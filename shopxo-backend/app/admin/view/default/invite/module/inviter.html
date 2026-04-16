@@ -1,0 +1,7 @@
+{{if !empty($module_data) and !empty($module_data['inviter_info'])}}
+    <a href="{{:MyUrl('admin/user/detail', ['id'=>$module_data['inviter_id']])}}" target="_blank">
+        {{$module_data['inviter_info']['nickname'] ?: $module_data['inviter_info']['username'] ?: ('ID:'.$module_data['inviter_id'])}}
+    </a>
+{{else /}}
+    ID:{{$module_data['inviter_id'] ?? ''}}
+{{/if}}

@@ -1,0 +1,342 @@
+{{:ModuleInclude('public/header')}}
+
+<!-- right content start  -->
+<div class="content-right">
+    <!-- second nav end -->
+	<div class="content">
+        <!-- form start -->
+        <form class="am-form form-validation am-form-popup-sticky" action="{{:MyUrl('admin/site/save')}}" method="POST" request-type="ajax-view" request-value="{{:MyUrl('admin/site/index')}}" enctype="multipart/form-data">
+            {{if !isset($is_theme_data_admin) or $is_theme_data_admin eq 0}}
+                {{:ModuleInclude('public/nav_switch_btn', [
+                    'nav_data' => [
+                        [
+                            'name' => MyLang('base_config_title'),
+                            'key'  => 'site-base',
+                        ],
+                        [
+                            'name' => MyLang('site.base_item_site_status_title'),
+                            'key'  => 'site-status',
+                        ],
+                        [
+                            'name' => MyLang('site.base_item_site_domain_title'),
+                            'key'  => 'site-domain',
+                        ],
+                        [
+                            'name' => MyLang('site.base_item_site_filing_title'),
+                            'key'  => 'site-filing',
+                        ],
+                        [
+                            'name' => MyLang('site.base_item_site_other_title'),
+                            'key'  => 'site-other',
+                        ]
+                    ]
+                ])}}
+            {{/if}}
+            <div class="nav-content">
+                <!-- 基础配置 -->
+                <div class="item {{if empty($params['switch']) or $params['switch'] eq 'site-base'}}am-active{{/if}}" data-key="site-base">
+                    <div class="am-form-group">
+                        <label>{{$data.home_site_name.name}}</label>
+                        <input type="text" name="{{$data.home_site_name.only_tag}}" minlength="1" placeholder="{{$data.home_site_name.name}}" data-validation-message="{{$data.home_site_name.error_tips}}" class="am-radius" {{if !empty($data)}}value="{{$data.home_site_name.value}}"{{/if}} required />
+                    </div>
+                    <div class="am-form-group">
+                        <label class="am-block">{{$data.home_site_logo.name}}<span class="am-form-group-label-tips">{{$data.home_site_logo.describe}}</span></label>
+                        <div class="am-form-file-upload-container plug-file-upload-view-width-auto">
+                            <ul class="plug-file-upload-view home_site_logo-images-view" data-form-name="home_site_logo" data-max-number="1" data-dialog-type="images" data-is-eye="1">
+                                <li class="plug-file-upload-submit" data-view-tag="ul.home_site_logo-images-view">
+                                    {{if empty($data['home_site_logo']['value'])}}
+                                        <i class="iconfont icon-add"></i>
+                                    {{else /}}
+                                        <input type="text" name="home_site_logo" value="{{$data.home_site_logo.value}}" />
+                                        <img src="{{:AttachmentPathViewHandle($data.home_site_logo.value)}}" />
+                                        <i class="iconfont icon-close"></i>
+                                        <i class="iconfont icon-eye"></i>
+                                    {{/if}}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label class="am-block">{{$data.home_site_logo_wap.name}}<span class="am-form-group-label-tips">{{$data.home_site_logo_wap.describe}}</span></label>
+                        <div class="am-form-file-upload-container plug-file-upload-view-width-auto">
+                            <ul class="plug-file-upload-view home_site_logo_wap-images-view" data-form-name="home_site_logo_wap" data-max-number="1" data-dialog-type="images" data-is-eye="1">
+                                <li class="plug-file-upload-submit" data-view-tag="ul.home_site_logo_wap-images-view">
+                                    {{if empty($data['home_site_logo_wap']['value'])}}
+                                        <i class="iconfont icon-add"></i>
+                                    {{else /}}
+                                        <input type="text" name="home_site_logo_wap" value="{{$data.home_site_logo_wap.value}}" />
+                                        <img src="{{:AttachmentPathViewHandle($data.home_site_logo_wap.value)}}" />
+                                        <i class="iconfont icon-close"></i>
+                                        <i class="iconfont icon-eye"></i>
+                                    {{/if}}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label class="am-block">{{$data.home_site_logo_app.name}}<span class="am-form-group-label-tips">{{$data.home_site_logo_app.describe}}</span></label>
+                        <div class="am-form-file-upload-container plug-file-upload-view-width-auto">
+                            <ul class="plug-file-upload-view home_site_logo_app-images-view" data-form-name="home_site_logo_app" data-max-number="1" data-dialog-type="images" data-is-eye="1">
+                                <li class="plug-file-upload-submit" data-view-tag="ul.home_site_logo_app-images-view">
+                                    {{if empty($data['home_site_logo_app']['value'])}}
+                                        <i class="iconfont icon-add"></i>
+                                    {{else /}}
+                                        <input type="text" name="home_site_logo_app" value="{{$data.home_site_logo_app.value}}" />
+                                        <img src="{{:AttachmentPathViewHandle($data.home_site_logo_app.value)}}" />
+                                        <i class="iconfont icon-close"></i>
+                                        <i class="iconfont icon-eye"></i>
+                                    {{/if}}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label class="am-block">{{$data.home_site_logo_square.name}}<span class="am-form-group-label-tips">{{$data.home_site_logo_square.describe}}</span></label>
+                        <div class="am-form-file-upload-container">
+                            <ul class="plug-file-upload-view home_site_logo_square-images-view" data-form-name="home_site_logo_square" data-max-number="1" data-dialog-type="images" data-is-eye="1">
+                                <li class="plug-file-upload-submit" data-view-tag="ul.home_site_logo_square-images-view">
+                                    {{if empty($data['home_site_logo_square']['value'])}}
+                                        <i class="iconfont icon-add"></i>
+                                    {{else /}}
+                                        <input type="text" name="home_site_logo_square" value="{{$data.home_site_logo_square.value}}" />
+                                        <img src="{{:AttachmentPathViewHandle($data.home_site_logo_square.value)}}" />
+                                        <i class="iconfont icon-close"></i>
+                                        <i class="iconfont icon-eye"></i>
+                                    {{/if}}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label class="am-block">{{$data.home_site_title_icon.name}}<span class="am-form-group-label-tips">{{$data.home_site_title_icon.describe}}</span></label>
+                        <div class="am-form-file-upload-container">
+                            <ul class="plug-file-upload-view home_site_title_icon-images-view" data-form-name="home_site_title_icon" data-max-number="1" data-dialog-type="images" data-is-eye="1" data-suffix=".ico">
+                                <li class="plug-file-upload-submit" data-view-tag="ul.home_site_title_icon-images-view">
+                                    {{if empty($data['home_site_title_icon']['value'])}}
+                                        <i class="iconfont icon-add"></i>
+                                    {{else /}}
+                                        <input type="text" name="home_site_title_icon" value="{{$data.home_site_title_icon.value}}" />
+                                        <img src="{{:AttachmentPathViewHandle($data.home_site_title_icon.value)}}" />
+                                        <i class="iconfont icon-close"></i>
+                                        <i class="iconfont icon-eye"></i>
+                                    {{/if}}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label>{{$data.common_timezone.name}}<span class="am-form-group-label-tips">{{$data.common_timezone.describe}}</span></label>
+                        <select name="{{$data.common_timezone.only_tag}}" class="am-radius chosen-select" data-placeholder="{{$data.common_timezone.name}}" data-validation-message="{{$data.common_timezone.error_tips}}" required>
+                            {{foreach $common_site_timezone_list as $k=>$v}}
+                                <option value="{{$k}}" {{if isset($data['common_timezone']['value']) and $data['common_timezone']['value'] eq $k}}selected{{/if}}>{{$v}}</option>
+                            {{/foreach}}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 站点状态 -->
+                <div class="item {{if !empty($params['switch']) and $params['switch'] eq 'site-status'}}am-active{{/if}}" data-key="site-status">
+                    <div class="am-form-group">
+                        <label class="am-block">{{$data.home_site_app_state.name}}<span class="am-form-group-label-tips">{{$data.home_site_app_state.describe}}</span></label>
+                        <div class="am-checkbox-group am-flex am-gap-12">
+                            {{foreach :MyConst('common_platform_type') as $v}}
+                                {{if !in_array($v['value'], ['pc'])}}
+                                    <label class="am-checkbox-inline">
+                                        <input type="checkbox" name="{{$data.home_site_app_state.only_tag}}" value="{{$v.value}}" {{if !empty($data['home_site_app_state']) and !empty($data['home_site_app_state']['value']) and is_array($data['home_site_app_state']['value']) and in_array($v['value'], $data['home_site_app_state']['value'])}}checked{{/if}} data-validation-message="{{$data.home_site_app_state.error_tips}}" data-am-ucheck /> {{$v.name}}
+                                    </label>
+                                {{/if}}
+                            {{/foreach}}
+                        </div>
+                    </div>
+                    <div class="am-form-group">
+                        <label>{{$data.home_site_web_state.name}}<span class="am-form-group-label-tips">{{$data.home_site_web_state.describe}}</span></label>
+                        <div class="am-radio-group">
+                            {{foreach $common_close_open_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.value}}" name="{{$data.home_site_web_state.only_tag}}" data-validation-message="{{$data.home_site_web_state.error_tips}}" required {{if isset($data['home_site_web_state']['value']) and $data['home_site_web_state']['value'] eq $v['value']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                    </div>
+                    <div class="am-form-group">
+                        <label>{{$data.home_site_web_home_state.name}}<span class="am-form-group-label-tips">{{$data.home_site_web_home_state.describe}}</span></label>
+                        <div class="am-radio-group">
+                            {{foreach $common_close_open_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.value}}" name="{{$data.home_site_web_home_state.only_tag}}" data-validation-message="{{$data.home_site_web_home_state.error_tips}}" required  {{if isset($data['home_site_web_home_state']['value']) and $data['home_site_web_home_state']['value'] eq $v['value']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                    </div>
+                    <div class="am-form-group">
+                        <label>{{$data.home_site_web_pc_state.name}}<span class="am-form-group-label-tips">{{$data.home_site_web_pc_state.describe}}</span></label>
+                        <div class="am-radio-group">
+                            {{foreach $common_close_open_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.value}}" name="{{$data.home_site_web_pc_state.only_tag}}" data-validation-message="{{$data.home_site_web_pc_state.error_tips}}" required {{if isset($data['home_site_web_pc_state']['value']) and $data['home_site_web_pc_state']['value'] eq $v['value']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                    </div>
+                    <div class="am-form-group">
+                        <label>{{$data.home_site_close_reason.name}}<span class="am-form-group-label-tips">{{$data.home_site_close_reason.describe}}</span></label>
+                        <textarea rows="4" name="{{$data.home_site_close_reason.only_tag}}" class="am-radius" placeholder="{{$data.home_site_close_reason.name}}" data-validation-message="{{$data.home_site_close_reason.error_tips}}">{{if !empty($data)}}{{$data.home_site_close_reason.value}}{{/if}}</textarea>
+                    </div>
+                </div>
+
+                <!-- 站点域名地址 -->
+                <div class="item {{if !empty($params['switch']) and $params['switch'] eq 'site-domain'}}am-active{{/if}}" data-key="site-domain">
+                    {{if is_array(MyLang('site.site_domain_tips_list'))}}
+                        <div class="am-operate-stretch-tips">
+                            <div class="title">
+                                <i class="iconfont icon-tips"></i>
+                                <strong title="{{:MyLang('operate_list_tips_msg')}}">{{:MyLang('operate_list_tips_button_text')}}</strong>
+                                <i class="iconfont icon-retract-diagonal contract" title="{{:MyLang('operate_list_tips_retract_text')}}"></i> 
+                            </div>
+                            <p>{{:implode('</p><p>', MyLang('site.site_domain_tips_list'))}}</p>
+                        </div>
+                    {{/if}}
+                    <div class="am-form-group">
+                        <label>{{$data.common_domain_host.name}}<span class="am-form-group-label-tips">{{$data.common_domain_host.describe}}</span></label>
+                        <input type="url" name="{{$data.common_domain_host.only_tag}}" placeholder="{{$data.common_domain_host.describe}}" data-validation-message="{{$data.common_domain_host.error_tips}}" class="am-radius" {{if !empty($data)}}value="{{$data.common_domain_host.value}}"{{/if}} />
+                    </div>
+                    <div class="am-form-group">
+                        <label>{{$data.common_cdn_attachment_host.name}}<span class="am-form-group-label-tips">{{$data.common_cdn_attachment_host.describe}}</span></label>
+                        <input type="url" name="{{$data.common_cdn_attachment_host.only_tag}}" placeholder="{{$data.common_cdn_attachment_host.describe}}" data-validation-message="{{$data.common_cdn_attachment_host.error_tips}}" class="am-radius" {{if !empty($data)}}value="{{$data.common_cdn_attachment_host.value}}"{{/if}} />
+                    </div>
+                    <div class="am-form-group">
+                        <label>{{$data.common_cdn_public_host.name}}<span class="am-form-group-label-tips">{{$data.common_cdn_public_host.describe}}</span></label>
+                        <input type="url" name="{{$data.common_cdn_public_host.only_tag}}" placeholder="{{$data.common_cdn_public_host.describe}}" data-validation-message="{{$data.common_cdn_public_host.error_tips}}" class="am-radius" {{if !empty($data)}}value="{{$data.common_cdn_public_host.value}}"{{/if}} />
+                    </div>
+                </div>
+
+                <!-- 备案信息 -->
+                <div class="item {{if !empty($params['switch']) and $params['switch'] eq 'site-filing'}}am-active{{/if}}" data-key="site-filing">
+                    <div class="am-form-group">
+                        <div class="card-grey">
+                            <div class="am-flex am-flex-col am-gap-1">
+                                <ul class="filing-list am-nbfc am-radius am-padding-0">
+                                    {{if !empty($site_filing_list) and is_array($site_filing_list)}}
+                                        {{foreach $site_filing_list as $filing}}
+                                            <li class="am-flex am-flex-justify-between am-flex-items-center am-gap-12">
+                                                <div class="am-flex am-flex-items-center am-flex-1 am-flex-width">
+                                                    {{if !empty($filing['icon'])}}
+                                                        <img src="{{$filing.icon}}" alt="{{$filing.name}}" class="am-img-thumbnail am-radius filing-icon" />
+                                                    {{/if}}
+                                                    <span class="filing-content">
+                                                        <span class="filing-text">{{$filing.name}}（{{$filing.show_name}}）</span>
+                                                        {{if !empty($filing['url'])}}
+                                                        <span class="am-badge am-radius am-margin-left-xs">{{$filing.url}}</span>
+                                                        {{/if}}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span class="edit-submit"><i class="iconfont icon-edit am-text-xs"></i>{{:MyLang('edit_title')}}</span>
+                                                    <span class="delete-submit"><i class="iconfont icon-btn-del am-text-xs"></i>{{:MyLang('remove_title')}}</span>
+                                                </div>
+                                            </li>
+                                        {{/foreach}}
+                                    {{/if}}
+                                </ul>
+                            </div>
+                            <div class="am-flex">
+                                <input type="hidden" name="{{$data.home_site_filing.only_tag}}" value="{{if !empty($site_filing_list) and is_array($site_filing_list)}}{{:urlencode(base64_encode(json_encode($site_filing_list, JSON_UNESCAPED_UNICODE)))}}{{/if}}" class="filing-value" />
+                                <button type="button" class="am-btn am-btn-primary-light-plain am-radius am-btn-xs filing-submit-add"> 
+                                    <i class="iconfont icon-add am-text-xs"></i>
+                                    {{:MyLang('site.add_filing_title')}}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 其它 -->
+                <div class="item {{if !empty($params['switch']) and $params['switch'] eq 'site-other'}}am-active{{/if}}" data-key="site-other">
+                    <div class="am-form-group">
+                        <label>{{$data.home_static_cache_version.name}}<span class="am-form-group-label-tips">{{$data.home_static_cache_version.describe}}</span></label>
+                        <input type="text" name="{{$data.home_static_cache_version.only_tag}}" placeholder="{{$data.home_static_cache_version.describe}}" data-validation-message="{{$data.home_static_cache_version.error_tips}}" class="am-radius" {{if !empty($data)}}value="{{$data.home_static_cache_version.value}}"{{/if}} />
+                    </div>
+                    <div class="am-form-group">
+                        <label>{{$data.home_footer_info.name}}<span class="am-form-group-label-tips">{{$data.home_footer_info.describe}}</span></label>
+                        <textarea rows="6" name="{{$data.home_footer_info.only_tag}}" class="am-radius" placeholder="{{$data.home_footer_info.name}}" data-validation-message="{{$data.home_footer_info.error_tips}}">{{if !empty($data)}}{{$data.home_footer_info.value}}{{/if}}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="am-form-popup-submit">
+                <input type="hidden" name="nav_type" value="{{$nav_type}}" />
+                <button type="submit" class="am-btn am-btn-primary am-radius am-btn-xs btn-loading-example" data-am-loading="{spinner: 'circle-o-notch', loadingText:'{{:MyLang('save_title')}}'}">
+                    <i class="am-icon-save"></i>
+                    <span>{{:MyLang('save_title')}}</span>
+                </button>
+            </div>
+        </form>
+        <!-- form end -->
+
+        <!-- 备案信息添加弹层 -->
+        <div class="am-popup am-radius" id="popup-filing-win">
+            <div class="am-popup-inner">
+                <div class="am-popup-hd">
+                    <h4 class="am-popup-title">{{:MyLang('site.form_filing_title')}}</h4>
+                    <span data-am-modal-close class="am-close">&times;</span>
+                </div>
+                <div class="am-popup-bd">
+                    <form class="am-form form-validation-filing am-form-full-screen am-form-popup-fixed" method="post" request-type="sync" request-value="ViewFilingModalBack">
+                        <div class="am-form-group row am-form-file">
+                            <label class="am-block">
+                                {{:MyLang('site.form_filing_icon')}}
+                                <a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: '{{:MyLang('site.form_filing_icon_tips')}}', trigger: 'hover focus', theme: 'sm'}"></a>
+                            </label>
+                            <div class="am-form-file-upload-container">
+                                <ul class="plug-file-upload-view filing-icon" data-form-name="icon" data-max-number="1" data-dialog-type="images">
+                                    <li class="plug-file-upload-submit" data-view-tag="ul.filing-icon">
+                                        <i class="iconfont icon-add"></i>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="am-form-group row">
+                            <label class="am-block">{{:MyLang('site.form_filing_name')}}<span class="am-form-group-label-tips-must">*</span></label>
+                            <input type="text" name="name" placeholder="{{:MyLang('site.form_filing_name_message')}}" minlength="1" maxlength="100" data-validation-message="{{:MyLang('site.form_filing_name_message')}}" class="am-radius" required />
+                        </div>
+                        <div class="am-form-group row">
+                            <label class="am-block">{{:MyLang('site.form_filing_show_name')}}<span class="am-form-group-label-tips-must">*</span></label>
+                            <input type="text" name="show_name" placeholder="{{:MyLang('site.form_filing_show_name_message')}}" minlength="1" maxlength="300" data-validation-message="{{:MyLang('site.form_filing_show_name_message')}}" class="am-radius" required />
+                        </div>
+                        <div class="am-form-group row">
+                            <label class="am-block">{{:MyLang('site.form_filing_url')}}</label>
+                            <input type="text" name="url" placeholder="{{:MyLang('site.form_filing_url')}}" data-validation-message="{{:MyLang('site.form_filing_url_message')}}" class="am-radius" />
+                        </div>
+
+                        <div class="am-form-popup-submit">
+                            <button type="button" class="am-btn am-btn-warning am-radius am-btn-xs" data-am-modal-close>
+                                <i class="am-icon-paint-brush"></i>
+                                <span>{{:MyLang('cancel_title')}}</span>
+                            </button>
+                            <button type="submit" class="am-btn am-btn-primary am-radius am-btn-xs btn-loading-example" data-am-loading="{spinner: 'circle-o-notch', loadingText:'{{:MyLang('confirm_title')}}'}">
+                                <i class="am-icon-check"></i>
+                                <span>{{:MyLang('confirm_title')}}</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+	</div>
+</div>
+<!-- right content end  -->
+
+<!-- footer start -->
+{{:ModuleInclude('public/footer')}}
+<script type="text/javascript">
+// 返回处理
+function ViewFilingModalBack(data)
+{
+    FilingModalHandle(data);
+}
+</script>

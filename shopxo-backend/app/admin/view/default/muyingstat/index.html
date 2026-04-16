@@ -1,0 +1,48 @@
+{{extend name="../../../module/view/form_table/form" /}}
+
+{{block name="form_content_top"}}
+<style>
+    .stat-dashboard{display:flex;flex-wrap:wrap;gap:20px;padding:10px 0 20px;}
+    .stat-card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:24px;width:calc(33.333% - 14px);box-sizing:border-box;transition:box-shadow 0.3s;}
+    .stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.15);}
+    .stat-card-name{font-size:14px;color:#888;margin-bottom:8px;}
+    .stat-card-value{font-size:36px;font-weight:700;color:#333;margin-bottom:8px;}
+    .stat-card-value span{font-size:16px;font-weight:400;color:#999;}
+    .stat-card-desc{font-size:12px;color:#aaa;line-height:1.5;}
+    @media(max-width:768px){.stat-card{width:100%;}}
+</style>
+<div class="stat-dashboard">
+    <div class="stat-card">
+        <div class="stat-card-name">注册转化率</div>
+        <div class="stat-card-value">{{$registration_conversion_rate.value}}<span>%</span></div>
+        <div class="stat-card-desc">{{$registration_conversion_rate.desc}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-name">阶段资料完善率</div>
+        <div class="stat-card-value">{{$stage_profile_completion_rate.value}}<span>%</span></div>
+        <div class="stat-card-desc">{{$stage_profile_completion_rate.desc}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-name">活动报名转化率</div>
+        <div class="stat-card-value">{{$activity_signup_conversion_rate.value}}<span>%</span></div>
+        <div class="stat-card-desc">{{$activity_signup_conversion_rate.desc}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-name">商品支付转化率</div>
+        <div class="stat-card-value">{{$product_payment_conversion_rate.value}}<span>%</span></div>
+        <div class="stat-card-desc">{{$product_payment_conversion_rate.desc}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-name">复购率</div>
+        <div class="stat-card-value">{{$repurchase_rate.value}}<span>%</span></div>
+        <div class="stat-card-desc">{{$repurchase_rate.desc}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-name">邀请带新率</div>
+        <div class="stat-card-value">{{$invite_referral_rate.value}}<span>%</span></div>
+        <div class="stat-card-desc">{{$invite_referral_rate.desc}}</div>
+    </div>
+</div>
+{{/block}}
+
+{{block name="form_operate_top"}}{{/block}}

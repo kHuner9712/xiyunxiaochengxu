@@ -1,0 +1,6 @@
+{{if AdminIsPower('invite', 'detail')}}
+    <button type="button" class="am-btn am-btn-default am-btn-xs am-radius am-btn-block submit-popup" data-url="{{:MyUrl('admin/invite/detail', ['id'=>$module_data['id']])}}" data-title="详情" data-offcanvas="right">
+        <i class="am-icon-eye"></i>
+        <span>详情</span>
+    </button>
+{{/if}}

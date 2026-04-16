@@ -1,0 +1,40 @@
+# Checklist
+
+- [x] 母婴主题色已添加到 theme.css，App.vue 默认主题已切换
+- [x] 全局样式导航栏背景色已改为奶白色
+- [x] muying.css 母婴行业专属样式已创建
+- [x] pages.json tabBar 已改为5个Tab（首页/商城/活动/购物车/我的）
+- [x] 活动Tab页面 pages/activity/activity.vue 已创建
+- [x] 活动页面路由已在 pages.json 中注册
+- [x] App.vue system_tabbar 已更新为5个Tab
+- [x] TabBar 图标已替换为母婴风格（占位图）
+- [x] 首页模块顺序已调整为母婴需求（Banner→搜索→阶段→活动→商品→资讯→反馈→邀请）
+- [x] 三大阶段入口组件已创建（备孕/孕期/产后）
+- [x] 推荐活动模块已集成到首页
+- [x] 按阶段推荐商品模块已集成
+- [x] 内容资讯模块已集成
+- [x] 用户反馈/案例模块已集成
+- [x] 邀请有礼/拼团/分享领券入口已集成
+- [x] 首页 mock 数据已内置
+- [x] 商品分类已改为9大母婴分类
+- [x] 商品详情页已新增"适用阶段"标签
+- [x] 用户资料已新增 current_stage/due_date/baby_birthday 字段
+- [x] 阶段选择引导弹窗已创建
+- [x] 用户中心已新增"我的活动""我的报名""我的邀请"入口
+- [x] 我的活动/报名记录页面已创建
+- [x] 我的邀请页面已创建
+- [x] 活动列表页已完善
+- [x] 活动详情页已创建
+- [x] 活动报名页已创建
+- [x] 活动 mock 数据已内置
+- [x] 邀请有礼页面已创建
+- [x] 用户注册流程已支持邀请码参数
+- [x] 数据库表 sxo_activity/sxo_activity_signup/sxo_invite_reward 已创建
+- [x] sxo_user 表已新增 current_stage/due_date/baby_birthday 字段
+- [x] 后端 Activity API 控制器已创建
+- [x] 后端 Invite API 控制器已创建
+- [x] Personal API 已支持新增字段读写
+- [x] ActivityService/InviteService 已创建
+- [x] /docs/10-母婴版页面改造清单.md 已生成
+- [x] /docs/11-新增字段与数据结构.md 已生成
+- [x] /docs/12-前台二开说明.md 已生成

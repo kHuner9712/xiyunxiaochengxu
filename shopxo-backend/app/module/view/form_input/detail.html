@@ -1,0 +1,16 @@
+{{if empty($module_data['data'])}}
+    {{:ModuleInclude('public/not_data')}}
+{{else /}}
+    <dl class="dl-content am-padding-sm">
+        {{foreach $module_data.data as $v}}
+            {{if !empty($v) and isset($v['key']) and isset($v['name']) and isset($v['value'])}}
+                <dt class="am-text-truncate">
+                    <strong>{{$v.name}}</strong>
+                </dt>
+                <dd>
+                    {{:ModuleInclude('../../../module/view/form_input/detail_value', $v)}}
+                </dd>
+            {{/if}}
+        {{/foreach}}
+    </dl>
+{{/if}}

@@ -1,0 +1,229 @@
+<!-- 所有规格批量操作弹层 -->
+<div class="am-popup am-radius" id="spec-popup-all-operation">
+    <div class="am-popup-inner">
+        <div class="am-popup-hd">
+            <h4 class="am-popup-title">{{:MyLang('common_service.goods.form_spec_advanced_batch_setup_title')}}</h4>
+            <span data-am-modal-close class="am-close">&times;</span>
+        </div>
+        <div class="am-popup-bd">
+            <form class="am-form am-form-popup-fixed">
+                <div class="am-alert spec-title-container"></div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_price_title')}}</label>
+                    <input type="text" placeholder="{{:MyLang('common_service.goods.form_spec_thead_price_title')}}" class="am-radius popup_all_price" pattern="{{$default_price_regex}}" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_price_message')}}" />
+                </div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_original_price_title')}}</label>
+                    <input type="text" placeholder="{{:MyLang('common_service.goods.form_spec_thead_original_price_title')}}" class="am-radius popup_all_original_price" pattern="{{$default_price_regex}}" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_original_price_message')}}" />
+                </div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_buy_min_number_title')}}</label>
+                    <input type="number" placeholder="{{:MyLang('common_service.goods.form_spec_thead_buy_min_number_title')}}" class="am-radius popup_all_buy_min_number" min="0" max="100000000" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_buy_min_number_message')}}" />
+                </div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_buy_max_number_title')}}</label>
+                    <input type="number" placeholder="{{:MyLang('common_service.goods.form_spec_thead_buy_max_number_title')}}" class="am-radius popup_all_buy_max_number" min="0" max="100000000" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_buy_max_number_message')}}" />
+                </div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_weight_title')}}</label>
+                    <input type="number" placeholder="{{:MyLang('common_service.goods.form_spec_thead_weight_title')}}" class="am-radius popup_all_weight" min="0.00" max="100000000.00" step="0.01" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_weight_message')}}" />
+                </div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_volume_title')}}</label>
+                    <input type="number" placeholder="{{:MyLang('common_service.goods.form_spec_thead_volume_title')}}" class="am-radius popup_all_volume" min="0.00" max="100000000.00" step="0.01" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_volume_message')}}" />
+                </div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_coding_title')}}</label>
+                    <input type="text" placeholder="{{:MyLang('common_service.goods.form_spec_thead_coding_title')}}" class="am-radius popup_all_coding" maxlength="80" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_coding_message')}}" />
+                </div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_barcode_title')}}</label>
+                    <input type="text" placeholder="{{:MyLang('common_service.goods.form_spec_thead_barcode_title')}}" class="am-radius popup_all_barcode" maxlength="80" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_barcode_message')}}" />
+                </div>
+                <div class="am-form-group">
+                    <label class="am-block">{{:MyLang('common_service.goods.form_spec_thead_inventory_unit_title')}}</label>
+                    <input type="text" placeholder="{{:MyLang('common_service.goods.form_spec_thead_inventory_unit_title')}}" class="am-radius popup_all_inventory_unit" maxlength="60" data-validation-message="{{:MyLang('common_service.goods.form_spec_thead_inventory_unit_message')}}" />
+                </div>
+
+                <div class="am-form-popup-submit">
+                    <button type="button" class="am-btn am-btn-warning am-radius am-btn-xs" data-am-modal-close>{{:MyLang('cancel_title')}}</button>
+                    <button type="button" class="am-btn am-btn-primary am-radius am-btn-xs spec-all-submit">{{:MyLang('confirm_title')}}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 单个规格批量操作弹层 -->
+<div class="am-modal am-modal-no-btn" tabindex="-1" id="spec-modal-all-operation">
+    <div class="am-modal-dialog">
+        <div class="am-modal-hd am-radius">
+            <span>{{:MyLang('common_service.goods.form_spec_all_operate_title')}}</span>
+            <a href="javascript: void(0)" class="am-close" data-am-modal-close>&times;</a>
+        </div>
+        <div class="am-modal-bd">
+            <div class="am-padding-top am-padding-horizontal-sm">
+                <div class="am-input-group am-input-group-sm">
+                    <input type="text" class="am-form-field am-radius" placeholder="{{:MyLang('common_service.goods.form_spec_all_operate_placeholder')}}" data-is-clearout="0" />
+                    <span class="am-input-group-btn">
+                        <button type="button" class="am-btn am-btn-default am-radius">{{:MyLang('confirm_title')}}</button>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 规格扩展弹窗 -->
+<div class="am-popup am-radius" id="specifications-extends-popup">
+    <div class="am-popup-inner">
+        <div class="am-popup-hd">
+            <h4 class="am-popup-title">{{:MyLang('common_service.goods.form_item_extends_popup_title')}}</h4>
+            <span data-am-modal-close class="am-close">&times;</span>
+        </div>
+        <div class="am-popup-bd">
+            <form class="am-form form-validation-specifications-extends am-form-full-screen am-form-popup-fixed" request-type="sync" request-value="SpecificationsExtendsBack">
+                {{if !empty($goods_specifications_extends) and is_array($goods_specifications_extends)}}
+                    {{foreach $goods_specifications_extends as $v}}
+                        <div class="am-alert am-alert-secondary">
+                            <label class="am-text-sm">{{$v.name}}</label>
+                            {{if !empty($v['desc'])}}
+                                <span class="am-text-xs am-text-warning am-margin-left-xs">{{$v.desc}}</span>
+                            {{/if}}
+                            {{if !empty($v['tips'])}}
+                                <div class="am-alert am-alert-warning am-margin-0" data-am-alert>
+                                    <button type="button" class="am-close">&times;</button>
+                                    <p>{{$v.tips|raw}}</p>
+                                </div>
+                            {{/if}}
+                            {{if !empty($v['element'])}}
+                                {{foreach $v.element as $element}}
+                                    {{if !empty($element['name'])}}
+                                        <div class="am-form-group">
+                                            {{if !empty($element['title']) or !empty($element['desc'])}}
+                                                <label class="am-block">
+                                                    {{if !empty($element['title'])}}
+                                                        {{$element.title}}
+                                                    {{/if}}
+                                                    {{if !empty($element['desc'])}}
+                                                        <span class="am-form-group-label-tips">{{$element.desc}}</span>
+                                                    {{/if}}
+                                                </label>
+                                            {{/if}}
+                                            {{switch element.element}}
+                                                {{case input}}
+                                                    {{if isset($element['type'])}}
+                                                        {{if in_array($element['type'], ['radio', 'checkbox']) and !empty($element['element_data']) and is_array($element['element_data'])}}
+                                                            {{foreach $element.element_data as $element_data_key=>$element_data}}
+                                                                <label class="{{if isset($element['is_block']) and $element['is_block'] eq 1}}am-{{$element.type}}{{else /}}am-{{$element.type}}-inline{{/if}}">
+                                                                    <input
+                                                                        type="{{$element.type}}"
+                                                                        name="{{$element.name}}"
+                                                                        value="{{$element_data.value}}"
+
+                                                                        {{if isset($data['config'][$element['name']]) and in_array($element_data['value'], explode(',', $data['config'][$element['name']]))}} checked{{/if}}
+
+                                                                        {{if isset($element['minchecked']) and $element['type'] eq 'checkbox'}} minchecked="{{$element.minchecked}}"{{/if}}
+
+                                                                        {{if isset($element['maxchecked']) and $element['type'] eq 'checkbox'}} maxchecked="{{$element.maxchecked}}"{{/if}}
+
+                                                                        {{if isset($element['message'])}} data-validation-message="{{$element.message}}"{{/if}}
+
+                                                                        {{if $element_data_key eq 0 and isset($element['is_required']) and $element['is_required'] eq 1}}required{{/if}}
+                                                                        data-am-ucheck />
+                                                                        {{$element_data.name}}
+                                                                </label>
+                                                            {{/foreach}}
+                                                        {{else /}}
+                                                            <input
+                                                                class="am-radius"
+                                                                type="{{$element.type}}"
+                                                                name="{{$element.name}}"
+                                                                value="{{if isset($data['config'][$element['name']])}}{{$data['config'][$element['name']]}}{{else /}}{{if isset($element['default'])}}{{$element.default}}{{/if}}{{/if}}"
+
+                                                                {{if isset($element['placeholder'])}} placeholder="{{$element.placeholder}}"{{/if}}
+
+                                                                {{if isset($element['message'])}} data-validation-message="{{$element.message}}"{{/if}}
+
+                                                                {{if isset($element['is_required']) and $element['is_required'] eq 1}} required{{/if}}
+                                                                />
+                                                        {{/if}}
+                                                    {{else /}}
+                                                        <p class="am-text-danger">element input-type 配置有误</p>
+                                                    {{/if}}
+                                                {{/case}}
+                                                {{case select}}
+                                                    {{if !empty($element['element_data']) and is_array($element['element_data'])}}
+                                                        <select
+                                                            class="chosen-select am-radius"
+                                                            name="{{$element.name}}"
+
+                                                            {{if isset($element['message'])}} data-validation-message="{{$element.message}}"{{/if}}
+
+                                                            {{if !empty($element['placeholder'])}} data-placeholder="{{$element.placeholder}}"{{/if}}
+
+                                                            {{if isset($element['is_multiple']) and $element['is_multiple'] eq 1}}
+                                                                multiple
+                                                                {{if isset($element['minchecked'])}} minchecked="{{$element.minchecked}}"{{/if}}
+                                                                {{if isset($element['maxchecked'])}} maxchecked="{{$element.maxchecked}}"{{/if}}
+                                                            {{/if}}
+
+                                                            {{if isset($element['is_required']) and $element['is_required'] eq 1}}required{{/if}}
+                                                        >
+                                                        {{if !isset($element['is_multiple']) or $element['is_multiple'] neq 1}}
+                                                            {{if !empty($element['placeholder'])}}
+                                                                <option value="">{{$element.placeholder}}</option>
+                                                            {{/if}}
+                                                        {{/if}}
+                                                            {{foreach $element.element_data as $element_data_key=>$element_data}}
+                                                                <option
+                                                                    value="{{$element_data.value}}"
+                                                                    {{if isset($data['config'][$element['name']]) and in_array($element_data['value'], explode(',', $data['config'][$element['name']]))}}selected{{/if}}
+                                                                    >{{$element_data.name}}</option>
+                                                            {{/foreach}}
+                                                        </select>
+                                                    {{/if}}
+                                                {{/case}}
+                                                {{case textarea}}
+                                                    <textarea
+                                                        class="am-radius"
+                                                        name="{{$element.name}}"
+
+                                                        {{if isset($element['rows'])}} rows="{{$element.rows}}"{{/if}}
+
+                                                        {{if isset($element['placeholder'])}} placeholder="{{$element.placeholder}}"{{/if}}
+
+                                                        {{if isset($element['is_required']) and $element['is_required'] eq 1}}
+                                                            {{if isset($element['minlength'])}} minlength="{{$element.minlength}}"{{/if}}
+                                                            {{if isset($element['maxlength'])}} maxlength="{{$element.maxlength}}"{{/if}}
+                                                            required
+                                                        {{/if}}
+                                                    >{{if isset($data['config'][$element['name']])}}{{$data['config'][$element['name']]}}{{else /}}{{if isset($element['default'])}}{{$element.default}}{{/if}}{{/if}}</textarea>
+                                                {{/case}}
+                                            {{/switch}}
+                                        </div>
+                                    {{else /}}
+                                        <p class="am-text-danger">element form-name {{:MyLang('config_error_tips')}}</p>
+                                    {{/if}}
+                                {{/foreach}}
+                            {{/if}}
+                        </div>
+                    {{/foreach}}
+
+                    <div class="am-form-popup-submit">
+                        <button type="button" class="am-btn am-btn-warning am-radius am-btn-xs am-margin-right-lg" data-am-modal-close>
+                            <i class="am-icon-paint-brush"></i>
+                            <span>{{:MyLang('cancel_title')}}</span>
+                        </button>
+                        <button type="submit" class="am-btn am-btn-primary am-radius am-btn-xs btn-loading-example" data-am-loading="{spinner: 'circle-o-notch', loadingText:'{{:MyLang('confirm_title')}}'}">
+                            <i class="am-icon-check"></i>
+                            <span>{{:MyLang('confirm_title')}}</span>
+                        </button>
+                    </div>
+                {{else /}}
+                    {{:ModuleInclude('public/not_data')}}
+                {{/if}}
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,41 @@
+<!-- 继承公共的 form -->
+{{extend name="../../../module/view/form_table/detail" /}}
+
+<!-- 重写数据模块 -->
+{{block name="detail_data"}}
+    {{if !empty($data)}}
+        <dl class="dl-content am-padding-sm">
+            <dt><strong>报名ID</strong></dt>
+            <dd>{{$data.id}}</dd>
+
+            <dt><strong>活动标题</strong></dt>
+            <dd>{{if !empty($data['activity_info'])}}{{$data.activity_info.title}}{{/if}}</dd>
+
+            <dt><strong>姓名</strong></dt>
+            <dd>{{$data.name}}</dd>
+
+            <dt><strong>手机</strong></dt>
+            <dd>{{$data.phone}}</dd>
+
+            <dt><strong>阶段</strong></dt>
+            <dd>{{$data.stage}}</dd>
+
+            <dt><strong>备注</strong></dt>
+            <dd>{{if !empty($data['remark'])}}{{$data.remark}}{{else /}}-{{/if}}</dd>
+
+            <dt><strong>报名状态</strong></dt>
+            <dd>{{$data.status_text}}</dd>
+
+            <dt><strong>签到状态</strong></dt>
+            <dd>{{$data.checkin_status_text}}</dd>
+
+            <dt><strong>报名时间</strong></dt>
+            <dd>{{$data.add_time_text}}</dd>
+
+            <dt><strong>签到时间</strong></dt>
+            <dd>{{if !empty($data['checkin_time_text'])}}{{$data.checkin_time_text}}{{else /}}-{{/if}}</dd>
+        </dl>
+    {{else /}}
+        {{:ModuleInclude('public/not_data')}}
+    {{/if}}
+{{/block}}

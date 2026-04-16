@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: shopxo-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./shopxo-backend:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - php
+    networks:
+      - shopxo-net
+    restart: unless-stopped
+
+  php:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    container_name: shopxo-php
+    volumes:
+      - ./shopxo-backend:/var/www/html
+    networks:
+      - shopxo-net
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: shopxo-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: shopxo
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_general_ci
+    volumes:
+      - shopxo-mysql-data:/var/lib/mysql
+    networks:
+      - shopxo-net
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+
+networks:
+  shopxo-net:
+    driver: bridge
+
+volumes:
+  shopxo-mysql-data:

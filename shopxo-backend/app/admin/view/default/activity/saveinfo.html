@@ -1,0 +1,150 @@
+{{:ModuleInclude('public/header')}}
+
+<!-- right content start  -->
+<div class="content-right">
+	<div class="content">
+        <!-- nav start -->
+        {{if !isset($is_theme_data_admin) or $is_theme_data_admin eq 0}}
+            {{:ModuleInclude('public/admin_nav', [
+                'title'     => '活动管理'.(empty($data['id']) ? MyLang('created_title') : MyLang('edit_title')),
+                'back_url'  => MyUrl('admin/activity/index', $params)
+            ])}}
+        {{/if}}
+        <!-- nav end -->
+
+        <!-- form start -->
+        <form class="am-form form-validation am-form-full-screen am-form-popup-sticky" action="{{:MyUrl('admin/activity/save')}}" method="POST" request-type="ajax-url" request-value="{{:MyUrl('admin/activity/index', $params)}}">
+            <div class="am-form-group">
+                <label>活动标题<span class="am-form-group-label-tips-must">*</span></label>
+                <input type="text" name="title" placeholder="请输入活动标题" minlength="2" maxlength="80" data-validation-message="活动标题格式有误" class="am-form-field am-radius" {{if !empty($data['title'])}} value="{{$data.title}}" {{/if}} required />
+            </div>
+
+            <div class="am-form-group am-form-file">
+                <label class="am-block">封面图片</label>
+                <div class="am-form-file-upload-container">
+                    <ul class="plug-file-upload-view activity-cover-view" data-form-name="cover" data-max-number="1" data-dialog-type="images" data-is-eye="1">
+                        <li class="plug-file-upload-submit" data-view-tag="ul.activity-cover-view">
+                            {{if empty($data['cover'])}}
+                                <i class="iconfont icon-add"></i>
+                            {{else /}}
+                                <input type="text" name="cover" value="{{$data.cover}}" />
+                                <img src="{{$data.cover}}" />
+                                <i class="iconfont icon-close"></i>
+                                <i class="iconfont icon-eye"></i>
+                            {{/if}}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="am-form-group">
+                <label>活动分类<span class="am-form-group-label-tips-must">*</span></label>
+                <select name="category" class="am-radius chosen-select" data-placeholder="请选择分类" data-validation-message="请选择活动分类" required>
+                    <option value="">请选择分类</option>
+                    <option value="maternity" {{if !empty($data['category']) and $data['category'] eq 'maternity'}}selected{{/if}}>孕产</option>
+                    <option value="parenting" {{if !empty($data['category']) and $data['category'] eq 'parenting'}}selected{{/if}}>育儿</option>
+                    <option value="postpartum" {{if !empty($data['category']) and $data['category'] eq 'postpartum'}}selected{{/if}}>产后恢复</option>
+                    <option value="early_edu" {{if !empty($data['category']) and $data['category'] eq 'early_edu'}}selected{{/if}}>早教</option>
+                    <option value="activity" {{if !empty($data['category']) and $data['category'] eq 'activity'}}selected{{/if}}>活动</option>
+                    <option value="other" {{if !empty($data['category']) and $data['category'] eq 'other'}}selected{{/if}}>其他</option>
+                </select>
+            </div>
+
+            <div class="am-form-group">
+                <label>适用阶段<span class="am-form-group-label-tips-must">*</span></label>
+                <select name="stage" class="am-radius chosen-select" data-placeholder="请选择阶段" data-validation-message="请选择适用阶段" required>
+                    <option value="">请选择阶段</option>
+                    <option value="pregnant" {{if !empty($data['stage']) and $data['stage'] eq 'pregnant'}}selected{{/if}}>孕期</option>
+                    <option value="newborn" {{if !empty($data['stage']) and $data['stage'] eq 'newborn'}}selected{{/if}}>新生儿</option>
+                    <option value="infant" {{if !empty($data['stage']) and $data['stage'] eq 'infant'}}selected{{/if}}>婴幼儿</option>
+                    <option value="all" {{if !empty($data['stage']) and $data['stage'] eq 'all'}}selected{{/if}}>全部</option>
+                </select>
+            </div>
+
+            <div class="am-form-group">
+                <label>适合人群</label>
+                <input type="text" name="suitable_crowd" placeholder="请输入适合人群" class="am-form-field am-radius" {{if !empty($data['suitable_crowd'])}} value="{{$data.suitable_crowd}}" {{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>活动简介</label>
+                <textarea class="am-radius" name="description" rows="3" maxlength="230" placeholder="请输入活动简介">{{if !empty($data['description'])}}{{$data.description}}{{/if}}</textarea>
+            </div>
+
+            <div class="am-form-group">
+                <label>活动详情<span class="am-form-group-label-tips-must">*</span></label>
+                <textarea class="am-radius am-validate" name="content" rows="5" minlength="10" {{if !IsMobile()}}id="editor-tag" data-url="{{:MyUrl('admin/ueditor/index', ['path_type'=>'activity'])}}" placeholder="请输入活动详情" {{else /}} placeholder="请输入活动详情" {{/if}} data-validation-message="请输入活动详情" required>{{if !empty($data['content'])}}{{$data.content}}{{/if}}</textarea>
+            </div>
+
+            <div class="am-form-group">
+                <label>活动地址</label>
+                <input type="text" name="address" placeholder="请输入活动地址" class="am-form-field am-radius" {{if !empty($data['address'])}} value="{{$data.address}}" {{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>活动开始时间</label>
+                <input type="text" name="start_time" placeholder="请选择活动开始时间" class="am-form-field am-radius am-datetime-picker" data-am-datetimepicker="{format: 'YYYY-MM-DD HH:mm:ss'}" {{if !empty($data['start_time_text'])}} value="{{$data.start_time_text}}" {{/if}} readonly />
+            </div>
+
+            <div class="am-form-group">
+                <label>活动结束时间</label>
+                <input type="text" name="end_time" placeholder="请选择活动结束时间" class="am-form-field am-radius am-datetime-picker" data-am-datetimepicker="{format: 'YYYY-MM-DD HH:mm:ss'}" {{if !empty($data['end_time_text'])}} value="{{$data.end_time_text}}" {{/if}} readonly />
+            </div>
+
+            <div class="am-form-group">
+                <label>报名开始时间</label>
+                <input type="text" name="signup_start_time" placeholder="请选择报名开始时间" class="am-form-field am-radius am-datetime-picker" data-am-datetimepicker="{format: 'YYYY-MM-DD HH:mm:ss'}" {{if !empty($data['signup_start_time_text'])}} value="{{$data.signup_start_time_text}}" {{/if}} readonly />
+            </div>
+
+            <div class="am-form-group">
+                <label>报名截止时间</label>
+                <input type="text" name="signup_end_time" placeholder="请选择报名截止时间" class="am-form-field am-radius am-datetime-picker" data-am-datetimepicker="{format: 'YYYY-MM-DD HH:mm:ss'}" {{if !empty($data['signup_end_time_text'])}} value="{{$data.signup_end_time_text}}" {{/if}} readonly />
+            </div>
+
+            <div class="am-form-group">
+                <label>报名人数上限</label>
+                <input type="number" name="max_count" placeholder="0表示不限" min="0" class="am-form-field am-radius" {{if isset($data['max_count'])}} value="{{$data.max_count}}" {{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>是否免费</label>
+                <input name="is_free" value="1" type="checkbox" data-off-text="否" data-on-text="是" data-size="xs" data-on-color="success" data-off-color="default" data-handle-width="50" data-am-switch {{if isset($data['is_free']) and $data['is_free'] eq 1}}checked="true"{{/if}} />
+            </div>
+
+            <div class="am-form-group am-free-price-toggle">
+                <label>活动价格</label>
+                <input type="text" name="price" placeholder="请输入活动价格" class="am-form-field am-radius" {{if !empty($data['price'])}} value="{{$data.price}}" {{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>联系人</label>
+                <input type="text" name="contact_name" placeholder="请输入联系人" class="am-form-field am-radius" {{if !empty($data['contact_name'])}} value="{{$data.contact_name}}" {{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>联系电话</label>
+                <input type="text" name="contact_phone" placeholder="请输入联系电话" class="am-form-field am-radius" {{if !empty($data['contact_phone'])}} value="{{$data.contact_phone}}" {{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>排序等级</label>
+                <input type="number" name="sort_level" placeholder="数值越大越靠前" min="0" class="am-form-field am-radius" {{if isset($data['sort_level'])}} value="{{$data.sort_level}}" {{/if}} />
+            </div>
+
+            {{:ModuleInclude('lib/is_enable')}}
+
+            <div class="am-form-popup-submit">
+                <input type="hidden" name="id" {{if !empty($data)}} value="{{$data.id}}"{{/if}} />
+                <button type="submit" class="am-btn am-btn-primary am-radius am-btn-xs btn-loading-example" data-am-loading="{spinner: 'circle-o-notch', loadingText:'{{:MyLang('save_title')}}'}">
+                    <i class="am-icon-save"></i>
+                    <span>{{:MyLang('save_title')}}</span>
+                </button>
+            </div>
+        </form>
+        <!-- form end -->
+	</div>
+</div>
+<!-- right content end  -->
+
+<!-- footer start -->
+{{:ModuleInclude('public/footer')}}

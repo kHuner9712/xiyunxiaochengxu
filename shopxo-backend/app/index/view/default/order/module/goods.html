@@ -1,0 +1,296 @@
+<!-- 订单商品信息 -->
+{{if !empty($module_data)}}
+    <!-- 用户订单列表基础顶部-开始 -->
+    {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+        <div class="plugins-tag">
+            <span>plugins_view_user_order_list_base_top</span>
+        </div>
+    {{/if}}
+    {{php}}
+        $hook_name = 'plugins_view_user_order_list_base_top';
+        $hook_data = MyEventTrigger($hook_name, ['hook_name'=>$hook_name, 'is_backend'=>false, 'data'=>$module_data]);
+        if(!empty($hook_data) && is_array($hook_data))
+        {
+            foreach($hook_data as $hook)
+            {
+                if(is_string($hook) || is_int($hook))
+                {
+                    echo htmlspecialchars_decode($hook);
+                }
+            }
+        }
+    {{/php}}
+    <!-- 用户订单列表基础顶部-结束 -->
+
+    <!-- 基础信息 -->
+    <p class="am-nbfc am-margin-bottom-xs">
+        <!-- 订单号 -->
+        <strong class="am-icon-bookmark-o text-copy-submit" data-value="{{$module_data.order_no}}"> {{$module_data.order_no}}</strong>
+
+        <!-- 仓库信息 -->
+        {{if !empty($module_data['warehouse_name'])}}
+            <span class="warehouse-item-container am-fr">
+                {{if !empty($module_data['warehouse_icon'])}}
+                    {{if IsUrl($module_data['warehouse_icon'])}}
+                        <img src="{{$module_data.warehouse_icon}}" alt="{{$module_data.warehouse_name}}" class="warehouse-icon" />
+                    {{else /}}
+                        <i class="{{$module_data.warehouse_icon}}"></i>
+                    {{/if}}
+                {{/if}}
+                {{if empty($module_data['warehouse_url'])}}
+                    <strong class="warehouse-name">{{$module_data.warehouse_name}}</strong>
+                {{else /}}
+                    <a href="{{$module_data.warehouse_url}}" target="_blank" class="text-deco-none">
+                        <strong class="warehouse-name">{{$module_data.warehouse_name}}</strong>
+                    </a>
+                {{/if}}
+            </span>
+        {{/if}}
+
+        <!-- 订单列表基础导航底部-开始 -->
+        {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+            <div class="plugins-tag">
+                <span>plugins_view_user_order_list_base_nav_bottom</span>
+            </div>
+        {{/if}}
+        {{php}}
+            $hook_name = 'plugins_view_user_order_list_base_nav_bottom';
+            $hook_data = MyEventTrigger($hook_name, ['hook_name'=>$hook_name, 'is_backend'=>false, 'data'=>$module_data]);
+            if(!empty($hook_data) && is_array($hook_data))
+            {
+                foreach($hook_data as $hook)
+                {
+                    if(is_string($hook) || is_int($hook))
+                    {
+                        echo htmlspecialchars_decode($hook);
+                    }
+                }
+            }
+        {{/php}}
+        <!-- 订单列表基础导航底部-结束 -->
+    </p>
+
+    <!-- 用户订单列表基础商品顶部-开始 -->
+    {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+        <div class="plugins-tag">
+            <span>plugins_view_user_order_list_base_goods_top</span>
+        </div>
+    {{/if}}
+    {{php}}
+        $hook_name = 'plugins_view_user_order_list_base_goods_top';
+        $hook_data = MyEventTrigger($hook_name, ['hook_name'=>$hook_name, 'is_backend'=>false, 'data'=>$module_data]);
+        if(!empty($hook_data) && is_array($hook_data))
+        {
+            foreach($hook_data as $hook)
+            {
+                if(is_string($hook) || is_int($hook))
+                {
+                    echo htmlspecialchars_decode($hook);
+                }
+            }
+        }
+    {{/php}}
+    <!-- 用户订单列表基础商品顶部-结束 -->
+
+    <!-- 商品信息 -->
+    <hr data-am-widget="divider" class="am-divider am-divider-dashed am-margin-top-0 am-margin-bottom-xs" />
+    {{if !empty($module_data['items'])}}
+        {{foreach $module_data.items as $item}}
+            <div class="am-nbfc">
+                <a href="{{$item.goods_url}}" target="_blank">
+                    <img src="{{$item.images}}" class="am-img-thumbnail am-radius am-margin-right-sm am-fl" width="18" height="18" />
+                </a>
+                <div class="am-text-truncate">
+                    <a href="{{$item.goods_url}}" target="_blank">{{$item.title}}</a>
+                </div>
+            </div>
+            {{if !empty($item['spec_text'])}}
+                <div class="am-margin-top-xs am-nowrap-initial">{{$item.spec_text}}</div>
+            {{/if}}
+            <div class="am-nbfc am-margin-top-xs">
+                <span>{{$module_data.currency_data.currency_symbol}}{{$item.price}}</span>
+                <span>x{{$item.buy_number}}</span>
+                {{if $item.original_price gt 0}}
+                    <span class="original-price am-margin-left-xs">{{$module_data.currency_data.currency_symbol}}{{$item.original_price}}</span>
+                {{/if}}
+                {{if $item['returned_quantity'] gt 0 or $item['refund_price'] gt 0}}
+                    <span class="am-text-danger am-margin-left-lg">{{:MyLang('already_retreat_title')}} {{$item.returned_quantity}} / {{$module_data.currency_data.currency_symbol}}{{$item.refund_price}}</span>
+                {{/if}}
+
+                {{if ($module_data['is_can_launch_aftersale'] eq 1 or !empty($item['orderaftersale'])) and !empty($item['orderaftersale_btn_text'])}}
+                    <div class="am-fr">
+                        <a href="{{:MyUrl('index/orderaftersale/detail', ['oid'=>$module_data['id'], 'did'=>$item['id']])}}" target="_blank" class="am-text-primary">
+                            {{if empty($item['orderaftersale'])}}
+                                {{$item.orderaftersale_btn_text}}
+                            {{else /}}
+                                <span class="{{if $item['orderaftersale']['status'] eq 3}}am-text-success{{else /}}am-text-secondary{{/if}}">{{$item.orderaftersale_btn_text}}</span>
+                            {{/if}}
+                        </a>
+                    </div>
+                {{/if}}
+            </div>
+            <hr data-am-widget="divider" class="am-divider am-divider-dashed am-margin-vertical-xs" />
+            <!-- 商品基础数据 -->
+            {{if !empty($item['base_data']) or !empty($item['goods_params']) or !empty($item['goods_content_app']) or !empty($item['goods_content_web'])}}
+                <section data-am-widget="accordion" class="am-accordion am-accordion-basic am-margin-top-xs am-margin-left-0 am-margin-right-0 am-margin-bottom-0" data-am-accordion='{ "multiple": true }'>
+                    {{if !empty($item['base_data'])}}
+                        <dl class="am-accordion-item">
+                            <dt class="am-accordion-title">
+                                {{:MyLang('goods_base')}}
+                            </dt>
+                            <dd class="am-accordion-bd am-collapse">
+                                <div class="am-accordion-content">
+                                    <table class="am-table am-table-bordered am-table-compact am-table-radius am-text-left am-margin-bottom-0">
+                                        <thead>
+                                            <tr>
+                                                <th width="130">{{:MyLang('name_title')}}</th>
+                                                <th>{{:MyLang('data_title')}}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="am-background-white">
+                                            {{foreach $item.base_data as $v}}
+                                                <tr>
+                                                    <td>{{$v.name}}</td>
+                                                    <td>
+                                                        <span class="text-copy-submit">{{$v.value}}</span>
+                                                    </td>
+                                                </tr>
+                                            {{/foreach}}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </dd>
+                        </dl>
+                    {{/if}}
+                    {{if !empty($item['goods_params'])}}
+                        <dl class="am-accordion-item">
+                            <dt class="am-accordion-title">
+                                {{:MyLang('goods_params')}}
+                            </dt>
+                            <dd class="am-accordion-bd am-collapse ">
+                                <div class="am-accordion-content">
+                                    <table class="am-table am-table-bordered am-table-compact am-table-radius am-text-left am-margin-bottom-0">
+                                        <thead>
+                                            <tr>
+                                                <th width="80">{{:MyLang('type_title')}}</th>
+                                                <th width="130">{{:MyLang('name_title')}}</th>
+                                                <th>{{:MyLang('data_title')}}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="am-background-white">
+                                            {{foreach $item.goods_params as $v}}
+                                                <tr>
+                                                    <td>
+                                                        {{if $v['scope'] eq 1}}
+                                                            {{:MyLang('detail_title')}}
+                                                        {{elseif $v['scope'] eq 2 /}}
+                                                            {{:MyLang('base_title')}}
+                                                        {{else /}}
+                                                            {{:MyLang('all_title')}}
+                                                        {{/if}}
+                                                    </td>
+                                                    <td>{{$v.name}}</td>
+                                                    <td>
+                                                        <span class="text-copy-submit">{{$v.value}}</span>
+                                                    </td>
+                                                </tr>
+                                            {{/foreach}}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </dd>
+                        </dl>
+                    {{/if}}
+                    {{if !empty($item['goods_content_web']) or !empty($item['goods_content_app'])}}
+                        <dl class="am-accordion-item">
+                            <dt class="am-accordion-title">
+                                {{:MyLang('goods_detail')}}
+                            </dt>
+                            <dd class="am-accordion-bd am-collapse">
+                                <div class="am-accordion-content">
+                                    <div class="am-tabs" data-am-tabs="{noSwipe: 1}">
+                                        <ul class="am-tabs-nav am-nav am-nav-tabs">
+                                            <li class="am-active"><a href="javascript: void(0)">{{:MyLang('web_title')}}</a></li>
+                                            <li><a href="javascript: void(0)">{{:MyLang('app_title')}}</a></li>
+                                        </ul>
+                                        <div class="am-tabs-bd am-background-white">
+                                            <div class="am-tab-panel am-active">
+                                                {{if empty($item['goods_content_web'])}}
+                                                    <span class="am-color-grey">{{:MyLang('no_data')}}</span>
+                                                {{else /}}
+                                                    <div class="am-scrollable-horizontal richtext">{{$item.goods_content_web|raw}}</div>
+                                                {{/if}}
+                                            </div>
+                                            <div class="am-tab-panel">
+                                                {{if empty($item['goods_content_app'])}}
+                                                    <span class="am-color-grey">{{:MyLang('no_data')}}</span>
+                                                {{else /}}
+                                                    {{foreach $item.goods_content_app as $v}}
+                                                        {{if !empty($v['images'])}}
+                                                            <img src="{{$v.images}}" class="am-block am-max-wh-auto common-annex-view-event" />
+                                                        {{/if}}
+                                                        {{if !empty($v['content'])}}
+                                                            <p>{{:implode('<br />', $v['content'])}}</p>
+                                                        {{/if}}
+                                                    {{/foreach}}
+                                                {{/if}}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </dd>
+                        </dl>
+                    {{/if}}
+                </section>
+                <hr data-am-widget="divider" class="am-divider am-divider-dashed am-margin-vertical-xs" />
+            {{/if}}
+        {{/foreach}}
+    {{/if}}
+
+    <!-- 用户订单列表基础商品底部-开始 -->
+    {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+        <div class="plugins-tag">
+            <span>plugins_view_user_order_list_base_goods_bottom</span>
+        </div>
+    {{/if}}
+    {{php}}
+        $hook_name = 'plugins_view_user_order_list_base_goods_bottom';
+        $hook_data = MyEventTrigger($hook_name, ['hook_name'=>$hook_name, 'is_backend'=>false, 'data'=>$module_data]);
+        if(!empty($hook_data) && is_array($hook_data))
+        {
+            foreach($hook_data as $hook)
+            {
+                if(is_string($hook) || is_int($hook))
+                {
+                    echo htmlspecialchars_decode($hook);
+                }
+            }
+        }
+    {{/php}}
+    <!-- 用户订单列表基础商品底部-结束 -->
+
+    <!-- 商品描述信息 -->
+    <div class="am-margin-top-sm">{{$module_data.describe}}</div>
+
+    <!-- 用户订单列表基础顶部-开始 -->
+    {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+        <div class="plugins-tag">
+            <span>plugins_view_user_order_list_base_bottom</span>
+        </div>
+    {{/if}}
+    {{php}}
+        $hook_name = 'plugins_view_user_order_list_base_bottom';
+        $hook_data = MyEventTrigger($hook_name, ['hook_name'=>$hook_name, 'is_backend'=>false, 'data'=>$module_data]);
+        if(!empty($hook_data) && is_array($hook_data))
+        {
+            foreach($hook_data as $hook)
+            {
+                if(is_string($hook) || is_int($hook))
+                {
+                    echo htmlspecialchars_decode($hook);
+                }
+            }
+        }
+    {{/php}}
+    <!-- 用户订单列表基础顶部-结束 -->
+{{/if}}

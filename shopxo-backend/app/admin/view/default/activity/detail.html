@@ -1,0 +1,35 @@
+<!-- 继承公共的 form -->
+{{extend name="../../../module/view/form_table/detail" /}}
+
+<!-- 重写数据模块 -->
+{{block name="detail_data"}}
+    {{:ModuleInclude('public/detail_nav_switch_tabs', [
+        'nav_data' => [
+            [
+                'name' => '基本信息',
+                'key'  => 'base',
+            ],
+            [
+                'name' => '活动详情',
+                'key'  => 'detail-content',
+            ],
+        ]
+    ])}}
+    <div class="detail-content-switch-data-item">
+        <!-- 基本信息 -->
+        <div class="item am-active" data-key="base">
+            {__block__}
+        </div>
+
+        <!-- 活动详情内容 -->
+        <div class="item am-padding-sm" data-key="detail-content">
+            {{if !empty($data['content'])}}
+                <div class="am-nowrap-initial richtext">
+                    {{$data.content|raw}}
+                </div>
+            {{else /}}
+                {{:ModuleInclude('public/not_data')}}
+            {{/if}}
+        </div>
+    </div>
+{{/block}}

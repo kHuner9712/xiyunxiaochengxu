@@ -1,0 +1,8 @@
+{{if !empty($module_data)}}
+    {{if !empty($module_data['start_time_text'])}}
+        <div class="am-text-xs">{{$module_data.start_time_text}}</div>
+    {{/if}}
+    {{if !empty($module_data['end_time_text'])}}
+        <div class="am-text-xs am-text-grey">至 {{$module_data.end_time_text}}</div>
+    {{/if}}
+{{/if}}

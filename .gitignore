@@ -1,0 +1,32 @@
+# ===== 后端 =====
+shopxo-backend/vendor/
+shopxo-backend/runtime/
+shopxo-backend/public/static/upload/
+shopxo-backend/.env
+shopxo-backend/test_*.php
+
+# ===== 前端 =====
+shopxo-uniapp/node_modules/
+shopxo-uniapp/unpackage/
+shopxo-uniapp/.hbuilderx/
+
+# ===== Docker 数据 =====
+mysql-data/
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.history/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 临时文件 =====
+*.log
+*.tmp
+*.bak

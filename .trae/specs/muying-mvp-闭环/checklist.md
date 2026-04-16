@@ -1,0 +1,40 @@
+# Checklist
+
+- [x] MuyingStage 枚举类已创建，阶段值统一引用
+- [x] sxo_activity 表已补充 category 新枚举值和 suitable_crowd 字段
+- [x] sxo_activity_signup 表已补充 due_date/baby_month_age/checkin_time/checkin_status 字段
+- [x] 数据库迁移SQL已就绪（需手动执行）
+- [x] 活动管理后台控制器已创建（Index/Detail/SaveInfo/Save/Delete/StatusUpdate）
+- [x] 活动管理Form表格配置已创建（列定义+筛选条件完整）
+- [x] 活动编辑视图已创建（saveinfo.html 完整）
+- [x] 活动详情视图已创建
+- [x] 活动管理权限菜单SQL已写入
+- [ ] 权限缓存已清除，活动菜单可见（需手动执行）
+- [x] 报名管理后台控制器已创建（Index/Detail/Checkin/Export）
+- [x] 报名管理Form表格配置已创建（列定义+筛选条件完整）
+- [x] 报名详情视图已创建
+- [x] 签到核销功能已实现
+- [x] 导出功能已实现（CSV格式）
+- [x] 报名管理权限菜单SQL已写入
+- [x] 邀请关系管理后台控制器已补全（含Service调用和数据传递）
+- [x] 邀请关系Form表格配置已创建（列定义+筛选条件完整）
+- [x] 邀请管理权限菜单SQL已写入
+- [x] 简版数据报表控制器已创建
+- [x] 数据报表视图已创建（6个核心指标）
+- [x] MuyingStatService 已创建
+- [x] 数据报表权限菜单SQL已写入
+- [x] UserService::Reg() 已接入 InviteService::OnUserRegister()
+- [x] 首单支付已接入 InviteService::OnFirstOrder()
+- [x] 邀请码注册传递链路已验证
+- [x] 报名表单动态字段已实现（预产期/宝宝月龄按阶段显示）
+- [x] ActivityService::ActivitySignup 已保存 due_date/baby_month_age
+- [x] 活动详情页已增加适合人群和分享海报入口
+- [x] 前端邀请页面API字段名已修复
+- [x] 多商户/分销/直播等菜单隐藏SQL已写入
+- [x] 6种活动类型演示数据SQL已创建
+- [x] 报名演示数据SQL已创建
+- [x] 邀请关系演示数据SQL已创建
+- [x] /docs/20-活动报名与核销实现说明.md 已生成
+- [x] /docs/21-后台菜单与权限调整.md 已生成
+- [x] /docs/22-邀请裂变逻辑说明.md 已生成
+- [x] /docs/23-MVP联调与演示路径.md 已生成

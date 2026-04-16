@@ -1,0 +1,47 @@
+{{if empty($form_input_data) or empty($form_input_data['config'])}}
+    {{:ModuleInclude('public/not_data')}}
+{{else /}}
+    <div class="forminput" id="forminputScoll">
+        <div class="forminput-bg" style="background: {{$form_input_data.config.overall_config.style_settings.computer.background_color}};">
+            <!-- 背景信息 -->
+            {{if !empty($form_input_data.config.overall_config.style_settings.computer.background_image) and !empty($form_input_data.config.overall_config.style_settings.computer.background_image[0])}}
+                <img class="image-contain" src="{{$form_input_data.config.overall_config.style_settings.computer.background_image[0]['url']}}" />
+            {{/if}}
+        </div>
+        <div class="forminput-data">
+            <!-- form start -->
+            <form class="forminput-data-form am-form form-validation am-form-full-screen" action="{{:MyUrl('index/forminputdata/save')}}" method="POST" {{if !empty($params) and isset($params['is_debug']) and $params['is_debug'] eq 1}}request-type="ajax-view"{{else /}}request-type="ajax-url" request-value="{{:MyUrl('index/forminputdata/index')}}"{{/if}}>
+                <div class="{{if $form_input_data.config.overall_config.is_show_submit == '1' or $form_input_data.config.overall_config.is_show_save_draft == '1'}}forminput-data-form-submit{{/if}}">
+                    <div class="forminput-top-bg" style="background: {{$form_input_data.config.overall_config.style_settings.computer.heading_color}};">
+                        {{if !empty($form_input_data.config.overall_config.style_settings.computer.heading_image) and !empty($form_input_data.config.overall_config.style_settings.computer.heading_image[0])}}
+                            <img class="image-contain" src="{{$form_input_data.config.overall_config.style_settings.computer.heading_image[0]['url']}}" />
+                        {{/if}}
+                    </div>
+                    {{if $form_input_data.config.overall_config.style_settings.computer.is_show_heading_title == '1'}}
+                        <div class="forminput-head-title am-flex-row" style="justify-content:{{$form_input_data.config.overall_config.style_settings.computer.heading_title_location}};color:{{$form_input_data.config.overall_config.style_settings.computer.heading_title_color}};font-size:{{$form_input_data.config.overall_config.style_settings.computer.heading_title_size}}px;font-weight:{{$form_input_data.config.overall_config.style_settings.computer.heading_title_font_weight}};">{{$form_input_data.name}}</div>
+                    {{/if}}
+                    <div class="forminput-popup-content ">
+                        {{:ModuleInclude('../../../module/view/form_input/base', ['form_input_data'=>$form_input_data])}}
+                    </div>
+                </div>
+                {{if $form_input_data.config.overall_config.is_show_submit == '1' or $form_input_data.config.overall_config.is_show_save_draft == '1'}}
+                    <div class="forminput-popup-submit" style="background: {{$form_input_data.config.overall_config.style_settings.computer.background_color}};">
+                        <div class="forminput-popup-submit-content">
+                            {{if $form_input_data.config.overall_config.is_show_save_draft == '1'}}
+                                <button type="submit" class="am-btn am-radius am-btn-xs btn-loading-example forminput-save-draft" data-am-loading="{spinner: 'circle-o-notch', loadingText:'{{$form_input_data.config.overall_config.save_draft_title}}'}">
+                                    <span>{{$form_input_data.config.overall_config.save_draft_title}}</span>
+                                </button>
+                            {{/if}}
+                            {{if $form_input_data.config.overall_config.is_show_submit == '1'}}
+                                <button type="submit" class="am-btn am-radius am-btn-xs btn-loading-example forminput-save" data-am-loading="{spinner: 'circle-o-notch', loadingText:'{{$form_input_data.config.overall_config.submit_title}}'}" style="background: {{$form_input_data.config.overall_config.style_settings.computer.submit_color}};">
+                                    <span>{{$form_input_data.config.overall_config.submit_title}}</span>
+                                </button>
+                            {{/if}}
+                        </div>
+                    </div>
+                {{/if}}
+            </form>
+        </div>
+    </div>
+{{/if}}
+

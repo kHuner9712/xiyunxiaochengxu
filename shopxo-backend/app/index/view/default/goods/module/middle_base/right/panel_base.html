@@ -1,0 +1,127 @@
+<!-- 右侧基础面板模块 -->
+{{if !empty($module_data['goods'])}}
+    <div class="tb-detail-panel-base">
+        <div class="tb-detail-panel-top-price-content {{if (isset($module_data['goods']['show_field_price_status']) and $module_data['goods']['show_field_price_status'] eq 1) or (isset($module_data['goods']['show_field_original_price_status']) and $module_data['goods']['show_field_original_price_status'] eq 1)}}show-price{{/if}}" style="--background-image: url({{:StaticAttachmentUrl('goods-meta-bg.png')}})">
+            <div class="tb-detail-price-content">
+                <!-- 商品页面基础信息面板原价顶部钩子 -->
+                {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+                    <div class="plugins-tag">
+                        <span>plugins_view_goods_detail_panel_original_price_top</span>
+                    </div>
+                {{/if}}
+                {{if !empty($plugins_view_goods_detail_panel_original_price_top_data) and is_array($plugins_view_goods_detail_panel_original_price_top_data)}}
+                    {{foreach $plugins_view_goods_detail_panel_original_price_top_data as $hook}}
+                        {{if is_string($hook) or is_int($hook)}}
+                            {{$hook|raw}}
+                        {{/if}}
+                    {{/foreach}}
+                {{/if}}
+                {{if isset($module_data['goods']['original_price']) and $module_data['goods']['original_price'] gt 0 and !empty($module_data['goods']['show_field_original_price_text'])}}
+                    <!-- 原价 -->
+                    {{if isset($module_data['goods']['show_field_original_price_status']) and $module_data['goods']['show_field_original_price_status'] eq 1}}
+                        <div class="items goods-price goods-original-price">
+                            <dt>{{$module_data.goods.show_field_original_price_text|raw}}</dt>
+                            <dd>
+                                <span class="am-text-grey">
+                                    {{if !empty($module_data['goods']['show_original_price_symbol'])}}
+                                        <em class="symbol">{{$module_data.goods.show_original_price_symbol}}</em>
+                                    {{/if}}
+                                    <b class="goods-original-price-value" data-original-price="{{$module_data.goods.original_price}}">{{$module_data.goods.original_price}}</b>
+                                    {{if !empty($module_data['goods']['show_original_price_unit'])}}
+                                        <em class="goods-original-price-unit" data-value="{{$module_data.goods.show_original_price_unit}}">{{$module_data.goods.show_original_price_unit}}</em>
+                                    {{/if}}
+                                </span>
+                            </dd>
+                        </div>
+                    {{/if}}
+                {{/if}}
+
+                <!-- 商品页面基础信息面板售价顶部钩子 -->
+                {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+                    <div class="plugins-tag">
+                        <span>plugins_view_goods_detail_panel_price_top</span>
+                    </div>
+                {{/if}}
+                {{if !empty($plugins_view_goods_detail_panel_price_top_data) and is_array($plugins_view_goods_detail_panel_price_top_data)}}
+                    {{foreach $plugins_view_goods_detail_panel_price_top_data as $hook}}
+                        {{if is_string($hook) or is_int($hook)}}
+                            {{$hook|raw}}
+                        {{/if}}
+                    {{/foreach}}
+                {{/if}}
+
+                <!-- 售价 -->
+                {{if isset($module_data['goods']['show_field_price_status']) and $module_data['goods']['show_field_price_status'] eq 1}}
+                    <div class="items goods-price goods-sale-price">
+                        <dt>{{if empty($module_data['goods']['show_field_price_text'])}}销售价{{else /}}{{$module_data.goods.show_field_price_text|raw}}{{/if}}</dt>
+                        <dd>
+                            {{if !empty($module_data['goods']['show_price_symbol'])}}<em class="symbol">{{$module_data.goods.show_price_symbol}}</em>{{/if}}<b class="goods-sale-price-value" data-original-price="{{$module_data.goods.price}}">{{$module_data.goods.price}}</b>{{if !empty($module_data['goods']['show_price_unit'])}}<em class="goods-sale-price-unit am-text-grey" data-value="{{$module_data.goods.show_price_unit}}">{{$module_data.goods.show_price_unit}}</em>{{/if}}
+                        </dd>                                 
+                    </div>
+                {{/if}}
+
+                <!-- 商品页面基础信息面板售价底部钩子 -->
+                {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+                    <div class="plugins-tag">
+                        <span>plugins_view_goods_detail_panel_price_bottom</span>
+                    </div>
+                {{/if}}
+                {{if !empty($plugins_view_goods_detail_panel_price_bottom_data) and is_array($plugins_view_goods_detail_panel_price_bottom_data)}}
+                    {{foreach $plugins_view_goods_detail_panel_price_bottom_data as $hook}}
+                        {{if is_string($hook) or is_int($hook)}}
+                            {{$hook|raw}}
+                        {{/if}}
+                    {{/foreach}}
+                {{/if}}
+            </div>
+
+            <!-- 销量 -->
+            {{if isset($module_data['goods']['show_sales_number_status']) and $module_data['goods']['show_sales_number_status'] eq 1}}
+                <div class="tm-indcon sales-volume exist-qrcode"><span class="tm-count">{{$module_data.goods.sales_count}}</span><span class="tm-label">{{:MyLang('sales_title')}}</span></div>
+            {{/if}}
+
+            <!-- 二维码（异步获取二维码数据渲染） -->
+            <div class="goods-qrcode" data-copy-text="{{:MyLang('copy_title')}}">
+                <div class="am-dropdown am-dropdown-flip" data-am-dropdown>
+                    <a href="javascript:;" class="am-dropdown-toggle am-color-grey-dark">{{:MyLang('goods.qrcode_mobile_buy_name')}} <i class="am-icon-qrcode"></i></a>
+                    <div class="am-dropdown-content am-padding-horizontal-sm am-padding-vertical am-radius am-text-center">
+                        {{if !empty($goods_qrcode) and is_array($goods_qrcode)}}
+                            <div class="am-flex am-flex-warp am-flex-justify-center am-gap-2">
+                                {{foreach $goods_qrcode as $qv}}
+                                    <div>
+                                        <img src="{{$qv.qrcode}}" width="150" height="150" class="common-annex-view-event" data-title="{{$qv.name}}" />
+                                        <p>
+                                            <span class="name am-text-truncate am-vertical-align-middle">{{$qv.name}}</span>
+                                            {{if in_array($qv['type'], ['pc', 'h5'])}}
+                                                <span class="am-badge am-badge-success am-radius am-vertical-align-middle text-copy-submit" data-value="{{$qv.url}}">{{:MyLang('copy_title')}}</span>
+                                            {{/if}}
+                                        </p>
+                                    </div>
+                                {{/foreach}}
+                            </div>
+                        {{else /}}
+                            <div class="am-padding-vertical-xl am-color-grey">
+                                <i class="am-icon-spinner am-icon-spin am-icon-sm"></i>
+                                <p class="am-margin-top-xs">{{:MyLang('page_common.loading_tips')}}</p>
+                            </div>
+                        {{/if}}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 商品页面基础信息面板底部钩子 -->
+        {{if isset($shopxo_is_develop) and $shopxo_is_develop eq true}}
+            <div class="plugins-tag">
+                <span>plugins_view_goods_detail_panel_bottom</span>
+            </div>
+        {{/if}}
+        {{if !empty($plugins_view_goods_detail_panel_bottom_data) and is_array($plugins_view_goods_detail_panel_bottom_data)}}
+            {{foreach $plugins_view_goods_detail_panel_bottom_data as $hook}}
+                {{if is_string($hook) or is_int($hook)}}
+                    {{$hook|raw}}
+                {{/if}}
+            {{/foreach}}
+        {{/if}}
+    </div>
+{{/if}}

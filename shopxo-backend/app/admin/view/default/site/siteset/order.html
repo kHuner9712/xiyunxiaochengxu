@@ -1,0 +1,324 @@
+{{:ModuleInclude('public/header')}}
+
+<!-- right content start  -->
+<div class="content-right">
+    <div class="content">
+        <!-- nav start -->
+        {{if !empty($siteset_nav_list) and is_array($siteset_nav_list)}}
+            {{:ModuleInclude('public/nav_switch_tabs', [
+                'nav_data'  => $siteset_nav_list,
+                'view_type' => $view_type,
+                'nav_type'  => $nav_type,
+                'url'       => 'admin/site/index'
+            ])}}
+        {{/if}}
+        <!-- nav end -->
+
+        <!-- form start -->
+        <form class="am-form form-validation am-form-popup-sticky" action="{{:MyUrl('admin/site/save')}}" method="POST" request-type="ajax-view" request-value="{{:MyUrl('admin/site/index', ['nav_type'=>$nav_type, 'view_type'=>$view_type])}}" enctype="multipart/form-data">
+            {{:ModuleInclude('public/nav_switch_btn', [
+                'nav_data' => [
+                    [
+                        'name' => MyLang('base_title'),
+                        'key'  => 'base-title',
+                    ],
+                    [
+                        'name' => MyLang('site.base_item_default_payment_title'),
+                        'key'  => 'site-defalut-payment',
+                    ],
+                    [
+                        'name' => MyLang('site.base_item_trace_source_title'),
+                        'key'  => 'site-trace-source',
+                    ],
+                ]
+            ])}}
+            <div class="nav-content">
+                <!-- 基础 -->
+                <div class="item am-active" data-key="base-title">
+                    <!-- 是否预约模式 -->
+                    <div class="am-form-group">
+                        <label>{{$data.common_order_is_booking.name}}<span class="am-form-group-label-tips">{{$data.common_order_is_booking.describe}}</span></label>
+                        <div class="am-radio-group">
+                            {{foreach $common_is_text_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.id}}" name="{{$data.common_order_is_booking.only_tag}}" data-validation-message="{{$data.common_order_is_booking.error_tips}}" required {{if isset($data['common_order_is_booking']['value']) and $data['common_order_is_booking']['value'] eq $v['id']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label>{{$data.home_extraction_address_position.name}}</label>
+                        <div class="am-radio-group">
+                            {{foreach $common_close_open_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.value}}" name="{{$data.home_extraction_address_position.only_tag}}" data-validation-message="{{$data.home_extraction_address_position.error_tips}}" required {{if isset($data['home_extraction_address_position']['value']) and $data['home_extraction_address_position']['value'] eq $v['value']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                        <div class="am-tips-card">
+                            <p>{{$data.home_extraction_address_position.describe}}</p>
+                        </div>
+                    </div>
+
+                    <!-- 下单指定时间 -->
+                    <div class="am-form-group">
+                        <label>{{$data.common_buy_datetime_info.name}}<span class="am-form-group-label-tips">{{$data.common_buy_datetime_info.describe}}</span></label>
+                        <div class="am-checkbox-group">
+                            {{foreach $common_buy_datetime_config_list as $v}}
+                                <label class="am-checkbox-inline">
+                                    <input type="checkbox" name="{{$data.common_buy_datetime_info.only_tag}}" value="{{$v.value}}" {{if isset($data['common_buy_datetime_info']['value']) and in_array($v['value'], $data['common_buy_datetime_info']['value'])}}checked{{/if}} data-validation-message="{{$data.common_buy_datetime_info.error_tips}}" data-am-ucheck> {{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                    </div>
+
+                    <!-- 下单联系信息 -->
+                    <div class="am-form-group">
+                        <label>{{$data.common_buy_extraction_contact_info.name}}<span class="am-form-group-label-tips">{{$data.common_buy_extraction_contact_info.describe}}</span></label>
+                        <div class="am-checkbox-group">
+                            {{foreach $common_buy_extraction_contact_config_list as $v}}
+                                <label class="am-checkbox-inline">
+                                    <input type="checkbox" name="{{$data.common_buy_extraction_contact_info.only_tag}}" value="{{$v.value}}" {{if isset($data['common_buy_extraction_contact_info']['value']) and in_array($v['value'], $data['common_buy_extraction_contact_info']['value'])}}checked{{/if}} data-validation-message="{{$data.common_buy_extraction_contact_info.error_tips}}" data-am-ucheck> {{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                    </div>
+
+                    <!-- 库存 -->
+                    <div class="am-form-group">
+                        <label>{{$data.common_is_deduction_inventory.name}}</label>
+                        <div class="am-radio-group">
+                            {{foreach $common_is_text_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.id}}" name="{{$data.common_is_deduction_inventory.only_tag}}" data-validation-message="{{$data.common_is_deduction_inventory.error_tips}}" required {{if isset($data['common_is_deduction_inventory']['value']) and $data['common_is_deduction_inventory']['value'] eq $v['id']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                        <div class="am-tips-card">
+                            <p>{{$data.common_is_deduction_inventory.describe}}</p>
+                        </div>
+                    </div>
+                    <div class="am-form-group">
+                        <label>{{$data.common_deduction_inventory_rules.name}}</label>
+                        <select name="{{$data.common_deduction_inventory_rules.only_tag}}" class="am-radius chosen-select" data-validation-message="{{$data.common_deduction_inventory_rules.error_tips}}" required>
+                            {{foreach $common_deduction_inventory_rules_list as $v}}
+                                <option value="{{$v.id}}" {{if isset($data['common_deduction_inventory_rules']['value']) and $data['common_deduction_inventory_rules']['value'] eq $v['id']}}selected{{/if}}>{{$v.name}}</option>
+                            {{/foreach}}
+                        </select>
+                        <div class="am-tips-card">
+                            <p>{{$data.common_deduction_inventory_rules.describe}}</p>
+                        </div>
+                    </div>
+
+                    <!-- 订单商品销量 -->
+                    <div class="am-form-group">
+                        <label>{{$data.common_goods_sales_count_inc_rules.name}}</label>
+                        <select name="{{$data.common_goods_sales_count_inc_rules.only_tag}}" class="am-radius chosen-select" data-validation-message="{{$data.common_goods_sales_count_inc_rules.error_tips}}" required>
+                            {{foreach $common_sales_count_inc_rules_list as $v}}
+                                <option value="{{$v.id}}" {{if isset($data['common_goods_sales_count_inc_rules']['value']) and $data['common_goods_sales_count_inc_rules']['value'] eq $v['id']}}selected{{/if}}>{{$v.name}}</option>
+                            {{/foreach}}
+                        </select>
+                        <div class="am-tips-card">
+                            <p>{{$data.common_goods_sales_count_inc_rules.describe}}</p>
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label>{{$data.common_is_under_line_order_normal.name}}</label>
+                        <div class="am-radio-group">
+                            {{foreach $common_is_text_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.id}}" name="{{$data.common_is_under_line_order_normal.only_tag}}" data-validation-message="{{$data.common_is_under_line_order_normal.error_tips}}" required {{if isset($data['common_is_under_line_order_normal']['value']) and $data['common_is_under_line_order_normal']['value'] eq $v['id']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                        <div class="am-tips-card">
+                            <p>{{$data.common_is_under_line_order_normal.describe}}</p>
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label>{{$data.common_fictitious_order_direct_pay.name}}</label>
+                        <div class="am-radio-group">
+                            {{foreach $common_is_text_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.id}}" name="{{$data.common_fictitious_order_direct_pay.only_tag}}" data-validation-message="{{$data.common_fictitious_order_direct_pay.error_tips}}" required {{if isset($data['common_fictitious_order_direct_pay']['value']) and $data['common_fictitious_order_direct_pay']['value'] eq $v['id']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                        <div class="am-tips-card">
+                            <p>{{$data.common_fictitious_order_direct_pay.describe}}</p>
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label>{{$data.common_is_pay_price_must_max_equal.name}}<span class="am-form-group-label-tips">{{$data.common_is_pay_price_must_max_equal.describe}}</span></label>
+                        <div class="am-radio-group">
+                            {{foreach $common_close_open_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.value}}" name="{{$data.common_is_pay_price_must_max_equal.only_tag}}" data-validation-message="{{$data.common_is_pay_price_must_max_equal.error_tips}}" required {{if isset($data['common_is_pay_price_must_max_equal']['value']) and $data['common_is_pay_price_must_max_equal']['value'] eq $v['value']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label>{{$data.home_is_enable_order_bulk_pay.name}}<span class="am-form-group-label-tips">{{$data.home_is_enable_order_bulk_pay.describe}}</span></label>
+                        <div class="am-radio-group">
+                            {{foreach $common_is_text_list as $v}}
+                                <label class="am-radio-inline">
+                                    <input type="radio" value="{{$v.id}}" name="{{$data.home_is_enable_order_bulk_pay.only_tag}}" data-validation-message="{{$data.home_is_enable_order_bulk_pay.error_tips}}" required {{if isset($data['home_is_enable_order_bulk_pay']['value']) and $data['home_is_enable_order_bulk_pay']['value'] eq $v['id']}}checked{{/if}} data-am-ucheck>{{$v.name}}
+                                </label>
+                            {{/foreach}}
+                        </div>
+                    </div>
+
+                    <div class="am-form-group">
+                        <label class="am-block">{{$data.common_order_detail_goods_use_guide_title.name}}<span class="am-form-group-label-tips">{{$data.common_order_detail_goods_use_guide_title.describe}}</span></label>
+                        <input type="text" name="{{$data.common_order_detail_goods_use_guide_title.only_tag}}" placeholder="{{$data.common_order_detail_goods_use_guide_title.name}}" data-validation-message="{{$data.common_order_detail_goods_use_guide_title.error_tips}}" class="am-radius" {{if !empty($data)}}value="{{$data.common_order_detail_goods_use_guide_title.value}}"{{/if}} />
+                    </div>
+                    <div class="am-form-group">
+                        <label class="am-block">{{$data.common_order_detail_goods_use_guide_describe.name}}</label>
+                        <input type="text" name="{{$data.common_order_detail_goods_use_guide_describe.only_tag}}" placeholder="{{$data.common_order_detail_goods_use_guide_describe.name}}" data-validation-message="{{$data.common_order_detail_goods_use_guide_describe.error_tips}}" class="am-radius" {{if !empty($data)}}value="{{$data.common_order_detail_goods_use_guide_describe.value}}"{{/if}} />
+                    </div>
+                </div>
+
+                <!-- 默认支付方式 -->
+                <div class="item" data-key="site-defalut-payment">
+                    <div class="am-operate-stretch-tips">
+                        <div class="title">
+                            <i class="iconfont icon-tips"></i>
+                            <strong title="{{:MyLang('operate_list_tips_msg')}}">{{:MyLang('operate_list_tips_button_text')}}</strong>
+                            <i class="iconfont icon-retract-diagonal contract"></i> 
+                        </div>
+                        <p>{{:MyLang('site.site_setup_order_default_payment_tips')}}</p>
+                    </div>
+                    <div class="default-payment-list am-margin-bottom-lg">
+                        {{foreach $common_platform_type as $v}}
+                            <div class="am-flex am-flex-row am-flex-items-center am-gap-1 am-margin-top-sm">
+                                <span class="am-text-right">{{$v.name}}</span>
+                                <select name="common_default_payment[{{$v.value}}]" class="am-radius chosen-select" data-placeholder="{{:MyLang('optional_tips')}}" data-validation-message="{{:MyLang('site.site_setup_choice_payment_message', ['name'=>$v['name']])}}">
+                                    <option value="">{{:MyLang('optional_tips')}}</option>
+                                    {{if !empty($payment_list)}}
+                                        {{foreach $payment_list as $pay}}
+                                            {{if !empty($pay['apply_terminal']) and is_array($pay['apply_terminal']) and in_array($v['value'], $pay['apply_terminal'])}}
+                                                <option value="{{$pay.payment}}" {{if !empty($data['common_default_payment']) and !empty($data['common_default_payment']['value']) and !empty($data['common_default_payment']['value'][$v['value']]) and $data['common_default_payment']['value'][$v['value']] eq $pay['payment']}}selected{{/if}}>{{$pay.name}}</option>
+                                            {{/if}}
+                                        {{/foreach}}
+                                    {{/if}}
+                                </select>
+                            </div>
+                        {{/foreach}}
+                    </div>
+                </div>
+
+                <!-- 订单追溯 -->
+                <div class="item" data-key="site-trace-source">
+                    <p class="am-margin-bottom-sm">{{$data.common_order_trace_source_config.describe}}</p>
+                    <table class="am-table am-table-bordered am-table-radius am-text-left trace-source-list">
+                        <thead>
+                            <tr>
+                                <th>{{:MyLang('goods_category_title')}}</th>
+                                <th>{{:MyLang('form_is_required_title')}}</th>
+                                <th>{{:MyLang('operate_title')}}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{if !empty($data['common_order_trace_source_config']) and !empty($data['common_order_trace_source_config']['value']) and is_array($data['common_order_trace_source_config']['value'])}}
+                                {{foreach $data['common_order_trace_source_config']['value'] as $dk=>$dv}}
+                                    <tr>
+                                        <td>
+                                            <select name="{{$data.common_order_trace_source_config.only_tag}}[{{$dk}}][category_ids]" class="am-radius chosen-select" data-placeholder="{{:MyLang('optional_tips')}}" multiple>
+                                            {{if !empty($goods_category_list)}}
+                                                {{foreach $goods_category_list as $v}}
+                                                    <option value="{{$v.id}}" {{if !empty($dv['category_ids']) and is_array($dv['category_ids']) and in_array($v['id'], $dv['category_ids'])}}selected{{/if}}>{{$v.name}}</option>
+                                                    {{if !empty($v['items'])}}
+                                                        {{foreach $v.items as $vs}}
+                                                            <option style="padding-left: 20px;" value="{{$vs.id}}" {{if !empty($dv['category_ids']) and is_array($dv['category_ids']) and in_array($vs['id'], $dv['category_ids'])}}selected{{/if}}>{{if empty($vs['items'])}}├{{else /}}└{{/if}}² {{$vs.name}}</option>
+                                                            {{if !empty($vs['items'])}}
+                                                                {{foreach $vs.items as $kss=>$vss}}
+                                                                    <option style="padding-left: 40px;" value="{{$vss.id}}" {{if !empty($dv['category_ids']) and is_array($dv['category_ids']) and in_array($vss['id'], $dv['category_ids'])}}selected{{/if}}>{{if $kss eq count($vs['items'])-1}}└{{else /}}├{{/if}}³ {{$vss.name}}</option>
+                                                                {{/foreach}}
+                                                            {{/if}}
+                                                        {{/foreach}}
+                                                    {{/if}}
+                                                {{/foreach}}
+                                            {{/if}}
+                                        </select>
+                                        </td>
+                                        <td>
+                                            {{if !empty($siteset_trace_source_required_list) and is_array($siteset_trace_source_required_list)}}
+                                                <div class="am-checkbox-group am-margin-top-xs">
+                                                    {{foreach $siteset_trace_source_required_list as $k=>$v}}
+                                                        <label class="am-checkbox-inline">
+                                                            <input type="checkbox" name="{{$data.common_order_trace_source_config.only_tag}}[{{$dk}}][required]" value="{{$k}}" {{if !empty($dv['required']) and is_array($dv['required']) and in_array($k, $dv['required'])}}checked{{/if}} data-am-ucheck /> {{$v}}
+                                                        </label>
+                                                    {{/foreach}}
+                                                </div>
+                                            {{/if}}
+                                        </td>
+                                        <td>
+                                            <div class="am-margin-top-xs">
+                                                <a href="javascript:;" class="delete-submit">
+                                                    <i class="iconfont icon-btn-del am-text-xs"></i>
+                                                    <span>{{:MyLang('remove_title')}}</span>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {{/foreach}}
+                            {{/if}}
+                        </tbody>
+                    </table>
+                    <div class="am-margin-top am-margin-bottom-lg">
+                        <button type="button" class="am-btn am-btn-primary-light-plain am-radius am-btn-xs trace-source-submit-add"> 
+                            <i class="iconfont icon-add am-text-xs"></i>
+                            <span>{{:MyLang('created_title')}}{{:MyLang('config_title')}}</span>
+                        </button>
+                        <select name="{{$data.common_order_trace_source_config.only_tag}}[{index}][category_ids]" class="am-radius chosen-select am-hide trace-source-goods-category-select-html" multiple="multiple" data-placeholder="{{:MyLang('please_select_tips')}}">
+                            {{if !empty($goods_category_list)}}
+                                {{foreach $goods_category_list as $v}}
+                                    <option value="{{$v.id}}">{{$v.name}}</option>
+                                    {{if !empty($v['items'])}}
+                                        {{foreach $v.items as $vs}}
+                                            <option style="padding-left: 20px;" value="{{$vs.id}}">{{if empty($vs['items'])}}├{{else /}}└{{/if}}² {{$vs.name}}</option>
+                                            {{if !empty($vs['items'])}}
+                                                {{foreach $vs.items as $kss=>$vss}}
+                                                    <option style="padding-left: 40px;" value="{{$vss.id}}">{{if $kss eq count($vs['items'])-1}}└{{else /}}├{{/if}}³ {{$vss.name}}</option>
+                                                {{/foreach}}
+                                            {{/if}}
+                                        {{/foreach}}
+                                    {{/if}}
+                                {{/foreach}}
+                            {{/if}}
+                        </select>
+                        <div class="am-checkbox-group am-margin-top-xs am-hide trace-source-required-html">
+                            {{if !empty($siteset_trace_source_required_list) and is_array($siteset_trace_source_required_list)}}
+                                {{foreach $siteset_trace_source_required_list as $k=>$v}}
+                                    <label class="am-checkbox-inline">
+                                        <input type="checkbox" name="{{$data.common_order_trace_source_config.only_tag}}[{index}][required]" value="{{$k}}" data-am-ucheck /> {{$v}}
+                                    </label>
+                                {{/foreach}}
+                            {{/if}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="am-form-popup-submit">
+                <input type="hidden" name="nav_type" value="{{$nav_type}}" />
+                <input type="hidden" name="view_type" value="{{$view_type}}" />
+                <button type="submit" class="am-btn am-btn-primary am-radius am-btn-xs btn-loading-example" data-am-loading="{spinner: 'circle-o-notch', loadingText:'{{:MyLang('save_title')}}'}">
+                    <i class="am-icon-save"></i>
+                    <span>{{:MyLang('save_title')}}</span>
+                </button>
+            </div>
+        </form>
+        <!-- form end -->
+    </div>
+</div>
+<!-- right content end  -->
+
+<!-- footer start -->
+{{:ModuleInclude('public/footer')}}

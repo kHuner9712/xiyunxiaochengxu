@@ -1,0 +1,47 @@
+/**
+* 虚拟销售-密钥信息
+*/
+.fictitious-container {
+    margin-top: 0 !important;
+}
+.fictitious-container li .am-u-sm-2 {
+    width: 6rem;
+    padding: 0;
+}
+.fictitious-container li .am-u-sm-10 {
+    width: calc(100% - 6rem);
+    padding: 0;
+}
+.fictitious-container li img {
+    max-width: 4rem;
+}
+
+
+/**
+ * 快递
+ */
+.express-list .edit-submit,
+.express-list .delete-submit {
+    cursor: pointer;
+    position: absolute;
+    top: 0.2rem;
+    right: 1rem;
+}
+.express-list .edit-submit {
+    right: 5rem;
+}
+
+
+/**
+ * 服务
+ */
+.service-list .edit-submit,
+.service-list .delete-submit {
+    cursor: pointer;
+    position: absolute;
+    top: 0.2rem;
+    right: 1rem;
+}
+.service-list .edit-submit {
+    right: 5rem;
+}
