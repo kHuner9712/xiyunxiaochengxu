@@ -58,6 +58,36 @@ cp manifest.local.json.example manifest.local.json
 
 构建脚本需在编译前将 `manifest.local.json` 中的值合并到 `manifest.json`，或使用 uni-app 的条件编译机制读取。
 
+## 构建注入机制
+
+项目提供了 `shopxo-uniapp/scripts/manifest-merge.js` 脚本，在构建前自动合并本地配置：
+
+```bash
+# 1. 创建本地配置
+cd shopxo-uniapp
+cp manifest.local.json.example manifest.local.json
+# 编辑 manifest.local.json，填入真实值
+
+# 2. 构建前合并
+node scripts/manifest-merge.js
+# 输出: [manifest-merge] 合并完成（原文件已备份为 manifest.json.bak）
+
+# 3. 执行 HBuilderX 构建
+
+# 4. 构建后恢复（避免提交密钥）
+node scripts/manifest-restore.js
+# 输出: [manifest-restore] manifest.json 已从备份恢复
+```
+
+CI/CD 流水线示例：
+```yaml
+- run: cp manifest.local.json.example manifest.local.json
+- run: sed -i 's/在此填入微信OAuth appid/$WX_APPID/' manifest.local.json
+- run: node scripts/manifest-merge.js
+- run: # 执行构建命令
+- run: node scripts/manifest-restore.js
+```
+
 ## Git 历史清理
 
 已使用 `git filter-repo` 将微信 OAuth appsecret 从 git 历史中替换为 `REDACTED_APPSECRET`，并 force push 到远程仓库。
