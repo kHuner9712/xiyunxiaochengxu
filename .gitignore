@@ -4,17 +4,26 @@ shopxo-backend/runtime/
 shopxo-backend/public/static/upload/
 shopxo-backend/.env
 shopxo-backend/test_*.php
+shopxo-backend/config/database.php
+shopxo-backend/config/domain.php
 
 # ===== 前端 =====
 shopxo-uniapp/node_modules/
 shopxo-uniapp/unpackage/
 shopxo-uniapp/.hbuilderx/
+shopxo-uniapp/dist/
 
 # ===== 环境配置 =====
 .env
 
 # ===== Docker 数据 =====
 mysql-data/
+redis-data/
+
+# ===== 构建产物 =====
+build/
+dist/
+output/
 
 # ===== IDE =====
 .idea/
@@ -33,3 +42,8 @@ desktop.ini
 *.log
 *.tmp
 *.bak
+
+# ===== 敏感文件 =====
+*.pem
+*.key
+*.cert

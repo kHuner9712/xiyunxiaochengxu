@@ -2309,6 +2309,13 @@
 
             // 分享参数处理
             share_query_handle(query) {
+                if ((query || null) == null || query.indexOf('invite_code') == -1) {
+                    var invite_code = this.get_user_cache_info('invite_code', '') || '';
+                    if (invite_code !== '') {
+                        var join = (query || null) == null ? '' : '&';
+                        query += join + 'invite_code=' + invite_code;
+                    }
+                }
                 if ((query || null) == null || query.indexOf('referrer') == -1) {
                     var user_id = parseInt(this.get_user_cache_info('id', 0)) || 0;
                     if (user_id > 0) {
@@ -2317,6 +2324,15 @@
                     }
                 }
                 return (query || null) == null ? '' : '?' + query;
+            },
+
+            get_user_invite_code_by_id(user_id) {
+                if (!user_id) return '';
+                var info = uni.getStorageSync(this.data.cache_user_info_key) || null;
+                if (info && info.id == user_id && info.invite_code) {
+                    return info.invite_code;
+                }
+                return '';
             },
 
             // 是否朋友圈单页访问提示

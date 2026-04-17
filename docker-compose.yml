@@ -22,6 +22,9 @@ services:
     container_name: shopxo-php
     volumes:
       - ./shopxo-backend:/var/www/html
+    depends_on:
+      - mysql
+      - redis
     networks:
       - shopxo-net
     restart: unless-stopped
@@ -42,6 +45,15 @@ services:
       - shopxo-net
     restart: unless-stopped
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+
+  redis:
+    image: redis:7-alpine
+    container_name: shopxo-redis
+    ports:
+      - "${REDIS_HOST_PORT:-}:6379"
+    networks:
+      - shopxo-net
+    restart: unless-stopped
 
 networks:
   shopxo-net:
