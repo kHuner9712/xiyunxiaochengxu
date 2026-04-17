@@ -1,0 +1,12 @@
+- [x] my-invite.vue data() 中无硬编码演示数据（invite_code/invite_stats/reward_list）
+- [x] my-invite.vue 通过接口获取 invite_code/invite_count/reward_total
+- [x] my-invite.vue 通过接口获取奖励记录列表
+- [x] my-invite.vue 接口失败时不回退到演示数据
+- [x] my-invite.vue 分享按钮显示"暂未开放"
+- [x] my-invite.vue 有加载态/空态处理
+- [x] invite.vue data() 中无硬编码演示数据（invite_code/invite_list）
+- [x] invite.vue 接口回调不回退到 self.xxx 演示数据
+- [x] invite.vue 接口失败时显示错误提示
+- [x] invite.vue 分享按钮显示"暂未开放"
+- [x] invite.vue 有加载态处理
+- [x] grep 搜索确认无 YX2026ABC/MY2026 等硬编码邀请码

@@ -48,7 +48,7 @@
                     <view class="flex-row jc-sb align-c">
                         <view>
                             <view class="text-size-sm cr-grey">我的邀请码</view>
-                            <view class="text-size fw-b margin-top-xs invite-code-text">{{ invite_code }}</view>
+                            <view class="text-size fw-b margin-top-xs invite-code-text">{{ invite_code || '加载中...' }}</view>
                         </view>
                         <view class="invite-copy-btn cr-white text-size-sm" @tap="copy_invite_code">复制邀请码</view>
                     </view>
@@ -97,46 +97,10 @@
         data() {
             return {
                 theme_view: app.globalData.get_theme_value_view(),
-                invite_code: 'MY2026',
+                invite_code: '',
                 invite_count: 0,
                 reward_total: 0,
-                invite_list: [
-                    {
-                        id: 1,
-                        avatar: '/static/images/common/user.png',
-                        nickname: '云溪妈妈',
-                        register_time: '2026-04-15 10:30',
-                        status: 1
-                    },
-                    {
-                        id: 2,
-                        avatar: '/static/images/common/user.png',
-                        nickname: '小丽',
-                        register_time: '2026-04-13 14:20',
-                        status: 1
-                    },
-                    {
-                        id: 3,
-                        avatar: '/static/images/common/user.png',
-                        nickname: '甜甜妈妈',
-                        register_time: '2026-04-10 09:15',
-                        status: 0
-                    },
-                    {
-                        id: 4,
-                        avatar: '/static/images/common/user.png',
-                        nickname: '小刚',
-                        register_time: '2026-04-08 16:00',
-                        status: 1
-                    },
-                    {
-                        id: 5,
-                        avatar: '/static/images/common/user.png',
-                        nickname: '芳芳',
-                        register_time: '2026-04-05 11:30',
-                        status: 0
-                    }
-                ]
+                invite_list: []
             };
         },
 
@@ -169,13 +133,17 @@
                         if (res.data.code == 0) {
                             var data = res.data.data || {};
                             self.setData({
-                                invite_code: data.invite_code || self.invite_code,
+                                invite_code: data.invite_code || '',
                                 invite_count: data.invite_count || 0,
                                 reward_total: data.reward_total || 0,
                             });
+                        } else {
+                            app.globalData.showToast(res.data.msg || '获取邀请信息失败');
                         }
                     },
-                    fail: function() {},
+                    fail: function() {
+                        app.globalData.showToast('网络异常，请重试');
+                    },
                 });
             },
 
@@ -189,11 +157,13 @@
                         if (res.data.code == 0) {
                             var data = res.data.data || {};
                             self.setData({
-                                invite_list: data.list || self.invite_list,
+                                invite_list: data.data || [],
                             });
                         }
                     },
-                    fail: function() {},
+                    fail: function() {
+                        app.globalData.showToast('网络异常，请重试');
+                    },
                 });
             },
 
@@ -207,7 +177,7 @@
             },
 
             share_event() {
-                app.globalData.showToast('分享功能开发中');
+                app.globalData.showToast('分享功能暂未开放');
             }
         }
     };

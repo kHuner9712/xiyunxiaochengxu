@@ -24,7 +24,7 @@
                     <view class="flex-row jc-sb align-c">
                         <view>
                             <view class="text-size-sm cr-grey">我的邀请码</view>
-                            <view class="text-size fw-b margin-top-xs invite-code-text">{{ invite_code }}</view>
+                            <view class="text-size fw-b margin-top-xs invite-code-text">{{ invite_code || '加载中...' }}</view>
                         </view>
                         <view class="invite-copy-btn cr-white text-size-sm" @tap="copy_invite_code">复制邀请码</view>
                     </view>
@@ -71,19 +71,13 @@
         data() {
             return {
                 theme_view: app.globalData.get_theme_value_view(),
-                invite_code: 'YX2026ABC',
+                invite_code: '',
                 invite_stats: {
-                    total_invites: 12,
-                    total_rewards: 86.50
+                    total_invites: 0,
+                    total_rewards: 0
                 },
-                reward_list: [
-                    { id: 1, desc: '邀请好友 小红 注册成功', time: '2026-04-15 10:30', amount: 10.00 },
-                    { id: 2, desc: '邀请好友 小明 完成首单', time: '2026-04-12 16:20', amount: 20.00 },
-                    { id: 3, desc: '邀请好友 小丽 注册成功', time: '2026-04-10 09:15', amount: 10.00 },
-                    { id: 4, desc: '邀请好友 小刚 完成首单', time: '2026-04-08 14:00', amount: 20.00 },
-                    { id: 5, desc: '邀请好友 小芳 注册成功', time: '2026-04-05 11:30', amount: 10.00 },
-                    { id: 6, desc: '邀请奖励提现', time: '2026-04-03 09:00', amount: -83.50 }
-                ]
+                reward_list: [],
+                loading: false
             };
         },
 
@@ -101,6 +95,8 @@
             if ((this.$refs.common || null) != null) {
                 this.$refs.common.on_show();
             }
+            this.get_invite_info();
+            this.get_reward_list();
         },
 
         methods: {
@@ -114,7 +110,59 @@
             },
 
             share_event() {
-                app.globalData.showToast('分享功能开发中');
+                app.globalData.showToast('分享功能暂未开放');
+            },
+
+            get_invite_info() {
+                var self = this;
+                uni.request({
+                    url: app.globalData.get_request_url('index', 'invite'),
+                    method: 'POST',
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.data.code == 0) {
+                            var data = res.data.data || {};
+                            self.setData({
+                                invite_code: data.invite_code || '',
+                                invite_stats: {
+                                    total_invites: data.invite_count || 0,
+                                    total_rewards: data.reward_total || 0,
+                                },
+                            });
+                        } else {
+                            app.globalData.showToast(res.data.msg || '获取邀请信息失败');
+                        }
+                    },
+                    fail: function() {
+                        app.globalData.showToast('网络异常，请重试');
+                    },
+                });
+            },
+
+            get_reward_list() {
+                var self = this;
+                uni.request({
+                    url: app.globalData.get_request_url('rewardlist', 'invite'),
+                    method: 'POST',
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.data.code == 0) {
+                            var list = (res.data.data || {}).data || [];
+                            var reward_list = [];
+                            for (var i = 0; i < list.length; i++) {
+                                var item = list[i];
+                                reward_list.push({
+                                    id: item.id,
+                                    desc: (item.trigger_event_text || '') + ' ' + (item.invitee_info ? item.invitee_info.nickname || '' : ''),
+                                    time: item.add_time_text || '',
+                                    amount: item.reward_type === 'integral' ? item.reward_value : 0,
+                                });
+                            }
+                            self.setData({ reward_list: reward_list });
+                        }
+                    },
+                    fail: function() {},
+                });
             }
         }
     };
