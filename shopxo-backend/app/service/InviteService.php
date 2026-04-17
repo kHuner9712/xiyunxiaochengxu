@@ -2,14 +2,36 @@
 namespace app\service;
 
 use think\facade\Db;
+use think\facade\Log;
 use app\service\IntegralService;
 use app\service\ResourcesService;
 
 class InviteService
 {
+    public static function GenerateInviteCode()
+    {
+        $max_attempts = 20;
+        for ($i = 0; $i < $max_attempts; $i++) {
+            $code = strtoupper(substr(md5(uniqid(mt_rand(), true) . microtime(true)), 0, 8));
+            $exists = Db::name('User')->where(['invite_code' => $code])->find();
+            if (empty($exists)) {
+                return $code;
+            }
+        }
+        return strtoupper(substr(md5(uniqid('invite', true) . time()), 0, 8));
+    }
+
     public static function InviteInfo($params = [])
     {
         $user_id = intval($params['user']['id']);
+
+        $user = Db::name('User')->where(['id' => $user_id])->find();
+        $invite_code = !empty($user['invite_code']) ? $user['invite_code'] : '';
+
+        if (empty($invite_code)) {
+            $invite_code = self::GenerateInviteCode();
+            Db::name('User')->where(['id' => $user_id])->update(['invite_code' => $invite_code]);
+        }
 
         $invite_count = Db::name('InviteReward')->where([
             ['inviter_id', '=', $user_id],
@@ -30,7 +52,7 @@ class InviteService
             'invite_count' => $invite_count,
             'reward_total' => intval($reward_total),
             'pending_count' => $pending_count,
-            'invite_code'  => md5($user_id . 'muying_invite'),
+            'invite_code'  => $invite_code,
         ];
     }
 
@@ -98,7 +120,12 @@ class InviteService
             return DataReturn('用户不存在', -1);
         }
 
-        $invite_code = md5($user_id . 'muying_invite');
+        $invite_code = !empty($user['invite_code']) ? $user['invite_code'] : '';
+        if (empty($invite_code)) {
+            $invite_code = self::GenerateInviteCode();
+            Db::name('User')->where(['id' => $user_id])->update(['invite_code' => $invite_code]);
+        }
+
         $poster_data = [
             'user_id'      => $user_id,
             'nickname'     => $user['nickname'],
@@ -263,48 +290,53 @@ class InviteService
 
     private static function GetInviterByCode($code)
     {
-        $users = Db::name('User')->column('id', 'id');
-        foreach ($users as $uid) {
-            if (md5($uid . 'muying_invite') === $code) {
-                return $uid;
-            }
-        }
-        return 0;
+        $user = Db::name('User')->where(['invite_code' => $code])->find();
+        return !empty($user) ? intval($user['id']) : 0;
     }
 
     private static function GrantReward($reward_id)
     {
-        $reward = Db::name('InviteReward')->where(['id' => $reward_id, 'status' => 0])->find();
-        if (empty($reward)) {
-            return false;
-        }
-
-        if ($reward['reward_type'] === 'integral' && $reward['reward_value'] > 0) {
-            $user = Db::name('User')->where(['id' => $reward['inviter_id']])->find();
-            if (empty($user)) {
+        Db::startTrans();
+        try {
+            $reward = Db::name('InviteReward')->where(['id' => $reward_id, 'status' => 0])->lock(true)->find();
+            if (empty($reward)) {
+                Db::rollback();
                 return false;
             }
 
-            Db::name('User')->where(['id' => $reward['inviter_id']])->inc('integral', $reward['reward_value'])->update();
+            if ($reward['reward_type'] === 'integral' && $reward['reward_value'] > 0) {
+                $user = Db::name('User')->where(['id' => $reward['inviter_id']])->find();
+                if (empty($user)) {
+                    Db::rollback();
+                    return false;
+                }
 
-            if (class_exists('app\service\IntegralService')) {
-                $inviter_integral = Db::name('User')->where(['id' => $reward['inviter_id']])->value('integral');
-                IntegralService::UserIntegralLogAdd(
-                    $reward['inviter_id'],
-                    intval($inviter_integral),
-                    $reward['reward_value'],
-                    '邀请奖励(用户ID:' . $reward['invitee_id'] . ')',
-                    1,
-                    0
-                );
+                Db::name('User')->where(['id' => $reward['inviter_id']])->inc('integral', $reward['reward_value'])->update();
+
+                if (class_exists('app\service\IntegralService')) {
+                    $inviter_integral = Db::name('User')->where(['id' => $reward['inviter_id']])->value('integral');
+                    IntegralService::UserIntegralLogAdd(
+                        $reward['inviter_id'],
+                        intval($inviter_integral),
+                        $reward['reward_value'],
+                        '邀请奖励(用户ID:' . $reward['invitee_id'] . ')',
+                        1,
+                        0
+                    );
+                }
             }
+
+            Db::name('InviteReward')->where(['id' => $reward_id])->update([
+                'status'   => 1,
+                'upd_time' => time(),
+            ]);
+
+            Db::commit();
+            return true;
+        } catch (\Exception $e) {
+            Db::rollback();
+            Log::error('邀请奖励发放失败 reward_id=' . $reward_id . ' error=' . $e->getMessage());
+            return false;
         }
-
-        Db::name('InviteReward')->where(['id' => $reward_id])->update([
-            'status'   => 1,
-            'upd_time' => time(),
-        ]);
-
-        return true;
     }
 }

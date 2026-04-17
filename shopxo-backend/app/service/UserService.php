@@ -11,6 +11,7 @@
 namespace app\service;
 
 use think\facade\Db;
+use think\facade\Log;
 use app\service\SystemService;
 use app\service\RegionService;
 use app\service\SafetyService;
@@ -1648,6 +1649,16 @@ class UserService
                 $obj->Remove();
             }
 
+            // 为新用户生成邀请码
+            try
+            {
+                $new_invite_code = InviteService::GenerateInviteCode();
+                Db::name('User')->where(['id' => $user_ret['data']['user_id']])->update(['invite_code' => $new_invite_code]);
+            } catch(\Exception $e)
+            {
+                Log::error('新用户邀请码生成失败 user_id=' . $user_ret['data']['user_id'] . ' error=' . $e->getMessage());
+            }
+
             // 邀请注册钩子
             try
             {
@@ -1655,7 +1666,10 @@ class UserService
                     'user_id'     => $user_ret['data']['user_id'],
                     'invite_code' => isset($params['invite_code']) ? $params['invite_code'] : '',
                 ]);
-            } catch(\Exception $e) {}
+            } catch(\Exception $e)
+            {
+                Log::error('邀请注册钩子异常 user_id=' . $user_ret['data']['user_id'] . ' error=' . $e->getMessage());
+            }
 
             // 是否需要审核
             if($common_register_is_enable_audit == 1)

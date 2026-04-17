@@ -5,6 +5,7 @@ use app\service\ApiService;
 use app\service\SystemBaseService;
 use app\service\ActivityService;
 use app\service\ResourcesService;
+use think\facade\Db;
 
 class Activity extends Common
 {
@@ -43,6 +44,7 @@ class Activity extends Common
             $params = [
                 'where' => [
                     ['is_enable', '=', 1],
+                    ['is_delete_time', '=', 0],
                     ['id', '=', $id],
                 ],
                 'm' => 0,
@@ -51,9 +53,27 @@ class Activity extends Common
             $data = ActivityService::ActivityList($params);
             if (!empty($data['data'][0])) {
                 ActivityService::ActivityAccessCountInc(['id' => $id]);
-                $data['data'][0]['content'] = ResourcesService::ApMiniRichTextContentHandle($data['data'][0]['content']);
+                $activity = $data['data'][0];
+                $activity['content'] = ResourcesService::ApMiniRichTextContentHandle($activity['content']);
+
+                $is_favored = false;
+                $is_liked = false;
+                if (!empty($this->user)) {
+                    $favor_exists = Db::name('GoodsFavor')->where([
+                        ['user_id', '=', $this->user['id']],
+                        ['goods_id', '=', $id],
+                        ['type', '=', 'activity'],
+                    ])->find();
+                    $is_favored = !empty($favor_exists);
+                }
+
                 $result = [
-                    'data' => $data['data'][0],
+                    'activity'     => $activity,
+                    'is_favored'   => $is_favored,
+                    'is_liked'     => false,
+                    'like_count'   => 0,
+                    'comment_count'=> 0,
+                    'user_shares'  => [],
                 ];
                 $ret = SystemBaseService::DataReturn($result);
             } else {

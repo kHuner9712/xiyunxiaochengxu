@@ -168,42 +168,10 @@
                 activity_id: null,
                 is_favored: false,
                 is_liked: false,
-                like_count: 36,
-                comment_count: 8,
-                activity: {
-                    id: 1,
-                    title: '孕妈瑜伽课堂·第二期',
-                    stage_name: '孕期',
-                    stage_class: 'muying-stage-tag--pregnant',
-                    cover: '/static/images/common/default-images.png',
-                    time: '2026-04-20 10:00 ~ 2026-04-20 11:30',
-                    address: '云禧母婴中心3楼瑜伽室',
-                    signup_count: 18,
-                    max_count: 30,
-                    signup_deadline: '2026-04-19 18:00',
-                    price: 0,
-                    organizer: '李老师',
-                    organizer_phone: '138****6789',
-                    suitable_crowd: '孕12周以上的准妈妈，无高危妊娠指征，经医生评估可适度运动者。',
-                    content: '<div style="padding:10px 0;"><h3 style="color:#333;font-size:16px;margin-bottom:10px;">课程介绍</h3><p style="color:#666;font-size:14px;line-height:1.8;">孕妈瑜伽是专为孕期妈妈设计的温和运动课程，由专业孕产瑜伽导师授课。通过安全、科学的瑜伽体式，帮助孕妈缓解孕期不适，增强体质，为顺利分娩做好准备。</p><h3 style="color:#333;font-size:16px;margin:15px 0 10px;">课程内容</h3><p style="color:#666;font-size:14px;line-height:1.8;">1. 呼吸练习与放松技巧<br/>2. 孕期安全体式练习<br/>3. 骨盆底肌训练<br/>4. 产前冥想与心理调适</p><h3 style="color:#333;font-size:16px;margin:15px 0 10px;">适合人群</h3><p style="color:#666;font-size:14px;line-height:1.8;">孕12周以上的准妈妈，无高危妊娠指征，经医生评估可适度运动者。</p><h3 style="color:#333;font-size:16px;margin:15px 0 10px;">注意事项</h3><p style="color:#666;font-size:14px;line-height:1.8;">请穿着宽松舒适的运动服装，自带瑜伽垫和水杯。课前2小时请勿进食。</p></div>',
-                },
-                user_shares: [
-                    {
-                        nickname: '小橘子',
-                        photo: '/static/images/common/default-images.png',
-                        comment: '很棒的课程，老师很专业！',
-                    },
-                    {
-                        nickname: '甜甜妈',
-                        photo: '/static/images/common/default-images.png',
-                        comment: '上完课感觉身体轻松多了',
-                    },
-                    {
-                        nickname: '幸福妈妈',
-                        photo: '/static/images/common/default-images.png',
-                        comment: '认识了好多准妈妈朋友',
-                    },
-                ],
+                like_count: 0,
+                comment_count: 0,
+                activity: {},
+                user_shares: [],
             };
         },
 
@@ -213,13 +181,15 @@
 
         computed: {
             signup_disabled() {
-                return this.activity.signup_count >= this.activity.max_count;
+                return this.activity.max_count > 0 && this.activity.signup_count >= this.activity.max_count;
             },
             signup_btn_text() {
+                if (!this.activity.id) return '加载中...';
                 if (this.signup_disabled) return '名额已满';
                 return '立即报名';
             },
             signup_btn_class() {
+                if (!this.activity.id) return 'signup-btn-disabled';
                 if (this.signup_disabled) return 'signup-btn-disabled';
                 return 'signup-btn-active';
             },
@@ -257,16 +227,20 @@
                         if (res.data.code == 0) {
                             var data = res.data.data || {};
                             self.setData({
-                                activity: data.activity || self.activity,
-                                user_shares: data.user_shares || self.user_shares,
-                                is_favored: data.is_favored || false,
-                                is_liked: data.is_liked || false,
-                                like_count: data.like_count || self.like_count,
-                                comment_count: data.comment_count || self.comment_count,
+                                activity: data.activity || {},
+                                user_shares: data.user_shares || [],
+                                is_favored: !!data.is_favored,
+                                is_liked: !!data.is_liked,
+                                like_count: data.like_count || 0,
+                                comment_count: data.comment_count || 0,
                             });
+                        } else {
+                            app.globalData.showToast(res.data.msg || '活动不存在');
                         }
                     },
-                    fail: function() {},
+                    fail: function() {
+                        app.globalData.showToast('网络异常，请重试');
+                    },
                 });
             },
 
@@ -275,16 +249,11 @@
             },
 
             fav_event() {
-                this.setData({ is_favored: !this.is_favored });
-                app.globalData.showToast(this.is_favored ? '收藏成功' : '已取消收藏', 'success');
+                app.globalData.showToast('收藏功能暂未开放');
             },
 
             like_event() {
-                var new_liked = !this.is_liked;
-                this.setData({
-                    is_liked: new_liked,
-                    like_count: this.like_count + (new_liked ? 1 : -1),
-                });
+                app.globalData.showToast('点赞功能暂未开放');
             },
 
             comment_event() {
@@ -303,14 +272,7 @@
             },
 
             poster_event() {
-                uni.showShareMenu({
-                    withShareTicket: true,
-                    menus: ['shareAppMessage', 'shareTimeline'],
-                    success: function() {},
-                    fail: function() {
-                        app.globalData.showToast('分享海报功能暂不可用');
-                    },
-                });
+                app.globalData.showToast('海报功能暂未开放');
             },
 
             signup_event() {

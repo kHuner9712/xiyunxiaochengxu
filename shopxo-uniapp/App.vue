@@ -2,15 +2,16 @@
     import base64 from './common/js/lib/base64.js';
     // 多语言引入并初始化
     import i18n from './locale/index';
+    import devConfig from './common/js/config/dev.js';
     export default {
         globalData: {
             data: {
                 // 基础配置
                 // 数据接口请求地址
-                request_url:'http://192.168.1.217:8080/',
+                request_url: devConfig.request_url || 'http://localhost:8080/',
 
                 // 静态资源地址（如系统根目录不在public目录下面请在静态地址后面加public目录、如：https://d1.shopxo.vip/public/）
-                static_url:'',
+                static_url: devConfig.static_url || '',
 
                 // 系统类型（默认default、如额外独立小程序、可与程序分身插件实现不同主体小程序及支付独立）
                 system_type: 'default',
@@ -2818,20 +2819,6 @@
                             break;
                     }
                 }
-            },
-
-            // 数组分组
-            group_arry(arry, sub_group_length) {
-                let index = 0;
-                let new_arry = [];
-                if (arry.length > sub_group_length) {
-                    while (index < arry.length) {
-                        new_arry.push(arry.slice(index, (index += sub_group_length)));
-                    }
-                } else {
-                    new_arry = [arry];
-                }
-                return new_arry;
             },
 
             // 数组分组

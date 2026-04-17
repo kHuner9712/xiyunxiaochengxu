@@ -1020,7 +1020,9 @@ class OrderService
                     {
                         InviteService::OnFirstOrder(['user_id' => $order['user_id']]);
                     }
-                } catch(\Exception $e) {}
+                } catch(\Exception $e) {
+                    \think\facade\Log::error('邀请首单奖励异常 order_id=' . $order['id'] . ' user_id=' . $order['user_id'] . ' error=' . $e->getMessage());
+                }
 
                 // 虚拟商品自动触发发货操作
                 if($order['order_model'] == 3)

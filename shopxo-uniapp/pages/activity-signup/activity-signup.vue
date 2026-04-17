@@ -146,9 +146,9 @@
                 status_bar_height: bar_height,
                 activity_id: null,
                 activity: {
-                    id: 1,
-                    title: '孕妈瑜伽课堂·第二期',
-                    time: '2026-04-20 10:00 ~ 2026-04-20 11:30',
+                    id: 0,
+                    title: '',
+                    time: '',
                     price: 0,
                 },
                 stage_options: ['备孕', '孕期', '产后'],
@@ -177,6 +177,7 @@
             if (params && params.id) {
                 this.setData({ activity_id: params.id });
             }
+            this.get_activity_summary();
             this.init_baby_month_age_options();
             this.init_due_date_start();
         },
@@ -189,6 +190,31 @@
         },
 
         methods: {
+            get_activity_summary() {
+                if (!this.activity_id) return;
+                var self = this;
+                uni.request({
+                    url: app.globalData.get_request_url('detail', 'activity'),
+                    method: 'POST',
+                    data: { id: this.activity_id },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.data.code == 0) {
+                            var activity = (res.data.data || {}).activity || {};
+                            self.setData({
+                                activity: {
+                                    id: activity.id || self.activity_id,
+                                    title: activity.title || '',
+                                    time: (activity.start_time_text || '') + (activity.end_time_text ? ' ~ ' + activity.end_time_text : ''),
+                                    price: activity.price || 0,
+                                },
+                            });
+                        }
+                    },
+                    fail: function() {},
+                });
+            },
+
             nav_back_event() {
                 app.globalData.page_back_prev_event();
             },

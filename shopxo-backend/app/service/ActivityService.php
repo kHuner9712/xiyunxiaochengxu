@@ -119,6 +119,27 @@ class ActivityService
         return false;
     }
 
+    public static function RecalculateSignupCount($activity_id)
+    {
+        if (empty($activity_id)) {
+            return false;
+        }
+        $activity_id = intval($activity_id);
+
+        $real_count = Db::name('ActivitySignup')->where([
+            ['activity_id', '=', $activity_id],
+            ['status', 'in', [0, 1]],
+            ['is_delete_time', '=', 0],
+        ])->count();
+
+        Db::name('Activity')->where(['id' => $activity_id])->update([
+            'signup_count' => $real_count,
+            'upd_time'     => time(),
+        ]);
+
+        return $real_count;
+    }
+
     public static function ActivitySignup($params = [])
     {
         $p = [
@@ -148,59 +169,72 @@ class ActivityService
         $activity_id = intval($params['activity_id']);
         $user_id = intval($params['user']['id']);
 
-        $activity = Db::name('Activity')->where([
-            ['id', '=', $activity_id],
-            ['is_enable', '=', 1],
-            ['is_delete_time', '=', 0],
-        ])->find();
-        if (empty($activity)) {
-            return DataReturn('活动不存在或已下架', -1);
+        Db::startTrans();
+        try {
+            $activity = Db::name('Activity')->where([
+                ['id', '=', $activity_id],
+                ['is_enable', '=', 1],
+                ['is_delete_time', '=', 0],
+            ])->lock(true)->find();
+            if (empty($activity)) {
+                Db::rollback();
+                return DataReturn('活动不存在或已下架', -1);
+            }
+
+            $now = time();
+            if ($activity['signup_start_time'] > 0 && $now < $activity['signup_start_time']) {
+                Db::rollback();
+                return DataReturn('报名尚未开始', -1);
+            }
+            if ($activity['signup_end_time'] > 0 && $now > $activity['signup_end_time']) {
+                Db::rollback();
+                return DataReturn('报名已截止', -1);
+            }
+
+            $exists = Db::name('ActivitySignup')->where([
+                ['activity_id', '=', $activity_id],
+                ['user_id', '=', $user_id],
+                ['status', 'in', [0, 1]],
+                ['is_delete_time', '=', 0],
+            ])->find();
+            if (!empty($exists)) {
+                Db::rollback();
+                return DataReturn('您已报名该活动', -1);
+            }
+
+            if ($activity['max_count'] > 0 && $activity['signup_count'] >= $activity['max_count']) {
+                Db::rollback();
+                return DataReturn('报名人数已满', -1);
+            }
+
+            $data = [
+                'activity_id'    => $activity_id,
+                'user_id'        => $user_id,
+                'name'           => $params['name'],
+                'phone'          => $params['phone'],
+                'stage'          => empty($params['stage']) ? '' : $params['stage'],
+                'due_date'       => empty($params['due_date']) ? 0 : (is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date'])),
+                'baby_month_age' => empty($params['baby_month_age']) ? 0 : intval($params['baby_month_age']),
+                'remark'         => empty($params['remark']) ? '' : $params['remark'],
+                'status'         => 0,
+                'add_time'       => time(),
+                'upd_time'       => time(),
+            ];
+
+            $signup_id = Db::name('ActivitySignup')->insertGetId($data);
+            if ($signup_id <= 0) {
+                Db::rollback();
+                return DataReturn('报名失败', -100);
+            }
+
+            Db::name('Activity')->where(['id' => $activity_id])->inc('signup_count')->update();
+
+            Db::commit();
+            return DataReturn('报名成功', 0);
+        } catch (\Exception $e) {
+            Db::rollback();
+            return DataReturn('报名失败：' . $e->getMessage(), -100);
         }
-
-        $now = time();
-        if ($activity['signup_start_time'] > 0 && $now < $activity['signup_start_time']) {
-            return DataReturn('报名尚未开始', -1);
-        }
-        if ($activity['signup_end_time'] > 0 && $now > $activity['signup_end_time']) {
-            return DataReturn('报名已截止', -1);
-        }
-
-        $exists = Db::name('ActivitySignup')->where([
-            ['activity_id', '=', $activity_id],
-            ['user_id', '=', $user_id],
-            ['status', 'in', [0, 1]],
-            ['is_delete_time', '=', 0],
-        ])->find();
-        if (!empty($exists)) {
-            return DataReturn('您已报名该活动', -1);
-        }
-
-        if ($activity['max_count'] > 0 && $activity['signup_count'] >= $activity['max_count']) {
-            return DataReturn('报名人数已满', -1);
-        }
-
-        $data = [
-            'activity_id'    => $activity_id,
-            'user_id'        => $user_id,
-            'name'           => $params['name'],
-            'phone'          => $params['phone'],
-            'stage'          => empty($params['stage']) ? '' : $params['stage'],
-            'due_date'       => empty($params['due_date']) ? 0 : (is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date'])),
-            'baby_month_age' => empty($params['baby_month_age']) ? 0 : intval($params['baby_month_age']),
-            'remark'         => empty($params['remark']) ? '' : $params['remark'],
-            'status'         => 0,
-            'add_time'       => time(),
-            'upd_time'       => time(),
-        ];
-
-        $signup_id = Db::name('ActivitySignup')->insertGetId($data);
-        if ($signup_id <= 0) {
-            return DataReturn('报名失败', -100);
-        }
-
-        Db::name('Activity')->where(['id' => $activity_id])->inc('signup_count')->update();
-
-        return DataReturn('报名成功', 0);
     }
 
     public static function SignupCancel($params = [])
@@ -220,26 +254,37 @@ class ActivityService
         $id = intval($params['id']);
         $user_id = intval($params['user']['id']);
 
-        $signup = Db::name('ActivitySignup')->where([
-            ['id', '=', $id],
-            ['user_id', '=', $user_id],
-            ['status', 'in', [0, 1]],
-            ['is_delete_time', '=', 0],
-        ])->find();
-        if (empty($signup)) {
-            return DataReturn('报名记录不存在', -1);
-        }
+        Db::startTrans();
+        try {
+            $signup = Db::name('ActivitySignup')->where([
+                ['id', '=', $id],
+                ['user_id', '=', $user_id],
+                ['status', 'in', [0, 1]],
+                ['is_delete_time', '=', 0],
+            ])->lock(true)->find();
+            if (empty($signup)) {
+                Db::rollback();
+                return DataReturn('报名记录不存在', -1);
+            }
 
-        $upd = Db::name('ActivitySignup')->where(['id' => $id])->update([
-            'status'          => 2,
-            'is_delete_time'  => time(),
-            'upd_time'        => time(),
-        ]);
-        if ($upd !== false) {
+            $upd = Db::name('ActivitySignup')->where(['id' => $id])->update([
+                'status'          => 2,
+                'is_delete_time'  => time(),
+                'upd_time'        => time(),
+            ]);
+            if ($upd === false) {
+                Db::rollback();
+                return DataReturn('取消报名失败', -100);
+            }
+
             Db::name('Activity')->where(['id' => $signup['activity_id']])->dec('signup_count')->update();
+
+            Db::commit();
             return DataReturn('取消报名成功', 0);
+        } catch (\Exception $e) {
+            Db::rollback();
+            return DataReturn('取消报名失败：' . $e->getMessage(), -100);
         }
-        return DataReturn('取消报名失败', -100);
     }
 
     public static function MySignupWhere($params = [])
@@ -306,7 +351,11 @@ class ActivityService
             return DataReturn('活动ID不能为空', -1);
         }
 
-        $data = Db::name('Activity')->where(['id' => $id])->find();
+        $data = Db::name('Activity')->where([
+            ['id', '=', $id],
+            ['is_enable', '=', 1],
+            ['is_delete_time', '=', 0],
+        ])->find();
         if (empty($data)) {
             return DataReturn('活动不存在', -1);
         }
