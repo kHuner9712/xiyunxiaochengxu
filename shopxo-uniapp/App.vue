@@ -3,15 +3,17 @@
     // 多语言引入并初始化
     import i18n from './locale/index';
     import devConfig from './common/js/config/dev.js';
+    import prodConfig from './common/js/config/prod.js';
+    var appConfig = (process.env.NODE_ENV === 'production') ? prodConfig : devConfig;
     export default {
         globalData: {
             data: {
                 // 基础配置
                 // 数据接口请求地址
-                request_url: devConfig.request_url || 'http://localhost:8080/',
+                request_url: appConfig.request_url || 'http://localhost:8080/',
 
                 // 静态资源地址（如系统根目录不在public目录下面请在静态地址后面加public目录、如：https://d1.shopxo.vip/public/）
-                static_url: devConfig.static_url || '',
+                static_url: appConfig.static_url || '',
 
                 // 系统类型（默认default、如额外独立小程序、可与程序分身插件实现不同主体小程序及支付独立）
                 system_type: 'default',
