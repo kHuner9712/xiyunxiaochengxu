@@ -5,3 +5,4 @@ unpackage
 sitemap.json
 .prettierrc.cjs
 pages/diy/init_data.js
+manifest.local.json

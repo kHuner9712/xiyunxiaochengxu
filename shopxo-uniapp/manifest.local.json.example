@@ -1,0 +1,70 @@
+{
+    "_comment": "本地开发用配置模板，复制为 manifest.local.json 后填入真实值，该文件已在 .gitignore 中",
+    "app-plus": {
+        "distribute": {
+            "sdkConfigs": {
+                "payment": {
+                    "weixin": {
+                        "appid": "在此填入微信支付appid",
+                        "UniversalLinks": "在此填入UniversalLinks"
+                    }
+                },
+                "oauth": {
+                    "weixin": {
+                        "appid": "在此填入微信OAuth appid",
+                        "appsecret": "在此填入微信OAuth appsecret",
+                        "UniversalLinks": "在此填入UniversalLinks"
+                    },
+                    "qq": {
+                        "appid": "在此填入QQ appid",
+                        "UniversalLinks": "在此填入UniversalLinks"
+                    },
+                    "google": {
+                        "clientid": "在此填入Google clientid"
+                    }
+                },
+                "maps": {
+                    "amap": {
+                        "name": "在此填入高德地图name",
+                        "appkey_ios": "在此填入高德地图iOS key",
+                        "appkey_android": "在此填入高德地图Android key"
+                    }
+                },
+                "share": {
+                    "weixin": {
+                        "appid": "在此填入微信分享appid",
+                        "UniversalLinks": "在此填入UniversalLinks"
+                    },
+                    "qq": {
+                        "appid": "在此填入QQ分享appid",
+                        "UniversalLinks": "在此填入UniversalLinks"
+                    }
+                }
+            }
+        }
+    },
+    "mp-weixin": {
+        "appid": "在此填入微信小程序appid"
+    },
+    "mp-alipay": {
+        "appid": "在此填入支付宝小程序appid"
+    },
+    "mp-toutiao": {
+        "appid": "在此填入头条小程序appid"
+    },
+    "mp-qq": {
+        "appid": "在此填入QQ小程序appid"
+    },
+    "mp-kuaishou": {
+        "appid": "在此填入快手小程序appid"
+    },
+    "h5": {
+        "sdkConfigs": {
+            "maps": {
+                "tencent": {
+                    "key": "在此填入腾讯地图key"
+                }
+            }
+        }
+    }
+}
