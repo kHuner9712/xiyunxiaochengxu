@@ -10,7 +10,11 @@ class Invite extends Common
     public function __construct()
     {
         parent::__construct();
-        $this->IsLogin();
+        $action = strtolower(request_action());
+        $public_actions = ['rewardconfigpublic'];
+        if (!in_array($action, $public_actions)) {
+            $this->IsLogin();
+        }
     }
 
     public function Index()
@@ -53,6 +57,12 @@ class Invite extends Common
     }
 
     public function RewardConfig()
+    {
+        $data = InviteService::RewardConfig();
+        return ApiService::ApiDataReturn(SystemBaseService::DataReturn($data));
+    }
+
+    public function RewardConfigPublic()
     {
         $data = InviteService::RewardConfig();
         return ApiService::ApiDataReturn(SystemBaseService::DataReturn($data));

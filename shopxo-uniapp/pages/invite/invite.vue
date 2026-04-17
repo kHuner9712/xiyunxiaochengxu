@@ -113,9 +113,7 @@
 
         onLoad(params) {
             app.globalData.page_event_onload_handle(params);
-            this.get_invite_index();
-            this.get_invite_rewardlist();
-            this.get_reward_config();
+            this.check_login_and_load();
         },
 
         onShow() {
@@ -140,6 +138,43 @@
         },
 
         methods: {
+            check_login_and_load() {
+                var self = this;
+                self.get_reward_config();
+                uni.request({
+                    url: app.globalData.get_request_url('index', 'invite'),
+                    method: 'POST',
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.data.code == -9999 || res.data.code == -999) {
+                            uni.showModal({
+                                title: '提示',
+                                content: '请先登录后查看邀请中心',
+                                confirmText: '去登录',
+                                success: function(modal_res) {
+                                    if (modal_res.confirm) {
+                                        uni.navigateTo({ url: '/pages/login/login' });
+                                    } else {
+                                        uni.navigateBack();
+                                    }
+                                }
+                            });
+                        } else if (res.data.code == 0) {
+                            var data = res.data.data || {};
+                            self.setData({
+                                invite_code: data.invite_code || '',
+                                invite_count: data.invite_count || 0,
+                                reward_total: data.reward_total || 0,
+                            });
+                            self.get_invite_rewardlist();
+                        }
+                    },
+                    fail: function() {
+                        app.globalData.showToast('网络异常，请重试');
+                    },
+                });
+            },
+
             get_invite_index() {
                 var self = this;
                 uni.request({
@@ -203,7 +238,7 @@
             get_reward_config() {
                 var self = this;
                 uni.request({
-                    url: app.globalData.get_request_url('rewardconfig', 'invite'),
+                    url: app.globalData.get_request_url('rewardconfigpublic', 'invite'),
                     method: 'POST',
                     dataType: 'json',
                     success: function(res) {
