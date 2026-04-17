@@ -459,6 +459,7 @@
                 client_text: '',
                 // 邀请码
                 invite_code: '',
+                referrer: '',
             };
         },
 
@@ -515,10 +516,18 @@
                 }
             }
 
-            // 邀请码参数
-            if ((params.invite_code || null) != null) {
+            // 邀请码参数（优先 invite_code，兼容 referrer）
+            var invite_code = params.invite_code || '';
+            if (!invite_code && (params.referrer || null) != null) {
+                var referrer_id = parseInt(params.referrer) || 0;
+                if (referrer_id > 0) {
+                    invite_code = app.globalData.get_user_invite_code_by_id(referrer_id) || '';
+                }
+                this.setData({ referrer: params.referrer });
+            }
+            if (invite_code) {
                 this.setData({
-                    invite_code: params.invite_code,
+                    invite_code: invite_code,
                 });
             }
 
@@ -1211,6 +1220,10 @@
                     // 邀请码
                     if ((this.invite_code || null) != null && this.invite_code !== '') {
                         e.detail.value['invite_code'] = this.invite_code;
+                    }
+                    // referrer 兼容
+                    if ((this.referrer || null) != null && this.referrer !== '') {
+                        e.detail.value['referrer'] = this.referrer;
                     }
 
                     // 网络请求

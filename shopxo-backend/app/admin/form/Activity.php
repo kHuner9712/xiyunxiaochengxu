@@ -82,7 +82,7 @@ class Activity
                 [
                     'label'             => '分类',
                     'view_type'         => 'field',
-                    'view_key'          => 'category',
+                    'view_key'          => 'category_text',
                     'is_sort'           => 1,
                     'width'             => 100,
                     'search_config'     => [
@@ -98,7 +98,7 @@ class Activity
                 [
                     'label'             => '阶段',
                     'view_type'         => 'field',
-                    'view_key'          => 'stage',
+                    'view_key'          => 'stage_name',
                     'is_sort'           => 1,
                     'width'             => 100,
                     'search_config'     => [
@@ -171,24 +171,22 @@ class Activity
 
     public function CategoryList()
     {
-        return [
-            ['value' => 'classroom', 'name' => '孕妈课堂'],
-            ['value' => 'salon', 'name' => '线下沙龙'],
-            ['value' => 'lecture', 'name' => '育儿讲座'],
-            ['value' => 'trial', 'name' => '试用官招募'],
-            ['value' => 'holiday', 'name' => '节日活动'],
-            ['value' => 'checkin', 'name' => '签到打卡'],
-        ];
+        $list = MuyingActivityCategory::getList();
+        $result = [];
+        foreach ($list as $value => $name) {
+            $result[] = ['value' => $value, 'name' => $name];
+        }
+        return $result;
     }
 
     public function StageList()
     {
-        return [
-            ['value' => 'prepare', 'name' => '备孕'],
-            ['value' => 'pregnancy', 'name' => '孕期'],
-            ['value' => 'postpartum', 'name' => '产后'],
-            ['value' => 'all', 'name' => '通用'],
-        ];
+        $list = MuyingStage::getList();
+        $result = [];
+        foreach ($list as $value => $name) {
+            $result[] = ['value' => $value, 'name' => $name];
+        }
+        return $result;
     }
 }
 ?>

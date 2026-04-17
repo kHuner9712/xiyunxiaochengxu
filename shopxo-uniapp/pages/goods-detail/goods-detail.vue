@@ -211,7 +211,7 @@
                     </view>
                     <view class="muying-stage-tags flex-row">
                         <block v-for="(tag, idx) in muying_stage_tags" :key="idx">
-                            <text :class="'muying-stage-tag ' + (tag.active ? 'muying-stage-tag--' + tag.key : 'muying-stage-tag--inactive')">{{ tag.label }}</text>
+                            <text :class="'muying-stage-tag ' + (tag.active ? MuyingStage.getStageClass(MuyingStage.normalize(tag.key)) : 'muying-stage-tag--inactive')">{{ tag.label }}</text>
                         </block>
                     </view>
                 </view>
@@ -690,6 +690,7 @@
     import componentCouponCard from '@/pages/plugins/coupon/components/coupon-card/coupon-card';
     import componentGoodsCompare from '@/pages/plugins/goodscompare/components/goods-compare/goods-compare';
     import componentFormInputBase from '@/pages/form-input/components/form-input/form-input-base';
+    import { MuyingStage } from '@/common/js/config/muying-enum';
 
     var common_static_url = app.globalData.get_static_url('common');
     var system_info = app.globalData.get_system_info() || {};

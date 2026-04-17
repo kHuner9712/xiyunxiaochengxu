@@ -123,7 +123,7 @@
                                         <text class="muying-activity-title">{{item.title}}</text>
                                         <text class="muying-activity-time">{{item.time_text}}</text>
                                         <view class="muying-activity-bottom">
-                                            <text class="muying-stage-tag" :class="'muying-stage-tag--' + item.stage">{{item.stage_text}}</text>
+                                            <text class="muying-stage-tag" :class="item.stage_class">{{item.stage_name}}</text>
                                             <text class="muying-activity-price">{{item.is_free ? '免费' : '¥' + item.price}}</text>
                                         </view>
                                     </view>

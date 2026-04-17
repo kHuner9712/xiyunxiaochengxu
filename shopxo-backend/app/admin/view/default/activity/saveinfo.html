@@ -41,12 +41,12 @@
                 <label>活动分类<span class="am-form-group-label-tips-must">*</span></label>
                 <select name="category" class="am-radius chosen-select" data-placeholder="请选择分类" data-validation-message="请选择活动分类" required>
                     <option value="">请选择分类</option>
-                    <option value="maternity" {{if !empty($data['category']) and $data['category'] eq 'maternity'}}selected{{/if}}>孕产</option>
-                    <option value="parenting" {{if !empty($data['category']) and $data['category'] eq 'parenting'}}selected{{/if}}>育儿</option>
-                    <option value="postpartum" {{if !empty($data['category']) and $data['category'] eq 'postpartum'}}selected{{/if}}>产后恢复</option>
-                    <option value="early_edu" {{if !empty($data['category']) and $data['category'] eq 'early_edu'}}selected{{/if}}>早教</option>
-                    <option value="activity" {{if !empty($data['category']) and $data['category'] eq 'activity'}}selected{{/if}}>活动</option>
-                    <option value="other" {{if !empty($data['category']) and $data['category'] eq 'other'}}selected{{/if}}>其他</option>
+                    <option value="classroom" {{if !empty($data['category']) and $data['category'] eq 'classroom'}}selected{{/if}}>孕妈课堂</option>
+                    <option value="salon" {{if !empty($data['category']) and $data['category'] eq 'salon'}}selected{{/if}}>线下沙龙</option>
+                    <option value="lecture" {{if !empty($data['category']) and $data['category'] eq 'lecture'}}selected{{/if}}>育儿讲座</option>
+                    <option value="trial" {{if !empty($data['category']) and $data['category'] eq 'trial'}}selected{{/if}}>试用官招募</option>
+                    <option value="holiday" {{if !empty($data['category']) and $data['category'] eq 'holiday'}}selected{{/if}}>节日活动</option>
+                    <option value="checkin" {{if !empty($data['category']) and $data['category'] eq 'checkin'}}selected{{/if}}>签到打卡</option>
                 </select>
             </div>
 
@@ -54,10 +54,10 @@
                 <label>适用阶段<span class="am-form-group-label-tips-must">*</span></label>
                 <select name="stage" class="am-radius chosen-select" data-placeholder="请选择阶段" data-validation-message="请选择适用阶段" required>
                     <option value="">请选择阶段</option>
-                    <option value="pregnant" {{if !empty($data['stage']) and $data['stage'] eq 'pregnant'}}selected{{/if}}>孕期</option>
-                    <option value="newborn" {{if !empty($data['stage']) and $data['stage'] eq 'newborn'}}selected{{/if}}>新生儿</option>
-                    <option value="infant" {{if !empty($data['stage']) and $data['stage'] eq 'infant'}}selected{{/if}}>婴幼儿</option>
-                    <option value="all" {{if !empty($data['stage']) and $data['stage'] eq 'all'}}selected{{/if}}>全部</option>
+                    <option value="prepare" {{if !empty($data['stage']) and $data['stage'] eq 'prepare'}}selected{{/if}}>备孕</option>
+                    <option value="pregnancy" {{if !empty($data['stage']) and $data['stage'] eq 'pregnancy'}}selected{{/if}}>孕期</option>
+                    <option value="postpartum" {{if !empty($data['stage']) and $data['stage'] eq 'postpartum'}}selected{{/if}}>产后</option>
+                    <option value="all" {{if !empty($data['stage']) and $data['stage'] eq 'all'}}selected{{/if}}>通用</option>
                 </select>
             </div>
 

@@ -75,6 +75,7 @@
     const app = getApp();
     import componentCommon from '@/components/common/common';
     import componentNoData from '@/components/no-data/no-data';
+    import { MuyingStage } from '@/common/js/config/muying-enum';
 
     export default {
         data() {
@@ -88,7 +89,7 @@
                         time: '2026-04-20 14:00',
                         location: '云溪母婴中心3楼',
                         status_text: '进行中',
-                        status_type: 'pregnant'
+                        status_type: MuyingStage.PREGNANCY
                     },
                     {
                         id: 2,
@@ -96,7 +97,7 @@
                         time: '2026-04-25 10:00',
                         location: '云溪母婴中心2楼',
                         status_text: '即将开始',
-                        status_type: 'prepare'
+                        status_type: MuyingStage.PREPARE
                     },
                     {
                         id: 3,
@@ -114,7 +115,7 @@
                         signup_time: '2026-04-15 10:30',
                         signup_count: 28,
                         status_text: '已确认',
-                        status_type: 'pregnant'
+                        status_type: MuyingStage.PREGNANCY
                     },
                     {
                         id: 2,
@@ -122,7 +123,7 @@
                         signup_time: '2026-04-16 09:00',
                         signup_count: 45,
                         status_text: '待确认',
-                        status_type: 'prepare'
+                        status_type: MuyingStage.PREPARE
                     },
                     {
                         id: 3,

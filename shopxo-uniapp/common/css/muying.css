@@ -31,7 +31,7 @@
 	border: 1px solid #F5A0B1;
 }
 
-.theme-muying .muying-stage-tag--pregnant {
+.theme-muying .muying-stage-tag--pregnancy {
 	background-color: #FFF5E6;
 	color: #E8A050;
 	border: 1px solid #E8A050;
@@ -362,10 +362,3 @@
 	flex-shrink: 0;
 }
 
-/******************** 母婴模块 - stage-tag 补充 pregnancy 别名 ********************/
-
-.theme-muying .muying-stage-tag--pregnancy {
-	background-color: #FFF5E6;
-	color: #E8A050;
-	border: 1px solid #E8A050;
-}

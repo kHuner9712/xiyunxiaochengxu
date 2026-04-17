@@ -31,6 +31,8 @@
 </template>
 
 <script>
+    import { MuyingStage } from '@/common/js/config/muying-enum';
+
     export default {
         name: 'stage-guide',
         props: {
@@ -44,9 +46,9 @@
                 is_show: false,
                 selected_stage: '',
                 stage_list: [
-                    { name: '备孕', value: 'prepare', icon: '🥚', desc: '科学备孕·营养先行' },
-                    { name: '孕期', value: 'pregnancy', icon: '🤰', desc: '安心孕育·均衡补充' },
-                    { name: '产后', value: 'postpartum', icon: '👶', desc: '科学恢复·重塑健康' }
+                    { name: '备孕', value: MuyingStage.PREPARE, icon: '🥚', desc: '科学备孕·营养先行' },
+                    { name: '孕期', value: MuyingStage.PREGNANCY, icon: '🤰', desc: '安心孕育·均衡补充' },
+                    { name: '产后', value: MuyingStage.POSTPARTUM, icon: '👶', desc: '科学恢复·重塑健康' }
                 ]
             };
         },

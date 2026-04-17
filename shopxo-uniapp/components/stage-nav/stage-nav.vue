@@ -15,14 +15,16 @@
 </template>
 
 <script>
+    import { MuyingStage } from '@/common/js/config/muying-enum';
+
     export default {
         name: 'component-stage-nav',
         data() {
             return {
                 stageList: [
-                    { type: 'prepare', icon: '🌸', title: '备孕阶段', subtitle: '科学备孕·营养先行' },
-                    { type: 'pregnancy', icon: '🤰', title: '孕期阶段', subtitle: '安心孕育·专业陪伴' },
-                    { type: 'postpartum', icon: '👶', title: '产后阶段', subtitle: '科学恢复·健康育儿' },
+                    { type: MuyingStage.PREPARE, icon: '🌸', title: '备孕阶段', subtitle: '科学备孕·营养先行' },
+                    { type: MuyingStage.PREGNANCY, icon: '🤰', title: '孕期阶段', subtitle: '安心孕育·专业陪伴' },
+                    { type: MuyingStage.POSTPARTUM, icon: '👶', title: '产后阶段', subtitle: '科学恢复·健康育儿' },
                 ],
             };
         },
