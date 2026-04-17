@@ -3,9 +3,46 @@ namespace app\service;
 
 use think\facade\Db;
 use app\service\ResourcesService;
+use app\extend\muying\MuyingStage;
+use app\extend\muying\MuyingActivityCategory;
 
 class ActivityService
 {
+    const SIGNUP_STATUS_PENDING  = 0;
+    const SIGNUP_STATUS_CONFIRMED = 1;
+    const SIGNUP_STATUS_CANCELLED = 2;
+
+    const CHECKIN_STATUS_NO  = 0;
+    const CHECKIN_STATUS_YES = 1;
+
+    public static function SignupStatusList()
+    {
+        return [
+            self::SIGNUP_STATUS_PENDING   => '待确认',
+            self::SIGNUP_STATUS_CONFIRMED => '已确认',
+            self::SIGNUP_STATUS_CANCELLED => '已取消',
+        ];
+    }
+
+    public static function CheckinStatusList()
+    {
+        return [
+            self::CHECKIN_STATUS_NO  => '未签到',
+            self::CHECKIN_STATUS_YES => '已签到',
+        ];
+    }
+
+    public static function SignupStatusText($status)
+    {
+        $list = self::SignupStatusList();
+        return isset($list[$status]) ? $list[$status] : '';
+    }
+
+    public static function CheckinStatusText($status)
+    {
+        $list = self::CheckinStatusList();
+        return isset($list[$status]) ? $list[$status] : '未签到';
+    }
     public static function ActivityList($params)
     {
         $where = empty($params['where']) ? [] : $params['where'];
@@ -75,6 +112,42 @@ class ActivityService
                 if (isset($v['max_count']) && $v['max_count'] > 0 && $v['signup_count'] >= $v['max_count']) {
                     $v['signup_status'] = 'full';
                 }
+
+                if (isset($v['stage'])) {
+                    $v['stage'] = MuyingStage::Normalize($v['stage']);
+                    $v['stage_name'] = MuyingStage::getName($v['stage']);
+                    $v['stage_class'] = MuyingStage::getStageClass($v['stage']);
+                }
+
+                if (isset($v['category'])) {
+                    $v['category'] = MuyingActivityCategory::Normalize($v['category']);
+                    $v['category_text'] = MuyingActivityCategory::getName($v['category']);
+                    $v['category_name'] = $v['category_text'];
+                }
+
+                if (isset($v['start_time']) && isset($v['end_time'])) {
+                    $start_text = empty($v['start_time']) ? '' : date('Y-m-d H:i', $v['start_time']);
+                    $end_text = empty($v['end_time']) ? '' : date('Y-m-d H:i', $v['end_time']);
+                    $v['time_text'] = $start_text . ($end_text ? (' ~ ' . $end_text) : '');
+                    $v['time'] = $v['time_text'];
+                }
+
+                if (isset($v['signup_end_time'])) {
+                    $v['signup_deadline'] = empty($v['signup_end_time']) ? '' : date('Y-m-d H:i', $v['signup_end_time']);
+                    $v['signup_deadline_text'] = $v['signup_deadline'];
+                }
+
+                if (isset($v['contact_name'])) {
+                    $v['organizer_name'] = $v['contact_name'];
+                    $v['organizer'] = $v['contact_name'];
+                }
+                if (isset($v['contact_phone'])) {
+                    $v['organizer_phone'] = $v['contact_phone'];
+                }
+
+                if (!isset($v['suitable_crowd'])) {
+                    $v['suitable_crowd'] = '';
+                }
             }
         }
         return $data;
@@ -93,11 +166,21 @@ class ActivityService
         ];
 
         if (!empty($params['category'])) {
-            $where[] = ['category', '=', $params['category']];
+            $normalized = MuyingActivityCategory::Normalize($params['category']);
+            if (!empty($normalized)) {
+                $where[] = ['category', 'in', [$normalized, $params['category']]];
+            } else {
+                $where[] = ['category', '=', $params['category']];
+            }
         }
 
         if (!empty($params['stage'])) {
-            $where[] = ['stage', 'in', [$params['stage'], 'all']];
+            $normalized = MuyingStage::Normalize($params['stage']);
+            $stage_values = [$normalized, MuyingStage::ALL];
+            if ($normalized !== $params['stage']) {
+                $stage_values[] = $params['stage'];
+            }
+            $where[] = ['stage', 'in', array_unique($stage_values)];
         }
 
         if (!empty($params['awd'])) {
@@ -212,7 +295,7 @@ class ActivityService
                 'user_id'        => $user_id,
                 'name'           => $params['name'],
                 'phone'          => $params['phone'],
-                'stage'          => empty($params['stage']) ? '' : $params['stage'],
+                'stage'          => MuyingStage::Normalize(empty($params['stage']) ? '' : $params['stage']),
                 'due_date'       => empty($params['due_date']) ? 0 : (is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date'])),
                 'baby_month_age' => empty($params['baby_month_age']) ? 0 : intval($params['baby_month_age']),
                 'remark'         => empty($params['remark']) ? '' : $params['remark'],
@@ -259,17 +342,21 @@ class ActivityService
             $signup = Db::name('ActivitySignup')->where([
                 ['id', '=', $id],
                 ['user_id', '=', $user_id],
-                ['status', 'in', [0, 1]],
+                ['status', 'in', [self::SIGNUP_STATUS_PENDING, self::SIGNUP_STATUS_CONFIRMED]],
                 ['is_delete_time', '=', 0],
             ])->lock(true)->find();
             if (empty($signup)) {
                 Db::rollback();
-                return DataReturn('报名记录不存在', -1);
+                return DataReturn('报名记录不存在或已取消', -1);
+            }
+
+            if ($signup['checkin_status'] == self::CHECKIN_STATUS_YES) {
+                Db::rollback();
+                return DataReturn('已签到的报名不能取消', -1);
             }
 
             $upd = Db::name('ActivitySignup')->where(['id' => $id])->update([
-                'status'          => 2,
-                'is_delete_time'  => time(),
+                'status'          => self::SIGNUP_STATUS_CANCELLED,
                 'upd_time'        => time(),
             ]);
             if ($upd === false) {
@@ -322,26 +409,48 @@ class ActivityService
 
         if (!empty($data)) {
             $activity_ids = array_unique(array_column($data, 'activity_id'));
-            $activities = Db::name('Activity')->where(['id' => $activity_ids])->column('title,cover,category,stage,start_time,end_time,address', 'id');
+            $activities = Db::name('Activity')->where(['id' => $activity_ids])->column('title,cover,category,stage,start_time,end_time,signup_end_time,address,contact_name,contact_phone,is_free,price', 'id');
 
             foreach ($data as $k => &$v) {
                 $v['data_index'] = $k + 1;
                 $v['activity_info'] = isset($activities[$v['activity_id']]) ? $activities[$v['activity_id']] : null;
-                if (!empty($v['activity_info']['cover'])) {
-                    $v['activity_info']['cover'] = ResourcesService::AttachmentPathViewHandle($v['activity_info']['cover']);
+                if (!empty($v['activity_info'])) {
+                    self::FormatActivityInfo($v['activity_info']);
                 }
-                if (!empty($v['activity_info']['start_time'])) {
-                    $v['activity_info']['start_time_text'] = date('Y-m-d H:i:s', $v['activity_info']['start_time']);
-                }
-                if (!empty($v['activity_info']['end_time'])) {
-                    $v['activity_info']['end_time_text'] = date('Y-m-d H:i:s', $v['activity_info']['end_time']);
-                }
-                $v['status_text'] = ['待确认', '已确认', '已取消'][$v['status']] ?? '';
+                $v['status_text'] = self::SignupStatusText($v['status']);
                 $v['add_time_text'] = empty($v['add_time']) ? '' : date('Y-m-d H:i:s', $v['add_time']);
             }
         }
 
         return DataReturn(MyLang('handle_success'), 0, $data);
+    }
+
+    private static function FormatActivityInfo(&$info)
+    {
+        if (empty($info)) {
+            return;
+        }
+        if (!empty($info['cover'])) {
+            $info['cover'] = ResourcesService::AttachmentPathViewHandle($info['cover']);
+        }
+        $info['stage'] = MuyingStage::Normalize($info['stage'] ?? '');
+        $info['stage_name'] = MuyingStage::getName($info['stage']);
+        $info['stage_class'] = MuyingStage::getStageClass($info['stage']);
+        $info['category'] = MuyingActivityCategory::Normalize($info['category'] ?? '');
+        $info['category_name'] = MuyingActivityCategory::getName($info['category']);
+        $info['category_text'] = $info['category_name'];
+        $start_text = empty($info['start_time']) ? '' : date('Y-m-d H:i', $info['start_time']);
+        $end_text = empty($info['end_time']) ? '' : date('Y-m-d H:i', $info['end_time']);
+        $info['time_text'] = $start_text . ($end_text ? (' ~ ' . $end_text) : '');
+        $info['time'] = $info['time_text'];
+        $info['signup_deadline'] = empty($info['signup_end_time']) ? '' : date('Y-m-d H:i', $info['signup_end_time']);
+        $info['signup_deadline_text'] = $info['signup_deadline'];
+        $info['organizer_name'] = empty($info['contact_name']) ? '' : $info['contact_name'];
+        $info['organizer'] = $info['organizer_name'];
+        $info['organizer_phone'] = empty($info['contact_phone']) ? '' : $info['contact_phone'];
+        if (!isset($info['suitable_crowd'])) {
+            $info['suitable_crowd'] = '';
+        }
     }
 
     public static function ActivityDetail($params = [])
@@ -389,14 +498,24 @@ class ActivityService
             return DataReturn($ret, -1);
         }
 
+        $stage = MuyingStage::Normalize($params['stage']);
+        if (empty($stage)) {
+            return DataReturn('适用阶段值无效', -1);
+        }
+
+        $category = MuyingActivityCategory::Normalize($params['category']);
+        if (empty($category)) {
+            return DataReturn('活动分类值无效', -1);
+        }
+
         $attachment = ResourcesService::AttachmentParams($params, ['cover']);
         $content = empty($params['content']) ? '' : str_replace("\n", '', ResourcesService::ContentStaticReplace(htmlspecialchars_decode($params['content']), 'add'));
 
         $data = [
             'title'              => $params['title'],
             'cover'              => $attachment['data']['cover'],
-            'category'           => $params['category'],
-            'stage'              => $params['stage'],
+            'category'           => $category,
+            'stage'              => $stage,
             'suitable_crowd'     => empty($params['suitable_crowd']) ? '' : $params['suitable_crowd'],
             'description'        => empty($params['description']) ? '' : strip_tags($params['description']),
             'content'            => $content,
@@ -492,17 +611,18 @@ class ActivityService
 
         if (!empty($data)) {
             $activity_ids = array_unique(array_column($data, 'activity_id'));
-            $activities = Db::name('Activity')->where(['id' => $activity_ids])->column('title,cover,category,stage,start_time,end_time,address', 'id');
+            $activities = Db::name('Activity')->where(['id' => $activity_ids])->column('title,cover,category,stage,start_time,end_time,signup_end_time,address,contact_name,contact_phone,is_free,price', 'id');
 
             foreach ($data as $k => &$v) {
                 $v['data_index'] = $k + 1;
                 $v['activity_title'] = isset($activities[$v['activity_id']]) ? $activities[$v['activity_id']]['title'] : '';
                 $v['activity_info'] = isset($activities[$v['activity_id']]) ? $activities[$v['activity_id']] : null;
-                if (!empty($v['activity_info']['cover'])) {
-                    $v['activity_info']['cover'] = ResourcesService::AttachmentPathViewHandle($v['activity_info']['cover']);
+                if (!empty($v['activity_info'])) {
+                    self::FormatActivityInfo($v['activity_info']);
                 }
-                $v['status_text'] = ['待确认', '已确认', '已取消'][$v['status']] ?? '';
-                $v['checkin_status_text'] = empty($v['checkin_status']) ? '未签到' : '已签到';
+                $v['status_text'] = self::SignupStatusText($v['status']);
+                $v['checkin_status_text'] = self::CheckinStatusText($v['checkin_status']);
+                $v['stage_text'] = MuyingStage::getName(MuyingStage::Normalize($v['stage']));
                 $v['add_time_text'] = empty($v['add_time']) ? '' : date('Y-m-d H:i:s', $v['add_time']);
                 $v['checkin_time_text'] = empty($v['checkin_time']) ? '' : date('Y-m-d H:i:s', $v['checkin_time']);
             }
@@ -514,6 +634,29 @@ class ActivityService
     public static function AdminSignupTotal($where)
     {
         return (int) Db::name('ActivitySignup')->where($where)->count();
+    }
+
+    public static function AdminSignupListHandle($data, $params = [])
+    {
+        if (!empty($data)) {
+            $activity_ids = array_unique(array_column($data, 'activity_id'));
+            $activities = Db::name('Activity')->where(['id' => $activity_ids])->column('title,cover,category,stage,start_time,end_time,signup_end_time,address,contact_name,contact_phone,is_free,price', 'id');
+
+            foreach ($data as $k => &$v) {
+                $v['data_index'] = $k + 1;
+                $v['activity_title'] = isset($activities[$v['activity_id']]) ? $activities[$v['activity_id']]['title'] : '';
+                $v['activity_info'] = isset($activities[$v['activity_id']]) ? $activities[$v['activity_id']] : null;
+                if (!empty($v['activity_info'])) {
+                    self::FormatActivityInfo($v['activity_info']);
+                }
+                $v['status_text'] = self::SignupStatusText($v['status']);
+                $v['checkin_status_text'] = self::CheckinStatusText($v['checkin_status']);
+                $v['stage_text'] = MuyingStage::getName(MuyingStage::Normalize($v['stage']));
+                $v['add_time_text'] = empty($v['add_time']) ? '' : date('Y-m-d H:i:s', $v['add_time']);
+                $v['checkin_time_text'] = empty($v['checkin_time']) ? '' : date('Y-m-d H:i:s', $v['checkin_time']);
+            }
+        }
+        return $data;
     }
 
     public static function AdminSignupDetail($params = [])
@@ -530,8 +673,9 @@ class ActivityService
 
         $activity = Db::name('Activity')->where(['id' => $data['activity_id']])->find();
         $data['activity_info'] = $activity;
-        $data['status_text'] = ['待确认', '已确认', '已取消'][$data['status']] ?? '';
-        $data['checkin_status_text'] = empty($data['checkin_status']) ? '未签到' : '已签到';
+        $data['status_text'] = self::SignupStatusText($data['status']);
+        $data['checkin_status_text'] = self::CheckinStatusText($data['checkin_status']);
+        $data['stage_text'] = MuyingStage::getName(MuyingStage::Normalize($data['stage']));
         $data['add_time_text'] = empty($data['add_time']) ? '' : date('Y-m-d H:i:s', $data['add_time']);
         $data['checkin_time_text'] = empty($data['checkin_time']) ? '' : date('Y-m-d H:i:s', $data['checkin_time']);
 
@@ -555,14 +699,22 @@ class ActivityService
         $id = intval($params['id']);
         $signup = Db::name('ActivitySignup')->where([
             ['id', '=', $id],
-            ['checkin_status', '=', 0],
+            ['is_delete_time', '=', 0],
         ])->find();
         if (empty($signup)) {
-            return DataReturn('报名记录不存在或已签到', -1);
+            return DataReturn('报名记录不存在', -1);
+        }
+
+        if ($signup['status'] == self::SIGNUP_STATUS_CANCELLED) {
+            return DataReturn('已取消的报名不能签到', -1);
+        }
+
+        if ($signup['checkin_status'] == self::CHECKIN_STATUS_YES) {
+            return DataReturn('已签到，请勿重复签到', -1);
         }
 
         if (Db::name('ActivitySignup')->where(['id' => $id])->update([
-            'checkin_status' => 1,
+            'checkin_status' => self::CHECKIN_STATUS_YES,
             'checkin_time'   => time(),
             'upd_time'       => time(),
         ])) {
@@ -583,15 +735,9 @@ class ActivityService
         $activity_ids = array_unique(array_column($data, 'activity_id'));
         $activities = Db::name('Activity')->where(['id' => $activity_ids])->column('title,stage', 'id');
 
-        $stage_map = [
-            'prepare'    => '备孕',
-            'pregnancy'  => '孕期',
-            'postpartum' => '产后',
-            'all'        => '通用',
-        ];
-
-        $status_map = ['待确认', '已确认', '已取消'];
-        $checkin_map = ['未签到', '已签到'];
+        $stage_map = MuyingStage::getList();
+        $status_map = self::SignupStatusList();
+        $checkin_map = self::CheckinStatusList();
 
         $result = [];
         foreach ($data as $v) {
