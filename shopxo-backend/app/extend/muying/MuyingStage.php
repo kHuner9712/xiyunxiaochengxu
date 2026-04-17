@@ -8,6 +8,12 @@ class MuyingStage
     const POSTPARTUM = 'postpartum';
     const ALL = 'all';
 
+    private static $legacy_map = [
+        'pregnant' => 'pregnancy',
+        'newborn'  => 'postpartum',
+        'infant'   => 'postpartum',
+    ];
+
     public static function getList()
     {
         return [
@@ -28,6 +34,28 @@ class MuyingStage
     {
         return in_array($value, [self::PREPARE, self::PREGNANCY, self::POSTPARTUM, self::ALL]);
     }
+
+    public static function Normalize($value)
+    {
+        if (empty($value)) {
+            return '';
+        }
+        if (isset(self::$legacy_map[$value])) {
+            return self::$legacy_map[$value];
+        }
+        return self::isValid($value) ? $value : '';
+    }
+
+    public static function getStageClass($value)
+    {
+        $map = [
+            self::PREPARE    => 'muying-stage-tag--prepare',
+            self::PREGNANCY  => 'muying-stage-tag--pregnancy',
+            self::POSTPARTUM => 'muying-stage-tag--postpartum',
+            self::ALL        => 'muying-stage-tag--common',
+        ];
+        return isset($map[$value]) ? $map[$value] : 'muying-stage-tag--common';
+    }
 }
 
 class MuyingActivityCategory
@@ -38,6 +66,15 @@ class MuyingActivityCategory
     const TRIAL = 'trial';
     const HOLIDAY = 'holiday';
     const CHECKIN = 'checkin';
+
+    private static $legacy_map = [
+        'maternity' => 'classroom',
+        'parenting' => 'lecture',
+        'early_edu' => 'lecture',
+        'activity'  => 'holiday',
+        'other'     => 'classroom',
+        'class'     => 'classroom',
+    ];
 
     public static function getList()
     {
@@ -55,5 +92,21 @@ class MuyingActivityCategory
     {
         $list = self::getList();
         return isset($list[$value]) ? $list[$value] : '';
+    }
+
+    public static function isValid($value)
+    {
+        return in_array($value, [self::CLASSROOM, self::SALON, self::LECTURE, self::TRIAL, self::HOLIDAY, self::CHECKIN]);
+    }
+
+    public static function Normalize($value)
+    {
+        if (empty($value)) {
+            return '';
+        }
+        if (isset(self::$legacy_map[$value])) {
+            return self::$legacy_map[$value];
+        }
+        return self::isValid($value) ? $value : '';
     }
 }
