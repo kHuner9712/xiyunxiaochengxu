@@ -12,7 +12,7 @@
                         <view class="invite-stats-divider"></view>
                         <view class="flex-1">
                             <view class="text-size-lg fw-b cr-main">{{ invite_stats.total_rewards }}</view>
-                            <view class="text-size-sm cr-grey margin-top-xs">获得奖励(元)</view>
+                            <view class="text-size-sm cr-grey margin-top-xs">获得积分</view>
                         </view>
                     </view>
                 </view>
@@ -46,7 +46,7 @@
                                 <view class="text-size-sm cr-grey margin-top-xs">{{ item.time }}</view>
                             </view>
                             <view :class="['text-size fw-b', item.amount > 0 ? 'cr-red' : 'cr-grey']">
-                                {{ item.amount > 0 ? '+' : '' }}{{ item.amount }}元
+                                {{ item.amount > 0 ? '+' : '' }}{{ item.amount }}积分
                             </view>
                         </view>
                     </view>
@@ -101,6 +101,10 @@
 
         methods: {
             copy_invite_code() {
+                if (!this.invite_code) {
+                    app.globalData.showToast('邀请码加载中，请稍后');
+                    return;
+                }
                 uni.setClipboardData({
                     data: this.invite_code,
                     success: () => {
@@ -159,9 +163,13 @@
                                 });
                             }
                             self.setData({ reward_list: reward_list });
+                        } else {
+                            app.globalData.showToast(res.data.msg || '获取奖励记录失败');
                         }
                     },
-                    fail: function() {},
+                    fail: function() {
+                        app.globalData.showToast('网络异常，请重试');
+                    },
                 });
             }
         }
