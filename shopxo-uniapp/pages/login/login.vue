@@ -303,7 +303,10 @@
                                 <navigator open-type="navigateBack" hover-class="none" class="dis-inline-block margin-right-lg">
                                     <button class="bg-yellow br-yellow cr-white round" type="default" size="mini" hover-class="none">{{ $t('common.cancel') }}</button>
                                 </navigator>
-                                <!-- #ifdef MP-WEIXIN || MP-TOUTIAO -->
+                                <!-- #ifdef MP-WEIXIN -->
+                                <button class="margin-left-lg bg-green br-green cr-white round" type="default" size="mini" @tap="get_user_info_event">微信登录</button>
+                                <!-- #endif -->
+                                <!-- #ifdef MP-TOUTIAO -->
                                 <button class="margin-left-lg bg-green br-green cr-white round" type="default" size="mini" @tap="get_user_info_event">{{ $t('buy.buy.33fugm') }}{{client_text}}{{ $t('login.login.tvl242') }}</button>
                                 <!-- #endif -->
                                 <!-- #ifdef MP-QQ || MP-BAIDU || MP-KUAISHOU -->
@@ -313,6 +316,7 @@
                                 <button class="margin-left-lg bg-green br-green cr-white round" type="default" size="mini" open-type="getAuthorize" @getAuthorize="get_user_info_event" scope="userInfo">{{ $t('buy.buy.33fugm') }}{{client_text}}{{ $t('login.login.tvl242') }}</button>
                                 <!-- #endif -->
                             </view>
+                            <view class="margin-top-xl cr-grey text-size-xs">头像昵称可在个人中心补充</view>
                         </view>
                         <!-- #endif -->
                     </view>
@@ -725,16 +729,7 @@
                 }
 
                 // #ifdef MP-WEIXIN
-                uni.getUserProfile({
-                    desc: this.$t('login.login.no8ts6'),
-                    lang: 'zh_CN',
-                    success: (res) => {
-                        this.user_auth_code(res.userInfo);
-                    },
-                    fail: (res) => {
-                        app.globalData.user_login_handle(this, 'user_auth_back_event');
-                    }
-                });
+                app.globalData.user_login_handle(this, 'user_auth_back_event');
                 // #endif
                 // #ifdef MP-QQ
                 uni.getUserInfo({
@@ -1031,11 +1026,11 @@
                 // 其他数据
                 var client_type = app.globalData.application_client_type();
                 var user = this.user || this.plugins_thirdpartylogin_user || app.globalData.get_login_cache_info() || {};
-                e.detail.value['nickname'] = user.nickname;
-                e.detail.value['avatar'] = user.avatar;
-                e.detail.value['province'] = user.province;
-                e.detail.value['city'] = user.city;
-                e.detail.value['gender'] = user.gender;
+                e.detail.value['nickname'] = user.nickname || '';
+                e.detail.value['avatar'] = user.avatar || '';
+                e.detail.value['province'] = user.province || '';
+                e.detail.value['city'] = user.city || '';
+                e.detail.value['gender'] = user.gender || 0;
 
                 // 小程序数据
                 // #ifdef MP
@@ -1151,11 +1146,11 @@
                     // 其他数据
                     var client_type = app.globalData.application_client_type();
                     var user = this.user || this.plugins_thirdpartylogin_user || app.globalData.get_login_cache_info() || {};
-                    e.detail.value['nickname'] = user.nickname;
-                    e.detail.value['avatar'] = user.avatar;
-                    e.detail.value['province'] = user.province;
-                    e.detail.value['city'] = user.city;
-                    e.detail.value['gender'] = user.gender;
+                    e.detail.value['nickname'] = user.nickname || '';
+                    e.detail.value['avatar'] = user.avatar || '';
+                    e.detail.value['province'] = user.province || '';
+                    e.detail.value['city'] = user.city || '';
+                    e.detail.value['gender'] = user.gender || 0;
                     // #ifdef MP
                     // 小程序数据
                     var field_openid = client_type + '_openid';
@@ -1219,11 +1214,11 @@
                     // 其他数据
                     var client_type = app.globalData.application_client_type();
                     var user = this.user || this.plugins_thirdpartylogin_user || app.globalData.get_login_cache_info() || {};
-                    e.detail.value['nickname'] = user.nickname;
-                    e.detail.value['avatar'] = user.avatar;
-                    e.detail.value['province'] = user.province;
-                    e.detail.value['city'] = user.city;
-                    e.detail.value['gender'] = user.gender;
+                    e.detail.value['nickname'] = user.nickname || '';
+                    e.detail.value['avatar'] = user.avatar || '';
+                    e.detail.value['province'] = user.province || '';
+                    e.detail.value['city'] = user.city || '';
+                    e.detail.value['gender'] = user.gender || 0;
 
                     // #ifdef MP
                     // 小程序数据
