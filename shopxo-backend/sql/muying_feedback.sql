@@ -1,5 +1,5 @@
 -- MuyingFeedback 表（妈妈说/用户反馈）
-CREATE TABLE IF NOT EXISTS `sx_muying_feedback` (
+CREATE TABLE IF NOT EXISTS `sxo_muying_feedback` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(11) unsigned NOT NULL DEFAULT 0,
   `nickname` varchar(60) NOT NULL DEFAULT '',

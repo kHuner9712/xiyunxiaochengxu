@@ -250,11 +250,21 @@
             },
 
             go_register() {
-                uni.navigateTo({ url: '/pages/login/login' });
+                var url = '/pages/login/login?opt_form=reg';
+                var shared_code = uni.getStorageSync('invite_code_from_share') || '';
+                if (shared_code) {
+                    url += '&invite_code=' + encodeURIComponent(shared_code);
+                }
+                uni.navigateTo({ url: url });
             },
 
             go_login() {
-                uni.navigateTo({ url: '/pages/login/login' });
+                var url = '/pages/login/login?opt_form=login';
+                var shared_code = uni.getStorageSync('invite_code_from_share') || '';
+                if (shared_code) {
+                    url += '&invite_code=' + encodeURIComponent(shared_code);
+                }
+                uni.navigateTo({ url: url });
             },
         }
     };

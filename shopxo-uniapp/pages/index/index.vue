@@ -845,12 +845,17 @@
                                 };
                             });
                             self.setData({ muying_goods_list: list });
+                            if (list.length === 0 && stage) {
+                                console.warn('[index] 阶段推荐返回空列表 stage=' + stage);
+                            }
                         } else {
                             self.setData({ muying_goods_list: [] });
+                            console.warn('[index] 阶段推荐请求失败 stage=' + stage, res.data);
                         }
                     },
                     fail: function() {
                         self.setData({ muying_goods_list: [] });
+                        console.warn('[index] 阶段推荐网络请求失败 stage=' + stage);
                     },
                 });
             },

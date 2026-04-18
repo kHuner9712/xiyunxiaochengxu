@@ -2,6 +2,7 @@
 namespace app\service;
 
 use think\facade\Db;
+use think\facade\Log;
 use app\service\ResourcesService;
 use app\extend\muying\MuyingStage;
 use app\extend\muying\MuyingActivityCategory;
@@ -361,13 +362,18 @@ class ActivityService
                 if ($normalized === 'pregnancy' && !empty($data['due_date'])) {
                     $user_update['due_date'] = $data['due_date'];
                 }
-                Db::name('User')->where(['id' => $user_id])->update($user_update);
+                try {
+                    Db::name('User')->where(['id' => $user_id])->update($user_update);
+                } catch (\Exception $e) {
+                    Log::warning('报名回填用户阶段失败 user_id=' . $user_id . ' error=' . $e->getMessage());
+                }
             }
 
             Db::commit();
             return DataReturn('报名成功', 0);
         } catch (\Exception $e) {
             Db::rollback();
+            Log::error('活动报名异常 activity_id=' . $activity_id . ' user_id=' . $user_id . ' error=' . $e->getMessage());
             return DataReturn('报名失败：' . $e->getMessage(), -100);
         }
     }
@@ -422,6 +428,7 @@ class ActivityService
             return DataReturn('取消报名成功', 0);
         } catch (\Exception $e) {
             Db::rollback();
+            Log::error('取消报名异常 id=' . $id . ' user_id=' . $user_id . ' error=' . $e->getMessage());
             return DataReturn('取消报名失败：' . $e->getMessage(), -100);
         }
     }

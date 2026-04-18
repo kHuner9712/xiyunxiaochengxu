@@ -492,13 +492,17 @@
                             if ((data.user_name_view || null) != null) {
                                 upd_data['nickname'] = data.user_name_view;
                             }
-                            this.setData(upd_data);
-
-                            // 检查是否需要弹出阶段引导
                             var user_stage = (data.current_stage || '');
                             var stage_map = { 'prepare': '备孕中', 'pregnancy': '孕期中', 'postpartum': '产后' };
                             var stage_text = stage_map[user_stage] || '';
                             upd_data['current_stage_text'] = stage_text;
+
+                            if (user_stage && !stage_text) {
+                                console.warn('[user] current_stage有值但无法映射 user_stage=' + user_stage);
+                            }
+
+                            this.setData(upd_data);
+
                             if (!user_stage && this.user != null) {
                                 var stage_shown = uni.getStorageSync('stage_guide_shown') || '';
                                 if (!stage_shown) {
@@ -610,12 +614,18 @@
                     dataType: 'json',
                     success: (res) => {
                         if (res.data.code == 0) {
-                            // 用后端返回的最新用户信息更新缓存
                             if (res.data.data) {
                                 uni.setStorageSync(app.globalData.data.cache_user_info_key, res.data.data);
                             }
                             app.globalData.showToast('阶段设置成功', 'success');
+                        } else {
+                            app.globalData.showToast('阶段信息保存失败，请稍后重试');
+                            console.warn('[user] 阶段保存失败', res.data);
                         }
+                    },
+                    fail: () => {
+                        app.globalData.showToast('网络异常，阶段保存失败');
+                        console.warn('[user] 阶段保存网络请求失败');
                     }
                 });
             },

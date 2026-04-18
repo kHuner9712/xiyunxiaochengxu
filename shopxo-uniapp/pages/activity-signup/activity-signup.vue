@@ -426,7 +426,7 @@
                     },
                     fail: function() {
                         uni.hideLoading();
-                        app.globalData.showToast('网络异常，请重试');
+                        app.globalData.showToast('网络异常，报名信息未提交，请检查网络后重试');
                     },
                 });
             },

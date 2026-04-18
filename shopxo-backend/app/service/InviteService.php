@@ -335,6 +335,9 @@ class InviteService
     private static function GetInviterByCode($code)
     {
         $user = Db::name('User')->where(['invite_code' => $code])->find();
+        if (empty($user)) {
+            Log::info('邀请码无效 code=' . $code);
+        }
         return !empty($user) ? intval($user['id']) : 0;
     }
 

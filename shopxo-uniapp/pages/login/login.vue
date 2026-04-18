@@ -631,6 +631,16 @@
                 }
                 if ((this.params.opt_form || null) != null) {
                     form = this.params.opt_form;
+                    if (form == 'reg' && type.indexOf('reg_') !== 0) {
+                        if ((this.home_user_reg_type || null) != null && this.home_user_reg_type.length > 0) {
+                            type = 'reg_' + this.home_user_reg_type[0];
+                        }
+                    }
+                    if (form == 'login' && type.indexOf('login_') !== 0) {
+                        if ((this.home_user_login_type || null) != null && this.home_user_login_type.length > 0) {
+                            type = 'login_' + this.home_user_login_type[0];
+                        }
+                    }
                 }
 
                 // 没有基础数据则刷新

@@ -2400,6 +2400,7 @@ class UserService
             }
             return DataReturn(MyLang('change_success'), 0, $user);
         }
+        Log::error('用户资料保存失败 user_id=' . $params['user']['id'] . ' data=' . json_encode($data, JSON_UNESCAPED_UNICODE));
         return DataReturn(MyLang('change_fail'), -100);
     }
 
