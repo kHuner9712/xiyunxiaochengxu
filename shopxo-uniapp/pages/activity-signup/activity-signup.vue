@@ -123,9 +123,31 @@
                 </view>
             </view>
 
+            <!-- 隐私告知与同意 -->
+            <view class="privacy-container padding-horizontal-main margin-top-main">
+                <view class="privacy-card muying-card padding-main">
+                    <view class="privacy-header flex-row align-c margin-bottom-sm">
+                        <uni-icons type="info" size="28rpx" color="#F5A0B1"></uni-icons>
+                        <text class="fw-b text-size-sm cr-base margin-left-xs">隐私告知</text>
+                    </view>
+                    <view class="privacy-content">
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">1. 我们将收集您的姓名、手机号、孕育阶段、预产期/宝宝月龄等信息，用于活动报名确认、签到核实及活动通知。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">2. 您的个人信息仅用于孕禧平台活动相关服务，不会用于其他商业目的或提供给第三方。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">3. 孕禧平台是您个人信息的处理者，负责保护您的信息安全。</text>
+                        <text class="text-size-xs cr-grey block">4. 提交报名即表示您同意以上隐私告知，并确认所填信息真实有效。</text>
+                    </view>
+                    <view class="privacy-agree flex-row align-c margin-top-main" @tap="toggle_privacy_agree">
+                        <view class="privacy-checkbox" :class="{'privacy-checkbox-checked': privacy_agreed}">
+                            <uni-icons v-if="privacy_agreed" type="checkmarkempty" size="22rpx" color="#fff"></uni-icons>
+                        </view>
+                        <text class="text-size-xs cr-base margin-left-sm">我已阅读并同意以上隐私告知</text>
+                    </view>
+                </view>
+            </view>
+
             <!-- 提交按钮 -->
-            <view class="submit-container padding-horizontal-main margin-top-xxxl margin-bottom-xxxl">
-                <button class="submit-btn cr-white fw-b text-size-md round" @tap="submit_event">提交报名</button>
+            <view class="submit-container padding-horizontal-main margin-top-main margin-bottom-xxxl">
+                <button class="submit-btn cr-white fw-b text-size-md round" :class="{'submit-btn-disabled': !privacy_agreed}" @tap="submit_event">提交报名</button>
             </view>
 
             <!-- 公共 -->
@@ -166,6 +188,7 @@
                     baby_month_age: '',
                     remark: '',
                 },
+                privacy_agreed: false,
             };
         },
 
@@ -178,9 +201,15 @@
             if (params && params.id) {
                 this.setData({ activity_id: params.id });
             }
+            var user = app.globalData.get_user_cache_info();
+            if (!user) {
+                uni.navigateTo({ url: '/pages/login/login?event_callback=signup_init' });
+                return;
+            }
             this.get_activity_summary();
             this.init_baby_month_age_options();
             this.init_due_date_start();
+            this.load_user_profile();
         },
 
         onShow() {
@@ -191,6 +220,59 @@
         },
 
         methods: {
+            load_user_profile() {
+                var self = this;
+                uni.request({
+                    url: app.globalData.get_request_url('index', 'personal'),
+                    method: 'POST',
+                    data: {},
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.data.code == 0) {
+                            var profile = res.data.data.data || {};
+                            var form = self.form;
+                            if (!form.name && profile.user_name_view) {
+                                form.name = profile.user_name_view;
+                            }
+                            if (!form.phone && profile.mobile) {
+                                form.phone = profile.mobile;
+                            }
+                            if (profile.current_stage) {
+                                var stage_idx = self.stage_values.indexOf(profile.current_stage);
+                                if (stage_idx >= 0) {
+                                    self.setData({ stage_index: stage_idx, selected_stage: profile.current_stage });
+                                }
+                            }
+                            if (profile.due_date) {
+                                var d = profile.due_date;
+                                if (typeof d === 'number') {
+                                    d = new Date(d * 1000);
+                                    form.due_date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                                } else {
+                                    form.due_date = d;
+                                }
+                            }
+                            if (profile.baby_birthday) {
+                                var b = profile.baby_birthday;
+                                if (typeof b === 'number') {
+                                    b = new Date(b * 1000);
+                                    var now = new Date();
+                                    var months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
+                                    if (months >= 0) {
+                                        var baby_idx = self.baby_month_age_options.indexOf(months + '个月');
+                                        if (baby_idx >= 0) {
+                                            self.setData({ baby_month_age_index: baby_idx });
+                                            form.baby_month_age = months;
+                                        }
+                                    }
+                                }
+                            }
+                            self.setData({ form: form });
+                        }
+                    },
+                });
+            },
+
             get_activity_summary() {
                 if (!this.activity_id) return;
                 var self = this;
@@ -285,7 +367,15 @@
                     app.globalData.showToast('请选择宝宝月龄');
                     return false;
                 }
+                if (!this.privacy_agreed) {
+                    app.globalData.showToast('请阅读并同意隐私告知');
+                    return false;
+                }
                 return true;
+            },
+
+            toggle_privacy_agree() {
+                this.setData({ privacy_agreed: !this.privacy_agreed });
             },
 
             submit_event() {
@@ -301,6 +391,7 @@
                     due_date: this.form.due_date,
                     baby_month_age: this.form.baby_month_age,
                     remark: this.form.remark,
+                    privacy_agreed: this.privacy_agreed ? 1 : 0,
                 };
 
                 uni.request({
@@ -317,6 +408,11 @@
                                 duration: 1500,
                             });
                             setTimeout(function() {
+                                var pages = getCurrentPages();
+                                var prevPage = pages.length > 1 ? pages[pages.length - 2] : null;
+                                if (prevPage && prevPage.get_activity_detail) {
+                                    prevPage.get_activity_detail();
+                                }
                                 uni.navigateBack();
                             }, 1500);
                         } else {
@@ -368,5 +464,31 @@
         line-height: 96rpx;
         background: linear-gradient(135deg, #F5A0B1 0%, #F5C6A0 100%);
         border: none;
+    }
+
+    .submit-btn-disabled {
+        opacity: 0.5;
+    }
+
+    .privacy-checkbox {
+        width: 36rpx;
+        height: 36rpx;
+        border-radius: 6rpx;
+        border: 2rpx solid #ccc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .privacy-checkbox-checked {
+        background-color: #F5A0B1;
+        border-color: #F5A0B1;
+    }
+
+    .privacy-content {
+        padding: 16rpx;
+        background-color: #FFF8F5;
+        border-radius: 12rpx;
     }
 </style>

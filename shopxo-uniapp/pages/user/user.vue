@@ -12,6 +12,9 @@
                             <view class="va-m dis-inline-block margin-left-lg base-info">
                                 <view class="flex-col align-b" data-value="/pages/personal/personal" @tap="url_event">
                                     <view class="va-m fw-b text-size single-text">{{ nickname }}</view>
+                                    <view v-if="current_stage_text" class="stage-tag margin-top-sm dis-inline-block">
+                                        <text class="text-size-xs">{{ current_stage_text }}</text>
+                                    </view>
                                     <view v-if="(user || null) != null && (user.number_code || null) != null" class="head-id border-radius-sm padding-horizontal-sm margin-top-sm dis-inline-block fw-b">
                                         <text class="text-size-xs">ID </text>
                                         <text class="text-size-xss padding-left-xs pr bottom-xs">{{ user.number_code }}</text>
@@ -43,8 +46,8 @@
                             </view>
                         </block>
                     </view>
-                    <!-- 会员码 付款码 -->
-                    <view v-if="(payment_page_url || null) !== null || (membership_page_url || null) !== null" class="qrcode padding-horizontal-main pr oh">
+                    <!-- 会员码 付款码 - 暂时隐藏 -->
+                    <view v-if="false && ((payment_page_url || null) !== null || (membership_page_url || null) !== null)" class="qrcode padding-horizontal-main pr oh">
                         <view class="qrcode-content flex-row align-c text-size-md" :style="'background-image: url(' + static_url + 'qrcode-bg.png)'" :class="(payment_page_url || null) == null || (membership_page_url || null) == null ? 'jc-sb' : 'jc-sa divider-r'">
                             <view v-if="(membership_page_url || null) != null" class="padding-horizontal-lg pr z-i ht-auto" :class="(payment_page_url || null) == null || (membership_page_url || null) == null ? 'wh-auto' : 'tc flex-width-half'" :data-value="membership_page_url" @tap="url_event">
                                 <view class="item pr top-lg dis-inline-block"> <image class="icon" :src="static_url + 'membership-code.png'" mode="widthFix"></image> </view>{{ $t('member-code.member-code.26bu38') }}</view
@@ -233,7 +236,8 @@
                 // 用户中心菜单展示模式
                 nav_show_model_type: app.globalData.data.user_center_nav_show_model_type,
                 // 阶段引导弹窗
-                stage_guide_show: false
+                stage_guide_show: false,
+                current_stage_text: '',
             };
         },
 
@@ -492,6 +496,9 @@
 
                             // 检查是否需要弹出阶段引导
                             var user_stage = (data.current_stage || '');
+                            var stage_map = { 'prepare': '备孕中', 'pregnancy': '孕期中', 'postpartum': '产后' };
+                            var stage_text = stage_map[user_stage] || '';
+                            upd_data['current_stage_text'] = stage_text;
                             if (!user_stage && this.user != null) {
                                 var stage_shown = uni.getStorageSync('stage_guide_shown') || '';
                                 if (!stage_shown) {
@@ -638,5 +645,13 @@
 
     .muying-nav-icon-text {
         font-size: 36rpx;
+    }
+
+    .stage-tag {
+        background: linear-gradient(135deg, #F5A0B1, #F5C6A0);
+        color: #fff;
+        padding: 4rpx 16rpx;
+        border-radius: 20rpx;
+        font-size: 20rpx;
     }
 </style>

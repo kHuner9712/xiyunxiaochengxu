@@ -88,59 +88,12 @@
                 </view>
             </view>
 
-            <!-- 用户晒单 -->
-            <view class="share-container padding-horizontal-main margin-top-main">
-                <view class="share-card muying-card padding-main">
-                    <view class="share-header flex-row align-c jc-sb margin-bottom-main">
-                        <view class="flex-row align-c">
-                            <text class="fw-b text-size cr-base">用户晒单</text>
-                            <text class="cr-grey-9 text-size-xs margin-left-sm">({{ user_shares.length }})</text>
-                        </view>
-                    </view>
-                    <scroll-view :scroll-x="true" :show-scrollbar="false" class="share-scroll">
-                        <view class="share-scroll-inner flex-row">
-                            <block v-for="(item, index) in user_shares" :key="index">
-                                <view class="share-item">
-                                    <image :src="item.photo" mode="aspectFill" class="share-photo"></image>
-                                    <view class="share-user-info flex-row align-c margin-top-xs">
-                                        <text class="cr-base text-size-xs fw-b">{{ item.nickname }}</text>
-                                    </view>
-                                    <text class="cr-grey text-size-xs share-comment single-text">{{ item.comment }}</text>
-                                </view>
-                            </block>
-                        </view>
-                    </scroll-view>
-                </view>
-            </view>
-
-            <!-- 互动数据 -->
-            <view class="interact-container padding-horizontal-main margin-top-main margin-bottom-xxxl">
-                <view class="interact-card muying-card padding-main flex-row jc-sa align-c">
-                    <view class="interact-item tc cp" @tap="like_event">
-                        <uni-icons :type="is_liked ? 'heart-filled' : 'heart'" size="40rpx" :color="is_liked ? '#F5A0B1' : '#999'"></uni-icons>
-                        <text :class="'text-size-xs dis-block ' + (is_liked ? 'cr-main' : 'cr-grey')">{{ like_count }}</text>
-                    </view>
-                    <view class="interact-item tc cp" @tap="comment_event">
-                        <uni-icons type="chat" size="40rpx" color="#999"></uni-icons>
-                        <text class="text-size-xs cr-grey dis-block">{{ comment_count }}</text>
-                    </view>
-                    <view class="interact-item tc cp" @tap="share_event">
-                        <uni-icons type="redo" size="40rpx" color="#999"></uni-icons>
-                        <text class="text-size-xs cr-grey dis-block">分享</text>
-                    </view>
-                </view>
-            </view>
-
             <!-- 底部操作栏 -->
             <view class="bottom-bar pf bottom-0 left-0 right-0 z-i-deep bg-white">
                 <view class="bottom-bar-inner flex-row align-c padding-horizontal-main padding-vertical-sm">
                     <view class="fav-btn tc cp margin-right-main" @tap="fav_event">
                         <uni-icons :type="is_favored ? 'star-filled' : 'star'" size="44rpx" :color="is_favored ? '#F5A0B1' : '#999'"></uni-icons>
                         <text :class="'text-size-xs dis-block ' + (is_favored ? 'cr-main' : 'cr-grey')">{{ is_favored ? '已收藏' : '收藏' }}</text>
-                    </view>
-                    <view class="poster-btn tc cp margin-right-main" @tap="poster_event">
-                        <uni-icons type="image" size="44rpx" color="#F5A0B1"></uni-icons>
-                        <text class="text-size-xs cr-main dis-block">海报</text>
                     </view>
                     <button class="signup-btn flex-1 cr-white fw-b text-size-md round" :class="signup_btn_class" :disabled="signup_disabled" @tap="signup_event">
                         {{ signup_btn_text }}
@@ -167,11 +120,9 @@
                 scroll_value: 0,
                 activity_id: null,
                 is_favored: false,
-                is_liked: false,
-                like_count: 0,
-                comment_count: 0,
+                is_signed_up: false,
+                signup_status: 'ongoing',
                 activity: {},
-                user_shares: [],
             };
         },
 
@@ -181,11 +132,19 @@
 
         computed: {
             signup_disabled() {
-                return this.activity.max_count > 0 && this.activity.signup_count >= this.activity.max_count;
+                if (!this.activity.id) return true;
+                if (this.is_signed_up) return true;
+                if (this.signup_status === 'not_started') return true;
+                if (this.signup_status === 'ended') return true;
+                if (this.signup_status === 'full') return true;
+                return false;
             },
             signup_btn_text() {
                 if (!this.activity.id) return '加载中...';
-                if (this.signup_disabled) return '名额已满';
+                if (this.is_signed_up) return '已报名';
+                if (this.signup_status === 'not_started') return '报名未开始';
+                if (this.signup_status === 'ended') return '报名已截止';
+                if (this.signup_status === 'full') return '名额已满';
                 return '立即报名';
             },
             signup_btn_class() {
@@ -228,11 +187,9 @@
                             var data = res.data.data || {};
                             self.setData({
                                 activity: data.activity || {},
-                                user_shares: data.user_shares || [],
                                 is_favored: !!data.is_favored,
-                                is_liked: !!data.is_liked,
-                                like_count: data.like_count || 0,
-                                comment_count: data.comment_count || 0,
+                                is_signed_up: !!data.is_signed_up,
+                                signup_status: data.signup_status || 'ongoing',
                             });
                         } else {
                             app.globalData.showToast(res.data.msg || '活动不存在');
@@ -249,38 +206,56 @@
             },
 
             fav_event() {
-                app.globalData.showToast('收藏功能暂未开放');
-            },
-
-            like_event() {
-                app.globalData.showToast('点赞功能暂未开放');
-            },
-
-            comment_event() {
-                app.globalData.showToast('评论功能开发中');
+                var self = this;
+                var user = app.globalData.get_user_cache_info();
+                if (!user) {
+                    uni.navigateTo({ url: '/pages/login/login' });
+                    return;
+                }
+                uni.request({
+                    url: app.globalData.get_request_url('favor', 'activity'),
+                    method: 'POST',
+                    data: { id: this.activity_id },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.data.code == 0) {
+                            self.setData({ is_favored: res.data.data.is_favored });
+                        } else {
+                            app.globalData.showToast(res.data.msg || '操作失败');
+                        }
+                    },
+                    fail: function() {
+                        app.globalData.showToast('网络异常');
+                    },
+                });
             },
 
             share_event() {
                 uni.showShareMenu({
                     withShareTicket: true,
                     menus: ['shareAppMessage', 'shareTimeline'],
-                    success: function() {},
-                    fail: function() {
-                        app.globalData.showToast('分享功能暂不可用');
-                    },
                 });
-            },
-
-            poster_event() {
-                app.globalData.showToast('海报功能暂未开放');
             },
 
             signup_event() {
                 if (this.signup_disabled) return;
+                var user = app.globalData.get_user_cache_info();
+                if (!user) {
+                    uni.navigateTo({ url: '/pages/login/login' });
+                    return;
+                }
                 uni.navigateTo({
                     url: '/pages/activity-signup/activity-signup?id=' + this.activity.id,
                 });
             },
+        },
+
+        onShareAppMessage() {
+            return {
+                title: this.activity.title || '孕禧活动',
+                path: '/pages/activity-detail/activity-detail?id=' + this.activity_id,
+                imageUrl: this.activity.cover || '',
+            };
         },
     };
 </script>

@@ -24,8 +24,8 @@
                 system_type: 'default',
 
                 // 基础信息
-                application_title: 'ShopXO',
-                application_describe: 'ShopXO Desc',
+                application_title: '孕禧',
+                application_describe: '孕禧 - 科学孕育·安心陪伴',
 
                 // 默认logo、如 /static/images/common/logo.png
                 application_logo: '',

@@ -113,6 +113,9 @@
 
         onLoad(params) {
             app.globalData.page_event_onload_handle(params);
+            if (params && params.invite_code) {
+                uni.setStorageSync('invite_code_from_share', params.invite_code);
+            }
             this.check_login_and_load();
         },
 
@@ -125,14 +128,15 @@
 
         onShareAppMessage() {
             return {
-                title: '邀请好友 赢积分',
-                path: '/pages/login/login?invite_code=' + (this.invite_code || ''),
+                title: '孕禧邀请你一起科学孕育，赢积分好礼！',
+                path: '/pages/invite/invite?invite_code=' + (this.invite_code || ''),
+                imageUrl: '/static/images/common/logo.png',
             };
         },
 
         onShareTimeline() {
             return {
-                title: '邀请好友 赢积分',
+                title: '孕禧邀请你一起科学孕育，赢积分好礼！',
                 query: 'invite_code=' + (this.invite_code || ''),
             };
         },

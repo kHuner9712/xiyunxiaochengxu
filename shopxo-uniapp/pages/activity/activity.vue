@@ -127,6 +127,15 @@
 
         onLoad(params) {
             app.globalData.page_event_onload_handle(params);
+            if (params && params.stage) {
+                var tabs = this.stage_tabs;
+                for (var i = 0; i < tabs.length; i++) {
+                    if (tabs[i].value === params.stage) {
+                        this.setData({ stage_active_index: i });
+                        break;
+                    }
+                }
+            }
         },
 
         onShow() {
@@ -185,15 +194,14 @@
                             var list = data.data || [];
                             self.setData({
                                 data_list: self.data_page > 1 ? self.data_list.concat(list) : list,
-                                data_list_loding_status: 3,
+                                data_list_loding_status: list.length > 0 ? 3 : 0,
                                 data_bottom_line_status: (data.page_total || 0) <= self.data_page,
                                 data_page_total: data.page_total || 0,
                                 data_is_loading: 0,
                             });
                         } else {
                             self.setData({
-                                data_list: [],
-                                data_page_total: 0,
+                                data_list_loding_status: 0,
                                 data_is_loading: 0,
                             });
                         }
@@ -201,8 +209,7 @@
                     fail: function() {
                         uni.stopPullDownRefresh();
                         self.setData({
-                            data_list: [],
-                            data_page_total: 0,
+                            data_list_loding_status: 2,
                             data_is_loading: 0,
                         });
                     },

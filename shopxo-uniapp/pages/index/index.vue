@@ -139,7 +139,18 @@
                                     <text v-for="(s, i) in muying_stage_tabs" :key="i" class="muying-stage-filter-item" :class="{'muying-stage-filter-active': muying_current_stage === s.value}" @tap="muying_stage_change(s.value)">{{s.name}}</text>
                                 </view>
                             </view>
-                            <component-goods-list :propData="muying_goods_list" :propIsAutoType="false" :propLabel="propLabel"></component-goods-list>
+                            <view class="muying-goods-grid">
+                                <view v-for="(item, index) in muying_goods_list" :key="index" class="muying-goods-item muying-card" @tap="goods_item_event(item)">
+                                    <image :src="item.images" mode="aspectFill" class="muying-goods-image"></image>
+                                    <view class="muying-goods-info">
+                                        <text class="muying-goods-title">{{item.title}}</text>
+                                        <view class="muying-goods-tags" v-if="item.tags && item.tags.length > 0">
+                                            <text v-for="(tag, ti) in item.tags.slice(0,2)" :key="ti" class="muying-article-tag">{{tag}}</text>
+                                        </view>
+                                        <text class="muying-goods-price">¥{{item.price}}</text>
+                                    </view>
+                                </view>
+                            </view>
                         </view>
 
                         <!-- 内容资讯 -->
@@ -185,12 +196,12 @@
                             </view>
                         </view>
 
-                        <!-- 商城公告 -->
-                        <view v-if="load_status == 1 && (common_shop_notice || null) != null" class="notice">
+                        <!-- 商城公告 - 暂时隐藏 -->
+                        <view v-if="false && load_status == 1 && (common_shop_notice || null) != null" class="notice">
                             <uni-notice-bar show-icon scrollable :text="common_shop_notice" background-color="transparent" color="#666" />
                         </view>
-                        <!-- 推荐文章 -->
-                        <view v-if="article_list.length > 0" class="article-list padding-main border-radius-main oh bg-white spacing-mb">
+                        <!-- 推荐文章 - 暂时隐藏 -->
+                        <view v-if="false && article_list.length > 0" class="article-list padding-main border-radius-main oh bg-white spacing-mb">
                             <view mode="aspectFit" class="new-icon va-m fl cp pr divider-r" data-value="/pages/article-category/article-category" @tap="url_event">
                                 <text>{{ $t('index.index.t8bll8') }}</text
                                 ><text class="cr-red">{{ $t('index.index.t8bll9') }}</text>
@@ -207,8 +218,8 @@
                             </view>
                         </view>
 
-                        <!-- 按照插件顺序渲染插件数据 -->
-                        <block v-if="plugins_sort_list.length > 0">
+                        <!-- 按照插件顺序渲染插件数据 - 暂时隐藏 -->
+                        <block v-if="false && plugins_sort_list.length > 0">
                             <block v-for="(pv, pi) in plugins_sort_list" :key="pi">
                                 <!-- 首页中间广告 - 插件 -->
                                 <view v-if="pv.plugins == 'homemiddleadv' && (plugins_homemiddleadv_data || null) != null && plugins_homemiddleadv_data.length > 0" class="plugins-homemiddleadv oh spacing-mb">
@@ -275,8 +286,8 @@
                             </block>
                         </block>
 
-                        <!-- 楼层数据 -->
-                        <block v-if="(data_list || null) != null && data_list.length > 0">
+                        <!-- 楼层数据 - 暂时隐藏 -->
+                        <block v-if="false && (data_list || null) != null && data_list.length > 0">
                             <!-- 数据模式0,1自动+手动、2拖拽 -->
                             <block v-if="data_mode == 2">
                                 <!-- 引入拖拽数据模块 -->
@@ -301,8 +312,8 @@
                             </block>
                         </block>
 
-                        <!-- 按照插件顺序渲染插件数据 -->
-                        <block v-if="plugins_sort_list.length > 0">
+                        <!-- 按照插件顺序渲染插件数据(楼层底部) - 暂时隐藏 -->
+                        <block v-if="false && plugins_sort_list.length > 0">
                             <block v-for="(pv, pi) in plugins_sort_list" :key="pi">
                                 <!-- 活动配置-楼层底部 - 插件 -->
                                 <view v-if="pv.plugins == 'activity' && (plugins_activity_data || null) != null">
@@ -496,6 +507,7 @@
                 muying_stage_tabs: [{name:'全部',value:''},{name:'备孕',value:'prepare'},{name:'孕期',value:'pregnancy'},{name:'产后',value:'postpartum'}],
                 muying_current_stage: '',
                 muying_goods_list: [],
+                muying_goods_all_list: [],
                 muying_article_list: [],
                 muying_feedback_list: [],
             };
@@ -564,8 +576,10 @@
                 this.set_navigation_bar_color();
 
                 this.get_muying_activity_list();
+                this.get_muying_goods_list();
                 this.get_muying_article_list();
                 this.get_muying_feedback_list();
+                this.init_user_stage();
             },
 
         // 下拉刷新
@@ -784,15 +798,7 @@
 
             // 母婴模块 - 阶段点击
             stage_click_event(stage) {
-                var url = '/pages/goods-search/goods-search';
-                if (stage === 'prepare') {
-                    url += '?keywords=备孕';
-                } else if (stage === 'pregnancy') {
-                    url += '?keywords=孕期';
-                } else if (stage === 'postpartum') {
-                    url += '?keywords=产后';
-                }
-                app.globalData.url_open(url);
+                app.globalData.url_open('/pages/activity/activity?stage=' + stage);
             },
 
             // 母婴模块 - 活动更多
@@ -808,6 +814,45 @@
             // 母婴模块 - 阶段筛选切换
             muying_stage_change(stage) {
                 this.setData({ muying_current_stage: stage });
+                this.filter_muying_goods_by_stage(stage);
+            },
+
+            filter_muying_goods_by_stage(stage) {
+                var all = this.muying_goods_all_list;
+                var filtered;
+                if (!stage) {
+                    filtered = all;
+                } else {
+                    filtered = all.filter(function(item) {
+                        var tags = item.tags || [];
+                        var title = item.title || '';
+                        var stage_map = {
+                            'prepare': ['备孕', '孕前'],
+                            'pregnancy': ['孕期', '孕妇', '孕中', '孕妈'],
+                            'postpartum': ['产后', '月子', '哺乳', '新生儿', '婴儿'],
+                        };
+                        var keywords = stage_map[stage] || [];
+                        var match = false;
+                        for (var i = 0; i < keywords.length; i++) {
+                            if (title.indexOf(keywords[i]) !== -1) {
+                                match = true;
+                                break;
+                            }
+                            for (var j = 0; j < tags.length; j++) {
+                                if (tags[j].indexOf(keywords[i]) !== -1) {
+                                    match = true;
+                                    break;
+                                }
+                            }
+                            if (match) break;
+                        }
+                        return !stage || match;
+                    });
+                }
+                if (filtered.length === 0) {
+                    filtered = all.slice(0, 6);
+                }
+                this.setData({ muying_goods_list: filtered });
             },
 
             // 母婴模块 - 文章更多
@@ -825,6 +870,11 @@
                 app.globalData.url_open('/pages/invite/invite');
             },
 
+            // 母婴模块 - 商品点击
+            goods_item_event(item) {
+                app.globalData.url_open('/pages/goods-detail/goods-detail?goods_id=' + item.id);
+            },
+
             get_muying_activity_list() {
                 var self = this;
                 uni.request({
@@ -836,6 +886,44 @@
                         if (res.data.code == 0) {
                             var list = (res.data.data && res.data.data.data) || [];
                             self.setData({ muying_activity_list: list });
+                        }
+                    },
+                });
+            },
+
+            init_user_stage() {
+                var user = app.globalData.get_user_cache_info();
+                if (user && user.current_stage && !this.muying_current_stage) {
+                    this.setData({ muying_current_stage: user.current_stage });
+                    this.filter_muying_goods_by_stage(user.current_stage);
+                }
+            },
+
+            get_muying_goods_list() {
+                var self = this;
+                uni.request({
+                    url: app.globalData.get_request_url('datalist', 'search'),
+                    method: 'POST',
+                    data: { n: 20 },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.data.code == 0) {
+                            var raw = (res.data.data && res.data.data.data) || [];
+                            var list = raw.map(function(item) {
+                                return {
+                                    id: item.id,
+                                    title: item.title || '',
+                                    images: item.images || '',
+                                    price: item.price || '0.00',
+                                    original_price: item.original_price || '',
+                                    tags: (item.category_names || '').split(',').filter(function(t) { return t; }),
+                                    url: '/pages/goods-detail/goods-detail?goods_id=' + item.id,
+                                };
+                            });
+                            self.setData({
+                                muying_goods_all_list: list,
+                                muying_goods_list: list,
+                            });
                         }
                     },
                 });

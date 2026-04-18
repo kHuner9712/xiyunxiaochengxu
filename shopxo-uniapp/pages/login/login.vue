@@ -516,7 +516,7 @@
                 }
             }
 
-            // 邀请码参数（优先 invite_code，兼容 referrer）
+            // 邀请码参数（优先 invite_code，兼容 referrer，最后从全局临时数据取）
             var invite_code = params.invite_code || '';
             if (!invite_code && (params.referrer || null) != null) {
                 var referrer_id = parseInt(params.referrer) || 0;
@@ -524,6 +524,13 @@
                     invite_code = app.globalData.get_user_invite_code_by_id(referrer_id) || '';
                 }
                 this.setData({ referrer: params.referrer });
+            }
+            if (!invite_code) {
+                var shared_code = uni.getStorageSync('invite_code_from_share') || '';
+                if (shared_code) {
+                    invite_code = shared_code;
+                    uni.removeStorageSync('invite_code_from_share');
+                }
             }
             if (invite_code) {
                 this.setData({

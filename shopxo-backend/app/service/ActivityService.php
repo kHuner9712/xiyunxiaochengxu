@@ -243,10 +243,40 @@ class ActivityService
                 'checked_data' => '1,30',
                 'error_msg'    => '联系电话格式有误',
             ],
+            [
+                'checked_type' => 'empty',
+                'key_name'     => 'stage',
+                'error_msg'    => '请选择孕育阶段',
+            ],
         ];
         $ret = ParamsChecked($params, $p);
         if ($ret !== true) {
             return DataReturn($ret, -1);
+        }
+
+        if (!preg_match('/^1[3-9]\d{9}$/', $params['phone'])) {
+            return DataReturn('手机号格式有误', -1);
+        }
+
+        $normalized = MuyingStage::Normalize($params['stage']);
+        if (empty($normalized)) {
+            return DataReturn('请选择有效的孕育阶段', -1);
+        }
+
+        if ($normalized === 'pregnancy' && empty($params['due_date'])) {
+            return DataReturn('孕期阶段请选择预产期', -1);
+        }
+
+        if ($normalized === 'postpartum' && empty($params['baby_month_age'])) {
+            return DataReturn('产后阶段请选择宝宝月龄', -1);
+        }
+
+        if (empty($params['privacy_agreed']) || $params['privacy_agreed'] !== true && $params['privacy_agreed'] !== 1 && $params['privacy_agreed'] !== '1') {
+            return DataReturn('请阅读并同意隐私告知', -1);
+        }
+
+        if (!empty($params['remark']) && mb_strlen($params['remark']) > 200) {
+            return DataReturn('备注信息不能超过200字', -1);
         }
 
         $activity_id = intval($params['activity_id']);
@@ -285,23 +315,35 @@ class ActivityService
                 return DataReturn('您已报名该活动', -1);
             }
 
+            $phone_exists = Db::name('ActivitySignup')->where([
+                ['activity_id', '=', $activity_id],
+                ['phone', '=', $params['phone']],
+                ['status', 'in', [0, 1]],
+                ['is_delete_time', '=', 0],
+            ])->find();
+            if (!empty($phone_exists)) {
+                Db::rollback();
+                return DataReturn('该手机号已报名此活动', -1);
+            }
+
             if ($activity['max_count'] > 0 && $activity['signup_count'] >= $activity['max_count']) {
                 Db::rollback();
                 return DataReturn('报名人数已满', -1);
             }
 
             $data = [
-                'activity_id'    => $activity_id,
-                'user_id'        => $user_id,
-                'name'           => $params['name'],
-                'phone'          => $params['phone'],
-                'stage'          => MuyingStage::Normalize(empty($params['stage']) ? '' : $params['stage']),
-                'due_date'       => empty($params['due_date']) ? 0 : (is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date'])),
-                'baby_month_age' => empty($params['baby_month_age']) ? 0 : intval($params['baby_month_age']),
-                'remark'         => empty($params['remark']) ? '' : $params['remark'],
-                'status'         => 0,
-                'add_time'       => time(),
-                'upd_time'       => time(),
+                'activity_id'         => $activity_id,
+                'user_id'             => $user_id,
+                'name'                => strip_tags(trim($params['name'])),
+                'phone'               => trim($params['phone']),
+                'stage'               => $normalized,
+                'due_date'            => empty($params['due_date']) ? 0 : (is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date'])),
+                'baby_month_age'      => empty($params['baby_month_age']) ? 0 : intval($params['baby_month_age']),
+                'remark'              => empty($params['remark']) ? '' : strip_tags(trim($params['remark'])),
+                'privacy_agreed_time' => time(),
+                'status'              => 0,
+                'add_time'            => time(),
+                'upd_time'            => time(),
             ];
 
             $signup_id = Db::name('ActivitySignup')->insertGetId($data);
@@ -311,6 +353,19 @@ class ActivityService
             }
 
             Db::name('Activity')->where(['id' => $activity_id])->inc('signup_count')->update();
+
+            // 回填用户画像：如果用户没有 current_stage，从报名数据回填
+            $user_row = Db::name('User')->where(['id' => $user_id])->find();
+            if (!empty($user_row) && empty($user_row['current_stage']) && !empty($normalized)) {
+                $user_update = ['current_stage' => $normalized, 'upd_time' => time()];
+                if ($normalized === 'pregnancy' && !empty($data['due_date'])) {
+                    $user_update['due_date'] = $data['due_date'];
+                }
+                if ($normalized === 'postpartum' && !empty($data['baby_month_age'])) {
+                    $user_update['baby_birthday'] = $data['baby_month_age'];
+                }
+                Db::name('User')->where(['id' => $user_id])->update($user_update);
+            }
 
             Db::commit();
             return DataReturn('报名成功', 0);

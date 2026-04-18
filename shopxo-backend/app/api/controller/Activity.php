@@ -65,15 +65,58 @@ class Activity extends Common
             $is_favored = !empty($favor_exists);
         }
 
+        $is_signed_up = false;
+        if (!empty($this->user)) {
+            $signup_exists = Db::name('ActivitySignup')->where([
+                ['activity_id', '=', $id],
+                ['user_id', '=', $this->user['id']],
+                ['status', 'in', [0, 1]],
+                ['is_delete_time', '=', 0],
+            ])->find();
+            $is_signed_up = !empty($signup_exists);
+        }
+
         $detail = [
             'activity'      => $activity,
             'is_favored'    => $is_favored,
-            'is_liked'      => false,
-            'like_count'    => 0,
-            'comment_count' => 0,
-            'user_shares'   => [],
+            'is_signed_up'  => $is_signed_up,
+            'signup_status' => isset($activity['signup_status']) ? $activity['signup_status'] : 'ongoing',
         ];
         return ApiService::ApiDataReturn(SystemBaseService::DataReturn($detail));
+    }
+
+    public function Favor()
+    {
+        $this->IsLogin();
+        if (empty($this->data_request['id'])) {
+            return ApiService::ApiDataReturn(DataReturn('活动ID参数有误', -1));
+        }
+
+        $id = intval($this->data_request['id']);
+        $user_id = intval($this->user['id']);
+
+        $exists = Db::name('GoodsFavor')->where([
+            ['user_id', '=', $user_id],
+            ['goods_id', '=', $id],
+            ['type', '=', 'activity'],
+        ])->find();
+
+        if (!empty($exists)) {
+            Db::name('GoodsFavor')->where([
+                ['user_id', '=', $user_id],
+                ['goods_id', '=', $id],
+                ['type', '=', 'activity'],
+            ])->delete();
+            return ApiService::ApiDataReturn(DataReturn('取消收藏成功', 0, ['is_favored' => false]));
+        } else {
+            Db::name('GoodsFavor')->insert([
+                'user_id'   => $user_id,
+                'goods_id'  => $id,
+                'type'      => 'activity',
+                'add_time'  => time(),
+            ]);
+            return ApiService::ApiDataReturn(DataReturn('收藏成功', 0, ['is_favored' => true]));
+        }
     }
 
     public function Signup()
