@@ -4,13 +4,18 @@
     import i18n from './locale/index';
     import devConfig from './common/js/config/dev.js';
     import prodConfig from './common/js/config/prod.js';
-    var appConfig = (process.env.NODE_ENV === 'production') ? prodConfig : devConfig;
+    var isProd = process.env.NODE_ENV === 'production';
+    var appConfig = isProd ? prodConfig : devConfig;
+    var request_url_value = isProd ? appConfig.request_url : (appConfig.request_url || 'http://localhost:8080/');
+    if (isProd && !request_url_value) {
+        console.error('[FATAL] 生产环境未配置 UNI_APP_REQUEST_URL，应用无法正常运行');
+    }
     export default {
         globalData: {
             data: {
                 // 基础配置
                 // 数据接口请求地址
-                request_url: appConfig.request_url || 'http://localhost:8080/',
+                request_url: request_url_value,
 
                 // 静态资源地址（如系统根目录不在public目录下面请在静态地址后面加public目录、如：https://d1.shopxo.vip/public/）
                 static_url: appConfig.static_url || '',
