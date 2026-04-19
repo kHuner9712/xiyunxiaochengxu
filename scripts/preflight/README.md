@@ -4,29 +4,110 @@
 
 | 文件 | 用途 | 执行方式 |
 |------|------|---------|
-| `check-server.sh` | 服务器环境+数据库全量预检 | `bash check-server.sh /path/to/shopxo-backend` |
+| `check-server.sh` | 服务器环境+数据库全量预检 | `bash check-server.sh [选项] [/path/to/backend]` |
 | `check-db.sql` | 纯数据库结构预检 | `mysql -u root -p shopxo < check-db.sql` |
 
 ## 快速开始
 
-### 方式一：一键全量预检（推荐）
+### 基本用法
 
 ```bash
-# 在服务器上执行
-cd /path/to/yunxi/scripts/preflight
-
-# 基本用法（默认数据库 root@127.0.0.1:3306/shopxo）
+# 在服务器上执行，检查当前目录下的后端代码
 bash check-server.sh /var/www/yunxi/shopxo-backend
 
 # 指定数据库连接
-DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=shopxo DB_PASS=yourpass DB_NAME=shopxo DB_PREFIX=sxo_ \
+DB_HOST=127.0.0.1 DB_USER=shopxo DB_PASS=yourpass \
   bash check-server.sh /var/www/yunxi/shopxo-backend
+
+# 从 .env 文件读取数据库连接
+bash check-server.sh --env /var/www/yunxi/shopxo-backend/.env /var/www/yunxi/shopxo-backend
 ```
 
-### 方式二：仅检查数据库
+### 仅检查数据库
 
 ```bash
 mysql -u shopxo -p shopxo < check-db.sql
+```
+
+## check-server.sh 选项
+
+| 选项 | 说明 |
+|------|------|
+| `--no-color` | 关闭彩色输出（适合重定向日志到文件） |
+| `--quiet` | 只输出 FAIL/WARN，不输出 PASS（减少输出量） |
+| `--strict` | WARN 也视为阻断上线（退出码 1） |
+| `--env FILE` | 从 .env 文件读取 DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS/DB_PREFIX |
+| `--help` | 显示帮助 |
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `DB_HOST` | `127.0.0.1` | 数据库主机 |
+| `DB_PORT` | `3306` | 数据库端口 |
+| `DB_NAME` | `shopxo` | 数据库名 |
+| `DB_USER` | `root` | 数据库用户 |
+| `DB_PASS` | （空） | 数据库密码 |
+| `DB_PREFIX` | `sxo_` | 表前缀 |
+
+## 真实执行示例
+
+### 示例1：标准检查
+
+```bash
+$ bash check-server.sh /var/www/yunxi/shopxo-backend
+
+==========================================
+ 1. 基础环境
+==========================================
+[PASS] PHP 版本: 8.1.2 (≥8.0.2)
+[PASS] MySQL 版本: 8.0 (≥5.6)
+[PASS] Composer: Composer version 2.5.1 2023-09-01
+
+==========================================
+ 4. 安全配置
+==========================================
+[PASS] install.php 已删除
+[FAIL] APP_DEBUG = true | 修复: 修改 .env 中 APP_DEBUG=false
+
+==========================================
+ 检查汇总
+==========================================
+  PASS: 18  WARN: 2  FAIL: 1  总计: 21
+
+不建议上线 — 存在 1 个 FAIL 项，请按修复建议逐项处理。
+```
+
+### 示例2：静默模式 + 重定向日志
+
+```bash
+$ bash check-server.sh --no-color --quiet /var/www/yunxi/shopxo-backend > preflight.log 2>&1
+$ echo $?
+1
+$ cat preflight.log
+[FAIL] APP_DEBUG = true | 修复: 修改 .env 中 APP_DEBUG=false
+[FAIL] 目录不可写: public/static/upload | 修复: chmod -R 755 ...
+
+不建议上线 — 存在 2 个 FAIL 项，请按修复建议逐项处理。
+```
+
+### 示例3：严格模式（WARN 也阻断）
+
+```bash
+$ bash check-server.sh --strict /var/www/yunxi/shopxo-backend
+
+==========================================
+ 检查汇总
+==========================================
+  PASS: 18  WARN: 2  FAIL: 0  总计: 20
+
+不建议上线 (--strict) — 存在 2 个 WARN 项，--strict 模式下视为阻断。
+```
+
+### 示例4：从 .env 读取数据库连接
+
+```bash
+$ bash check-server.sh --env /var/www/yunxi/shopxo-backend/.env /var/www/yunxi/shopxo-backend
 ```
 
 ## 检查项清单
@@ -47,7 +128,7 @@ mysql -u shopxo -p shopxo < check-db.sql
 | 安全配置 | 管理后台入口存在 | WARN |
 | 数据库 | 连接成功 | FAIL |
 | 数据库 | 必需表存在（7张） | FAIL |
-| 数据库 | 关键字段存在（9个） | FAIL |
+| 数据库 | 关键字段存在（6个） | FAIL |
 | 数据库 | 关键索引存在（2个） | FAIL |
 | 配置项 | 6个关键配置项已插入 | FAIL |
 | 数据完整性 | 邀请码空值 | WARN |
@@ -58,86 +139,34 @@ mysql -u shopxo -p shopxo < check-db.sql
 
 | 类别 | 检查项 |
 |------|--------|
-| 必需表 | sxo_activity, sxo_activity_signup, sxo_invite_reward, sxo_muying_feedback, sxo_user, sxo_goods_favor, sxo_config |
-| 关键字段 | privacy_agreed_time, type, current_stage, due_date, baby_birthday, invite_code, suitable_crowd, stage, category |
-| 关键索引 | uk_invite_code, uk_inviter_invitee_event |
-| 配置项 | muying_invite_register_reward, muying_invite_first_order_reward, home_site_name, common_app_is_weixin_force_user_base, common_user_is_mandatory_bind_mobile, home_search_keywords |
+| 必需表 | 7 张表是否存在 |
+| 关键字段 | 9 个字段是否存在 |
+| 关键索引 | 2 个唯一索引是否存在 |
+| 配置项 | 6 个配置项是否存在且有值 |
 | 数据完整性 | 邀请码空值、邀请奖励重复、活动数据、妈妈说数据 |
 | 阶段筛选 | 备孕/孕期/产后分类关键词命中 |
 
-## 结果判定
+## 结果判定与退出码
 
-| 状态 | 含义 | 是否阻断上线 |
-|------|------|:---:|
-| PASS | 检查通过 | 否 |
-| WARN | 建议修复 | 否（但强烈建议处理） |
-| FAIL | 必须修复 | **是** |
-
-- 存在任何 FAIL 项 → 脚本退出码 1，不建议上线
-- 仅有 WARN 项 → 脚本退出码 0，建议处理后再上线
-- 全部 PASS → 脚本退出码 0，可以上线
-
-## 输出示例
-
-```
-==========================================
- 1. 基础环境
-==========================================
-[PASS] PHP 版本: 8.1.2 (≥8.0.2)
-[PASS] MySQL 版本: 8.0 (≥5.6)
-[PASS] Composer: Composer version 2.5.1
-
-==========================================
- 2. PHP 扩展
-==========================================
-[PASS] PHP 扩展: pdo_mysql
-[PASS] PHP 扩展: mbstring
-[FAIL] PHP 扩展: redis 缺失 | 修复: apt install php8.1-redis
-
-==========================================
- 3. 目录权限
-==========================================
-[PASS] 目录可写: runtime
-[FAIL] 目录不可写: public/static/upload | 修复: chmod -R 755 public/static/upload
-
-==========================================
- 4. 安全配置
-==========================================
-[PASS] install.php 已删除
-[FAIL] APP_DEBUG = true | 修复: 修改 .env 中 APP_DEBUG=false
-
-==========================================
- 检查汇总
-==========================================
-  PASS: 18  WARN: 2  FAIL: 3  总计: 23
-
-存在 3 个 FAIL 项，不建议上线！
-请按上述 FAIL 项的修复建议逐项处理。
-```
+| 场景 | 退出码 | 最终建议 |
+|------|:---:|---------|
+| 全部 PASS | 0 | ✅ 可以上线 |
+| 有 WARN 但无 FAIL | 0 | ⚠️ 建议修复后上线 |
+| 有 WARN + `--strict` | 1 | ❌ 不建议上线 |
+| 有 FAIL | 1 | ❌ 不建议上线 |
 
 ## 哪些问题会阻断上线
-
-以下 FAIL 项会阻断上线（必须修复）：
 
 | # | FAIL 项 | 后果 | 修复方式 |
 |---|---------|------|---------|
 | 1 | PHP 版本不足 | 后端无法运行 | 升级 PHP |
 | 2 | MySQL 版本不足 | SQL 语法报错 | 升级 MySQL |
-| 3 | 必需 PHP 扩展缺失 | 功能异常 | apt install php8.1-{ext} |
-| 4 | 目录不可写 | 上传/缓存失败 | chmod/chown |
-| 5 | install.php 存在 | 安全风险 | rm public/install.php |
-| 6 | APP_DEBUG = true | 暴露错误信息 | 修改 .env |
-| 7 | 必需表缺失 | 功能不可用 | 执行 migration SQL |
+| 3 | 必需 PHP 扩展缺失 | 功能异常 | `apt install php8.1-{ext}` |
+| 4 | 目录不可写 | 上传/缓存失败 | `chmod/chown` |
+| 5 | install.php 存在 | 安全风险 | `rm public/install.php` |
+| 6 | APP_DEBUG = true | 暴露错误信息 | 修改 `.env` |
+| 7 | 必需表缺失 | 功能不可用 | 执行 migration SQL A 段 |
 | 8 | 关键字段缺失 | 功能报错 | 执行 migration SQL B 段 |
 | 9 | 关键索引缺失 | 性能/数据一致性 | 执行 migration SQL C 段 |
-| 10 | 邀请奖励配置缺失 | 奖励=0，伤害信任 | 执行 yunxi-init-config.sql |
+| 10 | 邀请奖励配置缺失 | 奖励=0，伤害信任 | 执行 `yunxi-init-config.sql` |
 | 11 | 商品分类无阶段关键词 | 阶段推荐返回空 | 创建含关键词的分类 |
-
-以下 WARN 项不阻断但强烈建议修复：
-
-| # | WARN 项 | 后果 |
-|---|---------|------|
-| 1 | 可选 PHP 扩展缺失 | 部分功能降级 |
-| 2 | 邀请码空值 | 邀请链路不完整 |
-| 3 | 活动数据为空 | 首页/活动页空白 |
-| 4 | 妈妈说数据为空 | 首页缺少社区氛围 |
