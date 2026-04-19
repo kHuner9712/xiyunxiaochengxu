@@ -148,7 +148,9 @@
             init_config(status) {
                 if ((status || false) == true) {
                     this.setData({
-                        is_search_shop: parseInt(app.globalData.get_config('plugins_base.shop.data.is_main_search_shop', 0))
+                        // 一期收口：关闭店铺搜索入口
+                        is_search_shop: 0,
+                        search_switch_type_value: 'goods',
                     });
                 } else {
                     app.globalData.is_config(this, 'init_config');
@@ -216,16 +218,20 @@
             // 搜索事件
             search_submit_confirm_event() {
                 if(this.search_switch_type_value == 'shop') {
-                    app.globalData.url_open('/pages/plugins/shop/index/index?keywords='+this.search_keywords_value);
-                } else {
-                    if ((this.$refs.search || null) != null) {
-                        this.$refs.search.search_submit_confirm(this.search_keywords_value);
-                    }
+                    this.setData({
+                        search_switch_type_value: 'goods',
+                    });
+                }
+                if ((this.$refs.search || null) != null) {
+                    this.$refs.search.search_submit_confirm(this.search_keywords_value);
                 }
             },
 
             // 搜索切换类型
             search_switch_type_event(e) {
+                if (this.is_search_shop != 1) {
+                    return false;
+                }
                 var self = this;
                 uni.showActionSheet({
                     itemList: [self.$t('common.goods'), self.$t('common.shop')],

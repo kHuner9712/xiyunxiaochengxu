@@ -5,7 +5,6 @@ use app\service\ApiService;
 use app\service\SystemBaseService;
 use app\service\ActivityService;
 use app\service\ResourcesService;
-use think\facade\Db;
 
 class Activity extends Common
 {
@@ -56,24 +55,10 @@ class Activity extends Common
         $activity['content'] = ResourcesService::ApMiniRichTextContentHandle($activity['content']);
 
         $is_favored = false;
-        if (!empty($this->user)) {
-            $favor_exists = Db::name('GoodsFavor')->where([
-                ['user_id', '=', $this->user['id']],
-                ['goods_id', '=', $id],
-                ['type', '=', 'activity'],
-            ])->find();
-            $is_favored = !empty($favor_exists);
-        }
-
         $is_signed_up = false;
         if (!empty($this->user)) {
-            $signup_exists = Db::name('ActivitySignup')->where([
-                ['activity_id', '=', $id],
-                ['user_id', '=', $this->user['id']],
-                ['status', 'in', [0, 1]],
-                ['is_delete_time', '=', 0],
-            ])->find();
-            $is_signed_up = !empty($signup_exists);
+            $is_favored = ActivityService::IsActivityFavored($id, $this->user['id']);
+            $is_signed_up = ActivityService::IsUserSignedUp($id, $this->user['id']);
         }
 
         $detail = [
@@ -88,35 +73,9 @@ class Activity extends Common
     public function Favor()
     {
         $this->IsLogin();
-        if (empty($this->data_request['id'])) {
-            return ApiService::ApiDataReturn(DataReturn('活动ID参数有误', -1));
-        }
-
-        $id = intval($this->data_request['id']);
-        $user_id = intval($this->user['id']);
-
-        $exists = Db::name('GoodsFavor')->where([
-            ['user_id', '=', $user_id],
-            ['goods_id', '=', $id],
-            ['type', '=', 'activity'],
-        ])->find();
-
-        if (!empty($exists)) {
-            Db::name('GoodsFavor')->where([
-                ['user_id', '=', $user_id],
-                ['goods_id', '=', $id],
-                ['type', '=', 'activity'],
-            ])->delete();
-            return ApiService::ApiDataReturn(DataReturn('取消收藏成功', 0, ['is_favored' => false]));
-        } else {
-            Db::name('GoodsFavor')->insert([
-                'user_id'   => $user_id,
-                'goods_id'  => $id,
-                'type'      => 'activity',
-                'add_time'  => time(),
-            ]);
-            return ApiService::ApiDataReturn(DataReturn('收藏成功', 0, ['is_favored' => true]));
-        }
+        $params = $this->data_request;
+        $params['user'] = $this->user;
+        return ApiService::ApiDataReturn(ActivityService::ActivityFavorToggle($params));
     }
 
     public function Signup()

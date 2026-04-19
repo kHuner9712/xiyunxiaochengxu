@@ -20,6 +20,7 @@ use app\service\SystemBaseService;
 use app\service\ConfigService;
 use app\service\ApiService;
 use app\service\InviteService;
+use app\extend\muying\MuyingStage;
 
 /**
  * 用户服务层
@@ -1008,6 +1009,14 @@ class UserService
             if(isset($user['birthday']))
             {
                 $user['birthday'] = empty($user['birthday']) ? '' : date('Y-m-d', $user['birthday']);
+            }
+            if(isset($user['due_date']))
+            {
+                $user['due_date'] = empty($user['due_date']) ? '' : date('Y-m-d', $user['due_date']);
+            }
+            if(isset($user['baby_birthday']))
+            {
+                $user['baby_birthday'] = empty($user['baby_birthday']) ? '' : date('Y-m-d', $user['baby_birthday']);
             }
 
             // 邮箱/手机
@@ -2324,6 +2333,24 @@ class UserService
             return DataReturn($ret, -1);
         }
 
+        // 母婴画像字段校验
+        if(array_key_exists('current_stage', $params) && !empty($params['current_stage']))
+        {
+            $normalized_stage = MuyingStage::Normalize($params['current_stage']);
+            if(empty($normalized_stage) || $normalized_stage === MuyingStage::ALL)
+            {
+                return DataReturn('请选择有效的孕育阶段', -1);
+            }
+            if($normalized_stage === MuyingStage::PREGNANCY && array_key_exists('due_date', $params) && empty($params['due_date']))
+            {
+                return DataReturn('孕期阶段请选择预产期', -1);
+            }
+            if($normalized_stage === MuyingStage::POSTPARTUM && array_key_exists('baby_birthday', $params) && empty($params['baby_birthday']))
+            {
+                return DataReturn('产后阶段请选择宝宝生日', -1);
+            }
+        }
+
         // 更新的字段
         $fields = [
             'avatar',
@@ -2349,6 +2376,10 @@ class UserService
                     // 头像
                     case 'avatar' :
                         $data[$k] = empty($params['avatar']) ? '' : ResourcesService::AttachmentPathHandle($params['avatar']);
+                        break;
+                    // 孕育阶段
+                    case 'current_stage' :
+                        $data[$k] = empty($params['current_stage']) ? '' : MuyingStage::Normalize($params['current_stage']);
                         break;
                     // 生日
                     case 'birthday' :

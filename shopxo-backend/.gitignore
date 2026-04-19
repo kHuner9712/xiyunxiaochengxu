@@ -1,11 +1,29 @@
-*.html.php
-.DS_Store
-.ide
+# Backend local env/config
+.env
+.env.local
+*.local.php
+config/database.php
+config/domain.php
+app/install/config/database.php
+
+# Runtime / uploads / logs
+runtime/
+public/static/upload/
+public/download/*
+!public/download/.gitignore
+logs/
 *.log
 *.lock
+
+# Local IDE / temp
+.DS_Store
+.idea/
+.vscode/
 .tea
-.idea
-.env
+.ide
+
+# Existing legacy excludes
+*.html.php
 *.htaccess
 *payment_*_respond.php
 *payment_*_notify.php

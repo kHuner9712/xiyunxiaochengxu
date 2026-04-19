@@ -1,49 +1,76 @@
-# ===== 后端 =====
-shopxo-backend/vendor/
-shopxo-backend/runtime/
-shopxo-backend/public/static/upload/
-shopxo-backend/.env
-shopxo-backend/test_*.php
-shopxo-backend/config/database.php
-shopxo-backend/config/domain.php
-
-# ===== 前端 =====
-shopxo-uniapp/node_modules/
-shopxo-uniapp/unpackage/
-shopxo-uniapp/.hbuilderx/
-shopxo-uniapp/dist/
-
-# ===== 环境配置 =====
-.env
-
-# ===== Docker 数据 =====
-mysql-data/
-redis-data/
-
-# ===== 构建产物 =====
-build/
-dist/
-output/
-
-# ===== IDE =====
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.history/
-
-# ===== OS =====
+# OS
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# ===== 临时文件 =====
+# Editor / local tooling
+.idea/
+.vscode/
+.history/
+.trae/
+*.swp
+*.swo
+*~
+
+# Local env files (keep *.example)
+.env
+.env.local
+.env.*.local
+shopxo-backend/.env
+shopxo-backend/.env.local
+shopxo-uniapp/.env
+shopxo-uniapp/.env.*
+shopxo-uniapp/.env.local
+shopxo-uniapp/.env.*.local
+!shopxo-uniapp/.env*.example
+
+# WeChat / uni-app local private config
+project.private.config.json
+**/project.private.config.json
+shopxo-uniapp/manifest.local.json
+**/manifest.local.json
+
+# Frontend build/cache
+node_modules/
+shopxo-uniapp/node_modules/
+shopxo-uniapp/unpackage/
+shopxo-uniapp/dist/
+shopxo-uniapp/.hbuilderx/
+shopxo-uniapp/miniprogram_npm/
+build/
+dist/
+output/
+coverage/
+
+# Backend dependencies/runtime/upload/log
+shopxo-backend/vendor/
+shopxo-backend/runtime/
+shopxo-backend/public/static/upload/
+shopxo-backend/public/download/*
+!shopxo-backend/public/download/.gitignore
+shopxo-backend/storage/
+shopxo-backend/logs/
+shopxo-backend/*.log
+
+# Backend local config
+shopxo-backend/test_*.php
+shopxo-backend/config/database.php
+shopxo-backend/config/domain.php
+shopxo-backend/config/*.local.php
+shopxo-backend/app/install/config/database.php
+
+# Docker local data
+mysql-data/
+redis-data/
+docker-data/
+*.pid
+
+# Temp files
 *.log
 *.tmp
 *.bak
 
-# ===== 敏感文件 =====
+# Secrets / certs
 *.pem
 *.key
 *.cert

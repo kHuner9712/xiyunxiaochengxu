@@ -1,14 +1,21 @@
 const fs = require('fs');
 const path = require('path');
 
-const rootDir = path.resolve(__dirname);
-const manifestPath = path.join(rootDir, 'manifest.json');
-const backupPath = path.join(rootDir, 'manifest.json.bak');
+const projectRoot = path.resolve(__dirname, '..');
+const manifestPath = path.join(projectRoot, 'manifest.json');
+const manifestBackupPath = `${manifestPath}.bak`;
+const projectConfigPath = path.join(projectRoot, 'project.config.json');
+const projectConfigBackupPath = `${projectConfigPath}.bak`;
 
-if (fs.existsSync(backupPath)) {
-    fs.copyFileSync(backupPath, manifestPath);
+const restoreFile = (backupPath, targetPath, label) => {
+    if (!fs.existsSync(backupPath)) {
+        console.log(`[manifest-restore] ${label} backup not found, skipped`);
+        return;
+    }
+    fs.copyFileSync(backupPath, targetPath);
     fs.unlinkSync(backupPath);
-    console.log('[manifest-restore] manifest.json 已从备份恢复');
-} else {
-    console.log('[manifest-restore] 无备份文件，跳过恢复');
-}
+    console.log(`[manifest-restore] restored ${label}`);
+};
+
+restoreFile(manifestBackupPath, manifestPath, 'manifest.json');
+restoreFile(projectConfigBackupPath, projectConfigPath, 'project.config.json');

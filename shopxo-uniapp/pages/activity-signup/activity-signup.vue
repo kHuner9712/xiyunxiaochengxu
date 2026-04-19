@@ -93,6 +93,22 @@
                             </view>
                         </view>
 
+                        <!-- 宝宝生日（产后时显示） -->
+                        <view v-if="selected_stage === 'postpartum'" class="form-item br-b padding-bottom-main margin-bottom-main">
+                            <view class="form-label flex-row align-c">
+                                <text class="cr-main">*</text>
+                                <text class="cr-base text-size-sm margin-left-xs">宝宝生日</text>
+                            </view>
+                            <view class="form-input margin-top-xs">
+                                <picker mode="date" :value="form.baby_birthday" :end="baby_birthday_end" @change="baby_birthday_change_event">
+                                    <view class="flex-row jc-sb align-c">
+                                        <text :class="'text-size-sm ' + (form.baby_birthday ? 'cr-base' : 'cr-grey-9')">{{ form.baby_birthday || '请选择宝宝生日' }}</text>
+                                        <uni-icons type="right" size="16" color="#999"></uni-icons>
+                                    </view>
+                                </picker>
+                            </view>
+                        </view>
+
                         <!-- 宝宝月龄（产后时显示） -->
                         <view v-if="selected_stage === 'postpartum'" class="form-item br-b padding-bottom-main margin-bottom-main">
                             <view class="form-label flex-row align-c">
@@ -131,10 +147,10 @@
                         <text class="fw-b text-size-sm cr-base margin-left-xs">隐私告知</text>
                     </view>
                     <view class="privacy-content">
-                        <text class="text-size-xs cr-grey block margin-bottom-xs">1. 我们将收集您的姓名、手机号、孕育阶段、预产期/宝宝月龄等信息，用于活动报名确认、签到核实及活动通知。</text>
-                        <text class="text-size-xs cr-grey block margin-bottom-xs">2. 您的个人信息仅用于孕禧平台活动相关服务，不会用于其他商业目的或提供给第三方。</text>
-                        <text class="text-size-xs cr-grey block margin-bottom-xs">3. 孕禧平台是您个人信息的处理者，负责保护您的信息安全。</text>
-                        <text class="text-size-xs cr-grey block">4. 提交报名即表示您同意以上隐私告知，并确认所填信息真实有效。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">1. 我们将收集您的姓名、手机号、孕育阶段、预产期/宝宝生日/宝宝月龄等信息，用于活动报名确认、签到核实及活动通知。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">2. 您的孕育阶段、预产期、宝宝生日等信息将同步至您的个人画像，用于为您推荐更适合的活动和内容。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">3. 您的个人信息仅用于孕禧平台相关服务，不会提供给第三方。</text>
+                        <text class="text-size-xs cr-grey block">4. 提交报名即表示您同意<text class="cr-main" @tap="open_privacy_url">《隐私政策》</text>，并确认所填信息真实有效。</text>
                     </view>
                     <view class="privacy-agree flex-row align-c margin-top-main" @tap="toggle_privacy_agree">
                         <view class="privacy-checkbox" :class="{'privacy-checkbox-checked': privacy_agreed}">
@@ -179,12 +195,14 @@
                 stage_index: -1,
                 selected_stage: '',
                 due_date_start: '',
+                baby_birthday_end: '',
                 baby_month_age_options: [],
                 baby_month_age_index: -1,
                 form: {
                     name: '',
                     phone: '',
                     due_date: '',
+                    baby_birthday: '',
                     baby_month_age: '',
                     remark: '',
                 },
@@ -219,6 +237,7 @@
                 this.get_activity_summary();
                 this.init_baby_month_age_options();
                 this.init_due_date_start();
+                this.init_baby_birthday_end();
                 this.load_user_profile();
                 this.setData({ data_loaded: true });
             }
@@ -249,26 +268,18 @@
                                 }
                             }
                             if (profile.due_date) {
-                                var d = profile.due_date;
-                                if (typeof d === 'number') {
-                                    d = new Date(d * 1000);
-                                    form.due_date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-                                } else {
-                                    form.due_date = d;
-                                }
+                                form.due_date = profile.due_date;
                             }
                             if (profile.baby_birthday) {
-                                var b = profile.baby_birthday;
-                                if (typeof b === 'number') {
-                                    b = new Date(b * 1000);
-                                    var now = new Date();
+                                form.baby_birthday = profile.baby_birthday;
+                                var b = new Date(profile.baby_birthday);
+                                var now = new Date();
+                                if (!isNaN(b.getTime())) {
                                     var months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
-                                    if (months >= 0) {
-                                        var baby_idx = self.baby_month_age_options.indexOf(months + '个月');
-                                        if (baby_idx >= 0) {
-                                            self.setData({ baby_month_age_index: baby_idx });
-                                            form.baby_month_age = months;
-                                        }
+                                    if (months >= 0 && months <= 36) {
+                                        var baby_idx = months;
+                                        self.setData({ baby_month_age_index: baby_idx });
+                                        form.baby_month_age = months;
                                     }
                                 }
                             }
@@ -314,6 +325,7 @@
                     stage_index: idx,
                     selected_stage: stage,
                     'form.due_date': '',
+                    'form.baby_birthday': '',
                     'form.baby_month_age': '',
                     baby_month_age_index: -1,
                 });
@@ -323,11 +335,15 @@
                 this.setData({ 'form.due_date': e.detail.value });
             },
 
+            baby_birthday_change_event(e) {
+                this.setData({ 'form.baby_birthday': e.detail.value });
+            },
+
             baby_month_age_change_event(e) {
                 var idx = e.detail.value;
                 this.setData({
                     baby_month_age_index: idx,
-                    'form.baby_month_age': this.baby_month_age_options[idx],
+                    'form.baby_month_age': idx + 1,
                 });
             },
 
@@ -345,6 +361,14 @@
                 var m = String(now.getMonth() + 1).padStart(2, '0');
                 var d = String(now.getDate()).padStart(2, '0');
                 this.setData({ due_date_start: y + '-' + m + '-' + d });
+            },
+
+            init_baby_birthday_end() {
+                var now = new Date();
+                var y = now.getFullYear();
+                var m = String(now.getMonth() + 1).padStart(2, '0');
+                var d = String(now.getDate()).padStart(2, '0');
+                this.setData({ baby_birthday_end: y + '-' + m + '-' + d });
             },
 
             validate_form() {
@@ -368,6 +392,10 @@
                     app.globalData.showToast('请选择预产期');
                     return false;
                 }
+                if (this.selected_stage === 'postpartum' && !this.form.baby_birthday) {
+                    app.globalData.showToast('请选择宝宝生日');
+                    return false;
+                }
                 if (this.selected_stage === 'postpartum' && this.baby_month_age_index < 0) {
                     app.globalData.showToast('请选择宝宝月龄');
                     return false;
@@ -383,6 +411,15 @@
                 this.setData({ privacy_agreed: !this.privacy_agreed });
             },
 
+            open_privacy_url() {
+                var url = app.globalData.get_config('config.agreement_userprivacy_url') || '';
+                if (url) {
+                    uni.navigateTo({ url: '/pages/web-view/web-view?url=' + encodeURIComponent(url) });
+                } else {
+                    app.globalData.showToast('隐私政策页面暂未配置');
+                }
+            },
+
             submit_event() {
                 if (!this.validate_form()) return;
 
@@ -394,6 +431,7 @@
                     phone: this.form.phone.trim(),
                     stage: this.selected_stage,
                     due_date: this.form.due_date,
+                    baby_birthday: this.form.baby_birthday,
                     baby_month_age: this.form.baby_month_age,
                     remark: this.form.remark,
                     privacy_agreed: this.privacy_agreed ? 1 : 0,

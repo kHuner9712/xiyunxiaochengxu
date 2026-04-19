@@ -20,6 +20,7 @@
 </template>
 <script>
     const app = getApp();
+    import { filter_phase_one_navigation } from '@/common/js/config/phase-one-scope.js';
     export default {
         data() {
             return {
@@ -64,7 +65,10 @@
             // 数据处理
             handle_data() {
                 if((this.propData || null) != null && (this.propData.data || null) != null && this.propData.data.length > 0) {
-                    this.swiper_data = app.globalData.group_arry(this.propData.data, 10);
+                    var data = filter_phase_one_navigation(this.propData.data || []);
+                    this.swiper_data = app.globalData.group_arry(data, 10);
+                } else {
+                    this.swiper_data = [];
                 }
             },
             swiper_change(e) {

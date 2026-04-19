@@ -51,7 +51,7 @@
                             </view>
 
                             <view class="form-gorup oh flex-row jc-sb align-c">
-                                <view class="form-gorup-title">当前阶段</view>
+                                <view class="form-gorup-title">当前阶段<text class="cr-grey-9 text-size-xs margin-left-xs">(选填)</text></view>
                                 <view class="flex-row jc-e align-c flex-1 flex-width">
                                     <picker @change="stage_change_event" :value="current_stage_index" :range="stage_list" range-key="name" class="margin-right-sm wh-auto tr">
                                         <view class="uni-input cr-base picker">{{ stage_list[current_stage_index].name || '请选择' }}</view>
@@ -61,7 +61,7 @@
                             </view>
 
                             <view v-if="user_data.current_stage === 'pregnancy'" class="form-gorup oh flex-row jc-sb align-c">
-                                <view class="form-gorup-title">预产期</view>
+                                <view class="form-gorup-title">预产期<text class="cr-grey-9 text-size-xs margin-left-xs">(用于推荐适合您的活动)</text></view>
                                 <view class="flex-1 flex-width flex-row jc-e align-c">
                                     <picker class="margin-right-sm wh-auto tr" name="due_date" mode="date" :value="user_data.due_date || ''" data-field="due_date" @change="select_change_event">
                                         <view :class="'picker ' + ((user_data.due_date || null) == null ? 'cr-grey' : '')">{{ user_data.due_date || '请选择预产期' }}</view>
@@ -71,13 +71,18 @@
                             </view>
 
                             <view v-if="user_data.current_stage === 'postpartum'" class="form-gorup oh flex-row jc-sb align-c">
-                                <view class="form-gorup-title">宝宝生日</view>
+                                <view class="form-gorup-title">宝宝生日<text class="cr-grey-9 text-size-xs margin-left-xs">(用于推荐适合您的活动)</text></view>
                                 <view class="flex-1 flex-width flex-row jc-e align-c">
                                     <picker class="margin-right-sm wh-auto tr" name="baby_birthday" mode="date" :value="user_data.baby_birthday || ''" data-field="baby_birthday" @change="select_change_event">
                                         <view :class="'picker ' + ((user_data.baby_birthday || null) == null ? 'cr-grey' : '')">{{ user_data.baby_birthday || '请选择宝宝生日' }}</view>
                                     </picker>
                                     <iconfont name="icon-arrow-right" size="34rpx" color="#ccc"></iconfont>
                                 </view>
+                            </view>
+
+                            <view v-if="user_data.current_stage === 'postpartum' && baby_month_age_text" class="form-gorup oh flex-row jc-sb align-c">
+                                <view class="form-gorup-title">宝宝月龄</view>
+                                <view class="cr-grey text-size-sm">{{ baby_month_age_text }}</view>
                             </view>
                         </view>
 
@@ -102,6 +107,7 @@
     const app = getApp();
     import componentCommon from '@/components/common/common';
     import componentNoData from '@/components/no-data/no-data';
+    import { MuyingStage } from '@/common/js/config/muying-enum';
     export default {
         data() {
             return {
@@ -115,12 +121,10 @@
                 user_data: {},
                 gender_list: [],
                 stage_list: [
-                    { name: '请选择', value: '' },
-                    { name: '备孕', value: 'prepare' },
-                    { name: '孕期', value: 'pregnancy' },
-                    { name: '产后', value: 'postpartum' }
-                ],
-                current_stage_index: 0
+                    { name: '请选择', value: '' }
+                ].concat(MuyingStage.getList().filter(function(v) { return v.value !== 'all'; })),
+                current_stage_index: 0,
+                baby_month_age_text: ''
             };
         },
 
@@ -186,6 +190,7 @@
                                 gender_list: res.data.data.gender_list || [],
                                 current_stage_index: stage_index,
                             });
+                            this.calc_baby_month_age();
                         } else {
                             this.setData({
                                 data_list_loding_status: 0,
@@ -213,6 +218,9 @@
                 var temp = this.user_data;
                 temp[e.currentTarget.dataset.field] = e.detail.value;
                 this.setData({ user_data: temp });
+                if (e.currentTarget.dataset.field === 'baby_birthday') {
+                    this.calc_baby_month_age();
+                }
             },
 
             // 阶段选择事件
@@ -224,6 +232,7 @@
                     user_data: temp,
                     current_stage_index: index
                 });
+                this.calc_baby_month_age();
             },
 
             // 头像事件
@@ -360,6 +369,21 @@
                         app.globalData.showToast(this.$t('common.internet_error_tips'));
                     },
                 });
+            },
+
+            // 计算宝宝月龄
+            calc_baby_month_age() {
+                var text = '';
+                if (this.user_data.current_stage === 'postpartum' && this.user_data.baby_birthday) {
+                    var b = new Date(this.user_data.baby_birthday);
+                    var now = new Date();
+                    if (!isNaN(b.getTime())) {
+                        var months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
+                        if (months < 0) months = 0;
+                        text = months + '个月';
+                    }
+                }
+                this.setData({ baby_month_age_text: text });
             },
 
             // 数据提交

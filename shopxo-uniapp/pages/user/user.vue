@@ -12,8 +12,11 @@
                             <view class="va-m dis-inline-block margin-left-lg base-info">
                                 <view class="flex-col align-b" data-value="/pages/personal/personal" @tap="url_event">
                                     <view class="va-m fw-b text-size single-text">{{ nickname }}</view>
-                                    <view v-if="current_stage_text" class="stage-tag margin-top-sm dis-inline-block">
+                                    <view v-if="current_stage_text" class="stage-tag margin-top-sm dis-inline-block cp" data-value="/pages/personal/personal" @tap="url_event">
                                         <text class="text-size-xs">{{ current_stage_text }}</text>
+                                    </view>
+                                    <view v-else class="stage-tag stage-tag--empty margin-top-sm dis-inline-block cp" @tap="stage_nav_event">
+                                        <text class="text-size-xs">点击设置阶段</text>
                                     </view>
                                     <view v-if="(user || null) != null && (user.number_code || null) != null" class="head-id border-radius-sm padding-horizontal-sm margin-top-sm dis-inline-block fw-b">
                                         <text class="text-size-xs">ID </text>
@@ -85,6 +88,12 @@
                                     <text class="muying-nav-icon-text">🎁</text>
                                 </view>
                                 <view class="item-name cr-base text-size-sm">我的邀请</view>
+                            </view>
+                            <view class="muying-nav-item tc cp" @tap="stage_nav_event">
+                                <view class="muying-nav-icon-wrap">
+                                    <text class="muying-nav-icon-text">{{ current_stage_text ? '🏷️' : '➕' }}</text>
+                                </view>
+                                <view class="item-name cr-base text-size-sm">{{ current_stage_text || '设置阶段' }}</view>
                             </view>
                         </view>
                     </view>
@@ -203,6 +212,8 @@
     import componentCopyright from '@/components/copyright/copyright';
     import componentOnlineService from '@/components/online-service/online-service';
     import componentStageGuide from '@/components/stage-guide/stage-guide';
+    import { filter_phase_one_navigation } from '@/common/js/config/phase-one-scope.js';
+    import { MuyingStage } from '@/common/js/config/muying-enum';
 
     var common_static_url = app.globalData.get_static_url('common');
     var static_url = app.globalData.get_static_url('user');
@@ -302,14 +313,9 @@
                         count: old_nav.length > 0 ? old_nav[1].count : 0,
                     },
                     {
-                        name: this.$t('user.user.57xw84'),
-                        url: 'user-goods-browse',
-                        count: old_nav.length > 0 ? old_nav[2].count : 0,
-                    },
-                    {
                         name: this.$t('user.user.k78280'),
                         url: 'user-integral',
-                        count: old_nav.length > 0 ? old_nav[3].count : 0,
+                        count: old_nav.length > 0 ? old_nav[2].count : 0,
                     },
                 ];
                 var nav_logout_data = (user == null) ? null : {
@@ -331,12 +337,6 @@
                     // 会员码及付款码入口
                     var membership_page_url = null;
                     var payment_page_url = null;
-                    if (app.globalData.get_config('plugins_base.wallet.data.is_enable_payment_code') == 1) {
-                        payment_page_url = '/pages/plugins/wallet/payment-code/payment-code';
-                    }
-                    if (app.globalData.get_config('plugins_base.membershiplevelvip.data.is_enable_member_code') == 1) {
-                        membership_page_url = '/pages/plugins/membershiplevelvip/member-code/member-code';
-                    }
                     this.setData({
                         common_app_customer_service_tel: app.globalData.get_config('config.common_app_customer_service_tel'),
                         common_user_center_notice: app.globalData.get_config('config.common_user_center_notice'),
@@ -403,14 +403,13 @@
                         uni.stopPullDownRefresh();
                         if (res.data.code == 0) {
                             var data = res.data.data;
-                            var navigation = data.navigation || [];
+                            var navigation = filter_phase_one_navigation(data.navigation || []);
 
                             // 头部小导航总数
                             var temp_head_nav_list = this.head_nav_list;
                             temp_head_nav_list[0]['count'] = (data.user_order_count || 0) == 0 ? 0 : data.user_order_count;
                             temp_head_nav_list[1]['count'] = (data.user_goods_favor_count || 0) == 0 ? 0 : data.user_goods_favor_count;
-                            temp_head_nav_list[2]['count'] = (data.user_goods_browse_count || 0) == 0 ? 0 : data.user_goods_browse_count;
-                            temp_head_nav_list[3]['count'] = (data.integral || 0) == 0 ? 0 : data.integral;
+                            temp_head_nav_list[2]['count'] = (data.integral || 0) == 0 ? 0 : data.integral;
 
                             // 订单状态总数
                             var user_order_status_list = [
@@ -493,8 +492,7 @@
                                 upd_data['nickname'] = data.user_name_view;
                             }
                             var user_stage = (data.current_stage || '');
-                            var stage_map = { 'prepare': '备孕中', 'pregnancy': '孕期中', 'postpartum': '产后' };
-                            var stage_text = stage_map[user_stage] || '';
+                            var stage_text = MuyingStage.getName(user_stage);
                             upd_data['current_stage_text'] = stage_text;
 
                             if (user_stage && !stage_text) {
@@ -598,8 +596,7 @@
             stage_guide_confirm_event(stage) {
                 uni.setStorageSync('stage_guide_shown', '1');
                 this.setData({ stage_guide_show: false });
-                var stage_map = { 'prepare': '备孕中', 'pregnancy': '孕期中', 'postpartum': '产后' };
-                this.setData({ current_stage_text: stage_map[stage] || '' });
+                this.setData({ current_stage_text: MuyingStage.getName(stage) });
                 // 更新本地缓存
                 var user = app.globalData.get_user_cache_info();
                 if (user) {
@@ -634,6 +631,16 @@
             stage_guide_skip_event() {
                 uni.setStorageSync('stage_guide_shown', '1');
                 this.setData({ stage_guide_show: false });
+            },
+
+            // 阶段导航点击
+            stage_nav_event() {
+                if (!this.is_login()) return;
+                if (this.current_stage_text) {
+                    uni.navigateTo({ url: '/pages/personal/personal' });
+                } else {
+                    this.setData({ stage_guide_show: true });
+                }
             }
         },
     };
@@ -675,5 +682,11 @@
         padding: 4rpx 16rpx;
         border-radius: 20rpx;
         font-size: 20rpx;
+    }
+
+    .stage-tag--empty {
+        background: #F5F5F5;
+        color: #999;
+        border: 1rpx dashed #ccc;
     }
 </style>

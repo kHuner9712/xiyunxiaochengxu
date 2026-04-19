@@ -1,5 +1,0 @@
-- [x] 模板中统计标签显示"获得积分"而非"获得奖励(元)"
-- [x] 奖励记录 amount 后缀显示"积分"而非"元"
-- [x] get_reward_list() 接口返回 code!=0 时有错误提示
-- [x] get_reward_list() 请求 fail 时有错误提示
-- [x] copy_invite_code() 邀请码为空时提示"邀请码加载中"

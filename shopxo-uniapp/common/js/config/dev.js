@@ -1,6 +1,5 @@
-var request_url = process.env.UNI_APP_REQUEST_URL || 'http://localhost:8080/';
+import { build_runtime_config, DEFAULT_DEV_REQUEST_URL } from './runtime-config.js';
 
-export default {
-    request_url: request_url,
-    static_url: '',
-};
+export default build_runtime_config({
+    default_request_url: DEFAULT_DEV_REQUEST_URL,
+});

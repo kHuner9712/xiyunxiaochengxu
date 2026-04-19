@@ -145,8 +145,8 @@
     },
     "quickapp": {},
     "mp-weixin": {
-        "requiredPrivateInfos": ["chooseLocation", "getLocation", "chooseAddress", "onLocationChange", "startLocationUpdate", "startLocationUpdateBackground"],
-        "appid": "",
+        "requiredPrivateInfos": ["chooseLocation", "getLocation", "onLocationChange", "startLocationUpdate"],
+        "appid": "wxda7779770f53e901",
         "setting": {
             "urlCheck": false,
             "es6": true,
@@ -157,7 +157,7 @@
         "usingComponents": true,
         "permission": {
             "scope.userLocation": {
-                "desc": "你的位置将用于小程序中相应业务位置服务使用"
+                "desc": "用于活动签到、收货地址选择等位置服务"
             }
         },
         "__usePrivacyCheck__": true,

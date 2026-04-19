@@ -1,6 +1,10 @@
 <?php
 namespace app\extend\muying;
 
+// [MUYING-二开] 母婴阶段枚举 - 后端唯一权威定义
+// 前端对应文件：shopxo-uniapp/common/js/config/muying-enum.js
+// 修改枚举时前后端必须同步
+
 class MuyingStage
 {
     const PREPARE = 'prepare';

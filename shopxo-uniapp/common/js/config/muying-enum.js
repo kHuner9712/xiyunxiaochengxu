@@ -1,3 +1,7 @@
+// [MUYING-二开] 母婴阶段枚举 - 前端唯一权威定义
+// 后端对应文件：shopxo-backend/app/extend/muying/MuyingStage.php
+// 修改枚举时前后端必须同步
+
 var STAGE_LEGACY_MAP = {
     'pregnant': 'pregnancy',
     'newborn': 'postpartum',

@@ -1,6 +1,8 @@
 <?php
 namespace app\service;
 
+// [MUYING-二开] 活动报名、收藏、核销服务 - 二开新增文件
+
 use think\facade\Db;
 use think\facade\Log;
 use app\service\ResourcesService;
@@ -203,6 +205,78 @@ class ActivityService
         return false;
     }
 
+    public static function ActivityFavorToggle($params = [])
+    {
+        if (empty($params['id'])) {
+            return DataReturn('活动ID参数有误', -1);
+        }
+        if (empty($params['user']) || empty($params['user']['id'])) {
+            return DataReturn(MyLang('user_info_incorrect_tips'), -1);
+        }
+
+        $id = intval($params['id']);
+        $user_id = intval($params['user']['id']);
+
+        $activity = Db::name('Activity')->where([
+            ['id', '=', $id],
+            ['is_enable', '=', 1],
+            ['is_delete_time', '=', 0],
+        ])->find();
+        if (empty($activity)) {
+            return DataReturn('活动不存在或已下架', -1);
+        }
+
+        $exists = Db::name('GoodsFavor')->where([
+            ['user_id', '=', $user_id],
+            ['goods_id', '=', $id],
+            ['type', '=', 'activity'],
+        ])->find();
+
+        if (!empty($exists)) {
+            Db::name('GoodsFavor')->where([
+                ['user_id', '=', $user_id],
+                ['goods_id', '=', $id],
+                ['type', '=', 'activity'],
+            ])->delete();
+            return DataReturn('取消收藏成功', 0, ['is_favored' => false]);
+        } else {
+            Db::name('GoodsFavor')->insert([
+                'user_id'   => $user_id,
+                'goods_id'  => $id,
+                'type'      => 'activity',
+                'add_time'  => time(),
+            ]);
+            return DataReturn('收藏成功', 0, ['is_favored' => true]);
+        }
+    }
+
+    public static function IsActivityFavored($activity_id, $user_id)
+    {
+        if (empty($activity_id) || empty($user_id)) {
+            return false;
+        }
+        $favor_exists = Db::name('GoodsFavor')->where([
+            ['user_id', '=', intval($user_id)],
+            ['goods_id', '=', intval($activity_id)],
+            ['type', '=', 'activity'],
+        ])->find();
+        return !empty($favor_exists);
+    }
+
+    public static function IsUserSignedUp($activity_id, $user_id)
+    {
+        if (empty($activity_id) || empty($user_id)) {
+            return false;
+        }
+        $signup_exists = Db::name('ActivitySignup')->where([
+            ['activity_id', '=', intval($activity_id)],
+            ['user_id', '=', intval($user_id)],
+            ['status', 'in', [0, 1]],
+            ['is_delete_time', '=', 0],
+        ])->find();
+        return !empty($signup_exists);
+    }
+
     public static function RecalculateSignupCount($activity_id)
     {
         if (empty($activity_id)) {
@@ -260,7 +334,7 @@ class ActivityService
         }
 
         $normalized = MuyingStage::Normalize($params['stage']);
-        if (empty($normalized)) {
+        if (empty($normalized) || $normalized === MuyingStage::ALL) {
             return DataReturn('请选择有效的孕育阶段', -1);
         }
 
@@ -268,11 +342,21 @@ class ActivityService
             return DataReturn('孕期阶段请选择预产期', -1);
         }
 
-        if ($normalized === 'postpartum' && empty($params['baby_month_age'])) {
-            return DataReturn('产后阶段请选择宝宝月龄', -1);
+        if ($normalized === 'postpartum') {
+            if (empty($params['baby_birthday'])) {
+                return DataReturn('产后阶段请选择宝宝生日', -1);
+            }
+            if (empty($params['baby_month_age'])) {
+                return DataReturn('产后阶段请选择宝宝月龄', -1);
+            }
+            $month_age = intval($params['baby_month_age']);
+            if ($month_age < 1 || $month_age > 36) {
+                return DataReturn('宝宝月龄应在1-36个月之间', -1);
+            }
         }
 
-        if (empty($params['privacy_agreed']) || $params['privacy_agreed'] !== true && $params['privacy_agreed'] !== 1 && $params['privacy_agreed'] !== '1') {
+        $privacy_val = isset($params['privacy_agreed']) ? $params['privacy_agreed'] : null;
+        if (!in_array($privacy_val, [true, 1, '1'], true)) {
             return DataReturn('请阅读并同意隐私告知', -1);
         }
 
@@ -355,17 +439,36 @@ class ActivityService
 
             Db::name('Activity')->where(['id' => $activity_id])->inc('signup_count')->update();
 
-            // 回填用户画像：如果用户没有 current_stage，从报名数据回填
+            // 回填用户画像：补充用户缺失的画像字段
             $user_row = Db::name('User')->where(['id' => $user_id])->find();
-            if (!empty($user_row) && empty($user_row['current_stage']) && !empty($normalized)) {
-                $user_update = ['current_stage' => $normalized, 'upd_time' => time()];
-                if ($normalized === 'pregnancy' && !empty($data['due_date'])) {
-                    $user_update['due_date'] = $data['due_date'];
+            if (!empty($user_row)) {
+                $user_update = ['upd_time' => time()];
+                $need_update = false;
+
+                if (empty($user_row['current_stage']) && !empty($normalized)) {
+                    $user_update['current_stage'] = $normalized;
+                    $need_update = true;
                 }
-                try {
-                    Db::name('User')->where(['id' => $user_id])->update($user_update);
-                } catch (\Exception $e) {
-                    Log::warning('报名回填用户阶段失败 user_id=' . $user_id . ' error=' . $e->getMessage());
+
+                if ($normalized === 'pregnancy' && !empty($data['due_date']) && empty($user_row['due_date'])) {
+                    $user_update['due_date'] = $data['due_date'];
+                    $need_update = true;
+                }
+
+                if ($normalized === 'postpartum' && !empty($params['baby_birthday']) && empty($user_row['baby_birthday'])) {
+                    $baby_birthday_ts = is_numeric($params['baby_birthday']) ? intval($params['baby_birthday']) : strtotime($params['baby_birthday']);
+                    if ($baby_birthday_ts > 0) {
+                        $user_update['baby_birthday'] = $baby_birthday_ts;
+                        $need_update = true;
+                    }
+                }
+
+                if ($need_update) {
+                    try {
+                        Db::name('User')->where(['id' => $user_id])->update($user_update);
+                    } catch (\Exception $e) {
+                        Log::warning('报名回填用户画像失败 user_id=' . $user_id . ' error=' . $e->getMessage());
+                    }
                 }
             }
 

@@ -37,6 +37,7 @@
     const app = getApp();
     import componentPopup from '@/components/popup/popup';
     import componentNoData from '@/components/no-data/no-data';
+    import { filter_phase_one_navigation } from '@/common/js/config/phase-one-scope.js';
     export default {
         data() {
             return {
@@ -118,7 +119,7 @@
             // 初始化配置
             init_config(status) {
                 if ((status || false) == true) {
-                    var data_list = app.globalData.get_config('quick_nav') || [];
+                    var data_list = filter_phase_one_navigation(app.globalData.get_config('quick_nav') || []);
                     this.setData({
                         data_list: data_list,
                         quick_status: (data_list.length > 0) ? (app.globalData.get_config('config.home_navigation_main_quick_status') || 0) : 0,
@@ -132,7 +133,7 @@
             quick_open_event(e) {
                 this.setData({
                     popup_status: true,
-                    data_list: app.globalData.get_config('quick_nav') || [],
+                    data_list: filter_phase_one_navigation(app.globalData.get_config('quick_nav') || []),
                 });
             },
 
