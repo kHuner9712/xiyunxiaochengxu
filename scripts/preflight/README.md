@@ -5,6 +5,7 @@
 | 文件 | 用途 | 执行方式 |
 |------|------|---------|
 | `check-server.sh` | 服务器环境+数据库全量预检 | `bash check-server.sh [选项] [/path/to/backend]` |
+| `check-placeholders.sh` | 占位符残留扫描 | `bash check-placeholders.sh [选项] [/path/to/repo]` |
 | `check-db.sql` | 纯数据库结构预检 | `mysql -u root -p shopxo < check-db.sql` |
 
 ## 快速开始
@@ -49,6 +50,44 @@ mysql -u shopxo -p shopxo < check-db.sql
 | `DB_USER` | `root` | 数据库用户 |
 | `DB_PASS` | （空） | 数据库密码 |
 | `DB_PREFIX` | `sxo_` | 表前缀 |
+
+## check-placeholders.sh 选项
+
+| 选项 | 说明 |
+|------|------|
+| `--no-color` | 关闭彩色输出（适合重定向日志到文件） |
+| `--docs-also` | 同时扫描 docs 目录中的占位符（默认只扫描代码和配置） |
+| `--strict` | SQL 中的占位符也视为阻断上线 |
+| `--help` | 显示帮助 |
+
+### check-placeholders.sh 扫描规则
+
+| 类别 | 扫描项 | 阻断级别 |
+|------|--------|---------|
+| 代码/配置 | `{{APP_ID}}`、`{{API_DOMAIN}}` 等 `{{...}}` 占位符 | FAIL |
+| 代码/配置 | `400-000-0000`、`api.yunxi.com`、`cdn.yunxi.com`、`/var/www/yunxi` | FAIL |
+| 代码/配置 | `shopxo_dev_123`、`root123456` 开发默认密码 | FAIL |
+| 代码/配置 | manifest.json mp-weixin.appid 为空 | FAIL |
+| 代码/配置 | .env 中 APP_DEBUG=true | FAIL |
+| Nginx 配置 | server_name 为 localhost | WARN |
+| SQL 文件 | `{{CONTACT_PHONE}}` 等 | WARN（`--strict` 时 FAIL） |
+| 文档 | 所有占位符（`--docs-also` 时扫描） | WARN |
+
+### check-placeholders.sh 执行示例
+
+```bash
+# 基本扫描（只检查代码和配置）
+bash check-placeholders.sh .
+
+# 同时扫描文档
+bash check-placeholders.sh --docs-also .
+
+# 严格模式（SQL 占位符也阻断上线）
+bash check-placeholders.sh --strict .
+
+# 无彩色输出 + 重定向日志
+bash check-placeholders.sh --no-color . > placeholder-scan.log 2>&1
+```
 
 ## 真实执行示例
 
