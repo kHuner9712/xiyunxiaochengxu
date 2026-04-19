@@ -54,7 +54,7 @@ mysql -u shopxo -p shopxo < check-db.sql
 | `--no-color` | 关闭彩色输出（适合重定向日志到文件） |
 | `--quiet` | 只输出 FAIL/WARN，不输出 PASS（减少输出量） |
 | `--strict` | WARN 也视为阻断上线（退出码 1） |
-| `--env FILE` | 从 .env 文件读取 DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS/DB_PREFIX |
+| `--env FILE` | 从 .env 文件读取数据库连接（支持 ThinkPHP/INI 风格 `[DATABASE]` 段和扁平 `DB_HOST` 风格） |
 | `--help` | 显示帮助 |
 
 ### 环境变量
@@ -67,6 +67,38 @@ mysql -u shopxo -p shopxo < check-db.sql
 | `DB_USER` | `root` | 数据库用户 |
 | `DB_PASS` | （空） | 数据库密码 |
 | `DB_PREFIX` | `sxo_` | 表前缀 |
+
+### .env 解析策略
+
+所有 preflight 脚本通过 `lib-env.sh` 统一解析 .env 文件，支持两种格式：
+
+**优先级 1：ThinkPHP/INI 风格（仓库实际格式）**
+
+```ini
+[DATABASE]
+TYPE = mysql
+HOSTNAME = 10.0.1.50
+DATABASE = yunxi_prod
+USERNAME = yunxi_app
+PASSWORD = your_strong_pass
+HOSTPORT = 3306
+PREFIX = sxo_
+```
+
+映射关系：`HOSTNAME→DB_HOST`、`HOSTPORT→DB_PORT`、`DATABASE→DB_NAME`、`USERNAME→DB_USER`、`PASSWORD→DB_PASS`、`PREFIX→DB_PREFIX`
+
+**优先级 2：扁平变量风格（兼容回退）**
+
+```ini
+DB_HOST=10.0.1.50
+DB_PORT=3306
+DB_NAME=yunxi_prod
+DB_USER=yunxi_app
+DB_PASS=your_strong_pass
+DB_PREFIX=sxo_
+```
+
+如果同一 .env 中两种格式同时存在，INI 段内的值先被读取，扁平变量后读取可覆盖。环境变量优先级最高，不会被 .env 覆盖。
 
 ## check-placeholders.sh 选项
 

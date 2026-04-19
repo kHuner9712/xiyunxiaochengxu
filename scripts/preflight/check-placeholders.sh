@@ -96,6 +96,14 @@ DOC_PATTERNS=(
     '/var/www/yunxi'
 )
 
+CODE_FILE_TYPES=(-name '*.php' -o -name '*.vue' -o -name '*.js' -o -name '*.json' -o -name '*.env' -o -name '*.yml' -o -name '*.yaml' -o -name '*.conf' -o -name '*.sh')
+
+CODE_DEV_FILE_TYPES=(-name '*.php' -o -name '*.env' -o -name '*.env.example' -o -name '*.yml' -o -name '*.yaml' -o -name '*.conf')
+
+SQL_FILE_TYPES=(-name '*.sql')
+
+DOC_FILE_TYPES=(-name '*.md' -o -name '*.txt')
+
 CODE_EXCLUDE=(
     -not -path '*/docs/*'
     -not -path '*/node_modules/*'
@@ -117,12 +125,10 @@ DOC_INCLUDE=(
 scan_pattern() {
     local label="$1"
     local pattern="$2"
-    local file_types="$3"
-    shift 3
-    local glob_args=("$@")
+    shift 2
 
     local results
-    results=$(find "$REPO_PATH" -type f \( $file_types \) "${glob_args[@]}" -exec grep -l "$pattern" {} \; 2>/dev/null || true)
+    results=$(find "$REPO_PATH" -type f \( "$@" \) -exec grep -l "$pattern" {} \; 2>/dev/null || true)
     if [[ -n "$results" ]]; then
         echo -e "${C_FAIL}[${label}] 发现: ${pattern}${C_RESET}"
         while IFS= read -r f; do
@@ -143,7 +149,7 @@ scan_pattern() {
 echo "--- 代码/配置: 占位符扫描 ---"
 
 for pattern in "${CODE_PATTERNS[@]}"; do
-    if ! scan_pattern "FAIL" "$pattern" "-name '*.php' -o -name '*.vue' -o -name '*.js' -o -name '*.json' -o -name '*.env' -o -name '*.yml' -o -name '*.yaml' -o -name '*.conf' -o -name '*.sh'" "${CODE_EXCLUDE[@]}"; then
+    if ! scan_pattern "FAIL" "$pattern" "${CODE_FILE_TYPES[@]}" "${CODE_EXCLUDE[@]}"; then
         CODE_HIT=$((CODE_HIT + 1))
     fi
 done
@@ -158,7 +164,7 @@ echo ""
 echo "--- 代码/配置: 开发默认值扫描 ---"
 
 for pattern in "${CODE_DEV_PATTERNS[@]}"; do
-    if ! scan_pattern "FAIL" "$pattern" "-name '*.php' -o -name '*.env' -o -name '*.env.example' -o -name '*.yml' -o -name '*.yaml' -o -name '*.conf'" "${CODE_EXCLUDE[@]}"; then
+    if ! scan_pattern "FAIL" "$pattern" "${CODE_DEV_FILE_TYPES[@]}" "${CODE_EXCLUDE[@]}"; then
         CODE_HIT=$((CODE_HIT + 1))
     fi
 done
@@ -276,7 +282,7 @@ echo "--- SQL 文件: 占位符扫描 ---"
 
 sql_hit_before=$SQL_HIT
 for pattern in "${SQL_PATTERNS[@]}"; do
-    if ! scan_pattern "SQL" "$pattern" "-name '*.sql'" -not -path '*/.git/*' -not -path '*/node_modules/*'; then
+    if ! scan_pattern "SQL" "$pattern" "${SQL_FILE_TYPES[@]}" -not -path '*/.git/*' -not -path '*/node_modules/*'; then
         SQL_HIT=$((SQL_HIT + 1))
     fi
 done
@@ -293,7 +299,7 @@ if [[ $DOCS_ALSO -eq 1 ]]; then
 
     doc_hit_before=$DOC_HIT
     for pattern in "${DOC_PATTERNS[@]}"; do
-        if ! scan_pattern "WARN" "$pattern" "-name '*.md' -o -name '*.txt'" "${DOC_INCLUDE[@]}"; then
+        if ! scan_pattern "WARN" "$pattern" "${DOC_FILE_TYPES[@]}" "${DOC_INCLUDE[@]}"; then
             DOC_HIT=$((DOC_HIT + 1))
         fi
     done

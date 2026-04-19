@@ -190,18 +190,35 @@ if [[ $SKIP_DB -eq 0 ]]; then
     echo ""
 
     if [[ -n "$ENV_FILE" ]] && [[ -f "$ENV_FILE" ]]; then
-        DB_HOST_VAL=$(grep -i '^DATABASE\.HOSTNAME' "$ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d ' "' || echo "")
-        DB_PORT_VAL=$(grep -i '^DATABASE\.HOSTPORT' "$ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d ' "' || echo "3306")
-        DB_NAME_VAL=$(grep -i '^DATABASE\.DATABASE' "$ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d ' "' || echo "")
-        DB_USER_VAL=$(grep -i '^DATABASE\.USERNAME' "$ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d ' "' || echo "")
-        DB_PASS_VAL=$(grep -i '^DATABASE\.PASSWORD' "$ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d ' "' || echo "")
+        LIB_ENV="${SCRIPT_DIR}/lib-env.sh"
+        if [[ -f "$LIB_ENV" ]]; then
+            DB_HOST="${DB_HOST:-127.0.0.1}"
+            DB_PORT="${DB_PORT:-3306}"
+            DB_NAME="${DB_NAME:-shopxo}"
+            DB_USER="${DB_USER:-root}"
+            DB_PASS="${DB_PASS:-}"
+            DB_PREFIX="${DB_PREFIX:-sxo_}"
+            source "$LIB_ENV"
+            parse_env_file "$ENV_FILE"
+            DB_HOST_VAL="$DB_HOST"
+            DB_PORT_VAL="$DB_PORT"
+            DB_NAME_VAL="$DB_NAME"
+            DB_USER_VAL="$DB_USER"
+            DB_PASS_VAL="$DB_PASS"
+        else
+            DB_HOST_VAL="${DB_HOST:-127.0.0.1}"
+            DB_PORT_VAL="${DB_PORT:-3306}"
+            DB_NAME_VAL="${DB_NAME:-shopxo}"
+            DB_USER_VAL="${DB_USER:-root}"
+            DB_PASS_VAL="${DB_PASS:-}"
+        fi
+    else
+        DB_HOST_VAL="${DB_HOST:-127.0.0.1}"
+        DB_PORT_VAL="${DB_PORT:-3306}"
+        DB_NAME_VAL="${DB_NAME:-shopxo}"
+        DB_USER_VAL="${DB_USER:-root}"
+        DB_PASS_VAL="${DB_PASS:-}"
     fi
-
-    DB_HOST_VAL="${DB_HOST_VAL:-${DB_HOST:-127.0.0.1}}"
-    DB_PORT_VAL="${DB_PORT_VAL:-${DB_PORT:-3306}}"
-    DB_NAME_VAL="${DB_NAME_VAL:-${DB_NAME:-shopxo}}"
-    DB_USER_VAL="${DB_USER_VAL:-${DB_USER:-root}}"
-    DB_PASS_VAL="${DB_PASS_VAL:-${DB_PASS:-}}"
 
     if command -v mysql &>/dev/null; then
         DB_SQL="${SCRIPT_DIR}/check-db.sql"

@@ -70,21 +70,13 @@ done
 
 # --- 从 .env 文件读取数据库连接 ---
 if [[ -n "${ENV_FILE:-}" ]]; then
-    if [[ -f "$ENV_FILE" ]]; then
-        while IFS='=' read -r key value; do
-            key=$(echo "$key" | tr -d ' ' | tr '[:lower:]' '[:upper:]')
-            value=$(echo "$value" | tr -d ' ')
-            case "$key" in
-                DB_HOST)   DB_HOST="$value" ;;
-                DB_PORT)   DB_PORT="$value" ;;
-                DB_NAME)   DB_NAME="$value" ;;
-                DB_USER)   DB_USER="$value" ;;
-                DB_PASS)   DB_PASS="$value" ;;
-                DB_PREFIX) DB_PREFIX="$value" ;;
-            esac
-        done < <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
-    else
-        echo "错误: .env 文件不存在: $ENV_FILE" >&2; exit 1
+    LIB_ENV="$(cd "$(dirname "$0")" && pwd)/lib-env.sh"
+    if [[ ! -f "$LIB_ENV" ]]; then
+        echo "错误: 公共解析库不存在: $LIB_ENV" >&2; exit 1
+    fi
+    source "$LIB_ENV"
+    if ! parse_env_file "$ENV_FILE"; then
+        exit 1
     fi
 fi
 
@@ -292,14 +284,14 @@ if command -v mysql &>/dev/null; then
             pass "数据库连接成功: ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
             DB_CONNECT_OK=1
         else
-            fail "数据库连接失败 | 修复: 检查 DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME"
+            fail "数据库连接失败: ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME} | 修复: 检查 DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME"
         fi
     else
         if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -e "SELECT 1;" "$DB_NAME" &>/dev/null; then
             pass "数据库连接成功: ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
             DB_CONNECT_OK=1
         else
-            fail "数据库连接失败 | 修复: 检查 DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME"
+            fail "数据库连接失败: ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME} | 修复: 检查 DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME"
         fi
     fi
 else
