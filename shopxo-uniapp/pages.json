@@ -15,24 +15,12 @@
                 "usingComponents": {
                     "component-diy": "/pages/diy/components/diy/diy",
                     "component-form-input": "/pages/form-input/components/form-input/form-input",
-                    "component-layout": "/pages/design/components/layout/layout",
-                    "component-binding-list": "/pages/plugins/binding/components/binding-list/binding-list",
-                    "component-realstore-list": "/pages/plugins/realstore/components/realstore-list/realstore-list",
-                    "component-shop-list": "/pages/plugins/shop/components/shop-list/shop-list",
-                    "component-blog-list": "/pages/plugins/blog/components/blog-list/blog-list",
-                    "component-activity-list": "/pages/plugins/activity/components/activity-list/activity-list",
-                    "component-magic-list": "/pages/plugins/magic/components/magic-list/magic-list"
+                    "component-layout": "/pages/design/components/layout/layout"
                 },
                 "componentPlaceholder": {
                     "component-diy": "view",
                     "component-form-input": "view",
-                    "component-layout": "view",
-                    "component-binding-list": "view",
-                    "component-realstore-list": "view",
-                    "component-shop-list": "view",
-                    "component-blog-list": "view",
-                    "component-activity-list": "view",
-                    "component-magic-list": "view"
+                    "component-layout": "view"
                 }
             }
         },
