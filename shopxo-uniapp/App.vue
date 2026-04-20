@@ -1,4 +1,4 @@
-<script>
+﻿<script>
     import base64 from './common/js/lib/base64.js';
     // 多语言引入并初始化
     import i18n from './locale/index';
@@ -2768,6 +2768,7 @@
                     orange: '#fe6f04', // 橙色
                     brown: '#8B4513', // 棕色
                     purple: '#623cec', // 紫色
+                    muying: '#F5A0B1', // 母婴粉
 
                     // 浅主色
                     red_light: '#ffdbe2', // 红色
@@ -2778,6 +2779,7 @@
                     orange_light: '#fde4d1', // 橙色
                     brown_light: '#eadcd2', // 棕色
                     purple_light: '#d6cbfb', // 紫色
+                    muying_light: '#FFF0F3', // 母婴浅粉
                 };
                 // 当前主题
                 if ((theme || null) == null) {

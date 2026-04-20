@@ -7,7 +7,7 @@
 |------|-----|
 | 版本 | v1.0-phase-freeze |
 | 冻结日期 | 2026-04-20 |
-| 基于框架 | ShopXO v6.8.0 (ThinkPHP 8) + uni-app |
+| 基于框架 | ShopXO v6.8.0 (ThinkPHP 6) + uni-app |
 | 定位 | 母婴行业微信商城小程序 — 一期上线版 |
 
 ---
@@ -37,8 +37,8 @@
 | 内容资讯/孕育知识 | ✅ 已实现 | `pages/index/index.vue` → `article/datalist` |
 | 邀请有礼入口 | ✅ 已实现 | `pages/index/index.vue` |
 | Banner/轮播图 | ✅ 已实现 | ShopXO 原生 |
-| 🔴 muying 主题色注册 | ❌ 必须修 | `App.vue` `get_theme_color()` 缺 `muying` 条目 |
-| 🔴 TabBar 选中态图标 | ❌ 必须补 | `static/images/muying/tabbar/` 缺 4 个图标 |
+| 🔴 muying 主题色注册 | ✅ 已修复 | `App.vue` `get_theme_color()` 已注册 `muying: #F5A0B1`、`muying_light: #FFF0F3` |
+| 🔴 TabBar 选中态图标 | ⚠️ 需确认 | `static/images/muying/tabbar/` 需人工确认图标是否存在 |
 
 ### 2.2 商城
 
@@ -62,7 +62,7 @@
 | 活动报名（含隐私协议） | ✅ 已实现 | `pages/activity-signup/activity-signup.vue` + `ActivityService.php` |
 | 活动收藏 | ✅ 已实现 | `ActivityService::ActivityFavorToggle()` |
 | 我的报名列表 | ✅ 已实现 | `pages/my-activity/my-activity.vue` + `ActivityService.php` |
-| 🔴 报名页防重复提交 | ❌ 必须修 | `activity-signup.vue` 提交按钮无 loading |
+| 🔴 报名页防重复提交 | ✅ 已实现 | `activity-signup.vue` 提交按钮有 `uni.showLoading` 防重复 |
 | 🔴 取消报名前端入口 | ❌ 必须补 | 后端 `SignupCancel` 已实现，前端无按钮 |
 
 ### 2.4 个人中心
@@ -86,7 +86,7 @@
 | 奖励规则展示 | ✅ 已实现 | `invite/rewardconfigpublic` API |
 | 邀请记录列表 | ✅ 已实现 | `pages/invite/invite.vue` → `invite/rewardlist` |
 | 小程序分享（带邀请码） | ✅ 已实现 | `onShareAppMessage` |
-| 🔴 邀请码 Storage 清理 | ❌ 必须修 | 注册成功后未清理 `invite_code_from_share` |
+| 🔴 邀请码 Storage 清理 | ✅ 已修复 | `invite.vue:181` + `login.vue:1332` 均已清理 `invite_code_from_share` |
 
 ### 2.6 后台运营
 
@@ -359,14 +359,14 @@
 | 约束项 | 说明 |
 |--------|------|
 | 前端框架 | uni-app，一期仅适配微信小程序 |
-| 后端框架 | ShopXO v6.8.0 (ThinkPHP 8) |
+| 后端框架 | ShopXO v6.8.0 (ThinkPHP 6) |
 | 数据库 | MySQL 5.7+（推荐 8.0），utf8mb4 |
 | 迁移入口 | `docs/muying-final-migration.sql` 为唯一执行入口 |
 | 旧脚本 | `muying-migration.sql`、`muying-mvp-migration.sql` 等已废弃，不再执行 |
 | Docker 镜像 | 当前 `mysql:8.0`，预部署环境为 5.7.44，需对齐 |
 | 排序规则 | 统一使用 `utf8mb4_general_ci`，与 ShopXO 原生一致 |
 | 一期范围过滤 | `phase-one-scope.js` 控制前端插件可见性 |
-| 主题色 | `muying: #F5A0B1`，需在 `App.vue` 中注册 |
+| 主题色 | `muying: #F5A0B1`、`muying_light: #FFF0F3`，已在 `App.vue` 中注册 |
 
 ---
 
@@ -393,11 +393,11 @@
 
 | # | 风险 | 影响 | 当前状态 |
 |---|------|------|---------|
-| 1 | App.vue 未注册 muying 主题色 | 全局主题色 undefined，TabBar/按钮/渐变全部异常 | 待修 |
-| 2 | TabBar 选中态图标缺失 4 个 | 底部导航选中态无图标 | 待补 |
+| 1 | App.vue 未注册 muying 主题色 | 全局主题色 undefined，TabBar/按钮/渐变全部异常 | ✅ 已修复 |
+| 2 | TabBar 选中态图标缺失 4 个 | 底部导航选中态无图标 | ⚠️ 需确认 |
 | 3 | goods.stage / goods.selling_point 数据来源未确认 | 商品详情页阶段标签和卖点标签可能为空 | 待确认 |
-| 4 | 报名页无防重复提交 | 用户多次点击可能重复报名 | 待修 |
-| 5 | 邀请码 Storage 清理不完整 | 旧邀请码可能被误用 | 待修 |
+| 4 | 报名页无防重复提交 | 用户多次点击可能重复报名 | ✅ 已实现（uni.showLoading） |
+| 5 | 邀请码 Storage 清理不完整 | 旧邀请码可能被误用 | ✅ 已修复（invite.vue + login.vue） |
 
 ### 13.2 P1 风险（不解决则体验不完整）
 

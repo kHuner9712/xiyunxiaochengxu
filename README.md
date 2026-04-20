@@ -164,9 +164,10 @@ shopxo-uniapp/                          ← uni-app 源码（HBuilderX 打开这
 
 ## 7. 微信小程序开发
 
-1. 将 `shopxo-uniapp` 导入微信开发者工具。
-2. 本地私有设置放在 `project.private.config.json`（自动生成，已忽略）。
-3. 提交前确认不包含本地路径、私有配置、缓存文件或构建产物。
+1. 先用 HBuilderX 打开 `shopxo-uniapp` 源码目录，运行编译（**运行 → 运行到小程序模拟器 → 微信开发者工具**）。
+2. 编译完成后，用微信开发者工具导入编译产物目录：`shopxo-uniapp/unpackage/dist/dev/mp-weixin/`。
+3. 本地私有设置放在 `project.private.config.json`（自动生成，已忽略）。
+4. 提交前确认不包含本地路径、私有配置、缓存文件或构建产物。
 
 ## 8. 母婴核心数据流
 
