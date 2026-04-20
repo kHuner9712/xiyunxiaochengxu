@@ -77,17 +77,17 @@
                     </view>
                 </view>
 
-                <view class="padding-horizontal-main margin-top-main margin-bottom-main">
+                <scroll-view scroll-y class="padding-horizontal-main margin-top-main margin-bottom-main" @scrolltolower="scrolltolower_event" style="max-height: 60vh;">
                     <view class="muying-section-header">
                         <view class="muying-section-title">邀请记录</view>
                     </view>
                     <block v-if="invite_list.length > 0">
                         <view v-for="(item, index) in invite_list" :key="index" class="muying-card spacing-mb padding-main">
                             <view class="flex-row align-c">
-                                <image class="invite-avatar circle" :src="item.avatar" mode="aspectFill"></image>
+                                <image class="invite-avatar circle" :src="item.avatar || '/static/images/common/user.png'" mode="aspectFill"></image>
                                 <view class="flex-1 margin-left-main">
                                     <view class="flex-row jc-sb align-c">
-                                        <view class="text-size fw-b">{{ item.nickname }}</view>
+                                        <view class="text-size fw-b">{{ item.nickname || '用户' }}</view>
                                         <view :class="['invite-reward-status', item.status === 1 ? 'invite-reward-status--done' : 'invite-reward-status--pending']">
                                             {{ item.status === 1 ? '已发放' : '待发放' }}
                                         </view>
@@ -96,11 +96,12 @@
                                 </view>
                             </view>
                         </view>
+                        <component-bottom-line propStatus="data_list_loding_status"></component-bottom-line>
                     </block>
                     <block v-else>
                         <component-no-data propStatus="0" propMsg="暂无邀请记录"></component-no-data>
                     </block>
-                </view>
+                </scroll-view>
             </block>
 
             <!-- 未登录态底部留白 -->
@@ -114,6 +115,7 @@
     const app = getApp();
     import componentCommon from '@/components/common/common';
     import componentNoData from '@/components/no-data/no-data';
+    import componentBottomLine from '@/components/bottom-line/bottom-line';
 
     export default {
         data() {
@@ -126,12 +128,17 @@
                 invite_list: [],
                 register_reward: 0,
                 first_order_reward: 0,
+                data_page: 1,
+                data_page_total: 1,
+                data_list_loding_status: 1,
+                data_is_loading: 0,
             };
         },
 
         components: {
             componentCommon,
-            componentNoData
+            componentNoData,
+            componentBottomLine
         },
 
         onLoad(params) {
@@ -173,6 +180,7 @@
                 if (logged_in) {
                     uni.removeStorageSync('invite_code_from_share');
                     this.get_invite_index();
+                    this.setData({ data_page: 1, invite_list: [] });
                     this.get_invite_rewardlist();
                 }
             },
@@ -197,22 +205,52 @@
                 });
             },
 
-            get_invite_rewardlist() {
+            get_invite_rewardlist(is_mandatory) {
+                if (this.data_is_loading == 1) return;
+                if (!is_mandatory && this.data_page > this.data_page_total) return;
+
                 var self = this;
+                this.setData({ data_is_loading: 1 });
                 uni.request({
                     url: app.globalData.get_request_url('rewardlist', 'invite'),
                     method: 'POST',
                     dataType: 'json',
+                    data: { page: this.data_page },
                     success: function(res) {
                         if (res.data.code == 0) {
-                            var data = res.data.data || {};
+                            var result = res.data.data || {};
+                            var list = result.data || [];
+                            var new_list = [];
+                            for (var i = 0; i < list.length; i++) {
+                                var item = list[i];
+                                var info = item.invitee_info || {};
+                                new_list.push({
+                                    id: item.id,
+                                    avatar: info.avatar || '',
+                                    nickname: info.nickname || '',
+                                    status: item.status,
+                                    register_time: item.add_time_text || '',
+                                });
+                            }
+                            var merged = is_mandatory ? new_list : self.invite_list.concat(new_list);
                             self.setData({
-                                invite_list: data.data || [],
+                                invite_list: merged,
+                                data_page_total: result.page_total || 1,
+                                data_list_loding_status: (result.page_total || 1) <= self.data_page ? 0 : 1,
                             });
                         }
                     },
-                    fail: function() {},
+                    complete: function() {
+                        self.setData({ data_is_loading: 0 });
+                    },
                 });
+            },
+
+            scrolltolower_event() {
+                if (this.data_page < this.data_page_total) {
+                    this.setData({ data_page: this.data_page + 1 });
+                    this.get_invite_rewardlist(false);
+                }
             },
 
             copy_invite_code() {

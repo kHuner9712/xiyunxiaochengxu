@@ -1328,6 +1328,9 @@
                     clearInterval(this.temp_clear_time);
                     uni.setStorageSync(app.globalData.data.cache_user_info_key, res.data.data);
 
+                    // 注册/登录成功后清理邀请码临时缓存
+                    uni.removeStorageSync('invite_code_from_share');
+
                     // 是否强制绑定账号处理
                     if ((this.plugins_thirdpartylogin_user || null) != null && (this.plugins_thirdpartylogin_user.is_force_bind_user || 0) == 1) {
                         uni.request({

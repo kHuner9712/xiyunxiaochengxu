@@ -131,12 +131,7 @@
 
 | # | SQL 文件 | 执行结果 | 错误信息（如有） |
 |---|---------|---------|----------------|
-| 1 | `docs/muying-migration.sql` | ☐ 成功 ☐ 失败 | |
-| 2 | `docs/muying-mvp-migration.sql` | ☐ 成功 ☐ 失败 | |
-| 3 | `docs/muying-final-migration.sql` | ☐ 成功 ☐ 失败 | |
-| 4 | `docs/muying-invite-code-migration.sql` | ☐ 成功 ☐ 失败 | |
-| 5 | `docs/muying-invite-idempotent-migration.sql` | ☐ 成功 ☐ 失败 | |
-| 6 | `docs/muying-enum-normalize-migration.sql` | ☐ 成功 ☐ 失败 | |
+| 1 | `docs/muying-final-migration.sql` | ☐ 成功 ☐ 失败 | |
 
 ### R07 — 初始化 SQL
 

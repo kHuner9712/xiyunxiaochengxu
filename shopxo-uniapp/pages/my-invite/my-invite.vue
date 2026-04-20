@@ -36,7 +36,7 @@
             </view>
 
             <!-- 奖励记录 -->
-            <view class="padding-horizontal-main">
+            <scroll-view scroll-y class="padding-horizontal-main" @scrolltolower="scrolltolower_event" style="max-height: 60vh;">
                 <view class="text-size fw-b margin-bottom-main">奖励记录</view>
                 <block v-if="reward_list.length > 0">
                     <view v-for="(item, index) in reward_list" :key="index" class="muying-card spacing-mb padding-main">
@@ -50,11 +50,12 @@
                             </view>
                         </view>
                     </view>
+                    <component-bottom-line propStatus="data_list_loding_status"></component-bottom-line>
                 </block>
                 <block v-else>
                     <component-no-data propStatus="0" propMsg="暂无奖励记录"></component-no-data>
                 </block>
-            </view>
+            </scroll-view>
         </view>
 
         <!-- 公共 -->
@@ -66,6 +67,7 @@
     const app = getApp();
     import componentCommon from '@/components/common/common';
     import componentNoData from '@/components/no-data/no-data';
+    import componentBottomLine from '@/components/bottom-line/bottom-line';
 
     export default {
         data() {
@@ -77,13 +79,17 @@
                     total_rewards: 0
                 },
                 reward_list: [],
-                loading: false
+                data_page: 1,
+                data_page_total: 1,
+                data_list_loding_status: 1,
+                data_is_loading: 0,
             };
         },
 
         components: {
             componentCommon,
-            componentNoData
+            componentNoData,
+            componentBottomLine
         },
 
         onLoad(params) {
@@ -96,6 +102,7 @@
                 this.$refs.common.on_show();
             }
             this.get_invite_info();
+            this.setData({ data_page: 1, reward_list: [] });
             this.get_reward_list();
         },
 
@@ -161,26 +168,38 @@
                 });
             },
 
-            get_reward_list() {
+            get_reward_list(is_mandatory) {
+                if (this.data_is_loading == 1) return;
+                if (!is_mandatory && this.data_page > this.data_page_total) return;
+
                 var self = this;
+                this.setData({ data_is_loading: 1 });
                 uni.request({
                     url: app.globalData.get_request_url('rewardlist', 'invite'),
                     method: 'POST',
                     dataType: 'json',
+                    data: { page: this.data_page },
                     success: function(res) {
                         if (res.data.code == 0) {
-                            var list = (res.data.data || {}).data || [];
+                            var result = res.data.data || {};
+                            var list = result.data || [];
                             var reward_list = [];
                             for (var i = 0; i < list.length; i++) {
                                 var item = list[i];
+                                var info = item.invitee_info || {};
                                 reward_list.push({
                                     id: item.id,
-                                    desc: (item.trigger_event_text || '') + ' ' + (item.invitee_info ? item.invitee_info.nickname || '' : ''),
+                                    desc: (item.trigger_event_text || '') + ' ' + (info.nickname || ''),
                                     time: item.add_time_text || '',
                                     amount: item.reward_type === 'integral' ? item.reward_value : 0,
                                 });
                             }
-                            self.setData({ reward_list: reward_list });
+                            var merged = is_mandatory ? reward_list : self.reward_list.concat(reward_list);
+                            self.setData({
+                                reward_list: merged,
+                                data_page_total: result.page_total || 1,
+                                data_list_loding_status: (result.page_total || 1) <= self.data_page ? 0 : 1,
+                            });
                         } else {
                             app.globalData.showToast(res.data.msg || '获取奖励记录失败');
                         }
@@ -188,7 +207,17 @@
                     fail: function() {
                         app.globalData.showToast('网络异常，请重试');
                     },
+                    complete: function() {
+                        self.setData({ data_is_loading: 0 });
+                    },
                 });
+            },
+
+            scrolltolower_event() {
+                if (this.data_page < this.data_page_total) {
+                    this.setData({ data_page: this.data_page + 1 });
+                    this.get_reward_list(false);
+                }
             }
         }
     };

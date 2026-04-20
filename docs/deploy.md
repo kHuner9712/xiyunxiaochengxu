@@ -16,7 +16,7 @@
 
 ### 2.1 后端
 
-1. 确保本地已安装 PHP 8.1+、MySQL 8.0、Redis 7+
+1. 确保本地已安装 PHP 8.1+、MySQL 5.7+、Redis 7+
 2. 创建数据库：`CREATE DATABASE shopxo DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;`
 3. 复制配置：`cp shopxo-backend/.env.example shopxo-backend/.env`
 4. 修改 `shopxo-backend/.env` 中的数据库连接信息：
@@ -25,7 +25,7 @@
    PASSWORD = 你的本地MySQL密码
    ```
 5. 复制数据库配置：`cp shopxo-backend/config/database.php`（需手动创建或通过安装向导生成）
-6. 导入数据库：`mysql -u root -p shopxo < docs/muying-migration.sql`
+6. 导入数据库：`mysql -u root -p shopxo < docs/muying-final-migration.sql`
 7. 导入演示数据（可选）：`mysql -u root -p shopxo < docs/muying-demo-data.sql`
 8. 启动 PHP 内置服务器：`cd shopxo-backend && php think run`
 
@@ -55,7 +55,7 @@ docker-compose up -d
 docker-compose logs -f mysql
 
 # 5. 导入数据库
-docker-compose exec mysql mysql -uroot -pshopxo_dev_123 shopxo < /path/to/docs/muying-migration.sql
+docker-compose exec mysql mysql -uroot -pshopxo_dev_123 shopxo < /path/to/docs/muying-final-migration.sql
 
 # 6. 复制后端配置
 cp shopxo-backend/.env.example shopxo-backend/.env
@@ -143,23 +143,14 @@ export default {
 
 ## 六、数据库迁移脚本执行顺序
 
+> **唯一入口**：所有迁移统一使用 `docs/muying-final-migration.sql`（A→B→C 段，按段内顺序执行）。
+> 旧文件（muying-migration.sql、muying-mvp-migration.sql 等）已废弃，不要单独执行。
+
 ```bash
-# 1. 基础表结构
-mysql -u root -p shopxo < docs/muying-migration.sql
+# 1. 执行最终迁移（唯一入口，包含建表+补丁+索引+菜单权限）
+mysql -u root -p shopxo < docs/muying-final-migration.sql
 
-# 2. 邀请码字段迁移
-mysql -u root -p shopxo < docs/muying-invite-code-migration.sql
-
-# 3. MVP 菜单权限
-mysql -u root -p shopxo < docs/muying-mvp-migration.sql
-
-# 4. 枚举值归一化（如有旧数据）
-mysql -u root -p shopxo < docs/muying-enum-normalize-migration.sql
-
-# 5. 邀请奖励唯一约束
-mysql -u root -p shopxo < docs/muying-invite-idempotent-migration.sql
-
-# 6. 演示数据（可选）
+# 2. 演示数据（可选）
 mysql -u root -p shopxo < docs/muying-demo-data.sql
 ```
 

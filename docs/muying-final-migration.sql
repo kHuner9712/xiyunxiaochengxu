@@ -204,9 +204,16 @@ SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCH
 SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_activity` ADD COLUMN `suitable_crowd` char(255) NOT NULL DEFAULT '''' COMMENT ''适合人群'' AFTER `description`', 'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- B5. sxo_activity_signup 补 baby_birthday 字段（报名快照，保留用户报名时填写的宝宝生日）
+SET @tablename = 'sxo_activity_signup';
+SET @colname = 'baby_birthday';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_activity_signup` ADD COLUMN `baby_birthday` int unsigned NOT NULL DEFAULT 0 COMMENT ''宝宝生日(时间戳)'' AFTER `baby_month_age`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- B段回滚：
 -- ALTER TABLE sxo_user DROP COLUMN invite_code, DROP COLUMN baby_birthday, DROP COLUMN due_date, DROP COLUMN current_stage;
--- ALTER TABLE sxo_activity_signup DROP COLUMN privacy_agreed_time;
+-- ALTER TABLE sxo_activity_signup DROP COLUMN privacy_agreed_time, DROP COLUMN baby_birthday;
 -- ALTER TABLE sxo_goods_favor DROP COLUMN type;
 -- ALTER TABLE sxo_activity DROP COLUMN suitable_crowd;
 

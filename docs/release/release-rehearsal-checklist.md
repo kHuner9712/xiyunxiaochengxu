@@ -182,26 +182,14 @@ bash scripts/preflight/release-gate.sh \
 
 ### 执行动作
 
-按顺序执行迁移 SQL（根据实际版本选择需要的文件）：
+按顺序执行迁移 SQL：
+
+> **唯一入口**：`docs/muying-final-migration.sql`（A→B→C 段，按段内顺序执行）。
+> 旧文件（muying-migration.sql、muying-mvp-migration.sql 等）已废弃，不要单独执行。
 
 ```bash
-# 1. 基础迁移
-mysql -u USER -p -h HOST DB_NAME < docs/muying-migration.sql
-
-# 2. MVP 迁移
-mysql -u USER -p -h HOST DB_NAME < docs/muying-mvp-migration.sql
-
-# 3. 最终迁移
+# 执行最终迁移（唯一入口）
 mysql -u USER -p -h HOST DB_NAME < docs/muying-final-migration.sql
-
-# 4. 邀请码迁移
-mysql -u USER -p -h HOST DB_NAME < docs/muying-invite-code-migration.sql
-
-# 5. 邀请幂等迁移
-mysql -u USER -p -h HOST DB_NAME < docs/muying-invite-idempotent-migration.sql
-
-# 6. 枚举规范化迁移
-mysql -u USER -p -h HOST DB_NAME < docs/muying-enum-normalize-migration.sql
 ```
 
 ### 成功标准

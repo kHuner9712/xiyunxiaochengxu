@@ -22,14 +22,11 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 ### 1.2 数据库迁移
 
-按顺序执行两个SQL文件：
+> **唯一入口**：使用 `docs/muying-final-migration.sql`（旧脚本已废弃，不要单独执行）。
 
 ```powershell
-# 1. 基础建表（活动表、报名表、邀请奖励表、用户字段扩展）
-docker exec -i shopxo-mysql mysql -uroot -proot123456 shopxo < docs/muying-migration.sql
-
-# 2. MVP补充（菜单权限、报名表补充字段、隐藏菜单）
-docker exec -i shopxo-mysql mysql -uroot -proot123456 shopxo < docs/muying-mvp-migration.sql
+# 执行最终迁移（包含建表+补丁+索引+菜单权限）
+docker exec -i shopxo-mysql mysql -uroot -proot123456 shopxo < docs/muying-final-migration.sql
 ```
 
 验证表是否创建成功：

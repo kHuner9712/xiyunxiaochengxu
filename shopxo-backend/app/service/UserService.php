@@ -2341,11 +2341,11 @@ class UserService
             {
                 return DataReturn('请选择有效的孕育阶段', -1);
             }
-            if($normalized_stage === MuyingStage::PREGNANCY && array_key_exists('due_date', $params) && empty($params['due_date']))
+            if($normalized_stage === MuyingStage::PREGNANCY && empty($params['due_date']))
             {
                 return DataReturn('孕期阶段请选择预产期', -1);
             }
-            if($normalized_stage === MuyingStage::POSTPARTUM && array_key_exists('baby_birthday', $params) && empty($params['baby_birthday']))
+            if($normalized_stage === MuyingStage::POSTPARTUM && empty($params['baby_birthday']))
             {
                 return DataReturn('产后阶段请选择宝宝生日', -1);
             }
@@ -2379,7 +2379,10 @@ class UserService
                         break;
                     // 孕育阶段
                     case 'current_stage' :
-                        $data[$k] = empty($params['current_stage']) ? '' : MuyingStage::Normalize($params['current_stage']);
+                        if(!empty($params['current_stage']))
+                        {
+                            $data[$k] = MuyingStage::Normalize($params['current_stage']);
+                        }
                         break;
                     // 生日
                     case 'birthday' :
@@ -2387,11 +2390,16 @@ class UserService
                         break;
                     // 预产期
                     case 'due_date' :
-                        $data[$k] = empty($params['due_date']) ? 0 : (is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date']));
+                        if(!empty($params['due_date']))
+                        {
+                            $data[$k] = is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date']);
+                        }
                         break;
-                    // 宝宝生日
                     case 'baby_birthday' :
-                        $data[$k] = empty($params['baby_birthday']) ? 0 : (is_numeric($params['baby_birthday']) ? intval($params['baby_birthday']) : strtotime($params['baby_birthday']));
+                        if(!empty($params['baby_birthday']))
+                        {
+                            $data[$k] = is_numeric($params['baby_birthday']) ? intval($params['baby_birthday']) : strtotime($params['baby_birthday']);
+                        }
                         break;
                     // 手机、用户基础信息填写一键授权手机号码
                     case 'mobile' :

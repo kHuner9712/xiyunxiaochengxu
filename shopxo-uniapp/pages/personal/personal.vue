@@ -7,7 +7,7 @@
                     <view class="padding-main page-bottom-fixed">
                         <view class="bg-white border-radius-main oh">
                             <view class="form-gorup oh flex-row jc-sb align-c">
-                                <view>{{$t('personal.personal.cw1d8p')}}</view>
+                                <view>{{ $t('personal.personal.cw1d8p') }}</view>
                                 <view class="flex-row align-c">
                                     <button class="bg-white br-0 lh-0 padding-horizontal-sm" hover-class="none" open-type="chooseAvatar" @chooseavatar="choose_avatar_event" @tap="choose_avatar_event">
                                         <image :src="user_data.avatar || default_avatar" mode="widthFix" class="circle br user-avatar flex-1 flex-width"></image>
@@ -17,14 +17,14 @@
                             </view>
 
                             <view class="form-gorup oh flex-row jc-sb align-c">
-                                <view class="form-gorup-title">{{$t('personal.personal.gw8br3')}}<text class="form-group-tips-must">*</text></view>
+                                <view class="form-gorup-title">{{ $t('personal.personal.gw8br3') }}<text class="form-group-tips-must">*</text></view>
                                 <view class="flex-row align-c flex-1 flex-width">
                                     <input :type="application_client_type == 'weixin' ? 'nickname' : 'text'" name="nickname" :value="user_data.nickname || ''" maxlength="16" placeholder-class="cr-grey-9 tr" class="cr-base tr margin-right-sm" :placeholder="$t('personal.personal.44112i')" />
                                 </view>
                             </view>
 
                             <view class="form-gorup oh flex-row jc-sb align-c">
-                                <view class="form-gorup-title">{{$t('personal.personal.jibx42')}}</view>
+                                <view class="form-gorup-title">{{ $t('personal.personal.jibx42') }}</view>
                                 <view class="flex-1 flex-width flex-row jc-e align-c">
                                     <picker class="margin-right-sm wh-auto tr" name="birthday" mode="date" :value="user_data.birthday || ''" data-field="birthday" @change="select_change_event">
                                         <view :class="'picker ' + ((user_data.birthday || null) == null ? 'cr-grey' : '')">{{ user_data.birthday || $t('personal.personal.85404s') }}</view>
@@ -34,14 +34,14 @@
                             </view>
 
                             <view class="form-gorup oh flex-row jc-sb align-c">
-                                <view class="form-gorup-title">{{$t('personal.personal.6m33c4')}}</view>
+                                <view class="form-gorup-title">{{ $t('personal.personal.6m33c4') }}</view>
                                 <view class="flex-row align-c flex-1 flex-width">
                                     <input type="text" name="address" :value="user_data.address || ''" maxlength="30" placeholder-class="cr-grey-9 tr" class="cr-base tr margin-right-sm" :placeholder="$t('personal.personal.re674n')" />
                                 </view>
                             </view>
 
                             <view class="form-gorup oh flex-row jc-sb align-c">
-                                <view class="form-gorup-title">{{$t('personal.personal.x2fofv')}}</view>
+                                <view class="form-gorup-title">{{ $t('personal.personal.x2fofv') }}</view>
                                 <view class="flex-row jc-e align-c flex-1 flex-width">
                                     <picker @change="select_change_event" :value="user_data.gender || ''" :range="gender_list" range-key="name" name="gender" data-field="gender" class="margin-right-sm wh-auto tr">
                                         <view class="uni-input cr-base picker">{{ gender_list[user_data.gender].name || '' }}</view>
@@ -88,7 +88,7 @@
 
                         <view class="bottom-fixed" :style="bottom_fixed_style">
                             <view class="bottom-line-exclude">
-                                <button class="item bg-main br-main cr-white round text-size" type="default" form-type="submit" hover-class="none" :disabled="form_submit_disabled_status">{{$t('common.save')}}</button>
+                                <button class="item bg-main br-main cr-white round text-size" type="default" form-type="submit" hover-class="none" :disabled="form_submit_disabled_status">{{ $t('common.save') }}</button>
                             </view>
                         </view>
                     </view>
@@ -120,17 +120,19 @@
                 default_avatar: app.globalData.data.default_user_head_src,
                 user_data: {},
                 gender_list: [],
-                stage_list: [
-                    { name: '请选择', value: '' }
-                ].concat(MuyingStage.getList().filter(function(v) { return v.value !== 'all'; })),
+                stage_list: [{ name: '请选择', value: '' }].concat(
+                    MuyingStage.getList().filter(function (v) {
+                        return v.value !== 'all';
+                    })
+                ),
                 current_stage_index: 0,
-                baby_month_age_text: ''
+                baby_month_age_text: '',
             };
         },
 
         components: {
             componentCommon,
-            componentNoData
+            componentNoData,
         },
 
         onLoad(params) {
@@ -170,7 +172,7 @@
                 uni.request({
                     url: app.globalData.get_request_url('index', 'personal'),
                     method: 'POST',
-                    data: {lang_can_key: 'gender_list'},
+                    data: { lang_can_key: 'gender_list' },
                     dataType: 'json',
                     success: (res) => {
                         if (res.data.code == 0) {
@@ -227,10 +229,17 @@
             stage_change_event(e) {
                 var index = e.detail.value;
                 var temp = this.user_data;
-                temp.current_stage = this.stage_list[index].value;
+                var new_stage = this.stage_list[index].value;
+                temp.current_stage = new_stage;
+                if (new_stage !== 'pregnancy') {
+                    temp.due_date = '';
+                }
+                if (new_stage !== 'postpartum') {
+                    temp.baby_birthday = '';
+                }
                 this.setData({
                     user_data: temp,
-                    current_stage_index: index
+                    current_stage_index: index,
                 });
                 this.calc_baby_month_age();
             },
@@ -243,11 +252,11 @@
                 // 如果是微信/支付宝小程序，直接使用其API（不需要权限弹窗）
                 let arr = ['weixin', 'alipay'];
                 if (arr.indexOf(this.application_client_type) != -1) {
-                    if(e !== null) {
+                    if (e !== null) {
                         let temp_url = e.detail.avatarUrl;
-                        if(this.application_client_type == 'alipay') {
+                        if (this.application_client_type == 'alipay') {
                             // 支付宝如果是临时文件走文件上传，普通图片地址走表单
-                            if(temp_url.substr(-6) == '.image') {
+                            if (temp_url.substr(-6) == '.image') {
                                 self.upload_handle(temp_url, self);
                             } else {
                                 self.upload_url_handle(temp_url, self);
@@ -274,7 +283,7 @@
                     title: self.$t('common.choice_image_source_text'),
                     itemList: [self.$t('common.camera_text'), self.$t('common.album_choice_text')],
                     success: (res) => {
-                        if(res.tapIndex == 0) {
+                        if (res.tapIndex == 0) {
                             var type = 'camera';
                             var title = self.$t('common.need_camera_power_text');
                             var msg = self.$t('common.camera_get_access_text');
@@ -284,17 +293,17 @@
                             var msg = self.$t('common.album_get_access_text');
                         }
                         uni.showModal({
-                        	title: title,
-                        	content: msg,
+                            title: title,
+                            content: msg,
                             cancelText: self.$t('common.cancel'),
                             confirmText: self.$t('common.confirm'),
-                        	success: function (res) {
-                        		if (res.confirm) {
+                            success: function (res) {
+                                if (res.confirm) {
                                     self.choose_image_handle(type, self);
-                        		}
-                        	}
+                                }
+                            },
                         });
-                    }
+                    },
                 });
                 // #endif
             },
@@ -314,11 +323,11 @@
                         if (err.errMsg && err.errMsg.indexOf('cancel') === -1) {
                             uni.showModal({
                                 title: self.$t('common.power_refuse_text'),
-                                content: (type == 'camera') ? self.$t('common.camera_error_text') : self.$t('common.album_error_text'),
-                                showCancel: false
+                                content: type == 'camera' ? self.$t('common.camera_error_text') : self.$t('common.album_error_text'),
+                                showCancel: false,
                             });
                         }
-                    }
+                    },
                 });
             },
 
@@ -343,7 +352,7 @@
                     },
                 });
             },
-            
+
             // form上传url
             upload_url_handle(image, self) {
                 uni.showLoading({
@@ -352,7 +361,7 @@
                 uni.request({
                     url: app.globalData.get_request_url('useravatarupload', 'personal'),
                     method: 'POST',
-                    data: {file: image},
+                    data: { file: image },
                     dataType: 'json',
                     success: (res) => {
                         uni.hideLoading();
@@ -449,7 +458,7 @@
 <style>
     @import './personal.css';
     @import '@/common/css/muying.css';
-    
+
     /* 权限说明弹窗样式 */
     .permission-modal-mask {
         position: fixed;
@@ -463,7 +472,7 @@
         justify-content: center;
         z-index: 9999;
     }
-    
+
     .permission-modal {
         width: 80%;
         max-width: 600rpx;
@@ -472,7 +481,7 @@
         overflow: hidden;
         animation: fadeIn 0.3s ease;
     }
-    
+
     .permission-modal-title {
         padding: 40rpx 30rpx 20rpx;
         font-size: 36rpx;
@@ -480,7 +489,7 @@
         text-align: center;
         color: #333;
     }
-    
+
     .permission-modal-content {
         padding: 20rpx 30rpx 40rpx;
         font-size: 28rpx;
@@ -488,12 +497,12 @@
         color: #666;
         text-align: center;
     }
-    
+
     .permission-modal-buttons {
         display: flex;
         border-top: 1rpx solid #eee;
     }
-    
+
     .permission-btn {
         flex: 1;
         height: 88rpx;
@@ -504,20 +513,20 @@
         margin: 0;
         position: relative;
     }
-    
+
     .permission-btn::after {
         border: none;
     }
-    
+
     .permission-btn.cancel {
         color: #666;
         border-right: 1rpx solid #eee;
     }
-    
+
     .permission-btn.confirm {
         color: #007aff;
     }
-    
+
     @keyframes fadeIn {
         from {
             opacity: 0;
