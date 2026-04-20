@@ -2350,6 +2350,7 @@ class UserService
                 return DataReturn('产后阶段请选择宝宝生日', -1);
             }
         }
+        // current_stage 为空时：允许清空，同时清空 due_date / baby_birthday
 
         // 更新的字段
         $fields = [
@@ -2377,28 +2378,41 @@ class UserService
                     case 'avatar' :
                         $data[$k] = empty($params['avatar']) ? '' : ResourcesService::AttachmentPathHandle($params['avatar']);
                         break;
-                    // 孕育阶段
+                    // 孕育阶段：非空时规范化，空时清空
                     case 'current_stage' :
                         if(!empty($params['current_stage']))
                         {
                             $data[$k] = MuyingStage::Normalize($params['current_stage']);
+                        }
+                        else
+                        {
+                            $data[$k] = '';
                         }
                         break;
                     // 生日
                     case 'birthday' :
                         $data[$k] = empty($params['birthday']) ? '' : strtotime($params['birthday']);
                         break;
-                    // 预产期
+                    // 预产期：非空时转时间戳，空时清零
                     case 'due_date' :
                         if(!empty($params['due_date']))
                         {
                             $data[$k] = is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date']);
                         }
+                        else
+                        {
+                            $data[$k] = 0;
+                        }
                         break;
+                    // 宝宝生日：非空时转时间戳，空时清零
                     case 'baby_birthday' :
                         if(!empty($params['baby_birthday']))
                         {
                             $data[$k] = is_numeric($params['baby_birthday']) ? intval($params['baby_birthday']) : strtotime($params['baby_birthday']);
+                        }
+                        else
+                        {
+                            $data[$k] = 0;
                         }
                         break;
                     // 手机、用户基础信息填写一键授权手机号码
