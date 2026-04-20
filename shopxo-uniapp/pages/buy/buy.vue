@@ -360,7 +360,7 @@
     import componentCommon from '@/components/common/common';
     import componentPopup from '@/components/popup/popup';
     import componentNoData from '@/components/no-data/no-data';
-    import componentTimeSelect from '@/pages/common/components/time-select/time-select';
+    import componentTimeSelect from '@/pages/buy/components/common/time-select/time-select';
     import componentPayment from '@/components/payment/payment';
     import componentFormInputBase from '@/pages/form-input/components/form-input/form-input-base';
 

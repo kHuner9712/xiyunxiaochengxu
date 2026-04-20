@@ -12,7 +12,7 @@
 
 <script>
     import { isEmpty } from '@/common/js/common/common.js';
-    import VideoPlayer from '@/components/video-player/video-player.vue';
+    import VideoPlayer from '@/pages/form-input/components/common/video-player/video-player.vue';
     export default {
         components: {
             VideoPlayer,
@@ -48,7 +48,7 @@
         },
         watch: {
             propKey(val) {
-                // 初始化
+                // 初始�?
                 this.init();
             },
         },
@@ -57,7 +57,7 @@
         },
         methods: {
             isEmpty,
-            // 初始化数据
+            // 初始化数�?
             init() {
                 const com_data = this.propValue;
                 let video_style = `width: 100%;height:100%;`;

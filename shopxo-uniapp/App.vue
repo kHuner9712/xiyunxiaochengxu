@@ -8,6 +8,13 @@
     var isProd = process.env.NODE_ENV === 'production';
     var appConfig = isProd ? prodConfig : devConfig;
     var request_url_value = appConfig.request_url;
+    var static_url_value = appConfig.static_url || '/';
+    if (!/^https?:\/\//i.test(static_url_value) && static_url_value.charAt(0) !== '/') {
+        static_url_value = '/' + static_url_value;
+    }
+    if (static_url_value.slice(-1) !== '/') {
+        static_url_value += '/';
+    }
     if (!request_url_value) {
         if (isProd) {
             console.error('[FATAL] 生产环境未配置 UNI_APP_REQUEST_URL，应用无法正常运行');
@@ -23,7 +30,7 @@
                 request_url: request_url_value,
 
                 // 静态资源地址（如系统根目录不在public目录下面请在静态地址后面加public目录、如：https://d1.shopxo.vip/public/）
-                static_url: appConfig.static_url || '',
+                static_url: static_url_value,
 
                 // 系统类型（默认default、如额外独立小程序、可与程序分身插件实现不同主体小程序及支付独立）
                 system_type: 'default',

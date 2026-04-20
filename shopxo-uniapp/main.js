@@ -1,16 +1,13 @@
-import Vue from 'vue';
+﻿import Vue from 'vue';
 import App from './App';
 
-// 全局mixins
+// 鍏ㄥ眬mixins
 import base from './common/js/common/base';
 import share from './common/js/common/share';
 
-// 多语言引入并初始化
+// 澶氳瑷€寮曞叆骞跺垵濮嬪寲
 import i18n from './locale/index'
-
-// 全局icon组件
-import iconfont from './components/iconfont/iconfont.vue'
-Vue.component("iconfont", iconfont);
+// iconfont 由 easycom 按需注入，不再做全局注册
 
 Vue.mixin(base);
 Vue.mixin(share);

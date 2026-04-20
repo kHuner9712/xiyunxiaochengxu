@@ -151,9 +151,13 @@
             "urlCheck": false,
             "es6": true,
             "minified": true,
-            "ignoreDevUnusedFiles": false,
-            "ignoreUploadUnusedFiles": false
+            "ignoreDevUnusedFiles": true,
+            "ignoreUploadUnusedFiles": true
         },
+        "optimization": {
+            "subPackages": true
+        },
+        "lazyCodeLoading": "requiredComponents",
         "usingComponents": true,
         "permission": {
             "scope.userLocation": {

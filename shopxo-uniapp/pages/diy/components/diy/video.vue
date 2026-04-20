@@ -16,7 +16,7 @@
 
 <script>
     import { common_styles_computer, common_img_computer } from '@/common/js/common/common.js';
-    import VideoPlayer from '@/components/video-player/video-player.vue';
+    import VideoPlayer from '@/pages/diy/components/common/video-player/video-player.vue';
     export default {
         components: {
             VideoPlayer,
@@ -34,7 +34,7 @@
                 type: Boolean,
                 default: true,
             },
-            // 组件渲染的下标
+            // 组件渲染的下�?
             propIndex: {
                 type: Number,
                 default: 1000000,
@@ -51,7 +51,7 @@
         },
         watch: {
             propKey(val) {
-                // 初始化
+                // 初始�?
                 this.init();
             },
         },
@@ -59,7 +59,7 @@
             this.init();
         },
         methods: {
-            // 初始化数据
+            // 初始化数�?
             init() {
                 const new_content = this.propValue.content || {};
                 const new_style = this.propValue.style || {};

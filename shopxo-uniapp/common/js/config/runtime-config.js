@@ -1,11 +1,14 @@
 const DEFAULT_DEV_REQUEST_URL_H5 = 'http://localhost:8080/';
+const DEFAULT_DEV_REQUEST_URL_NON_H5 = 'http://127.0.0.1:8080/';
 
 const get_default_dev_request_url = () => {
     // #ifdef H5
     return DEFAULT_DEV_REQUEST_URL_H5;
     // #endif
     // #ifndef H5
-    return '';
+    // For local mini-program debugging in WeChat DevTools on desktop,
+    // fallback to loopback backend when env injection is unavailable.
+    return DEFAULT_DEV_REQUEST_URL_NON_H5;
     // #endif
 };
 
@@ -17,7 +20,14 @@ const normalize_base_url = (value) => {
     return raw.endsWith('/') ? raw : `${raw}/`;
 };
 
-const read_env = (name) => (process.env[name] || '').trim();
+const read_env = (name) => {
+    const direct = (process.env[name] || '').trim();
+    if (direct) {
+        return direct;
+    }
+    // HBuilderX / vue-cli only inject custom env keys with VUE_APP_ prefix.
+    return (process.env[`VUE_APP_${name}`] || '').trim();
+};
 
 const build_runtime_config = ({ default_request_url = '' } = {}) => {
     const env_url = read_env('UNI_APP_REQUEST_URL');
@@ -40,6 +50,7 @@ const build_runtime_config = ({ default_request_url = '' } = {}) => {
 
 export {
     DEFAULT_DEV_REQUEST_URL_H5,
+    DEFAULT_DEV_REQUEST_URL_NON_H5,
     get_default_dev_request_url,
     normalize_base_url,
     build_runtime_config,

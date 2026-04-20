@@ -39,19 +39,7 @@
                                         <component-diy-img-magic v-else-if="item.key == 'img-magic'" :propOuterContainerPadding="outer_container_padding" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-img-magic>
                                         <component-diy-hot-zone v-else-if="item.key == 'hot-zone'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-hot-zone>
                                         <!-- 插件 -->
-                                        <component-diy-seckill v-else-if="item.key == 'seckill'" :propOuterContainerPadding="outer_container_padding" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-seckill>
-                                        <component-diy-coupon v-else-if="item.key == 'coupon'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-coupon>
-                                        <component-diy-realstore v-else-if="item.key == 'realstore'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-realstore>
-                                        <component-diy-blog-list v-else-if="item.key == 'blog'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-blog-list>
-                                        <component-diy-blog-tabs v-else-if="item.key == 'blog-tabs'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data" :propTop="get_diy_prop_top(item.com_data)" :propScrollTop="scroll_top" :propCustomNavHeight="get_diy_custom_nav_height(item.com_data)" :propIsTabsUseSafeDistance="getPropIsTabsUseSafeDistance"></component-diy-blog-tabs>
-                                        <component-diy-plugins-video-list v-else-if="item.key == 'plugins-video'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-plugins-video-list>
-                                        <component-diy-plugins-video-tabs v-else-if="item.key == 'plugins-video-tabs'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data" :propTop="get_diy_prop_top(item.com_data)" :propScrollTop="scroll_top" :propCustomNavHeight="get_diy_custom_nav_height(item.com_data)" :propIsTabsUseSafeDistance="getPropIsTabsUseSafeDistance"></component-diy-plugins-video-tabs>
-                                        <component-diy-shop v-else-if="item.key == 'shop'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-shop>
-                                        <component-diy-binding v-else-if="item.key == 'binding'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-binding>
-                                        <component-diy-ask v-else-if="item.key == 'ask'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-ask>
-                                        <component-diy-ask-tabs v-else-if="item.key == 'ask-tabs'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data" :propTop="get_diy_prop_top(item.com_data)" :propScrollTop="scroll_top" :propCustomNavHeight="get_diy_custom_nav_height(item.com_data)" :propIsTabsUseSafeDistance="getPropIsTabsUseSafeDistance"></component-diy-ask-tabs>
-                                        <component-diy-activity v-else-if="item.key == 'activity'" :ref="'diy_goods_buy' + index" :propDiyIndex="index" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data" @goods_buy_event="goods_buy_event"></component-diy-activity>
-                                        <component-diy-salerecords v-else-if="item.key == 'salerecords'" :propIndex="get_prop_index(item)" :propKey="item.id + index" :propValue="item.com_data"></component-diy-salerecords>
+                                        <!-- lightweight mini-program pack: disabled heavy plugin diy modules -->
                                         <!-- 工具组件 -->
                                         <component-diy-float-window v-else-if="(item.key == 'float-window' && item.com_data.content.button_jump !== 'gotop') || (item.key == 'float-window' && item.com_data.content.button_jump === 'gotop' && getPropIsHalf)" :propKey="item.id + index" :propValue="item.com_data" @btn_event="btn_event"></component-diy-float-window>
                                         <component-diy-title v-else-if="item.key == 'title'" :propKey="item.id + index" :propIndex="get_prop_index(item)" :propValue="item.com_data"></component-diy-title>
@@ -133,12 +121,7 @@
     import componentDiyVideo from '@/pages/diy/components/diy/video';
     import componentDiyArticleList from '@/pages/diy/components/diy/article-list';
     import componentDiyArticleTabs from '@/pages/diy/components/diy/article-tabs';
-    import componentDiyBlogList from '@/pages/diy/components/diy/blog-list';
-    import componentDiyBlogTabs from '@/pages/diy/components/diy/blog-tabs';
-    import componentDiyPluginsVideoList from '@/pages/diy/components/diy/plugins-video-list';
-    import componentDiyPluginsVideoTabs from '@/pages/diy/components/diy/plugins-video-tabs';
     import componentDiyHotZone from '@/pages/diy/components/diy/hot-zone';
-    import componentDiyCoupon from '@/pages/diy/components/diy/coupon';
     import componentDiyFloatWindow from '@/pages/diy/components/diy/float-window';
     import componentDiyTitle from '@/pages/diy/components/diy/title';
     import componentDiyAuxiliaryLine from '@/pages/diy/components/diy/auxiliary-line';
@@ -151,14 +134,6 @@
     import componentDiyDataMagic from '@/pages/diy/components/diy/data-magic';
     import componentDiyCustom from '@/pages/diy/components/diy/custom';
     import componentDiyImgMagic from '@/pages/diy/components/diy/img-magic';
-    import componentDiySeckill from '@/pages/diy/components/diy/seckill';
-    import componentDiyRealstore from '@/pages/diy/components/diy/realstore';
-    import componentDiyShop from '@/pages/diy/components/diy/shop';
-    import componentDiyBinding from '@/pages/diy/components/diy/binding';
-    import componentDiyAsk from '@/pages/diy/components/diy/ask';
-    import componentDiyAskTabs from '@/pages/diy/components/diy/ask-tabs';
-    import componentDiyActivity from '@/pages/diy/components/diy/activity';
-    import componentDiySalerecords from '@/pages/diy/components/diy/salerecords'
     import componentDiyTabsCarousel from '@/pages/diy/components/diy/tabs-carousel';
     import componentDiyTabsMagic from '@/pages/diy/components/diy/tabs-magic';
     import componentDataTabs from '@/pages/diy/components/diy/data-tabs';
@@ -209,12 +184,7 @@
             componentDiyVideo,
             componentDiyArticleList,
             componentDiyArticleTabs,
-            componentDiyBlogList,
-            componentDiyBlogTabs,
-            componentDiyPluginsVideoList,
-            componentDiyPluginsVideoTabs,
             componentDiyHotZone,
-            componentDiyCoupon,
             componentDiyAuxiliaryLine,
             componentDiyRichText,
             componentDiyFloatWindow,
@@ -226,14 +196,6 @@
             componentDiyDataMagic,
             componentDiyCustom,
             componentDiyImgMagic,
-            componentDiySeckill,
-            componentDiyRealstore,
-            componentDiyShop,
-            componentDiyBinding,
-            componentDiyAsk,
-            componentDiyAskTabs,
-            componentDiyActivity,
-            componentDiySalerecords,
             componentDiyTabsCarousel,
             componentDiyTabsMagic,
             componentDataTabs,

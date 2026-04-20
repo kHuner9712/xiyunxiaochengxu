@@ -1,6 +1,8 @@
-import { build_runtime_config } from './runtime-config.js';
+import { build_runtime_config, get_default_dev_request_url } from './runtime-config.js';
 
-const config = build_runtime_config();
+const config = build_runtime_config({
+    default_request_url: process.env.NODE_ENV === 'production' ? '' : get_default_dev_request_url(),
+});
 
 if (process.env.NODE_ENV === 'production' && !config.request_url) {
     console.error(
