@@ -605,6 +605,35 @@ class GoodsService
                     $v['produce_region_name'] = (!empty($produce_region_list) && is_array($produce_region_list) && array_key_exists($v['produce_region'], $produce_region_list)) ? $produce_region_list[$v['produce_region']] : '';
                 }
 
+                // 母婴阶段标签（保留原 stage 字符串不变，新增前端专用数组字段）
+                if(isset($v['stage']))
+                {
+                    $v['muying_stage_tags'] = [];
+                    if(!empty($v['stage']))
+                    {
+                        $stage_values = array_filter(array_map('trim', explode(',', $v['stage'])));
+                        foreach($stage_values as $sv)
+                        {
+                            $sv_lower = strtolower($sv);
+                            $v['muying_stage_tags'][] = [
+                                'key'    => $sv_lower,
+                                'label'  => \app\extend\muying\MuyingStage::getName($sv_lower),
+                                'active' => true,
+                            ];
+                        }
+                    }
+                }
+
+                // 卖点标签（保留原 selling_point 字符串不变，新增前端专用数组字段）
+                if(isset($v['selling_point']))
+                {
+                    $v['muying_selling_points'] = [];
+                    if(!empty($v['selling_point']))
+                    {
+                        $v['muying_selling_points'] = array_filter(array_map('trim', explode(',', $v['selling_point'])));
+                    }
+                }
+
                 // 品牌
                 if(isset($v['brand_id']))
                 {
@@ -1509,6 +1538,8 @@ class GoodsService
         // 基础数据
         $data = [
             'title'                   => $params['title'],
+            'stage'                   => empty($params['stage']) ? '' : strip_tags(trim($params['stage'])),
+            'selling_point'           => empty($params['selling_point']) ? '' : strip_tags(trim($params['selling_point'])),
             'title_color'             => empty($params['title_color']) ? '' : $params['title_color'],
             'simple_desc'             => empty($params['simple_desc']) ? '' : $params['simple_desc'],
             'spec_desc'               => empty($params['spec_desc']) ? '' : $params['spec_desc'],

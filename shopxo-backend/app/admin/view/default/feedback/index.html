@@ -1,0 +1,22 @@
+{{extend name="../../../module/view/form_table/form" /}}
+
+{{block name="form_search"}}
+    <div class="am-form-group">
+        <label class="am-form-label">{{:MyLang('common_service.goodscomments.form_item_stage')}}</label>
+        <select name="stage" class="am-radius">
+            <option value="">{{:MyLang('please_select')}}</option>
+            {{foreach $common_service_muying_stage_list as $v}}
+                <option value="{{$v.value}}">{{$v.name}}</option>
+            {{/foreach}}
+        </select>
+    </div>
+
+    <div class="am-form-group">
+        <label class="am-form-label">{{:MyLang('common_service.goodscomments.form_item_is_enable')}}</label>
+        <select name="is_enable" class="am-radius">
+            <option value="">{{:MyLang('please_select')}}</option>
+            <option value="1">显示</option>
+            <option value="0">隐藏</option>
+        </select>
+    </div>
+{{/block}}

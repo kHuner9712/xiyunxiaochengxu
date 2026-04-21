@@ -1120,8 +1120,8 @@
                     show_field_price_text: price_text_arr.indexOf(goods.show_field_price_text) != -1 ? null : goods.show_field_price_text.replace(/<[^>]+>/g, '') || null,
                     goods_show_price_unit: goods.show_price_unit,
                     goods_show_original_price_unit: goods.show_original_price_unit,
-                    muying_stage_tags: goods.stage || [],
-                    muying_selling_points: goods.selling_point || [],
+                    muying_stage_tags: goods.muying_stage_tags || [],
+                    muying_selling_points: goods.muying_selling_points || [],
                 });
             },
 
@@ -1610,16 +1610,15 @@
             },
             
             order_goods_form_back_item_event(e) {
-                console.log(e, 'item');
-                
-                // forminput
                 if ((this.$refs.form_input_base || null) != null) {
                     this.$refs.form_input_base.submit_data_parameter_handle();
                 }
             },
             
             order_goods_form_back_data_event(e) {
-                console.log(e, 'data');
+                if ((e && e.form_data || null) != null) {
+                    this.setData({order_goods_form_data: e.form_data});
+                }
             }
         }
     };

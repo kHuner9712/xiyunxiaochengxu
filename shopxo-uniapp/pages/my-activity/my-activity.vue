@@ -53,7 +53,10 @@
                         <view class="muying-divider margin-top-main margin-bottom-main"></view>
                         <view class="flex-row jc-sb align-c">
                             <view class="text-size-sm cr-grey-9">{{ (item.activity_info && item.activity_info.time_text) || '' }}</view>
-                            <view class="text-size-sm cr-main cp" @tap="view_detail(item.activity_id)">查看详情</view>
+                            <view class="flex-row align-c">
+                                <view v-if="item.status === 0 || item.status === 1" class="text-size-sm cr-red cp margin-right-main" @tap="cancel_signup(item)">取消报名</view>
+                                <view class="text-size-sm cr-main cp" @tap="view_detail(item.activity_id)">查看详情</view>
+                            </view>
                         </view>
                     </view>
                 </block>
@@ -193,6 +196,37 @@
                 if (status === 2) return 'muying-status-cancelled';
                 return '';
             },
+
+            cancel_signup(item) {
+                var self = this;
+                uni.showModal({
+                    title: '取消报名',
+                    content: '确定要取消报名「' + ((item.activity_info && item.activity_info.title) || '该活动') + '」吗？',
+                    success: function(res) {
+                        if (!res.confirm) return;
+                        uni.showLoading({ title: '处理中...' });
+                        uni.request({
+                            url: app.globalData.get_request_url('signupcancel', 'activity'),
+                            method: 'POST',
+                            data: { id: item.id },
+                            dataType: 'json',
+                            success: function(res) {
+                                uni.hideLoading();
+                                if (res.data.code == 0) {
+                                    uni.showToast({ title: '已取消报名', icon: 'success' });
+                                    self.load_data();
+                                } else {
+                                    app.globalData.showToast(res.data.msg || '取消失败，请重试');
+                                }
+                            },
+                            fail: function() {
+                                uni.hideLoading();
+                                app.globalData.showToast('网络异常，请重试');
+                            },
+                        });
+                    },
+                });
+            },
         }
     };
 </script>
@@ -260,5 +294,13 @@
         color: #E57373;
         border: 1px solid #E57373;
         text-decoration: line-through;
+    }
+
+    .cr-red {
+        color: #E57373;
+    }
+
+    .margin-right-main {
+        margin-right: 20rpx;
     }
 </style>

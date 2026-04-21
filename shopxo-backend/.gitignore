@@ -1,6 +1,8 @@
 # Backend local env/config
 .env
-.env.local
+.env.*
+!.env.*.example
+.env.docker
 *.local.php
 config/database.php
 config/domain.php

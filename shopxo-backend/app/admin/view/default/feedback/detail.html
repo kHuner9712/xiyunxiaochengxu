@@ -1,0 +1,40 @@
+{{extend name="../../../module/view/form_table/detail" /}}
+
+{{block name="detail_data"}}
+    {{if !empty($data)}}
+        <dl class="dl-content am-padding-sm">
+            <dt><strong>反馈ID</strong></dt>
+            <dd>{{$data.id}}</dd>
+
+            <dt><strong>用户昵称</strong></dt>
+            <dd>{{$data.nickname}}</dd>
+
+            <dt><strong>反馈阶段</strong></dt>
+            <dd>{{$data.stage_text}}</dd>
+
+            <dt><strong>反馈内容</strong></dt>
+            <dd style="white-space: pre-wrap;">{{$data.content}}</dd>
+
+            <dt><strong>联系方式</strong></dt>
+            <dd>{{if !empty($data['contact'])}}{{$data.contact}}{{else /}}-{{/if}}</dd>
+
+            <dt><strong>状态</strong></dt>
+            <dd>{{if $data.is_enable == 1}}<span class="am-badge am-badge-success am-radius">显示</span>{{else /}}<span class="am-badge am-badge-default am-radius">隐藏</span>{{/if}}</dd>
+
+            <dt><strong>提交时间</strong></dt>
+            <dd>{{$data.add_time_text}}</dd>
+
+            <dt><strong>更新时间</strong></dt>
+            <dd>{{$data.upd_time_text}}</dd>
+
+            {{if !empty($data['user_info'])}}
+                <dt><strong>关联用户</strong></dt>
+                <dd>
+                    ID: {{$data.user_info.id}} | 昵称: {{$data.user_info.nickname}} | 手机: {{if !empty($data.user_info.mobile)}}{{$data.user_info.mobile}}{{else /}}-{{/if}}
+                </dd>
+            {{/if}}
+        </dl>
+    {{else /}}
+        {{:ModuleInclude('public/not_data')}}
+    {{/if}}
+{{/block}}

@@ -168,7 +168,7 @@
                                                 <text>{{ $t('login.login.nddg2x') }}</text>
                                                 <text class="cr-main" @tap="agreement_event" data-value="userregister">{{ $t('login.login.2v11we') }}</text>
                                                 <text>{{ $t('login.login.l3r4vr') }}</text>
-                                                <text class="cr-main" @tap="agreement_event" data-value="userprivacy">{{ $t('login.login.myno2x') }}</text>
+                                                <text class="cr-main" @tap="agreement_event" data-value="privacy">{{ $t('login.login.myno2x') }}</text>
                                             </view>
                                         </view>
                                         <button class="bg-main br-main cr-white round text-size margin-top-xxxl" form-type="submit" type="default" hover-class="none" :loading="form_submit_loading" :disabled="form_submit_loading">{{ $t('login.login.i1deai') }}</button>
@@ -237,7 +237,7 @@
                                                 <text>{{ $t('login.login.nddg2x') }}</text>
                                                 <text class="cr-main" @tap="agreement_event" data-value="userregister">{{ $t('login.login.2v11we') }}</text>
                                                 <text>{{ $t('login.login.l3r4vr') }}</text>
-                                                <text class="cr-main" @tap="agreement_event" data-value="userprivacy">{{ $t('login.login.myno2x') }}</text>
+                                                <text class="cr-main" @tap="agreement_event" data-value="privacy">{{ $t('login.login.myno2x') }}</text>
                                             </view>
                                         </view>
                                         <button class="bg-main br-main cr-white round text-size margin-top-xxxl" form-type="submit" type="default" hover-class="none" :loading="form_submit_loading" :disabled="form_submit_loading">{{ $t('login.login.hvunf8') }}</button>
@@ -296,7 +296,7 @@
                                     <text>{{ $t('login.login.nddg2x') }}</text>
                                     <text class="cr-main" @tap="agreement_event" data-value="userregister">{{ $t('login.login.2v11we') }}</text>
                                     <text>{{ $t('login.login.l3r4vr') }}</text>
-                                    <text class="cr-main" @tap="agreement_event" data-value="userprivacy">{{ $t('login.login.myno2x') }}</text>
+                                    <text class="cr-main" @tap="agreement_event" data-value="privacy">{{ $t('login.login.myno2x') }}</text>
                                 </view>
                             </view>
                             <view class="margin-top-xxl">
@@ -1404,16 +1404,20 @@
                     return false;
                 }
 
-                // 是否存在协议 url 地址
+                // 是否存在协议 url 地址（优先 web-view 外链）
                 var key = 'agreement_' + value + '_url';
                 var url = app.globalData.get_config('config.' + key) || null;
-                if (url == null) {
-                    app.globalData.showToast(this.$t('login.login.x0nxxf'));
-                    return false;
+                if (url != null) {
+                    app.globalData.open_web_view(url);
+                    return;
                 }
 
-                // 打开 webview
-                app.globalData.open_web_view(url);
+                // 无外链配置时，兜底到本地协议页面
+                if (value === 'privacy' || value === 'userregister') {
+                    app.globalData.url_open('/pages/agreement/agreement?type=' + value);
+                } else {
+                    app.globalData.showToast(this.$t('login.login.x0nxxf'));
+                }
             },
 
             // 协议改变
@@ -1514,8 +1518,6 @@
             set_navigation_bar_title() {
                 // 重新设置静态资源
                 this.set_resources_data();
-                // 设置这标题
-                console.log( this.current_opt_type_title[this.navigation_bar_title_key] )
                 uni.setNavigationBarTitle({
                     title: this.current_opt_type_title[this.navigation_bar_title_key],
                 });

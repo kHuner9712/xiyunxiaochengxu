@@ -62,6 +62,16 @@ class Activitysignup extends Base
     }
 
     /**
+     * 确认报名
+     */
+    public function Confirm()
+    {
+        $params = $this->data_request;
+        $params['admin'] = $this->admin;
+        return ApiService::ApiDataReturn(ActivityService::SignupConfirm($params));
+    }
+
+    /**
      * 导出
      * @author   Devil
      * @blog     http://gong.gg/

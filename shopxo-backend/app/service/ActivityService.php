@@ -872,6 +872,47 @@ class ActivityService
         return DataReturn('签到失败', -100);
     }
 
+    public static function SignupConfirm($params = [])
+    {
+        $p = [
+            [
+                'checked_type' => 'empty',
+                'key_name'     => 'id',
+                'error_msg'    => '报名记录ID不能为空',
+            ],
+        ];
+        $ret = ParamsChecked($params, $p);
+        if ($ret !== true) {
+            return DataReturn($ret, -1);
+        }
+
+        $id = intval($params['id']);
+        $signup = Db::name('ActivitySignup')->where([
+            ['id', '=', $id],
+            ['is_delete_time', '=', 0],
+        ])->find();
+        if (empty($signup)) {
+            return DataReturn('报名记录不存在', -1);
+        }
+
+        if ($signup['status'] == self::SIGNUP_STATUS_CONFIRMED) {
+            return DataReturn('该报名已确认，请勿重复确认', -1);
+        }
+
+        if ($signup['status'] == self::SIGNUP_STATUS_CANCELLED) {
+            return DataReturn('已取消的报名不能确认', -1);
+        }
+
+        $upd_result = Db::name('ActivitySignup')->where(['id' => $id])->update([
+            'status'   => self::SIGNUP_STATUS_CONFIRMED,
+            'upd_time' => time(),
+        ]);
+        if ($upd_result !== false) {
+            return DataReturn('确认成功', 0);
+        }
+        return DataReturn('确认失败', -100);
+    }
+
     public static function SignupExport($params = [])
     {
         $where = empty($params['where']) ? [] : $params['where'];

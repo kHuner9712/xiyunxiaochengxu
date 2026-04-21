@@ -1,6 +1,9 @@
 <template>
     <view :class="theme_view">
-        <view class="activity-detail-page">
+        <view v-if="data_loaded && !activity.id" class="padding-main" style="padding-top: 45%">
+            <component-no-data propStatus="0" propMsg="活动不存在或已下架"></component-no-data>
+        </view>
+        <view v-else class="activity-detail-page">
             <!-- 自定义导航栏 -->
             <view class="nav-top pf top-0 left-0 right-0 z-i-deep" :style="'padding-top:' + status_bar_height + 'px;'">
                 <view class="nav-top-content pr flex-row align-c jc-sb padding-horizontal-main" :style="'background-color:' + (scroll_value > 100 ? '#FFFFFF' : 'transparent') + ';'">
@@ -8,7 +11,7 @@
                         <uni-icons type="back" size="22" :color="scroll_value > 100 ? '#333' : '#FFF'"></uni-icons>
                     </view>
                     <text v-if="scroll_value > 100" class="nav-title cr-base fw-b text-size-md">活动详情</text>
-                    <text v-else class="nav-title" style="color:transparent;">活动详情</text>
+                    <text v-else class="nav-title" style="color: transparent">活动详情</text>
                     <view class="nav-share cp" @tap="share_event">
                         <uni-icons type="redo" size="20" :color="scroll_value > 100 ? '#333' : '#FFF'"></uni-icons>
                     </view>
@@ -83,7 +86,7 @@
                         <view class="muying-divider flex-1 margin-left-main"></view>
                     </view>
                     <view class="crowd-content">
-                        <text class="cr-grey text-size-sm" style="line-height:1.8;">{{ activity.suitable_crowd }}</text>
+                        <text class="cr-grey text-size-sm" style="line-height: 1.8">{{ activity.suitable_crowd }}</text>
                     </view>
                 </view>
             </view>
@@ -111,6 +114,7 @@
     const app = getApp();
     var bar_height = parseInt(app.globalData.get_system_info('statusBarHeight')) || 0;
     import componentCommon from '@/components/common/common';
+    import componentNoData from '@/components/no-data/no-data';
 
     export default {
         data() {
@@ -123,11 +127,13 @@
                 is_signed_up: false,
                 signup_status: 'ongoing',
                 activity: {},
+                data_loaded: false,
             };
         },
 
         components: {
             componentCommon,
+            componentNoData,
         },
 
         computed: {
@@ -167,6 +173,9 @@
             if ((this.$refs.common || null) != null) {
                 this.$refs.common.on_show();
             }
+            if (this.activity_id) {
+                this.get_activity_detail();
+            }
         },
 
         onPageScroll(e) {
@@ -182,7 +191,7 @@
                     method: 'POST',
                     data: { id: this.activity_id },
                     dataType: 'json',
-                    success: function(res) {
+                    success: function (res) {
                         if (res.data.code == 0) {
                             var data = res.data.data || {};
                             self.setData({
@@ -190,12 +199,15 @@
                                 is_favored: !!data.is_favored,
                                 is_signed_up: !!data.is_signed_up,
                                 signup_status: data.signup_status || 'ongoing',
+                                data_loaded: true,
                             });
                         } else {
+                            self.setData({ data_loaded: true });
                             app.globalData.showToast(res.data.msg || '活动不存在');
                         }
                     },
-                    fail: function() {
+                    fail: function () {
+                        self.setData({ data_loaded: true });
                         app.globalData.showToast('网络异常，请重试');
                     },
                 });
@@ -217,14 +229,14 @@
                     method: 'POST',
                     data: { id: this.activity_id },
                     dataType: 'json',
-                    success: function(res) {
+                    success: function (res) {
                         if (res.data.code == 0) {
                             self.setData({ is_favored: res.data.data.is_favored });
                         } else {
                             app.globalData.showToast(res.data.msg || '操作失败');
                         }
                     },
-                    fail: function() {
+                    fail: function () {
                         app.globalData.showToast('网络异常');
                     },
                 });
@@ -263,7 +275,7 @@
 <style lang="scss" scoped>
     .activity-detail-page {
         min-height: 100vh;
-        background-color: #FFF8F5;
+        background-color: #fff8f5;
         padding-bottom: 140rpx;
     }
 
@@ -367,11 +379,11 @@
     }
 
     .signup-btn-active {
-        background: linear-gradient(135deg, #F5A0B1 0%, #F5C6A0 100%);
+        background: linear-gradient(135deg, #f5a0b1 0%, #f5c6a0 100%);
     }
 
     .signup-btn-disabled {
-        background-color: #DDDDDD;
+        background-color: #dddddd;
         color: #999999;
     }
 </style>

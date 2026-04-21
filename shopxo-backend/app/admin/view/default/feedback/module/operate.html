@@ -1,0 +1,6 @@
+{{if AdminIsPower('feedback', 'detail')}}
+    <button type="button" class="am-btn am-btn-default am-btn-xs am-radius am-btn-block submit-popup" data-url="{{:MyUrl('admin/feedback/detail', ['id'=>$module_data['id']])}}" data-title="{{:MyLang('detail_title')}}" data-offcanvas="right">
+        <i class="am-icon-eye"></i>
+        <span>{{:MyLang('detail_title')}}</span>
+    </button>
+{{/if}}

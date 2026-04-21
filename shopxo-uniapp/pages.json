@@ -226,6 +226,18 @@
             ]
         },
         {
+            "root": "pages/agreement",
+            "pages": [
+                {
+                    "path": "agreement",
+                    "style": {
+                        "enablePullDownRefresh": false,
+                        "navigationBarTitleText": ""
+                    }
+                }
+            ]
+        },
+        {
             "root": "pages/cart-page",
             "pages": [
                 {
@@ -668,7 +680,7 @@
                     "path": "personal",
                     "style": {
                         "enablePullDownRefresh": false,
-                        "navigationBarTitleText": ""
+                        "navigationBarTitleText": "个人资料"
                     }
                 }
             ]
@@ -680,7 +692,7 @@
                     "path": "my-activity",
                     "style": {
                         "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
+                        "navigationBarTitleText": "我的活动"
                     }
                 }
             ]
@@ -716,7 +728,7 @@
                     "path": "my-invite",
                     "style": {
                         "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
+                        "navigationBarTitleText": "我的邀请"
                     }
                 }
             ]
@@ -765,6 +777,18 @@
                     "style": {
                         "enablePullDownRefresh": false,
                         "navigationBarTitleText": ""
+                    }
+                }
+            ]
+        },
+        {
+            "root": "pages/feedback-submit",
+            "pages": [
+                {
+                    "path": "feedback-submit",
+                    "style": {
+                        "enablePullDownRefresh": false,
+                        "navigationBarTitleText": "意见反馈"
                     }
                 }
             ]

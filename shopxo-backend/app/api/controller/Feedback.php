@@ -34,4 +34,12 @@ class Feedback extends Common
         ];
         return ApiService::ApiDataReturn(SystemBaseService::DataReturn($result));
     }
+
+    public function Create()
+    {
+        $this->IsLogin();
+        $params = $this->data_request;
+        $params['user'] = $this->user;
+        return ApiService::ApiDataReturn(FeedbackService::FeedbackCreate($params));
+    }
 }

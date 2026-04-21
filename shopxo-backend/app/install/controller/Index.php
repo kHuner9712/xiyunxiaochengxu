@@ -357,19 +357,19 @@ return [
             // 数据库类型
             'type'            => '{$params['DB_TYPE']}',
             // 服务器地址
-            'hostname'        => '{$params['DB_HOST']}',
+            'hostname'        => \\think\\facade\\Env::get('database.hostname', '{$params['DB_HOST']}'),
             // 数据库名
-            'database'        => '{$params['DB_NAME']}',
+            'database'        => \\think\\facade\\Env::get('database.database', '{$params['DB_NAME']}'),
             // 用户名
-            'username'        => '{$params['DB_USER']}',
+            'username'        => \\think\\facade\\Env::get('database.username', '{$params['DB_USER']}'),
             // 密码
-            'password'        => '{$params['DB_PWD']}',
+            'password'        => \\think\\facade\\Env::get('database.password', '{$params['DB_PWD']}'),
             // 端口
-            'hostport'        => '{$params['DB_PORT']}',
+            'hostport'        => \\think\\facade\\Env::get('database.hostport', '{$params['DB_PORT']}'),
             // 数据库连接参数
             'params'          => [
-                \PDO::ATTR_CASE => \PDO::CASE_LOWER,
-                \PDO::ATTR_EMULATE_PREPARES => true,
+                \\PDO::ATTR_CASE => \\PDO::CASE_LOWER,
+                \\PDO::ATTR_EMULATE_PREPARES => true,
             ],
             // 数据库编码默认采用utf8mb4
             'charset'         => '{$params['DB_CHARSET']}',

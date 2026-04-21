@@ -132,7 +132,7 @@
                                 <text class="cr-grey-9 text-size-xs margin-left-xs">(选填)</text>
                             </view>
                             <view class="form-input margin-top-xs">
-                                <textarea v-model="form.remark" placeholder="请输入备注信息" placeholder-class="cr-grey-9" class="text-size-sm" maxlength="200" :auto-height="false" style="height: 160rpx;" />
+                                <textarea v-model="form.remark" placeholder="请输入备注信息" placeholder-class="cr-grey-9" class="text-size-sm" maxlength="200" :auto-height="false" style="height: 160rpx" />
                             </view>
                         </view>
                     </view>
@@ -153,7 +153,7 @@
                         <text class="text-size-xs cr-grey block">4. 提交报名即表示您同意<text class="cr-main" @tap="open_privacy_url">《隐私政策》</text>，并确认所填信息真实有效。</text>
                     </view>
                     <view class="privacy-agree flex-row align-c margin-top-main" @tap="toggle_privacy_agree">
-                        <view class="privacy-checkbox" :class="{'privacy-checkbox-checked': privacy_agreed}">
+                        <view class="privacy-checkbox" :class="{ 'privacy-checkbox-checked': privacy_agreed }">
                             <uni-icons v-if="privacy_agreed" type="checkmarkempty" size="22rpx" color="#fff"></uni-icons>
                         </view>
                         <text class="text-size-xs cr-base margin-left-sm">我已阅读并同意以上隐私告知</text>
@@ -163,7 +163,7 @@
 
             <!-- 提交按钮 -->
             <view class="submit-container padding-horizontal-main margin-top-main margin-bottom-xxxl">
-                <button class="submit-btn cr-white fw-b text-size-md round" :class="{'submit-btn-disabled': !privacy_agreed}" @tap="submit_event">提交报名</button>
+                <button class="submit-btn cr-white fw-b text-size-md round" :class="{ 'submit-btn-disabled': !privacy_agreed }" @tap="submit_event">提交报名</button>
             </view>
 
             <!-- 公共 -->
@@ -190,8 +190,20 @@
                     time: '',
                     price: 0,
                 },
-                stage_options: MuyingStage.getList().filter(function(v) { return v.value !== 'all'; }).map(function(v) { return v.name; }),
-                stage_values: MuyingStage.getList().filter(function(v) { return v.value !== 'all'; }).map(function(v) { return v.value; }),
+                stage_options: MuyingStage.getList()
+                    .filter(function (v) {
+                        return v.value !== 'all';
+                    })
+                    .map(function (v) {
+                        return v.name;
+                    }),
+                stage_values: MuyingStage.getList()
+                    .filter(function (v) {
+                        return v.value !== 'all';
+                    })
+                    .map(function (v) {
+                        return v.value;
+                    }),
                 stage_index: -1,
                 selected_stage: '',
                 due_date_start: '',
@@ -251,7 +263,7 @@
                     method: 'POST',
                     data: {},
                     dataType: 'json',
-                    success: function(res) {
+                    success: function (res) {
                         if (res.data.code == 0) {
                             var profile = res.data.data.data || {};
                             var form = self.form;
@@ -276,8 +288,8 @@
                                 var now = new Date();
                                 if (!isNaN(b.getTime())) {
                                     var months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
-                                    if (months >= 0 && months <= 36) {
-                                        var baby_idx = months;
+                                    if (months >= 1 && months <= 36) {
+                                        var baby_idx = months - 1;
                                         self.setData({ baby_month_age_index: baby_idx });
                                         form.baby_month_age = months;
                                     }
@@ -297,7 +309,7 @@
                     method: 'POST',
                     data: { id: this.activity_id },
                     dataType: 'json',
-                    success: function(res) {
+                    success: function (res) {
                         if (res.data.code == 0) {
                             var activity = (res.data.data || {}).activity || {};
                             self.setData({
@@ -310,7 +322,7 @@
                             });
                         }
                     },
-                    fail: function() {},
+                    fail: function () {},
                 });
             },
 
@@ -416,7 +428,7 @@
                 if (url) {
                     uni.navigateTo({ url: '/pages/web-view/web-view?url=' + encodeURIComponent(url) });
                 } else {
-                    app.globalData.showToast('隐私政策页面暂未配置');
+                    uni.navigateTo({ url: '/pages/agreement/agreement?type=privacy' });
                 }
             },
 
@@ -442,7 +454,7 @@
                     method: 'POST',
                     data: post_data,
                     dataType: 'json',
-                    success: function(res) {
+                    success: function (res) {
                         uni.hideLoading();
                         if (res.data.code == 0) {
                             uni.showToast({
@@ -450,7 +462,7 @@
                                 icon: 'success',
                                 duration: 1500,
                             });
-                            setTimeout(function() {
+                            setTimeout(function () {
                                 var pages = getCurrentPages();
                                 var prevPage = pages.length > 1 ? pages[pages.length - 2] : null;
                                 if (prevPage && prevPage.get_activity_detail) {
@@ -462,7 +474,7 @@
                             app.globalData.showToast(res.data.msg || '报名失败，请重试');
                         }
                     },
-                    fail: function() {
+                    fail: function () {
                         uni.hideLoading();
                         app.globalData.showToast('网络异常，报名信息未提交，请检查网络后重试');
                     },
@@ -475,7 +487,7 @@
 <style lang="scss" scoped>
     .activity-signup-page {
         min-height: 100vh;
-        background-color: #FFF8F5;
+        background-color: #fff8f5;
     }
 
     .nav-top-content {
@@ -490,7 +502,7 @@
 
     .form-input input,
     .form-input textarea {
-        background-color: #F8F8F8;
+        background-color: #f8f8f8;
         border-radius: 12rpx;
         padding: 16rpx 20rpx;
         width: 100%;
@@ -505,7 +517,7 @@
     .submit-btn {
         height: 96rpx;
         line-height: 96rpx;
-        background: linear-gradient(135deg, #F5A0B1 0%, #F5C6A0 100%);
+        background: linear-gradient(135deg, #f5a0b1 0%, #f5c6a0 100%);
         border: none;
     }
 
@@ -525,13 +537,13 @@
     }
 
     .privacy-checkbox-checked {
-        background-color: #F5A0B1;
-        border-color: #F5A0B1;
+        background-color: #f5a0b1;
+        border-color: #f5a0b1;
     }
 
     .privacy-content {
         padding: 16rpx;
-        background-color: #FFF8F5;
+        background-color: #fff8f5;
         border-radius: 12rpx;
     }
 </style>

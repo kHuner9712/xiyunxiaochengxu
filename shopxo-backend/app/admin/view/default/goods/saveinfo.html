@@ -234,6 +234,22 @@
                                 {{/if}}
                             </select>
                         </div>
+                        <!-- 母婴扩展：阶段标签 -->
+                        <div class="am-form-group">
+                            <label>
+                                母婴阶段标签
+                                <a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: '多个阶段用逗号分隔，如：pregnancy,postpartum。留空表示无。可选值：prepare(备孕),pregnancy(孕期),postpartum(产后),all(全部)', trigger: 'hover focus', theme: 'sm'}"></a>
+                            </label>
+                            <input type="text" name="stage" placeholder="如：pregnancy,postpartum" maxlength="120" class="am-radius" {{if !empty($data['stage'])}} value="{{$data.stage}}"{{/if}} />
+                        </div>
+                        <!-- 母婴扩展：卖点标签 -->
+                        <div class="am-form-group">
+                            <label>
+                                卖点标签
+                                <a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: '多个卖点用逗号分隔，如：安全认证,进口品质。留空表示无。', trigger: 'hover focus', theme: 'sm'}"></a>
+                            </label>
+                            <input type="text" name="selling_point" placeholder="如：安全认证,进口品质" maxlength="500" class="am-radius" {{if !empty($data['selling_point'])}} value="{{$data.selling_point}}"{{/if}} />
+                        </div>
                         <div class="am-form-group am-form-file">
                             <label class="am-block">{{:MyLang('common_service.goods.form_item_images')}}<a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: '{{:MyLang('common_service.goods.form_item_images_tips')}}', trigger: 'hover focus', theme: 'sm'}"></a></label>
                             <div class="am-form-file-upload-container">

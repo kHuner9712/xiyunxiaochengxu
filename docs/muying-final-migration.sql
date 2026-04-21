@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS `sxo_muying_feedback` (
   `avatar` varchar(255) NOT NULL DEFAULT '' COMMENT '头像',
   `content` text NOT NULL COMMENT '反馈内容',
   `stage` varchar(30) NOT NULL DEFAULT '' COMMENT '当前阶段',
+  `contact` varchar(60) NOT NULL DEFAULT '' COMMENT '联系方式',
   `sort_level` int NOT NULL DEFAULT 0 COMMENT '排序',
   `is_enable` tinyint NOT NULL DEFAULT 1 COMMENT '是否启用',
   `is_delete_time` int unsigned NOT NULL DEFAULT 0 COMMENT '是否删除',
@@ -211,11 +212,33 @@ SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCH
 SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_activity_signup` ADD COLUMN `baby_birthday` int unsigned NOT NULL DEFAULT 0 COMMENT ''宝宝生日(时间戳)'' AFTER `baby_month_age`', 'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- B6. sxo_goods 补 stage / selling_point 字段（母婴阶段标签与卖点标签数据来源）
+SET @tablename = 'sxo_goods';
+
+SET @colname = 'stage';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `stage` char(120) NOT NULL DEFAULT '''' COMMENT ''适用阶段(逗号分隔:pregnancy,postpartum等)'' AFTER `title`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @colname = 'selling_point';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `selling_point` varchar(500) NOT NULL DEFAULT '''' COMMENT ''卖点标签(逗号分隔)'' AFTER `stage`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- B段回滚：
 -- ALTER TABLE sxo_user DROP COLUMN invite_code, DROP COLUMN baby_birthday, DROP COLUMN due_date, DROP COLUMN current_stage;
 -- ALTER TABLE sxo_activity_signup DROP COLUMN privacy_agreed_time, DROP COLUMN baby_birthday;
 -- ALTER TABLE sxo_goods_favor DROP COLUMN type;
 -- ALTER TABLE sxo_activity DROP COLUMN suitable_crowd;
+-- ALTER TABLE sxo_goods DROP COLUMN stage, DROP COLUMN selling_point;
+-- ALTER TABLE sxo_muying_feedback DROP COLUMN contact;
+
+-- B7. sxo_muying_feedback 补 contact 字段
+SET @tablename = 'sxo_muying_feedback';
+SET @colname = 'contact';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_muying_feedback` ADD COLUMN `contact` varchar(60) NOT NULL DEFAULT \'\' COMMENT \'联系方式\' AFTER `stage`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
 -- ============================================================
@@ -333,6 +356,15 @@ INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_
 
 INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
 (@op_id, '数据报表', 'muyingstat', 'index', '', 4, 1, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
+
+INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
+(@op_id, '反馈管理', 'feedback', 'index', '', 5, 1, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
+SET @feedback_id = LAST_INSERT_ID();
+
+INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
+(@feedback_id, '反馈详情', 'feedback', 'detail', '', 1, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
+(@feedback_id, '启用/禁用', 'feedback', 'statusupdate', '', 2, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
+(@feedback_id, '删除反馈', 'feedback', 'delete', '', 3, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
 -- C7. 隐藏一期不需要的功能菜单
 UPDATE `sxo_power` SET `is_show`=0 WHERE `name` IN ('多商户', '商家入驻', '分销管理', '直播管理', '积分商城') OR `control` IN ('shop', 'distribution', 'weixinliveplayer', 'coin');

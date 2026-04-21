@@ -144,6 +144,20 @@
                                     </view>
                                 </view>
                             </block>
+                            <!-- 协议与说明 -->
+                            <view class="nav-item br-t cp padding-main" @tap="open_agreement_list">
+                                <view class="arrow-right">
+                                    <iconfont name="icon-file" size="40rpx" propClass="item-icon va-m"></iconfont>
+                                    <text class="item-name va-m cr-base margin-left-sm text-size-sm">协议与说明</text>
+                                </view>
+                            </view>
+                            <!-- 意见反馈 -->
+                            <view class="nav-item br-t cp padding-main" data-value="/pages/feedback-submit/feedback-submit" data-login="1" @tap="url_event">
+                                <view class="arrow-right">
+                                    <iconfont name="icon-message" size="40rpx" propClass="item-icon va-m"></iconfont>
+                                    <text class="item-name va-m cr-base margin-left-sm text-size-sm">意见反馈</text>
+                                </view>
+                            </view>
                             <!-- 清除缓存 -->
                             <view v-if="(nav_logout_data || null) != null" class="nav-item br-t cp padding-main" @tap="remove_user_cache_event">
                                 <view class="arrow-right">
@@ -546,6 +560,18 @@
 
                 // 初始数据
                 this.get_data();
+            },
+
+            // 打开协议列表
+            open_agreement_list() {
+                var self = this;
+                uni.showActionSheet({
+                    itemList: ['用户协议', '隐私政策'],
+                    success: function(res) {
+                        var type = res.tapIndex === 0 ? 'userregister' : 'privacy';
+                        uni.navigateTo({ url: '/pages/agreement/agreement?type=' + type });
+                    },
+                });
             },
 
             // 客服电话

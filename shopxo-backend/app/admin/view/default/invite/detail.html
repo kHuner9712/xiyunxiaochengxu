@@ -1,1 +1,45 @@
 {{extend name="../../../module/view/form_table/detail" /}}
+
+{{block name="detail_data"}}
+    {{if !empty($data)}}
+        <dl class="dl-content am-padding-sm">
+            <dt><strong>记录ID</strong></dt>
+            <dd>{{$data.id}}</dd>
+
+            <dt><strong>邀请人</strong></dt>
+            <dd>
+                {{if !empty($data['inviter_info'])}}
+                    ID: {{$data.inviter_info.id}} | 昵称: {{$data.inviter_info.nickname}}
+                {{else /}}
+                    ID: {{$data.inviter_id}}
+                {{/if}}
+            </dd>
+
+            <dt><strong>被邀请人</strong></dt>
+            <dd>
+                {{if !empty($data['invitee_info'])}}
+                    ID: {{$data.invitee_info.id}} | 昵称: {{$data.invitee_info.nickname}}
+                {{else /}}
+                    ID: {{$data.invitee_id}}
+                {{/if}}
+            </dd>
+
+            <dt><strong>触发事件</strong></dt>
+            <dd>{{$data.trigger_event_text}}</dd>
+
+            <dt><strong>奖励类型</strong></dt>
+            <dd>{{$data.reward_type_text}}</dd>
+
+            <dt><strong>奖励值</strong></dt>
+            <dd>{{$data.reward_value}}</dd>
+
+            <dt><strong>状态</strong></dt>
+            <dd>{{$data.status_text}}</dd>
+
+            <dt><strong>创建时间</strong></dt>
+            <dd>{{$data.add_time_text}}</dd>
+        </dl>
+    {{else /}}
+        {{:ModuleInclude('public/not_data')}}
+    {{/if}}
+{{/block}}
