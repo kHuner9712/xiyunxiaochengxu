@@ -7,9 +7,12 @@ use app\service\InviteService;
 
 class Invite extends Common
 {
+    private static $FEATURE_FLAG_KEY = 'feature_invite_enabled';
+
     public function __construct()
     {
         parent::__construct();
+        self::CheckFeatureEnabled(self::$FEATURE_FLAG_KEY);
         $action = strtolower(request_action());
         $public_actions = ['rewardconfigpublic'];
         if (!in_array($action, $public_actions)) {
@@ -21,8 +24,7 @@ class Invite extends Common
     {
         $params = $this->data_request;
         $params['user'] = $this->user;
-        $data = InviteService::InviteInfo($params);
-        return ApiService::ApiDataReturn(SystemBaseService::DataReturn($data));
+        return ApiService::ApiDataReturn(InviteService::InviteInfo($params));
     }
 
     public function RewardList()
@@ -44,7 +46,7 @@ class Invite extends Common
         $result = [
             'total'      => $total,
             'page_total' => $page_total,
-            'data'       => $data['data'],
+            'items'      => $data['data'],
         ];
         return ApiService::ApiDataReturn(SystemBaseService::DataReturn($result));
     }

@@ -135,7 +135,7 @@ class Article extends Common
 
                 // 返回数据
                 $result = [
-                    'data'      => $data['data'][0],
+                    'article'   => $data['data'][0],
                     'last_next' => $last_next_data,
                 ];
                 $ret = SystemBaseService::DataReturn($result);

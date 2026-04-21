@@ -98,6 +98,7 @@
     import componentNoData from '@/components/no-data/no-data';
     import componentBottomLine from '@/components/bottom-line/bottom-line';
     import { MuyingStage, MuyingActivityCategory } from '@/common/js/config/muying-enum';
+    import { request as http_request } from '@/common/js/http.js';
 
     export default {
         data() {
@@ -175,41 +176,34 @@
                 var self = this;
                 var selected_stage = this.stage_tabs[this.stage_active_index].value;
                 var selected_category = this.category_tabs[this.category_active_index].value;
-                var params = 'page=' + this.data_page;
+
+                var request_data = { page: this.data_page };
                 if (selected_stage) {
-                    params += '&stage=' + selected_stage;
+                    request_data.stage = selected_stage;
                 }
                 if (selected_category) {
-                    params += '&category=' + selected_category;
+                    request_data.category = selected_category;
                 }
 
-                uni.request({
-                    url: app.globalData.get_request_url('index', 'activity') + '&' + params,
-                    method: 'POST',
-                    dataType: 'json',
-                    success: function(res) {
+                http_request({
+                    controller: 'activity',
+                    action: 'index',
+                    data: request_data,
+                    success: function(data) {
                         uni.stopPullDownRefresh();
-                        if (res.data.code == 0) {
-                            var data = res.data.data || {};
-                            var list = data.data || [];
-                            self.setData({
-                                data_list: self.data_page > 1 ? self.data_list.concat(list) : list,
-                                data_list_loding_status: list.length > 0 ? 3 : 0,
-                                data_bottom_line_status: (data.page_total || 0) <= self.data_page,
-                                data_page_total: data.page_total || 0,
-                                data_is_loading: 0,
-                            });
-                        } else {
-                            self.setData({
-                                data_list_loding_status: 0,
-                                data_is_loading: 0,
-                            });
-                        }
+                        var list = data.items || [];
+                        self.setData({
+                            data_list: self.data_page > 1 ? self.data_list.concat(list) : list,
+                            data_list_loding_status: list.length > 0 ? 3 : 0,
+                            data_bottom_line_status: (data.page_total || 0) <= self.data_page,
+                            data_page_total: data.page_total || 0,
+                            data_is_loading: 0,
+                        });
                     },
                     fail: function() {
                         uni.stopPullDownRefresh();
                         self.setData({
-                            data_list_loding_status: 2,
+                            data_list_loding_status: 0,
                             data_is_loading: 0,
                         });
                     },

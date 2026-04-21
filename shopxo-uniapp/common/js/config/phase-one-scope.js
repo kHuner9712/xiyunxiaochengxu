@@ -1,4 +1,17 @@
-var PHASE_ONE_DISABLED_PLUGIN_NAMES = [
+var BASE_DISABLED_PLUGIN_NAMES = [
+    'excellentbuyreturntocash',
+    'exchangerate',
+    'goodscompare',
+    'orderfeed',
+    'ordergoodsform',
+    'orderresources',
+    'antifakecode',
+    'form',
+    'binding',
+    'label',
+];
+
+var DYNAMIC_DISABLED_PLUGIN_NAMES = [
     'distribution',
     'wallet',
     'coin',
@@ -21,41 +34,11 @@ var PHASE_ONE_DISABLED_PLUGIN_NAMES = [
     'scanpay',
     'weixinliveplayer',
     'intellectstools',
-    'excellentbuyreturntocash',
-    'exchangerate',
-    'goodscompare',
-    'orderfeed',
-    'ordergoodsform',
-    'orderresources',
-    'antifakecode',
-    'form',
-    'binding',
-    'label',
 ];
 
-var FeatureFlagKey = {
-    SHOP: 'feature_shop_enabled',
-    REALSTORE: 'feature_realstore_enabled',
-    DISTRIBUTION: 'feature_distribution_enabled',
-    WALLET: 'feature_wallet_enabled',
-    COIN: 'feature_coin_enabled',
-    UGC: 'feature_ugc_enabled',
-    MEMBERSHIP: 'feature_membership_enabled',
-    SECKILL: 'feature_seckill_enabled',
-    COUPON: 'feature_coupon_enabled',
-    SIGNIN: 'feature_signin_enabled',
-    POINTS: 'feature_points_enabled',
-    VIDEO: 'feature_video_enabled',
-    HOSPITAL: 'feature_hospital_enabled',
-    GIFTCARD: 'feature_giftcard_enabled',
-    GIVEGIFT: 'feature_givegift_enabled',
-    COMPLAINT: 'feature_complaint_enabled',
-    INVOICE: 'feature_invoice_enabled',
-    CERTIFICATE: 'feature_certificate_enabled',
-    SCANPAY: 'feature_scanpay_enabled',
-    LIVE: 'feature_live_enabled',
-    INTELLECTSTOOLS: 'feature_intellectstools_enabled',
-};
+var PHASE_ONE_DISABLED_PLUGIN_NAMES = BASE_DISABLED_PLUGIN_NAMES.concat(DYNAMIC_DISABLED_PLUGIN_NAMES);
+
+import { FeatureFlagKey } from './muying-constants.js';
 
 var FEATURE_FLAG_PLUGIN_MAP = {};
 FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.SHOP] = 'shop';
@@ -82,26 +65,44 @@ FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.INTELLECTSTOOLS] = 'intellectstools';
 
 var _feature_flags = null;
 
-function init_feature_flags(flags) {
-    _feature_flags = flags || {};
-    var dynamic_disabled = [];
+function _merge_disabled_list() {
+    var dynamic = DYNAMIC_DISABLED_PLUGIN_NAMES.slice();
     for (var flag_key in FEATURE_FLAG_PLUGIN_MAP) {
-        if (!_feature_flags[flag_key]) {
-            var plugin_names = FEATURE_FLAG_PLUGIN_MAP[flag_key];
+        var plugin_names = FEATURE_FLAG_PLUGIN_MAP[flag_key];
+        var is_enabled = _feature_flags && !!_feature_flags[flag_key];
+        if (is_enabled) {
             if (Array.isArray(plugin_names)) {
-                for (var i = 0; i < plugin_names.length; i++) {
-                    if (dynamic_disabled.indexOf(plugin_names[i]) === -1) {
-                        dynamic_disabled.push(plugin_names[i]);
+                for (var i = dynamic.length - 1; i >= 0; i--) {
+                    if (plugin_names.indexOf(dynamic[i]) !== -1) {
+                        dynamic.splice(i, 1);
                     }
                 }
             } else {
-                if (dynamic_disabled.indexOf(plugin_names) === -1) {
-                    dynamic_disabled.push(plugin_names);
+                var idx = dynamic.indexOf(plugin_names);
+                if (idx !== -1) {
+                    dynamic.splice(idx, 1);
+                }
+            }
+        } else {
+            if (Array.isArray(plugin_names)) {
+                for (var i = 0; i < plugin_names.length; i++) {
+                    if (dynamic.indexOf(plugin_names[i]) === -1) {
+                        dynamic.push(plugin_names[i]);
+                    }
+                }
+            } else {
+                if (dynamic.indexOf(plugin_names) === -1) {
+                    dynamic.push(plugin_names);
                 }
             }
         }
     }
-    PHASE_ONE_DISABLED_PLUGIN_NAMES = dynamic_disabled;
+    return BASE_DISABLED_PLUGIN_NAMES.concat(dynamic);
+}
+
+function init_feature_flags(flags) {
+    _feature_flags = flags || {};
+    PHASE_ONE_DISABLED_PLUGIN_NAMES = _merge_disabled_list();
     _rebuild_route_prefixes();
 }
 
@@ -215,6 +216,8 @@ function filter_phase_one_plugin_sort_list(list) {
 }
 
 export {
+    BASE_DISABLED_PLUGIN_NAMES,
+    DYNAMIC_DISABLED_PLUGIN_NAMES,
     PHASE_ONE_DISABLED_PLUGIN_NAMES,
     PHASE_ONE_DISABLED_ROUTE_PREFIXES,
     FEATURE_FLAG_PLUGIN_MAP,

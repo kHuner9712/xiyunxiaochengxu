@@ -8,9 +8,12 @@ use app\service\ResourcesService;
 
 class Activity extends Common
 {
+    private static $FEATURE_FLAG_KEY = 'feature_activity_enabled';
+
     public function __construct()
     {
         parent::__construct();
+        self::CheckFeatureEnabled(self::$FEATURE_FLAG_KEY);
     }
 
     public function Index()
@@ -31,7 +34,7 @@ class Activity extends Common
         $result = [
             'total'      => $total,
             'page_total' => $page_total,
-            'data'       => $data['data'],
+            'items'      => $data['data'],
         ];
         return ApiService::ApiDataReturn(SystemBaseService::DataReturn($result));
     }
@@ -114,7 +117,7 @@ class Activity extends Common
         $result = [
             'total'      => $total,
             'page_total' => $page_total,
-            'data'       => $data['data'],
+            'items'      => $data['data'],
         ];
         return ApiService::ApiDataReturn(SystemBaseService::DataReturn($result));
     }

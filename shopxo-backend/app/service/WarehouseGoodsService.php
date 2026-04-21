@@ -189,7 +189,8 @@ class WarehouseGoodsService
             return DataReturn(MyLang('delete_success'), 0);
         } catch(\Exception $e) {
             Db::rollback();
-            return DataReturn($e->getMessage(), -1);
+            Log::error("仓库商品操作异常 error=" . $e->getMessage());
+            return DataReturn("操作失败，请稍后重试", -1);
         }
     }
 
@@ -262,7 +263,8 @@ class WarehouseGoodsService
             return DataReturn(MyLang('edit_success'), 0);
         } catch(\Exception $e) {
             Db::rollback();
-            return DataReturn($e->getMessage(), -1);
+            Log::error("仓库商品操作异常 error=" . $e->getMessage());
+            return DataReturn("操作失败，请稍后重试", -1);
         }
     }
 
@@ -480,7 +482,8 @@ class WarehouseGoodsService
             return DataReturn(MyLang('delete_success'), 0);
         } catch(\Exception $e) {
             Db::rollback();
-            return DataReturn($e->getMessage(), -1);
+            Log::error("仓库商品操作异常 error=" . $e->getMessage());
+            return DataReturn("操作失败，请稍后重试", -1);
         }
     }
 
@@ -715,7 +718,8 @@ class WarehouseGoodsService
             return DataReturn(MyLang('operate_success'), 0);
         } catch(\Exception $e) {
             Db::rollback();
-            return DataReturn($e->getMessage(), -1);
+            Log::error("仓库商品操作异常 error=" . $e->getMessage());
+            return DataReturn("操作失败，请稍后重试", -1);
         }
     }
 

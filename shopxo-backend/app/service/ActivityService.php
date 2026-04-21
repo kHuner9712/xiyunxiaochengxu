@@ -484,8 +484,8 @@ class ActivityService
                 }
             }
 
-            Db::commit();
             MuyingLogService::LogSuccess(MuyingLogService::TYPE_ACTIVITY_SIGNUP, 'create', $user_id, $activity_id, '活动报名成功');
+            Db::commit();
             return DataReturn('报名成功', 0);
         } catch (\Exception $e) {
             Db::rollback();
@@ -545,7 +545,7 @@ class ActivityService
         } catch (\Exception $e) {
             Db::rollback();
             Log::error('取消报名异常 id=' . $id . ' user_id=' . $user_id . ' error=' . $e->getMessage());
-            return DataReturn('取消报名失败：' . $e->getMessage(), -100);
+            return DataReturn('取消报名失败，请稍后重试', -100);
         }
     }
 
@@ -885,8 +885,8 @@ class ActivityService
                 'upd_time'       => time(),
             ]);
             if ($checkin_result !== false) {
-                Db::commit();
                 MuyingLogService::LogSuccess(MuyingLogService::TYPE_ACTIVITY_CHECKIN, 'update', $signup['user_id'], $id, '签到成功');
+                Db::commit();
                 return DataReturn('签到成功', 0);
             }
             Db::rollback();
@@ -940,8 +940,8 @@ class ActivityService
                 'upd_time' => time(),
             ]);
             if ($upd_result !== false) {
-                Db::commit();
                 MuyingLogService::LogSuccess(MuyingLogService::TYPE_ACTIVITY_CONFIRM, 'update', $signup['user_id'], $id, '确认报名成功');
+                Db::commit();
                 return DataReturn('确认成功', 0);
             }
             Db::rollback();

@@ -5,6 +5,7 @@
     import devConfig from './common/js/config/dev.js';
     import prodConfig from './common/js/config/prod.js';
     import { PHASE_ONE_DISABLED_PLUGIN_NAMES, PHASE_ONE_DISABLED_ROUTE_PREFIXES, is_phase_one_disabled_route as is_phase_one_disabled_route_match, init_feature_flags, is_feature_enabled } from './common/js/config/phase-one-scope.js';
+    import { FeatureFlagKey } from './common/js/config/muying-constants.js';
     import { logger } from './common/js/logger.js';
     var isProd = process.env.NODE_ENV === 'production';
     var appConfig = isProd ? prodConfig : devConfig;
@@ -1629,7 +1630,7 @@
 
                 if (data) {
                     var feature_flags = {};
-                    var feature_keys = ['feature_shop_enabled', 'feature_realstore_enabled', 'feature_distribution_enabled', 'feature_wallet_enabled', 'feature_coin_enabled', 'feature_ugc_enabled', 'feature_membership_enabled', 'feature_seckill_enabled', 'feature_coupon_enabled', 'feature_signin_enabled', 'feature_points_enabled', 'feature_video_enabled', 'feature_hospital_enabled', 'feature_giftcard_enabled', 'feature_givegift_enabled', 'feature_complaint_enabled', 'feature_invoice_enabled', 'feature_certificate_enabled', 'feature_scanpay_enabled', 'feature_live_enabled', 'feature_intellectstools_enabled', 'feature_activity_enabled', 'feature_invite_enabled', 'feature_content_enabled'];
+                    var feature_keys = [FeatureFlagKey.SHOP, FeatureFlagKey.REALSTORE, FeatureFlagKey.DISTRIBUTION, FeatureFlagKey.WALLET, FeatureFlagKey.COIN, FeatureFlagKey.UGC, FeatureFlagKey.MEMBERSHIP, FeatureFlagKey.SECKILL, FeatureFlagKey.COUPON, FeatureFlagKey.SIGNIN, FeatureFlagKey.POINTS, FeatureFlagKey.VIDEO, FeatureFlagKey.HOSPITAL, FeatureFlagKey.GIFTCARD, FeatureFlagKey.GIVEGIFT, FeatureFlagKey.COMPLAINT, FeatureFlagKey.INVOICE, FeatureFlagKey.CERTIFICATE, FeatureFlagKey.SCANPAY, FeatureFlagKey.LIVE, FeatureFlagKey.INTELLECTSTOOLS, FeatureFlagKey.ACTIVITY, FeatureFlagKey.INVITE, FeatureFlagKey.CONTENT];
                     for (var i = 0; i < feature_keys.length; i++) {
                         var key = feature_keys[i];
                         if (typeof data[key] !== 'undefined') {

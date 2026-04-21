@@ -371,7 +371,8 @@ class PayEase
                 $aa=$data["scanCode"];
                 $img = base64_decode($aa);
                 header('Content-type: image/jpg');
-                print_r($img);
+                echo $img;
+                exit;
             }
             return DataReturn('处理成功', 0, $data);
         } else if(isset($data['status']) && $data['status'] == 'CANCEL'){

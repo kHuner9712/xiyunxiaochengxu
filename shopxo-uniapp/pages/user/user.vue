@@ -71,25 +71,25 @@
                     <!-- 母婴专属导航 -->
                     <view class="muying-nav-section padding-main border-radius-main bg-white spacing-mb">
                         <view class="muying-nav-row flex-row jc-sa">
-                            <view v-if="is_feature_enabled('feature_activity_enabled')" class="muying-nav-item tc cp" data-value="/pages/my-activity/my-activity?tab=activity" @tap="url_event">
+                            <view v-if="is_feature_enabled(FeatureFlagKey.ACTIVITY)" class="muying-nav-item tc cp" data-value="/pages/my-activity/my-activity?tab=activity" @tap="url_event">
                                 <view class="muying-nav-icon-wrap">
                                     <text class="muying-nav-icon-text">🎉</text>
                                 </view>
                                 <view class="item-name cr-base text-size-sm">我的活动</view>
                             </view>
-                            <view v-if="is_feature_enabled('feature_activity_enabled')" class="muying-nav-item tc cp" data-value="/pages/my-activity/my-activity?tab=signup" @tap="url_event">
+                            <view v-if="is_feature_enabled(FeatureFlagKey.ACTIVITY)" class="muying-nav-item tc cp" data-value="/pages/my-activity/my-activity?tab=signup" @tap="url_event">
                                 <view class="muying-nav-icon-wrap">
                                     <text class="muying-nav-icon-text">📋</text>
                                 </view>
                                 <view class="item-name cr-base text-size-sm">我的报名</view>
                             </view>
-                            <view v-if="is_feature_enabled('feature_invite_enabled')" class="muying-nav-item tc cp" data-value="/pages/my-invite/my-invite" @tap="url_event">
+                            <view v-if="is_feature_enabled(FeatureFlagKey.INVITE)" class="muying-nav-item tc cp" data-value="/pages/my-invite/my-invite" @tap="url_event">
                                 <view class="muying-nav-icon-wrap">
                                     <text class="muying-nav-icon-text">🎁</text>
                                 </view>
                                 <view class="item-name cr-base text-size-sm">我的邀请</view>
                             </view>
-                            <view v-if="is_feature_enabled('feature_activity_enabled')" class="muying-nav-item tc cp" @tap="stage_nav_event">
+                            <view v-if="is_feature_enabled(FeatureFlagKey.ACTIVITY)" class="muying-nav-item tc cp" @tap="stage_nav_event">
                                 <view class="muying-nav-icon-wrap">
                                     <text class="muying-nav-icon-text">{{ current_stage_text ? '🏷️' : '➕' }}</text>
                                 </view>
@@ -227,6 +227,7 @@
     import componentOnlineService from '@/components/online-service/online-service';
     import componentStageGuide from '@/components/stage-guide/stage-guide';
     import { filter_phase_one_navigation, is_feature_enabled } from '@/common/js/config/phase-one-scope.js';
+    import { FeatureFlagKey } from '@/common/js/config/muying-constants.js';
     import { MuyingStage } from '@/common/js/config/muying-enum';
     import { request as http_request } from '@/common/js/http.js';
     import { userStore } from '@/common/js/user-store.js';
@@ -237,6 +238,7 @@
     export default {
         data() {
             return {
+                FeatureFlagKey: FeatureFlagKey,
                 theme_view: app.globalData.get_theme_value_view(),
                 common_static_url: common_static_url,
                 load_status: 0,

@@ -74,6 +74,7 @@
     const app = getApp();
     import componentCommon from '@/components/common/common';
     import componentNoData from '@/components/no-data/no-data';
+    import { request as http_request } from '@/common/js/http.js';
 
     export default {
         data() {
@@ -128,15 +129,11 @@
 
             get_my_signup_list() {
                 var self = this;
-                uni.request({
-                    url: app.globalData.get_request_url('mysignup', 'activity'),
-                    method: 'POST',
-                    dataType: 'json',
-                    success: function(res) {
-                        if (res.data.code == 0) {
-                            var data = res.data.data || {};
-                            self.setData({ signup_list: data.data || [] });
-                        }
+                http_request({
+                    controller: 'activity',
+                    action: 'mysignup',
+                    success: function(data) {
+                        self.setData({ signup_list: data.items || [] });
                     },
                     fail: function() {
                         app.globalData.showToast('网络异常，请重试');
@@ -146,44 +143,40 @@
 
             get_my_activity_list() {
                 var self = this;
-                uni.request({
-                    url: app.globalData.get_request_url('mysignup', 'activity'),
-                    method: 'POST',
-                    dataType: 'json',
-                    success: function(res) {
-                        if (res.data.code == 0) {
-                            var data = res.data.data || {};
-                            var raw_list = data.data || [];
-                            var activity_map = {};
-                            var activity_list = [];
-                            raw_list.forEach(function(item) {
-                                if (item.activity_info && !activity_map[item.activity_id]) {
-                                    activity_map[item.activity_id] = true;
-                                    var info = item.activity_info;
-                                    var now = Math.floor(Date.now() / 1000);
-                                    var signup_status = 'ongoing';
-                                    var signup_status_text = '进行中';
-                                    if (info.signup_end_time > 0 && now > info.signup_end_time) {
-                                        signup_status = 'ended';
-                                        signup_status_text = '已结束';
-                                    }
-                                    if (info.end_time > 0 && now > info.end_time) {
-                                        signup_status = 'ended';
-                                        signup_status_text = '已结束';
-                                    }
-                                    activity_list.push({
-                                        id: info.id || item.activity_id,
-                                        activity_id: item.activity_id,
-                                        title: info.title || '',
-                                        time_text: info.time_text || '',
-                                        address: info.address || '',
-                                        signup_status: signup_status,
-                                        signup_status_text: signup_status_text,
-                                    });
+                http_request({
+                    controller: 'activity',
+                    action: 'mysignup',
+                    success: function(data) {
+                        var raw_list = data.items || [];
+                        var activity_map = {};
+                        var activity_list = [];
+                        raw_list.forEach(function(item) {
+                            if (item.activity_info && !activity_map[item.activity_id]) {
+                                activity_map[item.activity_id] = true;
+                                var info = item.activity_info;
+                                var now = Math.floor(Date.now() / 1000);
+                                var signup_status = 'ongoing';
+                                var signup_status_text = '进行中';
+                                if (info.signup_end_time > 0 && now > info.signup_end_time) {
+                                    signup_status = 'ended';
+                                    signup_status_text = '已结束';
                                 }
-                            });
-                            self.setData({ activity_list: activity_list });
-                        }
+                                if (info.end_time > 0 && now > info.end_time) {
+                                    signup_status = 'ended';
+                                    signup_status_text = '已结束';
+                                }
+                                activity_list.push({
+                                    id: info.id || item.activity_id,
+                                    activity_id: item.activity_id,
+                                    title: info.title || '',
+                                    time_text: info.time_text || '',
+                                    address: info.address || '',
+                                    signup_status: signup_status,
+                                    signup_status_text: signup_status_text,
+                                });
+                            }
+                        });
+                        self.setData({ activity_list: activity_list });
                     },
                     fail: function() {
                         app.globalData.showToast('网络异常，请重试');
@@ -211,24 +204,18 @@
                     content: '确定要取消报名「' + ((item.activity_info && item.activity_info.title) || '该活动') + '」吗？',
                     success: function(res) {
                         if (!res.confirm) return;
-                        uni.showLoading({ title: '处理中...' });
-                        uni.request({
-                            url: app.globalData.get_request_url('signupcancel', 'activity'),
-                            method: 'POST',
+                        http_request({
+                            controller: 'activity',
+                            action: 'signupcancel',
                             data: { id: item.id },
-                            dataType: 'json',
-                            success: function(res) {
-                                uni.hideLoading();
-                                if (res.data.code == 0) {
-                                    uni.showToast({ title: '已取消报名', icon: 'success' });
-                                    self.load_data();
-                                } else {
-                                    app.globalData.showToast(res.data.msg || '取消失败，请重试');
-                                }
+                            success: function() {
+                                uni.showToast({ title: '已取消报名', icon: 'success' });
+                                self.load_data();
                             },
-                            fail: function() {
-                                uni.hideLoading();
-                                app.globalData.showToast('网络异常，请重试');
+                            fail: function(err) {
+                                if (!err.feature_disabled && !err.login_expired) {
+                                    app.globalData.showToast(err.errMsg || '取消失败，请重试');
+                                }
                             },
                         });
                     },

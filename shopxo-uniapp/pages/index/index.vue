@@ -108,9 +108,9 @@
                     <!-- 内容 -->
                     <view class="content padding-horizontal-main pr">
                         <!-- 三大阶段入口 -->
-                        <component-stage-nav v-if="is_feature_enabled('feature_activity_enabled')" ref="stageNav" @stage-click="stage_click_event"></component-stage-nav>
+                        <component-stage-nav v-if="is_feature_enabled(FeatureFlagKey.ACTIVITY)" ref="stageNav" @stage-click="stage_click_event"></component-stage-nav>
 
-                        <view class="muying-section" v-if="is_feature_enabled('feature_activity_enabled')">
+                        <view class="muying-section" v-if="is_feature_enabled(FeatureFlagKey.ACTIVITY)">
                             <view class="muying-section-header">
                                 <text class="muying-section-title">推荐活动</text>
                                 <text class="muying-section-more" @tap="activity_more_event">更多 ›</text>
@@ -158,7 +158,7 @@
                             </view>
                         </view>
 
-                        <view class="muying-section" v-if="is_feature_enabled('feature_content_enabled')">
+                        <view class="muying-section" v-if="is_feature_enabled(FeatureFlagKey.CONTENT)">
                             <view class="muying-section-header">
                                 <text class="muying-section-title">孕育知识</text>
                                 <text class="muying-section-more" @tap="article_more_event">更多 ›</text>
@@ -177,7 +177,7 @@
                             </view>
                         </view>
 
-                        <view class="muying-section" v-if="is_feature_enabled('feature_content_enabled')">
+                        <view class="muying-section" v-if="is_feature_enabled(FeatureFlagKey.CONTENT)">
                             <view class="muying-section-header">
                                 <text class="muying-section-title">妈妈说</text>
                             </view>
@@ -196,7 +196,7 @@
                             </view>
                         </view>
 
-                        <view class="muying-section" v-if="is_feature_enabled('feature_invite_enabled')">
+                        <view class="muying-section" v-if="is_feature_enabled(FeatureFlagKey.INVITE)">
                             <view class="muying-invite-entry" @tap="invite_event">
                                 <view class="muying-invite-text">
                                     <text class="muying-invite-title">邀请有礼</text>
@@ -258,6 +258,7 @@
     import componentChoiceLocation from '@/components/choice-location/choice-location';
     import componentStageNav from '@/components/stage-nav/stage-nav';
     import { filter_phase_one_navigation, filter_phase_one_plugin_sort_list, is_feature_enabled } from '@/common/js/config/phase-one-scope.js';
+    import { FeatureFlagKey } from '@/common/js/config/muying-constants.js';
     import { MuyingStage } from '@/common/js/config/muying-enum';
     import { request as http_request } from '@/common/js/http.js';
     import { logger } from '@/common/js/logger.js';
@@ -270,6 +271,7 @@
     export default {
         data() {
             return {
+                FeatureFlagKey: FeatureFlagKey,
                 theme_view: '',
                 theme_color: '',
                 common_static_url: '',

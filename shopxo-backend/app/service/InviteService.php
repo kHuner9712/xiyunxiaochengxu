@@ -55,12 +55,12 @@ class InviteService
             ['status', '=', 0],
         ])->count();
 
-        return [
+        return DataReturn(MyLang('handle_success'), 0, [
             'invite_count' => $invite_count,
             'reward_total' => intval($reward_total),
             'pending_count' => $pending_count,
             'invite_code'  => $invite_code,
-        ];
+        ]);
     }
 
     public static function RewardListWhere($params = [])
@@ -202,8 +202,8 @@ class InviteService
                 }
             }
 
-            Db::commit();
             MuyingLogService::LogSuccess(MuyingLogService::TYPE_INVITE_REWARD, 'create', $inviter_id, $id, '注册邀请奖励 inviter_id=' . $inviter_id . ' invitee_id=' . $params['user_id']);
+            Db::commit();
             return DataReturn('邀请注册奖励记录已创建', 0);
         } catch (\Exception $e) {
             Db::rollback();
@@ -284,9 +284,9 @@ class InviteService
                 }
             }
 
-            Db::commit();
-
             MuyingLogService::LogSuccess(MuyingLogService::TYPE_INVITE_REWARD, 'create', $inviter_id, $id, '首单邀请奖励 inviter_id=' . $inviter_id . ' invitee_id=' . $invitee_id);
+
+            Db::commit();
 
             return DataReturn('首单邀请奖励记录已创建', 0);
         } catch (\Exception $e) {
@@ -394,13 +394,14 @@ class InviteService
                 return false;
             }
 
+            $original_integral = intval($user['integral']);
+
             Db::name('User')->where(['id' => $reward['inviter_id']])->inc('integral', $reward['reward_value'])->update();
 
             if (class_exists('app\service\IntegralService')) {
-                $inviter_integral = Db::name('User')->where(['id' => $reward['inviter_id']])->value('integral');
                 IntegralService::UserIntegralLogAdd(
                     $reward['inviter_id'],
-                    intval($inviter_integral),
+                    $original_integral,
                     $reward['reward_value'],
                     '邀请奖励(用户ID:' . $reward['invitee_id'] . ')',
                     1,

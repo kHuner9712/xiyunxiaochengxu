@@ -362,7 +362,7 @@
         </view>
         
         <!-- 互联网医院问诊下单弹窗 -->
-        <component-popup v-if="is_feature_enabled('feature_hospital_enabled')" :propShow="plugins_hospital_prescription_status" propPosition="bottom" @onclose="hospital_prescription_close_event">
+        <component-popup v-if="is_feature_enabled(FeatureFlagKey.HOSPITAL)" :propShow="plugins_hospital_prescription_status" propPosition="bottom" @onclose="hospital_prescription_close_event">
             <view class="padding-horizontal-main padding-top-main bg-white">
                 <view class="oh tc">
                     <text class="text-size">{{ (plugins_hospital_prescription_data || null) != null ? (plugins_hospital_prescription_data.title || '') : '' }}</text>
@@ -403,6 +403,7 @@
     import componentCartParaCurve from '@/components/cart-para-curve/cart-para-curve';
     import componentNavMore from '@/components/nav-more/nav-more';
     import { is_feature_enabled } from '@/common/js/config/phase-one-scope.js';
+    import { FeatureFlagKey } from '@/common/js/config/muying-constants.js';
 
     var theme_static_url = app.globalData.get_static_url('goods-category');
     var common_static_url = app.globalData.get_static_url('common');
@@ -416,6 +417,7 @@
     export default {
         data() {
             return {
+                FeatureFlagKey: FeatureFlagKey,
                 theme_view: app.globalData.get_theme_value_view(),
                 theme_static_url: theme_static_url,
                 common_static_url: common_static_url,

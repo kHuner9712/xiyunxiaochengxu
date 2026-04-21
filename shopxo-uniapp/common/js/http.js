@@ -7,10 +7,38 @@ var FEATURE_FLAG_ACTION_MAP = {};
 FEATURE_FLAG_ACTION_MAP['activity'] = FeatureFlagKey.ACTIVITY;
 FEATURE_FLAG_ACTION_MAP['invite'] = FeatureFlagKey.INVITE;
 FEATURE_FLAG_ACTION_MAP['feedback'] = FeatureFlagKey.FEEDBACK;
+FEATURE_FLAG_ACTION_MAP['article'] = FeatureFlagKey.CONTENT;
+FEATURE_FLAG_ACTION_MAP['coupon'] = FeatureFlagKey.COUPON;
+FEATURE_FLAG_ACTION_MAP['points'] = FeatureFlagKey.POINTS;
+FEATURE_FLAG_ACTION_MAP['signin'] = FeatureFlagKey.SIGNIN;
+FEATURE_FLAG_ACTION_MAP['seckill'] = FeatureFlagKey.SECKILL;
+FEATURE_FLAG_ACTION_MAP['shop'] = FeatureFlagKey.SHOP;
+FEATURE_FLAG_ACTION_MAP['realstore'] = FeatureFlagKey.REALSTORE;
+FEATURE_FLAG_ACTION_MAP['distribution'] = FeatureFlagKey.DISTRIBUTION;
+FEATURE_FLAG_ACTION_MAP['wallet'] = FeatureFlagKey.WALLET;
+FEATURE_FLAG_ACTION_MAP['coin'] = FeatureFlagKey.COIN;
+FEATURE_FLAG_ACTION_MAP['video'] = FeatureFlagKey.VIDEO;
+FEATURE_FLAG_ACTION_MAP['hospital'] = FeatureFlagKey.HOSPITAL;
+FEATURE_FLAG_ACTION_MAP['membershiplevelvip'] = FeatureFlagKey.MEMBERSHIP;
+FEATURE_FLAG_ACTION_MAP['muyinguser'] = FeatureFlagKey.MEMBERSHIP;
+FEATURE_FLAG_ACTION_MAP['muyingdashboard'] = FeatureFlagKey.ACTIVITY;
 
 var LOGIN_EXPIRED_CODES = [-100, -9999];
+var FEATURE_DISABLED_CODE = -403;
 var DEFAULT_LOADING_TITLE = '加载中...';
 var _loading_count = 0;
+
+function _normalize_response_data(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return data;
+    }
+    if ('data' in data && ('total' in data || 'page_total' in data)) {
+        logger.warn('HTTP', '响应使用旧格式 data.data，已自动转为 data.items，后端应尽快迁移');
+        data.items = data.data;
+        delete data.data;
+    }
+    return data;
+}
 
 function _show_loading(title) {
     _loading_count++;
@@ -40,6 +68,30 @@ function _handle_login_expired(msg) {
     }
 }
 
+/**
+ * request(options) - 统一请求封装
+ *
+ * @param {Object} options
+ * @param {string} options.action        - 接口动作名，如 'index', 'detail', 'signup'
+ * @param {string} options.controller    - 控制器名，如 'activity', 'invite', 'personal'
+ * @param {string} [options.plugins]     - 插件名，默认 null
+ * @param {string} [options.params]      - URL 附加参数
+ * @param {string} [options.group='api'] - 请求分组，默认 'api'
+ * @param {string} [options.method='POST'] - 请求方法
+ * @param {Object} [options.data={}]     - 请求数据
+ * @param {string} [options.dataType='json'] - 数据类型
+ * @param {boolean} [options.loading=true]   - 是否显示 loading，默认 true
+ * @param {string}  [options.loading_title]  - loading 文案，默认 '加载中...'
+ * @param {boolean} [options.silent=false]   - 静默模式，不自动 showToast
+ * @param {Function} [options.success]  - 成功回调 (data, res) => void
+ * @param {Function} [options.fail]     - 失败回调 ({ errMsg, code, ... }) => void
+ * @param {Function} [options.complete] - 完成回调 (res) => void
+ *
+ * fail 回调额外字段：
+ * - login_expired: boolean  - 登录失效
+ * - feature_disabled: boolean - 功能开关关闭
+ * - network_error: boolean - 网络错误
+ */
 function request(options) {
     var app = getApp();
     if (!app || !app.globalData) {
@@ -99,7 +151,15 @@ function request(options) {
                 return;
             }
 
+            if (code === FEATURE_DISABLED_CODE) {
+                logger.warn('HTTP', '后端功能开关拦截 ' + controller + '/' + action);
+                if (options.fail) options.fail({ errMsg: msg || TipMessage.FEATURE_DISABLED, code: code, feature_disabled: true });
+                if (options.complete) options.complete(res);
+                return;
+            }
+
             if (code == 0) {
+                data = _normalize_response_data(data);
                 if (options.success) options.success(data, res);
             } else {
                 if (!options.silent) {

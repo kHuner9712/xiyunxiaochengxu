@@ -51,6 +51,7 @@
     const app = getApp();
     import componentCommon from '@/components/common/common';
     import { MuyingStage } from '@/common/js/config/muying-enum';
+    import { request as http_request } from '@/common/js/http.js';
 
     export default {
         data() {
@@ -137,30 +138,24 @@
                     return;
                 }
 
-                uni.showLoading({ title: '提交中...' });
-                uni.request({
-                    url: app.globalData.get_request_url('create', 'feedback'),
-                    method: 'POST',
+                http_request({
+                    controller: 'feedback',
+                    action: 'create',
                     data: {
                         content: self.form.content.trim(),
                         stage: self.form.stage,
                         contact: self.form.contact ? self.form.contact.trim() : '',
                     },
-                    dataType: 'json',
-                    success: function(res) {
-                        uni.hideLoading();
-                        if (res.data.code == 0) {
-                            uni.showToast({ title: '提交成功', icon: 'success' });
-                            setTimeout(function() {
-                                uni.navigateBack();
-                            }, 1500);
-                        } else {
-                            app.globalData.showToast(res.data.msg || '提交失败，请重试');
-                        }
+                    success: function() {
+                        uni.showToast({ title: '提交成功', icon: 'success' });
+                        setTimeout(function() {
+                            uni.navigateBack();
+                        }, 1500);
                     },
-                    fail: function() {
-                        uni.hideLoading();
-                        app.globalData.showToast('网络异常，请重试');
+                    fail: function(err) {
+                        if (!err.feature_disabled && !err.login_expired) {
+                            app.globalData.showToast(err.errMsg || '提交失败，请重试');
+                        }
                     },
                 });
             },

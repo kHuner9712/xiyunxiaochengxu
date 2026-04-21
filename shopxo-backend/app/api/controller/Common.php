@@ -157,6 +157,13 @@ class Common extends BaseController
 		}
     }
 
+    protected static function CheckFeatureEnabled($feature_flag_key)
+    {
+        if (intval(MyC($feature_flag_key, 1)) === 0) {
+            exit(json_encode(DataReturn('该功能暂未开放', -403)));
+        }
+    }
+
     /**
      * 动态表格初始化
      * @author  Devil

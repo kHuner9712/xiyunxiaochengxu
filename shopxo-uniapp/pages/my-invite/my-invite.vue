@@ -68,6 +68,7 @@
     import componentCommon from '@/components/common/common';
     import componentNoData from '@/components/no-data/no-data';
     import componentBottomLine from '@/components/bottom-line/bottom-line';
+    import { request as http_request } from '@/common/js/http.js';
 
     export default {
         data() {
@@ -151,26 +152,22 @@
 
             get_invite_info() {
                 var self = this;
-                uni.request({
-                    url: app.globalData.get_request_url('index', 'invite'),
-                    method: 'POST',
-                    dataType: 'json',
-                    success: function(res) {
-                        if (res.data.code == 0) {
-                            var data = res.data.data || {};
-                            self.setData({
-                                invite_code: data.invite_code || '',
-                                invite_stats: {
-                                    total_invites: data.invite_count || 0,
-                                    total_rewards: data.reward_total || 0,
-                                },
-                            });
-                        } else {
-                            app.globalData.showToast(res.data.msg || '获取邀请信息失败');
-                        }
+                http_request({
+                    controller: 'invite',
+                    action: 'index',
+                    success: function(data) {
+                        self.setData({
+                            invite_code: data.invite_code || '',
+                            invite_stats: {
+                                total_invites: data.invite_count || 0,
+                                total_rewards: data.reward_total || 0,
+                            },
+                        });
                     },
-                    fail: function() {
-                        app.globalData.showToast('网络异常，请重试');
+                    fail: function(err) {
+                        if (!err.feature_disabled && !err.login_expired) {
+                            app.globalData.showToast(err.errMsg || '获取邀请信息失败');
+                        }
                     },
                 });
             },
@@ -181,38 +178,34 @@
 
                 var self = this;
                 this.setData({ data_is_loading: 1 });
-                uni.request({
-                    url: app.globalData.get_request_url('rewardlist', 'invite'),
-                    method: 'POST',
-                    dataType: 'json',
+                http_request({
+                    controller: 'invite',
+                    action: 'rewardlist',
                     data: { page: this.data_page },
-                    success: function(res) {
-                        if (res.data.code == 0) {
-                            var result = res.data.data || {};
-                            var list = result.data || [];
-                            var reward_list = [];
-                            for (var i = 0; i < list.length; i++) {
-                                var item = list[i];
-                                var info = item.invitee_info || {};
-                                reward_list.push({
-                                    id: item.id,
-                                    desc: (item.trigger_event_text || '') + ' ' + (info.nickname || ''),
-                                    time: item.add_time_text || '',
-                                    amount: item.reward_type === 'integral' ? item.reward_value : 0,
-                                });
-                            }
-                            var merged = is_mandatory ? reward_list : self.reward_list.concat(reward_list);
-                            self.setData({
-                                reward_list: merged,
-                                data_page_total: result.page_total || 1,
-                                data_list_loding_status: (result.page_total || 1) <= self.data_page ? 0 : 1,
+                    success: function(data) {
+                        var list = data.items || [];
+                        var reward_list = [];
+                        for (var i = 0; i < list.length; i++) {
+                            var item = list[i];
+                            var info = item.invitee_info || {};
+                            reward_list.push({
+                                id: item.id,
+                                desc: (item.trigger_event_text || '') + ' ' + (info.nickname || ''),
+                                time: item.add_time_text || '',
+                                amount: item.reward_type === 'integral' ? item.reward_value : 0,
                             });
-                        } else {
-                            app.globalData.showToast(res.data.msg || '获取奖励记录失败');
                         }
+                        var merged = is_mandatory ? reward_list : self.reward_list.concat(reward_list);
+                        self.setData({
+                            reward_list: merged,
+                            data_page_total: data.page_total || 1,
+                            data_list_loding_status: (data.page_total || 1) <= self.data_page ? 0 : 1,
+                        });
                     },
-                    fail: function() {
-                        app.globalData.showToast('网络异常，请重试');
+                    fail: function(err) {
+                        if (!err.feature_disabled && !err.login_expired) {
+                            app.globalData.showToast(err.errMsg || '获取奖励记录失败');
+                        }
                     },
                     complete: function() {
                         self.setData({ data_is_loading: 0 });

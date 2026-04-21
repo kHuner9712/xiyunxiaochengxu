@@ -115,6 +115,7 @@
     var bar_height = parseInt(app.globalData.get_system_info('statusBarHeight')) || 0;
     import componentCommon from '@/components/common/common';
     import componentNoData from '@/components/no-data/no-data';
+    import { request as http_request } from '@/common/js/http.js';
 
     export default {
         data() {
@@ -186,29 +187,24 @@
             get_activity_detail() {
                 if (!this.activity_id) return;
                 var self = this;
-                uni.request({
-                    url: app.globalData.get_request_url('detail', 'activity'),
-                    method: 'POST',
+                http_request({
+                    controller: 'activity',
+                    action: 'detail',
                     data: { id: this.activity_id },
-                    dataType: 'json',
-                    success: function (res) {
-                        if (res.data.code == 0) {
-                            var data = res.data.data || {};
-                            self.setData({
-                                activity: data.activity || {},
-                                is_favored: !!data.is_favored,
-                                is_signed_up: !!data.is_signed_up,
-                                signup_status: data.signup_status || 'ongoing',
-                                data_loaded: true,
-                            });
-                        } else {
-                            self.setData({ data_loaded: true });
-                            app.globalData.showToast(res.data.msg || '活动不存在');
-                        }
+                    success: function (data) {
+                        self.setData({
+                            activity: data.activity || {},
+                            is_favored: !!data.is_favored,
+                            is_signed_up: !!data.is_signed_up,
+                            signup_status: data.signup_status || 'ongoing',
+                            data_loaded: true,
+                        });
                     },
-                    fail: function () {
+                    fail: function (err) {
                         self.setData({ data_loaded: true });
-                        app.globalData.showToast('网络异常，请重试');
+                        if (!err.feature_disabled && !err.login_expired) {
+                            app.globalData.showToast(err.errMsg || '活动不存在');
+                        }
                     },
                 });
             },
@@ -224,20 +220,17 @@
                     uni.navigateTo({ url: '/pages/login/login' });
                     return;
                 }
-                uni.request({
-                    url: app.globalData.get_request_url('favor', 'activity'),
-                    method: 'POST',
+                http_request({
+                    controller: 'activity',
+                    action: 'favor',
                     data: { id: this.activity_id },
-                    dataType: 'json',
-                    success: function (res) {
-                        if (res.data.code == 0) {
-                            self.setData({ is_favored: res.data.data.is_favored });
-                        } else {
-                            app.globalData.showToast(res.data.msg || '操作失败');
-                        }
+                    success: function (data) {
+                        self.setData({ is_favored: data.is_favored });
                     },
-                    fail: function () {
-                        app.globalData.showToast('网络异常');
+                    fail: function (err) {
+                        if (!err.feature_disabled && !err.login_expired) {
+                            app.globalData.showToast(err.errMsg || '操作失败');
+                        }
                     },
                 });
             },
