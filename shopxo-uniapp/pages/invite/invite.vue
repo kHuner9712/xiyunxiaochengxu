@@ -5,7 +5,7 @@
             <view class="invite-banner muying-section-gradient">
                 <view class="invite-banner-content padding-horizontal-main padding-top-xxxl padding-bottom-main">
                     <view class="invite-banner-slogan tc">
-                        <view class="invite-banner-title">邀请好友 赢积分</view>
+                        <view class="invite-banner-title">{{ slogan || '邀请好友 赢积分' }}</view>
                         <view class="invite-banner-sub">每邀一位好友，最高可获{{ register_reward + first_order_reward }}积分</view>
                     </view>
                     <view v-if="is_logged_in" class="invite-stats-row flex-row jc-sa tc margin-top-xl">
@@ -20,7 +20,7 @@
                         </view>
                     </view>
                     <view v-else class="invite-stats-row tc margin-top-xl">
-                        <view class="invite-banner-sub">好友通过邀请码注册，双方均可获得积分奖励</view>
+                        <view class="invite-banner-sub">好友通过邀请码注册，您即可获得积分奖励</view>
                     </view>
                 </view>
             </view>
@@ -77,7 +77,7 @@
                     </view>
                 </view>
 
-                <scroll-view scroll-y class="padding-horizontal-main margin-top-main margin-bottom-main" @scrolltolower="scrolltolower_event" style="max-height: 60vh;">
+                <scroll-view scroll-y class="padding-horizontal-main margin-top-main margin-bottom-main" @scrolltolower="scrolltolower_event" style="max-height: 60vh">
                     <view class="muying-section-header">
                         <view class="muying-section-title">邀请记录</view>
                     </view>
@@ -130,6 +130,7 @@
                 invite_list: [],
                 register_reward: 0,
                 first_order_reward: 0,
+                slogan: '',
                 data_page: 1,
                 data_page_total: 1,
                 data_list_loding_status: 1,
@@ -140,7 +141,7 @@
         components: {
             componentCommon,
             componentNoData,
-            componentBottomLine
+            componentBottomLine,
         },
 
         onLoad(params) {
@@ -193,14 +194,14 @@
                     action: 'index',
                     controller: 'invite',
                     loading: false,
-                    success: function(data) {
+                    success: function (data) {
                         self.setData({
                             invite_code: data.invite_code || '',
                             invite_count: data.invite_count || 0,
                             reward_total: data.reward_total || 0,
                         });
                     },
-                    fail: function(err) {
+                    fail: function (err) {
                         if (err && err.network_error) {
                             app.globalData.showToast('网络异常，邀请信息加载失败');
                         }
@@ -219,7 +220,7 @@
                     controller: 'invite',
                     data: { page: this.data_page },
                     loading: false,
-                    success: function(data) {
+                    success: function (data) {
                         var result = data || {};
                         var list = result.data || [];
                         var new_list = [];
@@ -241,7 +242,7 @@
                             data_list_loding_status: (result.page_total || 1) <= self.data_page ? 0 : 1,
                         });
                     },
-                    complete: function() {
+                    complete: function () {
                         self.setData({ data_is_loading: 0 });
                     },
                 });
@@ -259,7 +260,7 @@
                     data: this.invite_code,
                     success: () => {
                         app.globalData.showToast('邀请码已复制', 'success');
-                    }
+                    },
                 });
             },
 
@@ -276,13 +277,14 @@
                     action: 'rewardconfigpublic',
                     controller: 'invite',
                     loading: false,
-                    success: function(data) {
+                    success: function (data) {
                         self.setData({
                             register_reward: data.register_reward || 0,
                             first_order_reward: data.first_order_reward || 0,
+                            slogan: data.slogan || '',
                         });
                     },
-                    fail: function() {
+                    fail: function () {
                         logger.warn('invite', '奖励配置加载失败');
                     },
                 });
@@ -305,7 +307,7 @@
                 }
                 uni.navigateTo({ url: url });
             },
-        }
+        },
     };
 </script>
 <style scoped>
@@ -325,13 +327,13 @@
         width: 140%;
         height: 120rpx;
         border-radius: 50% 50% 0 0;
-        background-color: #FFF8F5;
+        background-color: #fff8f5;
     }
 
     .invite-banner-title {
         font-size: 44rpx;
         font-weight: bold;
-        color: #F5A0B1;
+        color: #f5a0b1;
         letter-spacing: 4rpx;
     }
 
@@ -349,7 +351,7 @@
     .invite-stats-num {
         font-size: 40rpx;
         font-weight: bold;
-        color: #F5A0B1;
+        color: #f5a0b1;
     }
 
     .invite-stats-label {
@@ -361,7 +363,7 @@
     .invite-stats-divider {
         width: 1rpx;
         height: 60rpx;
-        background: linear-gradient(180deg, transparent, #F5A0B1, transparent);
+        background: linear-gradient(180deg, transparent, #f5a0b1, transparent);
         opacity: 0.3;
     }
 
@@ -369,8 +371,8 @@
         width: 44rpx;
         height: 44rpx;
         border-radius: 50%;
-        background: linear-gradient(135deg, #F5A0B1, #F5C6A0);
-        color: #FFFFFF;
+        background: linear-gradient(135deg, #f5a0b1, #f5c6a0);
+        color: #ffffff;
         font-size: 24rpx;
         font-weight: bold;
         display: flex;
@@ -381,7 +383,7 @@
     }
 
     .invite-rule-reward {
-        background: linear-gradient(135deg, #F5A0B1, #F5C6A0);
+        background: linear-gradient(135deg, #f5a0b1, #f5c6a0);
         font-size: 22rpx;
         padding: 6rpx 16rpx;
         border-radius: 16rpx;
@@ -390,17 +392,17 @@
 
     .invite-code-text {
         letter-spacing: 4rpx;
-        color: #F5A0B1;
+        color: #f5a0b1;
     }
 
     .invite-copy-btn {
-        background: linear-gradient(135deg, #F5A0B1, #F5C6A0);
+        background: linear-gradient(135deg, #f5a0b1, #f5c6a0);
         padding: 12rpx 28rpx;
         border-radius: 24rpx;
     }
 
     .invite-share-btn {
-        background: linear-gradient(135deg, #F5A0B1, #F5C6A0);
+        background: linear-gradient(135deg, #f5a0b1, #f5c6a0);
         padding: 20rpx;
         border-radius: 40rpx;
     }
@@ -419,15 +421,15 @@
     }
 
     .invite-reward-status--done {
-        background-color: #F0FFF4;
-        color: #6ABF8A;
-        border: 1px solid #6ABF8A;
+        background-color: #f0fff4;
+        color: #6abf8a;
+        border: 1px solid #6abf8a;
     }
 
     .invite-reward-status--pending {
-        background-color: #FFF5E6;
-        color: #E8A050;
-        border: 1px solid #E8A050;
+        background-color: #fff5e6;
+        color: #e8a050;
+        border: 1px solid #e8a050;
     }
 
     .invite-cta-section {
@@ -445,7 +447,7 @@
     }
 
     .invite-cta-btn {
-        background: linear-gradient(135deg, #F5A0B1, #F5C6A0);
+        background: linear-gradient(135deg, #f5a0b1, #f5c6a0);
         padding: 24rpx;
         border-radius: 40rpx;
         display: inline-block;

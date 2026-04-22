@@ -23,7 +23,9 @@ use app\service\ActivityService;
  */
 class Activitysignup
 {
-    public $condition_base = [];
+    public $condition_base = [
+        ['is_delete_time', '=', 0],
+    ];
 
     public function Run($params = [])
     {

@@ -4,25 +4,37 @@
 <div class="am-g am-margin-bottom">
     <div class="am-u-sm-12">
         <div class="am-g">
-            <div class="am-u-md-3 am-u-sm-6 am-margin-bottom-sm">
+            <div class="am-u-md-2 am-u-sm-4 am-margin-bottom-sm">
                 <div class="am-panel am-panel-default">
                     <div class="am-panel-hd">今日新增用户</div>
                     <div class="am-panel-bd am-text-center am-text-xl am-text-primary" id="stat-today-users">-</div>
                 </div>
             </div>
-            <div class="am-u-md-3 am-u-sm-6 am-margin-bottom-sm">
+            <div class="am-u-md-2 am-u-sm-4 am-margin-bottom-sm">
+                <div class="am-panel am-panel-default">
+                    <div class="am-panel-hd">今日订单数</div>
+                    <div class="am-panel-bd am-text-center am-text-xl am-text-success" id="stat-today-orders">-</div>
+                </div>
+            </div>
+            <div class="am-u-md-2 am-u-sm-4 am-margin-bottom-sm">
+                <div class="am-panel am-panel-default">
+                    <div class="am-panel-hd">今日销售额</div>
+                    <div class="am-panel-bd am-text-center am-text-xl am-text-warning" id="stat-today-sales">-</div>
+                </div>
+            </div>
+            <div class="am-u-md-2 am-u-sm-4 am-margin-bottom-sm">
                 <div class="am-panel am-panel-default">
                     <div class="am-panel-hd">今日活动报名</div>
                     <div class="am-panel-bd am-text-center am-text-xl am-text-success" id="stat-today-signups">-</div>
                 </div>
             </div>
-            <div class="am-u-md-3 am-u-sm-6 am-margin-bottom-sm">
+            <div class="am-u-md-2 am-u-sm-4 am-margin-bottom-sm">
                 <div class="am-panel am-panel-default">
-                    <div class="am-panel-hd">今日邀请奖励</div>
+                    <div class="am-panel-hd">今日邀请数</div>
                     <div class="am-panel-bd am-text-center am-text-xl am-text-warning" id="stat-today-invites">-</div>
                 </div>
             </div>
-            <div class="am-u-md-3 am-u-sm-6 am-margin-bottom-sm">
+            <div class="am-u-md-2 am-u-sm-4 am-margin-bottom-sm">
                 <div class="am-panel am-panel-default">
                     <div class="am-panel-hd">今日反馈</div>
                     <div class="am-panel-bd am-text-center am-text-xl am-text-danger" id="stat-today-feedback">-</div>
@@ -72,6 +84,8 @@
                     </thead>
                     <tbody id="total-stats">
                         <tr><td>总用户</td><td id="stat-total-users">-</td></tr>
+                        <tr><td>总订单数</td><td id="stat-total-orders">-</td></tr>
+                        <tr><td>总销售额</td><td id="stat-total-sales">-</td></tr>
                         <tr><td>进行中活动</td><td id="stat-total-activities">-</td></tr>
                         <tr><td>总报名数</td><td id="stat-total-signups">-</td></tr>
                         <tr><td>邀请人数</td><td id="stat-total-invites">-</td></tr>
@@ -102,12 +116,16 @@ $(function() {
                     var d = res.data;
                     if(d.today) {
                         $('#stat-today-users').text(d.today.new_users || 0);
+                        $('#stat-today-orders').text(d.today.orders || 0);
+                        $('#stat-today-sales').text('¥' + (d.today.sales || 0));
                         $('#stat-today-signups').text(d.today.activity_signups || 0);
                         $('#stat-today-invites').text(d.today.invite_rewards || 0);
                         $('#stat-today-feedback').text(d.today.feedback_count || 0);
                     }
                     if(d.total) {
                         $('#stat-total-users').text(d.total.users || 0);
+                        $('#stat-total-orders').text(d.total.orders || 0);
+                        $('#stat-total-sales').text('¥' + (d.total.sales || 0));
                         $('#stat-total-activities').text(d.total.activities || 0);
                         $('#stat-total-signups').text(d.total.signups || 0);
                         $('#stat-total-invites').text(d.total.invites || 0);

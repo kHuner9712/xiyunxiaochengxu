@@ -1,40 +1,6 @@
-var BASE_DISABLED_PLUGIN_NAMES = [
-    'excellentbuyreturntocash',
-    'exchangerate',
-    'goodscompare',
-    'orderfeed',
-    'ordergoodsform',
-    'orderresources',
-    'antifakecode',
-    'form',
-    'binding',
-    'label',
-];
+var BASE_DISABLED_PLUGIN_NAMES = ['excellentbuyreturntocash', 'exchangerate', 'goodscompare', 'orderfeed', 'ordergoodsform', 'orderresources', 'antifakecode', 'form', 'binding', 'label'];
 
-var DYNAMIC_DISABLED_PLUGIN_NAMES = [
-    'distribution',
-    'wallet',
-    'coin',
-    'shop',
-    'realstore',
-    'ask',
-    'blog',
-    'membershiplevelvip',
-    'seckill',
-    'coupon',
-    'signin',
-    'points',
-    'video',
-    'hospital',
-    'giftcard',
-    'givegift',
-    'complaint',
-    'invoice',
-    'certificate',
-    'scanpay',
-    'weixinliveplayer',
-    'intellectstools',
-];
+var DYNAMIC_DISABLED_PLUGIN_NAMES = ['distribution', 'wallet', 'coin', 'shop', 'realstore', 'ask', 'blog', 'membershiplevelvip', 'seckill', 'coupon', 'signin', 'points', 'video', 'hospital', 'giftcard', 'givegift', 'complaint', 'invoice', 'certificate', 'scanpay', 'weixinliveplayer', 'intellectstools', 'activity', 'magic'];
 
 var PHASE_ONE_DISABLED_PLUGIN_NAMES = BASE_DISABLED_PLUGIN_NAMES.concat(DYNAMIC_DISABLED_PLUGIN_NAMES);
 
@@ -62,6 +28,12 @@ FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.CERTIFICATE] = 'certificate';
 FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.SCANPAY] = 'scanpay';
 FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.LIVE] = 'weixinliveplayer';
 FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.INTELLECTSTOOLS] = 'intellectstools';
+
+var PHASE_ONE_ALLOWED_FLAGS = {};
+PHASE_ONE_ALLOWED_FLAGS[FeatureFlagKey.ACTIVITY] = true;
+PHASE_ONE_ALLOWED_FLAGS[FeatureFlagKey.INVITE] = true;
+PHASE_ONE_ALLOWED_FLAGS[FeatureFlagKey.CONTENT] = true;
+PHASE_ONE_ALLOWED_FLAGS[FeatureFlagKey.FEEDBACK] = true;
 
 var _feature_flags = null;
 
@@ -102,17 +74,22 @@ function _merge_disabled_list() {
 
 function init_feature_flags(flags) {
     _feature_flags = flags || {};
+    for (var key in _feature_flags) {
+        if (_feature_flags.hasOwnProperty(key) && !PHASE_ONE_ALLOWED_FLAGS[key]) {
+            _feature_flags[key] = 0;
+        }
+    }
     PHASE_ONE_DISABLED_PLUGIN_NAMES = _merge_disabled_list();
     _rebuild_route_prefixes();
 }
 
 function _rebuild_route_prefixes() {
-    PHASE_ONE_DISABLED_ROUTE_PREFIXES = PHASE_ONE_DISABLED_PLUGIN_NAMES.map(function(name) {
+    PHASE_ONE_DISABLED_ROUTE_PREFIXES = PHASE_ONE_DISABLED_PLUGIN_NAMES.map(function (name) {
         return '/pages/plugins/' + name + '/';
     });
 }
 
-var PHASE_ONE_DISABLED_ROUTE_PREFIXES = PHASE_ONE_DISABLED_PLUGIN_NAMES.map(function(name) {
+var PHASE_ONE_DISABLED_ROUTE_PREFIXES = PHASE_ONE_DISABLED_PLUGIN_NAMES.map(function (name) {
     return '/pages/plugins/' + name + '/';
 });
 
@@ -167,6 +144,9 @@ function is_feature_enabled(flag_key) {
     if (_feature_flags && typeof _feature_flags[flag_key] !== 'undefined') {
         return !!_feature_flags[flag_key];
     }
+    if (PHASE_ONE_ALLOWED_FLAGS[flag_key]) {
+        return true;
+    }
     return false;
 }
 
@@ -215,17 +195,4 @@ function filter_phase_one_plugin_sort_list(list) {
     return result;
 }
 
-export {
-    BASE_DISABLED_PLUGIN_NAMES,
-    DYNAMIC_DISABLED_PLUGIN_NAMES,
-    PHASE_ONE_DISABLED_PLUGIN_NAMES,
-    PHASE_ONE_DISABLED_ROUTE_PREFIXES,
-    FEATURE_FLAG_PLUGIN_MAP,
-    init_feature_flags,
-    normalize_page_path,
-    is_phase_one_disabled_route,
-    is_phase_one_disabled_plugin,
-    is_feature_enabled,
-    filter_phase_one_navigation,
-    filter_phase_one_plugin_sort_list,
-};
+export { BASE_DISABLED_PLUGIN_NAMES, DYNAMIC_DISABLED_PLUGIN_NAMES, PHASE_ONE_DISABLED_PLUGIN_NAMES, PHASE_ONE_DISABLED_ROUTE_PREFIXES, FEATURE_FLAG_PLUGIN_MAP, init_feature_flags, normalize_page_path, is_phase_one_disabled_route, is_phase_one_disabled_plugin, is_feature_enabled, filter_phase_one_navigation, filter_phase_one_plugin_sort_list };

@@ -63,7 +63,7 @@
                             <view v-if="user_data.current_stage === 'pregnancy'" class="form-gorup oh flex-row jc-sb align-c">
                                 <view class="form-gorup-title">预产期<text class="cr-grey-9 text-size-xs margin-left-xs">(用于推荐适合您的活动)</text></view>
                                 <view class="flex-1 flex-width flex-row jc-e align-c">
-                                    <picker class="margin-right-sm wh-auto tr" name="due_date" mode="date" :value="user_data.due_date || ''" data-field="due_date" @change="select_change_event">
+                                    <picker class="margin-right-sm wh-auto tr" name="due_date" mode="date" :value="user_data.due_date || ''" :start="due_date_start" data-field="due_date" @change="select_change_event">
                                         <view :class="'picker ' + ((user_data.due_date || null) == null ? 'cr-grey' : '')">{{ user_data.due_date || '请选择预产期' }}</view>
                                     </picker>
                                     <iconfont name="icon-arrow-right" size="34rpx" color="#ccc"></iconfont>
@@ -73,7 +73,7 @@
                             <view v-if="user_data.current_stage === 'postpartum'" class="form-gorup oh flex-row jc-sb align-c">
                                 <view class="form-gorup-title">宝宝生日<text class="cr-grey-9 text-size-xs margin-left-xs">(用于推荐适合您的活动)</text></view>
                                 <view class="flex-1 flex-width flex-row jc-e align-c">
-                                    <picker class="margin-right-sm wh-auto tr" name="baby_birthday" mode="date" :value="user_data.baby_birthday || ''" data-field="baby_birthday" @change="select_change_event">
+                                    <picker class="margin-right-sm wh-auto tr" name="baby_birthday" mode="date" :value="user_data.baby_birthday || ''" :end="baby_birthday_end" data-field="baby_birthday" @change="select_change_event">
                                         <view :class="'picker ' + ((user_data.baby_birthday || null) == null ? 'cr-grey' : '')">{{ user_data.baby_birthday || '请选择宝宝生日' }}</view>
                                     </picker>
                                     <iconfont name="icon-arrow-right" size="34rpx" color="#ccc"></iconfont>
@@ -129,6 +129,8 @@
                 ),
                 current_stage_index: 0,
                 baby_month_age_text: '',
+                due_date_start: '',
+                baby_birthday_end: '',
             };
         },
 
@@ -143,10 +145,8 @@
         },
 
         onShow() {
-            // 调用公共事件方法
             app.globalData.page_event_onshow_handle();
-
-            // 数据加载
+            this.init_date_constraints();
             this.init();
 
             // 公共onshow事件
@@ -156,6 +156,18 @@
         },
 
         methods: {
+            init_date_constraints() {
+                var now = new Date();
+                var y = now.getFullYear();
+                var m = String(now.getMonth() + 1).padStart(2, '0');
+                var d = String(now.getDate()).padStart(2, '0');
+                var today = y + '-' + m + '-' + d;
+                this.setData({
+                    due_date_start: today,
+                    baby_birthday_end: today,
+                });
+            },
+
             // 获取数据
             init() {
                 var user = app.globalData.get_user_info(this, 'init');
@@ -179,8 +191,12 @@
                         var user_data = (data && data.data) || {};
                         var stage_index = 0;
                         if (user_data.current_stage) {
+                            var normalized = MuyingStage.normalize(user_data.current_stage);
+                            if (normalized) {
+                                user_data.current_stage = normalized;
+                            }
                             for (var i = 0; i < this.stage_list.length; i++) {
-                                if (this.stage_list[i].value === user_data.current_stage) {
+                                if (this.stage_list[i].value === normalized) {
                                     stage_index = i;
                                     break;
                                 }

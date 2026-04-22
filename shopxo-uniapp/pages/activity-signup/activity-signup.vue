@@ -179,6 +179,7 @@
     import { MuyingStage } from '@/common/js/config/muying-enum';
     import { request as http_request } from '@/common/js/http.js';
     import { logger } from '@/common/js/logger.js';
+    import { userStore } from '@/common/js/user-store.js';
 
     export default {
         data() {
@@ -275,9 +276,12 @@
                             form.phone = profile.mobile;
                         }
                         if (profile.current_stage) {
-                            var stage_idx = self.stage_values.indexOf(profile.current_stage);
-                            if (stage_idx >= 0) {
-                                self.setData({ stage_index: stage_idx, selected_stage: profile.current_stage });
+                            var normalized_stage = MuyingStage.normalize(profile.current_stage);
+                            if (normalized_stage) {
+                                var stage_idx = self.stage_values.indexOf(normalized_stage);
+                                if (stage_idx >= 0) {
+                                    self.setData({ stage_index: stage_idx, selected_stage: normalized_stage });
+                                }
                             }
                         }
                         if (profile.due_date) {
@@ -351,7 +355,21 @@
             },
 
             baby_birthday_change_event(e) {
-                this.setData({ 'form.baby_birthday': e.detail.value });
+                var birthday = e.detail.value;
+                var updates = { 'form.baby_birthday': birthday };
+                var b = new Date(birthday);
+                var now = new Date();
+                if (!isNaN(b.getTime())) {
+                    var months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
+                    if (months >= 1 && months <= 36) {
+                        updates['baby_month_age_index'] = months - 1;
+                        updates['form.baby_month_age'] = months;
+                    } else {
+                        updates['baby_month_age_index'] = -1;
+                        updates['form.baby_month_age'] = '';
+                    }
+                }
+                this.setData(updates);
             },
 
             baby_month_age_change_event(e) {
@@ -457,6 +475,11 @@
                     data: post_data,
                     loading_title: '提交中...',
                     success: function (data) {
+                        userStore.merge({
+                            current_stage: self.selected_stage,
+                            due_date: self.form.due_date || '',
+                            baby_birthday: self.form.baby_birthday || '',
+                        });
                         uni.showToast({
                             title: '报名成功',
                             icon: 'success',

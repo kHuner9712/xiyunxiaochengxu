@@ -13,6 +13,10 @@
                 'name' => '活动详情',
                 'key'  => 'detail-content',
             ],
+            [
+                'name' => '报名列表',
+                'key'  => 'signup-list',
+            ],
         ]
     ])}}
     <div class="detail-content-switch-data-item">
@@ -22,10 +26,51 @@
         </div>
 
         <!-- 活动详情内容 -->
-        <div class="item am-padding-sm" data-key="detail-content">
+        <div class="am-padding-sm item" data-key="detail-content">
             {{if !empty($data['content'])}}
                 <div class="am-nowrap-initial richtext">
                     {{$data.content|raw}}
+                </div>
+            {{else /}}
+                {{:ModuleInclude('public/not_data')}}
+            {{/if}}
+        </div>
+
+        <!-- 报名列表 -->
+        <div class="am-padding-sm item" data-key="signup-list">
+            {{if !empty($signup_list) && is_array($signup_list)}}
+                <table class="am-table am-table-bordered am-table-striped am-text-sm">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>姓名</th>
+                            <th>手机</th>
+                            <th>阶段</th>
+                            <th>报名状态</th>
+                            <th>签到状态</th>
+                            <th>报名时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{foreach $signup_list as $signup}}
+                        <tr>
+                            <td>{{$signup.id}}</td>
+                            <td>{{$signup.name}}</td>
+                            <td>{{$signup.phone}}</td>
+                            <td>{{$signup.stage_text}}</td>
+                            <td>{{$signup.status_text}}</td>
+                            <td>{{$signup.checkin_status_text}}</td>
+                            <td>{{$signup.add_time_text}}</td>
+                            <td>
+                                <a href="{{:MyUrl('admin/activitysignup/detail', ['id'=>$signup.id])}}" class="am-badge am-badge-primary am-radius">详情</a>
+                            </td>
+                        </tr>
+                        {{/foreach}}
+                    </tbody>
+                </table>
+                <div class="am-text-sm am-text-gray">
+                    共 {{$signup_total}} 条报名记录，已确认 {{$signup_confirmed_count}} 条
                 </div>
             {{else /}}
                 {{:ModuleInclude('public/not_data')}}

@@ -25,9 +25,10 @@ class Activity extends Common
         $start = intval(($this->page - 1) * $this->page_size);
 
         $data_params = array_merge($params, [
-            'm'     => $start,
-            'n'     => $this->page_size,
-            'where' => $where,
+            'm'       => $start,
+            'n'       => $this->page_size,
+            'where'   => $where,
+            'user_id' => !empty($this->user) ? $this->user['id'] : 0,
         ]);
         $data = ActivityService::ActivityList($data_params);
 

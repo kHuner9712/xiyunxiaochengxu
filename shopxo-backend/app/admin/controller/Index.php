@@ -58,15 +58,19 @@ class Index extends Common
 	 */
 	public function Index()
 	{
-		// 默认地址
 		$to_url = '';
 
-		// 是否指定页面地址
 		if(!empty($this->data_request['to_url']))
 		{
 			$to_url = base64_decode(urldecode($this->data_request['to_url']));
             MyViewAssign('appoint_to_url', 1);
 		}
+
+		if(empty($to_url) && AdminIsPower('dashboard', 'index'))
+		{
+			$to_url = MyUrl('admin/dashboard/index');
+		}
+
 		MyViewAssign('to_url', $to_url);
 		return MyView();
 	}

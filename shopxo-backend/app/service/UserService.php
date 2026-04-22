@@ -190,6 +190,20 @@ class UserService
                 {
                     $v['status_text'] = $common_user_status_list[$v['status']]['name'];
                 }
+
+                // 母婴画像字段格式化
+                if(array_key_exists('due_date', $v))
+                {
+                    $v['due_date'] = empty($v['due_date']) ? '' : date('Y-m-d', $v['due_date']);
+                }
+                if(array_key_exists('baby_birthday', $v))
+                {
+                    $v['baby_birthday'] = empty($v['baby_birthday']) ? '' : date('Y-m-d', $v['baby_birthday']);
+                }
+                if(array_key_exists('current_stage', $v))
+                {
+                    $v['current_stage_text'] = MuyingStage::getName($v['current_stage']);
+                }
             }
 
             // 用户列表钩子-后面
@@ -1014,10 +1028,17 @@ class UserService
             {
                 $user['due_date'] = empty($user['due_date']) ? '' : date('Y-m-d', $user['due_date']);
             }
+            $baby_birthday_raw = 0;
             if(isset($user['baby_birthday']))
             {
+                $baby_birthday_raw = intval($user['baby_birthday']);
                 $user['baby_birthday'] = empty($user['baby_birthday']) ? '' : date('Y-m-d', $user['baby_birthday']);
             }
+            if(isset($user['current_stage']))
+            {
+                $user['current_stage_text'] = MuyingStage::getName($user['current_stage']);
+            }
+            $user['baby_month_age'] = ($baby_birthday_raw > 0) ? self::CalcBabyMonthAge($baby_birthday_raw) : 0;
 
             // 邮箱/手机
             if(isset($user['mobile']))
@@ -2288,6 +2309,25 @@ class UserService
     }
 
     /**
+     * 计算宝宝月龄
+     * @param   [int]          $baby_birthday_ts [宝宝生日时间戳]
+     * @return  [int]          月龄（月），最小为0
+     */
+    public static function CalcBabyMonthAge($baby_birthday_ts)
+    {
+        if(empty($baby_birthday_ts) || $baby_birthday_ts <= 0)
+        {
+            return 0;
+        }
+        $b_year = intval(date('Y', $baby_birthday_ts));
+        $b_month = intval(date('n', $baby_birthday_ts));
+        $now_year = intval(date('Y'));
+        $now_month = intval(date('n'));
+        $months = ($now_year - $b_year) * 12 + ($now_month - $b_month);
+        return max(0, $months);
+    }
+
+    /**
      * 用户资料保存
      * @author   Devil
      * @blog    http://gong.gg/
@@ -2350,7 +2390,30 @@ class UserService
                 return DataReturn('产后阶段请选择宝宝生日', -1);
             }
         }
-        // current_stage 为空时：允许清空，同时清空 due_date / baby_birthday
+
+        // 母婴画像联动清空：current_stage 变化时，清空不相关的关联字段
+        $new_stage = '';
+        if(array_key_exists('current_stage', $params))
+        {
+            $new_stage = !empty($params['current_stage']) ? MuyingStage::Normalize($params['current_stage']) : '';
+        }
+        else
+        {
+            // 未传 current_stage 时，从数据库取当前值判断
+            $existing = Db::name('User')->where(['id' => $params['user']['id']])->field('current_stage')->find();
+            $new_stage = !empty($existing['current_stage']) ? $existing['current_stage'] : '';
+        }
+
+        // 非 pregnancy 阶段时，确保 due_date 被清空
+        if($new_stage !== MuyingStage::PREGNANCY && !array_key_exists('due_date', $params))
+        {
+            $params['due_date'] = '';
+        }
+        // 非 postpartum 阶段时，确保 baby_birthday 被清空
+        if($new_stage !== MuyingStage::POSTPARTUM && !array_key_exists('baby_birthday', $params))
+        {
+            $params['baby_birthday'] = '';
+        }
 
         // 更新的字段
         $fields = [
@@ -2393,22 +2456,24 @@ class UserService
                     case 'birthday' :
                         $data[$k] = empty($params['birthday']) ? '' : strtotime($params['birthday']);
                         break;
-                    // 预产期：非空时转时间戳，空时清零
+                    // 预产期：非空时转时间戳（校验合法性），空时清零
                     case 'due_date' :
                         if(!empty($params['due_date']))
                         {
-                            $data[$k] = is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date']);
+                            $ts = is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date']);
+                            $data[$k] = ($ts !== false && $ts > 0) ? $ts : 0;
                         }
                         else
                         {
                             $data[$k] = 0;
                         }
                         break;
-                    // 宝宝生日：非空时转时间戳，空时清零
+                    // 宝宝生日：非空时转时间戳（校验合法性），空时清零
                     case 'baby_birthday' :
                         if(!empty($params['baby_birthday']))
                         {
-                            $data[$k] = is_numeric($params['baby_birthday']) ? intval($params['baby_birthday']) : strtotime($params['baby_birthday']);
+                            $ts = is_numeric($params['baby_birthday']) ? intval($params['baby_birthday']) : strtotime($params['baby_birthday']);
+                            $data[$k] = ($ts !== false && $ts > 0) ? $ts : 0;
                         }
                         else
                         {

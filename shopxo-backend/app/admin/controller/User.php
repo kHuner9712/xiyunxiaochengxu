@@ -13,6 +13,7 @@ namespace app\admin\controller;
 use app\admin\controller\Base;
 use app\service\ApiService;
 use app\service\UserService;
+use app\extend\muying\MuyingStage;
 
 /**
  * 用户管理
@@ -61,6 +62,11 @@ class User extends Base
                     'reward_total' => intval($reward_total),
                 ];
             }
+            // 母婴画像字段格式化
+            $data['current_stage_text'] = MuyingStage::getName($data['current_stage'] ?? '');
+            $data['due_date'] = !empty($data['due_date']) ? date('Y-m-d', $data['due_date']) : '';
+            $data['baby_birthday'] = !empty($data['baby_birthday']) ? date('Y-m-d', $data['baby_birthday']) : '';
+            $data['baby_month_age'] = UserService::CalcBabyMonthAge(intval($data['baby_birthday'] ?? 0));
             MyViewAssign(['data' => $data]);
         }
         return MyView();

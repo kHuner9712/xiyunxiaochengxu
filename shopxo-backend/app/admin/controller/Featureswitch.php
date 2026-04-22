@@ -90,6 +90,7 @@ class Featureswitch extends Base
                     ['key' => 'feature_activity_enabled', 'name' => '活动报名', 'desc' => '控制活动报名功能是否开放'],
                     ['key' => 'feature_invite_enabled', 'name' => '邀请裂变', 'desc' => '控制邀请裂变功能是否开放'],
                     ['key' => 'feature_content_enabled', 'name' => '官方内容', 'desc' => '控制文章/资讯等官方内容功能是否开放'],
+                    ['key' => 'feature_feedback_enabled', 'name' => '用户反馈', 'desc' => '控制用户反馈/妈妈说功能是否开放'],
                 ],
             ],
         ];

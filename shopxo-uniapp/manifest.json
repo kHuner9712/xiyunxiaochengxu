@@ -146,7 +146,7 @@
     "quickapp": {},
     "mp-weixin": {
         "requiredPrivateInfos": ["chooseLocation", "getLocation", "onLocationChange", "startLocationUpdate"],
-        "appid": "wxda7779770f53e901",
+        "appid": "",
         "setting": {
             "urlCheck": false,
             "es6": true,

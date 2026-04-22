@@ -20,6 +20,15 @@
             <dt><strong>阶段</strong></dt>
             <dd>{{$data.stage_text}}</dd>
 
+            <dt><strong>预产期</strong></dt>
+            <dd>{{if !empty($data['due_date'])}}{{$data.due_date}}{{else /}}-{{/if}}</dd>
+
+            <dt><strong>宝宝生日</strong></dt>
+            <dd>{{if !empty($data['baby_birthday'])}}{{$data.baby_birthday}}{{else /}}-{{/if}}</dd>
+
+            <dt><strong>宝宝月龄</strong></dt>
+            <dd>{{if !empty($data['baby_month_age'])}}{{$data.baby_month_age}}个月{{else /}}-{{/if}}</dd>
+
             <dt><strong>备注</strong></dt>
             <dd>{{if !empty($data['remark'])}}{{$data.remark}}{{else /}}-{{/if}}</dd>
 
@@ -34,6 +43,9 @@
 
             <dt><strong>签到时间</strong></dt>
             <dd>{{if !empty($data['checkin_time_text'])}}{{$data.checkin_time_text}}{{else /}}-{{/if}}</dd>
+
+            <dt><strong>隐私同意时间</strong></dt>
+            <dd>{{if !empty($data['privacy_agreed_time_text'])}}{{$data.privacy_agreed_time_text}}{{else /}}-{{/if}}</dd>
         </dl>
     {{else /}}
         {{:ModuleInclude('public/not_data')}}

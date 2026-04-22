@@ -5,3 +5,51 @@
 {{block name="form_operate_top"}}
     {__block__}
 {{/block}}
+
+{{block name="content"}}
+    {__block__}
+    <script type="text/javascript">
+    $(function() {
+        $(document).on('click', '.invite-grant-btn', function() {
+            var id = $(this).data('id');
+            if (!id) return;
+            $.ajax({
+                url: "{{:MyUrl('admin/invite/grant')}}",
+                type: 'POST',
+                data: {id: id},
+                dataType: 'json',
+                success: function(res) {
+                    if (res.code == 0) {
+                        Prompt('发放成功');
+                        setTimeout(function(){ location.reload(); }, 800);
+                    } else {
+                        Prompt(res.msg || '操作失败', 'danger');
+                    }
+                },
+                error: function() { Prompt('网络异常', 'danger'); }
+            });
+        });
+
+        $(document).on('click', '.invite-cancel-btn', function() {
+            var id = $(this).data('id');
+            if (!id) return;
+            if (!confirm('确定要取消该邀请奖励吗？')) return;
+            $.ajax({
+                url: "{{:MyUrl('admin/invite/cancel')}}",
+                type: 'POST',
+                data: {id: id},
+                dataType: 'json',
+                success: function(res) {
+                    if (res.code == 0) {
+                        Prompt('取消成功');
+                        setTimeout(function(){ location.reload(); }, 800);
+                    } else {
+                        Prompt(res.msg || '操作失败', 'danger');
+                    }
+                },
+                error: function() { Prompt('网络异常', 'danger'); }
+            });
+        });
+    });
+    </script>
+{{/block}}

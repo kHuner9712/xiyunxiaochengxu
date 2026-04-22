@@ -11,6 +11,17 @@
                 </view>
             </view>
 
+            <!-- 搜索栏 -->
+            <view class="search-bar padding-horizontal-main padding-top-sm padding-bottom-sm">
+                <view class="search-input-wrap flex-row align-c bg-white border-radius-main padding-horizontal-main">
+                    <iconfont name="icon-search" size="28rpx" color="#999"></iconfont>
+                    <input type="text" v-model="search_keyword" placeholder="搜索活动" placeholder-class="cr-grey-9" class="search-input cr-base text-size-sm margin-left-sm" confirm-type="search" @confirm="search_event" />
+                    <view v-if="search_keyword" class="search-clear cp" @tap="clear_search_event">
+                        <uni-icons type="clear" size="16" color="#999"></uni-icons>
+                    </view>
+                </view>
+            </view>
+
             <!-- 阶段筛选 -->
             <view class="stage-tabs padding-horizontal-main">
                 <scroll-view :scroll-x="true" :show-scrollbar="false" class="stage-tabs-scroll">
@@ -62,9 +73,10 @@
                                         <view class="activity-bottom margin-top-sm flex-row jc-sb align-c">
                                             <view class="activity-signup flex-row align-c">
                                                 <text class="cr-grey-9 text-size-xs">{{ item.signup_count }}人已报名</text>
+                                                <text v-if="item.is_signed_up" class="signed-badge margin-left-xs">已报名</text>
                                             </view>
                                             <view class="activity-price">
-                                                <text v-if="item.price == 0" class="muying-badge-pink">免费</text>
+                                                <text v-if="item.is_free == 1" class="muying-badge-pink">免费</text>
                                                 <text v-else class="cr-main fw-b text-size">¥{{ item.price }}</text>
                                             </view>
                                         </view>
@@ -72,6 +84,13 @@
                                     <!-- 阶段标签 -->
                                     <view class="activity-stage-tag">
                                         <text :class="'muying-stage-tag ' + item.stage_class">{{ item.stage_name }}</text>
+                                    </view>
+                                    <!-- 报名状态角标 -->
+                                    <view v-if="item.signup_status === 'full'" class="activity-status-badge activity-status-full">
+                                        <text class="text-size-xs cr-white">已满</text>
+                                    </view>
+                                    <view v-else-if="item.signup_status === 'ended'" class="activity-status-badge activity-status-ended">
+                                        <text class="text-size-xs cr-white">已截止</text>
                                     </view>
                                 </view>
                             </view>
@@ -117,6 +136,8 @@
                 stage_active_index: 0,
                 category_tabs: MuyingActivityCategory.getFilterTabs(),
                 category_active_index: 0,
+                search_keyword: '',
+                is_logged_in: false,
             };
         },
 
@@ -137,15 +158,17 @@
                     }
                 }
             }
+            if (params && params.awd) {
+                this.setData({ search_keyword: params.awd });
+            }
         },
 
         onShow() {
             app.globalData.page_event_onshow_handle();
-
             if ((this.$refs.common || null) != null) {
                 this.$refs.common.on_show();
             }
-
+            this.is_logged_in = !!app.globalData.get_user_cache_info();
             this.init();
         },
 
@@ -184,12 +207,15 @@
                 if (selected_category) {
                     request_data.category = selected_category;
                 }
+                if (this.search_keyword.trim()) {
+                    request_data.awd = this.search_keyword.trim();
+                }
 
                 http_request({
                     controller: 'activity',
                     action: 'index',
                     data: request_data,
-                    success: function(data) {
+                    success: function (data) {
                         uni.stopPullDownRefresh();
                         var list = data.items || [];
                         self.setData({
@@ -200,7 +226,7 @@
                             data_is_loading: 0,
                         });
                     },
-                    fail: function() {
+                    fail: function () {
                         uni.stopPullDownRefresh();
                         self.setData({
                             data_list_loding_status: 0,
@@ -210,7 +236,14 @@
                 });
             },
 
+            search_event() {
+                this.init();
+            },
 
+            clear_search_event() {
+                this.setData({ search_keyword: '' });
+                this.init();
+            },
 
             stage_tab_event(e) {
                 var index = e.currentTarget.dataset.index;
@@ -246,7 +279,7 @@
 <style lang="scss" scoped>
     .activity-page {
         min-height: 100vh;
-        background-color: #FFF8F5;
+        background-color: #fff8f5;
     }
 
     .nav-top {
@@ -268,10 +301,30 @@
         text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
     }
 
+    .search-bar {
+        position: relative;
+        z-index: 5;
+    }
+
+    .search-input-wrap {
+        height: 64rpx;
+        border: 1rpx solid #f0f0f0;
+    }
+
+    .search-input {
+        flex: 1;
+        height: 64rpx;
+        font-size: 26rpx;
+    }
+
+    .search-clear {
+        padding: 4rpx;
+    }
+
     .stage-tabs {
         position: relative;
         z-index: 5;
-        padding-top: 16rpx;
+        padding-top: 8rpx;
         padding-bottom: 8rpx;
     }
 
@@ -291,14 +344,14 @@
         border-radius: 28rpx;
         font-size: 26rpx;
         color: #666;
-        background-color: #FFFFFF;
-        border: 1px solid #EEEEEE;
+        background-color: #ffffff;
+        border: 1px solid #eeeeee;
         transition: all 0.2s;
     }
 
     .stage-tab-active {
-        background: linear-gradient(135deg, #F5A0B1 0%, #F5C6A0 100%);
-        color: #FFFFFF;
+        background: linear-gradient(135deg, #f5a0b1 0%, #f5c6a0 100%);
+        color: #ffffff;
         border-color: transparent;
     }
 
@@ -329,13 +382,13 @@
     }
 
     .category-tab-active {
-        color: #F5A0B1;
-        background-color: #FFF0F3;
+        color: #f5a0b1;
+        background-color: #fff0f3;
         font-weight: bold;
     }
 
     .activity-list-scroll {
-        height: calc(100vh - 360rpx);
+        height: calc(100vh - 430rpx);
     }
 
     .activity-cover {
@@ -354,6 +407,32 @@
         top: 16rpx;
         left: 16rpx;
         z-index: 2;
+    }
+
+    .activity-status-badge {
+        position: absolute;
+        top: 16rpx;
+        right: 16rpx;
+        z-index: 2;
+        padding: 4rpx 16rpx;
+        border-radius: 16rpx;
+    }
+
+    .activity-status-full {
+        background-color: rgba(229, 115, 115, 0.85);
+    }
+
+    .activity-status-ended {
+        background-color: rgba(153, 153, 153, 0.85);
+    }
+
+    .signed-badge {
+        display: inline-block;
+        padding: 2rpx 10rpx;
+        border-radius: 8rpx;
+        font-size: 20rpx;
+        color: #fff;
+        background: linear-gradient(135deg, #f5a0b1, #f5c6a0);
     }
 
     .activity-meta {

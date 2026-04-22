@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS `sxo_muying_user_tag` (
   `upd_time` int unsigned NOT NULL DEFAULT 0 COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户标签';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户标签';
 
 -- D3.2 用户-标签关联表
 CREATE TABLE IF NOT EXISTS `sxo_muying_user_tag_rel` (
@@ -179,7 +179,7 @@ CREATE TABLE IF NOT EXISTS `sxo_muying_stat_snapshot` (
   UNIQUE KEY `uk_date_metric` (`stat_date`, `metric_key`),
   KEY `idx_date` (`stat_date`),
   KEY `idx_metric` (`metric_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统计快照';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='统计快照';
 
 -- D5.2 仪表盘配置项
 INSERT INTO `sxo_config` (`value`, `name`, `describe`, `error_tips`, `type`, `only_tag`, `upd_time`) VALUES

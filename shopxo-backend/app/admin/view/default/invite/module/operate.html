@@ -1,6 +1,9 @@
-{{if AdminIsPower('invite', 'detail')}}
-    <button type="button" class="am-btn am-btn-default am-btn-xs am-radius am-btn-block submit-popup" data-url="{{:MyUrl('admin/invite/detail', ['id'=>$module_data['id']])}}" data-title="详情" data-offcanvas="right">
-        <i class="am-icon-eye"></i>
-        <span>详情</span>
-    </button>
+<a href="{{:MyUrl('admin/invite/detail', ['id'=>$data['id']])}}" class="am-badge am-badge-primary am-radius">详情</a>
+{{if $data['status'] == 0}}
+    {{if AdminIsPower('invite', 'grant')}}
+    <a href="javascript:;" class="am-badge am-badge-success am-radius invite-grant-btn" data-id="{{$data['id']}}">发放</a>
+    {{/if}}
+    {{if AdminIsPower('invite', 'cancel')}}
+    <a href="javascript:;" class="am-badge am-badge-danger am-radius invite-cancel-btn" data-id="{{$data['id']}}">取消</a>
+    {{/if}}
 {{/if}}

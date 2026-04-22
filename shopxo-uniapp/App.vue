@@ -11,6 +11,7 @@
     var appConfig = isProd ? prodConfig : devConfig;
     var request_url_value = appConfig.request_url;
     var static_url_value = appConfig.static_url || '/';
+    var upload_url_value = appConfig.upload_url || request_url_value;
     if (!/^https?:\/\//i.test(static_url_value) && static_url_value.charAt(0) !== '/') {
         static_url_value = '/' + static_url_value;
     }
@@ -28,11 +29,17 @@
         globalData: {
             data: {
                 // 基础配置
+                // 当前运行环境（local / test / staging / production）
+                app_env: appConfig.env || 'local',
+
                 // 数据接口请求地址
                 request_url: request_url_value,
 
                 // 静态资源地址（如系统根目录不在public目录下面请在静态地址后面加public目录、如：https://d1.shopxo.vip/public/）
                 static_url: static_url_value,
+
+                // 上传地址（默认与 request_url 相同，独立部署时可通过 UNI_APP_UPLOAD_URL 单独配置）
+                upload_url: upload_url_value,
 
                 // 系统类型（默认default、如额外独立小程序、可与程序分身插件实现不同主体小程序及支付独立）
                 system_type: 'default',
@@ -1630,7 +1637,7 @@
 
                 if (data) {
                     var feature_flags = {};
-                    var feature_keys = [FeatureFlagKey.SHOP, FeatureFlagKey.REALSTORE, FeatureFlagKey.DISTRIBUTION, FeatureFlagKey.WALLET, FeatureFlagKey.COIN, FeatureFlagKey.UGC, FeatureFlagKey.MEMBERSHIP, FeatureFlagKey.SECKILL, FeatureFlagKey.COUPON, FeatureFlagKey.SIGNIN, FeatureFlagKey.POINTS, FeatureFlagKey.VIDEO, FeatureFlagKey.HOSPITAL, FeatureFlagKey.GIFTCARD, FeatureFlagKey.GIVEGIFT, FeatureFlagKey.COMPLAINT, FeatureFlagKey.INVOICE, FeatureFlagKey.CERTIFICATE, FeatureFlagKey.SCANPAY, FeatureFlagKey.LIVE, FeatureFlagKey.INTELLECTSTOOLS, FeatureFlagKey.ACTIVITY, FeatureFlagKey.INVITE, FeatureFlagKey.CONTENT];
+                    var feature_keys = [FeatureFlagKey.SHOP, FeatureFlagKey.REALSTORE, FeatureFlagKey.DISTRIBUTION, FeatureFlagKey.WALLET, FeatureFlagKey.COIN, FeatureFlagKey.UGC, FeatureFlagKey.MEMBERSHIP, FeatureFlagKey.SECKILL, FeatureFlagKey.COUPON, FeatureFlagKey.SIGNIN, FeatureFlagKey.POINTS, FeatureFlagKey.VIDEO, FeatureFlagKey.HOSPITAL, FeatureFlagKey.GIFTCARD, FeatureFlagKey.GIVEGIFT, FeatureFlagKey.COMPLAINT, FeatureFlagKey.INVOICE, FeatureFlagKey.CERTIFICATE, FeatureFlagKey.SCANPAY, FeatureFlagKey.LIVE, FeatureFlagKey.INTELLECTSTOOLS, FeatureFlagKey.ACTIVITY, FeatureFlagKey.INVITE, FeatureFlagKey.CONTENT, FeatureFlagKey.FEEDBACK];
                     for (var i = 0; i < feature_keys.length; i++) {
                         var key = feature_keys[i];
                         if (typeof data[key] !== 'undefined') {

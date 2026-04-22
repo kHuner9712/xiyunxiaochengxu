@@ -544,37 +544,36 @@
                 var navigation = filter_phase_one_navigation(data.navigation || []);
                 var right_icon_list = filter_phase_one_navigation(data.right_icon_list || []);
                 var plugins_sort_list = filter_phase_one_plugin_sort_list(data.plugins_sort_list || []);
+
                 var upd_data = {
                     random_value: Math.random(),
                     page_load_status: 1,
                     data_bottom_line_status: true,
-                    banner_list: data.banner_list || [],
-                    navigation: navigation,
-                    article_list: data.article_list || [],
                     data_mode: data.data_mode || 0,
                     data_list: data_list,
+                    data_list_loding_status: data_list == null || data_list.length == 0 ? 0 : 3,
+
+                    banner_list: data.banner_list || [],
+                    navigation: navigation,
+                    right_icon_list: right_icon_list,
+                    article_list: data.article_list || [],
                     cart_total: data.cart_total.buy_number || 0,
                     message_total: parseInt(data.message_total || 0),
-                    right_icon_list: right_icon_list,
-                    data_list_loding_status: data_list == null || data_list.length == 0 ? 0 : 3,
                     plugins_sort_list: plugins_sort_list,
-                    plugins_seckill_data: data.plugins_seckill_data || null,
-                    plugins_salerecords_data: (data.plugins_salerecords_data || null) == null || data.plugins_salerecords_data.length <= 0 ? null : data.plugins_salerecords_data,
-                    plugins_activity_data: (data.plugins_activity_data || null) == null || data.plugins_activity_data.length <= 0 ? null : data.plugins_activity_data,
-                    plugins_label_data: (data.plugins_label_data || null) == null || (data.plugins_label_data.base || null) == null || (data.plugins_label_data.data || null) == null || data.plugins_label_data.data.length <= 0 ? null : data.plugins_label_data,
-                    plugins_homemiddleadv_data: (data.plugins_homemiddleadv_data || null) == null || data.plugins_homemiddleadv_data.length <= 0 ? null : data.plugins_homemiddleadv_data,
+
                     plugins_mourning_data_is_app: parseInt(data.plugins_mourning_data || 0) == 1,
-                    plugins_blog_data: null,
-                    plugins_realstore_data: null,
-                    plugins_shop_data: null,
-                    plugins_seckill_data: null,
-                    plugins_salerecords_data: null,
-                    plugins_activity_data: null,
-                    plugins_label_data: null,
-                    plugins_homemiddleadv_data: null,
-                    plugins_binding_data: null,
-                    plugins_magic_data: null,
                 };
+
+                // 一期保留的插件数据（购买记录，首页底部展示）
+                if ((data.plugins_salerecords_data || null) != null && data.plugins_salerecords_data.length > 0) {
+                    upd_data.plugins_salerecords_data = data.plugins_salerecords_data;
+                }
+
+                // 一期禁用的插件数据，不赋值，保持 data() 中的 null 初始值
+                // 禁用列表：seckill / activity(原生活动插件) / label / homemiddleadv
+                //           / blog / realstore / shop / binding / magic
+                // 这些插件即使后端返回了数据，前端也不展示，无需赋值
+
                 if (upd_data.plugins_mourning_data_is_app == 1) {
                     upd_data.common_app_is_header_nav_fixed = 0;
                 }

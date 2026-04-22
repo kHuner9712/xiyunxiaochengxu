@@ -37,6 +37,18 @@ class DashboardService
         $total_signups = Db::name('ActivitySignup')->where([['status', 'in', [0, 1]]])->count();
         $total_invites = Db::name('InviteReward')->where(['status' => 1])->group('invitee_id')->count();
 
+        $total_orders = Db::name('Order')->where(['status' => 4])->count();
+        $total_sales = Db::name('Order')->where(['status' => 4])->sum('total_price');
+        $today_orders = Db::name('Order')->where([
+            ['add_time', '>=', $today_start],
+            ['add_time', '<', $today_start + 86400],
+        ])->count();
+        $today_sales = Db::name('Order')->where([
+            ['add_time', '>=', $today_start],
+            ['add_time', '<', $today_start + 86400],
+            ['status', '>=', 4],
+        ])->sum('total_price');
+
         $stage_distribution = [];
         $stage_list = \app\extend\muying\MuyingStage::getList();
         foreach ($stage_list as $value => $name) {
@@ -51,6 +63,8 @@ class DashboardService
                 'activity_signups'   => $activity_signup_today,
                 'invite_rewards'     => intval($invite_reward_today),
                 'feedback_count'     => $feedback_today,
+                'orders'             => $today_orders,
+                'sales'              => round(floatval($today_sales), 2),
             ],
             'yesterday' => [
                 'new_users' => $new_users_yesterday,
@@ -60,6 +74,8 @@ class DashboardService
                 'activities' => $total_activities,
                 'signups'    => $total_signups,
                 'invites'    => $total_invites,
+                'orders'     => $total_orders,
+                'sales'      => round(floatval($total_sales), 2),
             ],
             'stage_distribution' => $stage_distribution,
         ]);

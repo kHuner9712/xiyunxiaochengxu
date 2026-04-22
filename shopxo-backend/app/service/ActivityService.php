@@ -153,6 +153,11 @@ class ActivityService
                 if (!isset($v['suitable_crowd'])) {
                     $v['suitable_crowd'] = '';
                 }
+
+                $v['is_signed_up'] = false;
+                if (!empty($params['user_id']) && !empty($v['id'])) {
+                    $v['is_signed_up'] = self::IsUserSignedUp($v['id'], $params['user_id']);
+                }
             }
         }
         return $data;
@@ -433,9 +438,9 @@ class ActivityService
                 'name'                => strip_tags(trim($params['name'])),
                 'phone'               => trim($params['phone']),
                 'stage'               => $normalized,
-                'due_date'            => empty($params['due_date']) ? 0 : (is_numeric($params['due_date']) ? intval($params['due_date']) : strtotime($params['due_date'])),
+                'due_date'            => empty($params['due_date']) ? 0 : self::SafeStrtotime($params['due_date']),
                 'baby_month_age'      => empty($params['baby_month_age']) ? 0 : intval($params['baby_month_age']),
-                'baby_birthday'       => empty($params['baby_birthday']) ? 0 : (is_numeric($params['baby_birthday']) ? intval($params['baby_birthday']) : strtotime($params['baby_birthday'])),
+                'baby_birthday'       => empty($params['baby_birthday']) ? 0 : self::SafeStrtotime($params['baby_birthday']),
                 'remark'              => empty($params['remark']) ? '' : strip_tags(trim($params['remark'])),
                 'privacy_agreed_time' => time(),
                 'status'              => 0,
@@ -457,22 +462,34 @@ class ActivityService
                 $user_update = ['upd_time' => time()];
                 $need_update = false;
 
+                // current_stage 为空时回填
                 if (empty($user_row['current_stage']) && !empty($normalized)) {
                     $user_update['current_stage'] = $normalized;
                     $need_update = true;
                 }
 
+                // pregnancy 阶段：due_date 为空时回填
                 if ($normalized === 'pregnancy' && !empty($data['due_date']) && empty($user_row['due_date'])) {
                     $user_update['due_date'] = $data['due_date'];
                     $need_update = true;
                 }
 
-                if ($normalized === 'postpartum' && !empty($params['baby_birthday']) && empty($user_row['baby_birthday'])) {
-                    $baby_birthday_ts = is_numeric($params['baby_birthday']) ? intval($params['baby_birthday']) : strtotime($params['baby_birthday']);
-                    if ($baby_birthday_ts > 0) {
-                        $user_update['baby_birthday'] = $baby_birthday_ts;
-                        $need_update = true;
-                    }
+                // postpartum 阶段：baby_birthday 为空时回填
+                if ($normalized === 'postpartum' && !empty($data['baby_birthday']) && empty($user_row['baby_birthday'])) {
+                    $user_update['baby_birthday'] = $data['baby_birthday'];
+                    $need_update = true;
+                }
+
+                // 非 pregnancy 阶段时，清空残留的 due_date
+                if ($normalized !== 'pregnancy' && !empty($user_row['due_date'])) {
+                    $user_update['due_date'] = 0;
+                    $need_update = true;
+                }
+
+                // 非 postpartum 阶段时，清空残留的 baby_birthday
+                if ($normalized !== 'postpartum' && !empty($user_row['baby_birthday'])) {
+                    $user_update['baby_birthday'] = 0;
+                    $need_update = true;
                 }
 
                 if ($need_update) {
@@ -539,6 +556,7 @@ class ActivityService
             }
 
             Db::name('Activity')->where(['id' => $signup['activity_id']])->dec('signup_count')->update();
+            self::RecalculateSignupCount($signup['activity_id']);
 
             Db::commit();
             return DataReturn('取消报名成功', 0);
@@ -836,8 +854,12 @@ class ActivityService
         $data['status_text'] = self::SignupStatusText($data['status']);
         $data['checkin_status_text'] = self::CheckinStatusText($data['checkin_status']);
         $data['stage_text'] = MuyingStage::getName(MuyingStage::Normalize($data['stage']));
+        $data['due_date'] = empty($data['due_date']) ? '' : date('Y-m-d', $data['due_date']);
+        $data['baby_birthday'] = empty($data['baby_birthday']) ? '' : date('Y-m-d', $data['baby_birthday']);
+        $data['baby_month_age'] = empty($data['baby_month_age']) ? '' : intval($data['baby_month_age']);
         $data['add_time_text'] = empty($data['add_time']) ? '' : date('Y-m-d H:i:s', $data['add_time']);
         $data['checkin_time_text'] = empty($data['checkin_time']) ? '' : date('Y-m-d H:i:s', $data['checkin_time']);
+        $data['privacy_agreed_time_text'] = empty($data['privacy_agreed_time']) ? '' : date('Y-m-d H:i:s', $data['privacy_agreed_time']);
 
         return DataReturn(MyLang('handle_success'), 0, $data);
     }
@@ -953,6 +975,41 @@ class ActivityService
         }
     }
 
+    public static function SignupDelete($params = [])
+    {
+        $p = [
+            [
+                'checked_type' => 'empty',
+                'key_name'     => 'id',
+                'error_msg'    => '报名记录ID不能为空',
+            ],
+        ];
+        $ret = ParamsChecked($params, $p);
+        if ($ret !== true) {
+            return DataReturn($ret, -1);
+        }
+
+        $id = intval($params['id']);
+
+        $signup = Db::name('ActivitySignup')->where([
+            ['id', '=', $id],
+            ['is_delete_time', '=', 0],
+        ])->find();
+        if (empty($signup)) {
+            return DataReturn('报名记录不存在', -1);
+        }
+
+        $upd_result = Db::name('ActivitySignup')->where(['id' => $id])->update([
+            'is_delete_time' => time(),
+            'upd_time'       => time(),
+        ]);
+        if ($upd_result !== false) {
+            self::RecalculateSignupCount($signup['activity_id']);
+            return DataReturn('删除成功', 0);
+        }
+        return DataReturn('删除失败', -100);
+    }
+
     public static function SignupExport($params = [])
     {
         $where = empty($params['where']) ? [] : $params['where'];
@@ -991,5 +1048,20 @@ class ActivityService
         }
 
         return DataReturn(MyLang('handle_success'), 0, $result);
+    }
+
+    /**
+     * 安全的时间戳转换：数字直接取整，字符串走 strtotime 并校验返回值
+     * @param   [mixed]          $value [日期字符串或时间戳]
+     * @return  [int]            时间戳，失败返回 0
+     */
+    public static function SafeStrtotime($value)
+    {
+        if (is_numeric($value)) {
+            $ts = intval($value);
+            return ($ts > 0) ? $ts : 0;
+        }
+        $ts = strtotime($value);
+        return ($ts !== false && $ts > 0) ? $ts : 0;
     }
 }

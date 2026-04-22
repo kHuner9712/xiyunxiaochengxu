@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS `sxo_activity` (
   KEY `idx_stage` (`stage`),
   KEY `idx_enable` (`is_enable`, `is_delete_time`),
   KEY `idx_time` (`start_time`, `end_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='活动表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='活动表';
 
 -- A2. 活动报名表（含 privacy_agreed_time 字段）
 CREATE TABLE IF NOT EXISTS `sxo_activity_signup` (
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS `sxo_activity_signup` (
   KEY `idx_user` (`user_id`),
   KEY `idx_status` (`status`),
   KEY `idx_checkin` (`checkin_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='活动报名表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='活动报名表';
 
 -- A3. 邀请奖励表
 CREATE TABLE IF NOT EXISTS `sxo_invite_reward` (
@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS `sxo_invite_reward` (
   KEY `idx_invitee` (`invitee_id`),
   KEY `idx_trigger_event` (`trigger_event`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邀请奖励表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='邀请奖励表';
 
 -- A4. 用户反馈表
 CREATE TABLE IF NOT EXISTS `sxo_muying_feedback` (
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS `sxo_muying_feedback` (
   PRIMARY KEY (`id`),
   KEY `idx_enable` (`is_enable`, `is_delete_time`),
   KEY `idx_sort` (`sort_level`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='母婴用户反馈';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='母婴用户反馈';
 
 -- A段回滚：
 -- DROP TABLE IF EXISTS sxo_activity, sxo_activity_signup, sxo_invite_reward, sxo_muying_feedback;
@@ -366,11 +366,35 @@ INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_
 (@feedback_id, '启用/禁用', 'feedback', 'statusupdate', '', 2, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
 (@feedback_id, '删除反馈', 'feedback', 'delete', '', 3, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
+INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
+(@op_id, '邀请配置', 'inviteconfig', 'index', '', 6, 1, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
+SET @inviteconfig_id = LAST_INSERT_ID();
+
+INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
+(@inviteconfig_id, '保存配置', 'inviteconfig', 'save', '', 1, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
+
+INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
+(@op_id, '数据看板', 'dashboard', 'index', '', 7, 1, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
+SET @dashboard_id = LAST_INSERT_ID();
+
+INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
+(@dashboard_id, '概览', 'dashboard', 'overview', '', 1, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
+(@dashboard_id, '趋势', 'dashboard', 'trend', '', 2, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
+(@dashboard_id, '生成快照', 'dashboard', 'generatesnapshot', '', 3, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
+
+INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
+(@op_id, '用户标签', 'usertag', 'index', '', 8, 1, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
+
 -- C7. 隐藏一期不需要的功能菜单
-UPDATE `sxo_power` SET `is_show`=0 WHERE `name` IN ('多商户', '商家入驻', '分销管理', '直播管理', '积分商城') OR `control` IN ('shop', 'distribution', 'weixinliveplayer', 'coin');
+-- 一期白名单：商品管理/订单管理/用户管理/文章管理/运营/系统管理/应用管理/站点管理/支付管理
+-- 一期禁用：多商户/门店/分销/钱包/积分商城/问答/博客/会员VIP/秒杀/优惠券/签到/礼品卡/送礼/投诉/发票/实名认证/扫码支付/直播/智能工具/仓库
+UPDATE `sxo_power` SET `is_show`=0 WHERE `name` IN ('多商户', '商家入驻', '分销管理', '直播管理', '积分商城', '门店管理', '钱包管理', '问答管理', '博客管理', '会员等级', '限时秒杀', '优惠券', '签到', '礼品卡', '送礼', '投诉管理', '发票管理', '实名认证', '扫码支付', '智能工具', '仓库管理') OR `control` IN ('shop', 'distribution', 'weixinliveplayer', 'coin', 'realstore', 'wallet', 'ask', 'blog', 'membershiplevelvip', 'seckill', 'coupon', 'signin', 'giftcard', 'givegift', 'complaint', 'invoice', 'certificate', 'scanpay', 'intellectstools', 'warehouse');
+
+-- C8. 强制关闭一期外功能开关（防止后台误配残留）
+UPDATE `sxo_config` SET `value`='0' WHERE `only_tag` IN ('feature_shop_enabled', 'feature_realstore_enabled', 'feature_distribution_enabled', 'feature_wallet_enabled', 'feature_coin_enabled', 'feature_ugc_enabled', 'feature_membership_enabled', 'feature_seckill_enabled', 'feature_coupon_enabled', 'feature_signin_enabled', 'feature_points_enabled', 'feature_video_enabled', 'feature_hospital_enabled', 'feature_giftcard_enabled', 'feature_givegift_enabled', 'feature_complaint_enabled', 'feature_invoice_enabled', 'feature_certificate_enabled', 'feature_scanpay_enabled', 'feature_live_enabled', 'feature_intellectstools_enabled');
 
 -- C段回滚：
 -- ALTER TABLE sxo_user DROP INDEX uk_invite_code;
 -- ALTER TABLE sxo_invite_reward DROP INDEX uk_inviter_invitee_event;
 -- DELETE FROM sxo_config WHERE only_tag IN ('muying_invite_register_reward', 'muying_invite_first_order_reward');
--- DELETE FROM sxo_power WHERE name='运营' OR control IN ('activity','activitysignup','invite','muyingstat');
+-- DELETE FROM sxo_power WHERE name='运营' OR control IN ('activity','activitysignup','invite','inviteconfig','dashboard','muyingstat','feedback','usertag');

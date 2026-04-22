@@ -19,4 +19,4 @@ CREATE TABLE IF NOT EXISTS `sxo_muying_audit_log` (
     KEY `idx_user_id` (`user_id`),
     KEY `idx_add_time` (`add_time`),
     KEY `idx_type_action` (`type`, `action`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='母婴业务审计日志';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='母婴业务审计日志';

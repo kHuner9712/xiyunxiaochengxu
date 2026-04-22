@@ -72,6 +72,16 @@ class Activitysignup extends Base
     }
 
     /**
+     * 删除报名（软删除）
+     */
+    public function Delete()
+    {
+        $params = $this->data_request;
+        $params['admin'] = $this->admin;
+        return ApiService::ApiDataReturn(ActivityService::SignupDelete($params));
+    }
+
+    /**
      * 导出
      * @author   Devil
      * @blog     http://gong.gg/
@@ -102,7 +112,7 @@ class Activitysignup extends Base
         }
 
         $headers = [
-            '报名ID', '活动标题', '姓名', '手机', '阶段', '预产期', '宝宝月龄', '报名状态', '签到状态', '报名时间', '签到时间'
+            '报名ID', '活动标题', '姓名', '手机', '阶段', '预产期', '宝宝生日', '宝宝月龄', '报名状态', '签到状态', '报名时间', '签到时间'
         ];
 
         $filename = 'activity_signup_' . date('YmdHis') . '.csv';
@@ -124,6 +134,7 @@ class Activitysignup extends Base
                     $row['phone'],
                     $row['stage'],
                     $row['due_date'],
+                    $row['baby_birthday'],
                     $row['baby_month_age'],
                     $row['status_text'],
                     $row['checkin_status_text'],

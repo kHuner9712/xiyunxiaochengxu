@@ -8,15 +8,15 @@
 
 ## 1. 服务器目录规划
 
-| 目录 | 建议路径 | 说明 |
-|------|---------|------|
-| 后端根目录 | `/www/wwwroot/yunxi-api` | ShopXO 后端代码，Git clone 到此 |
-| Nginx root | `/www/wwwroot/yunxi-api` | 指向项目根目录（不是 public/） |
-| 上传目录 | `/www/wwwroot/yunxi-api/public/upload` | 自动创建，需可写 |
-| 日志目录 | `/www/wwwroot/yunxi-api/runtime/log` | 自动创建，需可写 |
-| 缓存目录 | `/www/wwwroot/yunxi-api/runtime/cache` | 自动创建，需可写 |
-| 备份目录 | `/www/backup/yunxi` | 数据库+代码备份 |
-| uni-app 源码 | `/www/wwwroot/yunxi-uniapp` | 仅构建时使用，不对外暴露 |
+| 目录         | 建议路径                               | 说明                            |
+| ------------ | -------------------------------------- | ------------------------------- |
+| 后端根目录   | `/www/wwwroot/yunxi-api`               | ShopXO 后端代码，Git clone 到此 |
+| Nginx root   | `/www/wwwroot/yunxi-api`               | 指向项目根目录（不是 public/）  |
+| 上传目录     | `/www/wwwroot/yunxi-api/public/upload` | 自动创建，需可写                |
+| 日志目录     | `/www/wwwroot/yunxi-api/runtime/log`   | 自动创建，需可写                |
+| 缓存目录     | `/www/wwwroot/yunxi-api/runtime/cache` | 自动创建，需可写                |
+| 备份目录     | `/www/backup/yunxi`                    | 数据库+代码备份                 |
+| uni-app 源码 | `/www/wwwroot/yunxi-uniapp`            | 仅构建时使用，不对外暴露        |
 
 > **关键说明**：ShopXO 的入口文件 `api.php`、`adminwlmqhs.php`、`index.php` 都在项目根目录下（不在 public/ 下），它们内部 require 到 `public/` 下的对应文件。因此 Nginx root 必须指向项目根目录，不能指向 public/。
 
@@ -24,13 +24,13 @@
 
 ### 2.1 创建站点
 
-| 配置项 | 值 |
-|--------|-----|
-| 域名 | `api.yunxi.com`（替换为实际域名） |
-| 根目录 | `/www/wwwroot/yunxi-api/public` |
-| 运行目录 | `/public`（宝塔面板设置） |
-| PHP版本 | PHP-81 |
-| HTTPS | 域名备案完成后开启，当前可暂不开启 |
+| 配置项   | 值                                 |
+| -------- | ---------------------------------- |
+| 域名     | `api.yunxi.com`（替换为实际域名）  |
+| 根目录   | `/www/wwwroot/yunxi-api`           |
+| 运行目录 | `/`（宝塔面板设置，即项目根目录）  |
+| PHP版本  | PHP-81                             |
+| HTTPS    | 域名备案完成后开启，当前可暂不开启 |
 
 ### 2.2 后台入口安全
 
@@ -57,7 +57,7 @@ location / {
 server {
     listen 80;
     server_name api.yunxi.com;
-    root /www/wwwroot/yunxi-api/public;
+    root /www/wwwroot/yunxi-api;
     index index.php index.html;
 
     # 伪静态
@@ -110,18 +110,18 @@ server {
 
 在宝塔「软件商店→PHP-8.1→设置→安装扩展」中确认以下扩展已安装：
 
-| 扩展 | 必须 | 说明 |
-|------|------|------|
-| mysqli | ✅ | MySQL 连接 |
-| pdo_mysql | ✅ | PDO MySQL |
-| gd | ✅ | 图片处理 |
-| curl | ✅ | HTTP 请求 |
-| mbstring | ✅ | 多字节字符串 |
-| openssl | ✅ | 加密/HTTPS |
-| json | ✅ | JSON 处理 |
-| fileinfo | ✅ | 文件类型检测 |
-| redis | ⬜ | 可选，缓存加速 |
-| opcache | ✅ | 性能优化 |
+| 扩展      | 必须 | 说明           |
+| --------- | ---- | -------------- |
+| mysqli    | ✅   | MySQL 连接     |
+| pdo_mysql | ✅   | PDO MySQL      |
+| gd        | ✅   | 图片处理       |
+| curl      | ✅   | HTTP 请求      |
+| mbstring  | ✅   | 多字节字符串   |
+| openssl   | ✅   | 加密/HTTPS     |
+| json      | ✅   | JSON 处理      |
+| fileinfo  | ✅   | 文件类型检测   |
+| redis     | ⬜   | 可选，缓存加速 |
+| opcache   | ✅   | 性能优化       |
 
 ### 4.2 PHP 配置调整
 
@@ -155,6 +155,7 @@ SHOW CREATE DATABASE shopxo_dev;
 ```
 
 如需修改：
+
 ```sql
 ALTER DATABASE shopxo_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 ```
@@ -162,6 +163,7 @@ ALTER DATABASE shopxo_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 ### 5.2 备份策略
 
 宝塔「计划任务→添加任务」：
+
 - 任务类型：备份数据库
 - 执行周期：每天凌晨 3:00
 - 备份到：/www/backup/database
@@ -175,18 +177,18 @@ ALTER DATABASE shopxo_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 ### 6.1 ShopXO 内置定时任务
 
-| 任务 | Cron | URL |
-|------|------|-----|
-| 订单自动关闭 | */5 * * * * | `curl http://127.0.0.1/api.php?s=crontab/orderclose` |
-| 订单自动收货 | 0 2 * * * | `curl http://127.0.0.1/api.php?s=crontab/ordersuccess` |
-| 支付日志关闭 | */10 * * * * | `curl http://127.0.0.1/api.php?s=crontab/paylogorderclose` |
-| 商品赠送积分 | 0 3 * * * | `curl http://127.0.0.1/api.php?s=crontab/goodsgiveintegral` |
+| 任务         | Cron            | URL                                                         |
+| ------------ | --------------- | ----------------------------------------------------------- |
+| 订单自动关闭 | _/5 _ \* \* \*  | `curl http://127.0.0.1/api.php?s=crontab/orderclose`        |
+| 订单自动收货 | 0 2 \* \* \*    | `curl http://127.0.0.1/api.php?s=crontab/ordersuccess`      |
+| 支付日志关闭 | _/10 _ \* \* \* | `curl http://127.0.0.1/api.php?s=crontab/paylogorderclose`  |
+| 商品赠送积分 | 0 3 \* \* \*    | `curl http://127.0.0.1/api.php?s=crontab/goodsgiveintegral` |
 
 ### 6.2 仪表盘快照生成
 
-| 任务 | Cron | URL |
-|------|------|-----|
-| 每日快照 | 0 1 * * * | `curl http://127.0.0.1/adminwlmqhs.php?s=dashboard/generatesnapshot` |
+| 任务     | Cron         | URL                                                                  |
+| -------- | ------------ | -------------------------------------------------------------------- |
+| 每日快照 | 0 1 \* \* \* | `curl http://127.0.0.1/adminwlmqhs.php?s=dashboard/generatesnapshot` |
 
 > 注意：Crontab 控制器无鉴权，必须通过 127.0.0.1 内网调用，不要暴露到公网。
 

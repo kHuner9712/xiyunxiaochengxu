@@ -277,7 +277,7 @@
             componentBadge,
             componentCopyright,
             componentOnlineService,
-            componentStageGuide
+            componentStageGuide,
         },
 
         onLoad(params) {
@@ -293,7 +293,7 @@
             this.set_resources_data();
 
             // 初始化配置
-            if(app.globalData.get_config('status') == 1) {
+            if (app.globalData.get_config('status') == 1) {
                 app.globalData.init_config(0, this, 'init_config', true);
             } else {
                 app.globalData.is_config(this, 'init_config');
@@ -304,7 +304,7 @@
 
             // 公共onshow事件
             if ((this.$refs.common || null) != null) {
-                this.$refs.common.on_show({object: this, method: 'init'});
+                this.$refs.common.on_show({ object: this, method: 'init' });
             }
         },
 
@@ -340,10 +340,13 @@
                         count: old_nav.length > 0 ? old_nav[2].count : 0,
                     },
                 ];
-                var nav_logout_data = (user == null) ? null : {
-                    name: this.$t('user.user.2k0227'),
-                    icon: 'logout',
-                };
+                var nav_logout_data =
+                    user == null
+                        ? null
+                        : {
+                              name: this.$t('user.user.2k0227'),
+                              icon: 'logout',
+                          };
 
                 this.setData({
                     user: user,
@@ -373,10 +376,10 @@
             // 获取数据
             init(status = 0) {
                 // 没有用户信息则调用用户登录
-                if(this.user == null) {
+                if (this.user == null) {
                     app.globalData.get_user_info(this, 'init', 1);
                 }
-                if(status == 1) {
+                if (status == 1) {
                     // 资源设置
                     this.set_resources_data();
                 }
@@ -393,7 +396,7 @@
 
             // 设置用户基础信息
             set_user_base() {
-                if(this.user != null) {
+                if (this.user != null) {
                     if ((this.user.avatar || null) != null) {
                         this.setData({
                             avatar: this.user.avatar,
@@ -406,9 +409,9 @@
                     }
                 } else {
                     // 有用户信息，是否需要绑定手机
-                    if(app.globalData.user_is_bind_mobile(this.user)) {
+                    if (app.globalData.user_is_bind_mobile(this.user)) {
                         this.setData({
-                            nickname: this.$t('login.login.np9177')
+                            nickname: this.$t('login.login.np9177'),
                         });
                     }
                 }
@@ -486,12 +489,12 @@
                                         temp['extension_data'] = user_order_status_list;
                                         main_navigation_data.push(temp);
                                         status = false;
-                                    // 是否存在扩展副导航数据
-                                    } else if((navigation[i]['extension_data'] || null) != null && navigation[i]['extension_data'].length > 0) {
+                                        // 是否存在扩展副导航数据
+                                    } else if ((navigation[i]['extension_data'] || null) != null && navigation[i]['extension_data'].length > 0) {
                                         main_navigation_data.push(navigation[i]);
                                         status = false;
                                     }
-                                    if(status) {
+                                    if (status) {
                                         temp_navigation.push(navigation[i]);
                                     }
                                 }
@@ -513,7 +516,7 @@
                             if ((data.user_name_view || null) != null) {
                                 upd_data['nickname'] = data.user_name_view;
                             }
-                            var user_stage = (data.current_stage || '');
+                            var user_stage = MuyingStage.normalize(data.current_stage || '');
                             var stage_text = MuyingStage.getName(user_stage);
                             upd_data['current_stage_text'] = stage_text;
 
@@ -562,7 +565,7 @@
 
                 // 调用公共方法处理
                 app.globalData.remove_user_cache_event();
-                
+
                 // 资源设置
                 this.set_resources_data();
 
@@ -575,7 +578,7 @@
                 var self = this;
                 uni.showActionSheet({
                     itemList: ['用户协议', '隐私政策'],
-                    success: function(res) {
+                    success: function (res) {
                         var type = res.tapIndex === 0 ? 'userregister' : 'privacy';
                         uni.navigateTo({ url: '/pages/agreement/agreement?type=' + type });
                     },
@@ -600,7 +603,7 @@
 
             // 远程自定义导航事件
             navigation_event(e) {
-                if(this.is_login()) {
+                if (this.is_login()) {
                     app.globalData.operation_event(e);
                 }
             },
@@ -608,8 +611,8 @@
             // url事件
             url_event(e) {
                 var login = e.currentTarget.dataset.login;
-                if(login === undefined || login == 1) {
-                    if(this.is_login()) {
+                if (login === undefined || login == 1) {
+                    if (this.is_login()) {
                         app.globalData.url_event(e);
                     }
                 } else {
@@ -619,7 +622,7 @@
 
             // 是否登录
             is_login() {
-                if((this.user || null) == null) {
+                if ((this.user || null) == null) {
                     app.globalData.url_open('/pages/login/login?event_callback=init');
                     return false;
                 }
@@ -629,28 +632,41 @@
             // 阶段引导确认
             stage_guide_confirm_event(stage) {
                 var self = this;
-                var prev_stage_text = self.current_stage_text;
-                var prev_user = app.globalData.get_user_cache_info();
-                var prev_user_stage = prev_user ? prev_user.current_stage : '';
                 self.setData({ stage_guide_show: false });
                 http_request({
                     action: 'save',
                     controller: 'personal',
                     data: { current_stage: stage },
-                    success: function(data) {
+                    success: function (data) {
                         uni.setStorageSync('stage_guide_shown', '1');
                         self.setData({ current_stage_text: MuyingStage.getName(stage) });
                         if (data) {
                             userStore.set(data);
                         } else {
+                            var prev_user = app.globalData.get_user_cache_info();
                             if (prev_user) {
                                 prev_user.current_stage = stage;
                                 userStore.set(prev_user);
                             }
                         }
                         app.globalData.showToast('阶段设置成功', 'success');
+                        if (stage === 'pregnancy' || stage === 'postpartum') {
+                            setTimeout(function () {
+                                uni.showModal({
+                                    title: '完善信息',
+                                    content: stage === 'pregnancy' ? '建议补充预产期信息，以便为您推荐更适合的活动' : '建议补充宝宝生日信息，以便为您推荐更适合的活动',
+                                    confirmText: '去完善',
+                                    cancelText: '稍后',
+                                    success: function (res) {
+                                        if (res.confirm) {
+                                            uni.navigateTo({ url: '/pages/personal/personal' });
+                                        }
+                                    },
+                                });
+                            }, 800);
+                        }
                     },
-                    fail: function(err) {
+                    fail: function (err) {
                         self.setData({ stage_guide_show: true });
                         if (err && err.network_error) {
                             app.globalData.showToast('网络异常，阶段保存失败');
@@ -673,7 +689,7 @@
                 } else {
                     this.setData({ stage_guide_show: true });
                 }
-            }
+            },
         },
     };
 </script>
@@ -697,7 +713,7 @@
         width: 80rpx;
         height: 80rpx;
         border-radius: 50%;
-        background: #FFF8F5;
+        background: #fff8f5;
         margin: 0 auto 12rpx;
         display: flex;
         align-items: center;
@@ -709,7 +725,7 @@
     }
 
     .stage-tag {
-        background: linear-gradient(135deg, #F5A0B1, #F5C6A0);
+        background: linear-gradient(135deg, #f5a0b1, #f5c6a0);
         color: #fff;
         padding: 4rpx 16rpx;
         border-radius: 20rpx;
@@ -717,7 +733,7 @@
     }
 
     .stage-tag--empty {
-        background: #F5F5F5;
+        background: #f5f5f5;
         color: #999;
         border: 1rpx dashed #ccc;
     }

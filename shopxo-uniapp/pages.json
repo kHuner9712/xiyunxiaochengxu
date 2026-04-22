@@ -191,21 +191,11 @@
                         "navigationBarTitleText": "",
                         "usingComponents": {
                             "component-goods-comments": "/pages/goods-detail/components/goods-comments/goods-comments",
-                            "component-binding-detail-list": "/pages/goods-detail/components/common/binding-detail-list/binding-detail-list",
-                            "component-realstore-list": "/pages/goods-detail/components/common/realstore-list/realstore-list",
-                            "component-shop-list": "/pages/goods-detail/components/common/shop-list/shop-list",
-                            "component-ask-comments-goods": "/pages/goods-detail/components/common/ask-comments-goods/ask-comments-goods",
-                            "component-coupon-card": "/pages/plugins/coupon/components/coupon-card/coupon-card",
                             "component-goods-compare": "/pages/goods-detail/components/common/goods-compare/goods-compare",
                             "component-form-input-base": "/pages/form-input/components/form-input/form-input-base"
                         },
                         "componentPlaceholder": {
                             "component-goods-comments": "view",
-                            "component-binding-detail-list": "view",
-                            "component-realstore-list": "view",
-                            "component-shop-list": "view",
-                            "component-ask-comments-goods": "view",
-                            "component-coupon-card": "view",
                             "component-goods-compare": "view",
                             "component-form-input-base": "view"
                         }
@@ -794,131 +784,6 @@
             ]
         },
         {
-            "root": "pages/plugins/seckill",
-            "pages": [
-                {
-                    "path": "index/index",
-                    "style": {
-                        // #ifdef MP-WEIXIN || MP-BAIDU || MP-QQ || MP-KUAISHOU || APP
-                        "navigationStyle": "custom",
-                        // #endif
-                        // #ifdef MP-ALIPAY
-                        "transparentTitle": "auto",
-                        "titlePenetrate": "YES",
-                        // #endif
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/plugins/coupon",
-            "pages": [
-                {
-                    "path": "index/index",
-                    "style": {
-                        // #ifdef MP-WEIXIN || MP-BAIDU || MP-QQ || MP-KUAISHOU || APP
-                        "navigationStyle": "custom",
-                        // #endif
-                        // #ifdef MP-ALIPAY
-                        "transparentTitle": "auto",
-                        "titlePenetrate": "YES",
-                        // #endif
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "detail/detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "user/user",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/plugins/signin",
-            "pages": [
-                {
-                    "path": "user/user",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "detail/detail",
-                    "style": {
-                        // #ifdef MP-WEIXIN || MP-BAIDU || MP-QQ || MP-KUAISHOU || APP
-                        "navigationStyle": "custom",
-                        // #endif
-                        // #ifdef MP-ALIPAY
-                        "transparentTitle": "auto",
-                        "titlePenetrate": "YES",
-                        // #endif
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "user-qrcode-detail/user-qrcode-detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "user-qrcode-saveinfo/user-qrcode-saveinfo",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "user-coming-list/user-coming-list",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/plugins/points",
-            "pages": [
-                {
-                    "path": "index/index",
-                    "style": {
-                        // #ifdef MP-WEIXIN || MP-BAIDU || MP-QQ || MP-KUAISHOU || APP
-                        "navigationStyle": "custom",
-                        // #endif
-                        // #ifdef MP-ALIPAY
-                        "transparentTitle": "auto",
-                        "titlePenetrate": "YES",
-                        // #endif
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "scan/scan",
-                    "style": {
-                        "enablePullDownRefresh": false,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
             "root": "pages/plugins/brand",
             "pages": [
                 {
@@ -931,69 +796,7 @@
             ]
         },
         {
-            "root": "pages/plugins/activity",
-            "pages": [
-                {
-                    "path": "index/index",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "detail/detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/plugins/label",
-            "pages": [
-                {
-                    "path": "detail/detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
             "root": "pages/plugins/express",
-            "pages": [
-                {
-                    "path": "detail/detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/plugins/binding",
-            "pages": [
-                {
-                    "path": "index/index",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "detail/detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/plugins/magic",
             "pages": [
                 {
                     "path": "detail/detail",

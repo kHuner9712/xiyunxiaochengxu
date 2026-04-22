@@ -98,7 +98,8 @@
                         <uni-icons :type="is_favored ? 'star-filled' : 'star'" size="44rpx" :color="is_favored ? '#F5A0B1' : '#999'"></uni-icons>
                         <text :class="'text-size-xs dis-block ' + (is_favored ? 'cr-main' : 'cr-grey')">{{ is_favored ? '已收藏' : '收藏' }}</text>
                     </view>
-                    <button class="signup-btn flex-1 cr-white fw-b text-size-md round" :class="signup_btn_class" :disabled="signup_disabled" @tap="signup_event">
+                    <button v-if="is_signed_up" class="signup-btn flex-1 cr-white fw-b text-size-md round signup-btn-cancel" @tap="cancel_signup_event">取消报名</button>
+                    <button v-else class="signup-btn flex-1 cr-white fw-b text-size-md round" :class="signup_btn_class" :disabled="signup_disabled" @tap="signup_event">
                         {{ signup_btn_text }}
                     </button>
                 </view>
@@ -253,6 +254,44 @@
                     url: '/pages/activity-signup/activity-signup?id=' + this.activity.id,
                 });
             },
+
+            cancel_signup_event() {
+                var self = this;
+                uni.showModal({
+                    title: '取消报名',
+                    content: '确定要取消该活动的报名吗？取消后可重新报名。',
+                    confirmText: '确定取消',
+                    cancelText: '再想想',
+                    confirmColor: '#F5A0B1',
+                    success: function (res) {
+                        if (res.confirm) {
+                            self.do_cancel_signup();
+                        }
+                    },
+                });
+            },
+
+            do_cancel_signup() {
+                var self = this;
+                http_request({
+                    controller: 'activity',
+                    action: 'signupcancel',
+                    data: { id: self.activity_id },
+                    success: function () {
+                        app.globalData.showToast('取消报名成功', 'success');
+                        self.setData({
+                            is_signed_up: false,
+                            signup_status: 'ongoing',
+                        });
+                        self.get_activity_detail();
+                    },
+                    fail: function (err) {
+                        if (!err.feature_disabled && !err.login_expired) {
+                            app.globalData.showToast(err.errMsg || '取消报名失败');
+                        }
+                    },
+                });
+            },
         },
 
         onShareAppMessage() {
@@ -378,5 +417,11 @@
     .signup-btn-disabled {
         background-color: #dddddd;
         color: #999999;
+    }
+
+    .signup-btn-cancel {
+        background-color: #fff;
+        color: #f5a0b1;
+        border: 2rpx solid #f5a0b1;
     }
 </style>

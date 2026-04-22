@@ -78,7 +78,7 @@
                     <tbody>
                         <tr>
                             <th style="width:120px;">当前阶段</th>
-                            <td>{{if !empty($data['current_stage'])}}{{$data.current_stage}}{{else /}}未设置{{/if}}</td>
+                            <td>{{if !empty($data['current_stage_text'])}}{{$data.current_stage_text}}{{else /}}未设置{{/if}}</td>
                             <th style="width:120px;">邀请码</th>
                             <td>{{if !empty($data['invite_code'])}}{{$data.invite_code}}{{else /}}未生成{{/if}}</td>
                         </tr>
@@ -87,6 +87,12 @@
                             <td>{{if !empty($data['due_date'])}}{{$data.due_date}}{{else /}}未设置{{/if}}</td>
                             <th>宝宝生日</th>
                             <td>{{if !empty($data['baby_birthday'])}}{{$data.baby_birthday}}{{else /}}未设置{{/if}}</td>
+                        </tr>
+                        <tr>
+                            <th>宝宝月龄</th>
+                            <td>{{if !empty($data['baby_month_age'])}}{{$data.baby_month_age}}个月{{else /}}未设置{{/if}}</td>
+                            <th></th>
+                            <td></td>
                         </tr>
                         <tr>
                             <th>用户标签</th>

@@ -11,6 +11,7 @@
 namespace app\admin\form;
 
 use think\facade\Db;
+use app\extend\muying\MuyingStage;
 
 /**
  * 用户动态表格
@@ -254,6 +255,41 @@ class User
                     ],
                 ],
                 [
+                    'label'         => '当前阶段',
+                    'view_type'     => 'field',
+                    'view_key'      => 'current_stage_text',
+                    'is_sort'       => 1,
+                    'search_config' => [
+                        'form_type'         => 'select',
+                        'form_name'         => 'current_stage',
+                        'where_type'        => 'in',
+                        'data'              => self::MuyingStageFormData(),
+                        'data_key'          => 'id',
+                        'data_name'         => 'name',
+                        'is_multiple'       => 1,
+                    ],
+                ],
+                [
+                    'label'         => '预产期',
+                    'view_type'     => 'field',
+                    'view_key'      => 'due_date',
+                    'is_sort'       => 1,
+                    'search_config' => [
+                        'form_type'         => 'date',
+                        'is_point'          => 1,
+                    ],
+                ],
+                [
+                    'label'         => '宝宝生日',
+                    'view_type'     => 'field',
+                    'view_key'      => 'baby_birthday',
+                    'is_sort'       => 1,
+                    'search_config' => [
+                        'form_type'         => 'date',
+                        'is_point'          => 1,
+                    ],
+                ],
+                [
                     'label'         => $lang['locking_integral'],
                     'view_type'     => 'field',
                     'view_key'      => 'locking_integral',
@@ -314,6 +350,21 @@ class User
                 ],
             ],
         ];
+    }
+
+    /**
+     * 母婴阶段筛选数据
+     */
+    public static function MuyingStageFormData()
+    {
+        $list = MuyingStage::getList();
+        $result = [];
+        foreach ($list as $k => $v) {
+            if ($k !== MuyingStage::ALL) {
+                $result[] = ['id' => $k, 'name' => $v];
+            }
+        }
+        return $result;
     }
 
     /**

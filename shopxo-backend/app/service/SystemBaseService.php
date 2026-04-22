@@ -248,6 +248,7 @@ class SystemBaseService
             'feature_activity_enabled'           => (int) MyC('feature_activity_enabled', 1),
             'feature_invite_enabled'             => (int) MyC('feature_invite_enabled', 1),
             'feature_content_enabled'            => (int) MyC('feature_content_enabled', 1),
+            'feature_feedback_enabled'           => (int) MyC('feature_feedback_enabled', 1),
         ];
         $config = array_merge($config, $feature_flags);
 
