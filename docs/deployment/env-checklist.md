@@ -34,7 +34,7 @@ UNI_APP_STATIC_URL=https://api.yunxi.com/
 | 数据库主机 | `mysql`（Docker）/ `127.0.0.1` | `127.0.0.1` | `.env` HOSTNAME |
 | 数据库名 | `shopxo_dev` | `shopxo_dev` 或自定义 | `.env` DATABASE |
 | 数据库用户 | `root` | 专用账号（建议） | `.env` USERNAME |
-| 数据库密码 | `SS200627.` | **替换为强密码** | `.env` PASSWORD |
+| 数据库密码 | `<强密码>` | **替换为强密码** | `.env` PASSWORD |
 | APP_DEBUG | `false` | `false` | `.env` |
 
 ### 后端 .env 配置步骤

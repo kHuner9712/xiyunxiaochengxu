@@ -39,7 +39,7 @@ SHOW TABLES LIKE 'sxo_%';
 ### 步骤 2：母婴基础迁移
 
 ```bash
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/../../docs/muying-final-migration.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-final-migration.sql
 ```
 
 **幂等性说明**：
@@ -68,7 +68,7 @@ ALTER TABLE sxo_goods DROP COLUMN stage, DROP COLUMN selling_point;
 ### 步骤 3：审计日志表
 
 ```bash
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/../../docs/muying-audit-log-migration.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-audit-log-migration.sql
 ```
 
 **验证**：
@@ -85,7 +85,7 @@ DROP TABLE IF EXISTS sxo_muying_audit_log;
 ### 步骤 4：功能开关配置
 
 ```bash
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/../../docs/muying-feature-switch-migration.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-feature-switch-migration.sql
 ```
 
 **验证**：
@@ -105,7 +105,7 @@ DELETE FROM sxo_power WHERE control = 'featureswitch';
 ### 步骤 5：增强功能迁移
 
 ```bash
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/../../docs/muying-enhancement-migration.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-enhancement-migration.sql
 ```
 
 **验证**：
@@ -135,7 +135,7 @@ DELETE FROM sxo_power WHERE control IN ('usertag', 'inviteconfig', 'dashboard');
 ### 步骤 6：演示数据（可选）
 
 ```bash
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/../../docs/muying-demo-data.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-demo-data.sql
 ```
 
 > 仅开发/测试环境使用，生产环境不要执行。

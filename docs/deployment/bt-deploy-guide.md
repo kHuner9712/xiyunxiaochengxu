@@ -11,12 +11,14 @@
 | 目录 | 建议路径 | 说明 |
 |------|---------|------|
 | 后端根目录 | `/www/wwwroot/yunxi-api` | ShopXO 后端代码，Git clone 到此 |
-| 后端运行目录 | `/www/wwwroot/yunxi-api/public` | Nginx root 指向此目录 |
+| Nginx root | `/www/wwwroot/yunxi-api` | 指向项目根目录（不是 public/） |
 | 上传目录 | `/www/wwwroot/yunxi-api/public/upload` | 自动创建，需可写 |
 | 日志目录 | `/www/wwwroot/yunxi-api/runtime/log` | 自动创建，需可写 |
 | 缓存目录 | `/www/wwwroot/yunxi-api/runtime/cache` | 自动创建，需可写 |
 | 备份目录 | `/www/backup/yunxi` | 数据库+代码备份 |
 | uni-app 源码 | `/www/wwwroot/yunxi-uniapp` | 仅构建时使用，不对外暴露 |
+
+> **关键说明**：ShopXO 的入口文件 `api.php`、`adminwlmqhs.php`、`index.php` 都在项目根目录下（不在 public/ 下），它们内部 require 到 `public/` 下的对应文件。因此 Nginx root 必须指向项目根目录，不能指向 public/。
 
 ## 2. 宝塔站点创建
 
