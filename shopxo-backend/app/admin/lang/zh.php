@@ -2043,6 +2043,36 @@ return [
                 'sqlconsole_implement'  => 'SQL执行',
             ]
         ],
+        'muying_index' => [
+            'name'  => '孕禧运营',
+            'item'  => [
+                'activity_index'           => '活动管理',
+                'activity_detail'          => '活动详情',
+                'activity_saveinfo'        => '活动添加/编辑页面',
+                'activity_save'            => '活动添加/编辑',
+                'activity_statusupdate'    => '活动状态更新',
+                'activity_delete'          => '活动删除',
+                'activitysignup_index'     => '活动报名',
+                'activitysignup_detail'    => '报名详情',
+                'activitysignup_checkin'   => '签到核销',
+                'activitysignup_confirm'   => '确认报名',
+                'activitysignup_delete'    => '报名删除',
+                'activitysignup_export'    => '报名导出',
+                'invite_index'             => '邀请奖励',
+                'invite_detail'            => '奖励详情',
+                'invite_grant'             => '奖励补发',
+                'invite_cancel'            => '奖励撤销',
+                'inviteconfig_index'       => '邀请配置',
+                'inviteconfig_save'        => '邀请配置保存',
+                'feedback_index'           => '用户反馈',
+                'feedback_detail'          => '反馈详情',
+                'feedback_review'          => '反馈审核',
+                'feedback_statusupdate'    => '反馈状态更新',
+                'feedback_delete'          => '反馈删除',
+                'featureswitch_index'      => '功能开关',
+                'featureswitch_save'       => '功能开关保存',
+            ]
+        ],
     ],
 ];
 ?>
