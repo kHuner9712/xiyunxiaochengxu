@@ -177,7 +177,7 @@
                             </view>
                         </view>
 
-                        <view class="muying-section" v-if="is_feature_enabled(FeatureFlagKey.CONTENT)">
+                        <view class="muying-section" v-if="is_feature_enabled(FeatureFlagKey.FEEDBACK)">
                             <view class="muying-section-header">
                                 <text class="muying-section-title">妈妈说</text>
                             </view>

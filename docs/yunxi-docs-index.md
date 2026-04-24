@@ -10,8 +10,10 @@
 | 首批内容清单 | [docs/yunxi-launch-content-checklist.md](yunxi-launch-content-checklist.md) | 后台初始化内容，照着配置 |
 | 首页内容填写模板 | [docs/templates/yunxi-home-content-template.md](templates/yunxi-home-content-template.md) | 后台人工填写操作模板 |
 | 一期验收测试清单 | [docs/release/uat-acceptance-checklist.md](release/uat-acceptance-checklist.md) | 发布前 11 模块验收测试项+自动化脚本 |
-| RC 封板前总检查报告 | [docs/release/rc-gate-report.md](release/rc-gate-report.md) | 代码完成度+不一致修复+剩余阻塞项 |
-| 正式上线前人工配置清单 | [docs/release/pre-launch-config-checklist.md](release/pre-launch-config-checklist.md) | 所有需人工填写的配置项汇总 |
+| RC 封板前总检查报告 | [docs/release/rc-gate-report.md](release/rc-gate-report.md) | 代码完成度+死角排查+功能开关一致性+真实阻塞项 |
+| 正式上线前人工配置清单 | [docs/release/pre-launch-config-checklist.md](release/pre-launch-config-checklist.md) | 三阶段配置项（体验版前/提审前/正式发布前） |
+| 体验版上线执行清单 | [docs/release/experience-version-launch-checklist.md](release/experience-version-launch-checklist.md) | 按顺序执行：部署→配置→构建→验收 |
+| 提审材料准备清单 | [docs/release/submission-materials-checklist.md](release/submission-materials-checklist.md) | 服务类目/隐私/截图/测试账号/客服 |
 | 后台菜单注册迁移 | [docs/muying-admin-power-migration.sql](muying-admin-power-migration.sql) | 注册孕禧运营菜单到后台 |
 
 ## 初始化 SQL 脚本

@@ -2,8 +2,7 @@
 
 > 项目：孕禧一期  
 > 日期：2026-04-24  
-> 检查人：AI 协助  
-> 结论：**代码层面已封板，外部条件未完成不可提审**
+> 结论：**代码层面已封板，体验版可立即上线；提审需等待正式 AppID + 备案域名**
 
 ---
 
@@ -31,104 +30,70 @@
 
 ---
 
-## 二、本轮修复的不一致项
+## 二、死角排查结果
 
-| 序号 | 不一致项 | 原文档描述 | 真实代码逻辑 | 修复动作 |
-|------|----------|------------|------------|----------|
-| 1 | 邀请注册逻辑 | 文档说读取 `muying_invite_register_reward`，status=0/1 | 实际硬编码 `reward_value=0, status=GRANTED(1)`，仅绑定关系 | 更新 `22-邀请裂变逻辑说明.md` |
-| 2 | 邀请状态枚举 | 文档说 status 有 0/1/2 三种 | 实际有 4 种：PENDING(0)/GRANTED(1)/CANCELLED(2)/REVOKED(3) | 更新文档 |
-| 3 | UAT 6.3 注册预期 | 写 `status='pending'` | 实际 `status=1(GRANTED), reward_value=0` | 更新 UAT 清单 |
-| 4 | UAT 6.6 每日上限 | 写 `status='daily_limited'` | 代码中不存在此状态，超限只是不创建新记录 | 更新 UAT 清单 |
-| 5 | 邀请文档 OnFirstOrder | 缺少 auto_grant/daily_limit/订单校验描述 | 代码有完整逻辑 | 补充文档 |
-| 6 | 邀请文档 GrantReward | 写 `IntegralService::IntegralLogAdd()` | 实际调用 `IntegralService::UserIntegralLogAdd()` | 更新文档 |
-| 7 | 邀请文档方法列表 | 缺少 AdminGrant/AdminCancel/GrantRewardInner/CheckDailyLimit | 代码中存在 | 补充文档 |
-| 8 | 后台菜单缺失 | Activity/Invite/Feedback/Featureswitch 无菜单入口 | 控制器/视图/Form 均存在 | 新增 SQL 迁移 + 语言包更新 |
+### 已修复
+
+| 问题 | 修复动作 |
+|------|----------|
+| `feature_feedback_enabled` 前端未使用，反馈入口无法关闭 | user.vue 反馈入口加 `v-if="is_feature_enabled(FeatureFlagKey.FEEDBACK)"` |
+| 首页妈妈说区块用 CONTENT 开关而非 FEEDBACK 开关 | index.vue 妈妈说区块改用 `FeatureFlagKey.FEEDBACK` |
+
+### 已知限制（不影响提审）
+
+| 问题 | 等级 | 说明 |
+|------|------|------|
+| 120+ 个插件页面未在 pages.json 注册 | P2 | 一期路由守卫会拦截，不会导航到这些页面 |
+| 15+ 个用户页面缺少显式登录检查 | P2 | API 层 is_login_check 兜底，用户会先看到空白再跳转 |
+| payment_id=0 时无明确"未配置支付方式"提示 | P2 | 支付列表为空时显示"暂无支付方式"，但 payment_id=0 分支无专项提示 |
+| chooseAvatar 按钮 @tap 和 open-type 可能双重触发 | P2 | 实际测试中未发现重复调用，但代码层面存在风险 |
 
 ---
 
 ## 三、权限最小化确认
 
-| 权限项 | 状态 | 说明 |
-|--------|------|------|
-| requiredPrivateInfos | ✅ 已精简 | 仅 chooseLocation + getLocation |
-| Android 高敏感权限 | ✅ 已移除 | READ_CONTACTS/CALL_PHONE/READ_PHONE_STATE/RECORD_AUDIO 等 11 项 |
-| iOS 后台定位 | ✅ 已移除 | NSLocationAlwaysUsageDescription 已删除 |
-| app-plus 模块 | ✅ 已精简 | 移除 Barcode/VideoPlayer/LivePusher |
-| 位置权限 desc | ✅ 已优化 | "用于活动签到、收货地址选择，为您提供附近的活动和服务" |
-| 位置监听 API | ✅ 已条件编译 | startLocationUpdate/onLocationChange 用 #ifndef MP-WEIXIN 排除 |
-| 隐私政策 | ✅ 已补充 | 含位置/相册/摄像头说明 + 拒绝授权不影响说明 |
-
----
-
-## 四、提审阻塞项清单
-
-### 4.1 代码已完成（无需操作）
-
-- [x] manifest.json 权限最小化
-- [x] 隐私政策内容完整（位置/相册/摄像头/拒绝说明）
-- [x] 用户协议内容完整
-- [x] 权限按需申请（不在首页自动弹出）
-- [x] __usePrivacyCheck__ 已开启
-- [x] 后台菜单注册 SQL 已准备
-- [x] 反馈审核制逻辑完整
-- [x] 邀请首单奖励逻辑完整
-- [x] 功能开关前后端一致
-
-### 4.2 后台待配置（部署后操作）
-
-- [ ] 执行 `muying-admin-power-migration.sql` 注册后台菜单
-- [ ] 配置 `common_app_mini_weixin_privacy_content` 隐私弹窗文案
-- [ ] 配置 `common_app_customer_service_tel` 客服电话
-- [ ] 配置 `muying_invite_first_order_reward` 首单奖励积分
-- [ ] 确认功能开关（activity/invite/feedback/content 开启）
-- [ ] 录入首批内容（活动/商品/文章）
-
-### 4.3 微信公众平台待配置
-
-- [ ] 注册小程序获取 AppID
-- [ ] 配置服务器域名（request/upload/download 合法域名）
-- [ ] 填写隐私保护指引（位置信息/相册/摄像头）
-- [ ] 选择服务类目
-- [ ] 配置微信支付商户号（如需支付功能）
-
-### 4.4 域名/备案待完成
-
-- [ ] 购买正式域名
-- [ ] 完成 ICP 备案（7-20 个工作日）
-- [ ] 配置 DNS 解析到服务器 IP
-- [ ] 申请 SSL 证书
-
-### 4.5 微信支付待配置
-
-- [ ] 申请微信支付商户号
-- [ ] 获取商户密钥
-- [ ] 下载支付证书
-- [ ] 后台配置支付参数
-
----
-
-## 五、剩余真实阻塞项（不可粉饰）
-
-| 序号 | 阻塞项 | 类别 | 预计耗时 | 说明 |
-|------|--------|------|----------|------|
-| 1 | 微信小程序 AppID | 外部条件 | 1-3 天 | 必须注册微信公众平台，获取 AppID 后才能编译和上传 |
-| 2 | ICP 域名备案 | 外部条件 | 7-20 天 | 域名未备案则微信审核不通过 |
-| 3 | 服务器部署 | 运维操作 | 1-2 天 | 需购买服务器、安装宝塔、部署后端 |
-| 4 | 微信支付商户号 | 外部条件 | 3-7 天 | 需申请微信支付，审核通过后才能使用支付功能 |
-| 5 | 后台菜单注册 SQL | 部署操作 | 5 分钟 | 需在部署后执行 muying-admin-power-migration.sql |
-| 6 | 首批内容录入 | 运营操作 | 1-2 天 | 至少需要 1 个活动、2 个商品、1 篇文章才能提审 |
-
----
-
-## 六、代码质量确认
-
-| 检查项 | 结果 |
+| 权限项 | 状态 |
 |--------|------|
-| MySQL 5.7.44 兼容 | ✅ 已验证，无 8.0 专属语法 |
-| 占位符残留 | ⚠️ .env.example 中有模板占位符（设计如此，不影响运行） |
-| 硬编码密钥 | ✅ 无硬编码密钥 |
-| APP_DEBUG | ✅ .env.production.example 中未设置，需部署时确认 false |
-| install.php | ⚠️ 文件存在，需部署后手动删除 |
-| 后台入口 | ⚠️ 默认 admin.php，需部署后重命名 |
-| 日志写入 | ✅ runtime/ 目录可写 |
-| 上传目录 | ✅ public/upload/ 目录可写 |
+| requiredPrivateInfos 仅 chooseLocation + getLocation | ✅ |
+| Android 高敏感权限已移除 | ✅ |
+| iOS 后台定位声明已移除 | ✅ |
+| app-plus 模块已精简 | ✅ |
+| 位置权限 desc 含具体场景 | ✅ |
+| 位置监听 API 已条件编译排除 | ✅ |
+| 隐私政策含位置/相册/摄像头说明 | ✅ |
+
+---
+
+## 四、功能开关前后端一致性
+
+| 开关 | 后端(API守卫) | 前端(UI控制) | 一致性 |
+|------|-------------|------------|--------|
+| feature_activity_enabled | ✅ API层 CheckFeatureEnabled | ✅ 首页+用户中心 v-if | ✅ 一致 |
+| feature_invite_enabled | ✅ API层 CheckFeatureEnabled | ✅ 首页+用户中心 v-if | ✅ 一致 |
+| feature_content_enabled | ✅ API层 CheckFeatureEnabled | ✅ 首页孕育知识 v-if | ✅ 一致 |
+| feature_feedback_enabled | ✅ API层 CheckFeatureEnabled | ✅ 首页妈妈说+用户中心反馈 v-if | ✅ 一致（本轮修复） |
+
+---
+
+## 五、真实阻塞项
+
+### 体验版上线：无外部阻塞
+
+> 体验版可用测试号 AppID + 服务器 IP 直连，不需要备案域名
+
+### 提审上线：4 项外部阻塞
+
+| 序号 | 阻塞项 | 预计耗时 | 说明 |
+|------|--------|----------|------|
+| 1 | 正式微信小程序 AppID | 1-3 天 | 注册微信公众平台获取 |
+| 2 | ICP 域名备案 | 7-20 天 | 域名未备案则微信审核不通过 |
+| 3 | 微信公众平台隐私保护指引 | 30 分钟 | 需在微信后台填写 |
+| 4 | 微信公众平台合法域名 | 30 分钟 | 需备案域名后配置 |
+
+### 正式发布：1 项额外阻塞
+
+| 序号 | 阻塞项 | 预计耗时 | 说明 |
+|------|--------|----------|------|
+| 5 | 微信支付商户号 | 3-7 天 | 支付功能上线前必须完成 |
+
+> **注意**：服务器+宝塔+Nginx+PHP+MySQL 已具备，不列为阻塞项。

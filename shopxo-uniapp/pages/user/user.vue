@@ -152,7 +152,7 @@
                                 </view>
                             </view>
                             <!-- 意见反馈 -->
-                            <view class="nav-item br-t cp padding-main" data-value="/pages/feedback-submit/feedback-submit" data-login="1" @tap="url_event">
+                            <view v-if="is_feature_enabled(FeatureFlagKey.FEEDBACK)" class="nav-item br-t cp padding-main" data-value="/pages/feedback-submit/feedback-submit" data-login="1" @tap="url_event">
                                 <view class="arrow-right">
                                     <iconfont name="icon-message" size="40rpx" propClass="item-icon va-m"></iconfont>
                                     <text class="item-name va-m cr-base margin-left-sm text-size-sm">意见反馈</text>
