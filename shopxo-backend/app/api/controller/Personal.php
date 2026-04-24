@@ -12,6 +12,7 @@ namespace app\api\controller;
 
 use app\service\ApiService;
 use app\service\UserService;
+use app\service\MuyingPrivacyService;
 
 /**
  * 用户资料
@@ -51,10 +52,19 @@ class Personal extends Common
      */
     public function Index()
     {
+        $user_data = UserService::UserHandle(UserService::UserInfo('id', $this->user['id']));
+
+        // [MUYING-二开] 前端 API 不返回完整手机号，仅返回脱敏版本
+        if (isset($user_data['mobile'])) {
+            unset($user_data['mobile']);
+        }
+        // [MUYING-二开] 前端 API 不返回完整邮箱
+        if (isset($user_data['email'])) {
+            unset($user_data['email']);
+        }
+
         $data = [
-            // 用户数据
-            'data'          => UserService::UserHandle(UserService::UserInfo('id', $this->user['id'])),
-            // 性别
+            'data'          => $user_data,
             'gender_list'   => MyConst('common_gender_list'),
         ];
         return ApiService::ApiDataReturn(DataReturn('success', 0, $data));

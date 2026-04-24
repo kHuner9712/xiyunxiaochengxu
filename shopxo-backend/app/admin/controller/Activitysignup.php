@@ -13,47 +13,21 @@ namespace app\admin\controller;
 use app\admin\controller\Base;
 use app\service\ApiService;
 use app\service\ActivityService;
+use app\service\MuyingPrivacyService;
+use app\service\MuyingAuditLogService;
 
-/**
- * 活动报名管理
- * @author   Devil
- * @blog     http://gong.gg/
- * @version  0.0.1
- * @datetime 2016-12-01T21:51:08+0800
- */
 class Activitysignup extends Base
 {
-    /**
-     * 列表
-     * @author   Devil
-     * @blog     http://gong.gg/
-     * @version  0.0.1
-     * @datetime 2016-12-06T21:31:53+0800
-     */
     public function Index()
     {
         return MyView();
     }
 
-    /**
-     * 详情
-     * @author   Devil
-     * @blog     http://gong.gg/
-     * @version  1.0.0
-     * @datetime 2019-08-05T08:21:54+0800
-     */
     public function Detail()
     {
         return MyView();
     }
 
-    /**
-     * 签到
-     * @author   Devil
-     * @blog     http://gong.gg/
-     * @version  0.0.1
-     * @datetime 2017-01-12T22:23:06+0800
-     */
     public function Checkin()
     {
         $params = $this->data_request;
@@ -61,9 +35,6 @@ class Activitysignup extends Base
         return ApiService::ApiDataReturn(ActivityService::SignupCheckin($params));
     }
 
-    /**
-     * 确认报名
-     */
     public function Confirm()
     {
         $params = $this->data_request;
@@ -71,7 +42,7 @@ class Activitysignup extends Base
         return ApiService::ApiDataReturn(ActivityService::SignupConfirm($params));
     }
 
-    // [MUYING-二开] 取消报名 — 管理员可取消已确认/待确认的报名
+    // [MUYING-二开] 取消报名
     public function Cancel()
     {
         $params = $this->data_request;
@@ -79,7 +50,7 @@ class Activitysignup extends Base
         return ApiService::ApiDataReturn(ActivityService::SignupAdminCancel($params));
     }
 
-    // [MUYING-二开] 批量确认报名 — 管理员可批量确认待确认的报名
+    // [MUYING-二开] 批量确认报名
     public function BatchConfirm()
     {
         $params = $this->data_request;
@@ -87,9 +58,6 @@ class Activitysignup extends Base
         return ApiService::ApiDataReturn(ActivityService::SignupBatchConfirm($params));
     }
 
-    /**
-     * 删除报名（软删除）
-     */
     public function Delete()
     {
         $params = $this->data_request;
@@ -97,19 +65,11 @@ class Activitysignup extends Base
         return ApiService::ApiDataReturn(ActivityService::SignupDelete($params));
     }
 
-    /**
-     * 导出
-     * @author   Devil
-     * @blog     http://gong.gg/
-     * @version  0.0.1
-     * @datetime 2017-01-12T22:23:06+0800
-     */
     public function Export()
     {
         $params = $this->data_request;
         $params['admin'] = $this->admin;
 
-        // [MUYING-二开] 导出权限校验 — 手机号和母婴资料属于个人信息，仅授权管理员可导出
         if (empty($this->admin) || empty($this->admin['id'])) {
             return ApiService::ApiDataReturn(DataReturn('无导出权限', -1));
         }
@@ -124,15 +84,14 @@ class Activitysignup extends Base
         if (isset($params['checkin_status']) && $params['checkin_status'] !== '') {
             $where[] = ['checkin_status', '=', intval($params['checkin_status'])];
         }
-        // [MUYING-二开] 增加阶段筛选
         if (!empty($params['stage'])) {
             $where[] = ['stage', '=', trim($params['stage'])];
         }
-        // [MUYING-二开] 增加手机号筛选
+        // [MUYING-二开] 手机号筛选改用 phone_hash（phone 字段已加密，无法 LIKE）
         if (!empty($params['phone'])) {
-            $where[] = ['phone', 'like', '%' . trim($params['phone']) . '%'];
+            $phone_hash = MuyingPrivacyService::HashPhone(trim($params['phone']));
+            $where[] = ['phone_hash', '=', $phone_hash];
         }
-        // [MUYING-二开] 增加时间范围筛选
         if (!empty($params['start_time'])) {
             $start_ts = strtotime($params['start_time']);
             if ($start_ts !== false) {
@@ -189,4 +148,3 @@ class Activitysignup extends Base
         exit;
     }
 }
-?>

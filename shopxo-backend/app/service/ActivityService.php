@@ -2,6 +2,8 @@
 namespace app\service;
 
 use app\service\MuyingLogService;
+use app\service\MuyingPrivacyService;
+use app\service\MuyingAuditLogService;
 
 // [MUYING-二开] 活动报名、收藏、核销服务 - 二开新增文件
 
@@ -416,12 +418,21 @@ class ActivityService
                 return DataReturn('您已报名该活动', -1);
             }
 
+            $phone_hash = MuyingPrivacyService::HashPhone($params['phone']);
             $phone_exists = Db::name('ActivitySignup')->where([
                 ['activity_id', '=', $activity_id],
-                ['phone', '=', $params['phone']],
+                ['phone_hash', '=', $phone_hash],
                 ['status', 'in', [0, 1]],
                 ['is_delete_time', '=', 0],
             ])->find();
+            if (empty($phone_exists)) {
+                $phone_exists = Db::name('ActivitySignup')->where([
+                    ['activity_id', '=', $activity_id],
+                    ['phone', '=', $params['phone']],
+                    ['status', 'in', [0, 1]],
+                    ['is_delete_time', '=', 0],
+                ])->find();
+            }
             if (!empty($phone_exists)) {
                 Db::rollback();
                 return DataReturn('该手机号已报名此活动', -1);
@@ -435,14 +446,16 @@ class ActivityService
             $data = [
                 'activity_id'         => $activity_id,
                 'user_id'             => $user_id,
-                'name'                => strip_tags(trim($params['name'])),
-                'phone'               => trim($params['phone']),
+                'name'                => MuyingPrivacyService::EncryptSensitive(strip_tags(trim($params['name']))),
+                'phone'               => MuyingPrivacyService::EncryptSensitive(trim($params['phone'])),
+                'phone_hash'          => $phone_hash,
                 'stage'               => $normalized,
                 'due_date'            => empty($params['due_date']) ? 0 : self::SafeStrtotime($params['due_date']),
                 'baby_month_age'      => empty($params['baby_month_age']) ? 0 : intval($params['baby_month_age']),
                 'baby_birthday'       => empty($params['baby_birthday']) ? 0 : self::SafeStrtotime($params['baby_birthday']),
                 'remark'              => empty($params['remark']) ? '' : strip_tags(trim($params['remark'])),
                 'privacy_agreed_time' => time(),
+                'privacy_version'     => 1,
                 'status'              => 0,
                 'add_time'            => time(),
                 'upd_time'            => time(),
@@ -612,6 +625,7 @@ class ActivityService
                 }
                 $v['status_text'] = self::SignupStatusText($v['status']);
                 $v['add_time_text'] = empty($v['add_time']) ? '' : date('Y-m-d H:i:s', $v['add_time']);
+                $v = MuyingPrivacyService::MaskSignupRow($v, false);
             }
         }
 
@@ -832,6 +846,7 @@ class ActivityService
                 $v['stage_text'] = MuyingStage::getName(MuyingStage::Normalize($v['stage']));
                 $v['add_time_text'] = empty($v['add_time']) ? '' : date('Y-m-d H:i:s', $v['add_time']);
                 $v['checkin_time_text'] = empty($v['checkin_time']) ? '' : date('Y-m-d H:i:s', $v['checkin_time']);
+                $v = MuyingPrivacyService::MaskSignupRow($v, false);
             }
         }
         return $data;
@@ -860,6 +875,13 @@ class ActivityService
         $data['add_time_text'] = empty($data['add_time']) ? '' : date('Y-m-d H:i:s', $data['add_time']);
         $data['checkin_time_text'] = empty($data['checkin_time']) ? '' : date('Y-m-d H:i:s', $data['checkin_time']);
         $data['privacy_agreed_time_text'] = empty($data['privacy_agreed_time']) ? '' : date('Y-m-d H:i:s', $data['privacy_agreed_time']);
+
+        $show_full = !empty($params['admin']) && MuyingPrivacyService::CanViewSensitive($params['admin']);
+        $data = MuyingPrivacyService::MaskSignupRow($data, $show_full);
+
+        if ($show_full && !empty($params['admin'])) {
+            MuyingAuditLogService::LogSensitiveView($params['admin'], MuyingAuditLogService::SCENE_SENSITIVE_VIEW, $id, '查看报名详情含敏感信息');
+        }
 
         return DataReturn(MyLang('handle_success'), 0, $data);
     }
@@ -1147,6 +1169,7 @@ class ActivityService
         foreach ($data as $v) {
             $activity_title = isset($activities[$v['activity_id']]) ? $activities[$v['activity_id']]['title'] : '';
             $activity_stage = isset($activities[$v['activity_id']]) ? $stage_map[$activities[$v['activity_id']]['stage']] ?? $activities[$v['activity_id']]['stage'] : '';
+            $v = MuyingPrivacyService::MaskSignupRow($v, true);
             $result[] = [
                 'id'               => $v['id'],
                 'activity_title'   => $activity_title,
@@ -1162,6 +1185,10 @@ class ActivityService
                 'add_time_text'    => empty($v['add_time']) ? '' : date('Y-m-d H:i:s', $v['add_time']),
                 'checkin_time_text' => empty($v['checkin_time']) ? '' : date('Y-m-d H:i:s', $v['checkin_time']),
             ];
+        }
+
+        if (!empty($params['admin'])) {
+            MuyingAuditLogService::LogExport($params['admin'], MuyingAuditLogService::SCENE_SIGNUP_EXPORT, $where, count($result));
         }
 
         return DataReturn(MyLang('handle_success'), 0, $result);

@@ -3,6 +3,7 @@ namespace app\service;
 
 use think\facade\Db;
 use app\service\ResourcesService;
+use app\service\MuyingPrivacyService;
 use app\extend\muying\MuyingStage;
 
 class FeedbackService
@@ -97,13 +98,15 @@ class FeedbackService
         $user_id = intval($params['user']['id']);
         $user_row = Db::name('User')->where(['id' => $user_id])->find();
 
+        $contact_plain = !empty($params['contact']) ? strip_tags(trim($params['contact'])) : '';
         $data = [
             'user_id'       => $user_id,
             'nickname'      => !empty($user_row['nickname']) ? strip_tags(trim($user_row['nickname'])) : '用户' . $user_id,
             'avatar'        => !empty($user_row['avatar']) ? trim($user_row['avatar']) : '',
             'content'       => $content,
             'stage'         => $normalized,
-            'contact'       => !empty($params['contact']) ? strip_tags(trim($params['contact'])) : '',
+            'contact'       => !empty($contact_plain) ? MuyingPrivacyService::EncryptSensitive($contact_plain) : '',
+            'contact_hash'  => !empty($contact_plain) ? MuyingPrivacyService::HashPhone($contact_plain) : '',
             'review_status' => 'pending',
             'is_enable'     => 1,
             'add_time'      => time(),
@@ -195,6 +198,7 @@ class FeedbackService
                 $v['is_enable_text'] = $v['is_enable'] == 1 ? '显示' : '隐藏';
                 $v['review_status_text'] = self::GetReviewStatusText($v['review_status'] ?? 'pending');
                 $v['review_time_text'] = empty($v['review_time']) ? '' : date('Y-m-d H:i:s', $v['review_time']);
+                $v = MuyingPrivacyService::MaskFeedbackRow($v, false);
             }
         }
 
@@ -211,6 +215,7 @@ class FeedbackService
                 $v['is_enable_text'] = $v['is_enable'] == 1 ? '显示' : '隐藏';
                 $v['review_status_text'] = self::GetReviewStatusText($v['review_status'] ?? 'pending');
                 $v['review_time_text'] = empty($v['review_time']) ? '' : date('Y-m-d H:i:s', $v['review_time']);
+                $v = MuyingPrivacyService::MaskFeedbackRow($v, false);
             }
         }
         return $data;

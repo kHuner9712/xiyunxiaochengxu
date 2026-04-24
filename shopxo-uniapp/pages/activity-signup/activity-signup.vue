@@ -272,9 +272,7 @@
                         if (!form.name && profile.user_name_view) {
                             form.name = profile.user_name_view;
                         }
-                        if (!form.phone && profile.mobile) {
-                            form.phone = profile.mobile;
-                        }
+                        // [MUYING-二开] 不再从 profile.mobile 预填手机号，API 已不返回完整手机号
                         if (profile.current_stage) {
                             var normalized_stage = MuyingStage.normalize(profile.current_stage);
                             if (normalized_stage) {
@@ -475,10 +473,9 @@
                     data: post_data,
                     loading_title: '提交中...',
                     success: function (data) {
+                        // [MUYING-二开] 仅回填非敏感画像字段，不缓存手机号/姓名/宝宝生日等敏感数据
                         userStore.merge({
                             current_stage: self.selected_stage,
-                            due_date: self.form.due_date || '',
-                            baby_birthday: self.form.baby_birthday || '',
                         });
                         uni.showToast({
                             title: '报名成功',

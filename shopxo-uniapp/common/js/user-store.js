@@ -1,6 +1,7 @@
 import { logger } from './logger.js';
 
 var _cache_key = null;
+var _SENSITIVE_KEYS = ['mobile', 'email', 'phone', 'due_date', 'baby_birthday', 'baby_month_age'];
 
 function _get_cache_key() {
     if (_cache_key) return _cache_key;
@@ -42,6 +43,9 @@ function set(user_info) {
         if (prev && prev.token && !user_info.token) {
             user_info.token = prev.token;
         }
+        for (var i = 0; i < _SENSITIVE_KEYS.length; i++) {
+            delete user_info[_SENSITIVE_KEYS[i]];
+        }
         uni.setStorageSync(key, user_info);
         return true;
     } catch (e) {
@@ -60,6 +64,9 @@ function merge(partial) {
     }
     for (var key in partial) {
         if (partial.hasOwnProperty(key)) {
+            if (_SENSITIVE_KEYS.indexOf(key) !== -1) {
+                continue;
+            }
             current[key] = partial[key];
         }
     }
@@ -68,12 +75,12 @@ function merge(partial) {
 
 function getToken() {
     var user = get();
-    return user ? (user.token || '') : '';
+    return user ? user.token || '' : '';
 }
 
 function getStage() {
     var user = get();
-    return user ? (user.current_stage || '') : '';
+    return user ? user.current_stage || '' : '';
 }
 
 function isLoggedIn() {
