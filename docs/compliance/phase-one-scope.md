@@ -10,9 +10,10 @@
 | 层级 | 机制 | 说明 | 关键文件 |
 |------|------|------|---------|
 | 第一层 | 资质门禁 | 即使功能开关误开，资质不满足也强制拦截 | `MuyingComplianceService.php` / `compliance-scope.js` |
-| 第二层 | 功能开关 | 后台配置 `feature_xxx_enabled`，表示业务想开 | `sxo_config` 表 |
+| 第二层 | 功能开关 | 后台配置 `feature_xxx_enabled`，表示业务想开 | `sxo_config` 表 / 合规中心 |
 | 第三层 | 前端白名单 | 只允许一期允许的路由通过，非白名单路由拦截 | `compliance-scope.js` / `phase-one-scope.js` |
 | 第四层 | 后端 API 拦截 | 插件 API 调用必须通过合规总闸 | `api/Plugins.php` / `index/Plugins.php` |
+| **后台保护** | 合规中心二次拦截 | 后台功能开关保存时也经过合规判断，防止误开 | `Featureswitch::Save()` / `Muyingcompliance::Toggle()` |
 
 ### 资质门禁配置
 
@@ -105,3 +106,4 @@
 |------|---------|
 | 2026-04-24 | 初始版本，定义一期功能边界 |
 | 2026-04-25 | 新增资质门禁机制，从黑名单改为白名单+资质门禁四层机制 |
+| 2026-04-25 | 新增合规中心后台页面，功能开关二次拦截，拦截日志 |

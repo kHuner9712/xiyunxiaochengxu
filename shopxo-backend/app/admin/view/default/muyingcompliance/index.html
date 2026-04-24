@@ -1,0 +1,157 @@
+{{:ModuleInclude('public/header')}}
+
+<style>
+.compliance-dashboard{padding:10px 0 20px;}
+.compliance-phase-banner{background:linear-gradient(135deg,#ff6e8b,#ff8fa3);color:#fff;border-radius:8px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
+.compliance-phase-title{font-size:20px;font-weight:700;}
+.compliance-phase-desc{font-size:13px;opacity:0.9;margin-top:4px;}
+.compliance-stats{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:20px;}
+.compliance-stat-card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:16px 20px;width:calc(20% - 13px);box-sizing:border-box;text-align:center;}
+.compliance-stat-card .stat-num{font-size:28px;font-weight:700;color:#333;}
+.compliance-stat-card .stat-num.danger{color:#e74c3c;}
+.compliance-stat-card .stat-num.safe{color:#27ae60;}
+.compliance-stat-card .stat-label{font-size:12px;color:#888;margin-top:4px;}
+.qualification-table{width:100%;border-collapse:collapse;margin-bottom:20px;}
+.qualification-table th,.qualification-table td{padding:10px 12px;text-align:left;border-bottom:1px solid #eee;font-size:13px;}
+.qualification-table th{background:#f8f8f8;color:#666;font-weight:600;}
+.qualification-table .status-yes{color:#27ae60;font-weight:600;}
+.qualification-table .status-no{color:#e74c3c;font-weight:600;}
+.recent-block-table{width:100%;border-collapse:collapse;}
+.recent-block-table th,.recent-block-table td{padding:8px 12px;text-align:left;border-bottom:1px solid #eee;font-size:12px;}
+.recent-block-table th{background:#f8f8f8;color:#666;font-weight:600;}
+.compliance-actions{margin-top:16px;display:flex;gap:12px;}
+.compliance-actions a{display:inline-block;padding:8px 20px;border-radius:4px;font-size:13px;text-decoration:none;}
+.btn-primary{background:#ff6e8b;color:#fff;}
+.btn-primary:hover{background:#ff5577;}
+.btn-default{background:#fff;color:#666;border:1px solid #ddd;}
+.btn-default:hover{border-color:#ff6e8b;color:#ff6e8b;}
+@media(max-width:768px){
+    .compliance-stat-card{width:100%;}
+    .compliance-phase-banner{flex-direction:column;text-align:center;}
+}
+</style>
+
+<div class="content-right">
+    <div class="content">
+        <div class="compliance-dashboard">
+            <div class="compliance-phase-banner">
+                <div>
+                    <div class="compliance-phase-title">{{$phase_mode}}</div>
+                    <div class="compliance-phase-desc">当前处于一期合规模式，高风险功能受资质门禁保护</div>
+                </div>
+            </div>
+
+            <div class="compliance-stats">
+                <div class="compliance-stat-card">
+                    <div class="stat-num danger">{{$high_risk_locked}}</div>
+                    <div class="stat-label">资质锁定功能</div>
+                </div>
+                <div class="compliance-stat-card">
+                    <div class="stat-num">{{$high_risk_count}}</div>
+                    <div class="stat-label">高风险功能总数</div>
+                </div>
+                <div class="compliance-stat-card">
+                    <div class="stat-num safe">{{$phase_one_enabled}}</div>
+                    <div class="stat-label">一期已启用功能</div>
+                </div>
+                <div class="compliance-stat-card">
+                    <div class="stat-num danger">{{$block_log_count}}</div>
+                    <div class="stat-label">拦截次数</div>
+                </div>
+                <div class="compliance-stat-card">
+                    <div class="stat-num">{{$pending_feedback}}</div>
+                    <div class="stat-label">待审核反馈</div>
+                </div>
+            </div>
+
+            <h4 style="margin:16px 0 8px;font-size:15px;font-weight:600;">资质状态</h4>
+            <table class="qualification-table">
+                <thead>
+                    <tr>
+                        <th>资质类型</th>
+                        <th>当前状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{foreach $qualifications as $q}}
+                    <tr>
+                        <td>{{$q.label}}</td>
+                        <td>
+                            {{if $q.value === 1}}
+                            <span class="status-yes">{{$q.status}}</span>
+                            {{else /}}
+                            <span class="status-no">{{$q.status}}</span>
+                            {{/if}}
+                        </td>
+                        <td>
+                            <select class="am-radius" data-qual-key="{{$q.key}}" onchange="ComplianceToggleQualification(this)">
+                                <option value="0" {{if $q.value === 0}}selected{{/if}}>未取得</option>
+                                <option value="1" {{if $q.value === 1}}selected{{/if}}>已取得</option>
+                            </select>
+                        </td>
+                    </tr>
+                    {{/foreach}}
+                </tbody>
+            </table>
+
+            <h4 style="margin:16px 0 8px;font-size:15px;font-weight:600;">最近拦截记录</h4>
+            {{if empty($recent_blocks)}}
+            <div style="color:#999;font-size:13px;padding:12px 0;">暂无拦截记录</div>
+            {{else /}}
+            <table class="recent-block-table">
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>管理员</th>
+                        <th>功能</th>
+                        <th>原因</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{foreach $recent_blocks as $log}}
+                    <tr>
+                        <td>{{$log.add_time_text}}</td>
+                        <td>{{$log.admin_username}}</td>
+                        <td>{{$log.feature_key}}</td>
+                        <td>{{$log.reason}}</td>
+                    </tr>
+                    {{/foreach}}
+                </tbody>
+            </table>
+            {{/if}}
+
+            <div class="compliance-actions">
+                <a href="{{:MyUrl('admin/muyingcompliance/features')}}" class="btn-primary">功能开关管理</a>
+                <a href="{{:MyUrl('admin/muyingcompliance/blocklogs')}}" class="btn-default">拦截日志</a>
+                <a href="{{:MyUrl('admin/featureswitch/index')}}" class="btn-default">原功能开关页</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function ComplianceToggleQualification(el) {
+    var key = $(el).data('qual-key');
+    var value = $(el).val();
+    $.ajax({
+        url: '{{:MyUrl("admin/muyingcompliance/savequalification")}}',
+        type: 'POST',
+        data: {key: key, value: value},
+        dataType: 'json',
+        success: function(res) {
+            if(res.code === 0) {
+                Prompt('资质状态已更新，页面即将刷新');
+                setTimeout(function(){ location.reload(); }, 1000);
+            } else {
+                Prompt(res.msg || '操作失败', 'error');
+            }
+        },
+        error: function() {
+            Prompt('网络错误', 'error');
+        }
+    });
+}
+</script>
+
+{{:ModuleInclude('public/footer')}}

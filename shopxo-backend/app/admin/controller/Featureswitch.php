@@ -4,6 +4,7 @@ namespace app\admin\controller;
 use app\admin\controller\Base;
 use app\service\ApiService;
 use app\service\ConfigService;
+use app\service\MuyingComplianceService;
 
 class Featureswitch extends Base
 {
@@ -29,13 +30,36 @@ class Featureswitch extends Base
         }
 
         $save_params = [];
+        $blocked_keys = [];
         foreach ($field_list as $field) {
-            $save_params[$field] = isset($params[$field]) ? intval($params[$field]) : 0;
+            $value = isset($params[$field]) ? intval($params[$field]) : 0;
+            if ($value === 1) {
+                $ret = MuyingComplianceService::TryToggleFeature($field, 1, $this->admin);
+                if ($ret['code'] != 0) {
+                    $blocked_keys[] = ['key' => $field, 'reason' => $ret['msg']];
+                    continue;
+                }
+            }
+            $save_params[$field] = $value;
+        }
+
+        if (!empty($blocked_keys)) {
+            $reasons = [];
+            foreach ($blocked_keys as $bk) {
+                $reasons[] = $bk['key'] . ': ' . $bk['reason'];
+            }
+            if (empty($save_params)) {
+                return ApiService::ApiDataReturn(DataReturn('所有开启操作被合规拦截：' . implode('；', $reasons), -10001));
+            }
         }
 
         $result = ConfigService::ConfigSave($save_params);
         if ($result) {
-            return ApiService::ApiDataReturn(DataReturn('保存成功', 0));
+            $msg = '保存成功';
+            if (!empty($blocked_keys)) {
+                $msg .= '（部分功能被合规拦截：' . implode('；', array_column($blocked_keys, 'reason')) . '）';
+            }
+            return ApiService::ApiDataReturn(DataReturn($msg, 0));
         }
         return ApiService::ApiDataReturn(DataReturn('保存失败', -1));
     }

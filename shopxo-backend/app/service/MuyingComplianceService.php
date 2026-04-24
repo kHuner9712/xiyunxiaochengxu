@@ -249,4 +249,273 @@ class MuyingComplianceService
             'allowed_plugins' => self::$PHASE_ONE_ALLOWED_PLUGINS,
         ];
     }
+
+    private static $QUALIFICATION_LABELS = [
+        self::QUALIFICATION_ICP_COMMERCIAL => 'ICP经营许可证',
+        self::QUALIFICATION_EDI => 'EDI许可证',
+        self::QUALIFICATION_MEDICAL => '医疗机构执业许可证',
+        self::QUALIFICATION_LIVE => '网络文化经营许可证',
+        self::QUALIFICATION_PAYMENT => '支付牌照',
+    ];
+
+    private static $ICP_FILING_KEY = 'qualification_icp_filing';
+
+    public static function GetQualificationLabels()
+    {
+        return self::$QUALIFICATION_LABELS;
+    }
+
+    public static function GetIcpFilingStatus()
+    {
+        return intval(MyC(self::$ICP_FILING_KEY, 0));
+    }
+
+    public static function SetIcpFilingStatus($value)
+    {
+        return MyC(self::$ICP_FILING_KEY, intval($value), true);
+    }
+
+    public static function GetQualificationDetailList()
+    {
+        $result = [];
+        foreach (self::$QUALIFICATION_DEFAULTS as $key => $default) {
+            $result[] = [
+                'key'    => $key,
+                'label'  => isset(self::$QUALIFICATION_LABELS[$key]) ? self::$QUALIFICATION_LABELS[$key] : $key,
+                'value'  => self::GetQualificationValue($key),
+                'status' => self::GetQualificationValue($key) === 1 ? '已取得' : '未取得',
+            ];
+        }
+        $result[] = [
+            'key'    => self::$ICP_FILING_KEY,
+            'label'  => 'ICP备案',
+            'value'  => self::GetIcpFilingStatus(),
+            'status' => self::GetIcpFilingStatus() === 1 ? '已备案' : '备案中',
+        ];
+        return $result;
+    }
+
+    public static function GetFeatureSwitchDetailList()
+    {
+        $feature_list = \app\admin\controller\Featureswitch::GetFeatureList();
+        $result = [];
+        foreach ($feature_list as $group) {
+            $group_name = $group['group_name'];
+            foreach ($group['items'] as $item) {
+                $key = $item['key'];
+                $current_value = intval(MyC($key, 0));
+                $is_high_risk = self::IsHighRiskFeatureKey($key);
+                $qualification_allowed = true;
+                $qualification_reason = '';
+                $phase_one_allowed = self::IsPhaseOneFeatureKey($key);
+
+                if ($is_high_risk) {
+                    $plugin_name = self::GetPluginNameByFeatureKey($key);
+                    if (!empty($plugin_name)) {
+                        $qualification_allowed = self::IsQualificationMetForPlugin($plugin_name);
+                        if (!$qualification_allowed) {
+                            $missing = self::GetMissingQualifications($plugin_name);
+                            $qualification_reason = '缺少资质：' . implode('、', $missing);
+                        }
+                    }
+                }
+
+                $can_toggle = $phase_one_allowed || $qualification_allowed;
+
+                $result[] = [
+                    'key'                   => $key,
+                    'name'                  => $item['name'],
+                    'desc'                  => $item['desc'],
+                    'group'                 => $group_name,
+                    'current_value'         => $current_value,
+                    'is_high_risk'          => $is_high_risk,
+                    'phase_one_allowed'     => $phase_one_allowed,
+                    'qualification_allowed' => $qualification_allowed,
+                    'qualification_reason'  => $qualification_reason,
+                    'can_toggle'            => $can_toggle,
+                    'block_reason'          => (!$can_toggle && $current_value === 1) ? $qualification_reason : '',
+                ];
+            }
+        }
+        return $result;
+    }
+
+    public static function IsHighRiskFeatureKey($key)
+    {
+        return isset(self::$FEATURE_FLAG_PLUGIN_MAP[$key]);
+    }
+
+    public static function IsPhaseOneFeatureKey($key)
+    {
+        $phase_one_keys = [
+            'feature_activity_enabled',
+            'feature_invite_enabled',
+            'feature_content_enabled',
+            'feature_feedback_enabled',
+            'feature_coupon_enabled',
+            'feature_signin_enabled',
+            'feature_points_enabled',
+        ];
+        return in_array($key, $phase_one_keys);
+    }
+
+    public static function GetPluginNameByFeatureKey($key)
+    {
+        if (!isset(self::$FEATURE_FLAG_PLUGIN_MAP[$key])) {
+            return '';
+        }
+        $val = self::$FEATURE_FLAG_PLUGIN_MAP[$key];
+        return is_array($val) ? $val[0] : $val;
+    }
+
+    public static function GetMissingQualifications($plugin_name)
+    {
+        $name = strtolower(trim($plugin_name));
+        if (!isset(self::$QUALIFICATION_REQUIRED_MAP[$name])) {
+            return [];
+        }
+        $missing = [];
+        $required = self::$QUALIFICATION_REQUIRED_MAP[$name];
+        foreach ($required as $qual_key) {
+            if (self::GetQualificationValue($qual_key) !== 1) {
+                $missing[] = isset(self::$QUALIFICATION_LABELS[$qual_key]) ? self::$QUALIFICATION_LABELS[$qual_key] : $qual_key;
+            }
+        }
+        return $missing;
+    }
+
+    public static function TryToggleFeature($key, $value, $admin = [])
+    {
+        $value = intval($value);
+        $current = intval(MyC($key, 0));
+
+        if ($value === 0) {
+            return DataReturn('关闭成功', 0, ['key' => $key, 'value' => 0]);
+        }
+
+        $is_high_risk = self::IsHighRiskFeatureKey($key);
+        $phase_one_allowed = self::IsPhaseOneFeatureKey($key);
+
+        if ($phase_one_allowed) {
+            return DataReturn('开启成功', 0, ['key' => $key, 'value' => 1]);
+        }
+
+        if ($is_high_risk) {
+            $plugin_name = self::GetPluginNameByFeatureKey($key);
+            $qualification_allowed = !empty($plugin_name) && self::IsQualificationMetForPlugin($plugin_name);
+            if (!$qualification_allowed) {
+                $missing = self::GetMissingQualifications($plugin_name);
+                $reason = '当前资质不允许开启此功能，缺少：' . implode('、', $missing);
+                self::LogComplianceBlock($admin, $key, $reason);
+                return DataReturn($reason, -10001);
+            }
+            return DataReturn('开启成功', 0, ['key' => $key, 'value' => 1]);
+        }
+
+        return DataReturn('开启成功', 0, ['key' => $key, 'value' => 1]);
+    }
+
+    public static function LogComplianceBlock($admin, $feature_key, $reason)
+    {
+        $admin_id = 0;
+        $admin_username = '';
+        if (!empty($admin) && !empty($admin['id'])) {
+            $admin_id = intval($admin['id']);
+            $admin_username = isset($admin['username']) ? $admin['username'] : '';
+        }
+        $ip = !empty($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+
+        try {
+            \think\facade\Db::name('MuyingComplianceLog')->insert([
+                'admin_id'       => $admin_id,
+                'admin_username' => $admin_username,
+                'feature_key'    => $feature_key,
+                'action'         => 'toggle_blocked',
+                'reason'         => $reason,
+                'ip'             => $ip,
+                'add_time'       => time(),
+            ]);
+        } catch (\Exception $e) {
+        }
+    }
+
+    public static function GetComplianceBlockLogList($params = [])
+    {
+        $m = isset($params['m']) ? intval($params['m']) : 0;
+        $n = isset($params['n']) ? intval($params['n']) : 20;
+        try {
+            $data = \think\facade\Db::name('MuyingComplianceLog')
+                ->order('id desc')
+                ->limit($m, $n)
+                ->select()
+                ->toArray();
+            foreach ($data as $k => &$v) {
+                $v['add_time_text'] = empty($v['add_time']) ? '' : date('Y-m-d H:i:s', $v['add_time']);
+            }
+            return $data;
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
+
+    public static function GetComplianceBlockLogCount()
+    {
+        try {
+            return (int) \think\facade\Db::name('MuyingComplianceLog')->count();
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    public static function GetDashboardSummary()
+    {
+        $qualifications = self::GetQualificationDetailList();
+        $feature_details = self::GetFeatureSwitchDetailList();
+        $high_risk_count = 0;
+        $high_risk_locked = 0;
+        $phase_one_count = 0;
+        $phase_one_enabled = 0;
+        foreach ($feature_details as $item) {
+            if ($item['is_high_risk']) {
+                $high_risk_count++;
+                if (!$item['qualification_allowed']) {
+                    $high_risk_locked++;
+                }
+            }
+            if ($item['phase_one_allowed']) {
+                $phase_one_count++;
+                if ($item['current_value'] === 1) {
+                    $phase_one_enabled++;
+                }
+            }
+        }
+
+        $block_log_count = self::GetComplianceBlockLogCount();
+        $recent_blocks = self::GetComplianceBlockLogList(['m' => 0, 'n' => 5]);
+
+        $pending_feedback = 0;
+        try {
+            $pending_feedback = (int) \think\facade\Db::name('MuyingFeedback')->where(['review_status' => 'pending', 'is_enable' => 1])->count();
+        } catch (\Exception $e) {
+        }
+
+        $export_log_count = 0;
+        try {
+            $export_log_count = (int) \think\facade\Db::name('MuyingAuditLog')->count();
+        } catch (\Exception $e) {
+        }
+
+        return [
+            'phase_mode'         => '一期合规模式',
+            'qualifications'     => $qualifications,
+            'high_risk_count'    => $high_risk_count,
+            'high_risk_locked'   => $high_risk_locked,
+            'phase_one_count'    => $phase_one_count,
+            'phase_one_enabled'  => $phase_one_enabled,
+            'block_log_count'    => $block_log_count,
+            'recent_blocks'      => $recent_blocks,
+            'pending_feedback'   => $pending_feedback,
+            'export_log_count'   => $export_log_count,
+        ];
+    }
 }

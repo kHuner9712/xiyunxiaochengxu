@@ -1,0 +1,53 @@
+{{:ModuleInclude('public/header')}}
+
+<style>
+.blocklog-table{width:100%;border-collapse:collapse;margin-top:12px;}
+.blocklog-table th,.blocklog-table td{padding:10px 12px;text-align:left;border-bottom:1px solid #eee;font-size:13px;}
+.blocklog-table th{background:#f8f8f8;color:#666;font-weight:600;}
+.blocklog-table tr:hover{background:#fafafa;}
+.blocklog-empty{color:#999;font-size:13px;padding:20px 0;text-align:center;}
+</style>
+
+<div class="content-right">
+    <div class="content">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h3 style="margin:0;font-size:16px;">合规拦截日志</h3>
+            <a href="{{:MyUrl('admin/muyingcompliance/index')}}" class="am-btn am-btn-sm am-btn-default am-radius">返回合规中心</a>
+        </div>
+
+        <div style="margin-bottom:8px;font-size:13px;color:#888;">共 {{$total}} 条拦截记录</div>
+
+        {{if empty($logs)}}
+        <div class="blocklog-empty">暂无拦截记录</div>
+        {{else /}}
+        <table class="blocklog-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>时间</th>
+                    <th>管理员</th>
+                    <th>功能Key</th>
+                    <th>操作</th>
+                    <th>拦截原因</th>
+                    <th>IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{foreach $logs as $log}}
+                <tr>
+                    <td>{{$log.id}}</td>
+                    <td>{{$log.add_time_text}}</td>
+                    <td>{{$log.admin_username}}</td>
+                    <td>{{$log.feature_key}}</td>
+                    <td>{{$log.action}}</td>
+                    <td>{{$log.reason}}</td>
+                    <td>{{$log.ip}}</td>
+                </tr>
+                {{/foreach}}
+            </tbody>
+        </table>
+        {{/if}}
+    </div>
+</div>
+
+{{:ModuleInclude('public/footer')}}
