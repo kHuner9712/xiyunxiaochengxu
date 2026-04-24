@@ -639,6 +639,9 @@ class GoodsService
                     }
                 }
 
+                // [MUYING-二开] 商品母婴合规属性
+                \app\service\MuyingGoodsComplianceService::GoodsDataHandleExtend($v);
+
                 // 品牌
                 if(isset($v['brand_id']))
                 {
@@ -1494,6 +1497,13 @@ class GoodsService
             return DataReturn($ret, -1);
         }
 
+        // [MUYING-二开] 商品合规校验：风险类目+资质状态
+        $compliance_ret = \app\service\MuyingGoodsComplianceService::ValidateGoodsSave($params);
+        if($compliance_ret['code'] != 0)
+        {
+            return $compliance_ret;
+        }
+
         // 规格基础
         $specifications_base = self::GetFormGoodsSpecificationsBaseParams($params);
         if($specifications_base['code'] != 0)
@@ -1574,6 +1584,14 @@ class GoodsService
             'site_type'               => (isset($params['site_type']) && $params['site_type'] != '') ? $params['site_type'] : -1,
             'sort_level'              => empty($params['sort_level']) ? 0 : intval($params['sort_level']),
             'share_images'            => $attachment['data']['share_images'],
+            'min_baby_month_age'      => empty($params['min_baby_month_age']) ? 0 : intval($params['min_baby_month_age']),
+            'max_baby_month_age'      => empty($params['max_baby_month_age']) ? 0 : intval($params['max_baby_month_age']),
+            'focus_areas'             => empty($params['focus_areas']) ? '' : strip_tags(trim($params['focus_areas'])),
+            'risk_category'           => empty($params['risk_category']) ? 'normal' : strip_tags(trim($params['risk_category'])),
+            'qualification_status'    => empty($params['qualification_status']) ? 'none_required' : strip_tags(trim($params['qualification_status'])),
+            'qualification_remark'    => empty($params['qualification_remark']) ? '' : strip_tags(trim($params['qualification_remark'])),
+            'is_muying_recommend'     => empty($params['is_muying_recommend']) ? 0 : intval($params['is_muying_recommend']),
+            'muying_sort_level'       => empty($params['muying_sort_level']) ? 0 : intval($params['muying_sort_level']),
         ];
 
         // 是否存在赠送积分

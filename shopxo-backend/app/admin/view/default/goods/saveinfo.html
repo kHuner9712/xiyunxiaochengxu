@@ -250,6 +250,67 @@
                             </label>
                             <input type="text" name="selling_point" placeholder="如：安全认证,进口品质" maxlength="500" class="am-radius" {{if !empty($data['selling_point'])}} value="{{$data.selling_point}}"{{/if}} />
                         </div>
+                        <!-- [MUYING-二开] 母婴合规属性 -->
+                        <div class="am-form-group">
+                            <label>
+                                适用月龄
+                                <a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: '0表示不限。例如：最小6个月、最大12个月，表示适用于6-12月龄宝宝', trigger: 'hover focus', theme: 'sm'}"></a>
+                            </label>
+                            <div class="am-input-group am-input-group-sm">
+                                <input type="number" name="min_baby_month_age" placeholder="最小月龄(0=不限)" min="0" max="120" class="am-radius" style="width:45%;display:inline-block;" {{if isset($data['min_baby_month_age'])}} value="{{$data.min_baby_month_age}}"{{/if}} />
+                                <span style="display:inline-block;padding:0 8px;">-</span>
+                                <input type="number" name="max_baby_month_age" placeholder="最大月龄(0=不限)" min="0" max="120" class="am-radius" style="width:45%;display:inline-block;" {{if isset($data['max_baby_month_age'])}} value="{{$data.max_baby_month_age}}"{{/if}} />
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label>
+                                关注方向
+                                <a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: '多个方向用逗号分隔。可选：nutrition(营养喂养),care(日常护理),safety(安全防护),education(早教启蒙),comfort(舒适睡眠),recovery(产后恢复),beauty(孕期美护)', trigger: 'hover focus', theme: 'sm'}"></a>
+                            </label>
+                            <input type="text" name="focus_areas" placeholder="如：nutrition,care" maxlength="200" class="am-radius" {{if !empty($data['focus_areas'])}} value="{{$data.focus_areas}}"{{/if}} />
+                        </div>
+                        <div class="am-form-group">
+                            <label>
+                                风险类目
+                                <a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: 'normal=普通母婴用品(可上架),food=普通食品(需资质),special_food=特殊食品(一期禁止),medical_device=医疗器械(一期禁止),medicine=药品(一期禁止),service=服务类(需资质)', trigger: 'hover focus', theme: 'sm'}"></a>
+                            </label>
+                            <select name="risk_category" class="am-radius">
+                                <option value="normal" {{if !isset($data['risk_category']) or $data['risk_category'] eq 'normal'}}selected{{/if}}>普通母婴用品</option>
+                                <option value="food" {{if isset($data['risk_category']) and $data['risk_category'] eq 'food'}}selected{{/if}}>普通食品</option>
+                                <option value="special_food" {{if isset($data['risk_category']) and $data['risk_category'] eq 'special_food'}}selected{{/if}}>特殊食品（一期禁止）</option>
+                                <option value="medical_device" {{if isset($data['risk_category']) and $data['risk_category'] eq 'medical_device'}}selected{{/if}}>医疗器械（一期禁止）</option>
+                                <option value="medicine" {{if isset($data['risk_category']) and $data['risk_category'] eq 'medicine'}}selected{{/if}}>药品（一期禁止）</option>
+                                <option value="service" {{if isset($data['risk_category']) and $data['risk_category'] eq 'service'}}selected{{/if}}>服务类</option>
+                            </select>
+                        </div>
+                        <div class="am-form-group">
+                            <label>
+                                资质状态
+                                <a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: 'none_required=无需资质,pending=审核中,approved=已通过,rejected=未通过,forbidden=禁止上架', trigger: 'hover focus', theme: 'sm'}"></a>
+                            </label>
+                            <select name="qualification_status" class="am-radius">
+                                <option value="none_required" {{if !isset($data['qualification_status']) or $data['qualification_status'] eq 'none_required'}}selected{{/if}}>无需资质</option>
+                                <option value="pending" {{if isset($data['qualification_status']) and $data['qualification_status'] eq 'pending'}}selected{{/if}}>资质审核中</option>
+                                <option value="approved" {{if isset($data['qualification_status']) and $data['qualification_status'] eq 'approved'}}selected{{/if}}>资质已通过</option>
+                                <option value="rejected" {{if isset($data['qualification_status']) and $data['qualification_status'] eq 'rejected'}}selected{{/if}}>资质未通过</option>
+                                <option value="forbidden" {{if isset($data['qualification_status']) and $data['qualification_status'] eq 'forbidden'}}selected{{/if}}>禁止上架</option>
+                            </select>
+                        </div>
+                        <div class="am-form-group">
+                            <label>资质备注</label>
+                            <input type="text" name="qualification_remark" placeholder="资质相关备注说明" maxlength="200" class="am-radius" {{if !empty($data['qualification_remark'])}} value="{{$data.qualification_remark}}"{{/if}} />
+                        </div>
+                        <div class="am-form-group">
+                            <label>母婴推荐</label>
+                            <select name="is_muying_recommend" class="am-radius">
+                                <option value="0" {{if !isset($data['is_muying_recommend']) or $data['is_muying_recommend'] eq 0}}selected{{/if}}>否</option>
+                                <option value="1" {{if isset($data['is_muying_recommend']) and $data['is_muying_recommend'] eq 1}}selected{{/if}}>是</option>
+                            </select>
+                        </div>
+                        <div class="am-form-group">
+                            <label>母婴排序权重</label>
+                            <input type="number" name="muying_sort_level" placeholder="越大越靠前，默认0" min="0" class="am-radius" {{if isset($data['muying_sort_level'])}} value="{{$data.muying_sort_level}}"{{/if}} />
+                        </div>
                         <div class="am-form-group am-form-file">
                             <label class="am-block">{{:MyLang('common_service.goods.form_item_images')}}<a href="javascript:;" class="am-icon-question-circle am-margin-left-xs" data-am-popover="{content: '{{:MyLang('common_service.goods.form_item_images_tips')}}', trigger: 'hover focus', theme: 'sm'}"></a></label>
                             <div class="am-form-file-upload-container">

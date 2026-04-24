@@ -214,6 +214,15 @@
                             <text :class="'muying-stage-tag ' + (tag.active ? MuyingStage.getStageClass(MuyingStage.normalize(tag.key)) : 'muying-stage-tag--inactive')">{{ tag.label }}</text>
                         </block>
                     </view>
+                    <view v-if="goods.month_age_text" class="muying-month-age margin-top-sm">
+                        <text class="text-size-xs cr-grey-9">适用月龄：{{ goods.month_age_text }}</text>
+                    </view>
+                    <view v-if="goods.focus_area_names && goods.focus_area_names.length > 0" class="muying-focus-areas margin-top-sm flex-row">
+                        <text class="text-size-xs cr-grey-9 margin-right-xs">关注：</text>
+                        <block v-for="(area, aidx) in goods.focus_area_names" :key="aidx">
+                            <text class="muying-focus-area-tag text-size-xs">{{ area }}</text>
+                        </block>
+                    </view>
                 </view>
 
                 <!-- 面板提示信息 -->

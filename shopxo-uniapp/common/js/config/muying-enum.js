@@ -135,3 +135,82 @@ export const MuyingCheckinStatus = {
         return item ? item.name : '未签到';
     },
 };
+
+export var MuyingGoodsRiskCategory = {
+    NORMAL: 'normal',
+    FOOD: 'food',
+    SPECIAL_FOOD: 'special_food',
+    MEDICAL_DEVICE: 'medical_device',
+    MEDICINE: 'medicine',
+    SERVICE: 'service',
+
+    getList() {
+        return [
+            { value: this.NORMAL, name: '普通母婴用品', canShelves: true },
+            { value: this.FOOD, name: '普通食品', canShelves: false },
+            { value: this.SPECIAL_FOOD, name: '特殊食品', canShelves: false },
+            { value: this.MEDICAL_DEVICE, name: '医疗器械', canShelves: false },
+            { value: this.MEDICINE, name: '药品', canShelves: false },
+            { value: this.SERVICE, name: '服务类', canShelves: false },
+        ];
+    },
+
+    getName(value) {
+        var item = this.getList().find(function(v) { return v.value === value; });
+        return item ? item.name : '';
+    },
+
+    isForbidden(value) {
+        return [this.SPECIAL_FOOD, this.MEDICAL_DEVICE, this.MEDICINE].indexOf(value) !== -1;
+    },
+};
+
+export var MuyingGoodsQualStatus = {
+    NONE_REQUIRED: 'none_required',
+    PENDING: 'pending',
+    APPROVED: 'approved',
+    REJECTED: 'rejected',
+    FORBIDDEN: 'forbidden',
+
+    getList() {
+        return [
+            { value: this.NONE_REQUIRED, name: '无需资质' },
+            { value: this.PENDING, name: '审核中' },
+            { value: this.APPROVED, name: '已通过' },
+            { value: this.REJECTED, name: '未通过' },
+            { value: this.FORBIDDEN, name: '禁止上架' },
+        ];
+    },
+
+    getName(value) {
+        var item = this.getList().find(function(v) { return v.value === value; });
+        return item ? item.name : '';
+    },
+};
+
+export var MuyingFocusArea = {
+    getList() {
+        return [
+            { value: 'nutrition', name: '营养喂养' },
+            { value: 'care', name: '日常护理' },
+            { value: 'safety', name: '安全防护' },
+            { value: 'education', name: '早教启蒙' },
+            { value: 'comfort', name: '舒适睡眠' },
+            { value: 'recovery', name: '产后恢复' },
+            { value: 'beauty', name: '孕期美护' },
+        ];
+    },
+
+    getName(value) {
+        var item = this.getList().find(function(v) { return v.value === value; });
+        return item ? item.name : '';
+    },
+
+    getNames(focusAreasStr) {
+        if (!focusAreasStr) return [];
+        var self = this;
+        return focusAreasStr.split(',').filter(function(v) { return v.trim(); }).map(function(v) {
+            return self.getName(v.trim());
+        }).filter(function(v) { return v; });
+    },
+};
