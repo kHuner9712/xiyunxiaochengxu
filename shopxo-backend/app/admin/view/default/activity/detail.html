@@ -17,6 +17,10 @@
                 'name' => '报名列表',
                 'key'  => 'signup-list',
             ],
+            [
+                'name' => '活动复盘',
+                'key'  => 'review',
+            ],
         ]
     ])}}
     <div class="detail-content-switch-data-item">
@@ -46,8 +50,10 @@
                             <th>姓名</th>
                             <th>手机</th>
                             <th>阶段</th>
+                            <th>类型</th>
                             <th>报名状态</th>
                             <th>签到状态</th>
+                            <th>签到码</th>
                             <th>报名时间</th>
                             <th>操作</th>
                         </tr>
@@ -59,8 +65,10 @@
                             <td>{{$signup.name}}</td>
                             <td>{{$signup.phone}}</td>
                             <td>{{$signup.stage_text}}</td>
+                            <td>{{$signup.is_waitlist_text}}</td>
                             <td>{{$signup.status_text}}</td>
                             <td>{{$signup.checkin_status_text}}</td>
+                            <td>{{$signup.signup_code}}</td>
                             <td>{{$signup.add_time_text}}</td>
                             <td>
                                 <a href="{{:MyUrl('admin/activitysignup/detail', ['id'=>$signup.id])}}" class="am-badge am-badge-primary am-radius">详情</a>
@@ -70,11 +78,86 @@
                     </tbody>
                 </table>
                 <div class="am-text-sm am-text-gray">
-                    共 {{$signup_total}} 条报名记录，已确认 {{$signup_confirmed_count}} 条
+                    共 {{$signup_total}} 条报名记录，已确认 {{$signup_confirmed_count}} 条，候补 {{$waitlist_count}} 条，已签到 {{$checkin_count}} 条
                 </div>
             {{else /}}
                 {{:ModuleInclude('public/not_data')}}
             {{/if}}
         </div>
+
+        <!-- 活动复盘 -->
+        <div class="am-padding-sm item" data-key="review">
+            <div class="am-g">
+                <div class="am-u-sm-12 am-u-md-6">
+                    <div class="am-panel am-panel-default">
+                        <div class="am-panel-hd">核心指标</div>
+                        <div class="am-panel-bd">
+                            <table class="am-table am-table-bordered am-text-sm">
+                                <tr><td>访问数</td><td><strong id="review-access-count">-</strong></td></tr>
+                                <tr><td>报名数（正式）</td><td><strong id="review-signup-count">-</strong></td></tr>
+                                <tr><td>候补数</td><td><strong id="review-waitlist-count">-</strong></td></tr>
+                                <tr><td>核销/签到数</td><td><strong id="review-checkin-count">-</strong></td></tr>
+                                <tr><td>取消数</td><td><strong id="review-cancelled-count">-</strong></td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="am-u-sm-12 am-u-md-6">
+                    <div class="am-panel am-panel-default">
+                        <div class="am-panel-hd">转化指标</div>
+                        <div class="am-panel-bd">
+                            <table class="am-table am-table-bordered am-text-sm">
+                                <tr><td>报名转化率</td><td><strong id="review-conversion-rate">-</strong></td></tr>
+                                <tr><td>到场率</td><td><strong id="review-attendance-rate">-</strong></td></tr>
+                                <tr><td>名额使用率</td><td><strong id="review-quota-rate">-</strong></td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="am-margin-top-sm">
+                <button type="button" class="am-btn am-btn-primary am-btn-xs am-radius" id="btn-refresh-review">
+                    <i class="am-icon-refresh"></i> 刷新复盘数据
+                </button>
+            </div>
+        </div>
     </div>
+{{/block}}
+
+{{block name="detail_page_bottom"}}
+<script type="text/javascript">
+$(function(){
+    function loadReviewData(){
+        var activityId = '{{if !empty($data["id"])}}{{$data.id}}{{/if}}';
+        if(!activityId) return;
+        $.ajax({
+            url: RequestUrlHandle("{{:MyUrl('admin/activity/review')}}"),
+            type: 'GET',
+            dataType: 'json',
+            data: {id: activityId},
+            success: function(result){
+                if(result.code == 0 && result.data){
+                    var d = result.data;
+                    $('#review-access-count').text(d.access_count);
+                    $('#review-signup-count').text(d.signup_count);
+                    $('#review-waitlist-count').text(d.waitlist_count);
+                    $('#review-checkin-count').text(d.checkin_count);
+                    $('#review-cancelled-count').text(d.cancelled_count);
+                    $('#review-conversion-rate').text(d.signup_conversion_rate + '%');
+                    $('#review-attendance-rate').text(d.attendance_rate + '%');
+                    var quotaRate = d.max_count > 0 ? Math.round(d.signup_count / d.max_count * 10000) / 100 : '-';
+                    $('#review-quota-rate').text(quotaRate + (quotaRate !== '-' ? '%' : ''));
+                }
+            }
+        });
+    }
+
+    $('#btn-refresh-review').on('click', function(){
+        loadReviewData();
+    });
+
+    loadReviewData();
+});
+</script>
+{__block__}
 {{/block}}

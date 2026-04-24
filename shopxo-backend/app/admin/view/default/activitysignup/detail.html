@@ -32,6 +32,12 @@
             <dt><strong>备注</strong></dt>
             <dd>{{if !empty($data['remark'])}}{{$data.remark}}{{else /}}-{{/if}}</dd>
 
+            <dt><strong>报名类型</strong></dt>
+            <dd>{{if !empty($data['is_waitlist'])}}候补{{else /}}正式{{/if}}</dd>
+
+            <dt><strong>签到码</strong></dt>
+            <dd>{{if !empty($data['signup_code'])}}<code>{{$data.signup_code}}</code>{{else /}}-{{/if}}</dd>
+
             <dt><strong>报名状态</strong></dt>
             <dd>{{$data.status_text}}</dd>
 
@@ -43,6 +49,9 @@
 
             <dt><strong>签到时间</strong></dt>
             <dd>{{if !empty($data['checkin_time_text'])}}{{$data.checkin_time_text}}{{else /}}-{{/if}}</dd>
+
+            <dt><strong>候补转正时间</strong></dt>
+            <dd>{{if !empty($data['waitlist_to_normal_time_text'])}}{{$data.waitlist_to_normal_time_text}}{{else /}}-{{/if}}</dd>
 
             <dt><strong>隐私同意时间</strong></dt>
             <dd>{{if !empty($data['privacy_agreed_time_text'])}}{{$data.privacy_agreed_time_text}}{{else /}}-{{/if}}</dd>

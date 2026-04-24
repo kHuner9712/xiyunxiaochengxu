@@ -60,9 +60,18 @@ class Activity extends Common
 
         $is_favored = false;
         $is_signed_up = false;
+        $my_signup = null;
         if (!empty($this->user)) {
             $is_favored = ActivityService::IsActivityFavored($id, $this->user['id']);
             $is_signed_up = ActivityService::IsUserSignedUp($id, $this->user['id']);
+            if ($is_signed_up) {
+                $my_signup = \think\facade\Db::name('ActivitySignup')->where([
+                    ['activity_id', '=', $id],
+                    ['user_id', '=', $this->user['id']],
+                    ['status', 'in', [0, 1]],
+                    ['is_delete_time', '=', 0],
+                ])->field('id,status,is_waitlist,signup_code,checkin_status')->find();
+            }
         }
 
         $detail = [
@@ -70,6 +79,7 @@ class Activity extends Common
             'is_favored'    => $is_favored,
             'is_signed_up'  => $is_signed_up,
             'signup_status' => isset($activity['signup_status']) ? $activity['signup_status'] : 'ongoing',
+            'my_signup'     => $my_signup,
         ];
         return ApiService::ApiDataReturn(SystemBaseService::DataReturn($detail));
     }

@@ -9,12 +9,17 @@ var STAGE_LEGACY_MAP = {
 };
 
 var CATEGORY_LEGACY_MAP = {
-    'maternity': 'classroom',
-    'parenting': 'lecture',
-    'early_edu': 'lecture',
-    'activity': 'holiday',
-    'other': 'classroom',
-    'class': 'classroom',
+    'classroom': 'pregnancy_class',
+    'lecture': 'parent_child',
+    'trial': 'product_trial',
+    'holiday': 'member_day',
+    'checkin': 'public_welfare',
+    'maternity': 'pregnancy_class',
+    'parenting': 'parent_child',
+    'early_edu': 'parent_child',
+    'activity': 'member_day',
+    'other': 'pregnancy_class',
+    'class': 'pregnancy_class',
 };
 
 export const MuyingStage = {
@@ -62,21 +67,21 @@ export const MuyingStage = {
 };
 
 export const MuyingActivityCategory = {
-    CLASSROOM: 'classroom',
+    PREGNANCY_CLASS: 'pregnancy_class',
+    PARENT_CHILD: 'parent_child',
+    PRODUCT_TRIAL: 'product_trial',
+    MEMBER_DAY: 'member_day',
     SALON: 'salon',
-    LECTURE: 'lecture',
-    TRIAL: 'trial',
-    HOLIDAY: 'holiday',
-    CHECKIN: 'checkin',
+    PUBLIC_WELFARE: 'public_welfare',
 
     getList() {
         return [
-            { value: this.CLASSROOM, name: '孕妈课堂' },
+            { value: this.PREGNANCY_CLASS, name: '孕妈课堂' },
+            { value: this.PARENT_CHILD, name: '亲子活动' },
+            { value: this.PRODUCT_TRIAL, name: '新品体验' },
+            { value: this.MEMBER_DAY, name: '会员日' },
             { value: this.SALON, name: '线下沙龙' },
-            { value: this.LECTURE, name: '育儿讲座' },
-            { value: this.TRIAL, name: '试用官招募' },
-            { value: this.HOLIDAY, name: '节日活动' },
-            { value: this.CHECKIN, name: '签到打卡' },
+            { value: this.PUBLIC_WELFARE, name: '公益活动' },
         ];
     },
 
@@ -97,6 +102,77 @@ export const MuyingActivityCategory = {
 
     getFilterTabs() {
         return [{ name: '全部', value: '' }].concat(this.getList());
+    },
+};
+
+export const MuyingActivityType = {
+    OFFLINE: 'offline',
+    ONLINE_INFO: 'online_info',
+
+    getList() {
+        return [
+            { value: this.OFFLINE, name: '线下活动' },
+            { value: this.ONLINE_INFO, name: '线上图文' },
+        ];
+    },
+
+    getName(value) {
+        var item = this.getList().find(function(v) { return v.value === value; });
+        return item ? item.name : '';
+    },
+
+    isValid(value) {
+        return [this.OFFLINE, this.ONLINE_INFO].indexOf(value) !== -1;
+    },
+
+    normalize(value) {
+        if (!value) return this.OFFLINE;
+        return this.isValid(value) ? value : this.OFFLINE;
+    },
+};
+
+export const MuyingActivityStatus = {
+    DRAFT: 'draft',
+    PUBLISHED: 'published',
+    SIGNING: 'signing',
+    FULL: 'full',
+    ENDED: 'ended',
+    CANCELLED: 'cancelled',
+
+    getList() {
+        return [
+            { value: this.DRAFT, name: '草稿' },
+            { value: this.PUBLISHED, name: '已发布' },
+            { value: this.SIGNING, name: '报名中' },
+            { value: this.FULL, name: '已满员' },
+            { value: this.ENDED, name: '已结束' },
+            { value: this.CANCELLED, name: '已取消' },
+        ];
+    },
+
+    getName(value) {
+        var item = this.getList().find(function(v) { return v.value === value; });
+        return item ? item.name : '';
+    },
+
+    isValid(value) {
+        return [this.DRAFT, this.PUBLISHED, this.SIGNING, this.FULL, this.ENDED, this.CANCELLED].indexOf(value) !== -1;
+    },
+
+    normalize(value) {
+        if (!value) return this.DRAFT;
+        return this.isValid(value) ? value : this.DRAFT;
+    },
+
+    getStatusClass(value) {
+        var map = {};
+        map[this.DRAFT] = 'muying-activity-status--draft';
+        map[this.PUBLISHED] = 'muying-activity-status--published';
+        map[this.SIGNING] = 'muying-activity-status--signing';
+        map[this.FULL] = 'muying-activity-status--full';
+        map[this.ENDED] = 'muying-activity-status--ended';
+        map[this.CANCELLED] = 'muying-activity-status--cancelled';
+        return map[value] || 'muying-activity-status--draft';
     },
 };
 

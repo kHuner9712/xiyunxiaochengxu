@@ -49,7 +49,19 @@
                                     <view class="text-size fw-b">{{ (item.activity_info && item.activity_info.title) || '' }}</view>
                                     <view class="text-size-sm cr-grey margin-top-xs">报名时间：{{ item.add_time_text }}</view>
                                 </view>
-                                <text :class="['muying-stage-tag', get_signup_status_class(item.status)]">{{ item.status_text }}</text>
+                                <view class="flex-row align-c" style="gap: 8rpx">
+                                    <text v-if="item.is_waitlist" class="muying-stage-tag muying-status-waitlist">候补</text>
+                                    <text :class="['muying-stage-tag', get_signup_status_class(item.status)]">{{ item.status_text }}</text>
+                                </view>
+                            </view>
+                            <view v-if="item.signup_code && item.activity_info && item.activity_info.signup_code_enabled" class="muying-divider margin-top-main margin-bottom-main"></view>
+                            <view v-if="item.signup_code && item.activity_info && item.activity_info.signup_code_enabled" class="flex-row jc-sb align-c">
+                                <view class="text-size-sm cr-grey-9"
+                                    >签到码：<text class="fw-b cr-base">{{ item.signup_code }}</text></view
+                                >
+                                <view class="text-size-sm cr-grey-9">
+                                    {{ item.checkin_status === 1 ? '已签到' : '未签到' }}
+                                </view>
                             </view>
                             <view class="muying-divider margin-top-main margin-bottom-main"></view>
                             <view class="flex-row jc-sb align-c">
@@ -207,13 +219,21 @@
                                 var info = item.activity_info;
                                 var activity_status = 'ongoing';
                                 var activity_status_text = '进行中';
-                                if (info.signup_end_time > 0 && now > info.signup_end_time && (info.end_time <= 0 || now <= info.end_time)) {
+                                if (info.activity_status === 'signing') {
+                                    activity_status = 'signing';
+                                    activity_status_text = '报名中';
+                                } else if (info.activity_status === 'full') {
+                                    activity_status = 'full';
+                                    activity_status_text = '已满员';
+                                } else if (info.signup_end_time > 0 && now > info.signup_end_time && (info.end_time <= 0 || now <= info.end_time)) {
                                     activity_status = 'signing_ended';
                                     activity_status_text = '报名截止';
-                                }
-                                if (info.end_time > 0 && now > info.end_time) {
+                                } else if (info.activity_status === 'ended' || (info.end_time > 0 && now > info.end_time)) {
                                     activity_status = 'ended';
                                     activity_status_text = '已结束';
+                                } else if (info.activity_status === 'cancelled') {
+                                    activity_status = 'cancelled';
+                                    activity_status_text = '已取消';
                                 }
                                 activity_list.push({
                                     id: info.id || item.activity_id,
@@ -268,9 +288,10 @@
 
             cancel_signup(item) {
                 var self = this;
+                var cancelLabel = item.is_waitlist ? '取消候补' : '取消报名';
                 uni.showModal({
-                    title: '取消报名',
-                    content: '确定要取消报名「' + ((item.activity_info && item.activity_info.title) || '该活动') + '」吗？取消后可重新报名。',
+                    title: cancelLabel,
+                    content: '确定要' + cancelLabel + '「' + ((item.activity_info && item.activity_info.title) || '该活动') + '」吗？取消后可重新报名。',
                     confirmColor: '#F5A0B1',
                     success: function (res) {
                         if (!res.confirm) return;
@@ -279,7 +300,7 @@
                             action: 'signupcancel',
                             data: { id: item.id },
                             success: function () {
-                                uni.showToast({ title: '已取消报名', icon: 'success' });
+                                uni.showToast({ title: '已' + cancelLabel, icon: 'success' });
                                 self.load_data();
                             },
                             fail: function (err) {
@@ -347,6 +368,18 @@
         border: 1px solid #4caf50;
     }
 
+    .muying-status-signing {
+        background-color: #e3f2fd;
+        color: #2196f3;
+        border: 1px solid #2196f3;
+    }
+
+    .muying-status-full {
+        background-color: #fff3e0;
+        color: #ff9800;
+        border: 1px solid #ff9800;
+    }
+
     .muying-status-signing_ended {
         background-color: #fff5e6;
         color: #e8a050;
@@ -359,6 +392,13 @@
         border: 1px solid #ddd;
     }
 
+    .muying-status-cancelled {
+        background-color: #fff0f0;
+        color: #e57373;
+        border: 1px solid #e57373;
+        text-decoration: line-through;
+    }
+
     .muying-status-pending {
         background-color: #fff5e6;
         color: #e8a050;
@@ -369,6 +409,12 @@
         background-color: #e8f5e9;
         color: #4caf50;
         border: 1px solid #4caf50;
+    }
+
+    .muying-status-waitlist {
+        background-color: #fff3e0;
+        color: #ff9800;
+        border: 1px solid #ff9800;
     }
 
     .muying-status-cancelled {

@@ -41,12 +41,20 @@
                 <label>活动分类<span class="am-form-group-label-tips-must">*</span></label>
                 <select name="category" class="am-radius chosen-select" data-placeholder="请选择分类" data-validation-message="请选择活动分类" required>
                     <option value="">请选择分类</option>
-                    <option value="classroom" {{if !empty($data['category']) and $data['category'] eq 'classroom'}}selected{{/if}}>孕妈课堂</option>
+                    <option value="pregnancy_class" {{if !empty($data['category']) and $data['category'] eq 'pregnancy_class'}}selected{{/if}}>孕妈课堂</option>
+                    <option value="parent_child" {{if !empty($data['category']) and $data['category'] eq 'parent_child'}}selected{{/if}}>亲子活动</option>
+                    <option value="product_trial" {{if !empty($data['category']) and $data['category'] eq 'product_trial'}}selected{{/if}}>新品体验</option>
+                    <option value="member_day" {{if !empty($data['category']) and $data['category'] eq 'member_day'}}selected{{/if}}>会员日</option>
                     <option value="salon" {{if !empty($data['category']) and $data['category'] eq 'salon'}}selected{{/if}}>线下沙龙</option>
-                    <option value="lecture" {{if !empty($data['category']) and $data['category'] eq 'lecture'}}selected{{/if}}>育儿讲座</option>
-                    <option value="trial" {{if !empty($data['category']) and $data['category'] eq 'trial'}}selected{{/if}}>试用官招募</option>
-                    <option value="holiday" {{if !empty($data['category']) and $data['category'] eq 'holiday'}}selected{{/if}}>节日活动</option>
-                    <option value="checkin" {{if !empty($data['category']) and $data['category'] eq 'checkin'}}selected{{/if}}>签到打卡</option>
+                    <option value="public_welfare" {{if !empty($data['category']) and $data['category'] eq 'public_welfare'}}selected{{/if}}>公益活动</option>
+                </select>
+            </div>
+
+            <div class="am-form-group">
+                <label>活动类型<span class="am-form-group-label-tips-must">*</span></label>
+                <select name="activity_type" class="am-radius chosen-select" data-placeholder="请选择活动类型" data-validation-message="请选择活动类型" required>
+                    <option value="offline" {{if empty($data['activity_type']) or $data['activity_type'] eq 'offline'}}selected{{/if}}>线下活动</option>
+                    <option value="online_info" {{if !empty($data['activity_type']) and $data['activity_type'] eq 'online_info'}}selected{{/if}}>线上图文</option>
                 </select>
             </div>
 
@@ -102,8 +110,23 @@
             </div>
 
             <div class="am-form-group">
-                <label>报名人数上限</label>
+                <label>正式名额上限</label>
                 <input type="number" name="max_count" placeholder="0表示不限" min="0" class="am-form-field am-radius" {{if isset($data['max_count'])}} value="{{$data.max_count}}" {{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>候补名额</label>
+                <input type="number" name="waitlist_count" placeholder="0表示不允许候补" min="0" class="am-form-field am-radius" {{if isset($data['waitlist_count'])}} value="{{$data.waitlist_count}}" {{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>允许候补</label>
+                <input name="allow_waitlist" value="1" type="checkbox" data-off-text="否" data-on-text="是" data-size="xs" data-on-color="success" data-off-color="default" data-handle-width="50" data-am-switch {{if isset($data['allow_waitlist']) and $data['allow_waitlist'] eq 1}}checked="true"{{/if}} />
+            </div>
+
+            <div class="am-form-group">
+                <label>启用签到码</label>
+                <input name="signup_code_enabled" value="1" type="checkbox" data-off-text="否" data-on-text="是" data-size="xs" data-on-color="success" data-off-color="default" data-handle-width="50" data-am-switch {{if isset($data['signup_code_enabled']) and $data['signup_code_enabled'] eq 1}}checked="true"{{/if}} />
             </div>
 
             <div class="am-form-group">

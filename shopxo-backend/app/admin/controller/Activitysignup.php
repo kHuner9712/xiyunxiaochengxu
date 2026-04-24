@@ -1,13 +1,4 @@
 <?php
-// +----------------------------------------------------------------------
-// | ShopXO 国内领先企业级B2C免费开源电商系统
-// +----------------------------------------------------------------------
-// | Copyright (c) 2011~2099 http://shopxo.net All rights reserved.
-// +----------------------------------------------------------------------
-// | Licensed ( https://opensource.org/licenses/mit-license.php )
-// +----------------------------------------------------------------------
-// | Author: Devil
-// +----------------------------------------------------------------------
 namespace app\admin\controller;
 
 use app\admin\controller\Base;
@@ -42,7 +33,6 @@ class Activitysignup extends Base
         return ApiService::ApiDataReturn(ActivityService::SignupConfirm($params));
     }
 
-    // [MUYING-二开] 取消报名
     public function Cancel()
     {
         $params = $this->data_request;
@@ -50,12 +40,25 @@ class Activitysignup extends Base
         return ApiService::ApiDataReturn(ActivityService::SignupAdminCancel($params));
     }
 
-    // [MUYING-二开] 批量确认报名
     public function BatchConfirm()
     {
         $params = $this->data_request;
         $params['admin'] = $this->admin;
         return ApiService::ApiDataReturn(ActivityService::SignupBatchConfirm($params));
+    }
+
+    public function WaitlistToNormal()
+    {
+        $params = $this->data_request;
+        $params['admin'] = $this->admin;
+        return ApiService::ApiDataReturn(ActivityService::WaitlistToNormal($params));
+    }
+
+    public function CodeCheckin()
+    {
+        $params = $this->data_request;
+        $params['admin'] = $this->admin;
+        return ApiService::ApiDataReturn(ActivityService::CodeCheckin($params));
     }
 
     public function Delete()
@@ -84,10 +87,12 @@ class Activitysignup extends Base
         if (isset($params['checkin_status']) && $params['checkin_status'] !== '') {
             $where[] = ['checkin_status', '=', intval($params['checkin_status'])];
         }
+        if (isset($params['is_waitlist']) && $params['is_waitlist'] !== '') {
+            $where[] = ['is_waitlist', '=', intval($params['is_waitlist'])];
+        }
         if (!empty($params['stage'])) {
             $where[] = ['stage', '=', trim($params['stage'])];
         }
-        // [MUYING-二开] 手机号筛选改用 phone_hash（phone 字段已加密，无法 LIKE）
         if (!empty($params['phone'])) {
             $phone_hash = MuyingPrivacyService::HashPhone(trim($params['phone']));
             $where[] = ['phone_hash', '=', $phone_hash];
@@ -113,7 +118,7 @@ class Activitysignup extends Base
         }
 
         $headers = [
-            '报名ID', '活动标题', '姓名', '手机', '阶段', '预产期', '宝宝生日', '宝宝月龄', '报名状态', '签到状态', '报名时间', '签到时间'
+            '报名ID', '活动标题', '姓名', '手机', '阶段', '预产期', '宝宝生日', '宝宝月龄', '报名类型', '签到码', '备注', '报名状态', '签到状态', '报名时间', '签到时间'
         ];
 
         $filename = 'activity_signup_' . date('YmdHis') . '.csv';
@@ -137,6 +142,9 @@ class Activitysignup extends Base
                     $row['due_date'],
                     $row['baby_birthday'],
                     $row['baby_month_age'],
+                    $row['is_waitlist'],
+                    $row['signup_code'],
+                    $row['remark'],
                     $row['status_text'],
                     $row['checkin_status_text'],
                     $row['add_time_text'],

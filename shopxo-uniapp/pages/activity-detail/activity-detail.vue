@@ -24,6 +24,9 @@
                 <view class="cover-stage-tag">
                     <text :class="'muying-stage-tag ' + activity.stage_class">{{ activity.stage_name }}</text>
                 </view>
+                <view v-if="activity.activity_status_text" class="cover-status-tag">
+                    <text :class="'muying-activity-status-badge ' + activity.activity_status_class">{{ activity.activity_status_text }}</text>
+                </view>
             </view>
 
             <!-- 基础信息 -->
@@ -31,7 +34,12 @@
                 <view class="info-card muying-card padding-main">
                     <view class="activity-title-row flex-row jc-sb align-c">
                         <text class="fw-b text-size-lg cr-base flex-1">{{ activity.title }}</text>
+                    </view>
+
+                    <view class="tag-row flex-row align-c margin-top-xs" style="gap: 12rpx; flex-wrap: wrap;">
                         <text :class="'muying-stage-tag ' + activity.stage_class">{{ activity.stage_name }}</text>
+                        <text class="muying-category-tag">{{ activity.category_text }}</text>
+                        <text class="muying-type-tag">{{ activity.activity_type_text }}</text>
                     </view>
 
                     <view class="info-items margin-top-main">
@@ -39,14 +47,28 @@
                             <iconfont name="icon-time" size="28rpx" color="#F5A0B1"></iconfont>
                             <text class="cr-grey text-size-sm margin-left-sm">{{ activity.time }}</text>
                         </view>
-                        <view class="info-item flex-row align-c margin-top-sm">
+                        <view v-if="activity.address" class="info-item flex-row align-c margin-top-sm">
                             <iconfont name="icon-location" size="28rpx" color="#F5A0B1"></iconfont>
                             <text class="cr-grey text-size-sm margin-left-sm">{{ activity.address }}</text>
                         </view>
                         <view class="info-item flex-row align-c margin-top-sm">
                             <iconfont name="icon-member" size="28rpx" color="#F5A0B1"></iconfont>
-                            <text class="cr-grey text-size-sm margin-left-sm">已报名 {{ activity.signup_count }}/{{ activity.max_count }}人</text>
-                            <text class="cr-grey-9 text-size-xs margin-left-sm">截止 {{ activity.signup_deadline }}</text>
+                            <text class="cr-grey text-size-sm margin-left-sm">
+                                已报名 {{ activity.signup_count }}{{ activity.max_count > 0 ? '/' + activity.max_count : '' }}人
+                            </text>
+                            <text v-if="activity.remain_count > 0" class="cr-main text-size-xs margin-left-sm">剩余{{ activity.remain_count }}个名额</text>
+                            <text v-else-if="activity.max_count > 0 && activity.remain_count === 0" class="cr-grey-9 text-size-xs margin-left-sm">名额已满</text>
+                        </view>
+                        <view v-if="activity.allow_waitlist && activity.waitlist_count > 0" class="info-item flex-row align-c margin-top-sm">
+                            <iconfont name="icon-member" size="28rpx" color="#e8a050"></iconfont>
+                            <text class="cr-grey text-size-sm margin-left-sm">
+                                候补 {{ activity.waitlist_signup_count }}/{{ activity.waitlist_count }}人
+                            </text>
+                            <text v-if="activity.waitlist_remain > 0" class="text-size-xs margin-left-sm" style="color: #e8a050;">还可候补{{ activity.waitlist_remain }}人</text>
+                        </view>
+                        <view class="info-item flex-row align-c margin-top-sm">
+                            <iconfont name="icon-time" size="28rpx" color="#999"></iconfont>
+                            <text class="cr-grey-9 text-size-sm margin-left-sm">报名截止 {{ activity.signup_deadline }}</text>
                         </view>
                     </view>
 
@@ -91,6 +113,23 @@
                 </view>
             </view>
 
+            <!-- 签到码展示（已报名且活动启用签到码） -->
+            <view v-if="is_signed_up && my_signup && my_signup.signup_code && activity.signup_code_enabled" class="checkin-container padding-horizontal-main margin-top-main">
+                <view class="checkin-card muying-card padding-main tc">
+                    <view class="checkin-header flex-row align-c jc-c margin-bottom-sm">
+                        <iconfont name="icon-check" size="28rpx" color="#4caf50"></iconfont>
+                        <text class="fw-b text-size cr-base margin-left-xs">签到码</text>
+                    </view>
+                    <view class="checkin-code">
+                        <text class="fw-b text-size-xxxl cr-base" style="letter-spacing: 8rpx;">{{ my_signup.signup_code }}</text>
+                    </view>
+                    <view class="cr-grey-9 text-size-xs margin-top-sm">现场出示此码完成签到</view>
+                    <view v-if="my_signup.is_waitlist" class="waitlist-hint margin-top-sm">
+                        <text class="cr-main text-size-xs">当前为候补状态，转正后可签到</text>
+                    </view>
+                </view>
+            </view>
+
             <!-- 底部操作栏 -->
             <view class="bottom-bar pf bottom-0 left-0 right-0 z-i-deep bg-white">
                 <view class="bottom-bar-inner flex-row align-c padding-horizontal-main padding-vertical-sm">
@@ -98,7 +137,9 @@
                         <uni-icons :type="is_favored ? 'star-filled' : 'star'" size="44rpx" :color="is_favored ? '#F5A0B1' : '#999'"></uni-icons>
                         <text :class="'text-size-xs dis-block ' + (is_favored ? 'cr-main' : 'cr-grey')">{{ is_favored ? '已收藏' : '收藏' }}</text>
                     </view>
-                    <button v-if="is_signed_up" class="signup-btn flex-1 cr-white fw-b text-size-md round signup-btn-cancel" @tap="cancel_signup_event">取消报名</button>
+                    <button v-if="is_signed_up" class="signup-btn flex-1 cr-white fw-b text-size-md round signup-btn-cancel" @tap="cancel_signup_event">
+                        {{ my_signup && my_signup.is_waitlist ? '取消候补' : '取消报名' }}
+                    </button>
                     <button v-else class="signup-btn flex-1 cr-white fw-b text-size-md round" :class="signup_btn_class" :disabled="signup_disabled" @tap="signup_event">
                         {{ signup_btn_text }}
                     </button>
@@ -116,6 +157,7 @@
     var bar_height = parseInt(app.globalData.get_system_info('statusBarHeight')) || 0;
     import componentCommon from '@/components/common/common';
     import componentNoData from '@/components/no-data/no-data';
+    import { MuyingActivityStatus } from '@/common/js/config/muying-enum';
     import { request as http_request } from '@/common/js/http.js';
 
     export default {
@@ -128,6 +170,7 @@
                 is_favored: false,
                 is_signed_up: false,
                 signup_status: 'ongoing',
+                my_signup: null,
                 activity: {},
                 data_loaded: false,
             };
@@ -144,7 +187,7 @@
                 if (this.is_signed_up) return true;
                 if (this.signup_status === 'not_started') return true;
                 if (this.signup_status === 'ended') return true;
-                if (this.signup_status === 'full') return true;
+                if (this.signup_status === 'full' && this.signup_status !== 'waitlist') return true;
                 return false;
             },
             signup_btn_text() {
@@ -153,11 +196,13 @@
                 if (this.signup_status === 'not_started') return '报名未开始';
                 if (this.signup_status === 'ended') return '报名已截止';
                 if (this.signup_status === 'full') return '名额已满';
+                if (this.signup_status === 'waitlist') return '候补报名';
                 return '立即报名';
             },
             signup_btn_class() {
                 if (!this.activity.id) return 'signup-btn-disabled';
                 if (this.signup_disabled) return 'signup-btn-disabled';
+                if (this.signup_status === 'waitlist') return 'signup-btn-waitlist';
                 return 'signup-btn-active';
             },
         },
@@ -198,6 +243,7 @@
                             is_favored: !!data.is_favored,
                             is_signed_up: !!data.is_signed_up,
                             signup_status: data.signup_status || 'ongoing',
+                            my_signup: data.my_signup || null,
                             data_loaded: true,
                         });
                     },
@@ -257,9 +303,10 @@
 
             cancel_signup_event() {
                 var self = this;
+                var cancelText = this.my_signup && this.my_signup.is_waitlist ? '确定要取消候补吗？' : '确定要取消该活动的报名吗？取消后可重新报名。';
                 uni.showModal({
                     title: '取消报名',
-                    content: '确定要取消该活动的报名吗？取消后可重新报名。',
+                    content: cancelText,
                     confirmText: '确定取消',
                     cancelText: '再想想',
                     confirmColor: '#F5A0B1',
@@ -282,6 +329,7 @@
                         self.setData({
                             is_signed_up: false,
                             signup_status: 'ongoing',
+                            my_signup: null,
                         });
                         self.get_activity_detail();
                     },
@@ -344,6 +392,46 @@
         z-index: 2;
     }
 
+    .cover-status-tag {
+        position: absolute;
+        top: 24rpx;
+        right: 24rpx;
+        z-index: 2;
+    }
+
+    .muying-activity-status-badge {
+        display: inline-block;
+        padding: 6rpx 20rpx;
+        border-radius: 20rpx;
+        font-size: 24rpx;
+        color: #fff;
+    }
+
+    .muying-activity-status--signing .muying-activity-status-badge,
+    .muying-activity-status-badge {
+        background-color: rgba(76, 175, 80, 0.85);
+    }
+
+    .muying-category-tag {
+        display: inline-block;
+        padding: 4rpx 16rpx;
+        border-radius: 16rpx;
+        font-size: 22rpx;
+        color: #f5a0b1;
+        background-color: #fff0f3;
+        border: 1rpx solid #f5a0b1;
+    }
+
+    .muying-type-tag {
+        display: inline-block;
+        padding: 4rpx 16rpx;
+        border-radius: 16rpx;
+        font-size: 22rpx;
+        color: #999;
+        background-color: #f5f5f5;
+        border: 1rpx solid #ddd;
+    }
+
     .info-card {
         margin-top: -40rpx;
         position: relative;
@@ -358,33 +446,21 @@
         line-height: 1.8;
     }
 
-    .share-scroll {
-        white-space: nowrap;
+    .checkin-card {
+        background: linear-gradient(135deg, #f0fff0 0%, #ffffff 100%);
     }
 
-    .share-scroll-inner {
-        gap: 20rpx;
+    .checkin-code {
+        padding: 24rpx;
+        background-color: #f8f8f8;
+        border-radius: 16rpx;
+        border: 2rpx dashed #4caf50;
     }
 
-    .share-item {
-        display: inline-flex;
-        flex-direction: column;
-        width: 280rpx;
-        vertical-align: top;
-    }
-
-    .share-photo {
-        width: 280rpx;
-        height: 200rpx;
-        border-radius: 12rpx;
-    }
-
-    .share-comment {
-        margin-top: 4rpx;
-    }
-
-    .interact-item {
-        min-width: 100rpx;
+    .waitlist-hint {
+        padding: 8rpx 16rpx;
+        background-color: #fff8f5;
+        border-radius: 8rpx;
     }
 
     .bottom-bar {
@@ -399,10 +475,6 @@
         min-width: 80rpx;
     }
 
-    .poster-btn {
-        min-width: 80rpx;
-    }
-
     .signup-btn {
         height: 88rpx;
         line-height: 88rpx;
@@ -412,6 +484,10 @@
 
     .signup-btn-active {
         background: linear-gradient(135deg, #f5a0b1 0%, #f5c6a0 100%);
+    }
+
+    .signup-btn-waitlist {
+        background: linear-gradient(135deg, #e8a050 0%, #f5c6a0 100%);
     }
 
     .signup-btn-disabled {
