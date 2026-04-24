@@ -6,17 +6,28 @@
 {{/if}}
 {{if AdminIsPower('activitysignup', 'confirm')}}
     {{if $module_data['status'] eq 0}}
-        <button type="button" class="am-btn am-btn-primary am-btn-xs am-radius am-btn-block submit-ajax" data-url="{{:MyUrl('admin/activitysignup/confirm')}}" data-id="{{$module_data.id}}" data-key="id" data-msg="确认该报名记录？">
+        <button type="button" class="am-btn am-btn-primary am-btn-xs am-radius am-btn-block submit-ajax" data-url="{{:MyUrl('admin/activitysignup/confirm')}}" data-id="{{$module_data.id}}" data-key="id" data-view="reload" data-msg="确认该报名记录？操作后报名状态将变为已确认。">
             <i class="am-icon-check-circle-o"></i>
             <span>确认</span>
         </button>
     {{/if}}
 {{/if}}
 {{if AdminIsPower('activitysignup', 'checkin')}}
-    {{if empty($module_data['checkin_status']) or $module_data['checkin_status'] eq 0}}
-        <button type="button" class="am-btn am-btn-success am-btn-xs am-radius am-btn-block submit-ajax" data-url="{{:MyUrl('admin/activitysignup/checkin')}}" data-id="{{$module_data.id}}" data-key="id" data-msg="确认签到？">
-            <i class="am-icon-check"></i>
-            <span>签到</span>
+    {{if $module_data['status'] neq 2}}
+        {{if empty($module_data['checkin_status']) or $module_data['checkin_status'] eq 0}}
+            <button type="button" class="am-btn am-btn-success am-btn-xs am-radius am-btn-block submit-ajax" data-url="{{:MyUrl('admin/activitysignup/checkin')}}" data-id="{{$module_data.id}}" data-key="id" data-view="reload" data-msg="确认签到？签到后不可撤销。">
+                <i class="am-icon-check"></i>
+                <span>签到</span>
+            </button>
+        {{/if}}
+    {{/if}}
+{{/if}}
+<!-- [MUYING-二开] 取消报名按钮 — 仅对待确认(0)/已确认(1)且未签到的记录展示 -->
+{{if AdminIsPower('activitysignup', 'cancel')}}
+    {{if ($module_data['status'] eq 0 or $module_data['status'] eq 1) and (empty($module_data['checkin_status']) or $module_data['checkin_status'] eq 0)}}
+        <button type="button" class="am-btn am-btn-warning am-btn-xs am-radius am-btn-block submit-ajax" data-url="{{:MyUrl('admin/activitysignup/cancel')}}" data-id="{{$module_data.id}}" data-key="id" data-view="reload" data-msg="确认取消该报名？取消后报名人数将减少，此操作不可撤销。">
+            <i class="am-icon-paint-brush"></i>
+            <span>取消</span>
         </button>
     {{/if}}
 {{/if}}
