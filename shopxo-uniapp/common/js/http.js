@@ -1,5 +1,5 @@
-import { is_feature_enabled } from '../config/phase-one-scope.js';
-import { FeatureFlagKey, TipMessage, RoutePath } from '../config/muying-constants.js';
+import { is_feature_enabled } from './config/phase-one-scope.js';
+import { FeatureFlagKey, TipMessage, RoutePath } from './config/muying-constants.js';
 import { userStore } from './user-store.js';
 import { logger } from './logger.js';
 
