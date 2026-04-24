@@ -12,6 +12,7 @@ namespace app\admin\form;
 
 use think\facade\Db;
 use app\service\ActivityService;
+use app\extend\muying\MuyingStage;
 
 /**
  * 活动报名动态表格
@@ -93,6 +94,24 @@ class Activitysignup
                         'where_type'        => 'like',
                     ],
                 ],
+                // [MUYING-二开] 增加阶段筛选列
+                [
+                    'label'             => '阶段',
+                    'view_type'         => 'field',
+                    'view_key'          => 'stage_text',
+                    'is_sort'           => 1,
+                    'width'             => 100,
+                    'align'             => 'center',
+                    'search_config'     => [
+                        'form_type'         => 'select',
+                        'form_name'         => 'stage',
+                        'where_type'        => 'in',
+                        'data'              => $this->StageData(),
+                        'data_key'          => 'id',
+                        'data_name'         => 'name',
+                        'is_multiple'       => 0,
+                    ],
+                ],
                 [
                     'label'             => '报名状态',
                     'view_type'         => 'field',
@@ -157,6 +176,17 @@ class Activitysignup
     public function ActivityList()
     {
         return Db::name('Activity')->where(['is_delete_time' => 0])->field('id,title')->order('id desc')->select()->toArray();
+    }
+
+    // [MUYING-二开] 阶段筛选数据源
+    public function StageData()
+    {
+        $list = MuyingStage::getList();
+        $result = [];
+        foreach ($list as $id => $name) {
+            $result[] = ['id' => $id, 'name' => $name];
+        }
+        return $result;
     }
 
     public function SignupStatusData()

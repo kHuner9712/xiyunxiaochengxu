@@ -71,6 +71,22 @@ class Activitysignup extends Base
         return ApiService::ApiDataReturn(ActivityService::SignupConfirm($params));
     }
 
+    // [MUYING-二开] 取消报名 — 管理员可取消已确认/待确认的报名
+    public function Cancel()
+    {
+        $params = $this->data_request;
+        $params['admin'] = $this->admin;
+        return ApiService::ApiDataReturn(ActivityService::SignupAdminCancel($params));
+    }
+
+    // [MUYING-二开] 批量确认报名 — 管理员可批量确认待确认的报名
+    public function BatchConfirm()
+    {
+        $params = $this->data_request;
+        $params['admin'] = $this->admin;
+        return ApiService::ApiDataReturn(ActivityService::SignupBatchConfirm($params));
+    }
+
     /**
      * 删除报名（软删除）
      */
@@ -93,6 +109,11 @@ class Activitysignup extends Base
         $params = $this->data_request;
         $params['admin'] = $this->admin;
 
+        // [MUYING-二开] 导出权限校验 — 手机号和母婴资料属于个人信息，仅授权管理员可导出
+        if (empty($this->admin) || empty($this->admin['id'])) {
+            return ApiService::ApiDataReturn(DataReturn('无导出权限', -1));
+        }
+
         $where = [];
         if (!empty($params['activity_id'])) {
             $where[] = ['activity_id', '=', intval($params['activity_id'])];
@@ -102,6 +123,27 @@ class Activitysignup extends Base
         }
         if (isset($params['checkin_status']) && $params['checkin_status'] !== '') {
             $where[] = ['checkin_status', '=', intval($params['checkin_status'])];
+        }
+        // [MUYING-二开] 增加阶段筛选
+        if (!empty($params['stage'])) {
+            $where[] = ['stage', '=', trim($params['stage'])];
+        }
+        // [MUYING-二开] 增加手机号筛选
+        if (!empty($params['phone'])) {
+            $where[] = ['phone', 'like', '%' . trim($params['phone']) . '%'];
+        }
+        // [MUYING-二开] 增加时间范围筛选
+        if (!empty($params['start_time'])) {
+            $start_ts = strtotime($params['start_time']);
+            if ($start_ts !== false) {
+                $where[] = ['add_time', '>=', $start_ts];
+            }
+        }
+        if (!empty($params['end_time'])) {
+            $end_ts = strtotime($params['end_time']);
+            if ($end_ts !== false) {
+                $where[] = ['add_time', '<=', $end_ts];
+            }
         }
         $where[] = ['is_delete_time', '=', 0];
 

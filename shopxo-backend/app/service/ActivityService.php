@@ -975,6 +975,123 @@ class ActivityService
         }
     }
 
+    // [MUYING-二开] 管理员取消报名 — 管理员可将待确认/已确认的报名取消
+    public static function SignupAdminCancel($params = [])
+    {
+        $p = [
+            [
+                'checked_type' => 'empty',
+                'key_name'     => 'id',
+                'error_msg'    => '报名记录ID不能为空',
+            ],
+        ];
+        $ret = ParamsChecked($params, $p);
+        if ($ret !== true) {
+            return DataReturn($ret, -1);
+        }
+
+        $id = intval($params['id']);
+
+        Db::startTrans();
+        try {
+            $signup = Db::name('ActivitySignup')->where([
+                ['id', '=', $id],
+                ['is_delete_time', '=', 0],
+            ])->lock(true)->find();
+            if (empty($signup)) {
+                Db::rollback();
+                return DataReturn('报名记录不存在', -1);
+            }
+
+            if ($signup['status'] == self::SIGNUP_STATUS_CANCELLED) {
+                Db::rollback();
+                return DataReturn('该报名已取消，请勿重复操作', -1);
+            }
+
+            if ($signup['checkin_status'] == self::CHECKIN_STATUS_YES) {
+                Db::rollback();
+                return DataReturn('已签到的报名不能取消', -1);
+            }
+
+            $upd_result = Db::name('ActivitySignup')->where(['id' => $id])->update([
+                'status'   => self::SIGNUP_STATUS_CANCELLED,
+                'upd_time' => time(),
+            ]);
+            if ($upd_result !== false) {
+                Db::name('Activity')->where(['id' => $signup['activity_id']])->dec('signup_count')->update();
+                self::RecalculateSignupCount($signup['activity_id']);
+
+                $admin_id = isset($params['admin']['id']) ? intval($params['admin']['id']) : 0;
+                MuyingLogService::LogSuccess(MuyingLogService::TYPE_ACTIVITY_CONFIRM, 'cancel', $signup['user_id'], $id, '管理员取消报名 admin_id=' . $admin_id);
+                Db::commit();
+                return DataReturn('取消报名成功', 0);
+            }
+            Db::rollback();
+            return DataReturn('取消报名失败', -100);
+        } catch (\Exception $e) {
+            Db::rollback();
+            Log::error('管理员取消报名异常 id=' . $id . ' error=' . $e->getMessage());
+            return DataReturn('取消操作失败，请稍后重试', -100);
+        }
+    }
+
+    // [MUYING-二开] 批量确认报名 — 管理员可批量确认待确认的报名
+    public static function SignupBatchConfirm($params = [])
+    {
+        $ids = empty($params['ids']) ? [] : $params['ids'];
+        if (!is_array($ids)) {
+            $ids = explode(',', $ids);
+        }
+        $ids = array_map('intval', array_filter($ids));
+        if (empty($ids)) {
+            return DataReturn('请选择要确认的报名记录', -1);
+        }
+
+        $success_count = 0;
+        $skip_count = 0;
+        $fail_count = 0;
+
+        Db::startTrans();
+        try {
+            foreach ($ids as $id) {
+                $signup = Db::name('ActivitySignup')->where([
+                    ['id', '=', $id],
+                    ['is_delete_time', '=', 0],
+                ])->lock(true)->find();
+
+                if (empty($signup)) {
+                    $skip_count++;
+                    continue;
+                }
+
+                if ($signup['status'] != self::SIGNUP_STATUS_PENDING) {
+                    $skip_count++;
+                    continue;
+                }
+
+                $upd_result = Db::name('ActivitySignup')->where(['id' => $id])->update([
+                    'status'   => self::SIGNUP_STATUS_CONFIRMED,
+                    'upd_time' => time(),
+                ]);
+
+                if ($upd_result !== false) {
+                    $success_count++;
+                } else {
+                    $fail_count++;
+                }
+            }
+
+            $admin_id = isset($params['admin']['id']) ? intval($params['admin']['id']) : 0;
+            MuyingLogService::LogSuccess(MuyingLogService::TYPE_ACTIVITY_CONFIRM, 'batch_confirm', 0, 0, '批量确认报名 成功' . $success_count . '条 跳过' . $skip_count . '条 admin_id=' . $admin_id);
+            Db::commit();
+            return DataReturn('批量确认完成：成功 ' . $success_count . ' 条，跳过 ' . $skip_count . ' 条，失败 ' . $fail_count . ' 条', 0);
+        } catch (\Exception $e) {
+            Db::rollback();
+            Log::error('批量确认报名异常 error=' . $e->getMessage());
+            return DataReturn('批量确认操作失败，请稍后重试', -100);
+        }
+    }
+
     public static function SignupDelete($params = [])
     {
         $p = [
