@@ -172,7 +172,7 @@ class Pluginsadmin extends Base
         // [MUYING-二开] 阻止安装/保存被合规屏蔽的插件
         $plugins_name = isset($this->data_request['plugins']) ? strtolower(trim($this->data_request['plugins'])) : '';
         if (!empty($plugins_name) && MuyingComplianceService::IsPluginBlocked($plugins_name)) {
-            return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -10000));
+            return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -403));
         }
         return ApiService::ApiDataReturn(PluginsAdminService::PluginsSave($this->data_request));
     }
@@ -201,7 +201,7 @@ class Pluginsadmin extends Base
         // [MUYING-二开] 阻止启用被合规屏蔽的插件
         $plugins_name = isset($this->data_request['id']) ? strtolower(trim($this->data_request['id'])) : '';
         if (!empty($plugins_name) && MuyingComplianceService::IsPluginBlocked($plugins_name)) {
-            return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -10000));
+            return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -403));
         }
         return ApiService::ApiDataReturn(PluginsAdminService::PluginsStatusUpdate($this->data_request));
     }
@@ -220,7 +220,7 @@ class Pluginsadmin extends Base
         if ($ret['code'] == 0 && !empty($ret['data']['plugins'])) {
             $plugins_name = strtolower(trim($ret['data']['plugins']));
             if (MuyingComplianceService::IsPluginBlocked($plugins_name)) {
-                return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -10000));
+                return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -403));
             }
         }
         return ApiService::ApiDataReturn($ret);

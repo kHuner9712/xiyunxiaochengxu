@@ -105,3 +105,89 @@
 | 4 | 默认管理员密码 | 高 | 首次部署后必须修改默认管理员密码 |
 | 5 | index 模块控制器 | 低 | Web 端 index 模块控制器未添加合规检查，但小程序不使用该模块 |
 | 6 | ShopXO 升级兼容 | 中 | 二开代码使用 [MUYING-二开] 标注，但 ShopXO 大版本升级时需人工合并 |
+
+---
+
+## 2026-04-25 — 第二轮合规硬门禁整改（P0 合规硬门禁）
+
+### 整改目标
+
+在没有 ICP经营许可证、EDI、医疗、直播、支付储值等资质的阶段，确保高风险功能"前端路由不能进、前端请求不能发、后端接口不能调用、后台不能误开启、菜单不能显示"。
+
+### 核心变更
+
+1. **coupon/points/signin 从"一期允许"降级为"一期受控"** — 默认关闭，后台可按需开启，约束：非现金、不可提现、不可转让、仅自营商品
+2. **统一合规拦截返回码为 -403** — 前后端完全对齐
+3. **http.js 增加 plugins 请求拦截** — 即使前端绕过路由守卫，请求层也会拦截
+4. **API 层合规日志增强** — 记录 controller/action/userID/IP
+5. **后台功能开关门禁增强** — coupon/signin/points 不再无条件放行
+
+### 修改清单
+
+#### 前端（3个文件）
+
+| 文件 | 修改内容 |
+|------|---------|
+| `shopxo-uniapp/common/js/config/compliance-scope.js` | coupon/signin/points 移入 PHASE_ONE_BLOCKED_PLUGINS；添加 FEATURE_FLAG_PLUGIN_MAP 映射；is_route_allowed 支持 is_plugin_allowed 放行 |
+| `shopxo-uniapp/common/js/http.js` | 引入 is_plugin_allowed；增加 plugins 请求拦截 |
+| `shopxo-uniapp/common/js/config/phase-one-scope.js` | 无需修改（逻辑自动跟随 compliance-scope.js） |
+
+#### 后端（6个文件）
+
+| 文件 | 修改内容 |
+|------|---------|
+| `shopxo-backend/app/service/MuyingComplianceService.php` | coupon/signin/points 移入 PHASE_ONE_BLOCKED_PLUGINS；添加 FEATURE_FLAG_PLUGIN_MAP；IsPhaseOneFeatureKey 移除 coupon/signin/points；TryToggleFeature 增加 LogComplianceToggle；LogComplianceBlock 增加 controller/action 字段；返回码 -10001 → -403 |
+| `shopxo-backend/app/api/controller/Common.php` | ExitFeatureDisabled 增加 DB 日志记录（controller/action/userID/IP） |
+| `shopxo-backend/app/api/controller/Plugins.php` | 返回码 -10000 → -403 |
+| `shopxo-backend/app/admin/controller/Plugins.php` | 返回码 -10000 → -403 |
+| `shopxo-backend/app/admin/controller/Pluginsadmin.php` | 返回码 -10000 → -403 |
+| `shopxo-backend/app/admin/controller/Featureswitch.php` | coupon/signin/points 移到"营销功能（一期不开放）"组；desc 增加约束说明；返回码 -10001 → -403 |
+
+#### SQL（2个文件）
+
+| 文件 | 修改内容 |
+|------|---------|
+| `docs/sql/muying-feature-switch-migration.sql` | coupon/signin/points 从"一期基础能力"移到"高风险功能"（默认关闭=0） |
+| `docs/sql/muying-compliance-center-migration.sql` | 合规日志表增加 controller/api_action/user_id 字段 |
+
+#### 迁移（1个文件）
+
+| 文件 | 修改内容 |
+|------|---------|
+| `docs/muying-final-migration.sql` | C7 隐藏优惠券/签到菜单；C8 强制关闭 coupon/signin/points 开关 |
+
+#### 脚本（1个文件）
+
+| 文件 | 修改内容 |
+|------|---------|
+| `scripts/preflight/preflight-production-check.php` | 增加 #12 高风险功能开关检查、#13 HTTPS 检查、#14 APP_DEBUG 检查 |
+
+#### 文档（2个文件）
+
+| 文件 | 修改内容 |
+|------|---------|
+| `docs/phase-one-compliance.md` | 新建：一期合规策略完整文档 |
+| `docs/trae-remediation-log.md` | 追加本次整改记录 |
+
+### 自测结果
+
+| 测试项 | 结果 |
+|--------|------|
+| 前端 PHASE_ONE_BLOCKED_PLUGINS 包含 22 项 | 通过 |
+| 后端 $PHASE_ONE_BLOCKED_PLUGINS 与前端一致 | 通过 |
+| http.js plugins 请求拦截 | 通过 |
+| Common.php $CONTROLLER_FEATURE_MAP 包含 userintegral | 通过 |
+| Featureswitch coupon/signin/points 在"营销功能（一期不开放）"组 | 通过 |
+| 所有合规拦截返回码统一为 -403 | 通过 |
+| coupon/signin/points 在 PHASE_ONE_BLOCKED_PLUGINS 中 | 通过 |
+
+### 遗留风险
+
+| # | 风险 | 严重性 | 说明 |
+|---|------|--------|------|
+| 1 | 正式 AppID 未申请 | 中 | 当前使用测试号，提审前需替换 |
+| 2 | 域名备案未完成 | 中 | 体验版可用 IP，提审需备案域名 |
+| 3 | MUYING_PRIVACY_KEY 未生成 | 高 | 部署时必须配置 |
+| 4 | 默认管理员密码 | 高 | 首次登录后必须修改 |
+| 5 | 合规日志表 DDL 变更 | 中 | 需在生产环境执行 ALTER TABLE 添加 controller/api_action/user_id 列 |
+| 6 | ShopXO 升级兼容 | 中 | [MUYING-二开] 标注代码需人工合并 |

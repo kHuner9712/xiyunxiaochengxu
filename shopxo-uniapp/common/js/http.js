@@ -1,5 +1,6 @@
 import { is_feature_enabled } from './config/phase-one-scope.js';
 import { FeatureFlagKey, TipMessage, RoutePath } from './config/muying-constants.js';
+import { is_plugin_allowed } from './config/compliance-scope.js';
 import { userStore } from './user-store.js';
 import { logger } from './logger.js';
 
@@ -118,6 +119,15 @@ function request(options) {
     var feature_flag_key = FEATURE_FLAG_ACTION_MAP[controller];
     if (feature_flag_key && !is_feature_enabled(feature_flag_key)) {
         logger.warn('HTTP', '功能已关闭，拦截请求 ' + controller + '/' + action);
+        if (options.fail) {
+            options.fail({ errMsg: TipMessage.FEATURE_DISABLED, code: -1, feature_disabled: true });
+        }
+        if (options.complete) options.complete();
+        return;
+    }
+
+    if (plugins && !is_plugin_allowed(plugins)) {
+        logger.warn('HTTP', '插件已屏蔽，拦截请求 plugins=' + plugins);
         if (options.fail) {
             options.fail({ errMsg: TipMessage.FEATURE_DISABLED, code: -1, feature_disabled: true });
         }

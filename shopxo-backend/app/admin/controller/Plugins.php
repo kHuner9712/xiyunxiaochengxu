@@ -78,7 +78,7 @@ class Plugins extends Base
             $reason = MuyingComplianceService::GetBlockReason($pluginsname);
             if(IS_AJAX)
             {
-                return ApiService::ApiDataReturn(DataReturn($reason, -10000));
+                return ApiService::ApiDataReturn(DataReturn($reason, -403));
             } else {
                 MyViewAssign('msg', $reason);
                 return MyView('public/tips_error');

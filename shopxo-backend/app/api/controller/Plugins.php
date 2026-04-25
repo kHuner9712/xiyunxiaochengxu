@@ -74,7 +74,7 @@ class Plugins extends Common
             $pluginsname = $params['data_request']['pluginsname'];
             if (MuyingComplianceService::IsPluginBlocked($pluginsname)) {
                 $reason = MuyingComplianceService::GetBlockReason($pluginsname);
-                return ApiService::ApiDataReturn(DataReturn($reason, -10000));
+                return ApiService::ApiDataReturn(DataReturn($reason, -403));
             }
 
             // 应用名称/控制器/方法

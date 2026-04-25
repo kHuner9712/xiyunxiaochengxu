@@ -49,7 +49,7 @@ class Featureswitch extends Base
                 $reasons[] = $bk['key'] . ': ' . $bk['reason'];
             }
             if (empty($save_params)) {
-                return ApiService::ApiDataReturn(DataReturn('所有开启操作被合规拦截：' . implode('；', $reasons), -10001));
+                return ApiService::ApiDataReturn(DataReturn('所有开启操作被合规拦截：' . implode('；', $reasons), -403));
             }
         }
 
@@ -83,9 +83,9 @@ class Featureswitch extends Base
                 'group_name' => '营销功能（一期不开放）',
                 'items' => [
                     ['key' => 'feature_seckill_enabled', 'name' => '限时秒杀', 'desc' => '控制限时秒杀功能是否开放'],
-                    ['key' => 'feature_coupon_enabled', 'name' => '优惠券中心', 'desc' => '控制优惠券领取/使用功能是否开放'],
-                    ['key' => 'feature_signin_enabled', 'name' => '签到打卡', 'desc' => '控制签到打卡功能是否开放'],
-                    ['key' => 'feature_points_enabled', 'name' => '积分兑换', 'desc' => '控制积分兑换功能是否开放'],
+                    ['key' => 'feature_coupon_enabled', 'name' => '优惠券中心', 'desc' => '控制优惠券领取/使用功能是否开放（仅自营商品、非现金、不可提现）'],
+                    ['key' => 'feature_signin_enabled', 'name' => '签到打卡', 'desc' => '控制签到打卡功能是否开放（非现金、不可提现、不可转让）'],
+                    ['key' => 'feature_points_enabled', 'name' => '积分兑换', 'desc' => '控制积分兑换功能是否开放（仅自营商品、不可提现、不可储值、不可转余额）'],
                     ['key' => 'feature_giftcard_enabled', 'name' => '礼品卡', 'desc' => '控制礼品卡功能是否开放'],
                     ['key' => 'feature_givegift_enabled', 'name' => '送礼', 'desc' => '控制送礼功能是否开放'],
                 ],

@@ -20,7 +20,7 @@ class MuyingComplianceService
     ];
 
     private static $PHASE_ONE_ALLOWED_PLUGINS = [
-        'brand', 'coupon', 'delivery', 'express', 'points', 'signin',
+        'brand', 'delivery', 'express',
     ];
 
     private static $PHASE_ONE_BLOCKED_PLUGINS = [
@@ -28,6 +28,7 @@ class MuyingComplianceService
         'ask', 'blog', 'membershiplevelvip', 'seckill', 'video',
         'hospital', 'giftcard', 'givegift', 'complaint', 'invoice',
         'certificate', 'scanpay', 'weixinliveplayer', 'intellectstools',
+        'coupon', 'signin', 'points',
     ];
 
     private static $PERMANENTLY_BLOCKED_PLUGINS = [
@@ -55,6 +56,9 @@ class MuyingComplianceService
         'feature_scanpay_enabled'           => 'scanpay',
         'feature_live_enabled'              => 'weixinliveplayer',
         'feature_intellectstools_enabled'   => 'intellectstools',
+        'feature_coupon_enabled'            => 'coupon',
+        'feature_signin_enabled'            => 'signin',
+        'feature_points_enabled'            => 'points',
     ];
 
     private static $QUALIFICATION_REQUIRED_MAP = [
@@ -352,9 +356,6 @@ class MuyingComplianceService
             'feature_invite_enabled',
             'feature_content_enabled',
             'feature_feedback_enabled',
-            'feature_coupon_enabled',
-            'feature_signin_enabled',
-            'feature_points_enabled',
         ];
         return in_array($key, $phase_one_keys);
     }
@@ -402,13 +403,16 @@ class MuyingComplianceService
 
         if ($is_high_risk) {
             $plugin_name = self::GetPluginNameByFeatureKey($key);
-            $qualification_allowed = !empty($plugin_name) && self::IsQualificationMetForPlugin($plugin_name);
-            if (!$qualification_allowed) {
-                $missing = self::GetMissingQualifications($plugin_name);
-                $reason = '当前资质不允许开启此功能，缺少：' . implode('、', $missing);
-                self::LogComplianceBlock($admin, $key, $reason);
-                return DataReturn($reason, -10001);
+            if (!empty($plugin_name)) {
+                $qualification_allowed = self::IsQualificationMetForPlugin($plugin_name);
+                if (!$qualification_allowed) {
+                    $missing = self::GetMissingQualifications($plugin_name);
+                    $reason = '当前资质不允许开启此功能，缺少：' . implode('、', $missing);
+                    self::LogComplianceBlock($admin, $key, $reason);
+                    return DataReturn($reason, -403);
+                }
             }
+            self::LogComplianceToggle($admin, $key);
             return DataReturn('开启成功', 0, ['key' => $key, 'value' => 1]);
         }
 
@@ -424,6 +428,12 @@ class MuyingComplianceService
             $admin_username = isset($admin['username']) ? $admin['username'] : '';
         }
         $ip = !empty($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+        $controller = '';
+        $action = '';
+        try {
+            $controller = request()->controller();
+            $action = request()->action();
+        } catch (\Exception $e) {}
 
         try {
             \think\facade\Db::name('MuyingComplianceLog')->insert([
@@ -432,6 +442,40 @@ class MuyingComplianceService
                 'feature_key'    => $feature_key,
                 'action'         => 'toggle_blocked',
                 'reason'         => $reason,
+                'controller'     => $controller,
+                'api_action'     => $action,
+                'ip'             => $ip,
+                'add_time'       => time(),
+            ]);
+        } catch (\Exception $e) {
+        }
+    }
+
+    public static function LogComplianceToggle($admin, $feature_key)
+    {
+        $admin_id = 0;
+        $admin_username = '';
+        if (!empty($admin) && !empty($admin['id'])) {
+            $admin_id = intval($admin['id']);
+            $admin_username = isset($admin['username']) ? $admin['username'] : '';
+        }
+        $ip = !empty($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+        $controller = '';
+        $action = '';
+        try {
+            $controller = request()->controller();
+            $action = request()->action();
+        } catch (\Exception $e) {}
+
+        try {
+            \think\facade\Db::name('MuyingComplianceLog')->insert([
+                'admin_id'       => $admin_id,
+                'admin_username' => $admin_username,
+                'feature_key'    => $feature_key,
+                'action'         => 'toggle_allowed',
+                'reason'         => '资质已满足，允许开启',
+                'controller'     => $controller,
+                'api_action'     => $action,
                 'ip'             => $ip,
                 'add_time'       => time(),
             ]);

@@ -393,13 +393,15 @@ INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_
 
 -- C7. 隐藏一期不需要的功能菜单
 -- 一期白名单：商品管理/订单管理/用户管理/文章管理/运营/系统管理/应用管理/站点管理/支付管理
--- 一期允许插件：brand/coupon/delivery/express/points/signin（菜单保留可见）
+-- 一期允许插件：brand/delivery/express（菜单保留可见）
+-- 一期受控插件：coupon/signin/points（菜单隐藏，需功能开关开启后手动显示）
 -- 一期禁用：多商户/门店/分销/钱包/积分商城/问答/博客/会员VIP/秒杀/礼品卡/送礼/投诉/发票/实名认证/扫码支付/直播/智能工具/仓库
-UPDATE `sxo_power` SET `is_show`=0 WHERE `name` IN ('多商户', '商家入驻', '分销管理', '直播管理', '积分商城', '门店管理', '钱包管理', '问答管理', '博客管理', '会员等级', '限时秒杀', '礼品卡', '送礼', '投诉管理', '发票管理', '实名认证', '扫码支付', '智能工具', '仓库管理') OR `control` IN ('shop', 'distribution', 'weixinliveplayer', 'coin', 'realstore', 'wallet', 'ask', 'blog', 'membershiplevelvip', 'seckill', 'giftcard', 'givegift', 'complaint', 'invoice', 'certificate', 'scanpay', 'intellectstools', 'warehouse');
+UPDATE `sxo_power` SET `is_show`=0 WHERE `name` IN ('多商户', '商家入驻', '分销管理', '直播管理', '积分商城', '门店管理', '钱包管理', '问答管理', '博客管理', '会员等级', '限时秒杀', '优惠券', '签到', '礼品卡', '送礼', '投诉管理', '发票管理', '实名认证', '扫码支付', '智能工具', '仓库管理') OR `control` IN ('shop', 'distribution', 'weixinliveplayer', 'coin', 'realstore', 'wallet', 'ask', 'blog', 'membershiplevelvip', 'seckill', 'coupon', 'signin', 'giftcard', 'givegift', 'complaint', 'invoice', 'certificate', 'scanpay', 'intellectstools', 'warehouse');
 
 -- C8. 强制关闭一期外功能开关（防止后台误配残留）
--- 一期允许的功能开关（activity/invite/content/feedback/coupon/signin/points）保持开启
-UPDATE `sxo_config` SET `value`='0' WHERE `only_tag` IN ('feature_shop_enabled', 'feature_realstore_enabled', 'feature_distribution_enabled', 'feature_wallet_enabled', 'feature_coin_enabled', 'feature_ugc_enabled', 'feature_membership_enabled', 'feature_seckill_enabled', 'feature_video_enabled', 'feature_hospital_enabled', 'feature_giftcard_enabled', 'feature_givegift_enabled', 'feature_complaint_enabled', 'feature_invoice_enabled', 'feature_certificate_enabled', 'feature_scanpay_enabled', 'feature_live_enabled', 'feature_intellectstools_enabled');
+-- 一期核心功能开关（activity/invite/content/feedback）保持开启
+-- coupon/signin/points 默认关闭，需后台按需开启（非现金、不可提现、仅自营）
+UPDATE `sxo_config` SET `value`='0' WHERE `only_tag` IN ('feature_shop_enabled', 'feature_realstore_enabled', 'feature_distribution_enabled', 'feature_wallet_enabled', 'feature_coin_enabled', 'feature_ugc_enabled', 'feature_membership_enabled', 'feature_seckill_enabled', 'feature_coupon_enabled', 'feature_signin_enabled', 'feature_points_enabled', 'feature_video_enabled', 'feature_hospital_enabled', 'feature_giftcard_enabled', 'feature_givegift_enabled', 'feature_complaint_enabled', 'feature_invoice_enabled', 'feature_certificate_enabled', 'feature_scanpay_enabled', 'feature_live_enabled', 'feature_intellectstools_enabled');
 
 -- C段回滚：
 -- ALTER TABLE sxo_user DROP INDEX uk_invite_code;

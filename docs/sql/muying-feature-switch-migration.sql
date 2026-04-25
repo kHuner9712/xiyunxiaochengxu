@@ -30,22 +30,22 @@ INSERT INTO `sxo_config` (`value`, `name`, `describe`, `error_tips`, `type`, `on
 ('0', '证书开关', '控制证书功能是否开放（需ICP经营许可证）', '请选择是否开启', 'admin', 'feature_certificate_enabled', UNIX_TIMESTAMP()),
 ('0', '扫码支付开关', '控制扫码支付功能是否开放（需支付牌照）', '请选择是否开启', 'admin', 'feature_scanpay_enabled', UNIX_TIMESTAMP()),
 ('0', '微信直播开关', '控制微信直播功能是否开放（需网络文化经营许可证）', '请选择是否开启', 'admin', 'feature_live_enabled', UNIX_TIMESTAMP()),
-('0', '智能工具开关', '控制智能工具功能是否开放（需ICP经营许可证）', '请选择是否开启', 'admin', 'feature_intellectstools_enabled', UNIX_TIMESTAMP())
+('0', '智能工具开关', '控制智能工具功能是否开放（需ICP经营许可证）', '请选择是否开启', 'admin', 'feature_intellectstools_enabled', UNIX_TIMESTAMP()),
+('0', '优惠券开关', '控制优惠券领取/使用功能是否开放（仅自营商品、非现金、不可提现）', '请选择是否开启', 'admin', 'feature_coupon_enabled', UNIX_TIMESTAMP()),
+('0', '签到开关', '控制每日签到功能是否开放（非现金、不可提现、不可转让）', '请选择是否开启', 'admin', 'feature_signin_enabled', UNIX_TIMESTAMP()),
+('0', '积分开关', '控制积分获取/消费功能是否开放（仅自营商品、不可提现、不可储值、不可转余额）', '请选择是否开启', 'admin', 'feature_points_enabled', UNIX_TIMESTAMP())
 ON DUPLICATE KEY UPDATE `name`=VALUES(`name`), `describe`=VALUES(`describe`), `upd_time`=UNIX_TIMESTAMP();
 
 -- ============================================================
--- 二、一期基础能力开关（默认开启 = 1）
--- 自营商城 + 官方活动报名 + 会员运营 + 一级邀请裂变
+-- 二、一期核心能力开关（默认开启 = 1）
+-- 自营商城 + 官方活动报名 + 一级邀请裂变 + 官方内容 + 用户反馈
 -- ============================================================
 
 INSERT INTO `sxo_config` (`value`, `name`, `describe`, `error_tips`, `type`, `only_tag`, `upd_time`) VALUES
 ('1', '活动报名开关', '控制官方活动报名功能是否开放（一期核心）', '请选择是否开启', 'admin', 'feature_activity_enabled', UNIX_TIMESTAMP()),
 ('1', '一级邀请裂变开关', '控制一级邀请裂变功能是否开放（一期核心）', '请选择是否开启', 'admin', 'feature_invite_enabled', UNIX_TIMESTAMP()),
 ('1', '官方内容开关', '控制文章/公告/首页装修等官方内容功能是否开放（一期核心）', '请选择是否开启', 'admin', 'feature_content_enabled', UNIX_TIMESTAMP()),
-('1', '用户反馈开关', '控制用户反馈/妈妈说功能是否开放（一期核心）', '请选择是否开启', 'admin', 'feature_feedback_enabled', UNIX_TIMESTAMP()),
-('1', '优惠券一期开关', '控制优惠券领取/使用功能是否开放（一期基础）', '请选择是否开启', 'admin', 'feature_coupon_enabled', UNIX_TIMESTAMP()),
-('1', '签到开关', '控制每日签到功能是否开放（一期基础）', '请选择是否开启', 'admin', 'feature_signin_enabled', UNIX_TIMESTAMP()),
-('1', '积分一期开关', '控制积分获取/消费功能是否开放（一期基础）', '请选择是否开启', 'admin', 'feature_points_enabled', UNIX_TIMESTAMP())
+('1', '用户反馈开关', '控制用户反馈/妈妈说功能是否开放（一期核心）', '请选择是否开启', 'admin', 'feature_feedback_enabled', UNIX_TIMESTAMP())
 ON DUPLICATE KEY UPDATE `name`=VALUES(`name`), `describe`=VALUES(`describe`), `upd_time`=UNIX_TIMESTAMP();
 
 -- ============================================================

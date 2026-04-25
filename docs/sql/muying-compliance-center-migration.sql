@@ -55,14 +55,18 @@ CREATE TABLE IF NOT EXISTS `sxo_muying_compliance_log` (
   `admin_id` int unsigned NOT NULL DEFAULT 0 COMMENT '管理员ID',
   `admin_username` varchar(60) NOT NULL DEFAULT '' COMMENT '管理员用户名',
   `feature_key` varchar(60) NOT NULL DEFAULT '' COMMENT '功能开关key',
-  `action` varchar(30) NOT NULL DEFAULT '' COMMENT '操作类型(toggle_blocked)',
+  `action` varchar(30) NOT NULL DEFAULT '' COMMENT '操作类型(toggle_blocked/toggle_allowed/api_blocked)',
   `reason` varchar(500) NOT NULL DEFAULT '' COMMENT '拦截原因',
+  `controller` varchar(60) NOT NULL DEFAULT '' COMMENT '控制器名',
+  `api_action` varchar(60) NOT NULL DEFAULT '' COMMENT '方法名',
+  `user_id` int unsigned NOT NULL DEFAULT 0 COMMENT '前端用户ID（API拦截时）',
   `ip` char(45) NOT NULL DEFAULT '' COMMENT '操作IP',
   `add_time` int unsigned NOT NULL DEFAULT 0 COMMENT '操作时间',
   PRIMARY KEY (`id`),
   KEY `idx_admin` (`admin_id`),
   KEY `idx_feature` (`feature_key`),
-  KEY `idx_time` (`add_time`)
+  KEY `idx_time` (`add_time`),
+  KEY `idx_action` (`action`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='合规拦截日志';
 
 -- ============================================================

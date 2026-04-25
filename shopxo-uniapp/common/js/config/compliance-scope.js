@@ -11,10 +11,11 @@ var PHASE_ONE_BLOCKED_PLUGINS = [
     'ask', 'blog', 'membershiplevelvip', 'seckill', 'video',
     'hospital', 'giftcard', 'givegift', 'complaint', 'invoice',
     'certificate', 'scanpay', 'weixinliveplayer', 'intellectstools',
+    'coupon', 'signin', 'points',
 ];
 
 var PHASE_ONE_ALLOWED_PLUGINS = [
-    'brand', 'coupon', 'delivery', 'express', 'points', 'signin',
+    'brand', 'delivery', 'express',
 ];
 
 var PHASE_ONE_ALLOWED_ROUTES = [
@@ -64,8 +65,6 @@ var PHASE_ONE_ALLOWED_ROUTES = [
     '/pages/feedback-submit/feedback-submit',
     '/pages/plugins/brand/',
     '/pages/plugins/express/',
-    '/pages/plugins/coupon/',
-    '/pages/plugins/signin/',
     '/pages/plugins/delivery/',
 ];
 
@@ -88,6 +87,9 @@ FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.CERTIFICATE] = 'certificate';
 FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.SCANPAY] = 'scanpay';
 FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.LIVE] = 'weixinliveplayer';
 FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.INTELLECTSTOOLS] = 'intellectstools';
+FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.COUPON] = 'coupon';
+FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.SIGNIN] = 'signin';
+FEATURE_FLAG_PLUGIN_MAP[FeatureFlagKey.POINTS] = 'points';
 
 var QUALIFICATION_REQUIRED_MAP = {};
 QUALIFICATION_REQUIRED_MAP['shop'] = [QualificationKey.ICP_COMMERCIAL, QualificationKey.EDI];
@@ -217,6 +219,13 @@ function is_route_allowed(url) {
             if (path.indexOf(allowed) === 0) return true;
         } else {
             if (path === allowed) return true;
+        }
+    }
+    if (path.indexOf('/pages/plugins/') === 0) {
+        var parts = path.split('/');
+        if (parts.length >= 4) {
+            var plugin_name = parts[3];
+            if (is_plugin_allowed(plugin_name)) return true;
         }
     }
     return false;

@@ -190,8 +190,36 @@ class Common extends BaseController
 
     private static function ExitFeatureDisabled($feature_flag_key, $reason)
     {
+        $controller = '';
+        $action = '';
+        $user_id = 0;
+        $ip = '';
         try {
-            \think\facade\Log::write('[MUYING] API feature blocked: key=' . $feature_flag_key . ' reason=' . $reason, 'warning');
+            $controller = request()->controller();
+            $action = request()->action();
+            $ip = !empty($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+        } catch (\Exception $e) {}
+        if (!empty(self::$user) && !empty(self::$user['id'])) {
+            $user_id = intval(self::$user['id']);
+        }
+
+        try {
+            \think\facade\Db::name('MuyingComplianceLog')->insert([
+                'admin_id'       => 0,
+                'admin_username' => '',
+                'feature_key'    => $feature_flag_key,
+                'action'         => 'api_blocked',
+                'reason'         => $reason,
+                'controller'     => $controller,
+                'api_action'     => $action,
+                'user_id'        => $user_id,
+                'ip'             => $ip,
+                'add_time'       => time(),
+            ]);
+        } catch (\Exception $e) {}
+
+        try {
+            \think\facade\Log::write('[MUYING] API feature blocked: key=' . $feature_flag_key . ' ctrl=' . $controller . '/' . $action . ' uid=' . $user_id . ' ip=' . $ip . ' reason=' . $reason, 'warning');
         } catch (\Exception $e) {}
         exit(json_encode(DataReturn($reason, -403)));
     }

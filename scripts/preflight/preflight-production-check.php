@@ -389,6 +389,96 @@ if (file_exists($pages_json_path)) {
 }
 
 // ============================================================
+// 12. 高风险功能开关生产环境检查
+// ============================================================
+section("12. 高风险功能开关生产环境检查");
+
+$high_risk_feature_flags = [
+    'feature_shop_enabled', 'feature_realstore_enabled', 'feature_distribution_enabled',
+    'feature_wallet_enabled', 'feature_coin_enabled', 'feature_ugc_enabled',
+    'feature_membership_enabled', 'feature_seckill_enabled', 'feature_video_enabled',
+    'feature_hospital_enabled', 'feature_giftcard_enabled', 'feature_givegift_enabled',
+    'feature_complaint_enabled', 'feature_invoice_enabled', 'feature_certificate_enabled',
+    'feature_scanpay_enabled', 'feature_live_enabled', 'feature_intellectstools_enabled',
+    'feature_coupon_enabled', 'feature_signin_enabled', 'feature_points_enabled',
+];
+
+$backend_env_path = $repo_path . '/shopxo-backend/.env';
+if (file_exists($backend_env_path)) {
+    pass_item("后端 .env 存在，但功能开关存储在数据库，需在后台合规中心确认");
+} else {
+    warn_item("后端 .env 不存在，无法检查");
+}
+
+$compliance_service_path = $repo_path . '/shopxo-backend/app/service/MuyingComplianceService.php';
+if (file_exists($compliance_service_path)) {
+    $cs_content = file_get_contents($compliance_service_path);
+    $all_in_blocked = true;
+    foreach (['coupon', 'signin', 'points'] as $plugin) {
+        if (strpos($cs_content, "'{$plugin}'") === false || strpos($cs_content, 'PHASE_ONE_BLOCKED_PLUGINS') === false) {
+            $all_in_blocked = false;
+            break;
+        }
+    }
+    if ($all_in_blocked) {
+        pass_item("coupon/signin/points 已在 PHASE_ONE_BLOCKED_PLUGINS 中（默认关闭）");
+    } else {
+        block_item("coupon/signin/points 未在 PHASE_ONE_BLOCKED_PLUGINS 中，生产环境可能误开放");
+    }
+} else {
+    warn_item("MuyingComplianceService.php 不存在，无法检查");
+}
+
+// ============================================================
+// 13. 生产环境 request_url HTTPS 检查
+// ============================================================
+section("13. 生产环境 request_url HTTPS 检查");
+
+$uniapp_prod_env = $repo_path . '/shopxo-uniapp/.env.production';
+if (file_exists($uniapp_prod_env)) {
+    $prod_content = file_get_contents($uniapp_prod_env);
+    if (preg_match('/UNI_APP_REQUEST_URL\s*=\s*(.+)/', $prod_content, $m)) {
+        $url = trim($m[1]);
+        if (strpos($url, 'https://') === 0) {
+            pass_item("生产 API 地址使用 HTTPS: {$url}");
+        } elseif (strpos($url, 'http://') === 0) {
+            $ip_pattern = '/http:\/\/\d+\.\d+\.\d+\.\d+/';
+            if (preg_match($ip_pattern, $url)) {
+                warn_item("生产 API 地址使用 HTTP+IP（体验版可接受，提审必须 HTTPS+域名）: {$url}");
+            } else {
+                block_item("生产 API 地址使用 HTTP 非安全协议: {$url}");
+            }
+        } elseif (strpos($url, '{{') !== false) {
+            warn_item("生产 API 地址仍为占位符: {$url}");
+        } else {
+            warn_item("生产 API 地址格式异常: {$url}");
+        }
+    } else {
+        warn_item("未找到 UNI_APP_REQUEST_URL 配置");
+    }
+} else {
+    warn_item(".env.production 不存在，无法检查");
+}
+
+// ============================================================
+// 14. APP_DEBUG 生产环境检查
+// ============================================================
+section("14. APP_DEBUG 生产环境检查");
+
+if (file_exists($backend_env_path)) {
+    $be_content = file_get_contents($backend_env_path);
+    if (preg_match('/APP_DEBUG\s*=\s*(true|1|yes)/i', $be_content)) {
+        block_item("APP_DEBUG = true，生产环境必须关闭！");
+    } elseif (preg_match('/APP_DEBUG\s*=\s*(false|0|no)/i', $be_content)) {
+        pass_item("APP_DEBUG = false，调试模式已关闭");
+    } else {
+        warn_item("APP_DEBUG 未明确设置，建议显式设为 false");
+    }
+} else {
+    warn_item("后端 .env 不存在，无法检查 APP_DEBUG");
+}
+
+// ============================================================
 // 汇总
 // ============================================================
 section("检查汇总");
