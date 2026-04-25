@@ -181,6 +181,13 @@ class OrderService
         {
             $payment = PaymentService::PaymentData(['where'=>['id'=>$payment_id]]);
         }
+
+        // [MUYING-二开] 合规拦截：拒绝不合规支付方式
+        if(!empty($payment) && PaymentService::IsComplianceBlockedPayment($payment['payment']))
+        {
+            return DataReturn('当前资质暂不支持该支付方式', -403);
+        }
+
         if(empty($payment))
         {
             $available_payments = PaymentService::BuyPaymentList(['is_enable'=>1, 'is_open_user'=>1]);

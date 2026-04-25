@@ -816,3 +816,46 @@
 
 - **commit**: `bf5fd2b`
 - **message**: `fix(compliance): stabilize feature gate errors and align miniapp manifest`
+
+---
+
+## 2026-04-26 — 第十二轮后端支付方式合规过滤
+
+### 整改目标
+
+后端不能返回或接受钱包/余额/储值/充值/提现/虚拟币/礼品卡/扫码支付等不合规支付方式，彻底关闭一期无资质的支付能力。
+
+### 核心变更
+
+1. **PaymentService::BuyPaymentList 扩展过滤** — 从仅排除 WalletPay 扩展为排除全部不合规支付方式（WalletPay/ChargePayment/CoinPay/UniPayment/GiftCardPay/ScanPay），且钩子后二次过滤防止插件注入
+2. **PaymentService::GetComplianceBlockedPayments** — 新增方法，根据功能开关动态生成不合规支付方式列表
+3. **PaymentService::IsComplianceBlockedPayment** — 新增方法，供其他服务判断支付方式是否被合规拦截
+4. **OrderService::Pay 合规拦截** — 支付提交入口增加不合规支付方式检查，抓包强传返回 -403
+5. **功能开关联动** — feature_wallet_enabled/feature_coin_enabled/feature_giftcard_enabled/feature_scanpay_enabled 控制对应支付方式是否可用
+
+### 修改文件清单
+
+| 文件 | 修改内容 |
+|------|----------|
+| `shopxo-backend/app/service/PaymentService.php` | BuyPaymentList 扩展过滤 + 新增 GetComplianceBlockedPayments/IsComplianceBlockedPayment |
+| `shopxo-backend/app/service/OrderService.php` | Pay 方法增加不合规支付方式拦截 |
+| `docs/known-risks.md` | R-01 状态改为已修复 |
+| `docs/release-checklist.md` | 增加后端支付方式过滤验证 |
+| `docs/test-cases-phase-one.md` | 增加抓包强传测试用例 |
+
+### 自测结果
+
+| 验证项 | 结果 | 说明 |
+|--------|------|------|
+| 正常商品下单不受影响 | ✅ | 微信支付/待支付订单流程不变 |
+| 支付方式列表不返回不合规方式 | ✅ | BuyPaymentList 过滤 + 钩子后二次过滤 |
+| 抓包强传 wallet/coin/giftcard/scanpay 被拒 | ✅ | OrderService::Pay 返回 -403 |
+| feature_wallet_enabled=0 时钱包不可用 | ✅ | GetComplianceBlockedPayments 动态判断 |
+| feature_coin_enabled=0 时虚拟币不可用 | ✅ | 同上 |
+| 不影响微信支付/待支付订单 | ✅ | WeixinAppMini 不在拦截列表 |
+| docs/known-risks.md R-01 已修复 | ✅ | 状态更新 |
+
+### Commit 信息
+
+- **commit**: （待提交）
+- **message**: `fix(payment): block wallet and stored-value payment methods server-side`

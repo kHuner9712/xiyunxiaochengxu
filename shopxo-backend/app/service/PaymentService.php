@@ -311,11 +311,12 @@ class PaymentService
     {
         $res = self::PaymentList($params);
         $data = [];
+        $blocked_payments = self::GetComplianceBlockedPayments();
         if(!empty($res))
         {
             foreach($res as $v)
             {
-                if($v['payment'] === 'WalletPay')
+                if(in_array($v['payment'], $blocked_payments))
                 {
                     continue;
                 }
@@ -336,7 +337,43 @@ class PaymentService
             'data'          => &$data,
         ]);
 
+        // [MUYING-二开] 钩子后再次过滤，防止插件注入不合规支付方式
+        if(!empty($data) && !empty($blocked_payments))
+        {
+            $data = array_values(array_filter($data, function($item) use ($blocked_payments) {
+                return !in_array($item['payment'], $blocked_payments);
+            }));
+        }
+
         return $data;
+    }
+
+    public static function GetComplianceBlockedPayments()
+    {
+        $blocked = ['WalletPay', 'ChargePayment'];
+        if(intval(MyC('feature_wallet_enabled', 0)) !== 1)
+        {
+            $blocked[] = 'WalletPay';
+        }
+        if(intval(MyC('feature_coin_enabled', 0)) !== 1)
+        {
+            $blocked[] = 'CoinPay';
+            $blocked[] = 'UniPayment';
+        }
+        if(intval(MyC('feature_giftcard_enabled', 0)) !== 1)
+        {
+            $blocked[] = 'GiftCardPay';
+        }
+        if(intval(MyC('feature_scanpay_enabled', 0)) !== 1)
+        {
+            $blocked[] = 'ScanPay';
+        }
+        return array_unique($blocked);
+    }
+
+    public static function IsComplianceBlockedPayment($payment_name)
+    {
+        return in_array($payment_name, self::GetComplianceBlockedPayments());
     }
 
     /**
