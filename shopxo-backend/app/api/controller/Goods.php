@@ -281,5 +281,22 @@ class Goods extends Common
         ];
         return ApiService::ApiDataReturn(SystemBaseService::DataReturn($result));
     }
+
+    public function MuyingRecommend()
+    {
+        $params = [
+            'is_muying_recommend' => 1,
+            'goods_number'        => empty($this->data_request['number']) ? 10 : min(intval($this->data_request['number']), 50),
+            'muying_stage'        => empty($this->data_request['stage']) ? '' : strip_tags(trim($this->data_request['stage'])),
+            'goods_order_by_type' => 0,
+            'goods_order_by_rule' => 1,
+        ];
+        $data = GoodsService::AutoGoodsList($params);
+        $result = [
+            'stage_options' => \app\extend\muying\MuyingStage::getList(),
+            'data'          => $data,
+        ];
+        return ApiService::ApiDataReturn(SystemBaseService::DataReturn($result));
+    }
 }
 ?>

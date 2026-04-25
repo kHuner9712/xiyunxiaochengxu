@@ -31,7 +31,7 @@
             <view v-if="payment_list.length > 0" class="oh">
                 <view class="payment-list">
                     <scroll-view scroll-y="true" class="scroll-y wh-auto">
-                        <view v-for="(item, index) in payment_list" :key="index" class="item br-b flex-row jc-sb align-c" :data-value="item.id" @tap="checked_payment">
+                        <view v-for="(item, index) in payment_list_filtered" :key="index" class="item br-b flex-row jc-sb align-c" :data-value="item.id" @tap="checked_payment">
                             <view class="flex-1">
                                 <image v-if="(item.logo || null) != null" class="icon va-m margin-right-sm" :src="item.logo" mode="widthFix"></image>
                                 <text class="va-m">{{ item.name }}</text>
@@ -259,6 +259,11 @@
             });
             // #endif
         },
+        computed: {
+            payment_list_filtered() {
+                return (this.payment_list || []).filter(item => item.payment !== 'WalletPay');
+            }
+        },
         methods: {
             // 支付弹窗关闭
             payment_popup_event_close(e) {
@@ -314,20 +319,8 @@
                     this.payment_list.forEach((item) => {
                         if (item.id == payment_id) {
                             if (item.payment == 'WalletPay') {
-                                var self = this;
-                                uni.showModal({
-                                    title: self.$t('common.warm_tips'),
-                                    content: self.$t('payment.payment.011cj4'),
-                                    confirmText: self.$t('common.confirm'),
-                                    cancelText: self.$t('common.not_yet'),
-                                    success(res) {
-                                        if (res.confirm) {
-                                            self.pay_handle_event(order_id, payment_id);
-                                        } else {
-                                            self.order_item_pay_fail_handle(null, order_id, self.$t('paytips.paytips.6mpsl7'));
-                                        }
-                                    },
-                                });
+                                app.globalData.showToast('钱包支付暂未开放');
+                                return;
                             } else {
                                 this.pay_handle_event(order_id, payment_id);
                             }

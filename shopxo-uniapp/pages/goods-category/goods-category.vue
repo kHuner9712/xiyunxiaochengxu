@@ -94,6 +94,13 @@
                                             <view class="padding-left-main" :style="right_content_actual_style">
                                                 <!-- 操作导航 -->
                                                 <view class="goods-list-top-nav bg-white">
+                                                    <!-- 母婴阶段筛选 -->
+                                                    <view class="muying-stage-filter oh padding-bottom-sm">
+                                                        <scroll-view :scroll-x="true" :show-scrollbar="false" class="muying-stage-scroll">
+                                                            <view :class="'muying-stage-item dis-inline-block text-size-xs round padding-top-xs padding-bottom-xs padding-left padding-right ' + (muying_stage_active == '' ? 'bg-main-light br-main-light cr-main' : 'br-grey cr-grey')" @tap="muying_stage_filter_event" data-value="">全部</view>
+                                                            <view v-for="(item, idx) in muying_stage_list" :key="idx" :class="'muying-stage-item dis-inline-block text-size-xs round padding-top-xs padding-bottom-xs padding-left padding-right ' + (muying_stage_active == item.key ? 'bg-main-light br-main-light cr-main' : 'br-grey cr-grey')" @tap="muying_stage_filter_event" :data-value="item.key">{{ item.label }}</view>
+                                                        </scroll-view>
+                                                    </view>
                                                     <!-- 排序 -->
                                                     <view class="nav-sort-content oh">
                                                         <block v-for="(item, index) in search_nav_sort_list" :key="index">
@@ -155,7 +162,7 @@
                                                         <view v-if="(plugins_label_data || null) != null && plugins_label_data.data.length > 0" :class="'plugins-label oh pa plugins-label-' + ((plugins_label_data.base.is_user_goods_label_icon || 0) == 0 ? 'text' : 'img') + ' plugins-label-' + (plugins_label_data.base.user_goods_show_style || 'top-left')">
                                                             <block v-for="(lv, li) in plugins_label_data.data" :key="li">
                                                                 <view v-if="(lv.goods_ids || null) != null && lv.goods_ids.indexOf(item.id) != -1" class="lv dis-inline-block va-m" :data-value="(plugins_label_data.base.is_user_goods_label_url || 0) == 1 ? lv.url || '' : ''" @tap="url_event">
-                                                                    <view v-if="(plugins_label_data.base.is_user_goods_label_icon || 0) == 0" class="round cr-white bg-main text-size-xs fl" :style="('background-color:'+(lv.bg_color || '#666'))+' !important;'+('color:'+(lv.text_color || '#fff'))+' !important;'">
+                                                                    <view v-if="(plugins_label_data.base.is_user_goods_label_icon || 0) == 0" class="round cr-white bg-main text-size-xs fl" :style="'background-color:' + (lv.bg_color || '#666') + ' !important;' + ('color:' + (lv.text_color || '#fff')) + ' !important;'">
                                                                         {{ lv.name }}
                                                                     </view>
                                                                     <block v-else>
@@ -329,7 +336,7 @@
                                 </view>
                             </block>
                             <!-- 购物车底部导航 -->
-                            <view class="botton-nav bg-white round pa oh padding-sm flex-row jc-sb align-c" :style="botton_nav_style+(cart_status ? 'z-index:5;' : '')">
+                            <view class="botton-nav bg-white round pa oh padding-sm flex-row jc-sb align-c" :style="botton_nav_style + (cart_status ? 'z-index:5;' : '')">
                                 <view class="flex-row align-c flex-1 flex-width">
                                     <view class="cart pr cp top-sm padding-left-sm" @tap="cart_event">
                                         <iconfont name="icon-cart" size="36rpx" color="#666"></iconfont>
@@ -360,12 +367,12 @@
                 </block>
             </view>
         </view>
-        
+
         <!-- 互联网医院问诊下单弹窗 -->
         <component-popup v-if="is_feature_enabled(FeatureFlagKey.HOSPITAL)" :propShow="plugins_hospital_prescription_status" propPosition="bottom" @onclose="hospital_prescription_close_event">
             <view class="padding-horizontal-main padding-top-main bg-white">
                 <view class="oh tc">
-                    <text class="text-size">{{ (plugins_hospital_prescription_data || null) != null ? (plugins_hospital_prescription_data.title || '') : '' }}</text>
+                    <text class="text-size">{{ (plugins_hospital_prescription_data || null) != null ? plugins_hospital_prescription_data.title || '' : '' }}</text>
                     <view class="fr" @tap.stop="hospital_prescription_close_event">
                         <iconfont name="icon-close-line" size="28rpx" color="#999"></iconfont>
                     </view>
@@ -374,8 +381,8 @@
                     <block v-if="(plugins_hospital_prescription_data || null) != null && plugins_hospital_prescription_data.choice_data.length > 0">
                         <block v-for="(item, index) in plugins_hospital_prescription_data.choice_data" :key="index">
                             <view class="padding-vertical-xxl pr">
-                                <text>{{item.name}}</text>
-                                <button type="default" size="mini" class="bg-main br-main cr-white round text-size-xs pa top-xxxxxl right-0" :data-index="index" @tap="hospital_prescription_confirm_event">{{item.btn_text}}</button>
+                                <text>{{ item.name }}</text>
+                                <button type="default" size="mini" class="bg-main br-main cr-white round text-size-xs pa top-xxxxxl right-0" :data-index="index" @tap="hospital_prescription_confirm_event">{{ item.btn_text }}</button>
                             </view>
                         </block>
                     </block>
@@ -476,7 +483,7 @@
                 // 底部tab高度 - 只有H5下有值
                 window_bottom_height: 0,
                 // #ifdef H5
-                window_bottom_height: (app.globalData.data.is_use_native_tabbar == 1) ? (uni.getWindowInfo().windowBottom || 50) : 0,
+                window_bottom_height: app.globalData.data.is_use_native_tabbar == 1 ? uni.getWindowInfo().windowBottom || 50 : 0,
                 // #endif
                 // 样式
                 category_content_style: '',
@@ -487,7 +494,15 @@
                 footer_height_value: 0,
                 // 互联网医院问诊数据
                 plugins_hospital_prescription_data: null,
-                plugins_hospital_prescription_status: false
+                plugins_hospital_prescription_status: false,
+                // 母婴阶段筛选
+                muying_stage_list: [
+                    { key: 'prepare', label: '备孕' },
+                    { key: 'pregnancy', label: '孕期' },
+                    { key: 'postpartum', label: '产后' },
+                    { key: 'all', label: '通用' },
+                ],
+                muying_stage_active: '',
             };
         },
 
@@ -499,7 +514,7 @@
             componentPopup,
             componentBadge,
             componentCartParaCurve,
-            componentNavMore
+            componentNavMore,
         },
 
         onLoad(params) {
@@ -529,7 +544,7 @@
             this.init();
 
             // 初始化配置
-            if(app.globalData.get_config('status') == 1) {
+            if (app.globalData.get_config('status') == 1) {
                 app.globalData.init_config(0, this, 'init_config', true);
             } else {
                 app.globalData.is_config(this, 'init_config');
@@ -540,7 +555,7 @@
 
             // 公共onshow事件
             if ((this.$refs.common || null) != null) {
-                this.$refs.common.on_show({object: this, method: 'init'});
+                this.$refs.common.on_show({ object: this, method: 'init' });
             }
         },
 
@@ -729,28 +744,28 @@
                 var bottom_style_value = 20;
                 // 左侧
                 var left_style = '';
-                if(this.category_goods_is_show_cart_nav == 1) {
-                    left_style = 'height: calc(100% - 120rpx - '+bottom_style_value+'rpx);';
+                if (this.category_goods_is_show_cart_nav == 1) {
+                    left_style = 'height: calc(100% - 120rpx - ' + bottom_style_value + 'rpx);';
                 }
                 // 右侧
                 var right_style = '';
-                if(this.category_goods_is_show_cart_nav == 1 && this.common_site_type != 4) {
-                    right_style = 'padding-bottom: calc(120rpx + '+bottom_style_value+'rpx);';
+                if (this.category_goods_is_show_cart_nav == 1 && this.common_site_type != 4) {
+                    right_style = 'padding-bottom: calc(120rpx + ' + bottom_style_value + 'rpx);';
                 }
                 // 底部导航高度
                 var footer_height = this.footer_height_value;
                 var footer_height_unit = 'px';
                 // #ifdef H5
-                if(app.globalData.is_pc()) {
+                if (app.globalData.is_pc()) {
                     var system = app.globalData.get_system_info(null, null, true);
-                    if(system.windowWidth <= 960) {
+                    if (system.windowWidth <= 960) {
                         footer_height *= 2;
                         footer_height_unit = 'rpx';
                     }
                 }
                 // #endif
                 this.setData({
-                    category_content_style: 'height:calc(100vh - ' + (this.search_height + this.window_bottom_height)+'px - '+footer_height+footer_height_unit+');',
+                    category_content_style: 'height:calc(100vh - ' + (this.search_height + this.window_bottom_height) + 'px - ' + footer_height + footer_height_unit + ');',
                     left_content_actual_style: left_style,
                     right_content_actual_style: right_style,
                     botton_nav_style: 'bottom: calc(20rpx);',
@@ -781,6 +796,10 @@
                     page: this.data_page,
                     wd: this.search_keywords_value || '',
                 };
+                // 母婴阶段筛选
+                if (this.muying_stage_active) {
+                    post_data['muying_stage'] = this.muying_stage_active;
+                }
                 // 分类id
                 if ((this.data_content || null) != null) {
                     // 主分类id
@@ -910,7 +929,7 @@
                     data_page: 1,
                     data_list: [],
                     data_list_loding_status: 1,
-                    data_bottom_line_status: false
+                    data_bottom_line_status: false,
                 });
                 this.reset_scroll();
                 this.get_goods_list(1);
@@ -937,7 +956,7 @@
                         data_page: 1,
                         data_list: [],
                         data_list_loding_status: 1,
-                        data_bottom_line_status: false
+                        data_bottom_line_status: false,
                     });
                     this.get_goods_list(1);
                 } else {
@@ -950,7 +969,7 @@
             goods_event(e) {
                 // 商品数据缓存处理
                 var index = e.currentTarget.dataset.index;
-                if(e.currentTarget.dataset.type == 'cart') {
+                if (e.currentTarget.dataset.type == 'cart') {
                     var goods = this.cart.data[index];
                     goods['id'] = goods['goods_id'];
                 } else {
@@ -1345,7 +1364,7 @@
             // 购物车结算数据参数
             // appoint_goods_ids  指定结算商品id，多个id逗号分割）
             buy_cart_data_params(appoint_goods_ids = null) {
-                if ((this.cart || null) != null) {                    
+                if ((this.cart || null) != null) {
                     return app.globalData.buy_cart_data_params(this.cart.data || [], appoint_goods_ids);
                 }
                 return false;
@@ -1366,7 +1385,7 @@
 
                 // 是否开启了互联网医院处方问诊
                 var is_goods_is_prescription = parseInt(app.globalData.get_config('plugins_base.hospital.data.is_goods_is_prescription', 0));
-                if(is_goods_is_prescription == 1) {
+                if (is_goods_is_prescription == 1) {
                     this.plugins_hospital_prescription_handle(buy_data);
                     return false;
                 }
@@ -1374,7 +1393,7 @@
                 // 进入结算页面
                 app.globalData.to_buy_handle(buy_data);
             },
-            
+
             // 互联网医院处方问诊
             plugins_hospital_prescription_handle(buy_data) {
                 uni.showLoading({
@@ -1389,10 +1408,10 @@
                         uni.hideLoading();
                         if (res.data.code == 0) {
                             var data = res.data.data;
-                            if((data.choice_data || null) != null && data.choice_data.length > 0) {
+                            if ((data.choice_data || null) != null && data.choice_data.length > 0) {
                                 this.setData({
                                     plugins_hospital_prescription_data: data,
-                                    plugins_hospital_prescription_status: true
+                                    plugins_hospital_prescription_status: true,
                                 });
                             } else {
                                 app.globalData.to_buy_handle(buy_data);
@@ -1411,14 +1430,14 @@
                     },
                 });
             },
-            
+
             // 互联网医院问诊确认事件
             hospital_prescription_confirm_event(e) {
                 var index = e.currentTarget.dataset.index || 0;
                 var data = this.plugins_hospital_prescription_data.choice_data[index];
                 var buy_data = this.buy_cart_data_params(data.goods_ids);
                 // 问诊开方
-                if(data.type == 'prescription') {
+                if (data.type == 'prescription') {
                     app.globalData.to_buy_handle(buy_data, '/pages/plugins/hospital/prescription/prescription');
                 } else {
                     // 普通结算
@@ -1429,7 +1448,7 @@
             // 互联网医院问诊弹窗关闭
             hospital_prescription_close_event(e) {
                 this.setData({
-                    plugins_hospital_prescription_status: false
+                    plugins_hospital_prescription_status: false,
                 });
             },
 
@@ -1474,7 +1493,7 @@
                     data_page: 1,
                     data_list: [],
                     data_list_loding_status: 1,
-                    data_bottom_line_status: false
+                    data_bottom_line_status: false,
                 });
                 this.reset_scroll();
                 this.get_goods_list(1);
@@ -1483,10 +1502,23 @@
             // 底部菜单高度
             footer_height_value_event(value) {
                 this.setData({
-                    footer_height_value: value
+                    footer_height_value: value,
                 });
                 this.content_actual_size_handle();
-            }
+            },
+
+            muying_stage_filter_event(e) {
+                var val = e.currentTarget.dataset.value || '';
+                this.setData({
+                    muying_stage_active: val,
+                    data_page: 1,
+                    data_list: [],
+                    data_list_loding_status: 1,
+                    data_bottom_line_status: false,
+                });
+                this.reset_scroll();
+                this.get_goods_list(1);
+            },
         },
     };
 </script>

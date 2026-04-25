@@ -274,12 +274,52 @@ SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCH
 SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `approval_number` char(60) NOT NULL DEFAULT '''' COMMENT ''批准文号(国食注字/妆字号等)'' AFTER `selling_point`', 'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+SET @colname = 'min_baby_month_age';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `min_baby_month_age` int unsigned NOT NULL DEFAULT 0 COMMENT ''最小宝宝月龄(0不限)'' AFTER `approval_number`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @colname = 'max_baby_month_age';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `max_baby_month_age` int unsigned NOT NULL DEFAULT 0 COMMENT ''最大宝宝月龄(0不限)'' AFTER `min_baby_month_age`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @colname = 'focus_areas';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `focus_areas` varchar(255) NOT NULL DEFAULT '''' COMMENT ''关注领域(逗号分隔:安全/舒适/待产包/哺乳/早教/清洁等)'' AFTER `max_baby_month_age`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @colname = 'risk_category';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `risk_category` char(20) NOT NULL DEFAULT ''low'' COMMENT ''风险类目(low/medium/high)'' AFTER `focus_areas`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @colname = 'qualification_status';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `qualification_status` char(20) NOT NULL DEFAULT ''pending'' COMMENT ''资质状态(pending/approved/rejected)'' AFTER `risk_category`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @colname = 'qualification_remark';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `qualification_remark` varchar(255) NOT NULL DEFAULT '''' COMMENT ''资质备注'' AFTER `qualification_status`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @colname = 'is_muying_recommend';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `is_muying_recommend` tinyint unsigned NOT NULL DEFAULT 0 COMMENT ''是否母婴推荐(0否/1是)'' AFTER `qualification_remark`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @colname = 'muying_sort_level';
+SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME=@tablename AND COLUMN_NAME=@colname;
+SET @sql = IF(@col_exists=0, 'ALTER TABLE `sxo_goods` ADD COLUMN `muying_sort_level` int NOT NULL DEFAULT 0 COMMENT ''母婴排序权重(越大越靠前)'' AFTER `is_muying_recommend`', 'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- B段回滚：
 -- ALTER TABLE sxo_user DROP COLUMN invite_code, DROP COLUMN baby_birthday, DROP COLUMN due_date, DROP COLUMN current_stage;
 -- ALTER TABLE sxo_activity_signup DROP COLUMN privacy_agreed_time, DROP COLUMN baby_birthday, DROP COLUMN phone_hash, DROP COLUMN is_waitlist, DROP COLUMN signup_code, DROP COLUMN privacy_version, DROP COLUMN waitlist_to_normal_time;
 -- ALTER TABLE sxo_goods_favor DROP COLUMN type;
 -- ALTER TABLE sxo_activity DROP COLUMN suitable_crowd, DROP COLUMN activity_type, DROP COLUMN activity_status, DROP COLUMN waitlist_count, DROP COLUMN waitlist_signup_count, DROP COLUMN allow_waitlist, DROP COLUMN signup_code_enabled, DROP COLUMN require_location_checkin, DROP COLUMN latitude, DROP COLUMN longitude;
--- ALTER TABLE sxo_goods DROP COLUMN stage, DROP COLUMN selling_point;
+-- ALTER TABLE sxo_goods DROP COLUMN stage, DROP COLUMN selling_point, DROP COLUMN approval_number, DROP COLUMN min_baby_month_age, DROP COLUMN max_baby_month_age, DROP COLUMN focus_areas, DROP COLUMN risk_category, DROP COLUMN qualification_status, DROP COLUMN qualification_remark, DROP COLUMN is_muying_recommend, DROP COLUMN muying_sort_level;
 -- ALTER TABLE sxo_muying_feedback DROP COLUMN contact, DROP COLUMN contact_hash;
 
 -- B7. sxo_muying_feedback 补 contact 字段

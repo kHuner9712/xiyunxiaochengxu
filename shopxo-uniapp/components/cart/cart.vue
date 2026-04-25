@@ -1,7 +1,7 @@
 <template>
     <view :class="theme_view">
         <block v-if="load_status == 1">
-            <block v-if="(plugins_realstore_info || null) != null">
+            <block v-if="(plugins_realstore_info || null) != null && is_feature_enabled(FeatureFlagKey.REALSTORE)">
                 <!-- 顶部导航 -->
                 <component-nav-back propClass="bg-white" propColor="#333" :propFixed="false" :propIsShowBack="propSourceType == 'page'">
                     <template slot="right" class="flex-1 cart-right-title">
@@ -337,8 +337,8 @@
             </view>
         </component-popup>
 
-        <!-- 门店购物车 -->
-        <component-realstore-cart ref="realstore_cart" :propStatus="false" :propCurrencySymbol="currency_symbol" v-on:BuyTypeSwitchEvent="realstore_buy_type_switch_back_event"></component-realstore-cart>
+        <!-- 门店购物车 - 自营模式不展示 -->
+        <!-- <component-realstore-cart ref="realstore_cart" :propStatus="false" :propCurrencySymbol="currency_symbol" v-on:BuyTypeSwitchEvent="realstore_buy_type_switch_back_event"></component-realstore-cart> -->
     </view>
 </template>
 <script>
@@ -350,6 +350,8 @@
     import componentRealstoreCart from '@/components/realstore-cart/realstore-cart';
     import componentBottomLine from '@/components/bottom-line/bottom-line';
     import componentPopup from '@/components/popup/popup';
+    import { is_feature_enabled } from '@/common/js/config/phase-one-scope.js';
+    import { FeatureFlagKey } from '@/common/js/config/muying-constants.js';
 
     var common_static_url = app.globalData.get_static_url('common');
     var status_bar_height = parseInt(app.globalData.get_system_info('statusBarHeight', 0, true));

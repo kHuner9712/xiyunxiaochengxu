@@ -135,22 +135,7 @@
                                 </view>
                             </view>
                         </view>
-                        <!-- 门店次卡 -->
-                        <view v-if="(plugins_realstore_data || null) != null && (plugins_realstore_data.user_card || null) != null && (plugins_realstore_data['user_card'][group.id] || null) != null" class="plugins-realstore-container-view">
-                            <block v-for="(item, index2) in plugins_realstore_data['user_card'][group.id]['data']" :key="index2">
-                                <view class="buy-data-item oh oh wh-auto">
-                                    <text class="cr-base va-m">{{ $t('buy.buy.58rs1a') }}</text>
-                                    <image class="image circle br va-m margin-left-xs" :src="item.images" mode="aspectFill"></image>
-                                    <text class="cr-grey va-m margin-left-xss text-size-xs">x{{ item.stock }}</text>
-                                    <view class="right-value fr cp tr" :data-index="index2" :data-groupid="group.id" @tap="plugins_realstore_open_event">
-                                        <text class="right-value-content single-text cr-grey va-m">{{ item.tips_msg }}</text>
-                                        <view class="dis-inline-block va-m lh-xs">
-                                            <iconfont name="icon-arrow-right" color="#999"></iconfont>
-                                        </view>
-                                    </view>
-                                </view>
-                            </block>
-                        </view>
+                        <!-- 门店次卡 - 自营模式不展示 -->
                         <!-- 扩展数据展示 -->
                         <view v-if="group.order_base.extension_data.length > 0" class="extension-list radius margin-top-lg">
                             <view v-for="(item, index2) in group.order_base.extension_data" :key="index2">
@@ -212,46 +197,24 @@
                     </view>
                     
                     <!-- 支付选择 -->
-                    <view v-if="total_price > 0 && ((common_order_is_booking != 1 && payment_list.length > 0) || plugins_coin_is_valid)" class="payment-list border-radius-main bg-white oh padding-main spacing-mb">
-                        <!-- 虚拟币支付 -->
-                        <block v-if="plugins_coin_is_valid">
-                            <block v-for="(item, index) in plugins_coin_data.accounts_list" :key="index">
-                                <view class="item flex-row jc-sb align-c" :data-value="item.id" @tap="plugins_coin_payment_event">
-                                    <view class="item-content pr flex-row align-c">
-                                        <image v-if="(item.platform_icon || null) != null" class="icon margin-right-sm va-m radius" :src="item.platform_icon" mode="widthFix"></image>
-                                        <view class="flex-col">
-                                            <view class="cr-base">{{ item.platform_name }}</view>
-                                            <view class="flex-row align-c margin-top-xs">
-                                                <view class="fw-b">{{ item.default_symbol }} {{ item.default_coin }}</view>
-                                                <view class="margin-left-lg text-size-xs cr-999">{{ item.platform_symbol }} {{ item.normal_coin }}</view>
-                                            </view>
-                                        </view>
-                                    </view>
-                                    <view>
-                                        <iconfont :name="plugins_coin_payment_id == item.id ? 'icon-selected-solid cr-main' : 'icon-not-selected'" size="40rpx"></iconfont>
-                                    </view>
-                                </view>
-                            </block>
-                        </block>
+                    <view v-if="total_price > 0 && common_order_is_booking != 1 && payment_list.length > 0" class="payment-list border-radius-main bg-white oh padding-main spacing-mb">
                         <!-- 支付方式 -->
-                        <view v-if="common_order_is_booking != 1 && payment_list.length > 0" :class="(plugins_coin_is_valid ? 'br-t-f9' : '')">
-                            <view v-for="(item, index) in payment_list" :key="index">
-                                <view class="item flex-row jc-sb align-c" :data-value="item.id" :data-index="index" @tap="payment_event">
-                                    <view class="item-content pr flex-1 flex-width">
-                                        <image v-if="(item.logo || null) != null" class="icon margin-right-sm va-m radius" :src="item.logo" mode="widthFix"></image>
-                                        <text class="va-m">{{ item.name }}</text>
-                                        <text v-if="(item.tips || null) !== null" class="pay-tips">{{ item.tips }}</text>
-                                    </view>
-                                    <view>
-                                        <iconfont :name="payment_id == item.id ? 'icon-selected-solid cr-main' : 'icon-not-selected'" size="40rpx"></iconfont>
-                                    </view>
+                        <view v-for="(item, index) in payment_list" :key="index">
+                            <view class="item flex-row jc-sb align-c" :data-value="item.id" :data-index="index" @tap="payment_event">
+                                <view class="item-content pr flex-1 flex-width">
+                                    <image v-if="(item.logo || null) != null" class="icon margin-right-sm va-m radius" :src="item.logo" mode="widthFix"></image>
+                                    <text class="va-m">{{ item.name }}</text>
+                                    <text v-if="(item.tips || null) !== null" class="pay-tips">{{ item.tips }}</text>
+                                </view>
+                                <view>
+                                    <iconfont :name="payment_id == item.id ? 'icon-selected-solid cr-main' : 'icon-not-selected'" size="40rpx"></iconfont>
                                 </view>
                             </view>
                         </view>
                     </view>
                     <!-- 支付未配置提示 -->
-                    <view v-if="total_price > 0 && common_order_is_booking != 1 && payment_list.length == 0 && !plugins_coin_is_valid" class="border-radius-main bg-white oh padding-main spacing-mb tc">
-                        <view class="cr-grey text-size-sm padding-vertical-main">当前为体验版，支付功能暂未开通</view>
+                    <view v-if="total_price > 0 && common_order_is_booking != 1 && payment_list.length == 0" class="border-radius-main bg-white oh padding-main spacing-mb tc">
+                        <view class="cr-grey text-size-sm padding-vertical-main">当前为体验版，支付功能暂未开通。可生成待支付订单，待支付开通后完成支付。</view>
                     </view>
 
                     <!-- 底部说明 - 智能工具箱插件 -->
@@ -315,42 +278,8 @@
                 </view>
             </component-popup>
 
-            <!-- 次卡选择 -->
-            <component-popup :propShow="popup_plugins_realstore_status" propPosition="bottom" @onclose="plugins_realstore_close_event">
-                <view class="bg-base padding-top-lg">
-                    <view class="close oh margin-right-lg padding-bottom-sm">
-                        <view class="fr" @tap.stop="plugins_realstore_close_event">
-                            <iconfont name="icon-close-line" size="28rpx" color="#999"></iconfont>
-                        </view>
-                    </view>
-                    <view class="plugins-realstore-container padding-horizontal-main padding-bottom-main oh">
-                        <view class="not-use-tips tc">
-                            <text class="cp cr-yellow text-size-sm" data-type="0" @tap="plugins_realstore_use_event">{{ $t('buy.buy.8vqfp3') }}</text>
-                        </view>
-                        <view v-if="(plugins_realstore_data || null) != null && (plugins_realstore_data.user_card || null) != null && (plugins_realstore_data['user_card'][popup_plugins_realstore_group_id] || null) != null">
-                            <block v-for="(item, index) in plugins_realstore_data['user_card'][popup_plugins_realstore_group_id]['data'][popup_plugins_realstore_card_index]['user_card']" :key="index">
-                                <view :class="'item spacing-mt bg-white border-radius-main ' + ((item.is_active || 0) == 1 ? 'item-disabled' : '')">
-                                    <view class="v-left fl">
-                                        <view class="base single-text">
-                                            <text class="value fw-b text-size-xxl">{{ item.valid_number }}</text>
-                                            <text class="unit margin-left-xs">{{ $t('buy.buy.0pgsrm') }}</text>
-                                            <text v-if="(item.name || null) != null" class="cr-base margin-left-lg">{{ item.name }}</text>
-                                        </view>
-                                        <view v-if="(item.describe || null) != null" class="margin-top-sm cr-grey single-text">{{ item.describe }}</view>
-                                        <view class="margin-top-sm cr-grey single-text text-size-xs">{{ item.start_time }}{{ $t('buy.buy.70u2vy') }}{{ item.end_time }}</view>
-                                    </view>
-                                    <view v-if="(item.is_active || 0) == 1" class="v-right bg-main fr tc cr-white">
-                                        <text>{{ $t('buy.buy.g2vt78') }}</text>
-                                    </view>
-                                    <view v-else class="v-right bg-main fr tc cr-white cp" :data-index="index" :data-value="item.id" data-type="1" @tap="plugins_realstore_use_event">
-                                        <text>{{ $t('buy.buy.inyxpx') }}</text>
-                                    </view>
-                                </view>
-                            </block>
-                        </view>
-                    </view>
-                </view>
-            </component-popup>
+            <!-- 次卡选择 - 自营模式不展示 -->
+
             <component-payment ref="payment" :propIsRedirectTo="true" :propPayUrl="pay_url" :propQrcodeUrl="qrcode_url" :propToAppointPage="to_appoint_page" propPayDataKey="ids" :propPaymentList="payment_list" :propToPageBack="to_page_back" :propToFailPage="to_fail_page"></component-payment>
         </block>
 
@@ -951,15 +880,16 @@
                     data['extraction_contact_tel'] = extraction_contact.tel || '';
                 }
 
-                // 是否需要选择支付方式、并且未选择虚拟币支付方式
-                if (this.total_price > 0 && this.common_order_is_booking != 1 && (this.plugins_coin_payment_id || null) == null) {
+                // 是否需要选择支付方式
+                if (this.total_price > 0 && this.common_order_is_booking != 1) {
                     if ((data.payment_id || null) == null) {
                         if (this.payment_list.length == 0) {
-                            app.globalData.showToast('当前为体验版，支付功能暂未开通');
+                            // 无可用支付方式时，允许生成待支付订单
+                            data['payment_id'] = 0;
                         } else {
                             app.globalData.showToast(this.$t('buy.buy.71kidy'));
+                            return false;
                         }
-                        return false;
                     }
                 }
 

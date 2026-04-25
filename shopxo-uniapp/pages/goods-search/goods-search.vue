@@ -34,6 +34,13 @@
                 <image class="screening-submit pa cp" :src="common_static_url+'search-submit-icon.png'" mode="aspectFill" @tap="popup_form_event_show"></image>
                 <image class="show-type-submit pa cp" :src="common_static_url+'show-'+(data_show_type_value == 0 ? 'list' : 'grid')+'-icon.png'" mode="aspectFill" @tap="data_show_type_event"></image>
             </view>
+            <!-- 母婴阶段快速筛选 -->
+            <view class="muying-stage-filter oh padding-horizontal-main padding-bottom-sm bg-white">
+                <scroll-view :scroll-x="true" :show-scrollbar="false" class="muying-stage-scroll">
+                    <view :class="'muying-stage-item dis-inline-block text-size-xs round padding-top-xs padding-bottom-xs padding-left padding-right ' + (muying_stage_active == '' ? 'bg-main-light br-main-light cr-main' : 'br-grey cr-grey')" @tap="muying_stage_filter_event" data-value="">全部</view>
+                    <view v-for="(item, idx) in muying_stage_list" :key="idx" :class="'muying-stage-item dis-inline-block text-size-xs round padding-top-xs padding-bottom-xs padding-left padding-right ' + (muying_stage_active == item.key ? 'bg-main-light br-main-light cr-main' : 'br-grey cr-grey')" @tap="muying_stage_filter_event" :data-value="item.key">{{ item.label }}</view>
+                </scroll-view>
+            </view>
         </view>
 
         <!-- 列表 -->
@@ -299,7 +306,15 @@
                     }
                 },
                 // 标签插件
-                plugins_label_data: null
+                plugins_label_data: null,
+                // 母婴阶段筛选
+                muying_stage_list: [
+                    { key: 'prepare', label: '备孕' },
+                    { key: 'pregnancy', label: '孕期' },
+                    { key: 'postpartum', label: '产后' },
+                    { key: 'all', label: '通用' }
+                ],
+                muying_stage_active: ''
             };
         },
 
@@ -585,6 +600,11 @@
                 post_data['order_by_type'] = temp_search_nav_sort[temp_index]['sort'] == 'desc' ? 'asc' : 'desc';
                 post_data['order_by_field'] = temp_search_nav_sort[temp_index]['field'];
 
+                // 母婴阶段筛选
+                if (this.muying_stage_active) {
+                    post_data['muying_stage'] = this.muying_stage_active;
+                }
+
                 return post_data;
             },
 
@@ -805,10 +825,24 @@
                 });
                 // 导航购物车处理
                 this.set_tab_bar_badge_handle();
+            },
+
+            // 母婴阶段筛选事件
+            muying_stage_filter_event(e) {
+                var val = e.currentTarget.dataset.value || '';
+                this.setData({
+                    muying_stage_active: val,
+                    data_page: 1,
+                    data_list: [],
+                    data_list_loding_status: 1,
+                    data_bottom_line_status: false
+                });
+                this.get_data_list(1);
             }
         }
     };
 </script>
 <style>
     @import './goods-search.css';
+    @import '@/common/css/muying.css';
 </style>

@@ -3801,6 +3801,19 @@ class GoodsService
         $where_base = empty($params['where_base']) ? [] : $params['where_base'];
         $where_keywords = empty($params['where_keywords']) ? [] : $params['where_keywords'];
 
+        // 母婴阶段筛选
+        if(!empty($params['muying_stage']))
+        {
+            $stage_val = strip_tags(trim($params['muying_stage']));
+            $where_base[] = ['stage', 'like', '%'.$stage_val.'%'];
+        }
+
+        // 母婴推荐筛选
+        if(!empty($params['is_muying_recommend']))
+        {
+            $where_base[] = ['is_muying_recommend', '=', 1];
+        }
+
         // 排序
         $order_by = empty($params['order_by']) ? 'access_count desc, sales_count desc, id desc' : $params['order_by'];
 
@@ -4079,6 +4092,19 @@ class GoodsService
                 $params['goods_brand_ids'] = explode(',', $params['goods_brand_ids']);
             }
             $params['where'][] = ['g.brand_id', 'in', $params['goods_brand_ids']];
+        }
+
+        // 母婴阶段筛选
+        if(!empty($params['muying_stage']))
+        {
+            $stage_val = strip_tags(trim($params['muying_stage']));
+            $params['where'][] = ['g.stage', 'like', '%'.$stage_val.'%'];
+        }
+
+        // 母婴推荐筛选
+        if(!empty($params['is_muying_recommend']))
+        {
+            $params['where'][] = ['g.is_muying_recommend', '=', 1];
         }
 
         // 排序

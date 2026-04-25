@@ -244,6 +244,31 @@
 	font-weight: bold;
 }
 
+.theme-muying .muying-stage-scroll {
+	white-space: nowrap;
+}
+
+.theme-muying .muying-stage-scroll .muying-stage-item {
+	margin-right: 12rpx;
+}
+
+.theme-muying .muying-stage-scroll .muying-stage-item:last-child {
+    margin-right: 0;
+}
+
+.muying-stage-scroll {
+    white-space: nowrap;
+}
+
+.muying-stage-scroll .muying-stage-item {
+    margin-right: 12rpx;
+    display: inline-block;
+}
+
+.muying-stage-scroll .muying-stage-item:last-child {
+    margin-right: 0;
+}
+
 /******************** 母婴模块 - 文章资讯 ********************/
 
 .theme-muying .muying-article-item {
