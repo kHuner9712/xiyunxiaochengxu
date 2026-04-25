@@ -315,7 +315,10 @@ class PaymentService
         {
             foreach($res as $v)
             {
-                // 根据终端类型筛选
+                if($v['payment'] === 'WalletPay')
+                {
+                    continue;
+                }
                 if(in_array(APPLICATION_CLIENT_TYPE, $v['apply_terminal']))
                 {
                     unset($v['config'], $v['element'], $v['apply_terminal'], $v['author'], $v['author_url'], $v['is_open_user'], $v['is_enable']);
