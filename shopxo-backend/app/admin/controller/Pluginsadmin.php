@@ -18,6 +18,7 @@ use app\service\ResourcesService;
 use app\service\PluginsService;
 use app\service\PackageUpgradeService;
 use app\service\PluginsCategoryService;
+use app\service\MuyingComplianceService;
 
 /**
  * 应用管理
@@ -168,6 +169,11 @@ class Pluginsadmin extends Base
      */
     public function Save()
     {
+        // [MUYING-二开] 阻止安装/保存被合规屏蔽的插件
+        $plugins_name = isset($this->data_request['plugins']) ? strtolower(trim($this->data_request['plugins'])) : '';
+        if (!empty($plugins_name) && MuyingComplianceService::IsPluginBlocked($plugins_name)) {
+            return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -10000));
+        }
         return ApiService::ApiDataReturn(PluginsAdminService::PluginsSave($this->data_request));
     }
 
@@ -192,6 +198,11 @@ class Pluginsadmin extends Base
      */
     public function StatusUpdate()
     {
+        // [MUYING-二开] 阻止启用被合规屏蔽的插件
+        $plugins_name = isset($this->data_request['id']) ? strtolower(trim($this->data_request['id'])) : '';
+        if (!empty($plugins_name) && MuyingComplianceService::IsPluginBlocked($plugins_name)) {
+            return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -10000));
+        }
         return ApiService::ApiDataReturn(PluginsAdminService::PluginsStatusUpdate($this->data_request));
     }
 
@@ -204,7 +215,15 @@ class Pluginsadmin extends Base
      */
     public function Upload()
     {
-        return ApiService::ApiDataReturn(PluginsAdminService::PluginsUpload($this->data_request));
+        // [MUYING-二开] 上传安装后检查合规，如果被屏蔽则拒绝
+        $ret = PluginsAdminService::PluginsUpload($this->data_request);
+        if ($ret['code'] == 0 && !empty($ret['data']['plugins'])) {
+            $plugins_name = strtolower(trim($ret['data']['plugins']));
+            if (MuyingComplianceService::IsPluginBlocked($plugins_name)) {
+                return ApiService::ApiDataReturn(DataReturn(MuyingComplianceService::GetBlockReason($plugins_name), -10000));
+            }
+        }
+        return ApiService::ApiDataReturn($ret);
     }
 
     /**

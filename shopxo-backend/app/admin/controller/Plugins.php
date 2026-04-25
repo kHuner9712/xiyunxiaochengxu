@@ -15,6 +15,7 @@ use app\service\ApiService;
 use app\service\SystemService;
 use app\service\PluginsService;
 use app\service\ResourcesService;
+use app\service\MuyingComplianceService;
 
 /**
  * 应用调用入口
@@ -71,6 +72,18 @@ class Plugins extends Base
         $pluginsname = $params['data_request']['pluginsname'];
         $pluginscontrol = strtolower($params['data_request']['pluginscontrol']);
         $pluginsaction = strtolower($params['data_request']['pluginsaction']);
+
+        // [MUYING-二开] 合规总闸 — 后台插件访问也必须经过资质门禁
+        if (MuyingComplianceService::IsPluginBlocked($pluginsname)) {
+            $reason = MuyingComplianceService::GetBlockReason($pluginsname);
+            if(IS_AJAX)
+            {
+                return ApiService::ApiDataReturn(DataReturn($reason, -10000));
+            } else {
+                MyViewAssign('msg', $reason);
+                return MyView('public/tips_error');
+            }
+        }
 
         // 插件权限校验
         $msg = '';
