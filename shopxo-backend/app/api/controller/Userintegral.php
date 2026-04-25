@@ -23,6 +23,8 @@ use app\service\IntegralService;
  */
 class UserIntegral extends Common
 {
+    private static $FEATURE_FLAG_KEY = 'feature_points_enabled';
+
     /**
      * 构造方法
      * @author   Devil
@@ -34,6 +36,9 @@ class UserIntegral extends Common
     {
         // 调用父类前置方法
         parent::__construct();
+
+        // [MUYING-二开] 积分功能开关检查
+        self::CheckFeatureEnabled(self::$FEATURE_FLAG_KEY);
 
         // 是否登录
         $this->IsLogin();

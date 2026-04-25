@@ -27,6 +27,17 @@ use app\service\MuyingComplianceService;
  */
 class Common extends BaseController
 {
+    // [MUYING-二开] 集中式控制器→功能开关映射安全网
+    // 任何新增的受控控制器必须在此注册，确保即使子类忘记调用 CheckFeatureEnabled 也不会绕过合规
+    private static $CONTROLLER_FEATURE_MAP = [
+        'activity'     => 'feature_activity_enabled',
+        'article'      => 'feature_content_enabled',
+        'feedback'     => 'feature_feedback_enabled',
+        'invite'       => 'feature_invite_enabled',
+        'muyinguser'   => 'feature_membership_enabled',
+        'userintegral' => 'feature_points_enabled',
+    ];
+
 	// 用户信息
 	protected $user;
 
@@ -261,6 +272,12 @@ class Common extends BaseController
         $this->page = max(1, isset($this->data_request['page']) ? intval($this->data_request['page']) : 1);
         $this->page_size = min(empty($this->data_request['page_size']) ? MyC('common_page_size', 15, true) : intval($this->data_request['page_size']), 1000);
         $this->page_start = intval(($this->page-1)*$this->page_size);
+
+        // [MUYING-二开] 集中式合规安全网：自动检查当前控制器是否需要功能开关
+        $ctrl = strtolower($this->controller_name);
+        if (isset(self::$CONTROLLER_FEATURE_MAP[$ctrl])) {
+            self::CheckFeatureEnabled(self::$CONTROLLER_FEATURE_MAP[$ctrl]);
+        }
 	}
 
 	/**
