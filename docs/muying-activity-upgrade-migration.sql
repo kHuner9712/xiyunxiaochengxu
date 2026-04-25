@@ -167,22 +167,25 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 -- D4. 后台菜单权限补充
 -- ============================================================
 
--- D4-1. 候补转正权限
+-- D4-1. 候补转正权限（幂等：仅当不存在时插入）
 INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`)
 SELECT `id`, '候补转正', 'activitysignup', 'waitlisttonormal', '', 4, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()
 FROM `sxo_power` WHERE `control` = 'activitysignup' AND `action` = 'index' AND `is_show` = 1
+AND NOT EXISTS (SELECT 1 FROM `sxo_power` AS _sub WHERE _sub.control = 'activitysignup' AND _sub.action = 'waitlisttonormal')
 LIMIT 1;
 
--- D4-2. 活动复盘权限
+-- D4-2. 活动复盘权限（幂等：仅当不存在时插入）
 INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`)
 SELECT `id`, '活动复盘', 'activity', 'review', '', 6, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()
 FROM `sxo_power` WHERE `control` = 'activity' AND `action` = 'index' AND `is_show` = 1
+AND NOT EXISTS (SELECT 1 FROM `sxo_power` AS _sub WHERE _sub.control = 'activity' AND _sub.action = 'review')
 LIMIT 1;
 
--- D4-3. 签到码核销权限
+-- D4-3. 签到码核销权限（幂等：仅当不存在时插入）
 INSERT INTO `sxo_power` (`pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`)
 SELECT `id`, '签到码核销', 'activitysignup', 'codecheckin', '', 5, 0, '', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()
 FROM `sxo_power` WHERE `control` = 'activitysignup' AND `action` = 'index' AND `is_show` = 1
+AND NOT EXISTS (SELECT 1 FROM `sxo_power` AS _sub WHERE _sub.control = 'activitysignup' AND _sub.action = 'codecheckin')
 LIMIT 1;
 
 

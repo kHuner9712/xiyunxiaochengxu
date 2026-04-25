@@ -59,6 +59,8 @@
 
 ### 主链路 SQL（必须按顺序执行，共 11 步）
 
+> 除 shopxo.sql 和 muying-final-migration.sql 外，其余迁移均为幂等迁移，部署脚本会直接执行，执行后统一验证。
+
 | 序号 | 文件 | 路径 | 用途 | 可重复 |
 |:---:|------|------|------|:---:|
 | 1 | shopxo.sql | `shopxo-backend/config/shopxo.sql` | ShopXO 主库初始化 | ❌ |

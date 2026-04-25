@@ -93,7 +93,7 @@
 1. 宝塔创建网站 + MySQL 数据库（utf8mb4）
 2. `git clone https://github.com/kHuner9712/xiyun.git` → 复制到站点目录
 3. `cp .env.production.example .env` → 填入数据库连接
-4. 按顺序执行 11 个 SQL 迁移文件
+4. 按顺序执行 11 个 SQL 迁移文件（除前 2 个外均为幂等，可安全重复执行）
 5. `composer install --no-dev --optimize-autoloader`
 6. `bash scripts/deploy/fix-permissions.sh /www/wwwroot/yunxi-api`
 7. Nginx 配置参照 `deploy/nginx.production.example.conf`

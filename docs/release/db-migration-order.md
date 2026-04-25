@@ -29,6 +29,8 @@ bash scripts/deploy/run-migrations.sh \
 
 ## 迁移执行顺序（不可调换）
 
+> **策略说明**：除 shopxo.sql 和 muying-final-migration.sql 外，其余迁移均为幂等迁移，部署脚本会直接执行，执行后统一验证。幂等迁移使用 INSERT IGNORE / ON DUPLICATE KEY UPDATE / CREATE TABLE IF NOT EXISTS / NOT EXISTS 防重复等机制，可安全重复执行。
+
 | 序号 | SQL 文件 | 位置 | 用途 | 可否重复 |
 |------|----------|------|------|---------|
 | 1 | `shopxo.sql` | `shopxo-backend/config/shopxo.sql` | ShopXO 主库初始化（含 DROP TABLE，仅全新安装） | ❌ |

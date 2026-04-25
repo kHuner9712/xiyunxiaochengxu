@@ -15,13 +15,18 @@
 #   --skip-main       跳过 shopxo.sql 主库导入
 #   --help            显示帮助
 #
+# 【迁移策略】
+#   - shopxo.sql 和 muying-final-migration.sql 不可重复执行，脚本会检查表是否存在
+#   - 其余 9 个迁移均为幂等迁移，脚本直接执行，不跳过
+#   - 执行完毕后统一验证关键字段/表/配置/菜单
+#
 # 【迁移顺序】（不可调换）
 #   1.  shopxo.sql                                — 主库（不可重复执行）
 #   2.  muying-final-migration.sql                — 孕禧核心表（不可重复）
 #   3.  sql/muying-feature-switch-migration.sql   — 功能开关完整初始化（幂等）
 #   4.  muying-feedback-review-migration.sql      — 反馈审核字段（幂等）
 #   5.  muying-invite-reward-unify-migration.sql  — 邀请奖励统一（幂等）
-#   6.  sql/muying-privacy-security-migration.sql — 隐私安全字段+审计日志（幂等）
+#   6.  sql/muying-privacy-security-migration.sql — 隐私安全字段+审计日志表（幂等）
 #   7.  sql/muying-goods-compliance-migration.sql — 商品合规字段（幂等）
 #   8.  muying-activity-upgrade-migration.sql     — 活动升级字段（幂等）
 #   9.  muying-feature-flag-upgrade-migration.sql — 功能开关升级补丁（幂等）
@@ -51,7 +56,7 @@ while [[ $# -gt 0 ]]; do
         --db-user=*)  DB_USER="${1#*=}"; shift ;;
         --db-pass=*)  DB_PASS="${1#*=}"; shift ;;
         --skip-main)  SKIP_MAIN=1; shift ;;
-        --help|-h)    head -35 "$0" | grep '^#' | sed 's/^# \?//'; exit 0 ;;
+        --help|-h)    head -40 "$0" | grep '^#' | sed 's/^# \?//'; exit 0 ;;
         *)            shift ;;
     esac
 done
@@ -107,49 +112,14 @@ config_exists() {
     [[ "${count:-0}" -gt 0 ]]
 }
 
-run_sql() {
+run_idempotent() {
     local desc="$1"
     local sql_file="$2"
-    local check_type="$3"
-    local check_arg="$4"
 
     if [[ ! -f "$sql_file" ]]; then
         warn "未找到 ${desc}（${sql_file}），跳过"
         return
     fi
-
-    case "$check_type" in
-        table)
-            if table_exists "$check_arg"; then
-                warn "${check_arg} 表已存在，跳过 ${desc}"
-                return
-            fi
-            ;;
-        column)
-            local col_args=($check_arg)
-            if column_exists "${col_args[0]}" "${col_args[1]}"; then
-                warn "${col_args[0]}.${col_args[1]} 字段已存在，跳过 ${desc}"
-                return
-            fi
-            ;;
-        config)
-            if config_exists "$check_arg"; then
-                warn "${check_arg} 配置已存在，跳过 ${desc}"
-                return
-            fi
-            ;;
-        power)
-            local power_count=$($MYSQL_CMD -N -e "SELECT COUNT(*) FROM sxo_power WHERE name='${check_arg}';" "$DB_NAME" 2>/dev/null || echo "0")
-            if [[ "${power_count:-0}" -gt 0 ]]; then
-                warn "${check_arg} 菜单已存在，跳过 ${desc}"
-                return
-            fi
-            ;;
-        force)
-            ;;
-        *)
-            ;;
-    esac
 
     $MYSQL_CMD "$DB_NAME" < "$sql_file" || fail "${desc} 执行失败"
     ok "${desc} 执行成功"
@@ -158,9 +128,10 @@ run_sql() {
 echo ""
 echo "=========================================="
 echo " 数据库迁移执行 (11 步完整链路)"
+echo " 策略：不可重复迁移检查后执行，幂等迁移直接执行"
 echo "=========================================="
 
-# --- 1. shopxo.sql 主库 ---
+# --- 1. shopxo.sql 主库（不可重复） ---
 if [[ $SKIP_MAIN -eq 0 ]]; then
     step "1/11 shopxo.sql — 主库初始化（不可重复）"
     MAIN_SQL="${SITE_DIR}/config/shopxo.sql"
@@ -178,55 +149,57 @@ else
     step "1/11 shopxo.sql — 已跳过（--skip-main）"
 fi
 
-# --- 2. muying-final-migration.sql ---
-step "2/11 muying-final-migration.sql — 孕禧核心表"
+# --- 2. muying-final-migration.sql（不可重复） ---
+step "2/11 muying-final-migration.sql — 孕禧核心表（不可重复）"
 SQL_FILE=$(find_sql "muying-final-migration.sql")
-run_sql "孕禧核心表" "$SQL_FILE" "table" "sxo_activity"
+if [[ -n "$SQL_FILE" ]]; then
+    if table_exists "sxo_activity"; then
+        warn "sxo_activity 表已存在，跳过核心表创建"
+    else
+        $MYSQL_CMD "$DB_NAME" < "$SQL_FILE" || fail "muying-final-migration.sql 执行失败"
+        ok "孕禧核心表创建成功"
+    fi
+else
+    warn "未找到 muying-final-migration.sql，跳过"
+fi
 
-# --- 3. muying-feature-switch-migration.sql（完整初始化） ---
-step "3/11 muying-feature-switch-migration.sql — 功能开关完整初始化"
+# --- 3-11：幂等迁移，直接执行 ---
+
+step "3/11 muying-feature-switch-migration.sql — 功能开关完整初始化（幂等）"
 SQL_FILE=$(find_sql "sql/muying-feature-switch-migration.sql")
-run_sql "功能开关完整初始化" "$SQL_FILE" "config" "feature_activity_enabled"
+run_idempotent "功能开关完整初始化" "$SQL_FILE"
 
-# --- 4. muying-feedback-review-migration.sql ---
-step "4/11 muying-feedback-review-migration.sql — 反馈审核字段"
+step "4/11 muying-feedback-review-migration.sql — 反馈审核字段（幂等）"
 SQL_FILE=$(find_sql "muying-feedback-review-migration.sql")
-run_sql "反馈审核字段" "$SQL_FILE" "column" "sxo_muying_feedback review_status"
+run_idempotent "反馈审核字段" "$SQL_FILE"
 
-# --- 5. muying-invite-reward-unify-migration.sql ---
-step "5/11 muying-invite-reward-unify-migration.sql — 邀请奖励统一"
+step "5/11 muying-invite-reward-unify-migration.sql — 邀请奖励统一（幂等）"
 SQL_FILE=$(find_sql "muying-invite-reward-unify-migration.sql")
-run_sql "邀请奖励统一" "$SQL_FILE" "column" "sxo_invite_reward trigger_event"
+run_idempotent "邀请奖励统一" "$SQL_FILE"
 
-# --- 6. muying-privacy-security-migration.sql ---
-step "6/11 muying-privacy-security-migration.sql — 隐私安全+审计日志"
+step "6/11 muying-privacy-security-migration.sql — 隐私安全+审计日志（幂等）"
 SQL_FILE=$(find_sql "sql/muying-privacy-security-migration.sql")
-run_sql "隐私安全字段" "$SQL_FILE" "column" "sxo_activity_signup phone_hash"
+run_idempotent "隐私安全字段" "$SQL_FILE"
 
-# --- 7. muying-goods-compliance-migration.sql ---
-step "7/11 muying-goods-compliance-migration.sql — 商品合规字段"
+step "7/11 muying-goods-compliance-migration.sql — 商品合规字段（幂等）"
 SQL_FILE=$(find_sql "sql/muying-goods-compliance-migration.sql")
-run_sql "商品合规字段" "$SQL_FILE" "column" "sxo_goods risk_category"
+run_idempotent "商品合规字段" "$SQL_FILE"
 
-# --- 8. muying-activity-upgrade-migration.sql ---
-step "8/11 muying-activity-upgrade-migration.sql — 活动升级（候补/签到码）"
+step "8/11 muying-activity-upgrade-migration.sql — 活动升级（幂等）"
 SQL_FILE=$(find_sql "muying-activity-upgrade-migration.sql")
-run_sql "活动升级字段" "$SQL_FILE" "column" "sxo_activity activity_type"
+run_idempotent "活动升级字段" "$SQL_FILE"
 
-# --- 9. muying-feature-flag-upgrade-migration.sql（升级补丁） ---
-step "9/11 muying-feature-flag-upgrade-migration.sql — 功能开关升级补丁"
+step "9/11 muying-feature-flag-upgrade-migration.sql — 功能开关升级补丁（幂等）"
 SQL_FILE=$(find_sql "muying-feature-flag-upgrade-migration.sql")
-run_sql "功能开关升级补丁" "$SQL_FILE" "force" ""
+run_idempotent "功能开关升级补丁" "$SQL_FILE"
 
-# --- 10. muying-admin-power-migration.sql ---
-step "10/11 muying-admin-power-migration.sql — 后台菜单权限"
+step "10/11 muying-admin-power-migration.sql — 后台菜单权限（幂等）"
 SQL_FILE=$(find_sql "muying-admin-power-migration.sql")
-run_sql "后台菜单权限" "$SQL_FILE" "power" "孕禧运营"
+run_idempotent "后台菜单权限" "$SQL_FILE"
 
-# --- 11. muying-compliance-center-migration.sql ---
-step "11/11 muying-compliance-center-migration.sql — 合规中心菜单+日志"
+step "11/11 muying-compliance-center-migration.sql — 合规中心菜单+日志（幂等）"
 SQL_FILE=$(find_sql "sql/muying-compliance-center-migration.sql")
-run_sql "合规中心" "$SQL_FILE" "power" "合规中心"
+run_idempotent "合规中心" "$SQL_FILE"
 
 echo ""
 echo "=========================================="
@@ -314,17 +287,17 @@ fi
 
 echo ""
 echo "  已执行的迁移（11 步完整链路）:"
-echo "    1.  shopxo.sql — 主库"
-echo "    2.  muying-final-migration.sql — 核心表"
-echo "    3.  muying-feature-switch-migration.sql — 功能开关完整初始化"
-echo "    4.  muying-feedback-review-migration.sql — 反馈审核"
-echo "    5.  muying-invite-reward-unify-migration.sql — 邀请统一"
-echo "    6.  muying-privacy-security-migration.sql — 隐私安全"
-echo "    7.  muying-goods-compliance-migration.sql — 商品合规"
-echo "    8.  muying-activity-upgrade-migration.sql — 活动升级"
-echo "    9.  muying-feature-flag-upgrade-migration.sql — 功能开关升级补丁"
-echo "    10. muying-admin-power-migration.sql — 菜单权限"
-echo "    11. muying-compliance-center-migration.sql — 合规中心"
+echo "    1.  shopxo.sql — 主库（不可重复）"
+echo "    2.  muying-final-migration.sql — 核心表（不可重复）"
+echo "    3.  muying-feature-switch-migration.sql — 功能开关完整初始化（幂等）"
+echo "    4.  muying-feedback-review-migration.sql — 反馈审核（幂等）"
+echo "    5.  muying-invite-reward-unify-migration.sql — 邀请统一（幂等）"
+echo "    6.  muying-privacy-security-migration.sql — 隐私安全（幂等）"
+echo "    7.  muying-goods-compliance-migration.sql — 商品合规（幂等）"
+echo "    8.  muying-activity-upgrade-migration.sql — 活动升级（幂等）"
+echo "    9.  muying-feature-flag-upgrade-migration.sql — 功能开关升级补丁（幂等）"
+echo "    10. muying-admin-power-migration.sql — 菜单权限（幂等）"
+echo "    11. muying-compliance-center-migration.sql — 合规中心（幂等）"
 echo ""
 ok "全部迁移完成"
 exit 0

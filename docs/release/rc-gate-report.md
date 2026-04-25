@@ -115,6 +115,8 @@
 
 ### 4.4 SQL 迁移顺序
 
+> 除 shopxo.sql 和 muying-final-migration.sql 外，其余迁移均为幂等迁移，部署脚本会直接执行，执行后统一验证。
+
 | 序号 | SQL 文件 | 位置 | 用途 | 可否重复 |
 |------|----------|------|------|---------|
 | 1 | `shopxo.sql` | `shopxo-backend/config/shopxo.sql` | ShopXO 主库初始化（含 DROP TABLE） | ❌ |
