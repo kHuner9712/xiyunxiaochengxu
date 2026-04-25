@@ -6,6 +6,7 @@
 > 输出物：配置完整的后端+前端+微信后台  
 > 前提：已有服务器+宝塔+Nginx+PHP 8.1+MySQL 5.7.44  
 > 注意：体验版详细步骤见 [experience-deploy-runbook.md](experience-deploy-runbook.md)，提审切换见 [submit-switch-runbook.md](submit-switch-runbook.md)
+> **RC 封板版本**：v0.1.0-rc1 | 封板报告：[rc-gate-report.md](rc-gate-report.md)
 > 最后更新：2026-04-25
 
 ---

@@ -1,6 +1,12 @@
 # 孕禧母婴商城 (ShopXO 二开) - 开发指南
 
+> **当前版本**：v0.1.0-rc1 | **封板日期**：2026-04-25 | **状态**：代码已封板，体验版可部署
+
 本仓库基于 ShopXO 开源电商系统二开，聚焦母婴商城一期：品牌展示、商品购买、活动报名、会员成长、邀请裂变。
+
+**封板报告**：[docs/release/rc-gate-report.md](docs/release/rc-gate-report.md)  
+**Release Notes**：[docs/release/rc-release-notes.md](docs/release/rc-release-notes.md)  
+**文档索引**：[docs/yunxi-docs-index.md](docs/yunxi-docs-index.md)
 
 ## 1. 项目结构
 

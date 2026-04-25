@@ -1,6 +1,6 @@
 # 孕禧小程序 — 文档索引
 
-> 最后更新：2026-04-24
+> 最后更新：2026-04-25
 > 本索引只保留当前发布链路中真正有用的文档入口
 
 ---
@@ -52,7 +52,8 @@
 
 | 文档 | 路径 | 用途 | 类型 |
 |------|------|------|:---:|
-| RC 封板前总检查报告 | [docs/release/rc-gate-report.md](release/rc-gate-report.md) | 代码完成度+死角排查+真实阻塞项 | 报告 |
+| RC 封板前总检查报告 | [docs/release/rc-gate-report.md](release/rc-gate-report.md) | 代码完成度+死角排查+真实阻塞项+技术状态+部署步骤 | 报告 |
+| RC Release Notes | [docs/release/rc-release-notes.md](release/rc-release-notes.md) | v0.1.0-rc1 功能亮点+合规边界+部署步骤+回滚方式 | 报告 |
 
 ## 五、数据库迁移 SQL（执行顺序见 db-migration-order.md）
 

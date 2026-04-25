@@ -5,6 +5,7 @@
 > 输入物：微信公众平台账号、营业执照、小程序信息  
 > 输出物：可提交审核的完整材料包  
 > 注意：提审切换操作步骤见 [submit-switch-runbook.md](submit-switch-runbook.md)  
+> **RC 封板版本**：v0.1.0-rc1 | 封板报告：[rc-gate-report.md](rc-gate-report.md)  
 > 最后更新：2026-04-25
 
 ---
