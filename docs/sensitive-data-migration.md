@@ -18,7 +18,7 @@
 
 新写入的数据已通过 `MuyingPrivacyService::EncryptSensitive` 自动加密，但历史存量数据仍为明文，必须通过本脚本迁移。
 
-**用户表（sxo_users）说明**：
+**用户表（sxo_user）说明**：
 - `mobile` 字段为 ShopXO 登录手机号，**不加密**（避免破坏登录逻辑）
 - `current_stage`/`due_date`/`baby_birthday`/`baby_month_age` 为阶段标识和时间戳，非 PII，无需加密
 

@@ -8,7 +8,7 @@
 
 | 指标 | API 字段 | 公式 | 数据来源 | 单位 |
 |------|---------|------|---------|------|
-| 今日新增用户 | today.new_users | COUNT(sxo_users WHERE add_time ∈ 今日) | sxo_users | 人 |
+| 今日新增用户 | today.new_users | COUNT(sxo_user WHERE add_time ∈ 今日) | sxo_user | 人 |
 | 今日订单数 | today.orders | COUNT(sxo_order WHERE add_time ∈ 今日) | sxo_order | 单 |
 | 今日销售额 | today.sales | SUM(sxo_order.total_price WHERE add_time ∈ 今日 AND status=4) | sxo_order | 元 |
 | 今日活动报名 | today.activity_signups | COUNT(sxo_activity_signup WHERE add_time ∈ 今日 AND status IN (0,1)) | sxo_activity_signup | 人 |
@@ -26,7 +26,7 @@
 
 | 指标 | API 字段 | 公式 | 数据来源 | 单位 |
 |------|---------|------|---------|------|
-| 总用户 | total.users | COUNT(sxo_users) | sxo_users | 人 |
+| 总用户 | total.users | COUNT(sxo_user) | sxo_user | 人 |
 | 总已完成订单 | total.orders | COUNT(sxo_order WHERE status=4) | sxo_order | 单 |
 | 总已完成销售额 | total.sales | SUM(sxo_order.total_price WHERE status=4) | sxo_order | 元 |
 | 上架活动 | total.activities | COUNT(sxo_activity WHERE is_enable=1 AND is_delete_time=0) | sxo_activity | 个 |
@@ -78,7 +78,7 @@ result = signup_count / active_activities（保留2位小数）
 ```
 invited_user_count = COUNT(DISTINCT invitee_id FROM sxo_invite_reward
                            WHERE add_time ∈ 当日 AND trigger_event='register' AND status=1)
-new_users = COUNT(sxo_users WHERE add_time ∈ 当日)
+new_users = COUNT(sxo_user WHERE add_time ∈ 当日)
 result = invited_user_count / new_users × 100（保留2位小数）
 ```
 
@@ -133,7 +133,7 @@ result = repeat_buyers / total_buyers × 100（保留2位小数）
 |------|---|
 | API 字段 | stage_distribution |
 | 公式 | 按 current_stage 分组 COUNT |
-| 数据来源 | sxo_users |
+| 数据来源 | sxo_user |
 | 阶段值 | prepare（备孕）/ pregnancy（孕期）/ postpartum（产后） |
 
 **说明**：占比 = 该阶段用户数 / 有阶段标识的用户总数 × 100%。未设置阶段的用户不计入分母。
@@ -143,8 +143,8 @@ result = repeat_buyers / total_buyers × 100（保留2位小数）
 | 属性 | 值 |
 |------|---|
 | API 字段 | due_soon_count |
-| 公式 | COUNT(sxo_users WHERE current_stage='pregnancy' AND due_date > 0 AND due_date ≤ now+30天) |
-| 数据来源 | sxo_users |
+| 公式 | COUNT(sxo_user WHERE current_stage='pregnancy' AND due_date > 0 AND due_date ≤ now+30天) |
+| 数据来源 | sxo_user |
 
 ### 4.3 宝宝月龄分布
 
@@ -152,7 +152,7 @@ result = repeat_buyers / total_buyers × 100（保留2位小数）
 |------|---|
 | API 字段 | baby_age_buckets |
 | 公式 | 按 baby_birthday 范围分组 COUNT（仅 current_stage='postpartum' 且 baby_birthday > 0） |
-| 数据来源 | sxo_users |
+| 数据来源 | sxo_user |
 | 分组 | 0-3月 / 3-6月 / 6-12月 |
 
 ### 4.4 阶段完善率

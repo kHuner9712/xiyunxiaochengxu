@@ -247,11 +247,11 @@ if (!empty($widenNeeded)) {
 
 echo "\n[INFO] 用户表敏感字段检查:\n";
 try {
-    $userCols = Db::query("SHOW COLUMNS FROM `sxo_users`");
+    $userCols = Db::query("SHOW COLUMNS FROM `sxo_user`");
     $userColNames = array_column($userCols, 'Field');
 
     if (in_array('mobile', $userColNames)) {
-        echo "  sxo_users.mobile — ShopXO 登录手机号，【不加密】（避免破坏登录逻辑）\n";
+        echo "  sxo_user.mobile — ShopXO 登录手机号，【不加密】（避免破坏登录逻辑）\n";
     }
     $muyingUserFields = [
         'current_stage' => '孕育阶段标识（非PII）',
@@ -261,7 +261,7 @@ try {
     ];
     foreach ($muyingUserFields as $uf => $desc) {
         if (in_array($uf, $userColNames)) {
-            echo "  sxo_users.{$uf} — {$desc}，无需加密\n";
+            echo "  sxo_user.{$uf} — {$desc}，无需加密\n";
         }
     }
     echo "  结论: 用户表无需执行加密迁移\n";
