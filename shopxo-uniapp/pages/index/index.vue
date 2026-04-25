@@ -107,6 +107,16 @@
 
                     <!-- 内容 -->
                     <view class="content padding-horizontal-main pr">
+                        <!-- 阶段引导卡片（未设置阶段的用户） -->
+                        <view v-if="!muying_current_stage && is_feature_enabled(FeatureFlagKey.ACTIVITY)" class="muying-stage-guide muying-card margin-top-main" @tap="go_personal_event">
+                            <view class="muying-stage-guide-icon">🤰</view>
+                            <view class="muying-stage-guide-text">
+                                <text class="muying-stage-guide-title">完善孕育阶段，获取个性化推荐</text>
+                                <text class="muying-stage-guide-desc">告诉我们您当前的状态，为您推荐合适的活动和商品</text>
+                            </view>
+                            <text class="muying-stage-guide-arrow">›</text>
+                        </view>
+
                         <!-- 三大阶段入口 -->
                         <component-stage-nav v-if="is_feature_enabled(FeatureFlagKey.ACTIVITY)" ref="stageNav" @stage-click="stage_click_event"></component-stage-nav>
 
@@ -752,6 +762,16 @@
             // 母婴模块 - 邀请有礼
             invite_event() {
                 app.globalData.url_open('/pages/invite/invite');
+            },
+
+            // 母婴模块 - 去完善个人资料
+            go_personal_event() {
+                var user = app.globalData.get_user_cache_info();
+                if (user && user.id) {
+                    app.globalData.url_open('/pages/personal/personal');
+                } else {
+                    app.globalData.url_open('/pages/login/login');
+                }
             },
 
             // 母婴模块 - 商品点击

@@ -163,7 +163,7 @@
 
             <!-- 提交按钮 -->
             <view class="submit-container padding-horizontal-main margin-top-main margin-bottom-xxxl">
-                <button class="submit-btn cr-white fw-b text-size-md round" :class="{ 'submit-btn-disabled': !privacy_agreed }" @tap="submit_event">提交报名</button>
+                <button class="submit-btn cr-white fw-b text-size-md round" :class="{ 'submit-btn-disabled': !privacy_agreed || loading }" :disabled="!privacy_agreed || loading" :loading="loading" @tap="submit_event">{{ loading ? '提交中...' : '提交报名' }}</button>
             </view>
 
             <!-- 公共 -->
@@ -452,9 +452,15 @@
             },
 
             submit_event() {
+                if (!this.privacy_agreed) {
+                    app.globalData.showToast('请先阅读并同意隐私协议');
+                    return;
+                }
                 if (!this.validate_form()) return;
+                if (this.loading) return;
 
                 var self = this;
+                this.setData({ loading: true });
                 var post_data = {
                     activity_id: this.activity_id,
                     name: this.form.name.trim(),
@@ -473,7 +479,6 @@
                     data: post_data,
                     loading_title: '提交中...',
                     success: function (data) {
-                        // [MUYING-二开] 仅回填非敏感画像字段，不缓存手机号/姓名/宝宝生日等敏感数据
                         userStore.merge({
                             current_stage: self.selected_stage,
                         });
@@ -495,6 +500,9 @@
                         if (err && err.network_error) {
                             app.globalData.showToast('网络异常，报名信息未提交，请检查网络后重试');
                         }
+                    },
+                    complete: function () {
+                        self.setData({ loading: false });
                     },
                 });
             },

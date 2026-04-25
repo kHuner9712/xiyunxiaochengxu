@@ -79,8 +79,9 @@
                             </view>
                         </view>
 
-                        <view class="cr-grey-9 text-size-xs padding-top-main padding-horizontal-main">
-                            <text>您的个人信息仅用于活动推荐，我们不会向第三方泄露您的隐私</text>
+                        <view class="cr-grey-9 text-size-xs padding-top-main padding-horizontal-main muying-privacy-note">
+                            <text>孕育阶段、预产期、宝宝生日仅用于个性化推荐活动和商品，不会向第三方共享。您可随时修改或清空。</text>
+                            <view class="muying-privacy-link" @tap="open_agreement_event('privacy')">查看《隐私政策》</view>
                         </view>
 
                         <view class="bottom-fixed" :style="bottom_fixed_style">
@@ -153,6 +154,10 @@
         },
 
         methods: {
+            open_agreement_event(type) {
+                app.globalData.url_open('/pages/agreement/agreement?type=' + (type || 'privacy'));
+            },
+
             init_date_constraints() {
                 var now = new Date();
                 var y = now.getFullYear();

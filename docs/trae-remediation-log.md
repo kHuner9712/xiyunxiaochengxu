@@ -452,3 +452,72 @@
 | 2 | C3 去重会删除重复邀请奖励记录 | 低 | 保留 id 最小的，不可逆 |
 | 3 | C4 枚举修复会修改旧数据 | 低 | 仅影响脏数据 |
 | 4 | 旧数据未加密 | 高 | 需运行 scripts/migrate-encrypt-sensitive.php |
+
+---
+
+## 2026-04-26 — 第七轮小程序前端一期体验整改
+
+### 整改目标
+
+把前端整理成适合当前资质阶段上线的「孕禧 V1.0 自营母婴服务小程序」，突出母婴行业刚需功能，优化用户体验。
+
+### 核心变更
+
+1. **首页阶段引导卡片** — 未设置孕育阶段的用户，首页顶部显示引导卡片，点击跳转个人资料页完善信息
+2. **个人资料隐私说明增强** — 从简单一句话改为详细说明具体用途，增加《隐私政策》链接
+3. **活动报名防重复提交** — 提交按钮增加 loading 状态和 disabled 控制，防止重复点击
+4. **活动报名隐私协议前置校验** — 未勾选隐私协议时点击提交，先弹出提示
+5. **微信小程序权限声明完善** — manifest.json 添加 scope.userLocation 权限描述和 requiredPrivateInfos 声明
+6. **母婴样式增强** — 阶段引导卡片样式、隐私说明链接样式
+
+### 修改清单
+
+| 文件 | 修改内容 |
+|------|---------|
+| `shopxo-uniapp/pages/index/index.vue` | 新增阶段引导卡片（未设置阶段时显示）+ go_personal_event 方法 |
+| `shopxo-uniapp/pages/personal/personal.vue` | 隐私说明增强 + 《隐私政策》链接 + open_agreement_event 方法 |
+| `shopxo-uniapp/pages/activity-signup/activity-signup.vue` | 提交按钮 loading/disabled 控制 + 隐私协议前置校验 + complete 回调 |
+| `shopxo-uniapp/manifest.json` | mp-weixin 添加 permission.scope.userLocation + requiredPrivateInfos |
+| `shopxo-uniapp/common/css/muying.css` | 阶段引导卡片样式 + 隐私说明链接样式 |
+
+### 已确认无需修改的功能
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| tabbar 5 tab | ✅ 已有 | 首页/分类/活动/购物车/我的 |
+| 阶段推荐核心 | ✅ 已有 | 三大阶段入口 + 阶段商品推荐 |
+| 活动中心筛选 | ✅ 已有 | 阶段筛选 + 分类筛选 + 搜索 |
+| 活动卡片展示 | ✅ 已有 | 封面/标题/时间/地址/阶段/报名状态/价格 |
+| 活动报名表单 | ✅ 已有 | 姓名/手机/阶段/预产期/宝宝生日/隐私协议 |
+| 活动详情按钮状态 | ✅ 已有 | 7 种状态（加载中/已报名/未开始/已截止/名额已满/候补/立即报名） |
+| 取消报名确认 | ✅ 已有 | 区分取消报名/取消候补的确认弹窗 |
+| 个人资料编辑 | ✅ 已有 | 阶段/预产期/宝宝生日/宝宝月龄 |
+| 我的页面导航过滤 | ✅ 已有 | filter_phase_one_navigation 过滤后台菜单 |
+| 会员码/付款码 | ✅ 已隐藏 | v-if="false" 控制 |
+| 请求层统一 | ✅ 已有 | http.js 统一封装 + feature flag + login expired |
+| 合规路由拦截 | ✅ 已有 | PHASE_ONE_ALLOWED_ROUTES 白名单 |
+| 高风险插件拦截 | ✅ 已有 | PHASE_ONE_BLOCKED_PLUGINS 列表 |
+| 空状态组件 | ✅ 已有 | component-no-data 统一使用 |
+| 定位权限 | ✅ 已有 | 仅活动签到/地址选择时请求 |
+
+### 自测结果
+
+| 测试项 | 结果 |
+|--------|------|
+| 未登录用户可浏览首页/商品/活动 | ✅ 合规路由白名单包含这些页面 |
+| 报名活动必须登录 | ✅ http.js 统一处理登录失效 |
+| 隐私协议未勾选不能提交 | ✅ 前置校验 + 按钮禁用 |
+| 高风险入口不显示 | ✅ filter_phase_one_navigation + v-if="false" |
+| 高风险页面直达被拦截 | ✅ PHASE_ONE_ALLOWED_ROUTES 白名单 |
+| 活动报名成功后我的活动可见 | ✅ navigateBack + prevPage.get_activity_detail 刷新 |
+| 自营商品/购物车/订单链路 | ✅ 白名单包含 buy/cashier/paytips/user-order 等路由 |
+| 未设置阶段用户引导 | ✅ 首页引导卡片 |
+| 微信小程序权限声明 | ✅ permission + requiredPrivateInfos |
+
+### 遗留风险
+
+| # | 风险 | 严重性 | 说明 |
+|---|------|--------|------|
+| 1 | 积分入口仍显示 | 低 | 一期允许积分获取/消费（不可提现/储值/转余额），入口可保留 |
+| 2 | 会员码/付款码代码未删除 | 低 | v-if="false" 隐藏，保留 ShopXO 原生结构便于后续恢复 |
+| 3 | 首页 DIY 装修可能包含高风险入口 | 中 | 需运营在后台装修时注意不添加违规入口 |

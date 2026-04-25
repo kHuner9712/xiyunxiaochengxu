@@ -411,3 +411,58 @@
 	flex-shrink: 0;
 }
 
+/******************** 母婴模块 - 阶段引导卡片 ********************/
+
+.theme-muying .muying-stage-guide {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 24rpx;
+	background: linear-gradient(135deg, #FFF5F0 0%, #FFEEE4 100%);
+	border: 1px solid #FFD4C0;
+}
+
+.theme-muying .muying-stage-guide-icon {
+	font-size: 48rpx;
+	margin-right: 20rpx;
+	flex-shrink: 0;
+}
+
+.theme-muying .muying-stage-guide-text {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+}
+
+.theme-muying .muying-stage-guide-title {
+	font-size: 28rpx;
+	font-weight: bold;
+	color: #D4614E;
+}
+
+.theme-muying .muying-stage-guide-desc {
+	font-size: 22rpx;
+	color: #B8857A;
+	margin-top: 6rpx;
+}
+
+.theme-muying .muying-stage-guide-arrow {
+	font-size: 36rpx;
+	color: #D4614E;
+	flex-shrink: 0;
+	margin-left: 12rpx;
+}
+
+/******************** 母婴模块 - 隐私说明 ********************/
+
+.theme-muying .muying-privacy-note {
+	line-height: 1.6;
+}
+
+.theme-muying .muying-privacy-link {
+	color: #D4614E;
+	margin-top: 6rpx;
+	text-decoration: underline;
+	display: inline-block;
+}
+
