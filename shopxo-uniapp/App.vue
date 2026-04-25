@@ -3394,6 +3394,23 @@
         onLaunch(params) {
             //隐藏系统tabbar
             this.globalData.system_hide_tabbar();
+
+            // [MUYING-二开] 统一路由拦截：拦截所有 navigateTo/redirectTo/reLaunch 跳转到禁用页面
+            var self = this;
+            ['navigateTo', 'redirectTo', 'reLaunch'].forEach(function(method) {
+                uni.addInterceptor(method, {
+                    invoke: function(args) {
+                        var url = args.url || '';
+                        url = url.split('?')[0];
+                        if (self.is_phase_one_disabled_route(url)) {
+                            var reason = _get_blocked_route_reason(url) || TipMessage.FEATURE_DISABLED;
+                            self.showToast(reason);
+                            return false;
+                        }
+                        return args;
+                    }
+                });
+            });
         },
 
         // 启动，或从后台进入前台显示

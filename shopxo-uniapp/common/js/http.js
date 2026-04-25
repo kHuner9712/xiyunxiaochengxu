@@ -21,6 +21,16 @@ FEATURE_FLAG_ACTION_MAP['video'] = FeatureFlagKey.VIDEO;
 FEATURE_FLAG_ACTION_MAP['hospital'] = FeatureFlagKey.HOSPITAL;
 FEATURE_FLAG_ACTION_MAP['membershiplevelvip'] = FeatureFlagKey.MEMBERSHIP;
 FEATURE_FLAG_ACTION_MAP['muyinguser'] = FeatureFlagKey.MEMBERSHIP;
+FEATURE_FLAG_ACTION_MAP['giftcard'] = FeatureFlagKey.GIFTCARD;
+FEATURE_FLAG_ACTION_MAP['givegift'] = FeatureFlagKey.GIVEGIFT;
+FEATURE_FLAG_ACTION_MAP['certificate'] = FeatureFlagKey.CERTIFICATE;
+FEATURE_FLAG_ACTION_MAP['scanpay'] = FeatureFlagKey.SCANPAY;
+FEATURE_FLAG_ACTION_MAP['weixinliveplayer'] = FeatureFlagKey.LIVE;
+FEATURE_FLAG_ACTION_MAP['intellectstools'] = FeatureFlagKey.INTELLECTSTOOLS;
+FEATURE_FLAG_ACTION_MAP['complaint'] = FeatureFlagKey.COMPLAINT;
+FEATURE_FLAG_ACTION_MAP['invoice'] = FeatureFlagKey.INVOICE;
+FEATURE_FLAG_ACTION_MAP['ask'] = FeatureFlagKey.UGC;
+FEATURE_FLAG_ACTION_MAP['blog'] = FeatureFlagKey.UGC;
 
 var LOGIN_EXPIRED_CODES = [-100, -9999];
 var FEATURE_DISABLED_CODE = -403;
@@ -61,7 +71,7 @@ function _handle_login_expired(msg) {
     var current_route = current ? '/' + current.route : '';
     if (current_route.indexOf(RoutePath.LOGIN) === -1) {
         uni.showToast({ title: TipMessage.LOGIN_EXPIRED, icon: 'none', duration: 2000 });
-        setTimeout(function() {
+        setTimeout(function () {
             uni.navigateTo({ url: RoutePath.LOGIN });
         }, 1500);
     }
@@ -129,7 +139,7 @@ function request(options) {
         method: options.method || 'POST',
         data: request_data,
         dataType: options.dataType || 'json',
-        success: function(res) {
+        success: function (res) {
             if (show_loading) _hide_loading();
 
             if (!res.data || typeof res.data !== 'object') {
@@ -169,7 +179,7 @@ function request(options) {
 
             if (options.complete) options.complete(res);
         },
-        fail: function(err) {
+        fail: function (err) {
             if (show_loading) _hide_loading();
 
             logger.error('HTTP', '网络请求失败 ' + url);

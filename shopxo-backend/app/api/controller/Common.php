@@ -159,7 +159,8 @@ class Common extends BaseController
 
     protected static function CheckFeatureEnabled($feature_flag_key)
     {
-        if (intval(MyC($feature_flag_key, 1)) === 0) {
+        // [MUYING-二开] 默认值改为 0（未配置=关闭），与前端 SystemBaseService 注入逻辑一致
+        if (intval(MyC($feature_flag_key, 0)) === 0) {
             exit(json_encode(DataReturn('该功能暂未开放', -403)));
         }
     }
