@@ -1,0 +1,141 @@
+{{extend name="../../../module/view/form_table/index" /}}
+
+{{block name="content"}}
+<div class="am-g am-margin-bottom">
+    <div class="am-u-sm-12">
+        <div class="am-panel am-panel-default">
+            <div class="am-panel-hd">默认敏感词（不可修改）</div>
+            <div class="am-panel-bd">
+                <table class="am-table am-table-bordered am-table-striped">
+                    <thead><tr><th>敏感词</th><th>风险级别</th><th>来源</th></tr></thead>
+                    <tbody>
+                        {{foreach $default_words as $w}}
+                        <tr>
+                            <td>{{$w.word}}</td>
+                            <td>{{if $w.risk == 'high'}}<span class="am-badge am-badge-danger">高风险</span>{{else /}}<span class="am-badge am-badge-warning">低风险</span>{{/if}}</td>
+                            <td>系统默认</td>
+                        </tr>
+                        {{/foreach}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="am-g am-margin-bottom">
+    <div class="am-u-sm-12">
+        <div class="am-panel am-panel-default">
+            <div class="am-panel-hd">自定义敏感词</div>
+            <div class="am-panel-bd">
+                <form class="am-form am-form-inline am-margin-bottom" id="add-word-form">
+                    <div class="am-form-group">
+                        <input type="text" name="word" class="am-input-sm" placeholder="输入敏感词" style="width:200px;">
+                    </div>
+                    <div class="am-form-group">
+                        <select name="risk" class="am-input-sm">
+                            <option value="high">高风险（阻止发布）</option>
+                            <option value="low">低风险（确认后可保存）</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="am-btn am-btn-primary am-btn-sm">添加</button>
+                </form>
+
+                {{if !empty($custom_words)}}
+                <table class="am-table am-table-bordered am-table-striped">
+                    <thead><tr><th>ID</th><th>敏感词</th><th>风险级别</th><th>添加时间</th><th>操作</th></tr></thead>
+                    <tbody>
+                        {{foreach $custom_words as $w}}
+                        <tr>
+                            <td>{{$w.id}}</td>
+                            <td>{{$w.word}}</td>
+                            <td>{{if $w.risk == 'high'}}<span class="am-badge am-badge-danger">高风险</span>{{else /}}<span class="am-badge am-badge-warning">低风险</span>{{/if}}</td>
+                            <td>{{$w.add_time_text}}</td>
+                            <td><button type="button" class="am-btn am-btn-danger am-btn-xs btn-delete" data-id="{{$w.id}}">删除</button></td>
+                        </tr>
+                        {{/foreach}}
+                    </tbody>
+                </table>
+                {{else /}}
+                <p class="am-text-grey">暂无自定义敏感词</p>
+                {{/if}}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="am-g am-margin-bottom">
+    <div class="am-u-sm-12">
+        <div class="am-panel am-panel-default">
+            <div class="am-panel-hd">合规拦截日志 (共 {{$log_count}} 条)</div>
+            <div class="am-panel-bd" style="max-height:300px;overflow-y:auto;">
+                {{if !empty($log_list)}}
+                <table class="am-table am-table-bordered am-table-striped am-table-compact">
+                    <thead><tr><th>时间</th><th>类型</th><th>敏感词</th><th>风险</th><th>字段</th><th>操作</th><th>管理员</th></tr></thead>
+                    <tbody>
+                        {{foreach $log_list as $log}}
+                        <tr>
+                            <td>{{$log.add_time_text}}</td>
+                            <td>{{$log.content_type_name}}</td>
+                            <td class="am-text-danger">{{$log.word}}</td>
+                            <td>{{if $log.risk == 'high'}}<span class="am-badge am-badge-danger">高</span>{{else /}}<span class="am-badge am-badge-warning">低</span>{{/if}}</td>
+                            <td>{{$log.field}}</td>
+                            <td>{{$log.action_name}}</td>
+                            <td>ID:{{$log.admin_id}}</td>
+                        </tr>
+                        {{/foreach}}
+                    </tbody>
+                </table>
+                {{else /}}
+                <p class="am-text-grey">暂无拦截记录</p>
+                {{/if}}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+$(function() {
+    $('#add-word-form').on('submit', function(e) {
+        e.preventDefault();
+        var word = $('[name=word]').val();
+        var risk = $('[name=risk]').val();
+        if (!word) { Prompt('请输入敏感词', 'warning'); return; }
+
+        $.ajax({
+            url: "{{:MyUrl('admin/contentsensitiveword/save')}}",
+            type: 'POST',
+            data: {word: word, risk: risk},
+            dataType: 'json',
+            success: function(res) {
+                if (res.code == 0) {
+                    Prompt('添加成功');
+                    location.reload();
+                } else {
+                    Prompt(res.msg || '添加失败', 'danger');
+                }
+            }
+        });
+    });
+
+    $('.btn-delete').on('click', function() {
+        var id = $(this).attr('data-id');
+        if (!confirm('确定删除该敏感词？')) return;
+        $.ajax({
+            url: "{{:MyUrl('admin/contentsensitiveword/delete')}}",
+            type: 'POST',
+            data: {id: id},
+            dataType: 'json',
+            success: function(res) {
+                if (res.code == 0) {
+                    Prompt('删除成功');
+                    location.reload();
+                } else {
+                    Prompt(res.msg || '删除失败', 'danger');
+                }
+            }
+        });
+    });
+});
+</script>
+{{/block}}

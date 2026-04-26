@@ -1504,6 +1504,18 @@ class GoodsService
             return $compliance_ret;
         }
 
+        // [MUYING-二开] 内容合规敏感词扫描
+        $admin = isset($params['admin']) ? $params['admin'] : [];
+        $content_compliance_ret = \app\service\MuyingContentComplianceService::ValidateBeforeSave(
+            \app\service\MuyingContentComplianceService::CONTENT_TYPE_GOODS,
+            $params,
+            $admin
+        );
+        if($content_compliance_ret['code'] != 0)
+        {
+            return $content_compliance_ret;
+        }
+
         // 规格基础
         $specifications_base = self::GetFormGoodsSpecificationsBaseParams($params);
         if($specifications_base['code'] != 0)

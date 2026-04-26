@@ -105,6 +105,7 @@ class Article extends Base
 	public function Save()
 	{
         $params = $this->data_request;
+        $params['admin'] = $this->admin;
         return ApiService::ApiDataReturn(ArticleService::ArticleSave($params));
 	}
 

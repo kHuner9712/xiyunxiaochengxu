@@ -1034,6 +1034,17 @@ class ActivityService
             return DataReturn($ret, -1);
         }
 
+        // [MUYING-二开] 内容合规敏感词扫描
+        $admin = isset($params['admin']) ? $params['admin'] : [];
+        $content_compliance_ret = \app\service\MuyingContentComplianceService::ValidateBeforeSave(
+            \app\service\MuyingContentComplianceService::CONTENT_TYPE_ACTIVITY,
+            $params,
+            $admin
+        );
+        if ($content_compliance_ret['code'] != 0) {
+            return $content_compliance_ret;
+        }
+
         $stage = MuyingStage::Normalize($params['stage']);
         if (empty($stage)) {
             return DataReturn('适用阶段值无效', -1);

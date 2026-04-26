@@ -86,6 +86,7 @@ class Activity extends Base
     public function Save()
     {
         $params = $this->data_request;
+        $params['admin'] = $this->admin;
         return ApiService::ApiDataReturn(ActivityService::ActivitySave($params));
     }
 

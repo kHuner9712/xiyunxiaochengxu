@@ -314,6 +314,18 @@ class ArticleService
             return DataReturn($ret, -1);
         }
 
+        // [MUYING-二开] 内容合规敏感词扫描
+        $admin = isset($params['admin']) ? $params['admin'] : [];
+        $content_compliance_ret = \app\service\MuyingContentComplianceService::ValidateBeforeSave(
+            \app\service\MuyingContentComplianceService::CONTENT_TYPE_ARTICLE,
+            $params,
+            $admin
+        );
+        if($content_compliance_ret['code'] != 0)
+        {
+            return $content_compliance_ret;
+        }
+
         // 其它附件
         $attachment = ResourcesService::AttachmentParams($params, ['cover', 'share_images']);
 
