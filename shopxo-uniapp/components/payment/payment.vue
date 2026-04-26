@@ -443,9 +443,9 @@
                                                 },
                                             });
                                             break;
-                                        // 钱包支付
+                                        // [MUYING-二开] 钱包支付已屏蔽，case 2 增加拦截
                                         case 2:
-                                            this.order_item_pay_success_handle(data, order_id);
+                                            app.globalData.showToast('钱包支付暂未开放');
                                             break;
                                         // 默认
                                         default:

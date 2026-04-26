@@ -404,6 +404,8 @@
 <script>
     const app = getApp();
     import componentCommon from '@/components/common/common';
+    import { is_feature_enabled } from '@/common/js/config/phase-one-scope.js';
+    import { FeatureFlagKey } from '@/common/js/config/muying-constants.js';
     import componentPopup from "@/components/popup/popup";
     import componentNoData from "@/components/no-data/no-data";
     import componentBottomLine from "@/components/bottom-line/bottom-line";
@@ -624,7 +626,8 @@
                                 return_goods_address: data.return_goods_address || null,
                                 form_price: data.returned_data || null != null ? data.returned_data.refund_price : '',
                                 plugins_intellectstools_data: data.plugins_intellectstools_data || null,
-                                plugins_shop_data: data.plugins_shop_data || null,
+                                // [MUYING-二开] shop 数据增加 feature flag 门控
+                                plugins_shop_data: is_feature_enabled(FeatureFlagKey.SHOP) ? (data.plugins_shop_data || null) : null,
                             });
 
                             // 获取消息数据
