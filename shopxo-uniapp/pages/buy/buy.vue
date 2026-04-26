@@ -290,6 +290,8 @@
 <script>
     const app = getApp();
     import base64 from '@/common/js/lib/base64.js';
+    import { is_feature_enabled } from '@/common/js/config/phase-one-scope.js';
+    import { FeatureFlagKey } from '@/common/js/config/muying-constants.js';
     import componentCommon from '@/components/common/common';
     import componentPopup from '@/components/popup/popup';
     import componentNoData from '@/components/no-data/no-data';
@@ -637,7 +639,8 @@
                                     buy_extraction_contact_info: extraction_contact,
                                     plugins_coupon_data: data.plugins_coupon_data || null,
                                     plugins_points_data: data.plugins_points_data || null,
-                                    plugins_realstore_data: data.plugins_realstore_data || null,
+                                    // [MUYING-二开] realstore 数据增加 feature flag 门控
+                                    plugins_realstore_data: is_feature_enabled(FeatureFlagKey.REALSTORE) ? (data.plugins_realstore_data || null) : null,
                                     plugins_intellectstools_data: data.plugins_intellectstools_data || null,
                                     plugins_coin_data: plugins_coin_data,
                                     plugins_coin_is_valid:  plugins_coin_data != null && (plugins_coin_data.accounts_list || null) != null &&  plugins_coin_data.accounts_list.length > 0,
