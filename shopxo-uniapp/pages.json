@@ -148,36 +148,7 @@
                 }
             ]
         },
-        {
-            "root": "pages/form-input-data",
-            "pages": [
-                {
-                    "path": "form-input-data",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/form-input-data-detail",
-            "pages": [
-                {
-                    "path": "form-input-data-detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": "",
-                        "usingComponents": {
-                            "component-form-input-detail": "/pages/form-input/components/form-input-detail/form-input-detail"
-                        },
-                        "componentPlaceholder": {
-                            "component-form-input-detail": "view"
-                        }
-                    }
-                }
-            ]
-        },
+
         {
             "root": "pages/goods-detail",
             "pages": [
@@ -191,12 +162,10 @@
                         "navigationBarTitleText": "",
                         "usingComponents": {
                             "component-goods-comments": "/pages/goods-detail/components/goods-comments/goods-comments",
-                            "component-goods-compare": "/pages/goods-detail/components/common/goods-compare/goods-compare",
                             "component-form-input-base": "/pages/form-input/components/form-input/form-input-base"
                         },
                         "componentPlaceholder": {
                             "component-goods-comments": "view",
-                            "component-goods-compare": "view",
                             "component-form-input-base": "view"
                         }
                     }
@@ -366,13 +335,7 @@
                     "path": "user-order-detail",
                     "style": {
                         "enablePullDownRefresh": true,
-                        "navigationBarTitleText": "",
-                        "usingComponents": {
-                            "component-hospital-order-detail": "/pages/plugins/hospital/components/order-detail/order-detail"
-                        },
-                        "componentPlaceholder": {
-                            "component-hospital-order-detail": "view"
-                        }
+                        "navigationBarTitleText": ""
                     }
                 }
             ]
@@ -437,18 +400,7 @@
                 }
             ]
         },
-        {
-            "root": "pages/user-integral",
-            "pages": [
-                {
-                    "path": "user-integral",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
+
         {
             "root": "pages/user-goods-browse",
             "pages": [
@@ -567,42 +519,8 @@
                 }
             ]
         },
-        {
-            "root": "pages/paylog-list",
-            "pages": [
-                {
-                    "path": "paylog-list",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/paylog-detail",
-            "pages": [
-                {
-                    "path": "paylog-detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/web-view",
-            "pages": [
-                {
-                    "path": "web-view",
-                    "style": {
-                        "enablePullDownRefresh": false,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
+
+
         {
             "root": "pages/error",
             "pages": [
@@ -795,68 +713,13 @@
                 }
             ]
         },
-        {
-            "root": "pages/plugins/coupon",
-            "pages": [
-                {
-                    "path": "index/index",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "detail/detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "user/user",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/plugins/signin",
-            "pages": [
-                {
-                    "path": "detail/detail",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                },
-                {
-                    "path": "user/user",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
+
+
         {
             "root": "pages/plugins/delivery",
             "pages": [
                 {
                     "path": "logistics/logistics",
-                    "style": {
-                        "enablePullDownRefresh": true,
-                        "navigationBarTitleText": ""
-                    }
-                }
-            ]
-        },
-        {
-            "root": "pages/plugins/points",
-            "pages": [
-                {
-                    "path": "index/index",
                     "style": {
                         "enablePullDownRefresh": true,
                         "navigationBarTitleText": ""

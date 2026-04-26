@@ -359,8 +359,8 @@
                         </view>
                     </view>
                 </view>
-                <!-- 问答 -->
-                <view v-if="(plugins_ask_data || null) !== null && (plugins_ask_data.is_ask_add || 0) == 1" class="goods-comment spacing-mb">
+                <!-- [MUYING-二开] 问答增加 UGC feature flag 门控 -->
+                <view v-if="is_feature_enabled(FeatureFlagKey.UGC) && (plugins_ask_data || null) !== null && (plugins_ask_data.is_ask_add || 0) == 1" class="goods-comment spacing-mb">
                     <view class="spacing-nav-title flex-row align-c jc-sb text-size-xs">
                         <view class="title-left">
                             <text class="text-wrapper title-left-border">{{$t('goods-detail.goods-detail.k5u755')}}</text>
@@ -575,7 +575,8 @@
                             <iconfont name="icon-close-line" size="28rpx" color="#999"></iconfont>
                         </view>
                     </view>
-                    <view class="plugins-coupon-container padding-bottom-main">
+                    <!-- [MUYING-二开] 优惠券增加 COUPON feature flag 门控 -->
+                    <view v-if="is_feature_enabled(FeatureFlagKey.COUPON)" class="plugins-coupon-container padding-bottom-main">
                         <block v-if="(plugins_coupon_data || null) != null && plugins_coupon_data.data.length > 0">
                             <block v-for="(item, index) in plugins_coupon_data.data" :key="index">
                                 <component-coupon-card :propData="item" :propStatusType="item.status_type" :propStatusOperableName="item.status_operable_name" :propIndex="index" propIsProgress @call-back="coupon_receive_back_event"></component-coupon-card>

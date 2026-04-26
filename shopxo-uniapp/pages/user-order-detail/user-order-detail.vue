@@ -51,13 +51,15 @@
                         <button v-if="detail.operate_data.is_comments == 1" class="round bg-white cr-green br-green margin-bottom-main" type="default" size="mini"  @tap="url_event" :data-value="'/pages/user-order-comments/user-order-comments?id='+detail.id" hover-class="none">{{$t('common.comment')}}</button>
                         <button v-if="detail.status == 2 && detail.order_model != 2" class="round cr-base br margin-bottom-main" type="default" size="mini" @tap="rush_event" hover-class="none">{{$t('user-order.user-order.lp1v28')}}</button>
                         <button v-if="detail.operate_data.is_delete == 1" class="round bg-white cr-red br-red margin-bottom-main" type="default" size="mini" @tap="delete_event" hover-class="none">{{$t('common.del')}}</button>
-                        <button v-if="(detail.plugins_is_order_allot_button || 0) == 1" class="round bg-white cr-main br-main margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/realstore/orderallot-list/orderallot-list?oid=' + detail.id" hover-class="none">{{$t('user-order.user-order.ht65c9')}}</button>
-                        <button v-if="(detail.plugins_is_order_batch_button || 0) == 1" class="round bg-white cr-blue br-blue margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/realstore/batchorder-list/batchorder-list?oid=' + detail.id" hover-class="none">{{$t('orderallot-list.orderallot-list.6m73j2')}}</button>
-                        <button v-if="(detail.plugins_is_order_frequencycard_button || 0) == 1" class="round bg-white cr-green br-green margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/realstore/frequencycard-list/frequencycard-list?oid=' + detail.id" hover-class="none">{{$t('orderallot-list.orderallot-list.b13k5r')}}</button>
-                        <button v-if="(detail.plugins_ordergoodsform_data || 0) == 1" class="round bg-white cr-blue br-blue margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/ordergoodsform/order/order?id=' + detail.id" hover-class="none">{{$t('user-order.user-order.9l47b6')}}</button>
-                        <button v-if="(detail.plugins_orderresources_data || 0) == 1" class="round bg-white cr-blue br-blue margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/orderresources/orderannex/orderannex?oid=' + detail.id" hover-class="none">{{$t('user-order.user-order.fyuikn')}}</button>
-                        <button v-if="(detail.plugins_is_orderfeed_button || 0) == 1" class="round bg-white cr-blue br-blue margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/orderfeed/form/form?oid=' + detail.id" hover-class="none">{{$t('common.feed_text')}}</button>
-                        <button v-if="(detail.plugins_intellectstools_data || null) != null && (detail.plugins_intellectstools_data.continue_buy_data || null) != null && detail.plugins_intellectstools_data.continue_buy_data.length > 0" class="round bg-white cr-base br-base margin-bottom-main" type="default" size="mini" @tap="continue_buy_event" hover-class="none">{{$t('user-order.user-order.3l2jr5')}}</button>
+                        <!-- [MUYING-二开] realstore 按钮增加 feature flag 门控 -->
+                        <button v-if="is_feature_enabled(FeatureFlagKey.REALSTORE) && (detail.plugins_is_order_allot_button || 0) == 1" class="round bg-white cr-main br-main margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/realstore/orderallot-list/orderallot-list?oid=' + detail.id" hover-class="none">{{$t('user-order.user-order.ht65c9')}}</button>
+                        <button v-if="is_feature_enabled(FeatureFlagKey.REALSTORE) && (detail.plugins_is_order_batch_button || 0) == 1" class="round bg-white cr-blue br-blue margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/realstore/batchorder-list/batchorder-list?oid=' + detail.id" hover-class="none">{{$t('orderallot-list.orderallot-list.6m73j2')}}</button>
+                        <button v-if="is_feature_enabled(FeatureFlagKey.REALSTORE) && (detail.plugins_is_order_frequencycard_button || 0) == 1" class="round bg-white cr-green br-green margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/realstore/frequencycard-list/frequencycard-list?oid=' + detail.id" hover-class="none">{{$t('orderallot-list.orderallot-list.b13k5r')}}</button>
+                        <!-- [MUYING-二开] 永久屏蔽插件按钮增加门控 -->
+                        <button v-if="is_plugin_allowed('ordergoodsform') && (detail.plugins_ordergoodsform_data || 0) == 1" class="round bg-white cr-blue br-blue margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/ordergoodsform/order/order?id=' + detail.id" hover-class="none">{{$t('user-order.user-order.9l47b6')}}</button>
+                        <button v-if="is_plugin_allowed('orderresources') && (detail.plugins_orderresources_data || 0) == 1" class="round bg-white cr-blue br-blue margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/orderresources/orderannex/orderannex?oid=' + detail.id" hover-class="none">{{$t('user-order.user-order.fyuikn')}}</button>
+                        <button v-if="is_plugin_allowed('orderfeed') && (detail.plugins_is_orderfeed_button || 0) == 1" class="round bg-white cr-blue br-blue margin-bottom-main" type="default" size="mini" @tap="url_event" :data-value="'/pages/plugins/orderfeed/form/form?oid=' + detail.id" hover-class="none">{{$t('common.feed_text')}}</button>
+                        <button v-if="is_feature_enabled(FeatureFlagKey.INTELLECTSTOOLS) && (detail.plugins_intellectstools_data || null) != null && (detail.plugins_intellectstools_data.continue_buy_data || null) != null && detail.plugins_intellectstools_data.continue_buy_data.length > 0" class="round bg-white cr-base br-base margin-bottom-main" type="default" size="mini" @tap="continue_buy_event" hover-class="none">{{$t('user-order.user-order.3l2jr5')}}</button>
                     </view>
                 </view>
 
@@ -324,8 +326,8 @@
                     </view>
                 </view>
 
-                <!-- 处方问诊 - 插件 -->
-                <block v-if="(detail.plugins_hospital_prescription_data || null) != null">
+                <!-- [MUYING-二开] 处方问诊增加 HOSPITAL feature flag 门控 -->
+                <block v-if="is_feature_enabled(FeatureFlagKey.HOSPITAL) && (detail.plugins_hospital_prescription_data || null) != null">
                     <component-hospital-order-detail :propData="detail.plugins_hospital_prescription_data"></component-hospital-order-detail>
                 </block>
             </view>
@@ -454,6 +456,9 @@
     import componentBottomLine from '@/components/bottom-line/bottom-line';
     import componentPopup from '@/components/popup/popup';
     import componentPayment from '@/components/payment/payment';
+    import { is_feature_enabled } from '@/common/js/config/phase-one-scope.js';
+    import { is_plugin_allowed } from '@/common/js/config/compliance-scope.js';
+    import { FeatureFlagKey } from '@/common/js/config/muying-constants.js';
     import componentHospitalOrderDetail from '@/pages/plugins/hospital/components/order-detail/order-detail';
     var common_static_url = app.globalData.get_static_url('common');
     export default {

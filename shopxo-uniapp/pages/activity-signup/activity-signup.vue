@@ -442,13 +442,9 @@
                 this.setData({ privacy_agreed: !this.privacy_agreed });
             },
 
+            // [MUYING-二开] web-view 已移除，统一使用 agreement 页面
             open_privacy_url() {
-                var url = app.globalData.get_config('config.agreement_userprivacy_url') || '';
-                if (url) {
-                    uni.navigateTo({ url: '/pages/web-view/web-view?url=' + encodeURIComponent(url) });
-                } else {
-                    uni.navigateTo({ url: '/pages/agreement/agreement?type=privacy' });
-                }
+                uni.navigateTo({ url: '/pages/agreement/agreement?type=privacy' });
             },
 
             submit_event() {

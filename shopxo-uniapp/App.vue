@@ -1191,16 +1191,17 @@
              * value       [string]  url地址
              * is_redirect [boolean] 是否关闭当前页面
              */
+            // [MUYING-二开] web-view 已移除，改为 agreement 页面或 toast 提示
             open_web_view(value, is_redirect = false) {
-                var url = '/pages/web-view/web-view?url=' + encodeURIComponent(value);
-                if (is_redirect) {
-                    uni.redirectTo({
-                        url: url,
-                    });
+                if (value && value.indexOf('agreement') !== -1) {
+                    var url = '/pages/agreement/agreement';
+                    if (is_redirect) {
+                        uni.redirectTo({ url: url });
+                    } else {
+                        uni.navigateTo({ url: url });
+                    }
                 } else {
-                    uni.navigateTo({
-                        url: url,
-                    });
+                    this.showToast('该功能暂未开放');
                 }
             },
 
@@ -3306,7 +3307,8 @@
                 // 支付宝平台以下条件不增加标题
                 if (client_value == 'alipay') {
                     // 自定义头页面
-                    var pages_always = ['pages/plugins/shop/index/index', 'pages/plugins/shop/detail/detail', 'pages/plugins/realstore/detail/detail', 'pages/plugins/seckill/index/index', 'pages/plugins/points/index/index', 'pages/plugins/coupon/index/index', 'pages/plugins/signin/detail/detail', 'pages/plugins/membershiplevelvip/index/index', 'pages/plugins/ask/index/index', 'pages/cashier/cashier', 'pages/plugins/video/index/index', 'pages/plugins/video/detail/detail', 'pages/plugins/video/search/search', 'pages/plugins/video/search-record/search-record'];
+                    // [MUYING-二开] 清理已移除的高风险页面
+                    var pages_always = ['pages/cashier/cashier'];
                     // 当前tab页面
                     if (this.is_system_tabbar_pages('/' + url) != -1 || pages_always.indexOf(url) != -1) {
                         value = '';
@@ -3397,9 +3399,9 @@
 
             // [MUYING-二开] 统一路由拦截：拦截所有 navigateTo/redirectTo/reLaunch 跳转到禁用页面
             var self = this;
-            ['navigateTo', 'redirectTo', 'reLaunch'].forEach(function(method) {
+            ['navigateTo', 'redirectTo', 'reLaunch'].forEach(function (method) {
                 uni.addInterceptor(method, {
-                    invoke: function(args) {
+                    invoke: function (args) {
                         var url = args.url || '';
                         url = url.split('?')[0];
                         if (self.is_phase_one_disabled_route(url)) {
@@ -3408,7 +3410,7 @@
                             return false;
                         }
                         return args;
-                    }
+                    },
                 });
             });
         },
