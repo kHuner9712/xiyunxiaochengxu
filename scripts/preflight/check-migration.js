@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const MIGRATION_FILE = path.resolve(__dirname, '../../docs/muying-final-migration.sql');
+const SQL_DIR = path.resolve(__dirname, '../../docs/sql');
 
 const REQUIRED_TABLES = [
   'sxo_activity',
@@ -15,6 +16,8 @@ const REQUIRED_TABLES = [
   'sxo_muying_compliance_log',
   'sxo_muying_stat_snapshot',
   'sxo_muying_sensitive_log',
+  'sxo_muying_content_sensitive_word',
+  'sxo_muying_content_compliance_log',
 ];
 
 const REQUIRED_FIELDS = {
@@ -58,14 +61,22 @@ const REQUIRED_FIELDS = {
   'sxo_muying_sensitive_log': [
     'id', 'content_type', 'content_id', 'word', 'ip', 'add_time',
   ],
+  'sxo_muying_content_sensitive_word': [
+    'id', 'word', 'risk', 'is_enable', 'add_time', 'upd_time',
+  ],
+  'sxo_muying_content_compliance_log': [
+    'id', 'content_type', 'content_id', 'word', 'risk', 'field',
+    'admin_id', 'action', 'ip', 'add_time',
+  ],
 };
 
 const REQUIRED_INDEXES = {
   'sxo_activity_signup': ['idx_phone_hash', 'idx_signup_code'],
-  'sxo_muying_feedback': ['idx_contact_hash'],
+  'sxo_muying_feedback': ['idx_contact_hash', 'idx_type'],
   'sxo_muying_stat_snapshot': ['uk_date_metric'],
   'sxo_user': ['uk_invite_code'],
   'sxo_invite_reward': ['uk_inviter_invitee_event'],
+  'sxo_muying_content_sensitive_word': ['uk_word'],
 };
 
 const REQUIRED_CONFIGS = [
@@ -217,7 +228,16 @@ function main() {
     process.exit(1);
   }
 
-  const sql = fs.readFileSync(MIGRATION_FILE, 'utf-8');
+  const mainSql = fs.readFileSync(MIGRATION_FILE, 'utf-8');
+
+  // 读取增量迁移文件
+  const postMigrationFile = path.join(SQL_DIR, 'muying-v1-post-migration.sql');
+  let postSql = '';
+  if (fs.existsSync(postMigrationFile)) {
+    postSql = fs.readFileSync(postMigrationFile, 'utf-8');
+  }
+
+  const sql = mainSql + '\n' + postSql;
 
   // 1. 检查 DROP TABLE 高风险语句
   console.log('--- 1. DROP TABLE 高风险语句检查 ---');
@@ -337,6 +357,64 @@ function main() {
     error(`权限 ID 冲突: ${[...new Set(duplicateIds)].join(', ')}`);
   } else if (powerIds.length > 0) {
     ok(`权限 ID 无冲突（${powerIds.length} 个: ${powerIds.sort((a, b) => a - b).join(', ')}）`);
+  }
+
+  // 10. docs/sql/*.sql 独立扫描
+  console.log('\n--- 10. docs/sql/*.sql 独立扫描 ---');
+  if (fs.existsSync(SQL_DIR)) {
+    const sqlFiles = fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql'));
+    for (const file of sqlFiles) {
+      const filePath = path.join(SQL_DIR, file);
+      const fileSql = fs.readFileSync(filePath, 'utf-8');
+
+      // 10a. 非幂等 ALTER TABLE ADD COLUMN
+      const bareAlterCol = fileSql.match(/^\s*ALTER\s+TABLE\s+\`\w+\`\s+ADD\s+COLUMN\s+(?!IF\s+NOT\s+EXISTS)/gm);
+      if (bareAlterCol) {
+        const hasInfoSchema = fileSql.includes('INFORMATION_SCHEMA.COLUMNS');
+        if (!hasInfoSchema) {
+          error(`${file}: 发现 ${bareAlterCol.length} 处非幂等 ADD COLUMN（无 information_schema 保护）`);
+        } else {
+          ok(`${file}: ADD COLUMN 有 information_schema 保护`);
+        }
+      }
+
+      // 10b. 非幂等 ALTER TABLE ADD INDEX
+      const bareAlterIdx = fileSql.match(/^\s*ALTER\s+TABLE\s+\`\w+\`\s+ADD\s+(?:UNIQUE\s+)?(?:INDEX|KEY)\s+(?!IF\s+NOT\s+EXISTS)/gm);
+      if (bareAlterIdx) {
+        const hasInfoSchema = fileSql.includes('INFORMATION_SCHEMA.STATISTICS');
+        if (!hasInfoSchema) {
+          warn(`${file}: 发现 ${bareAlterIdx.length} 处 ADD INDEX（无 information_schema 保护，重复执行会报错）`);
+        } else {
+          ok(`${file}: ADD INDEX 有 information_schema 保护`);
+        }
+      }
+
+      // 10c. DROP/TRUNCATE 检查
+      const dropMatches = fileSql.match(/^\s*DROP\s+TABLE\s+(?!IF\s+EXISTS)/gim);
+      if (dropMatches) {
+        error(`${file}: 发现 ${dropMatches.length} 处无 IF EXISTS 保护的 DROP TABLE`);
+      }
+      const truncateMatches = fileSql.match(/^\s*TRUNCATE\s+/gim);
+      if (truncateMatches) {
+        error(`${file}: 发现 ${truncateMatches.length} 处 TRUNCATE`);
+      }
+
+      // 10d. MySQL 8 语法检查
+      for (const { pattern, name } of MYSQL8_PATTERNS) {
+        if (pattern.test(fileSql)) {
+          error(`${file}: 发现 MySQL 8 专属语法: ${name}`);
+        }
+      }
+
+      // 10e. INSERT 无 IGNORE 检查
+      const bareInsert = fileSql.match(/^\s*INSERT\s+INTO\s+/gm);
+      const ignoreInsert = fileSql.match(/^\s*INSERT\s+IGNORE\s+INTO\s+/gm);
+      if (bareInsert && (!ignoreInsert || bareInsert.length > ignoreInsert.length)) {
+        warn(`${file}: 发现 ${bareInsert.length - (ignoreInsert ? ignoreInsert.length : 0)} 处无 IGNORE 保护的 INSERT`);
+      }
+    }
+  } else {
+    warn('docs/sql/ 目录不存在');
   }
 
   // 汇总

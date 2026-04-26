@@ -14,7 +14,7 @@
 | 1.4 | 伪静态选择 thinkphp | ☐ | 或手动添加 rewrite 规则 |
 | 1.5 | SSL 证书已配置 | ☐ | 必须开启 HTTPS |
 | 1.6 | .env 已创建且 APP_DEBUG=false | ☐ | 从 .env.production.example 复制并替换占位符 |
-| 1.7 | 数据库迁移已执行 | ☐ | 执行 muying-final-migration.sql |
+| 1.7 | 数据库迁移已执行 | ☐ | 执行 muying-final-migration.sql + muying-v1-post-migration.sql |
 | 1.8 | MUYING_PRIVACY_KEY 已配置 | ☐ | AES-256-CBC 密钥，≥16字符 |
 | 1.8a | 敏感数据迁移 dry-run 已执行 | ☐ | php scripts/migrate-encrypt-sensitive.php --dry-run，确认扫描/加密数量 |
 | 1.8b | 敏感数据迁移正式执行已完成 | ☐ | php scripts/migrate-encrypt-sensitive.php --force，确认无失败记录 |

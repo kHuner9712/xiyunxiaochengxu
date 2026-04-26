@@ -3,8 +3,10 @@
 ## 适用版本
 
 - MySQL 5.7.44（宝塔默认）
-- 迁移文件：`docs/muying-final-migration.sql`
-- 该文件为唯一真相源，docs/sql/ 下的独立迁移文件已废弃
+- 主迁移文件：`docs/muying-final-migration.sql`
+- 增量迁移文件：`docs/sql/muying-v1-post-migration.sql`
+- 执行顺序：先主迁移，再增量迁移
+- 详见 `docs/sql/README.md`
 
 ---
 
@@ -74,6 +76,7 @@ SELECT COUNT(*) FROM sxo_user WHERE invite_code='' OR invite_code IS NULL;
 
 ```bash
 mysql -u root -p sxo < docs/muying-final-migration.sql
+mysql -u root -p sxo < docs/sql/muying-v1-post-migration.sql
 ```
 
 ### 3.2 已有 ShopXO 部署升级
@@ -85,6 +88,7 @@ D 段 `INSERT IGNORE` 和 `ON DUPLICATE KEY UPDATE` 确保幂等。
 
 ```bash
 mysql -u root -p sxo < docs/muying-final-migration.sql
+mysql -u root -p sxo < docs/sql/muying-v1-post-migration.sql
 ```
 
 ### 3.3 分段执行（推荐生产环境）
@@ -118,9 +122,10 @@ AND TABLE_NAME IN (
   'sxo_activity','sxo_activity_signup','sxo_invite_reward',
   'sxo_muying_feedback','sxo_muying_audit_log',
   'sxo_muying_compliance_log','sxo_muying_stat_snapshot',
-  'sxo_muying_sensitive_log'
+  'sxo_muying_sensitive_log',
+  'sxo_muying_content_sensitive_word','sxo_muying_content_compliance_log'
 );
--- 预期：8 行结果
+-- 预期：10 行结果
 ```
 
 ### 4.2 关键字段验证
@@ -183,13 +188,13 @@ WHERE only_tag IN ('muying_invite_register_reward','muying_invite_first_order_re
 ```sql
 SELECT p.id, p.name, p.control, p.action
 FROM sxo_power p
-WHERE p.id BETWEEN 770 AND 782
+WHERE p.id BETWEEN 770 AND 796
 ORDER BY p.id;
 
 SELECT rp.role_id, rp.power_id, p.name
 FROM sxo_role_power rp
 JOIN sxo_power p ON p.id = rp.power_id
-WHERE rp.power_id BETWEEN 770 AND 782
+WHERE rp.power_id BETWEEN 770 AND 796
 ORDER BY rp.role_id, rp.power_id;
 ```
 
@@ -250,11 +255,11 @@ ON r1.inviter_id = r2.inviter_id
 
 ### 5.5 权限插入失败
 
-**原因**：sxo_power 表的 id 770-782 已被占用。  
+**原因**：sxo_power 表的 id 770-796 已被占用。  
 **处理**：
 
 ```sql
-SELECT id, name FROM sxo_power WHERE id BETWEEN 770 AND 782;
+SELECT id, name FROM sxo_power WHERE id BETWEEN 770 AND 796;
 -- 如果已被占用，需要调整 D2/D7 中的 id 范围
 ```
 

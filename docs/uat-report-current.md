@@ -169,6 +169,7 @@ cp shopxo-backend/config/database.php.example shopxo-backend/config/database.php
 
 ```bash
 mysql -u yunxi_user -p yunxi_db < /www/wwwroot/yunxi/docs/muying-final-migration.sql
+mysql -u yunxi_user -p yunxi_db < /www/wwwroot/yunxi/docs/sql/muying-v1-post-migration.sql
 ```
 
 检查是否有 SQL 错误：

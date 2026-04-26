@@ -132,14 +132,16 @@ function getTableIndexes(PDO $pdo, string $table): array {
 section("1. 母婴专属表检查");
 
 $required_tables = [
-    'sxo_activity'             => '活动表（A1）',
-    'sxo_activity_signup'      => '活动报名表（A2）',
-    'sxo_invite_reward'        => '邀请奖励表（A3）',
-    'sxo_muying_feedback'      => '用户反馈表（A4）',
-    'sxo_muying_audit_log'     => '审计日志表（D1）',
-    'sxo_muying_compliance_log'=> '合规拦截日志表（D5）',
-    'sxo_muying_stat_snapshot' => '统计快照表（D6）',
-    'sxo_muying_sensitive_log' => '敏感词拦截日志表（D10）',
+    'sxo_activity'                      => '活动表（A1）',
+    'sxo_activity_signup'               => '活动报名表（A2）',
+    'sxo_invite_reward'                 => '邀请奖励表（A3）',
+    'sxo_muying_feedback'               => '用户反馈表（A4）',
+    'sxo_muying_audit_log'              => '审计日志表（D1）',
+    'sxo_muying_compliance_log'         => '合规拦截日志表（D5）',
+    'sxo_muying_stat_snapshot'          => '统计快照表（D6）',
+    'sxo_muying_sensitive_log'          => '敏感词拦截日志表（D10）',
+    'sxo_muying_content_sensitive_word' => '内容合规敏感词表（P3）',
+    'sxo_muying_content_compliance_log' => '内容合规日志表（P3）',
 ];
 
 $tables_ok = true;
@@ -203,7 +205,7 @@ if (!empty($cols)) {
 section("4. sxo_muying_feedback 关键字段检查");
 
 $feedbackFields = [
-    'contact_hash', 'review_status', 'review_remark', 'review_admin_id', 'review_time',
+    'type', 'contact_hash', 'review_status', 'review_remark', 'review_admin_id', 'review_time',
 ];
 
 $cols = getTableColumns($pdo, 'sxo_muying_feedback');
@@ -292,6 +294,7 @@ $indexChecks = [
     'sxo_user' => ['uk_invite_code' => '邀请码唯一索引（C2）'],
     'sxo_invite_reward' => ['uk_inviter_invitee_event' => '邀请奖励去重索引（C3）'],
     'sxo_activity_signup' => ['idx_phone_hash' => '手机号哈希索引'],
+    'sxo_muying_feedback' => ['idx_contact_hash' => '联系方式哈希索引', 'idx_type' => '反馈类型索引'],
     'sxo_muying_stat_snapshot' => ['uk_date_metric' => '快照日期+指标唯一索引'],
 ];
 
@@ -375,6 +378,36 @@ try {
 }
 
 // ============================================================
+// 11. 后台权限菜单检查
+// ============================================================
+section("11. 后台权限菜单检查");
+
+$requiredPowers = [
+    ['control' => 'Muyingprivacy', 'action' => 'Index', 'name' => '隐私数据管理'],
+    ['control' => 'Muyingprivacy', 'action' => 'Search', 'name' => '用户数据查询'],
+    ['control' => 'Muyingprivacy', 'action' => 'Anonymize', 'name' => '数据匿名化'],
+    ['control' => 'Contentsensitiveword', 'action' => 'Index', 'name' => '内容合规'],
+    ['control' => 'Contentsensitiveword', 'action' => 'Save', 'name' => '添加敏感词'],
+    ['control' => 'Contentsensitiveword', 'action' => 'Delete', 'name' => '删除敏感词'],
+    ['control' => 'Contentsensitiveword', 'action' => 'LogList', 'name' => '查看合规日志'],
+];
+
+foreach ($requiredPowers as $pw) {
+    try {
+        $stmt = $pdo->prepare("SELECT id, name FROM `sxo_power` WHERE `control` = ? AND `action` = ? LIMIT 1");
+        $stmt->execute([$pw['control'], $pw['action']]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            pass_item("权限 {$pw['control']}/{$pw['action']} 存在（id={$row['id']}, {$row['name']}）");
+        } else {
+            block_item("权限 {$pw['control']}/{$pw['action']}（{$pw['name']}）不存在 — 请执行 muying-v1-post-migration.sql");
+        }
+    } catch (PDOException $e) {
+        warn_item("无法检查权限 {$pw['control']}/{$pw['action']}: " . $e->getMessage());
+    }
+}
+
+// ============================================================
 // 汇总
 // ============================================================
 section("检查汇总");
@@ -388,7 +421,8 @@ if ($block_count > 0) {
         echo "  ✗ {$item}\n";
     }
     echo "\n修复方式:\n";
-    echo "  mysql -u root -p {$dbConfig['dbname']} < docs/muying-final-migration.sql\n\n";
+    echo "  mysql -u root -p {$dbConfig['dbname']} < docs/muying-final-migration.sql\n";
+    echo "  mysql -u root -p {$dbConfig['dbname']} < docs/sql/muying-v1-post-migration.sql\n\n";
     echo "退出码: 1\n";
     exit(1);
 } elseif ($warn_count > 0) {
