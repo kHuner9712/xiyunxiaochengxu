@@ -1296,3 +1296,62 @@
 | commit | message |
 |--------|---------|
 | 7a2f860 | feat(privacy): split activity signup consent into privacy-agreed and profile-sync-agreed |
+
+## 2026-04-26 — 第三十轮生产环境构建配置强化
+
+### 整改目标
+
+完善生产环境构建配置，确保正式小程序上线时不会误用测试号、内网IP、HTTP、空AppID或本地开发配置。
+
+### 核心变更
+
+1. runtime-config.js 增加生产环境强制门禁（throw Error）：
+   - UNI_APP_REQUEST_URL 必须存在
+   - 必须以 https:// 开头
+   - 禁止 localhost/127.0.0.1/0.0.0.0/内网IP
+   - static_url 必须以 https:// 开头
+   - UNI_APP_WX_APPID 必须配置
+   - 禁止测试号 AppID wxda7779770f53e901
+
+2. .env.production.example 完善：
+   - UPLOAD_URL 从注释改为默认启用
+   - 增加 HTTPS 必须说明
+
+3. .env.example 增加生产环境配置说明：
+   - 正式提审必须 HTTPS + 正式 AppID
+   - 微信公众平台域名配置提醒
+   - 后端域名备案要求
+
+### 敏感信息扫描结果
+
+| 检查项 | 结果 |
+|--------|------|
+| .env 文件被 git 跟踪 | ✅ 无（只有 .example 文件被跟踪） |
+| manifest.json appid | ✅ 空字符串 |
+| project.config.json appid | ✅ 空字符串 |
+| AppSecret 硬编码 | ✅ 无 |
+| 真实域名泄露 | ✅ 无（只有上游 shopxo.vip 演示域名） |
+| 公网 IP 泄露 | ✅ 无 |
+
+### 生产门禁双重校验
+
+| 校验层 | 文件 | 方式 |
+|--------|------|------|
+| 第一层 | runtime-config.js | build_runtime_config() 内 throw Error |
+| 第二层 | prod.js | NODE_ENV=production 时 throw Error |
+
+### 自测场景
+
+| 场景 | 预期结果 |
+|------|----------|
+| development 构建 + 本地地址 | 正常 |
+| production 构建 + 缺失 AppID | throw Error 构建失败 |
+| production 构建 + HTTP 地址 | throw Error 构建失败 |
+| production 构建 + 内网 IP | throw Error 构建失败 |
+| production 构建 + 测试号 AppID | throw Error 构建失败 |
+
+### Commit 信息
+
+| commit | message |
+|--------|---------|
+| 229a46a | feat(config): harden production build gates in runtime-config and update env templates |
