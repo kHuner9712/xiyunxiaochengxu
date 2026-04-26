@@ -119,6 +119,9 @@ function request(options) {
     var feature_flag_key = FEATURE_FLAG_ACTION_MAP[controller];
     if (feature_flag_key && !is_feature_enabled(feature_flag_key)) {
         logger.warn('HTTP', '功能已关闭，拦截请求 ' + controller + '/' + action);
+        if (!options.silent) {
+            uni.showToast({ title: TipMessage.FEATURE_DISABLED, icon: 'none', duration: 2000 });
+        }
         if (options.fail) {
             options.fail({ errMsg: TipMessage.FEATURE_DISABLED, code: -1, feature_disabled: true });
         }
@@ -128,6 +131,9 @@ function request(options) {
 
     if (plugins && !is_plugin_allowed(plugins)) {
         logger.warn('HTTP', '插件已屏蔽，拦截请求 plugins=' + plugins);
+        if (!options.silent) {
+            uni.showToast({ title: TipMessage.FEATURE_DISABLED, icon: 'none', duration: 2000 });
+        }
         if (options.fail) {
             options.fail({ errMsg: TipMessage.FEATURE_DISABLED, code: -1, feature_disabled: true });
         }
@@ -172,6 +178,14 @@ function request(options) {
 
             if (code === FEATURE_DISABLED_CODE) {
                 logger.warn('HTTP', '后端功能开关拦截 ' + controller + '/' + action);
+                if (!options.silent) {
+                    var app = getApp();
+                    if (app && app.globalData && app.globalData.showToast) {
+                        app.globalData.showToast(msg || TipMessage.FEATURE_DISABLED);
+                    } else {
+                        uni.showToast({ title: msg || TipMessage.FEATURE_DISABLED, icon: 'none', duration: 2000 });
+                    }
+                }
                 if (options.fail) options.fail({ errMsg: msg || TipMessage.FEATURE_DISABLED, code: code, feature_disabled: true });
                 if (options.complete) options.complete(res);
                 return;
