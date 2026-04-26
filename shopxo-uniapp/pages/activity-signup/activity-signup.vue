@@ -139,7 +139,7 @@
                 </view>
             </view>
 
-            <!-- 隐私告知与同意 -->
+            <!-- [MUYING-二开] 隐私授权拆分：报名必需 vs 同步画像 -->
             <view class="privacy-container padding-horizontal-main margin-top-main">
                 <view class="privacy-card muying-card padding-main">
                     <view class="privacy-header flex-row align-c margin-bottom-sm">
@@ -147,16 +147,21 @@
                         <text class="fw-b text-size-sm cr-base margin-left-xs">隐私告知</text>
                     </view>
                     <view class="privacy-content">
-                        <text class="text-size-xs cr-grey block margin-bottom-xs">1. 我们将收集您的姓名、手机号、孕育阶段、预产期/宝宝生日/宝宝月龄等信息，用于活动报名确认、签到核实及活动通知。</text>
-                        <text class="text-size-xs cr-grey block margin-bottom-xs">2. 您的孕育阶段、预产期、宝宝生日等信息将同步至您的个人画像，用于为您推荐更适合的活动和内容。</text>
-                        <text class="text-size-xs cr-grey block margin-bottom-xs">3. 您的个人信息仅用于孕禧平台相关服务，不会提供给第三方。</text>
-                        <text class="text-size-xs cr-grey block">4. 提交报名即表示您同意<text class="cr-main" @tap="open_privacy_url">《隐私政策》</text>，并确认所填信息真实有效。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">1. 我们将收集您的姓名、手机号、孕育阶段、预产期/宝宝生日/宝宝月龄等信息，仅用于本次活动的报名确认、签到核实及活动通知。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">2. 您的个人信息仅用于孕禧平台相关服务，不会提供给第三方。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">3. 您可自主选择是否将孕育信息同步至个人资料，用于获得更精准的活动和内容推荐。</text>
                     </view>
                     <view class="privacy-agree flex-row align-c margin-top-main" @tap="toggle_privacy_agree">
                         <view class="privacy-checkbox" :class="{ 'privacy-checkbox-checked': privacy_agreed }">
                             <uni-icons v-if="privacy_agreed" type="checkmarkempty" size="22rpx" color="#fff"></uni-icons>
                         </view>
-                        <text class="text-size-xs cr-base margin-left-sm">我已阅读并同意以上隐私告知</text>
+                        <text class="text-size-xs cr-base margin-left-sm">我已阅读并同意<text class="cr-main" @tap.stop="open_privacy_url">《隐私政策》</text>，并同意提交本次活动报名所需信息</text>
+                    </view>
+                    <view class="privacy-agree flex-row align-c margin-top-sm" @tap="toggle_profile_sync_agree">
+                        <view class="privacy-checkbox" :class="{ 'privacy-checkbox-checked': profile_sync_agreed }">
+                            <uni-icons v-if="profile_sync_agreed" type="checkmarkempty" size="22rpx" color="#fff"></uni-icons>
+                        </view>
+                        <text class="text-size-xs cr-grey margin-left-sm">我同意将孕育阶段、预产期/宝宝生日等信息同步到个人资料，用于推荐更适合的活动和内容（可选）</text>
                     </view>
                 </view>
             </view>
@@ -222,6 +227,7 @@
                     remark: '',
                 },
                 privacy_agreed: false,
+                profile_sync_agreed: false,
                 data_loaded: false,
             };
         },
@@ -442,6 +448,10 @@
                 this.setData({ privacy_agreed: !this.privacy_agreed });
             },
 
+            toggle_profile_sync_agree() {
+                this.setData({ profile_sync_agreed: !this.profile_sync_agreed });
+            },
+
             // [MUYING-二开] web-view 已移除，统一使用 agreement 页面
             open_privacy_url() {
                 uni.navigateTo({ url: '/pages/agreement/agreement?type=privacy' });
@@ -467,6 +477,7 @@
                     baby_month_age: this.form.baby_month_age,
                     remark: this.form.remark,
                     privacy_agreed: this.privacy_agreed ? 1 : 0,
+                    profile_sync_agreed: this.profile_sync_agreed ? 1 : 0,
                 };
 
                 http_request({

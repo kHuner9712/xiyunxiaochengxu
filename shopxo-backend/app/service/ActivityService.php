@@ -493,6 +493,10 @@ class ActivityService
             return DataReturn('请阅读并同意隐私告知', -1);
         }
 
+        // [MUYING-二开] 画像同步授权：可选，默认不同意
+        $profile_sync_val = isset($params['profile_sync_agreed']) ? $params['profile_sync_agreed'] : 0;
+        $profile_sync_agreed = in_array($profile_sync_val, [true, 1, '1'], true) ? 1 : 0;
+
         if (!empty($params['remark']) && mb_strlen($params['remark']) > 200) {
             return DataReturn('备注信息不能超过200字', -1);
         }
@@ -589,6 +593,8 @@ class ActivityService
                 'remark'              => empty($params['remark']) ? '' : strip_tags(trim($params['remark'])),
                 'privacy_agreed_time' => time(),
                 'privacy_version'     => 1,
+                'profile_sync_agreed' => $profile_sync_agreed,
+                'profile_sync_agreed_time' => $profile_sync_agreed ? time() : 0,
                 'is_waitlist'         => $is_waitlist,
                 'waitlist_to_normal_time' => 0,
                 'signup_code'         => $signup_code,
@@ -611,37 +617,26 @@ class ActivityService
 
             self::AutoUpdateActivityStatus($activity_id);
 
-            $user_row = Db::name('User')->where(['id' => $user_id])->find();
-            if (!empty($user_row)) {
-                $user_update = ['upd_time' => time()];
-                $need_update = false;
+            // [MUYING-二开] 画像同步：仅在用户明确同意时更新，且保证阶段一致性
+            if ($profile_sync_agreed) {
+                $user_row = Db::name('User')->where(['id' => $user_id])->find();
+                if (!empty($user_row)) {
+                    $user_update = ['upd_time' => time()];
 
-                if (empty($user_row['current_stage']) && !empty($normalized)) {
-                    $user_update['current_stage'] = $normalized;
-                    $need_update = true;
-                }
+                    if ($normalized === 'pregnancy') {
+                        $user_update['current_stage'] = 'pregnancy';
+                        $user_update['due_date'] = empty($data['due_date']) ? 0 : $data['due_date'];
+                        $user_update['baby_birthday'] = 0;
+                    } elseif ($normalized === 'postpartum') {
+                        $user_update['current_stage'] = 'postpartum';
+                        $user_update['due_date'] = 0;
+                        $user_update['baby_birthday'] = empty($data['baby_birthday']) ? 0 : $data['baby_birthday'];
+                    } else {
+                        $user_update['current_stage'] = $normalized;
+                        $user_update['due_date'] = 0;
+                        $user_update['baby_birthday'] = 0;
+                    }
 
-                if ($normalized === 'pregnancy' && !empty($data['due_date']) && empty($user_row['due_date'])) {
-                    $user_update['due_date'] = $data['due_date'];
-                    $need_update = true;
-                }
-
-                if ($normalized === 'postpartum' && !empty($data['baby_birthday']) && empty($user_row['baby_birthday'])) {
-                    $user_update['baby_birthday'] = $data['baby_birthday'];
-                    $need_update = true;
-                }
-
-                if ($normalized !== 'pregnancy' && !empty($user_row['due_date'])) {
-                    $user_update['due_date'] = 0;
-                    $need_update = true;
-                }
-
-                if ($normalized !== 'postpartum' && !empty($user_row['baby_birthday'])) {
-                    $user_update['baby_birthday'] = 0;
-                    $need_update = true;
-                }
-
-                if ($need_update) {
                     try {
                         Db::name('User')->where(['id' => $user_id])->update($user_update);
                     } catch (\Exception $e) {
