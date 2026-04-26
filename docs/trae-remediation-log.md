@@ -1249,3 +1249,50 @@
 | commit | message |
 |--------|---------|
 | 663cdb4 | feat(compliance): slim down pages.json for phase-one review and gate high-risk navigation |
+
+## 2026-04-26 — 第二九轮活动报名隐私授权拆分
+
+### 整改目标
+
+将活动报名的"隐私同意"和"画像同步同意"拆分为两个独立勾选项，降低敏感个人信息风险。
+
+### 核心变更
+
+1. 前端报名页增加两个独立勾选：
+   - 必选：我已阅读并同意《隐私政策》，并同意提交本次活动报名所需信息
+   - 可选：我同意将孕育阶段、预产期/宝宝生日等信息同步到个人资料，用于推荐更适合的活动和内容
+
+2. 后端 ActivitySignup 增加 profile_sync_agreed 参数校验
+
+3. 画像同步逻辑改为仅在 profile_sync_agreed = 1 时执行
+
+4. 画像一致性修复：
+   - pregnancy：写 current_stage = pregnancy，写 due_date，清空 baby_birthday
+   - postpartum：写 current_stage = postpartum，写 baby_birthday，清空 due_date
+   - trying 或其他：写 current_stage，清空 due_date 和 baby_birthday
+
+5. 报名记录增加 profile_sync_agreed 和 profile_sync_agreed_time 字段
+
+### 修改文件清单
+
+| 文件 | 修改内容 |
+|------|----------|
+| shopxo-uniapp/pages/activity-signup/activity-signup.vue | 双勾选 UI + profile_sync_agreed 参数 |
+| shopxo-backend/app/service/ActivityService.php | 参数校验 + 画像同步条件 + 一致性修复 |
+| docs/sql/muying-activity-signup-privacy-split-migration.sql | 数据库迁移脚本 |
+
+### 自测场景
+
+| 场景 | 预期结果 |
+|------|----------|
+| 不勾选隐私协议提交 | 提示"请阅读并同意隐私告知"，不提交 |
+| 只勾选隐私协议，不勾选同步画像 | 报名成功，用户画像不更新 |
+| 勾选隐私协议 + 同步画像 | 报名成功，用户画像按阶段一致更新 |
+| 手机号重复报名 | 仍被拦截 |
+| 活动满员/候补 | 逻辑不被破坏 |
+
+### Commit 信息
+
+| commit | message |
+|--------|---------|
+| 7a2f860 | feat(privacy): split activity signup consent into privacy-agreed and profile-sync-agreed |
