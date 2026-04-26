@@ -11,6 +11,7 @@ FEATURE_FLAG_ACTION_MAP['feedback'] = FeatureFlagKey.FEEDBACK;
 FEATURE_FLAG_ACTION_MAP['article'] = FeatureFlagKey.CONTENT;
 FEATURE_FLAG_ACTION_MAP['coupon'] = FeatureFlagKey.COUPON;
 FEATURE_FLAG_ACTION_MAP['points'] = FeatureFlagKey.POINTS;
+FEATURE_FLAG_ACTION_MAP['userintegral'] = FeatureFlagKey.POINTS;
 FEATURE_FLAG_ACTION_MAP['signin'] = FeatureFlagKey.SIGNIN;
 FEATURE_FLAG_ACTION_MAP['seckill'] = FeatureFlagKey.SECKILL;
 FEATURE_FLAG_ACTION_MAP['shop'] = FeatureFlagKey.SHOP;

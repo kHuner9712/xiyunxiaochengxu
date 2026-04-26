@@ -1141,3 +1141,60 @@
 | b47c9b4 | fix(compliance): gate shop dispute in aftersale detail and block wallet payment case |
 | e7fd889 | fix(compliance): unify IsPhaseOneFeatureKey definition with GetAllFeatureFlags |
 | 626688b | fix(security): replace internal IP addresses with placeholders in docs |
+
+## 2026-04-26 — 第二七轮统一合规配置链路修复
+
+### 整改目标
+
+建立"孕禧一期可上线范围"的统一合规配置，确保前端页面、接口请求、后端接口、后台配置使用同一套 feature flag / qualification gate 逻辑。
+
+### 审查结果
+
+| 比对项 | 结果 |
+|--------|------|
+| PHASE_ONE_BLOCKED_PLUGINS 前后端 | 完全一致（22项） |
+| PERMANENTLY_BLOCKED_PLUGINS 前后端 | 完全一致（10项） |
+| FEATURE_FLAG_PLUGIN_MAP 前后端 | 完全一致（21项） |
+| QUALIFICATION_REQUIRED_MAP 前后端 | 完全一致（19项） |
+| Feature Flags 输出 vs 前端期望 | 完全一致（29项） |
+| Qualification Keys 输出 vs 前端期望 | 完全一致（5项） |
+| CONTROLLER_FEATURE_MAP vs 前端 ACTION_MAP | 1处差异（userintegral） |
+
+### 发现的缺口与修复
+
+| # | 缺口 | 严重性 | 修复 |
+|---|------|--------|------|
+| 1 | 后端 SystemBaseService 未输出 qualifications | P0 | 补齐 5 个 qualification key 输出 |
+| 2 | 后端 CONTROLLER_FEATURE_MAP 仅 6 个控制器 | P0 | 扩展至 28 个控制器覆盖所有高风险功能 |
+| 3 | 前端 http.js -403 响应未自动 toast | P1 | 增加 auto-show toast 逻辑 |
+| 4 | 前端 http.js 拦截请求时未自动 toast | P1 | 增加 auto-show toast 逻辑 |
+| 5 | 前端 http.js 缺少 userintegral 映射 | P2 | 补齐 userintegral → POINTS 映射 |
+
+### 修改文件清单
+
+| 文件 | 修改内容 |
+|------|----------|
+| shopxo-backend/app/service/SystemBaseService.php | 补齐 5 个 qualification key 输出 |
+| shopxo-backend/app/api/controller/Common.php | CONTROLLER_FEATURE_MAP 从 6 扩展至 28 |
+| shopxo-uniapp/common/js/http.js | -403 自动 toast + userintegral 映射 |
+
+### 合规链路验证
+
+| 链路环节 | 状态 | 说明 |
+|----------|------|------|
+| 后端初始化配置返回 feature flags | ✅ | SystemBaseService::Common() 输出 29 个 flag |
+| 后端初始化配置返回 qualifications | ✅ | SystemBaseService::Common() 输出 5 个资质 |
+| 前端启动时调用 init_feature_flags | ✅ | App.vue init_config_result_handle |
+| 前端 http.js 拦截关闭的 controller 请求 | ✅ | FEATURE_FLAG_ACTION_MAP 覆盖 28 个控制器 |
+| 前端 http.js 拦截关闭的 plugins 请求 | ✅ | is_plugin_allowed 检查 |
+| 前端路由拦截禁用页面 | ✅ | uni.addInterceptor 拦截 navigateTo/redirectTo/reLaunch |
+| 后端 CommonInit 自动检查 CONTROLLER_FEATURE_MAP | ✅ | 28 个控制器全覆盖 |
+| 后端返回 -403 时前端自动 toast | ✅ | http.js 统一处理 |
+| 前端拦截请求时自动 toast | ✅ | http.js 统一处理 |
+
+### Commit 信息
+
+| commit | message |
+|--------|---------|
+| dcc73e3 | feat(compliance): add qualifications to config output and expand controller feature map |
+| 09dda85 | fix(compliance): auto-show toast on -403 and frontend feature block |
