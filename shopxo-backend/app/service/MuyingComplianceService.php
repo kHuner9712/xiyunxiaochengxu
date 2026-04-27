@@ -241,7 +241,10 @@ class MuyingComplianceService
             'feature_membership_v2_enabled',
             'feature_wallet_v2_enabled',
         ];
-        $all_keys = array_merge($all_keys, $phase_one_keys, $phase_one_controlled_keys, $v2_keys);
+        $payment_keys = [
+            'feature_payment_enabled',
+        ];
+        $all_keys = array_merge($all_keys, $phase_one_keys, $phase_one_controlled_keys, $v2_keys, $payment_keys);
         foreach ($all_keys as $key) {
             $result[$key] = intval(MyC($key, 0));
         }
@@ -573,6 +576,22 @@ class MuyingComplianceService
             $filtered[] = $item;
         }
         return $filtered;
+    }
+
+    public static function IsPaymentEnabled()
+    {
+        return intval(MyC('feature_payment_enabled', 0)) === 1;
+    }
+
+    public static function CheckPaymentEnabled($return_error = true)
+    {
+        if (!self::IsPaymentEnabled()) {
+            if ($return_error) {
+                return DataReturn('线上支付暂未开放', -403);
+            }
+            return false;
+        }
+        return true;
     }
 
     public static function GetDashboardSummary()

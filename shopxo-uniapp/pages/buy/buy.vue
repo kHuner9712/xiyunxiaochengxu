@@ -214,7 +214,8 @@
                     </view>
                     <!-- 支付未配置提示 -->
                     <view v-if="total_price > 0 && common_order_is_booking != 1 && payment_list.length == 0" class="border-radius-main bg-white oh padding-main spacing-mb tc">
-                        <view class="cr-grey text-size-sm padding-vertical-main">当前为体验版，支付功能暂未开通。可生成待支付订单，待支付开通后完成支付。</view>
+                        <view v-if="!is_feature_enabled(FeatureFlagKey.PAYMENT)" class="cr-grey text-size-sm padding-vertical-main">线上支付暂未开放，请联系客服购买。可生成待支付订单，待支付开通后完成支付。</view>
+                        <view v-else class="cr-grey text-size-sm padding-vertical-main">当前为体验版，支付功能暂未开通。可生成待支付订单，待支付开通后完成支付。</view>
                     </view>
 
                     <!-- 底部说明 - 智能工具箱插件 -->
@@ -824,6 +825,12 @@
 
             // 提交订单
             buy_submit_event(e) {
+                // [MUYING-二开] 支付门禁：金额>0且支付未启用时，提示并阻止提交
+                if (this.total_price > 0 && !is_feature_enabled(FeatureFlagKey.PAYMENT)) {
+                    app.globalData.showToast('线上支付暂未开放，请联系客服购买');
+                    return;
+                }
+
                 // 表单数据
                 var data = this.params;
                 data['address_id'] = this.address_id;

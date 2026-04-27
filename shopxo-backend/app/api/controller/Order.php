@@ -17,6 +17,7 @@ use app\service\OrderService;
 use app\service\GoodsCommentsService;
 use app\service\ConfigService;
 use app\service\ResourcesService;
+use app\service\MuyingComplianceService;
 
 /**
  * 我的订单
@@ -229,6 +230,11 @@ class Order extends Common
      */
     public function Pay()
     {
+        // [MUYING-二开] 支付门禁
+        $check = MuyingComplianceService::CheckPaymentEnabled();
+        if ($check !== true) {
+            return ApiService::ApiDataReturn($check);
+        }
         $params = $this->data_request;
         $params['user'] = $this->user;
         return ApiService::ApiDataReturn(OrderService::Pay($params));

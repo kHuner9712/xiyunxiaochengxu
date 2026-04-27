@@ -33,6 +33,8 @@ FEATURE_FLAG_ACTION_MAP['complaint'] = FeatureFlagKey.COMPLAINT;
 FEATURE_FLAG_ACTION_MAP['invoice'] = FeatureFlagKey.INVOICE;
 FEATURE_FLAG_ACTION_MAP['ask'] = FeatureFlagKey.UGC;
 FEATURE_FLAG_ACTION_MAP['blog'] = FeatureFlagKey.UGC;
+FEATURE_FLAG_ACTION_MAP['cashier'] = FeatureFlagKey.PAYMENT;
+FEATURE_FLAG_ACTION_MAP['paylog'] = FeatureFlagKey.PAYMENT;
 
 var LOGIN_EXPIRED_CODES = [-100, -9999];
 var FEATURE_DISABLED_CODE = -403;

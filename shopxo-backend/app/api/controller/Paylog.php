@@ -12,6 +12,7 @@ namespace app\api\controller;
 
 use app\service\ApiService;
 use app\service\PayLogService;
+use app\service\MuyingComplianceService;
 
 /**
  * 支付日志
@@ -47,6 +48,11 @@ class PayLog extends Common
      */
     public function Index()
     {
+        // [MUYING-二开] 支付门禁
+        $check = MuyingComplianceService::CheckPaymentEnabled();
+        if ($check !== true) {
+            return ApiService::ApiDataReturn($check);
+        }
         $params = $this->data_request;
         $params['user_id'] = $this->user['id'];
         return ApiService::ApiDataReturn(PayLogService::PayLogPagesListData($params));
@@ -61,6 +67,11 @@ class PayLog extends Common
      */
     public function Detail()
     {
+        // [MUYING-二开] 支付门禁
+        $check = MuyingComplianceService::CheckPaymentEnabled();
+        if ($check !== true) {
+            return ApiService::ApiDataReturn($check);
+        }
         $params = $this->data_request;
         $params['user_id'] = $this->user['id'];
         return ApiService::ApiDataReturn(PayLogService::PayLogPagesDetailData($params));

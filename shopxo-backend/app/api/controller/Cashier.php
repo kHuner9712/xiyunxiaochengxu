@@ -12,6 +12,7 @@ namespace app\api\controller;
 
 use app\service\ApiService;
 use app\service\CashierService;
+use app\service\MuyingComplianceService;
 
 /**
  * 收银台
@@ -27,12 +28,17 @@ class Cashier extends Common
      * 支付数据
      * @author  Devil
      * @blog    http://gong.gg/
-     * @version 1.0.0
+     @version 1.0.0
      * @date    2022-08-23
      * @desc    description
      */
     public function PayData()
     {
+        // [MUYING-二开] 支付门禁
+        $check = MuyingComplianceService::CheckPaymentEnabled();
+        if ($check !== true) {
+            return ApiService::ApiDataReturn($check);
+        }
         return ApiService::ApiDataReturn(CashierService::PayData($this->data_request));
     }
 }

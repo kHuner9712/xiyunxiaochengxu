@@ -17,6 +17,7 @@ use app\service\UserService;
 use app\service\PaymentService;
 use app\service\BuyService;
 use app\service\ResourcesService;
+use app\service\MuyingComplianceService;
 
 /**
  * 购买
@@ -52,6 +53,12 @@ class Buy extends Common
      */
     public function Index()
     {
+        // [MUYING-二开] 支付门禁：允许查看下单页，但支付方式列表为空
+        $payment_list = [];
+        if (MuyingComplianceService::IsPaymentEnabled()) {
+            $payment_list = PaymentService::BuyPaymentList(['is_enable'=>1, 'is_open_user'=>1]);
+        }
+
         // 请求参数
         $params = $this->data_request;
         $params['user'] = $this->user;
@@ -67,15 +74,16 @@ class Buy extends Common
         }
 
         // 默认支付方式
-        $params['payment_id'] = PaymentService::BuyDefaultPayment($params);
+        if (MuyingComplianceService::IsPaymentEnabled()) {
+            $params['payment_id'] = PaymentService::BuyDefaultPayment($params);
+        } else {
+            $params['payment_id'] = 0;
+        }
 
         // 订单初始化
         $ret = BuyService::BuyOrderInit($params);
         if(isset($ret['code']) && $ret['code'] == 0)
         {
-            // 支付方式
-            $payment_list = PaymentService::BuyPaymentList(['is_enable'=>1, 'is_open_user'=>1]);
-
             // 订单是否已提交、则直接进入订单支付
             if(isset($ret['data']['is_order_submit']) && $ret['data']['is_order_submit'] == 1)
             {
@@ -127,9 +135,13 @@ class Buy extends Common
      */
     public function Add()
     {
-        // 请求参数
+        // [MUYING-二开] 支付门禁：允许下单，但支付方式强制为0（待支付）
         $params = $this->data_request;
         $params['user'] = $this->user;
+
+        if (!MuyingComplianceService::IsPaymentEnabled()) {
+            $params['payment_id'] = 0;
+        }
 
         // 获取下单信息
         if(empty($params['goods_data']) && empty($params['ids']))

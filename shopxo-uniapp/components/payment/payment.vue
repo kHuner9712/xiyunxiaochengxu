@@ -78,6 +78,8 @@
     const app = getApp();
     import base64 from '@/common/js/lib/base64.js';
     import componentPopup from '@/components/popup/popup';
+    import { is_feature_enabled } from '@/common/js/config/phase-one-scope.js';
+    import { FeatureFlagKey } from '@/common/js/config/muying-constants.js';
     export default {
         name: 'pay',
         data() {
@@ -305,6 +307,12 @@
 
             // 支付方法
             pay_handle(order_id, payment_id = 0, payment_list = []) {
+                // [MUYING-二开] 支付门禁
+                if (!is_feature_enabled(FeatureFlagKey.PAYMENT)) {
+                    app.globalData.showToast('线上支付暂未开放');
+                    return;
+                }
+
                 // 没有指定支付方式则使用属性传过来的值
                 if((payment_list || null) != null && payment_list.length > 0) {
                     this.setData({
