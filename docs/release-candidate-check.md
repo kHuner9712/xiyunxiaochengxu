@@ -3,6 +3,9 @@
 > 生成时间：2026-04-28
 > 执行人：自动化脚本 + 人工审查
 
+> ⚠️ **当前仍未执行 HBuilderX 构建和 PHP CLI 语法检查**
+> ⚠️ **本报告为代码层 RC 检查，不等同于真实服务器 UAT**
+
 ---
 
 ## 1. 当前分支
@@ -19,14 +22,15 @@
 
 | 项目 | 值 |
 |------|-----|
-| Ahead commits | **33** |
+| Ahead commits | **34** |
 | 变更文件数 | **66** |
-| 增加行数 | +3,218 |
+| 增加行数 | +3,262 |
 | 删除行数 | -2,173 |
 
 ### Commit 列表
 
 ```
+0e607f8 docs(release): update release-candidate-check with real diff stats and scan results
 527cf9c docs(submit): add WeChat mini-program submission human tasks checklist
 aed40a0 docs(uat): add server acceptance and functional test checklist
 df2fd97 docs(release): add release candidate check report for phase1 merge
@@ -66,9 +70,8 @@ c07cb57 fix(security): redact API keys from docs and add cert patterns to gitign
 
 ## 3. 自检脚本结果
 
-```
-node scripts/check-phase1-release.js
-```
+> 执行命令：`node scripts/check-phase1-release.js`
+> 执行环境：Node.js v20.18.0 / Windows
 
 | 类别 | 结果 |
 |------|------|
@@ -76,6 +79,68 @@ node scripts/check-phase1-release.js
 | WARN | **3** |
 | BLOCKER | **0** |
 | 总计 | 22 |
+
+### 脚本完整输出
+
+```
+==========================================
+ 1. pages.json 高风险页面检查
+==========================================
+[PASS] pages.json 无高风险插件路径
+
+==========================================
+ 2. .env.example 密钥泄露检查
+==========================================
+[PASS] shopxo-uniapp\.env.production.example 无明显密钥泄露
+[PASS] shopxo-uniapp\.env.staging.example 无明显密钥泄露
+[PASS] shopxo-uniapp\.env.release.example 无明显密钥泄露
+[WARN] shopxo-backend\.env.example:15 可能包含真实密钥: PASSWORD = 请替换为强密码
+
+==========================================
+ 3. AppID 与测试号检查
+==========================================
+[WARN] manifest.json mp-weixin.appid 为空（构建时由 .env.production 注入）
+[WARN] project.config.json appid 为空
+
+==========================================
+ 4. 生产配置 HTTPS 校验
+==========================================
+[PASS] runtime-config.js 包含 HTTPS 校验
+[PASS] runtime-config.js 包含测试号 AppID 拦截
+[PASS] runtime-config.js 包含 localhost/IP 拦截
+[PASS] .env.production REQUEST_URL 使用 HTTPS: https://<PROD_API_BASE_URL>/
+
+==========================================
+ 5. 高风险关键词检查
+==========================================
+[PASS] 前端页面无高风险关键词命中（排除合规过滤代码）
+
+==========================================
+ 6. 后端安全配置检查
+==========================================
+[PASS] public/install.php 已删除
+[PASS] 后端 .env APP_DEBUG 已关闭
+[PASS] .gitignore 已忽略 .env.production
+
+==========================================
+ 7. 动态页面与支付页面门控检查
+==========================================
+[PASS] form-input 页面有 feature flag 门控（feature_dynamic_page_enabled）
+[PASS] diy 页面有 feature flag 门控（feature_dynamic_page_enabled）
+[PASS] design 页面有 feature flag 门控（feature_dynamic_page_enabled）
+[PASS] cashier 页面有 feature flag 门控（feature_payment_enabled）
+[PASS] paytips 页面有 feature flag 门控（feature_payment_enabled）
+[PASS] pages.json 未注册 form-preview 页面
+[PASS] pages.json 未注册 customview 页面
+
+==========================================
+ 检查汇总
+==========================================
+
+  PASS: 19  WARN: 3  BLOCKER: 0  总计: 22
+
+存在 3 个 WARN → 需人工确认后可提审
+```
 
 ### PASS 项（19）
 
@@ -156,41 +221,7 @@ node scripts/check-phase1-release.js
 
 ---
 
-## 6. 未解决 BLOCKER
-
-**无 BLOCKER。**
-
-所有自检项均为 PASS 或 WARN，WARN 项均为预期行为或低风险占位文本。
-
----
-
-## 7. 人工待办项
-
-| # | 待办 | 优先级 | 说明 |
-|---|------|--------|------|
-| 1 | HBuilderX 构建 mp-weixin | **P0** | 合并前必须确认构建无报错 |
-| 2 | `php -l` 逐文件语法检查 | **P0** | 部署前必须用 PHP CLI 验证 18 个改动文件（含 1 个已删除） |
-| 3 | 数据库迁移脚本执行 | **P1** | 需在生产环境执行 `muying-activity-signup-privacy-split-migration.sql`，注意表前缀替换 |
-| 4 | .env.production 配置 | **P1** | 确认生产环境 `feature_payment_enabled=0`、`feature_dynamic_page_enabled=0` 等一期关闭项 |
-| 5 | Nginx 配置部署 | **P1** | 参照 `deploy/nginx.production.example.conf` 更新生产 Nginx，deny /install.php |
-| 6 | AppID 注入验证 | **P2** | 构建时确认 .env.production 中 AppID 正确注入 manifest.json 和 project.config.json |
-| 7 | 合并后 main 分支部署验证 | **P2** | 合并后需在测试环境完整走一遍提审流程 |
-
----
-
-## 8. 合并建议
-
-| 项目 | 结论 |
-|------|------|
-| 是否存在 BLOCKER | ❌ 否 |
-| 是否可以创建 PR | ✅ 是 |
-| 是否可以自动 merge | ❌ 否 — 需人工确认上述待办项后手动合并 |
-
-**建议**：创建 PR `review-remediation-phase1 → main`，在 PR 描述中引用本文档，待人工完成 P0 待办后合并。
-
----
-
-## 9. 敏感信息扫描结果
+## 6. 敏感信息扫描结果
 
 > 扫描时间：2026-04-28
 > 扫描方式：git diff -S + grep 正则扫描
@@ -205,14 +236,35 @@ node scripts/check-phase1-release.js
 
 ---
 
-## 10. 自检脚本真实执行记录
+## 7. 未解决 BLOCKER
 
-> 执行时间：2026-04-28
-> 执行命令：`node scripts/check-phase1-release.js`
-> 执行环境：Node.js v20.18.0 / Windows
+**无 BLOCKER。**
 
-```
-PASS: 19  WARN: 3  BLOCKER: 0  总计: 22
-```
+所有自检项均为 PASS 或 WARN，WARN 项均为预期行为或低风险占位文本。
 
-与文档第 3 节记录一致，无变化。
+---
+
+## 8. 人工待办项
+
+| # | 待办 | 优先级 | 说明 |
+|---|------|--------|------|
+| 1 | HBuilderX 构建 mp-weixin | **P0** | 合并前必须确认构建无报错 |
+| 2 | `php -l` 逐文件语法检查 | **P0** | 部署前必须用 PHP CLI 验证 18 个改动文件（含 1 个已删除） |
+| 3 | 真实服务器 UAT | **P0** | 本报告为代码层 RC 检查，不等同于真实服务器 UAT |
+| 4 | 数据库迁移脚本执行 | **P1** | 需在生产环境执行 `muying-activity-signup-privacy-split-migration.sql`，注意表前缀替换 |
+| 5 | .env.production 配置 | **P1** | 确认生产环境 `feature_payment_enabled=0`、`feature_dynamic_page_enabled=0` 等一期关闭项 |
+| 6 | Nginx 配置部署 | **P1** | 参照 `deploy/nginx.production.example.conf` 更新生产 Nginx，deny /install.php |
+| 7 | AppID 注入验证 | **P2** | 构建时确认 .env.production 中 AppID 正确注入 manifest.json 和 project.config.json |
+| 8 | 合并后 main 分支部署验证 | **P2** | 合并后需在测试环境完整走一遍提审流程 |
+
+---
+
+## 9. 合并建议
+
+| 项目 | 结论 |
+|------|------|
+| 是否存在 BLOCKER | ❌ 否 |
+| 是否可以创建 PR | ✅ 是 |
+| 是否可以自动 merge | ❌ 否 — 需人工确认上述待办项后手动合并 |
+
+**建议**：创建 Draft PR `review-remediation-phase1 → main`，在 PR 描述中引用本文档，待人工完成 P0 待办后合并。
