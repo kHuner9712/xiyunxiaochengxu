@@ -62,6 +62,8 @@
 | 5.5 | 后台入口已重命名 | `admin.php` 已改为非默认名称 | 检查 `public/` 目录 |
 | 5.6 | 敏感目录已屏蔽 | `.git`/`.env`/`vendor` 不可通过 HTTP 访问 | Nginx 配置 |
 | 5.7 | 后台管理员密码已修改 | 非 admin/admin 默认密码 | 人工确认 |
+| 5.8 | SQL 迁移已执行且表前缀正确 | 所有迁移 SQL 按顺序执行；表前缀为 sxo_（如不同需全局替换迁移脚本中的前缀） | `node scripts/preflight/check-migration.js` |
+| 5.9 | 活动报名隐私授权字段已添加 | `sxo_activity_signup` 表含 `profile_sync_agreed` 和 `profile_sync_agreed_time` 字段 | `DESCRIBE sxo_activity_signup` |
 
 ## 6. Git 与敏感信息
 

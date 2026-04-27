@@ -237,7 +237,7 @@ compliance-scope.js
 7. docs/sql/muying-privacy-security-migration.sql # 隐私安全
 8. docs/sql/muying-sensitive-permission-migration.sql # 敏感权限
 9. docs/sql/muying-compliance-center-migration.sql # 合规中心
-10. docs/sql/muying-activity-signup-privacy-split-migration.sql # 隐私授权拆分
+10. docs/sql/muying-activity-signup-privacy-split-migration.sql # 隐私授权拆分（前缀安全+幂等，历史数据默认不回填）
 11. docs/sql/muying-feedback-type-migration.sql # 反馈类型
 12. docs/sql/yunxi-init-config.sql             # 初始配置数据
 13. docs/sql/yunxi-init-activity-demo.sql      # 活动演示数据
