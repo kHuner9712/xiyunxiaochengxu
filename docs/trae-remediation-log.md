@@ -1401,3 +1401,55 @@
 | commit | message |
 |--------|---------|
 | 0df8f17 | docs(deployment): add BT panel production guide and harden Nginx security rules |
+
+## 2026-04-27 — 第三二轮提审前二次加固
+
+### 整改目标
+
+在 review-remediation-phase1 分支上做提审前二次加固，修复合规门控缺口、增强支付拦截、完善路由守卫、确保 SQL 迁移幂等。
+
+### 核心变更
+
+1. **后端 Common.php 补充 cashier/paylog 映射** — CONTROLLER_FEATURE_MAP 从 27 扩展至 29，覆盖支付相关控制器安全网
+2. **前端 payment.vue 扩展支付方式过滤** — 从仅过滤 WalletPay 扩展为过滤全部 6 种不合规支付方式（WalletPay/ChargePayment/CoinPay/UniPayment/GiftCardPay/ScanPay）
+3. **前端 buy.vue 补充积分/虚拟币门控** — 积分抵扣 UI 和提交参数增加 feature_points_enabled 门控；虚拟币数据和提交参数增加 feature_coin_enabled 门控
+4. **前端 App.vue 路由拦截器补充 switchTab** — 从 3 种跳转方式扩展为 4 种（navigateTo/redirectTo/reLaunch/switchTab）
+5. **SQL 迁移脚本幂等修复** — muying-activity-signup-privacy-split-migration.sql 改为 information_schema 判断字段是否存在
+6. **检查脚本增强** — check-migration.js 识别 ON DUPLICATE KEY UPDATE 幂等保护
+
+### 修改文件清单
+
+| 文件 | 修改内容 |
+|------|----------|
+| shopxo-backend/app/api/controller/Common.php | CONTROLLER_FEATURE_MAP 增加 cashier/paylog |
+| shopxo-uniapp/components/payment/payment.vue | payment_list_filtered 扩展过滤 + pay_handle 扩展拦截 |
+| shopxo-uniapp/pages/buy/buy.vue | 积分/虚拟币 UI 和提交参数增加 feature flag 门控 |
+| shopxo-uniapp/App.vue | 路由拦截器增加 switchTab |
+| docs/sql/muying-activity-signup-privacy-split-migration.sql | 改为幂等版本 |
+| scripts/preflight/check-migration.js | 识别 ON DUPLICATE KEY UPDATE |
+
+### 自测结果
+
+| 验证项 | 结果 |
+|--------|------|
+| CONTROLLER_FEATURE_MAP 覆盖 29 个控制器 | ✅ |
+| payment.vue 过滤 6 种不合规支付方式 | ✅ |
+| buy.vue 积分/虚拟币受 feature flag 控制 | ✅ |
+| 路由拦截器覆盖 4 种跳转方式 | ✅ |
+| SQL 迁移检查 0 错误 2 警告 | ✅ |
+| 自检脚本 11 PASS / 3 WARN / 1 BLOCKER(install.php) | ✅ |
+| 无真实密钥/密码/IP 泄露到 git 跟踪文件 | ✅ |
+
+### 遗留风险
+
+| # | 风险 | 严重性 | 说明 |
+|---|------|--------|------|
+| 1 | install.php 仍存在于仓库 | BLOCKER(部署时) | ShopXO 原始文件，部署时由脚本删除 |
+| 2 | git 历史中仍有旧密钥 | 高 | 需 git filter-repo 清理并轮换密钥 |
+| 3 | 演示数据 SQL 非幂等 | 低 | 仅执行一次，重复执行会产生重复数据 |
+
+### Commit 信息
+
+| commit | message |
+|--------|---------|
+| 13bf70f | fix(review): harden compliance gates for RC submission readiness |
