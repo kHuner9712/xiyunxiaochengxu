@@ -179,6 +179,9 @@ c07cb57 fix(security): redact API keys from docs and add cert patterns to gitign
 > ⚠️ 当前环境未安装 PHP CLI，无法执行 `php -l`。
 > 以下使用 Node.js 脚本执行基础结构检查（花括号匹配、PHP 标签、class/function 结构），**不等同于 `php -l` 编译级检查**。
 > 部署前必须安装 PHP CLI 并执行 `php -l` 逐文件验证。
+>
+> 📖 完整验收流程见 [docs/build-verification.md](build-verification.md) A 节
+> 🔧 自动化脚本：`bash scripts/check-php-syntax.sh`
 
 | # | 文件 | 行数 | 结构检查结果 |
 |---|------|------|-------------|
@@ -218,6 +221,8 @@ c07cb57 fix(security): redact API keys from docs and add cert patterns to gitign
 **原因**：本项目为 HBuilderX 管理的 uni-app 项目，无 CLI 构建脚本。当前开发环境未安装 HBuilderX CLI，无法执行 `uni build -p mp-weixin`。
 
 **人工待办**：合并前必须在 HBuilderX 中执行「发行 → 小程序-微信」构建，确认无编译错误。
+
+> 📖 完整验收流程见 [docs/build-verification.md](build-verification.md) B 节
 
 ---
 
