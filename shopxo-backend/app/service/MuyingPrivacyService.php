@@ -9,19 +9,33 @@ class MuyingPrivacyService
     const IV_LENGTH = 16;
     const HASH_ALGO = 'sha256';
 
+    // [MUYING-二开] 密钥最小长度（原始值需 >= 此值才视为有效）
+    const MIN_KEY_LENGTH = 16;
+
     private static function GetEncryptionKey()
     {
         $key = env('MUYING_PRIVACY_KEY', '');
         if (empty($key)) {
             $key = MyC('muying_privacy_key', '');
         }
-        if (empty($key)) {
-            Log::error('[MuyingPrivacy] 加密密钥未配置，请设置 MUYING_PRIVACY_KEY 环境变量或 muying_privacy_key 配置项');
+        if (empty($key) || strlen($key) < self::MIN_KEY_LENGTH) {
+            Log::error('[MuyingPrivacy] 加密密钥未配置或过短（需>=' . self::MIN_KEY_LENGTH . '字符），请设置 MUYING_PRIVACY_KEY 环境变量或 muying_privacy_key 配置项');
             return '';
         }
         return hash('sha256', $key, true);
     }
 
+    // [MUYING-二开] 检查密钥是否可用（fail-closed 前置检查）
+    public static function IsKeyAvailable()
+    {
+        $key = env('MUYING_PRIVACY_KEY', '');
+        if (empty($key)) {
+            $key = MyC('muying_privacy_key', '');
+        }
+        return !empty($key) && strlen($key) >= self::MIN_KEY_LENGTH;
+    }
+
+    // [MUYING-二开] fail-closed：密钥缺失时禁止返回原始值，返回 null 并记录错误
     public static function EncryptSensitive($value)
     {
         if (empty($value)) {
@@ -29,13 +43,14 @@ class MuyingPrivacyService
         }
         $key = self::GetEncryptionKey();
         if (empty($key)) {
-            return $value;
+            Log::error('[MuyingPrivacy] EncryptSensitive 密钥不可用，拒绝明文写入');
+            return null;
         }
         $iv = openssl_random_pseudo_bytes(self::IV_LENGTH);
         $encrypted = openssl_encrypt($value, self::CIPHER, $key, OPENSSL_RAW_DATA, $iv);
         if ($encrypted === false) {
             Log::error('[MuyingPrivacy] 加密失败');
-            return $value;
+            return null;
         }
         return base64_encode($iv . $encrypted);
     }
@@ -82,6 +97,7 @@ class MuyingPrivacyService
         return $value;
     }
 
+    // [MUYING-二开] fail-closed：HashPhone 密钥缺失时拒绝生成无盐 hash
     public static function HashPhone($phone)
     {
         if (empty($phone)) {
@@ -90,6 +106,10 @@ class MuyingPrivacyService
         $salt = env('MUYING_PRIVACY_KEY', '');
         if (empty($salt)) {
             $salt = MyC('muying_privacy_key', '');
+        }
+        if (empty($salt) || strlen($salt) < self::MIN_KEY_LENGTH) {
+            Log::error('[MuyingPrivacy] HashPhone 密钥不可用，拒绝生成无盐 hash');
+            return '';
         }
         return hash(self::HASH_ALGO, strtolower(trim($phone)) . $salt);
     }

@@ -13,6 +13,7 @@ namespace app\api\controller;
 use app\service\ApiService;
 use app\service\UserService;
 use app\service\MuyingPrivacyService;
+use app\service\MuyingUploadSecurityService;
 
 /**
  * 用户资料
@@ -95,6 +96,12 @@ class Personal extends Common
      */
     public function UserAvatarUpload()
     {
+        // [MUYING-二开] 头像上传安全检查（后缀、MIME、大小）
+        $security_ret = MuyingUploadSecurityService::CheckAvatarUpload('file');
+        if ($security_ret['code'] != 0) {
+            return ApiService::ApiDataReturn($security_ret);
+        }
+
         $params = $this->data_request;
         $params['user'] = $this->user;
         $params['img_field'] = 'file';

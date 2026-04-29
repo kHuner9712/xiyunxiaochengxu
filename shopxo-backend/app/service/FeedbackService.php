@@ -109,6 +109,12 @@ class FeedbackService
         $feedback_type = !empty($params['type']) && in_array($params['type'], $valid_types) ? $params['type'] : 'feedback';
 
         $contact_plain = !empty($params['contact']) ? strip_tags(trim($params['contact'])) : '';
+
+        // [MUYING-二开] fail-closed：联系方式非空时，隐私加密密钥不可用则阻断写入
+        if (!empty($contact_plain) && !MuyingPrivacyService::IsKeyAvailable()) {
+            return DataReturn('系统隐私配置异常，暂时无法提交含联系方式的反馈，请联系管理员', -500);
+        }
+
         $data = [
             'user_id'       => $user_id,
             'type'          => $feedback_type,

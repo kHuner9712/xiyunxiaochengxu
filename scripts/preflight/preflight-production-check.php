@@ -568,6 +568,325 @@ if (file_exists($uniapp_prod_env)) {
 }
 
 // ============================================================
+// 18. [MUYING-二开] composer.lock 存在性检查
+// ============================================================
+section("18. composer.lock 检查");
+
+$composer_lock_path = $repo_path . '/shopxo-backend/composer.lock';
+if (file_exists($composer_lock_path)) {
+    pass_item("composer.lock 存在，依赖可复现");
+} else {
+    block_item("composer.lock 不存在，必须运行 composer update 生成并提交");
+}
+
+// ============================================================
+// 19. [MUYING-二开] composer.json 核心依赖版本约束检查
+// ============================================================
+section("19. composer.json 核心依赖版本约束检查");
+
+$composer_json_path = $repo_path . '/shopxo-backend/composer.json';
+if (file_exists($composer_json_path)) {
+    $composer_content = file_get_contents($composer_json_path);
+    $composer_data = json_decode($composer_content, true);
+    $wildcard_found = false;
+    if (!empty($composer_data['require'])) {
+        foreach ($composer_data['require'] as $pkg => $ver) {
+            if ($ver === '*' && $pkg !== 'php') {
+                block_item("composer.json 核心依赖 {$pkg} 版本约束为 '*'，必须指定合理版本范围");
+                $wildcard_found = true;
+            }
+        }
+    }
+    if (!empty($composer_data['require-dev'])) {
+        foreach ($composer_data['require-dev'] as $pkg => $ver) {
+            if ($ver === '*') {
+                warn_item("composer.json require-dev {$pkg} 版本约束为 '*'，建议指定版本范围");
+                $wildcard_found = true;
+            }
+        }
+    }
+    if (!$wildcard_found) {
+        pass_item("composer.json 核心依赖版本约束合理");
+    }
+} else {
+    block_item("composer.json 不存在");
+}
+
+// ============================================================
+// 20. [MUYING-二开] 敏感文件 Git 跟踪检查
+// ============================================================
+section("20. 敏感文件 Git 跟踪检查");
+
+$sensitive_patterns = [
+    '.env', '.env.production', '.env.local',
+    '.pem', '.key', '.cert', '.crt', '.p12', '.jks',
+];
+$sensitive_dirs = [
+    'shopxo-backend/vendor/',
+    'shopxo-backend/runtime/',
+    'shopxo-backend/public/static/upload/',
+    'shopxo-uniapp/node_modules/',
+    'shopxo-uniapp/unpackage/',
+];
+
+$tracked_output = [];
+exec("cd " . escapeshellarg($repo_path) . " && git ls-files 2>/dev/null", $tracked_output);
+$sensitive_tracked = false;
+
+foreach ($tracked_output as $tf) {
+    foreach ($sensitive_dirs as $dir) {
+        if (strpos($tf, $dir) === 0) {
+            block_item("Git 跟踪了敏感目录文件: {$tf}，必须从版本控制中移除");
+            $sensitive_tracked = true;
+        }
+    }
+    $tf_lower = strtolower($tf);
+    if (preg_match('/\.(pem|key|cert|crt|p12|jks)$/i', $tf)) {
+        block_item("Git 跟踪了证书/密钥文件: {$tf}");
+        $sensitive_tracked = true;
+    }
+}
+
+if (!$sensitive_tracked) {
+    pass_item("Git 未跟踪敏感目录和证书文件");
+}
+
+// ============================================================
+// 21. [MUYING-二开] public/install.php 和 public/admin.php 检查
+// ============================================================
+section("21. 安装入口和后台入口检查");
+
+$install_php = $repo_path . '/shopxo-backend/public/install.php';
+if (file_exists($install_php)) {
+    block_item("public/install.php 存在，生产环境必须删除");
+} else {
+    pass_item("public/install.php 不存在");
+}
+
+$admin_php = $repo_path . '/shopxo-backend/public/admin.php';
+if (file_exists($admin_php)) {
+    warn_item("public/admin.php 存在，建议确认后台入口已重命名");
+} else {
+    pass_item("public/admin.php 不存在（可能已重命名）");
+}
+
+// ============================================================
+// 22. [MUYING-二开] PHP 调试残留检查
+// ============================================================
+section("22. PHP 调试残留检查");
+
+$php_debug_patterns = [
+    '/\bvar_dump\s*\(/' => 'var_dump',
+    '/\bprint_r\s*\(/' => 'print_r',
+    '/\bdump\s*\(/' => 'dump (symfony)',
+];
+
+$php_scan_dirs = [
+    $repo_path . '/shopxo-backend/app/',
+    $repo_path . '/shopxo-backend/extend/base/',
+];
+
+$php_debug_found = false;
+foreach ($php_scan_dirs as $scan_dir) {
+    if (!is_dir($scan_dir)) continue;
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($scan_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::LEAVES_ONLY
+    );
+    foreach ($iterator as $file) {
+        if ($file->getExtension() !== 'php') continue;
+        $content = file_get_contents($file->getPathname());
+        $relative = str_replace($repo_path . '/', '', $file->getPathname());
+        if (preg_match('/\bvar_dump\s*\(/', $content)) {
+            warn_item("PHP 调试残留 var_dump 在: {$relative}");
+            $php_debug_found = true;
+        }
+        if (preg_match('/\bprint_r\s*\(/', $content) && strpos($content, 'print_r($data)') === false) {
+            // 排除模板示例代码
+        } elseif (preg_match('/\{\{:print_r/', $content)) {
+            block_item("PHP 调试残留 print_r 在模板: {$relative}");
+            $php_debug_found = true;
+        }
+        if (preg_match('/\bdie\s*\(/', $content) && !preg_match('/die\s*\(\s*[\'"]/', $content)) {
+            // die('message') 是正常逻辑，die() 无参数或 die($var) 是调试残留
+        }
+    }
+}
+if (!$php_debug_found) {
+    pass_item("PHP 调试残留检查通过");
+}
+
+// ============================================================
+// 23. [MUYING-二开] 前端调试残留检查
+// ============================================================
+section("23. 前端调试残留检查");
+
+$frontend_scan_dirs = [
+    $repo_path . '/shopxo-uniapp/pages/',
+    $repo_path . '/shopxo-uniapp/components/',
+    $repo_path . '/shopxo-uniapp/common/',
+];
+
+$frontend_debug_found = false;
+foreach ($frontend_scan_dirs as $scan_dir) {
+    if (!is_dir($scan_dir)) continue;
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($scan_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::LEAVES_ONLY
+    );
+    foreach ($iterator as $file) {
+        $ext = $file->getExtension();
+        if (!in_array($ext, ['js', 'vue'])) continue;
+        $content = file_get_contents($file->getPathname());
+        $relative = str_replace($repo_path . '/', '', $file->getPathname());
+        if (preg_match('/\bconsole\.log\s*\(/', $content)) {
+            warn_item("前端调试残留 console.log 在: {$relative}");
+            $frontend_debug_found = true;
+        }
+        if (preg_match('/\bdebugger\s*;/', $content)) {
+            block_item("前端调试残留 debugger 在: {$relative}");
+            $frontend_debug_found = true;
+        }
+        if (preg_match('/\balert\s*\(/', $content) && !preg_match('/AMUI\.dialog\.alert|uni\.showModal|showModal/', $content)) {
+            warn_item("前端调试残留 alert() 在: {$relative}");
+            $frontend_debug_found = true;
+        }
+    }
+}
+if (!$frontend_debug_found) {
+    pass_item("前端调试残留检查通过");
+}
+
+// ============================================================
+// 24. [MUYING-二开] 隐私加密密钥缺失明文降级检查
+// ============================================================
+section("24. 隐私加密 fail-closed 检查");
+
+$privacy_service_path = $repo_path . '/shopxo-backend/app/service/MuyingPrivacyService.php';
+if (file_exists($privacy_service_path)) {
+    $ps_content = file_get_contents($privacy_service_path);
+
+    if (strpos($ps_content, 'return $value;') !== false && preg_match('/EncryptSensitive/', $ps_content)) {
+        if (preg_match('/function EncryptSensitive.*?return \$value;/s', $ps_content)) {
+            block_item("EncryptSensitive 仍存在密钥缺失时返回原始值的降级逻辑");
+        } else {
+            pass_item("EncryptSensitive 已实现 fail-closed");
+        }
+    } else {
+        pass_item("EncryptSensitive 未发现明文降级");
+    }
+
+    if (strpos($ps_content, 'IsKeyAvailable') !== false) {
+        pass_item("IsKeyAvailable() 方法已存在");
+    } else {
+        block_item("IsKeyAvailable() 方法不存在，无法做 fail-closed 前置检查");
+    }
+
+    if (preg_match('/HashPhone.*?return hash\(/s', $ps_content) && !preg_match('/HashPhone.*?IsKeyAvailable|HashPhone.*?MIN_KEY_LENGTH/s', $ps_content)) {
+        block_item("HashPhone 未检查密钥可用性，可能生成无盐 hash");
+    } else {
+        pass_item("HashPhone 已做密钥可用性检查");
+    }
+} else {
+    block_item("MuyingPrivacyService.php 不存在");
+}
+
+// ============================================================
+// 25. [MUYING-二开] 高风险功能默认关闭检查
+// ============================================================
+section("25. 高风险功能默认关闭检查");
+
+$compliance_service_path = $repo_path . '/shopxo-backend/app/service/MuyingComplianceService.php';
+if (file_exists($compliance_service_path)) {
+    $cs_content = file_get_contents($compliance_service_path);
+
+    $required_blocked = ['wallet', 'coin', 'distribution', 'shop', 'realstore', 'hospital', 'giftcard', 'scanpay', 'weixinliveplayer'];
+    $all_blocked = true;
+    foreach ($required_blocked as $plugin) {
+        if (strpos($cs_content, "'{$plugin}'") === false && strpos($cs_content, '"{$plugin}"') === false) {
+            block_item("高风险插件 {$plugin} 未在 PHASE_ONE_BLOCKED_PLUGINS 中");
+            $all_blocked = false;
+        }
+    }
+    if ($all_blocked) {
+        pass_item("所有高风险插件已在 PHASE_ONE_BLOCKED_PLUGINS 中");
+    }
+} else {
+    block_item("MuyingComplianceService.php 不存在");
+}
+
+// ============================================================
+// 26. [MUYING-二开] pages.json 一期禁止页面检查
+// ============================================================
+section("26. pages.json 一期禁止页面检查");
+
+$pages_json_path = $repo_path . '/shopxo-uniapp/pages.json';
+if (file_exists($pages_json_path)) {
+    $pages_content = file_get_contents($pages_json_path);
+    $blocked_page_patterns = [
+        '/plugins/wallet/' => '钱包',
+        '/plugins/coin/' => '虚拟币',
+        '/plugins/distribution/' => '分销',
+        '/plugins/shop/' => '第三方商家',
+        '/plugins/realstore/' => '门店',
+        '/plugins/hospital/' => '医疗问诊',
+        '/plugins/giftcard/' => '礼品卡',
+        '/plugins/scanpay/' => '扫码支付',
+        '/plugins/weixinliveplayer/' => '直播',
+        '/plugins/membershiplevelvip/' => '付费会员',
+        '/plugins/ask/' => 'UGC社区',
+        '/plugins/blog/' => '博客',
+    ];
+    $found_blocked_pages = false;
+    foreach ($blocked_page_patterns as $pattern => $desc) {
+        if (strpos($pages_content, $pattern) !== false) {
+            block_item("pages.json 包含一期禁止页面: {$pattern}（{$desc}）");
+            $found_blocked_pages = true;
+        }
+    }
+    if (!$found_blocked_pages) {
+        pass_item("pages.json 未包含一期禁止页面");
+    }
+} else {
+    warn_item("pages.json 不存在，无法检查");
+}
+
+// ============================================================
+// 27. [MUYING-二开] AppID/域名/HTTPS 状态（仅 WARN，不作为 BLOCKER）
+// ============================================================
+section("27. AppID/域名/HTTPS 状态（仅 WARN）");
+
+$manifest_path = $repo_path . '/shopxo-uniapp/manifest.json';
+if (file_exists($manifest_path)) {
+    $m_data = json_decode(file_get_contents($manifest_path), true);
+    $appid = $m_data['mp-weixin']['appid'] ?? '';
+    if (empty($appid)) {
+        warn_item("manifest.json AppID 为空，提审前必须配置正式 AppID");
+    } elseif (in_array($appid, ['wxda7779770f53e901', 'wx1234567890', 'wx0000000000'])) {
+        warn_item("manifest.json 使用测试号 AppID: {$appid}，提审前必须替换为正式 AppID");
+    } else {
+        warn_item("manifest.json AppID 已配置: {$appid}（需确认是否为正式 AppID）");
+    }
+} else {
+    warn_item("manifest.json 不存在");
+}
+
+$prod_env_check = $repo_path . '/shopxo-uniapp/.env.production';
+if (file_exists($prod_env_check)) {
+    $pe_content = file_get_contents($prod_env_check);
+    if (preg_match('/UNI_APP_REQUEST_URL\s*=\s*(.+)/', $pe_content, $m)) {
+        $url = trim($m[1]);
+        if (strpos($url, 'https://') === 0) {
+            warn_item("生产 request_url 使用 HTTPS（需确认域名已备案）: {$url}");
+        } else {
+            warn_item("生产 request_url 非 HTTPS，提审前必须配置 HTTPS+已备案域名");
+        }
+    }
+} else {
+    warn_item(".env.production 不存在，提审前必须创建并配置正式域名");
+}
+
+// ============================================================
 // 汇总
 // ============================================================
 section("检查汇总");

@@ -501,6 +501,11 @@ class ActivityService
             return DataReturn('备注信息不能超过200字', -1);
         }
 
+        // [MUYING-二开] fail-closed：隐私加密密钥不可用时阻断敏感数据写入
+        if (!MuyingPrivacyService::IsKeyAvailable()) {
+            return DataReturn('系统隐私配置异常，暂时无法报名，请联系管理员', -500);
+        }
+
         $activity_id = intval($params['activity_id']);
         $user_id = intval($params['user']['id']);
 

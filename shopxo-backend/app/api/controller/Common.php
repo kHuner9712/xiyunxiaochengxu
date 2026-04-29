@@ -245,7 +245,7 @@ class Common extends BaseController
         try {
             \think\facade\Log::write('[MUYING] API feature blocked: key=' . $feature_flag_key . ' ctrl=' . $controller . '/' . $action . ' uid=' . $user_id . ' ip=' . $ip . ' reason=' . $reason, 'warning');
         } catch (\Exception $e) {}
-        exit(json_encode(DataReturn($reason, -403)));
+        $this->ApiExit(DataReturn($reason, -403));
     }
 
     /**
@@ -335,9 +335,23 @@ class Common extends BaseController
         $act = strtolower($this->action_name);
         $payment_check = MuyingComplianceService::AssertPaymentEnabledForAction($ctrl, $act);
         if ($payment_check !== true) {
-            exit(json_encode($payment_check));
+            $this->ApiExit($payment_check);
         }
 	}
+
+    // [MUYING-二开] 统一 JSON 响应终止方法
+    // 所有二开拦截点（功能关闭、支付拦截、隐私配置异常等）统一使用此方法响应
+    protected function ApiExit($data_return, $http_code = 200)
+    {
+        if (!is_array($data_return) || !isset($data_return['code'])) {
+            $data_return = DataReturn('操作失败', -1);
+        }
+        $response = response(json_encode($data_return, JSON_UNESCAPED_UNICODE), $http_code);
+        $response->header([
+            'Content-Type' => 'application/json; charset=utf-8',
+        ]);
+        throw new \think\exception\HttpResponseException($response);
+    }
 
 	/**
      * 空方法响应

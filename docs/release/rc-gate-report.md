@@ -149,7 +149,7 @@
 | DATABASE.CHARSET | 字符集 | utf8mb4 | utf8mb4 |
 | DATABASE.PREFIX | 表前缀 | sxo_ | sxo_ |
 | MUYING_QUALIFICATION_MODE | 资质门禁模式 | phase_one | phase_one |
-| MUYING_PRIVACY_KEY | 隐私加密密钥 | 生成 64 位 hex | 同左 |
+| MUYING_PRIVACY_KEY | 隐私加密密钥（**必填，缺失会阻断敏感数据写入**） | 生成 64 位 hex | 同左 |
 
 #### 前端 `shopxo-uniapp/.env.production`
 
@@ -228,7 +228,7 @@ bash scripts/preflight/check-wechat-submit-readiness.sh .
 | 120+ 个插件页面未在 pages.json 注册 | P2 | 一期路由守卫会拦截，不会导航到这些页面 |
 | 15+ 个用户页面缺少显式登录检查 | P2 | API 层 is_login_check 兜底 |
 | chooseAvatar 按钮 @tap 和 open-type 可能双重触发 | P2 | 实际测试未发现重复调用 |
-| CheckFeatureEnabled 使用 exit() 硬终止 | P3 | 二期改为异常抛出 |
+| CheckFeatureEnabled 使用 exit() 硬终止 | P3 | 已改为 ApiExit() 统一响应，使用 HttpResponseException |
 | MuyingPrivacyService::CanViewSensitive 权限过宽 | P3 | 二期增加角色检查 |
 
 ### 7.2 外部阻塞项
@@ -247,7 +247,7 @@ bash scripts/preflight/check-wechat-submit-readiness.sh .
 |------|----------|
 | 提审时功能描述触发敏感词 | 提审材料禁用"平台入驻/社区/医疗/直播/分销/钱包"等词 |
 | 高风险功能前端隐藏但后端仍可调用 | 已实现 API 守卫 + 路由拦截双重拦截 |
-| 隐私数据泄露 | 已实现 AES-256-CBC 加密 + 脱敏展示 |
+| 隐私数据泄露 | 已实现 AES-256-CBC 加密 + 脱敏展示 + fail-closed（密钥缺失时拒绝写入） |
 
 ---
 
@@ -310,7 +310,7 @@ bash scripts/deploy/fix-permissions.sh /www/wwwroot/yunxi-api
 | 脚本 | 检查内容 | 输出等级 |
 |------|----------|----------|
 | `preflight-production-check.sh` | APP_DEBUG/HTTPS/功能开关/测试AppID/风险配置 | PASS/WARN/BLOCKER |
-| `preflight-production-check.php` | 同上（Windows/PHP 版） | PASS/WARN/BLOCKER |
+| `preflight-production-check.php` | 同上 + composer.lock/依赖版本/敏感文件跟踪/安装入口/调试残留/隐私fail-closed/高风险功能默认关闭/pages.json禁止页面 | PASS/WARN/BLOCKER |
 | `check-release-placeholders.sh` | manifest/project.config/.env 占位符/空值/IP/测试值 | PASS/WARN/BLOCKER |
 | `check-runtime-config.sh` | 数据库表/功能开关/邀请配置/客服电话/隐私协议/支付方式 | PASS/WARN/BLOCKER |
 | `check-admin-bootstrap.sh` | 后台入口/控制器/视图/菜单权限 | PASS/WARN/BLOCKER |

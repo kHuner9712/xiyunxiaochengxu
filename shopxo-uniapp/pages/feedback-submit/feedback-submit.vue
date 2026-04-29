@@ -50,7 +50,7 @@
 
             <!-- 提交按钮 -->
             <view class="submit-container margin-top-main">
-                <button class="submit-btn cr-white fw-b text-size-md round" @tap="submit_event">提交反馈</button>
+                <button class="submit-btn cr-white fw-b text-size-md round" :disabled="submitting" @tap="submit_event">{{ submitting ? '提交中...' : '提交反馈' }}</button>
             </view>
         </view>
 
@@ -87,6 +87,8 @@
                 stage_index: 0,
                 current_stage: '',
                 current_stage_text: '',
+                // [MUYING-二开] 防重复提交 + loading 状态
+                submitting: false,
             };
         },
 
@@ -156,6 +158,9 @@
             submit_event() {
                 var self = this;
 
+                // [MUYING-二开] 防重复提交
+                if (self.submitting) return;
+
                 if (!self.form.content || self.form.content.trim().length === 0) {
                     app.globalData.showToast('请输入反馈内容');
                     return;
@@ -165,6 +170,8 @@
                     app.globalData.showToast('反馈内容不能超过500字');
                     return;
                 }
+
+                self.setData({ submitting: true });
 
                 http_request({
                     controller: 'feedback',
@@ -191,6 +198,10 @@
                         if (!err.feature_disabled && !err.login_expired) {
                             app.globalData.showToast(err.errMsg || '提交失败，请重试');
                         }
+                    },
+                    // [MUYING-二开] 确保 loading 状态恢复
+                    complete: function () {
+                        self.setData({ submitting: false });
                     },
                 });
             },

@@ -41,6 +41,8 @@ FEATURE_FLAG_ACTION_MAP['design'] = FeatureFlagKey.DYNAMIC_PAGE;
 
 var LOGIN_EXPIRED_CODES = [-100, -9999];
 var FEATURE_DISABLED_CODE = -403;
+// [MUYING-二开] 隐私配置异常码
+var PRIVACY_ERROR_CODE = -500;
 var DEFAULT_LOADING_TITLE = '加载中...';
 var _loading_count = 0;
 
@@ -193,6 +195,17 @@ function request(options) {
                     }
                 }
                 if (options.fail) options.fail({ errMsg: msg || TipMessage.FEATURE_DISABLED, code: code, feature_disabled: true });
+                if (options.complete) options.complete(res);
+                return;
+            }
+
+            // [MUYING-二开] 隐私配置异常拦截，前端友好提示
+            if (code === PRIVACY_ERROR_CODE) {
+                logger.error('HTTP', '隐私配置异常 ' + controller + '/' + action + ' msg=' + msg);
+                if (!options.silent) {
+                    uni.showToast({ title: msg || '系统配置异常，请联系管理员', icon: 'none', duration: 3000 });
+                }
+                if (options.fail) options.fail({ errMsg: msg || '系统配置异常', code: code, privacy_error: true });
                 if (options.complete) options.complete(res);
                 return;
             }

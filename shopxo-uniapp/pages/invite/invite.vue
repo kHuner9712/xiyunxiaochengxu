@@ -240,6 +240,14 @@
                             data_list_loding_status: (result.page_total || 1) <= self.data_page ? 0 : 1,
                         });
                     },
+                    // [MUYING-二开] 补充缺失的 fail 回调，防止错误静默
+                    fail: function (err) {
+                        if (err && err.network_error) {
+                            app.globalData.showToast('网络异常，邀请记录加载失败');
+                        } else if (!err.feature_disabled && !err.login_expired) {
+                            app.globalData.showToast(err.errMsg || '邀请记录加载失败');
+                        }
+                    },
                     complete: function () {
                         self.setData({ data_is_loading: 0 });
                     },
