@@ -80,6 +80,12 @@ class AttachmentApiService
      */
     public static function Upload($params = [])
     {
+        // [MUYING-二开] 通用上传安全前置检查（危险后缀 + 真实 MIME）
+        $security_ret = MuyingUploadSecurityService::CheckGeneralUpload('file');
+        if ($security_ret['code'] != 0) {
+            return $security_ret;
+        }
+
         // 请求参数
         $p = [
             [

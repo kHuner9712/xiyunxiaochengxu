@@ -493,7 +493,7 @@ section("15. 真实密钥泄露检查");
 $secret_patterns = [
     '/MUYING_PRIVACY_KEY\s*=\s*[0-9a-f]{32,}/i' => 'MUYING_PRIVACY_KEY 可能包含真实密钥',
     '/MYSQL_ROOT_PASSWORD\s*=\s*(?!CHANGE_ME)[^\s]+/i' => 'MYSQL_ROOT_PASSWORD 可能包含真实密码',
-    '/PASSWORD\s*=\s*(?!{{DB_PASS}})(?!{{PRIVACY_KEY}})(?!CHANGE_ME)[^\s{\[{]+/i' => 'PASSWORD 可能包含真实密码',
+    '/PASSWORD\s*=\s*(?!{{DB_PASS}})(?!{{PRIVACY_KEY}})(?!CHANGE_ME)(?!请替换)[^\s{\[{]+/i' => 'PASSWORD 可能包含真实密码',
 ];
 
 $tracked_files_output = [];
@@ -766,14 +766,20 @@ $privacy_service_path = $repo_path . '/shopxo-backend/app/service/MuyingPrivacyS
 if (file_exists($privacy_service_path)) {
     $ps_content = file_get_contents($privacy_service_path);
 
-    if (strpos($ps_content, 'return $value;') !== false && preg_match('/EncryptSensitive/', $ps_content)) {
-        if (preg_match('/function EncryptSensitive.*?return \$value;/s', $ps_content)) {
-            block_item("EncryptSensitive 仍存在密钥缺失时返回原始值的降级逻辑");
-        } else {
-            pass_item("EncryptSensitive 已实现 fail-closed");
+    // [MUYING-二开] 提取 EncryptSensitive 函数体，检查是否仍存在密钥缺失时 return $value 降级
+    $encrypt_has_plaintext_fallback = false;
+    if (preg_match('/function\s+EncryptSensitive\s*\([^)]*\)\s*\{(.*?)\n    \}/s', $ps_content, $encrypt_match)) {
+        $encrypt_body = $encrypt_match[1];
+        // 排除 empty($value) 检查后的 return $value（这是正常逻辑：空值不需要加密）
+        $encrypt_body_filtered = preg_replace('/if\s*\(\s*empty\s*\(\s*\$value\s*\)\s*\)\s*\{\s*return\s+\$value\s*;\s*\}/s', '', $encrypt_body);
+        if (preg_match('/return\s+\$value\s*;/', $encrypt_body_filtered)) {
+            $encrypt_has_plaintext_fallback = true;
         }
+    }
+    if ($encrypt_has_plaintext_fallback) {
+        block_item("EncryptSensitive 仍存在密钥缺失时返回原始值的降级逻辑");
     } else {
-        pass_item("EncryptSensitive 未发现明文降级");
+        pass_item("EncryptSensitive 已实现 fail-closed");
     }
 
     if (strpos($ps_content, 'IsKeyAvailable') !== false) {

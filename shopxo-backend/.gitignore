@@ -16,6 +16,8 @@ public/download/*
 logs/
 *.log
 *.lock
+# [MUYING-二开] composer.lock 必须提交以确保依赖可复现
+!composer.lock
 
 # Local IDE / temp
 .DS_Store
