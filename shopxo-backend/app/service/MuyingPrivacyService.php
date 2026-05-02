@@ -25,7 +25,7 @@ class MuyingPrivacyService
         return hash('sha256', $key, true);
     }
 
-    // [MUYING-二开] 检查密钥是否可用（fail-closed 前置检查）
+    // [MUYING-二开] 检查密钥是否可用（fail-closed 前置检查，返回 bool）
     public static function IsKeyAvailable()
     {
         $key = env('MUYING_PRIVACY_KEY', '');
@@ -33,6 +33,26 @@ class MuyingPrivacyService
             $key = MyC('muying_privacy_key', '');
         }
         return !empty($key) && strlen($key) >= self::MIN_KEY_LENGTH;
+    }
+
+    // [MUYING-二开] 断言密钥就绪（生产环境密钥缺失时抛出异常，开发环境仅 warning）
+    // 调用方可在 Service 入口统一调用，避免分散检查遗漏
+    public static function AssertPrivacyKeyReady()
+    {
+        if (self::IsKeyAvailable()) {
+            return true;
+        }
+
+        $is_production = !env('APP_DEBUG', false);
+        $msg = '[MuyingPrivacy] 隐私加密密钥未配置或过短（需>=' . self::MIN_KEY_LENGTH . '字符），请设置 MUYING_PRIVACY_KEY 环境变量';
+
+        if ($is_production) {
+            Log::critical($msg . ' [PRODUCTION-REJECTED]');
+            throw new \RuntimeException('系统隐私配置异常，请联系管理员');
+        }
+
+        Log::warning($msg . ' [DEV-WARNING-ONLY]');
+        return false;
     }
 
     // [MUYING-二开] fail-closed：密钥缺失时禁止返回原始值，返回 null 并记录错误

@@ -171,6 +171,13 @@ class MuyingDataAnonymizeService
             return DataReturn('当前权限不允许执行数据匿名化操作', -403);
         }
 
+        // [MUYING-二开] fail-closed：数据匿名化涉及 EncryptSensitive/HashPhone，密钥缺失时阻断
+        try {
+            MuyingPrivacyService::AssertPrivacyKeyReady();
+        } catch (\RuntimeException $e) {
+            return DataReturn('系统隐私配置异常，匿名化操作暂不可用，请联系管理员', -500);
+        }
+
         $stats = [
             'user_updated'          => 0,
             'signups_updated'       => 0,

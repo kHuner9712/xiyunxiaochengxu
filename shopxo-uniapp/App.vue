@@ -394,6 +394,9 @@
              * url     url地址
              */
             request_params_handle(url) {
+                // [MUYING-二开] TODO: 后续后端兼容 Header Authorization 后，移除 query 中的 token 传递
+                // 当前同时通过 query + header 发送，保证兼容性
+                // 生产 Nginx access_log 建议配置中对 token 参数脱敏（参考 deploy/nginx.production.example.conf）
                 // 拼接字符
                 let query_str = '';
                 // 用户信息

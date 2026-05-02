@@ -270,9 +270,9 @@ if (!$found_risks) {
 }
 
 // ============================================================
-// 7. AppID 一致性检查
+// 7. AppID 检查（非空、一致性、生产禁止测试号）
 // ============================================================
-section("7. AppID 一致性检查");
+section("7. AppID 检查");
 
 $manifest_path = $repo_path . '/shopxo-uniapp/manifest.json';
 $proj_cfg_path = $repo_path . '/shopxo-uniapp/project.config.json';
@@ -299,15 +299,48 @@ if (file_exists($prod_env_path)) {
     }
 }
 
+// [MUYING-二开] 检查 AppID 非空，空值 = BLOCKER
+if (empty($manifest_appid)) {
+    block_item("manifest.json → mp-weixin.appid 为空，必须配置正式 AppID");
+} else {
+    pass_item("manifest.json AppID 已配置: {$manifest_appid}");
+}
+
+if (empty($proj_appid)) {
+    block_item("project.config.json → appid 为空，必须配置正式 AppID");
+} else {
+    pass_item("project.config.json AppID 已配置: {$proj_appid}");
+}
+
+if (empty($env_appid) || $env_appid === '{{WX_APPID}}') {
+    block_item(".env.production → UNI_APP_WX_APPID 为空或仍为占位符，必须配置正式 AppID");
+} else {
+    pass_item(".env.production AppID 已配置: {$env_appid}");
+}
+
+// [MUYING-二开] 生产环境禁止使用测试号
+$test_prod_appid = 'wxda7779770f53e901';
+$appid_locations = [
+    'manifest.json'      => $manifest_appid,
+    'project.config.json' => $proj_appid,
+    '.env.production'    => $env_appid,
+];
+foreach ($appid_locations as $loc => $val) {
+    if ($val === $test_prod_appid) {
+        block_item("{$loc} 使用了微信测试号 AppID ({$test_prod_appid})，生产环境禁止使用测试号");
+    }
+}
+
+// [MUYING-二开] 三处 AppID 一致性检查
 if (!empty($manifest_appid) && !empty($proj_appid) && $manifest_appid !== $proj_appid) {
     block_item("manifest.json AppID ({$manifest_appid}) 与 project.config.json AppID ({$proj_appid}) 不一致");
-} else {
+} elseif (!empty($manifest_appid) && !empty($proj_appid)) {
     pass_item("manifest.json 与 project.config.json AppID 一致");
 }
 
 if (!empty($manifest_appid) && !empty($env_appid) && $manifest_appid !== $env_appid) {
     block_item("manifest.json AppID ({$manifest_appid}) 与 .env.production AppID ({$env_appid}) 不一致");
-} else {
+} elseif (!empty($manifest_appid) && !empty($env_appid)) {
     pass_item("manifest.json 与 .env.production AppID 一致");
 }
 

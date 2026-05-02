@@ -107,6 +107,9 @@ class Activitysignup extends Base
             $where[] = ['stage', '=', trim($params['stage'])];
         }
         if (!empty($params['phone'])) {
+            if (!MuyingPrivacyService::IsKeyAvailable()) {
+                return ApiService::ApiDataReturn(DataReturn('隐私密钥未配置，无法按手机号查询，请联系管理员配置 MUYING_PRIVACY_KEY', -500));
+            }
             $phone_hash = MuyingPrivacyService::HashPhone(trim($params['phone']));
             $where[] = ['phone_hash', '=', $phone_hash];
         }

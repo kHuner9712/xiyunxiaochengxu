@@ -228,6 +228,7 @@
                 },
                 privacy_agreed: false,
                 profile_sync_agreed: false,
+                loading: false,
                 data_loaded: false,
             };
         },
@@ -486,9 +487,11 @@
                     data: post_data,
                     loading_title: '提交中...',
                     success: function (data) {
-                        userStore.merge({
-                            current_stage: self.selected_stage,
-                        });
+                        if (self.profile_sync_agreed) {
+                            userStore.merge({
+                                current_stage: self.selected_stage,
+                            });
+                        }
                         uni.showToast({
                             title: '报名成功',
                             icon: 'success',

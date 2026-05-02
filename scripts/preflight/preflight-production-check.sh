@@ -251,9 +251,9 @@ if [[ $FOUND_RISKS -eq 0 ]]; then
 fi
 
 # ============================================================
-# 7. AppID 一致性检查
+# 7. AppID 检查（非空、一致性、生产禁止测试号）
 # ============================================================
-section "7. AppID 一致性检查"
+section "7. AppID 检查"
 
 MANIFEST_FILE="${REPO_PATH}/shopxo-uniapp/manifest.json"
 PROJ_CFG_FILE="${REPO_PATH}/shopxo-uniapp/project.config.json"
@@ -275,15 +275,45 @@ if [[ -f "$PROD_ENV_FILE" ]]; then
     ENV_APPID=$(grep -oP 'UNI_APP_WX_APPID\s*=\s*\K.*' "$PROD_ENV_FILE" 2>/dev/null | head -1 | xargs)
 fi
 
+# [MUYING-二开] 检查 AppID 非空，空值 = BLOCKER
+if [[ -z "$MANIFEST_APPID" ]]; then
+    blocker "manifest.json → mp-weixin.appid 为空，必须配置正式 AppID"
+else
+    pass "manifest.json AppID 已配置: ${MANIFEST_APPID}"
+fi
+
+if [[ -z "$PROJ_APPID" ]]; then
+    blocker "project.config.json → appid 为空，必须配置正式 AppID"
+else
+    pass "project.config.json AppID 已配置: ${PROJ_APPID}"
+fi
+
+if [[ -z "$ENV_APPID" || "$ENV_APPID" == "{{WX_APPID}}" ]]; then
+    blocker ".env.production → UNI_APP_WX_APPID 为空或仍为占位符，必须配置正式 AppID"
+else
+    pass ".env.production AppID 已配置: ${ENV_APPID}"
+fi
+
+# [MUYING-二开] 生产环境禁止使用测试号
+TEST_PROD_APPID="wxda7779770f53e901"
+for loc in "manifest.json:${MANIFEST_APPID}" "project.config.json:${PROJ_APPID}" ".env.production:${ENV_APPID}"; do
+    FILE_NAME="${loc%%:*}"
+    APPID_VAL="${loc##*:}"
+    if [[ "$APPID_VAL" == "$TEST_PROD_APPID" ]]; then
+        blocker "${FILE_NAME} 使用了微信测试号 AppID (${TEST_PROD_APPID})，生产环境禁止使用测试号"
+    fi
+done
+
+# [MUYING-二开] 三处 AppID 一致性检查
 if [[ -n "$MANIFEST_APPID" && -n "$PROJ_APPID" && "$MANIFEST_APPID" != "$PROJ_APPID" ]]; then
     blocker "manifest.json AppID (${MANIFEST_APPID}) 与 project.config.json AppID (${PROJ_APPID}) 不一致"
-else
+elif [[ -n "$MANIFEST_APPID" && -n "$PROJ_APPID" ]]; then
     pass "manifest.json 与 project.config.json AppID 一致"
 fi
 
 if [[ -n "$MANIFEST_APPID" && -n "$ENV_APPID" && "$MANIFEST_APPID" != "$ENV_APPID" ]]; then
     blocker "manifest.json AppID (${MANIFEST_APPID}) 与 .env.production AppID (${ENV_APPID}) 不一致"
-else
+elif [[ -n "$MANIFEST_APPID" && -n "$ENV_APPID" ]]; then
     pass "manifest.json 与 .env.production AppID 一致"
 fi
 

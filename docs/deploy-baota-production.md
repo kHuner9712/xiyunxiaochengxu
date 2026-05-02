@@ -126,7 +126,19 @@ cp .env.production.example .env
 
 确认 `APP_DEBUG = false`。
 
-### 4.3 导入数据库
+### 4.3 安装 PHP 依赖（Composer）
+
+```bash
+cd /www/wwwroot/api.yunxi.com/shopxo-backend
+
+# [MUYING-二开] 生产环境必须使用 --no-dev 跳过开发依赖，--optimize-autoloader 优化类加载
+composer install --no-dev --optimize-autoloader
+```
+
+> ⚠️ **严禁在生产环境执行 `composer update`**（会修改 composer.lock，可能拉取预期外版本导致线上故障）。
+> 如果 `composer.lock` 未提交到仓库，先用开发机执行 `composer update` 生成后提交，再在生产执行 `composer install`。
+
+### 4.4 导入数据库
 
 ```bash
 # 按顺序执行 SQL 迁移
@@ -137,7 +149,7 @@ mysql -u yunxi_app -p yunxi_prod < docs/sql/muying-compliance-center-migration.s
 
 或通过 phpMyAdmin 导入。
 
-### 4.4 设置目录权限
+### 4.5 设置目录权限
 
 ```bash
 cd /www/wwwroot/api.yunxi.com/shopxo-backend
@@ -147,7 +159,7 @@ chmod -R 777 public/upload/
 chown -R www:www .
 ```
 
-### 4.5 运行 preflight 检查
+### 4.6 运行 preflight 检查
 
 ```bash
 php scripts/preflight/preflight-production-check.php --repo=/www/wwwroot/api.yunxi.com
@@ -157,7 +169,7 @@ php scripts/preflight/preflight-production-check.php --repo=/www/wwwroot/api.yun
 
 ## 5. 前端构建与上传
 
-### 5.1 配置前端环境
+### 5.1 配置前端环境与 AppID
 
 ```bash
 cd shopxo-uniapp
@@ -167,6 +179,26 @@ cp .env.production.example .env.production
 编辑 `.env.production`，替换占位符：
 - `{{API_DOMAIN}}` → `api.yunxi.com`
 - `{{WX_APPID}}` → 正式小程序 AppID
+
+同时手动修改以下两个文件中的 AppID（三处须一致）：
+- `shopxo-uniapp/manifest.json` → `mp-weixin.appid`
+- `shopxo-uniapp/project.config.json` → `appid`
+
+#### ⚠️ 防止正式 AppID 误提交到 Git 仓库
+
+填写正式 AppID 后，`manifest.json` 和 `project.config.json` 会在 Git 中显示为 modified。**提交前必须确认不将真实 AppID 提交到公开仓库。**
+
+```bash
+# 推荐：标记为本地不跟踪变更
+git update-index --assume-unchanged shopxo-uniapp/manifest.json
+git update-index --assume-unchanged shopxo-uniapp/project.config.json
+
+# 如需恢复跟踪（例如要切换到测试 AppID）
+git update-index --no-assume-unchanged shopxo-uniapp/manifest.json
+git update-index --no-assume-unchanged shopxo-uniapp/project.config.json
+```
+
+> 运行 `bash scripts/preflight/preflight-production-check.sh` 可验证三处 AppID 一致、非空、且非测试号。
 
 ### 5.2 HBuilderX 构建
 

@@ -502,6 +502,12 @@ class ActivityService
         }
 
         // [MUYING-二开] fail-closed：隐私加密密钥不可用时阻断敏感数据写入
+        // 生产环境 APP_DEBUG=false 时，AssertPrivacyKeyReady 会抛出 RuntimeException
+        try {
+            MuyingPrivacyService::AssertPrivacyKeyReady();
+        } catch (\RuntimeException $e) {
+            return DataReturn('系统隐私配置异常，暂时无法报名，请联系管理员', -500);
+        }
         if (!MuyingPrivacyService::IsKeyAvailable()) {
             return DataReturn('系统隐私配置异常，暂时无法报名，请联系管理员', -500);
         }
