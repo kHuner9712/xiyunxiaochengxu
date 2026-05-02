@@ -52,6 +52,7 @@ var PHASE_ONE_ALLOWED_ROUTES = [
     '/pages/error/error',
     '/pages/article-category/article-category',
     '/pages/article-detail/article-detail',
+    '/pages/common/open-setting-location/open-setting-location',
     '/pages/activity-detail/activity-detail',
     '/pages/activity-signup/activity-signup',
     '/pages/my-activity/my-activity',

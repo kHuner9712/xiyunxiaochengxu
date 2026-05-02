@@ -13,13 +13,17 @@
 #   --no-color       关闭彩色输出
 #   --help           显示帮助
 #
-# 【检查项】
+# 【检查项】（共 10 项）
 #   1. APP_DEBUG 是否关闭
-#   2. .env 是否存在但未提交到 Git
+#   2. .env / project.private.config / manifest.local 是否 gitignored 且未被跟踪
 #   3. 生产 request_url 是否 https
 #   4. 高风险 feature flag 是否关闭
 #   5. 是否存在测试 AppID
 #   6. 是否存在 localhost/127.0.0.1/明文密码等生产风险配置
+#   7. AppID 三处一致、非空、非测试号
+#   8. 合规白名单文件 compliance-scope.js 与 pages.json 存在性
+#   9. 资质门禁模式检查
+#  10. install.php 安装入口残留检查
 #
 # 【输出等级】PASS / WARN / BLOCKER
 # 【退出码】0=无 BLOCKER，1=存在 BLOCKER
@@ -99,6 +103,24 @@ if [[ -f "$GITIGNORE" ]]; then
     fi
 else
     warn ".gitignore 文件不存在"
+fi
+
+# 检查 project.private.config.json / manifest.local.json 是否在 gitignore
+if [[ -f "$GITIGNORE" ]]; then
+    if grep -q 'project.private.config\|manifest.local' "$GITIGNORE"; then
+        pass ".gitignore 包含 project.private.config / manifest.local 规则"
+    else
+        warn ".gitignore 未包含 project.private.config.json / manifest.local.json 规则"
+    fi
+fi
+
+# 检查 project.private.config 是否被 Git 跟踪
+if command -v git &>/dev/null; then
+    if git -C "$REPO_PATH" ls-files | grep -q 'project.private.config\|manifest.local.json$'; then
+        blocker "project.private.config.json 或 manifest.local.json 已被 Git 跟踪，应立即从 Git 中移除"
+    else
+        pass "project.private.config.json / manifest.local.json 未提交到 Git"
+    fi
 fi
 
 BACKEND_GITIGNORE="${REPO_PATH}/shopxo-backend/.gitignore"
@@ -318,20 +340,33 @@ elif [[ -n "$MANIFEST_APPID" && -n "$ENV_APPID" ]]; then
 fi
 
 # ============================================================
-# 8. 前端路由白名单检查
+# 8. 前端路由白名单检查（compliance-scope.js）
 # ============================================================
 section "8. 前端路由白名单检查"
 
-ENUM_FILE="${REPO_PATH}/shopxo-uniapp/common/js/config/muying-enum.js"
-if [[ -f "$ENUM_FILE" ]]; then
-    if grep -q 'ROUTE_WHITELIST\|route_whitelist\|page_whitelist' "$ENUM_FILE" 2>/dev/null; then
-        pass "前端路由白名单存在于 muying-enum.js"
+COMPLIANCE_SCOPE="${REPO_PATH}/shopxo-uniapp/common/js/config/compliance-scope.js"
+if [[ -f "$COMPLIANCE_SCOPE" ]]; then
+    ROUTE_COUNT=$(grep -c "/pages/" "$COMPLIANCE_SCOPE" 2>/dev/null || echo "0")
+    if [[ "$ROUTE_COUNT" -gt 0 ]]; then
+        pass "compliance-scope.js 路由白名单已配置（注册 ${ROUTE_COUNT} 条路径规则）"
     else
-        warn "前端路由白名单未在 muying-enum.js 中找到，请确认是否已配置"
+        blocker "compliance-scope.js 存在但未注册任何路由，合规拦截可能误伤"
     fi
 else
-    warn "muying-enum.js 文件不存在，无法检查路由白名单"
+    blocker "compliance-scope.js 不存在，合规拦截核心文件丢失"
 fi
+
+PAGES_JSON="${REPO_PATH}/shopxo-uniapp/pages.json"
+if [[ -f "$PAGES_JSON" ]]; then
+    SUBPACKAGE_COUNT=$(grep -c '"root":' "$PAGES_JSON" 2>/dev/null || echo "0")
+    pass "pages.json 已注册 ${SUBPACKAGE_COUNT} 个子包"
+else
+    blocker "pages.json 文件不存在，前端编译将失败"
+fi
+
+ALLOWED_COUNT=$(grep -c '/pages/' "$COMPLIANCE_SCOPE" 2>/dev/null || echo "0")
+SUBPKG_COUNT=$(grep -c '"root":' "$PAGES_JSON" 2>/dev/null || echo "0")
+echo "  合规白名单路由数: ${ALLOWED_COUNT}, pages.json 子包数: ${SUBPKG_COUNT}"
 
 # ============================================================
 # 9. 资质门禁检查
