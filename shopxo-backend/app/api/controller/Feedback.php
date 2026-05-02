@@ -41,6 +41,12 @@ class Feedback extends Common
     public function Create()
     {
         $this->IsLogin();
+
+        $rl = $this->CheckRateLimit('feedback', 3, 5, 60);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('提交过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         $params = $this->data_request;
         $params['user'] = $this->user;
         return ApiService::ApiDataReturn(FeedbackService::FeedbackCreate($params));

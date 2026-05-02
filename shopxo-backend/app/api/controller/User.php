@@ -56,6 +56,11 @@ class User extends Common
      */
     public function Login()
     {
+        $rl = $this->CheckRateLimit('login', 0, 10, 60);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('登录过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         return ApiService::ApiDataReturn(UserService::Login($this->data_request));
     }
 
@@ -69,6 +74,11 @@ class User extends Common
      */
     public function LoginVerifySend()
     {
+        $rl = $this->CheckRateLimit('sms', 0, 5, 120);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('验证码发送过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         return ApiService::ApiDataReturn(UserService::LoginVerifySend($this->data_request));
     }
 

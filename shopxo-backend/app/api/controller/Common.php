@@ -17,6 +17,7 @@ use app\service\SystemService;
 use app\service\UserService;
 use app\service\ConfigService;
 use app\service\MuyingComplianceService;
+use app\service\MuyingRateLimitService;
 
 /**
  * 接口公共控制器
@@ -194,6 +195,32 @@ class Common extends BaseController
 		{
 			exit(json_encode(DataReturn(MyLang('login_failure_tips'), -400)));
 		}
+    }
+
+    /**
+     * [MUYING-二开] API 限流检查
+     * 优先按 user_id，兜底按 IP → uuid → anon
+     * 限流仅取哈希/脱敏 key，不记录明文手机号/token 到日志
+     * @param string $action   操作标识
+     * @param int    $user_max 已登录用户窗口内最大次数
+     * @param int    $ip_max   IP 兜底窗口内最大次数
+     * @param int    $window   时间窗口（秒），默认 60
+     * @return array ['allowed'=>bool, 'remaining'=>int, 'retry_after'=>int]
+     */
+    protected function CheckRateLimit($action, $user_max, $ip_max, $window = 60)
+    {
+        $userId = (!empty($this->user) && !empty($this->user['id'])) ? intval($this->user['id']) : 0;
+
+        if ($userId > 0 && $user_max > 0) {
+            $r = MuyingRateLimitService::Check($action, 'u:' . $userId, $user_max, $window);
+            if (!$r['allowed']) return $r;
+        }
+
+        $uuid = isset($this->data_request['uuid']) ? $this->data_request['uuid'] : '';
+        $ip   = !empty($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+        $fallback = !empty($ip) ? 'ip:' . crc32($ip) : (!empty($uuid) ? 'uuid:' . crc32($uuid) : 'anon');
+
+        return MuyingRateLimitService::Check($action, $fallback, $ip_max, $window);
     }
 
     protected function CheckFeatureEnabled($feature_flag_key)

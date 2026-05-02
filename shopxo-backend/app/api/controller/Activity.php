@@ -87,6 +87,12 @@ class Activity extends Common
     public function Favor()
     {
         $this->IsLogin();
+
+        $rl = $this->CheckRateLimit('favor', 20, 30, 60);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('操作过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         $params = $this->data_request;
         $params['user'] = $this->user;
         return ApiService::ApiDataReturn(ActivityService::ActivityFavorToggle($params));
@@ -95,6 +101,12 @@ class Activity extends Common
     public function Signup()
     {
         $this->IsLogin();
+
+        $rl = $this->CheckRateLimit('signup', 5, 10, 60);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('报名过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         $params = $this->data_request;
         $params['user'] = $this->user;
         return ApiService::ApiDataReturn(ActivityService::ActivitySignup($params));
