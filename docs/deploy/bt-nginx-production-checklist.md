@@ -24,6 +24,7 @@
 | 网站根目录 | 指向 `shopxo-backend/` | 宝塔 → 网站 → 根目录 | ☐ |
 | 运行目录 | `/public` | 宝塔 → 网站 → 运行目录 | ☐ |
 | 伪静态 | 选择 `thinkphp` 或自定义规则 | 宝塔 → 网站 → 伪静态 | ☐ |
+| Nginx 语法检查 | `nginx -t` 无错误 | 终端执行 `nginx -t` | ☐ |
 | 跨域配置 | API 域名允许小程序域名访问 | Nginx 配置 CORS | ☐ |
 
 ## 3. Nginx 安全规则
@@ -119,7 +120,8 @@ curl -I https://域名/composer.json # 应返回 403 或 404
 | 测试 AppID 不存在 | 生产环境无 wx1234567890 等测试 ID | 搜索代码和配置 | ☐ |
 | localhost/127.0.0.1 不存在 | 生产配置无本地地址 | `preflight-production-check.sh` | ☐ |
 | 资质门禁一期模式 | 商品资质校验处于一期模式 | 后台功能开关确认 | ☐ |
-| 前端路由白名单 | muying-enum.js 中路由白名单存在 | 检查前端代码 | ☐ |
+| 前端路由白名单 | compliance-scope.js 中路由白名单存在 | 检查前端代码 `shopxo-uniapp/common/js/config/compliance-scope.js` | ☐ |
+| access_log query string | 不记录完整 $request_uri（token/手机号防泄露） | 检查 nginx 配置中 access_log 格式 | ☐ |
 | 隐私协议完整 | 隐私政策/用户协议/客服入口已配置 | 前端验证 | ☐ |
 
 ## 8. 部署后验证
