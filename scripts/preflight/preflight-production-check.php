@@ -926,6 +926,25 @@ if (file_exists($prod_env_check)) {
 }
 
 // ============================================================
+// 28. [MUYING-二开] 安装入口文件检查
+// ============================================================
+section("28. 安装入口文件检查");
+
+$public_install = $repo_path . '/shopxo-backend/public/install.php';
+if (file_exists($public_install)) {
+    block_item("发现 public/install.php 文件！生产环境必须删除安装入口。执行: rm -f shopxo-backend/public/install.php");
+} else {
+    pass_item("public/install.php 不存在（已按部署要求删除）");
+}
+
+$install_lock = $repo_path . '/shopxo-backend/install.lock';
+if (file_exists($install_lock)) {
+    pass_item("install.lock 存在，安装器已锁定（正常状态）");
+} else {
+    warn_item("install.lock 不存在，安装器未锁定。首次部署后自动生成，无需手动创建。请确认 shopxo-backend/public/install.php 已删除");
+}
+
+// ============================================================
 // 汇总
 // ============================================================
 section("检查汇总");

@@ -349,6 +349,25 @@ else
 fi
 
 # ============================================================
+# 10. 安装入口文件检查
+# ============================================================
+section "10. 安装入口文件检查"
+
+PUBLIC_INSTALL="${REPO_PATH}/shopxo-backend/public/install.php"
+if [[ -f "$PUBLIC_INSTALL" ]]; then
+    blocker "发现 public/install.php 文件！生产环境必须删除安装入口，执行: rm -f shopxo-backend/public/install.php"
+else
+    pass "public/install.php 不存在（已按部署要求删除）"
+fi
+
+INSTALL_LOCK="${REPO_PATH}/shopxo-backend/install.lock"
+if [[ -f "$INSTALL_LOCK" ]]; then
+    pass "install.lock 存在，安装器已锁定（正常状态）"
+else
+    warn "install.lock 不存在，安装器未锁定。首次部署后会自动生成，无需手动创建。请确认 shopxo-backend/public/install.php 已删除"
+fi
+
+# ============================================================
 # 汇总
 # ============================================================
 section "检查汇总"
