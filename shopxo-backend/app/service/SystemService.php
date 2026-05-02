@@ -96,12 +96,13 @@ class SystemService
         MySession('uuid', $uuid);
         MyCookie('uuid', $uuid, false);
 
-        // token
-        if(!empty($params['token']))
+        // [MUYING-二开] 兼容 header token 优先，query token 兜底
+        $token = UserService::GetTokenFromRequest();
+        if(!empty($token))
         {
             $key = UserService::$user_token_key;
-            MySession($key, $params['token']);
-            MyCookie($key, $params['token'], false);
+            MySession($key, $token);
+            MyCookie($key, $token, false);
         }
 
         // 邀请人id

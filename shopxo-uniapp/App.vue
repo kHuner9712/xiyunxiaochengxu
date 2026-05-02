@@ -46,8 +46,8 @@
                 system_type: 'default',
 
                 // 基础信息
-                application_title: '禧孕',
-                application_describe: '禧孕 - 科学孕育·安心陪伴',
+                application_title: '孕禧',
+                application_describe: '孕禧 - 科学孕育·安心陪伴',
 
                 // 默认logo、如 /static/images/common/logo.png
                 application_logo: '',
@@ -394,18 +394,16 @@
              * url     url地址
              */
             request_params_handle(url) {
-                // [MUYING-二开] TODO: 后续后端兼容 Header Authorization 后，移除 query 中的 token 传递
-                // 当前同时通过 query + header 发送，保证兼容性
+                // [MUYING-二开] token 已迁移至请求 Header（Authorization: Bearer）
+                // query token 仅在旧版本后端兼容期间保留，新请求不再拼接
                 // 生产 Nginx access_log 建议配置中对 token 参数脱敏（参考 deploy/nginx.production.example.conf）
                 // 拼接字符
                 let query_str = '';
                 // 用户信息
-                let user = this.get_user_cache_info();
-                let token = user == null ? '' : user.token || '';
                 let uuid = this.request_uuid();
                 let client_value = this.application_client_type();
                 let client_brand = this.application_client_brand();
-                query_str += '&application_client_type=' + client_value + '&application_client_brand=' + client_brand + '&token=' + token + '&uuid=' + uuid;
+                query_str += '&application_client_type=' + client_value + '&application_client_brand=' + client_brand + '&uuid=' + uuid;
 
                 // 启动参数
                 let params = this.get_launch_cache_info() || null;

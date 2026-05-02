@@ -241,6 +241,28 @@ class UserService
     }
 
     /**
+     * [MUYING-二开] 从请求中提取 token（header 优先，query 兼容）
+     * 优先级：Authorization: Bearer > X-Token > query token
+     * query token 仅保留作为旧版本兼容
+     */
+    public static function GetTokenFromRequest()
+    {
+        $authorization = request()->header('Authorization', '');
+        if(!empty($authorization) && stripos($authorization, 'Bearer ') === 0)
+        {
+            return trim(substr($authorization, 7));
+        }
+
+        $x_token = request()->header('X-Token', '');
+        if(!empty($x_token))
+        {
+            return $x_token;
+        }
+
+        return input('token', '');
+    }
+
+    /**
      * 获取用户登录信息
      * @author  Devil
      * @blog    http://gong.gg/
@@ -268,10 +290,10 @@ class UserService
             }
             if(empty($user_login_info))
             {
-                $params = input();
-                if(!empty($params['token']))
+                $token = self::GetTokenFromRequest();
+                if(!empty($token))
                 {
-                    $user_login_info = self::UserTokenData($params['token']);
+                    $user_login_info = self::UserTokenData($token);
                 }
             }
         }
@@ -314,9 +336,6 @@ class UserService
         static $user_cache_login_info = null;
         if($user_cache_login_info === null)
         {
-            // 参数
-            $params = input();
-
             // 用户数据处理
             if(APPLICATION == 'web')
             {
@@ -326,7 +345,8 @@ class UserService
                 // 用户信息为空，指定了token则设置登录信息
                 if(empty($user_cache_login_info))
                 {
-                    $token = empty($params['token']) ? MyCookie(self::$user_token_key) : $params['token'];
+                    $token = self::GetTokenFromRequest();
+                    $token = empty($token) ? MyCookie(self::$user_token_key) : $token;
                     if(!empty($token))
                     {
                         $user_cache_login_info = self::CacheUserTokenData($token);
@@ -338,9 +358,10 @@ class UserService
                     }
                 }
             } else {
-                if(!empty($params['token']))
+                $token = self::GetTokenFromRequest();
+                if(!empty($token))
                 {
-                    $user_cache_login_info = self::CacheUserTokenData($params['token']);
+                    $user_cache_login_info = self::CacheUserTokenData($token);
                 }
             }
         }

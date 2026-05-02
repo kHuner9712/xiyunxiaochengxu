@@ -148,7 +148,7 @@
                     </view>
                     <view class="privacy-content">
                         <text class="text-size-xs cr-grey block margin-bottom-xs">1. 我们将收集您的姓名、手机号、孕育阶段、预产期/宝宝生日/宝宝月龄等信息，仅用于本次活动的报名确认、签到核实及活动通知。</text>
-                        <text class="text-size-xs cr-grey block margin-bottom-xs">2. 您的个人信息仅用于禧孕平台相关服务，不会提供给第三方。</text>
+                        <text class="text-size-xs cr-grey block margin-bottom-xs">2. 您的个人信息仅用于孕禧平台相关服务，不会提供给第三方。</text>
                         <text class="text-size-xs cr-grey block margin-bottom-xs">3. 您可自主选择是否将孕育信息同步至个人资料，用于获得更精准的活动和内容推荐。</text>
                     </view>
                     <view class="privacy-agree flex-row align-c margin-top-main" @tap="toggle_privacy_agree">

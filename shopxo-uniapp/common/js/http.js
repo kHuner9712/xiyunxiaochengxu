@@ -158,8 +158,8 @@ function request(options) {
 
     var request_data = options.data || {};
 
-    // [MUYING-二开] 提取 token 和 UUID 用于 Header 传输（兼容增强）
-    // TODO: 后续后端兼容 Header token 后，移除 query token 传递
+    // [MUYING-二开] token 通过 Header Authorization: Bearer 传输，不再拼接到 URL
+    // 后端兼容 query token 作为旧版本兜底
     var user = app.globalData.get_user_cache_info();
     var token = user ? user.token || '' : '';
     var uuid = '';

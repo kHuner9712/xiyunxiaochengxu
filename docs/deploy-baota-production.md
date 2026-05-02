@@ -1,4 +1,4 @@
-# 禧孕 V1.0 宝塔面板生产部署指南
+# 孕禧 V1.0 宝塔面板生产部署指南
 
 ## 1. 服务器环境要求
 
@@ -36,9 +36,9 @@
 1. MySQL 3306 端口**不开放公网**（宝塔 → 安全 → 防火墙，不放行 3306）
 2. 创建专用数据库用户（不使用 root）：
    ```sql
-   CREATE USER 'xiyun_app'@'127.0.0.1' IDENTIFIED BY '强密码≥16位';
-   CREATE DATABASE xiyun_prod DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
-   GRANT ALL PRIVILEGES ON xiyun_prod.* TO 'xiyun_app'@'127.0.0.1';
+   CREATE USER 'yunxi_app'@'127.0.0.1' IDENTIFIED BY '强密码≥16位';
+   CREATE DATABASE yunxi_prod DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+   GRANT ALL PRIVILEGES ON yunxi_prod.* TO 'yunxi_app'@'127.0.0.1';
    FLUSH PRIVILEGES;
    ```
 
@@ -47,10 +47,10 @@
 ### 3.1 创建站点
 
 宝塔 → 网站 → 添加站点：
-- 域名：填写备案域名（如 `api.xiyun.com`）
-- 根目录：`/www/wwwroot/api.xiyun.com`
+- 域名：填写备案域名（如 `api.yunxi.com`）
+- 根目录：`/www/wwwroot/api.yunxi.com`
 - PHP 版本：PHP 8.1
-- 数据库：选择已创建的 `xiyun_prod`
+- 数据库：选择已创建的 `yunxi_prod`
 
 ### 3.2 设置运行目录
 
@@ -104,7 +104,7 @@ location ~ \.sql$ {
 ### 4.1 上传代码
 
 ```bash
-cd /www/wwwroot/api.xiyun.com
+cd /www/wwwroot/api.yunxi.com
 git clone https://github.com/kHuner9712/xiyun.git .
 ```
 
@@ -113,14 +113,14 @@ git clone https://github.com/kHuner9712/xiyun.git .
 ### 4.2 配置后端环境
 
 ```bash
-cd /www/wwwroot/api.xiyun.com/shopxo-backend
+cd /www/wwwroot/api.yunxi.com/shopxo-backend
 cp .env.production.example .env
 ```
 
 编辑 `.env`，替换所有占位符：
 - `{{DB_HOST}}` → `127.0.0.1`
-- `{{DB_NAME}}` → `xiyun_prod`
-- `{{DB_USER}}` → `xiyun_app`
+- `{{DB_NAME}}` → `yunxi_prod`
+- `{{DB_USER}}` → `yunxi_app`
 - `{{DB_PASS}}` → 实际密码
 - `{{PRIVACY_KEY}}` → 执行 `php -r "echo bin2hex(openssl_random_pseudo_bytes(32));"` 生成
 
@@ -129,7 +129,7 @@ cp .env.production.example .env
 ### 4.3 安装 PHP 依赖（Composer）
 
 ```bash
-cd /www/wwwroot/api.xiyun.com/shopxo-backend
+cd /www/wwwroot/api.yunxi.com/shopxo-backend
 
 # [MUYING-二开] 生产环境必须使用 --no-dev 跳过开发依赖，--optimize-autoloader 优化类加载
 composer install --no-dev --optimize-autoloader
@@ -142,9 +142,9 @@ composer install --no-dev --optimize-autoloader
 
 ```bash
 # 按顺序执行 SQL 迁移
-mysql -u xiyun_app -p xiyun_prod < docs/muying-final-migration.sql
-mysql -u xiyun_app -p xiyun_prod < docs/sql/muying-feature-switch-migration.sql
-mysql -u xiyun_app -p xiyun_prod < docs/sql/muying-compliance-center-migration.sql
+mysql -u yunxi_app -p yunxi_prod < docs/muying-final-migration.sql
+mysql -u yunxi_app -p yunxi_prod < docs/sql/muying-feature-switch-migration.sql
+mysql -u yunxi_app -p yunxi_prod < docs/sql/muying-compliance-center-migration.sql
 ```
 
 或通过 phpMyAdmin 导入。
@@ -152,7 +152,7 @@ mysql -u xiyun_app -p xiyun_prod < docs/sql/muying-compliance-center-migration.s
 ### 4.5 设置目录权限
 
 ```bash
-cd /www/wwwroot/api.xiyun.com/shopxo-backend
+cd /www/wwwroot/api.yunxi.com/shopxo-backend
 chmod -R 755 .
 chmod -R 777 runtime/
 chmod -R 777 public/upload/
@@ -162,7 +162,7 @@ chown -R www:www .
 ### 4.6 运行 preflight 检查
 
 ```bash
-php scripts/preflight/preflight-production-check.php --repo=/www/wwwroot/api.xiyun.com
+php scripts/preflight/preflight-production-check.php --repo=/www/wwwroot/api.yunxi.com
 ```
 
 所有检查项必须通过。
@@ -177,7 +177,7 @@ cp .env.production.example .env.production
 ```
 
 编辑 `.env.production`，替换占位符：
-- `{{API_DOMAIN}}` → `api.xiyun.com`
+- `{{API_DOMAIN}}` → `api.yunxi.com`
 - `{{WX_APPID}}` → 正式小程序 AppID
 
 同时手动修改以下两个文件中的 AppID（三处须一致）：
@@ -212,15 +212,15 @@ git update-index --no-assume-unchanged shopxo-uniapp/project.config.json
 
 1. 登录 [微信公众平台](https://mp.weixin.qq.com)
 2. 开发管理 → 开发设置 → 服务器域名：
-   - request 合法域名：`https://api.xiyun.com`
-   - uploadFile 合法域名：`https://api.xiyun.com`
-   - downloadFile 合法域名：`https://api.xiyun.com`
+   - request 合法域名：`https://api.yunxi.com`
+   - uploadFile 合法域名：`https://api.yunxi.com`
+   - downloadFile 合法域名：`https://api.yunxi.com`
 3. 版本管理 → 提交审核
 
 ## 6. 部署后验证
 
-1. 访问 `https://api.xiyun.com/api/common/baseconfig` 确认 API 正常
-2. 后台登录 `https://api.xiyun.com/admin.php` 修改默认管理员密码
+1. 访问 `https://api.yunxi.com/api/common/baseconfig` 确认 API 正常
+2. 后台登录 `https://api.yunxi.com/admin.php` 修改默认管理员密码
 3. 后台 → 合规中心 → 确认所有高风险功能开关为关闭状态
 4. 后台 → 系统设置 → 确认 APP_DEBUG 已关闭
 5. 小程序体验版测试核心流程：浏览商品 → 加购 → 下单 → 支付
