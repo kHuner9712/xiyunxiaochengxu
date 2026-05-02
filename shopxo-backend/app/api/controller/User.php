@@ -105,6 +105,11 @@ class User extends Common
      */
     public function RegVerifySend()
     {
+        $rl = $this->CheckRateLimit('sms_reg', 0, 5, 120);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('验证码发送过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         return ApiService::ApiDataReturn(UserService::RegVerifySend($this->data_request));
     }
 
@@ -131,6 +136,11 @@ class User extends Common
      */
     public function ForgetPwdVerifySend()
     {
+        $rl = $this->CheckRateLimit('sms_forget', 0, 5, 120);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('验证码发送过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         return ApiService::ApiDataReturn(UserService::ForgetPwdVerifySend($this->data_request));
     }
 
@@ -157,6 +167,11 @@ class User extends Common
      */
     public function AppMobileBindVerifySend()
     {
+        $rl = $this->CheckRateLimit('sms_mbind', 0, 5, 120);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('验证码发送过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         return ApiService::ApiDataReturn(UserService::AppMobileBindVerifySend($this->data_request));
     }
 
@@ -183,6 +198,11 @@ class User extends Common
      */
     public function AppEmailBindVerifySend()
     {
+        $rl = $this->CheckRateLimit('email_bind', 0, 5, 120);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('验证码发送过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         return ApiService::ApiDataReturn(UserService::AppEmailBindVerifySend($this->data_request));
     }
 
@@ -229,6 +249,11 @@ class User extends Common
      */
     public function AppMiniUserAuth()
     {
+        $rl = $this->CheckRateLimit('miniauth', 0, 20, 60);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('授权登录过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         $module = '\app\service\AppMiniUserService';
         $action = ucfirst(APPLICATION_CLIENT_TYPE).'UserAuth';
         if(method_exists($module, $action))
@@ -357,6 +382,11 @@ class User extends Common
      */
     public function OnekeyUserMobileDecrypt()
     {
+        $rl = $this->CheckRateLimit('ph_decrypt', 0, 10, 60);
+        if (!$rl['allowed']) {
+            return ApiService::ApiDataReturn(DataReturn('操作过于频繁，请 ' . $rl['retry_after'] . ' 秒后再试', -1));
+        }
+
         return ApiService::ApiDataReturn(AppMiniUserService::AppMiniOnekeyUserMobileDecrypt($this->data_request));
     }
 
