@@ -236,6 +236,7 @@ git update-index --no-assume-unchanged shopxo-uniapp/project.config.json
 | MySQL 3306 不开放公网 | ☐ |
 | phpMyAdmin 不公网开放 | ☐ |
 | SSL 证书已配置 | ☐ |
+| Nginx access_log 不记录 query string（token/手机号防泄露） | ☐ |
 | 默认管理员密码已修改 | ☐ |
 | MUYING_PRIVACY_KEY 已配置 | ☐ |
 | 高风险功能开关已关闭 | ☐ |
