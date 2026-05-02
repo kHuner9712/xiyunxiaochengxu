@@ -229,6 +229,7 @@
                         is_more: 1,
                     },
                     dataType: "json",
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if(this.data_page > 1) {
                             uni.hideLoading();
@@ -339,6 +340,7 @@
                                     id: id,
                                 },
                                 dataType: "json",
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {

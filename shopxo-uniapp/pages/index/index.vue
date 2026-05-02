@@ -508,6 +508,7 @@
                     method: 'POST',
                     data: request_params,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         var data = res.data.data;

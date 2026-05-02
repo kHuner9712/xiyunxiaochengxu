@@ -123,6 +123,7 @@
                                 method: 'POST',
                                 data: {...self.params, ...{authcode: res.code}},
                                 dataType: 'json',
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.stopPullDownRefresh();
                                     if (res.data.code == 0 && (res.data.data || null) != null) {

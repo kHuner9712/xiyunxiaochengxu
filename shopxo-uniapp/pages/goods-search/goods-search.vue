@@ -396,6 +396,7 @@
                     method: 'POST',
                     data: post_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: res => {
                         uni.stopPullDownRefresh();
                         if (res.data.code == 0) {
@@ -487,6 +488,7 @@
                     method: 'POST',
                     data: post_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: res => {
                         if(this.data_page > 1) {
                             uni.hideLoading();

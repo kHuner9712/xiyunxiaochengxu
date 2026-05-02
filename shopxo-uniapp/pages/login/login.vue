@@ -951,6 +951,7 @@
                     method: 'POST',
                     data: post_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {
@@ -1056,6 +1057,7 @@
                         method: 'POST',
                         data: e.detail.value,
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             this.user_success_handle(res);
                         },
@@ -1101,6 +1103,7 @@
                         method: 'POST',
                         data: data,
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             this.user_success_handle(res);
                         },
@@ -1171,6 +1174,7 @@
                         method: 'POST',
                         data: e.detail.value,
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             this.user_success_handle(res);
                         },
@@ -1249,6 +1253,7 @@
                         method: 'POST',
                         data: e.detail.value,
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             this.user_success_handle(res);
                         },
@@ -1284,6 +1289,7 @@
                         method: 'POST',
                         data: e.detail.value,
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             uni.hideLoading();
                             if (res.data.code == 0) {
@@ -1338,6 +1344,7 @@
                             method: 'POST',
                             data: this.plugins_thirdpartylogin_user,
                             dataType: 'json',
+                            header: app.globalData.get_request_headers(),
                             success: (res) => {
                                 if (res.data.code == 0) {
                                     uni.hideLoading();
@@ -1643,6 +1650,7 @@
                     method: 'POST',
                     data: post_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {

@@ -606,6 +606,7 @@
                     method: "POST",
                     data: this.params,
                     dataType: "json",
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         if (res.data.code == 0) {
@@ -774,6 +775,7 @@
                         method: "POST",
                         data: form_data,
                         dataType: "json",
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             uni.hideLoading();
                             if (res.data.code == 0) {
@@ -851,6 +853,7 @@
                         method: "POST",
                         data: form_data,
                         dataType: "json",
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             uni.hideLoading();
                             self.setData({
@@ -901,6 +904,7 @@
                                     id: this.aftersale_data.id,
                                 },
                                 dataType: "json",
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {
@@ -993,6 +997,7 @@
                         describe: value
                     },
                     dataType: "json",
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         this.setData({
@@ -1044,6 +1049,7 @@
                                     id: this.plugins_shop_data.dispute_data.id,
                                 },
                                 dataType: "json",
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {
@@ -1103,6 +1109,7 @@
                             order_aftersale_dispute_id: order_aftersale_dispute_id,
                         },
                         dataType: "json",
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             if (res.data.code == 0) {
                                 // 数据渲染、初始化则反转数据、记录最后的节点id
@@ -1253,6 +1260,7 @@
                         type: type
                     },
                     dataType: "json",
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         this.setData({
                             chat_send_submit_disabled_status: false,

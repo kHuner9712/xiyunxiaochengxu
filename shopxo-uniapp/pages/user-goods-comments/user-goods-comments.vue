@@ -162,6 +162,7 @@
                         is_more: 1,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         if (res.data.code == 0) {
@@ -251,6 +252,7 @@
                                 method: 'POST',
                                 data: { ids: data.id },
                                 dataType: 'json',
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {

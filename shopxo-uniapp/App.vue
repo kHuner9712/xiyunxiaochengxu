@@ -436,6 +436,25 @@
             },
 
             /**
+             * [MUYING-二开] 获取请求 Header（Authorization、X-User-UUID）
+             * 供未走 common/js/http.js 的直连 uni.request / uploadFile / downloadFile 使用
+             * @returns {Object} headers
+             */
+            get_request_headers() {
+                var user = this.get_user_cache_info();
+                var token = user ? user.token || '' : '';
+                var uuid = this.request_uuid();
+                var headers = {};
+                if (token) {
+                    headers['Authorization'] = 'Bearer ' + token;
+                }
+                if (uuid) {
+                    headers['X-User-UUID'] = uuid;
+                }
+                return headers;
+            },
+
+            /**
              * 获取tab页面切换参数
              */
             get_page_tabbar_switch_params() {
@@ -572,6 +591,7 @@
                                                                 mobile: res.result,
                                                             },
                                                             dataType: 'json',
+                                                            header: self.get_request_headers(),
                                                             success: (res) => {
                                                                 uni.closeAuthView();
                                                                 if (res.data.code == 0) {
@@ -775,6 +795,7 @@
                                     authcode: res.code,
                                 },
                                 dataType: 'json',
+                                header: self.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {
@@ -880,6 +901,7 @@
                     method: 'POST',
                     data: data,
                     dataType: 'json',
+                    header: self.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {
@@ -1418,6 +1440,7 @@
                             url: encodeURIComponent(page_url),
                         },
                         dataType: 'json',
+                        header: this.get_request_headers(),
                         success: (res) => {
                             if (res.data.code == 0 && (res.data.data.package || null) != null) {
                                 var data = res.data.data.package;
@@ -1590,6 +1613,7 @@
                                         is_key: 1,
                                     },
                                     dataType: 'json',
+                                    header: self.get_request_headers(),
                                     success: (res) => {
                                         // 赋值不在加载状态
                                         self.data.common_data_loading_status = 0;
@@ -2287,6 +2311,7 @@
                                 method: 'POST',
                                 data: {},
                                 dataType: 'json',
+                                header: this.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {

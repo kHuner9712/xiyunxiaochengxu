@@ -593,6 +593,7 @@
                             method: 'POST',
                             data: new_params,
                             dataType: 'json',
+                            header: app.globalData.get_request_headers(),
                             success: (res) => {
                                 if (is_lodaing) { 
                                     uni.hideLoading();
@@ -701,6 +702,7 @@
                     method: 'POST',
                     data: new_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (this.goods_page > 1) {
                             uni.hideLoading();

@@ -166,6 +166,7 @@
                         page: this.data_page
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: res => {
                         if(this.data_page > 1) {
                             uni.hideLoading();
@@ -267,6 +268,7 @@
                         ids: id
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: res => {
                         uni.hideLoading();
                         if (res.data.code == 0) {
@@ -306,6 +308,7 @@
                         is_mandatory_favor: 1
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {

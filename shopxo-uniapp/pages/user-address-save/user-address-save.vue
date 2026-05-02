@@ -293,6 +293,7 @@
                     method: 'POST',
                     data: {...this.params, ...{is_lang: 0}},
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (res.data.code == 0) {
                             var data = res.data.data || null;
@@ -417,6 +418,7 @@
                     url: app.globalData.get_request_url('index', 'ueditor'),
                     filePath: img_paths[count],
                     name: 'upfile',
+                    header: app.globalData.get_request_headers(),
                     formData: {
                         action: 'uploadimage',
                         path_type: self.editor_path_type,
@@ -640,6 +642,7 @@
                         method: 'POST',
                         data: form_data,
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             uni.hideLoading();
                             if (res.data.code == 0) {
@@ -687,6 +690,7 @@
                     method: 'POST',
                     data: { code: this.region_code_value },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         this.setData({
                             form_submit_disabled_status: false,
@@ -820,6 +824,7 @@
                                     id: value,
                                 },
                                 dataType: 'json',
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {

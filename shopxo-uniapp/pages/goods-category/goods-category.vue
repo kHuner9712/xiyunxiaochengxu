@@ -633,6 +633,7 @@
                     method: 'POST',
                     data: {},
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         if (res.data.code == 0) {
@@ -825,6 +826,7 @@
                     method: 'POST',
                     data: post_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (res.data.code == 0) {
                             var data = res.data.data;
@@ -1203,6 +1205,7 @@
                         spec: spec,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (res.data.code == 0) {
                             this.cart_para_curve_handle();
@@ -1230,6 +1233,7 @@
                         stock: buy_number,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (res.data.code == 0) {
                             this.cart_para_curve_handle();
@@ -1257,6 +1261,7 @@
                         id: cart_id,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (res.data.code == 0) {
                             this.get_cart_data();
@@ -1282,6 +1287,7 @@
                         method: 'POST',
                         data: {},
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             if (res.data.code == 0) {
                                 var data = res.data.data;
@@ -1404,6 +1410,7 @@
                     method: 'POST',
                     data: buy_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {

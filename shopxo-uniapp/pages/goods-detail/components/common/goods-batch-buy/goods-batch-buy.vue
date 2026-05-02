@@ -343,6 +343,7 @@ export default {
                 method: "POST",
                 data: { goods_data: goods_data },
                 dataType: "json",
+                header: app.globalData.get_request_headers(),
                 success: (res) => {
                     if (res.data.code == 0) {
                         var plugins_wholesale_data = null;
@@ -462,6 +463,7 @@ export default {
                 method: "POST",
                 data: { goods_data: goods_data },
                 dataType: "json",
+                header: app.globalData.get_request_headers(),
                 success: (res) => {
                     uni.hideLoading();
                     if (res.data.code == 0) {

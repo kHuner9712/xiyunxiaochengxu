@@ -230,6 +230,7 @@
                     method: 'POST',
                     data: {id: e.currentTarget.dataset.value},
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {

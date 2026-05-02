@@ -348,6 +348,7 @@
                     url: app.globalData.get_request_url('useravatarupload', 'personal'),
                     filePath: image,
                     name: 'file',
+                    header: app.globalData.get_request_headers(),
                     formData: {},
                     success: function (res) {
                         if (res.statusCode == 200) {

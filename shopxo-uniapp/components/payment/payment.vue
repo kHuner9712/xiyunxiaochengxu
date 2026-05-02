@@ -391,6 +391,7 @@
                         method: 'POST',
                         data: post_data,
                         dataType: 'json',
+                        header: getApp().globalData.get_request_headers(),
                         success: (res) => {
                             uni.hideLoading();
                             var data = res.data.data;
@@ -806,6 +807,7 @@
                             order_no: data.data.order_no,
                         },
                         dataType: 'json',
+                        header: getApp().globalData.get_request_headers(),
                         success: (res) => {
                             if (res.data.code == 0) {
                                 // 清除定时、支付数据、弹窗

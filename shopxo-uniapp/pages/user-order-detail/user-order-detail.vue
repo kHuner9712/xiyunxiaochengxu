@@ -567,6 +567,7 @@
                     method: 'POST',
                     data: this.params,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         if (res.data.code == 0) {
@@ -743,6 +744,7 @@
                                     id: this.detail.id,
                                 },
                                 dataType: 'json',
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {
@@ -814,6 +816,7 @@
                         id: this.detail.id,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {
@@ -849,6 +852,7 @@
                                     id: this.detail.id,
                                 },
                                 dataType: 'json',
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {
@@ -934,6 +938,7 @@
                     method: "POST",
                     data: { goods_data: goods_data },
                     dataType: "json",
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {

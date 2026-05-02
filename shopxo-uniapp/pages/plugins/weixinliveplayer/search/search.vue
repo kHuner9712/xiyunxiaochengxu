@@ -198,6 +198,7 @@
                         is_more: 1,
                     },
                     dataType: "json",
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         uni.stopPullDownRefresh();

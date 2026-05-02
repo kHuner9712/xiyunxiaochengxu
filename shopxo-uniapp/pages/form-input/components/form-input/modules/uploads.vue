@@ -161,10 +161,11 @@
                 var self = this;
                 if (self.form_images_list.length <= this.propMaxNum) {
                     uni.uploadFile({
-                        url: app.globalData.get_request_url('index', 'ueditor'),
-                        filePath: img_paths[count],
-                        name: 'upfile',
-                        formData: {
+                    url: app.globalData.get_request_url('index', 'ueditor'),
+                    filePath: img_paths[count],
+                    name: 'upfile',
+                    header: app.globalData.get_request_headers(),
+                     formData: {
                             action: action,
                             path_type: self.propPathType,
                             business: this.propBusiness

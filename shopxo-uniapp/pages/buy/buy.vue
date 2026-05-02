@@ -525,6 +525,7 @@
                     method: 'POST',
                     data: this.request_data_ext_params_merge(data),
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         if(this.is_first == 0) {
@@ -826,7 +827,8 @@
                         form_id: e.forminput_id,
                         data: e.submit_data
                     },
-                    dataType: 'json'
+                    dataType: 'json',
+                    header: app.globalData.get_request_headers()
                 });
             },
 
@@ -922,6 +924,7 @@
                     method: 'POST',
                     data: data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {

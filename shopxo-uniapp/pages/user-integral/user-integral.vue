@@ -122,6 +122,7 @@
                         page: this.data_page
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: res => {
                         if(this.data_page > 1) {
                             uni.hideLoading();

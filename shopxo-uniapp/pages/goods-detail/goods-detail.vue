@@ -1488,6 +1488,7 @@
                         coupon_id: value,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {

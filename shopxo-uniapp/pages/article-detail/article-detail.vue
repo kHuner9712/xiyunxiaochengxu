@@ -113,6 +113,7 @@
                         id: this.params.id || 0,
                     },
                     dataType: "json",
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         var data = res.data.data;

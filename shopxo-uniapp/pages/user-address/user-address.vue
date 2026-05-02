@@ -158,6 +158,7 @@
                     method: 'POST',
                     data: this.params,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         if (res.data.code == 0) {
@@ -275,6 +276,7 @@
                                 method: 'POST',
                                 data: data,
                                 dataType: 'json',
+                                header: app.globalData.get_request_headers(),
                                 success: (res) => {
                                     uni.hideLoading();
                                     if (res.data.code == 0) {

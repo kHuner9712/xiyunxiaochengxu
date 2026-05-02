@@ -115,6 +115,7 @@
                     url: app.globalData.get_request_url('detail', 'usergoodscomments'),
                     method: 'POST',
                     data: { id: this.goods_id },
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.stopPullDownRefresh();
                         var data = res.data.data || null;
@@ -172,6 +173,7 @@
                         method: 'POST',
                         data: newData,
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             uni.hideLoading();
                             if (res.data.code == 0) {

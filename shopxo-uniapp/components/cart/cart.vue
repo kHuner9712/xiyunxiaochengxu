@@ -587,6 +587,7 @@
                     method: 'POST',
                     data: post_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (res.data.code == 0) {
                             var data = res.data.data;
@@ -759,6 +760,7 @@
                         stock: buy_number,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {
@@ -819,6 +821,7 @@
                         is_mandatory_favor: 1,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (res.data.code == 0) {
                             this.cart_delete(id, type);
@@ -902,6 +905,7 @@
                         id: id,
                     },
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         if (res.data.code == 0) {
                             var temp_list = [];
@@ -1039,6 +1043,7 @@
                         method: 'POST',
                         data: {...data, ...{is_cart_init: 1}},
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             if (res.data.code == 0) {
                                 var data = res.data.data;
@@ -1127,6 +1132,7 @@
                     method: 'POST',
                     data: buy_data,
                     dataType: 'json',
+                    header: app.globalData.get_request_headers(),
                     success: (res) => {
                         uni.hideLoading();
                         if (res.data.code == 0) {
@@ -1210,6 +1216,7 @@
                             page: this.goods_page,
                         },
                         dataType: 'json',
+                        header: app.globalData.get_request_headers(),
                         success: (res) => {
                             if (res.data.code == 0) {
                                 var data = res.data.data;
