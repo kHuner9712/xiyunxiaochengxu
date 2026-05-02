@@ -1,4 +1,4 @@
-# 孕禧 V1.0 运营 Dashboard 指标定义
+# 禧孕 V1.0 运营 Dashboard 指标定义
 
 本文档明确每个 Dashboard 指标的公式、数据来源、刷新频率、适用限制。
 

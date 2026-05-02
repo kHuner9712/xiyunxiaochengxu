@@ -107,11 +107,11 @@ mysql -u<DB_USER> -p<DB_NAME> < docs/sql/muying-privacy-security-migration.sql
 mysql -u<DB_USER> -p<DB_NAME> < docs/sql/muying-v1-post-migration.sql
 
 # 3. 初始化配置（必须）
-mysql -u<DB_USER> -p<DB_NAME> < docs/sql/yunxi-init-config.sql
+mysql -u<DB_USER> -p<DB_NAME> < docs/sql/xiyun-init-config.sql
 
 # 4. 演示数据（可选，测试环境建议执行）
-mysql -u<DB_USER> -p<DB_NAME> < docs/sql/yunxi-init-activity-demo.sql
-mysql -u<DB_USER> -p<DB_NAME> < docs/sql/yunxi-init-feedback-demo.sql
+mysql -u<DB_USER> -p<DB_NAME> < docs/sql/xiyun-init-activity-demo.sql
+mysql -u<DB_USER> -p<DB_NAME> < docs/sql/xiyun-init-feedback-demo.sql
 ```
 
 ---

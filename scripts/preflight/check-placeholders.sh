@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — 占位符残留扫描
+# 禧孕小程序 — 占位符残留扫描
 # ============================================================
 #
 # 【用途】扫描仓库中残留的占位符或示例值，防止正式发布时遗漏替换
@@ -67,9 +67,9 @@ CODE_PATTERNS=(
     '{{SSL_CERT_PATH}}'
     '{{CONTACT_PHONE}}'
     '400-000-0000'
-    'api.yunxi.com'
-    'cdn.yunxi.com'
-    '/var/www/yunxi'
+    'api.xiyun.com'
+    'cdn.xiyun.com'
+    '/var/www/xiyun'
 )
 
 CODE_DEV_PATTERNS=(
@@ -91,9 +91,9 @@ DOC_PATTERNS=(
     '{{DEPLOY_PATH}}'
     '{{CONTACT_PHONE}}'
     '400-000-0000'
-    'api.yunxi.com'
-    'cdn.yunxi.com'
-    '/var/www/yunxi'
+    'api.xiyun.com'
+    'cdn.xiyun.com'
+    '/var/www/xiyun'
 )
 
 CODE_FILE_TYPES=(-name '*.php' -o -name '*.vue' -o -name '*.js' -o -name '*.json' -o -name '*.env' -o -name '*.yml' -o -name '*.yaml' -o -name '*.conf' -o -name '*.sh')
@@ -340,8 +340,8 @@ if [[ $TOTAL_FAIL -gt 0 ]]; then
     echo "  {{API_DOMAIN}}     → 后端 API 域名"
     echo "  {{CONTACT_PHONE}}  → 真实客服电话"
     echo "  400-000-0000       → 真实客服电话"
-    echo "  api.yunxi.com      → 实际 API 域名"
-    echo "  /var/www/yunxi     → 实际部署路径"
+    echo "  api.xiyun.com      → 实际 API 域名"
+    echo "  /var/www/xiyun     → 实际部署路径"
     echo "  shopxo_dev_123     → 生产数据库密码"
     echo "  root123456         → 生产数据库密码"
     echo "  manifest.json appid → 微信小程序 AppID"

@@ -1,4 +1,4 @@
-# 孕禧小程序 — 发布参数落地执行清单
+# 禧孕小程序 — 发布参数落地执行清单
 
 > 按"发布当天执行"顺序排列，每一步标注：填什么、填哪里、怎么验证、容易漏的地方。
 
@@ -35,12 +35,12 @@
 | 2    | 修改 .env 数据库配置   | DB_HOST/PORT/NAME/USER/PASS                        | 编辑 `shopxo-backend/.env`                           | `mysql -u USER -p -h HOST DB_NAME -e "SELECT 1"` |
 | 3    | 修改 .env 调试开关     | `APP_DEBUG=false`                                  | 编辑 `shopxo-backend/.env`                           | `grep APP_DEBUG .env` → false                    |
 | 4    | 确认密码一致性         | `.env` 密码 = `database.php` 密码 = MySQL 实际密码 | 对比三处                                             | 手动核对                                         |
-| 5    | 配置 Nginx             | API_DOMAIN、DEPLOY_PATH、SSL_CERT_PATH             | `/etc/nginx/sites-available/yunxi.conf`              | `nginx -t && systemctl reload nginx`             |
+| 5    | 配置 Nginx             | API_DOMAIN、DEPLOY_PATH、SSL_CERT_PATH             | `/etc/nginx/sites-available/xiyun.conf`              | `nginx -t && systemctl reload nginx`             |
 | 6    | 修改 Nginx server_name | `localhost` → 实际域名                             | `docker/nginx/default.conf` 或 Nginx 配置文件        | `nginx -t`                                       |
 | 7    | 确认表前缀             | DB*PREFIX = `sxo*`                                 | 安装向导中填写                                       | `SHOW TABLES LIKE 'sxo_%'`                       |
-| 8    | 替换 SQL 中的客服电话  | `{{CONTACT_PHONE}}` → 真实号码                     | `docs/sql/yunxi-init-activity-demo.sql` 中 6 处      | `grep CONTACT_PHONE *.sql` → 无命中              |
+| 8    | 替换 SQL 中的客服电话  | `{{CONTACT_PHONE}}` → 真实号码                     | `docs/sql/xiyun-init-activity-demo.sql` 中 6 处      | `grep CONTACT_PHONE *.sql` → 无命中              |
 | 9    | 执行数据库 SQL         | —                                                  | 依次执行 migration + init SQL                        | `bash check-server.sh`                           |
-| 10   | 配置后台               | 站点名称=孕禧、Logo、搜索关键词                    | 后台 → 系统设置                                      | 打开小程序检查                                   |
+| 10   | 配置后台               | 站点名称=禧孕、Logo、搜索关键词                    | 后台 → 系统设置                                      | 打开小程序检查                                   |
 | 11   | 配置协议 URL           | 隐私政策 URL、注册协议 URL                         | 后台 → 协议管理                                      | 登录页点击协议链接                               |
 | 12   | 删除 install.php       | —                                                  | `rm public/install.php`                              | `ls public/install.php` → 不存在                 |
 | 13   | 关闭调试               | APP_DEBUG=false、show_error_msg=false              | `.env` + `config/app.php`                            | `check-server.sh` 检查                           |
@@ -136,6 +136,6 @@
 | 12  | Logo 图片                  | 后台上传                        | 小程序中查看                        |   ⚠️   |
 | 13  | 协议 URL                   | 后台配置                        | 登录页点击链接                      |   ⚠️   |
 | 14  | install.php                | 删除                            | `ls public/install.php` → 不存在    |        |
-| 15  | SQL 中 `{{CONTACT_PHONE}}` | yunxi-init-activity-demo.sql    | `grep CONTACT_PHONE *.sql` → 无命中 |   ⚠️   |
+| 15  | SQL 中 `{{CONTACT_PHONE}}` | xiyun-init-activity-demo.sql    | `grep CONTACT_PHONE *.sql` → 无命中 |   ⚠️   |
 
 ⚠️ = 容易遗漏，发布前重点检查

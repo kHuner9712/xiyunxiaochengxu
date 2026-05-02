@@ -1,4 +1,4 @@
-# 宝塔面板 Nginx 配置示例 — 孕禧小程序后端
+# 宝塔面板 Nginx 配置示例 — 禧孕小程序后端
 
 ---
 
@@ -6,8 +6,8 @@
 
 在宝塔面板 → 网站 → 添加站点：
 
-- **域名**: `api.yunxi.example.com`（替换为实际域名）
-- **根目录**: `/www/wwwroot/yunxi`（项目根目录）
+- **域名**: `api.xiyun.example.com`（替换为实际域名）
+- **根目录**: `/www/wwwroot/xiyun`（项目根目录）
 - **PHP版本**: PHP-81
 - **数据库**: MySQL 5.7
 
@@ -27,17 +27,17 @@
 server {
     listen 80;
     listen 443 ssl http2;
-    server_name api.yunxi.example.com;
+    server_name api.xiyun.example.com;
 
     # SSL 证书（宝塔面板申请 Let's Encrypt 或上传自定义证书）
-    ssl_certificate    /www/server/panel/vhost/cert/api.yunxi.example.com/fullchain.pem;
-    ssl_certificate_key /www/server/panel/vhost/cert/api.yunxi.example.com/privkey.pem;
+    ssl_certificate    /www/server/panel/vhost/cert/api.xiyun.example.com/fullchain.pem;
+    ssl_certificate_key /www/server/panel/vhost/cert/api.xiyun.example.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
     # 网站根目录（指向 public）
-    root /www/wwwroot/yunxi/public;
+    root /www/wwwroot/xiyun/public;
     index index.php index.html;
 
     # HTTP 强制跳转 HTTPS
@@ -119,8 +119,8 @@ server {
     }
 
     # 日志
-    access_log /www/wwwlogs/api.yunxi.example.com.log;
-    error_log  /www/wwwlogs/api.yunxi.example.com.error.log;
+    access_log /www/wwwlogs/api.xiyun.example.com.log;
+    error_log  /www/wwwlogs/api.xiyun.example.com.error.log;
 }
 ```
 
@@ -169,11 +169,11 @@ redis（如使用 Redis 缓存）
 
 - **禁止远程访问**: 仅允许 127.0.0.1 连接
 - **root 密码**: 强密码
-- **创建专用用户**: yunxi_app，仅授权 yunxi_prod 数据库
+- **创建专用用户**: xiyun_app，仅授权 xiyun_prod 数据库
 
 ```sql
-CREATE USER 'yunxi_app'@'127.0.0.1' IDENTIFIED BY '强密码';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX ON yunxi_prod.* TO 'yunxi_app'@'127.0.0.1';
+CREATE USER 'xiyun_app'@'127.0.0.1' IDENTIFIED BY '强密码';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX ON xiyun_prod.* TO 'xiyun_app'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ```
 
@@ -189,10 +189,10 @@ collation_server = utf8mb4_general_ci
 ```bash
 # 1. 克隆代码
 cd /www/wwwroot
-git clone https://github.com/kHuner9712/xiyun.git yunxi
+git clone https://github.com/kHuner9712/xiyun.git xiyun
 
 # 2. 创建 .env
-cd yunxi/shopxo-backend
+cd xiyun/shopxo-backend
 cp .env.production.example .env
 # 编辑 .env，替换所有 {{占位符}} 为实际值
 
@@ -200,17 +200,17 @@ cp .env.production.example .env
 # （项目会从 .env 读取，但需确保文件存在）
 
 # 4. 导入数据库
-mysql -u yunxi_app -p yunxi_prod < config/shopxo.sql
-mysql -u yunxi_app -p yunxi_prod < ../../docs/muying-final-migration.sql
+mysql -u xiyun_app -p xiyun_prod < config/shopxo.sql
+mysql -u xiyun_app -p xiyun_prod < ../../docs/muying-final-migration.sql
 
 # 5. 设置权限
-chown -R www:www /www/wwwroot/yunxi
-chmod -R 755 /www/wwwroot/yunxi
-chmod -R 777 /www/wwwroot/yunxi/runtime
-chmod -R 777 /www/wwwroot/yunxi/public/static/upload
+chown -R www:www /www/wwwroot/xiyun
+chmod -R 755 /www/wwwroot/xiyun
+chmod -R 777 /www/wwwroot/xiyun/runtime
+chmod -R 777 /www/wwwroot/xiyun/public/static/upload
 
 # 6. 删除安装入口
-rm -f /www/wwwroot/yunxi/public/install.php
+rm -f /www/wwwroot/xiyun/public/install.php
 
 # 7. 重启 PHP-FPM
 /etc/init.d/php-fpm-81 restart
@@ -220,18 +220,18 @@ rm -f /www/wwwroot/yunxi/public/install.php
 
 ```bash
 # 检查 API 是否可访问
-curl -I https://api.yunxi.example.com/api.php
+curl -I https://api.xiyun.example.com/api.php
 
 # 检查 .env 不可访问
-curl -I https://api.yunxi.example.com/.env
+curl -I https://api.xiyun.example.com/.env
 # 预期: 403 Forbidden 或 404 Not Found
 
 # 检查 runtime 不可访问
-curl -I https://api.yunxi.example.com/runtime/
+curl -I https://api.xiyun.example.com/runtime/
 # 预期: 403 Forbidden 或 404 Not Found
 
 # 检查后台入口
-curl -I https://api.yunxi.example.com/adminwlmqhs.php
+curl -I https://api.xiyun.example.com/adminwlmqhs.php
 # 预期: 200 OK（登录页面）
 ```
 

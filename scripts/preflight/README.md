@@ -1,4 +1,4 @@
-# 孕禧小程序 — 上线前预检脚本
+# 禧孕小程序 — 上线前预检脚本
 
 ## 文件说明
 
@@ -37,10 +37,10 @@ bash check-release-placeholders.sh --mode=experience .
 bash check-wechat-submit-readiness.sh .
 
 # 服务器环境预检
-bash check-server.sh --env /var/www/yunxi/shopxo-backend/.env /var/www/yunxi/shopxo-backend
+bash check-server.sh --env /var/www/xiyun/shopxo-backend/.env /var/www/xiyun/shopxo-backend
 
 # 运行时配置检查
-bash check-runtime-config.sh --env /var/www/yunxi/shopxo-backend/.env
+bash check-runtime-config.sh --env /var/www/xiyun/shopxo-backend/.env
 
 # 后台初始化检查
 bash check-admin-bootstrap.sh .
@@ -103,8 +103,8 @@ mysql -u shopxo -p shopxo < check-db.sql
 ```ini
 [DATABASE]
 HOSTNAME = 127.0.0.1
-DATABASE = yunxi
-USERNAME = yunxi
+DATABASE = xiyun
+USERNAME = xiyun
 PASSWORD = your_pass
 HOSTPORT = 3306
 PREFIX = sxo_
@@ -114,8 +114,8 @@ PREFIX = sxo_
 ```ini
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_NAME=yunxi
-DB_USER=yunxi
+DB_NAME=xiyun
+DB_USER=xiyun
 DB_PASS=your_pass
 DB_PREFIX=sxo_
 ```

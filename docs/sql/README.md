@@ -1,4 +1,4 @@
-# 孕禧数据库迁移文件说明
+# 禧孕数据库迁移文件说明
 
 ## 执行顺序
 
@@ -24,7 +24,7 @@
 
 | ID 范围 | 用途 | 来源 |
 |---------|------|------|
-| 700-769 | 孕禧运营主菜单 + 子功能 | muying-final-migration.sql |
+| 700-769 | 禧孕运营主菜单 + 子功能 | muying-final-migration.sql |
 | 770-775 | 合规中心 | muying-final-migration.sql |
 | 780-782 | 敏感数据管理 | muying-final-migration.sql |
 | 790-792 | 隐私数据管理 | muying-v1-post-migration.sql |
@@ -34,9 +34,9 @@
 
 | 文件 | 说明 |
 |------|------|
-| `yunxi-init-activity-demo.sql` | 活动演示数据 |
-| `yunxi-init-config.sql` | 初始配置数据 |
-| `yunxi-init-feedback-demo.sql` | 反馈演示数据 |
+| `xiyun-init-activity-demo.sql` | 活动演示数据 |
+| `xiyun-init-config.sql` | 初始配置数据 |
+| `xiyun-init-feedback-demo.sql` | 反馈演示数据 |
 
 ## 早期迁移文件（已废弃，仅供参考）
 

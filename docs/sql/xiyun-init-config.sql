@@ -1,5 +1,5 @@
 -- ============================================================
--- 孕禧小程序 — 自定义配置项初始化
+-- 禧孕小程序 — 自定义配置项初始化
 -- ============================================================
 --
 -- 【用途】
@@ -46,25 +46,25 @@ ON DUPLICATE KEY UPDATE `value`=VALUES(`value`), `upd_time`=UNIX_TIMESTAMP();
 -- -----------------------------------------------------------
 
 -- 站点名称
--- 默认值 '孕禧'：显示在登录页标题、分享标题等位置
+-- 默认值 '禧孕'：显示在登录页标题、分享标题等位置
 -- 后台修改路径：系统设置 → 站点设置 → 站点名称
 INSERT INTO `sxo_config` (`value`, `name`, `describe`, `error_tips`, `type`, `only_tag`, `upd_time`) VALUES
-('孕禧', '站点名称', '站点名称，显示在浏览器标题和分享卡片', '', 'home', 'home_site_name', UNIX_TIMESTAMP())
-ON DUPLICATE KEY UPDATE `value`='孕禧', `upd_time`=UNIX_TIMESTAMP();
+('禧孕', '站点名称', '站点名称，显示在浏览器标题和分享卡片', '', 'home', 'home_site_name', UNIX_TIMESTAMP())
+ON DUPLICATE KEY UPDATE `value`='禧孕', `upd_time`=UNIX_TIMESTAMP();
 
 -- 正方形 Logo（登录页头像、分享图标）
 -- 建议尺寸：300x300px，PNG 格式
 -- 需要先上传图片到服务器，再填写路径
 -- 后台修改路径：系统设置 → 站点设置 → 正方形logo
 -- INSERT INTO `sxo_config` (`value`, `name`, `describe`, `error_tips`, `type`, `only_tag`, `upd_time`) VALUES
--- ('/static/upload/images/logo/yunxi-square.png', '正方形logo', '建议300x300px，png格式', '', 'home', 'home_site_logo_square', UNIX_TIMESTAMP())
--- ON DUPLICATE KEY UPDATE `value`='/static/upload/images/logo/yunxi-square.png', `upd_time`=UNIX_TIMESTAMP();
+-- ('/static/upload/images/logo/xiyun-square.png', '正方形logo', '建议300x300px，png格式', '', 'home', 'home_site_logo_square', UNIX_TIMESTAMP())
+-- ON DUPLICATE KEY UPDATE `value`='/static/upload/images/logo/xiyun-square.png', `upd_time`=UNIX_TIMESTAMP();
 
 -- 手机端 Logo
 -- 建议尺寸：220x66px
 -- INSERT INTO `sxo_config` (`value`, `name`, `describe`, `error_tips`, `type`, `only_tag`, `upd_time`) VALUES
--- ('/static/upload/images/logo/yunxi-wap.png', '手机端logo', '建议220x66px', '', 'home', 'home_site_logo_wap', UNIX_TIMESTAMP())
--- ON DUPLICATE KEY UPDATE `value`='/static/upload/images/logo/yunxi-wap.png', `upd_time`=UNIX_TIMESTAMP();
+-- ('/static/upload/images/logo/xiyun-wap.png', '手机端logo', '建议220x66px', '', 'home', 'home_site_logo_wap', UNIX_TIMESTAMP())
+-- ON DUPLICATE KEY UPDATE `value`='/static/upload/images/logo/xiyun-wap.png', `upd_time`=UNIX_TIMESTAMP();
 
 -- -----------------------------------------------------------
 -- 3. 微信小程序登录配置（建议执行）

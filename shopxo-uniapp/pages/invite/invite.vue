@@ -50,7 +50,7 @@
             <view v-if="!is_logged_in" class="padding-horizontal-main margin-top-main">
                 <view class="muying-card padding-main">
                     <view class="invite-cta-section tc">
-                        <view class="invite-cta-title">加入孕禧，领取专属福利</view>
+                        <view class="invite-cta-title">加入禧孕，领取专属福利</view>
                         <view class="invite-cta-desc cr-grey text-size-sm margin-top-sm">注册即享新人权益，邀请好友赢积分</view>
                         <view class="invite-cta-btn cr-white text-size fw-b margin-top-main" @tap="go_register">立即注册 领取福利</view>
                         <view class="invite-cta-login text-size-sm cr-grey margin-top-main" @tap="go_login">已有账号？去登录</view>
@@ -159,7 +159,7 @@
 
         onShareAppMessage() {
             return {
-                title: '孕禧邀请你一起科学孕育，赢积分好礼！',
+                title: '禧孕邀请你一起科学孕育，赢积分好礼！',
                 path: '/pages/invite/invite?invite_code=' + (this.invite_code || ''),
                 imageUrl: '/static/images/common/logo.png',
             };
@@ -167,7 +167,7 @@
 
         onShareTimeline() {
             return {
-                title: '孕禧邀请你一起科学孕育，赢积分好礼！',
+                title: '禧孕邀请你一起科学孕育，赢积分好礼！',
                 query: 'invite_code=' + (this.invite_code || ''),
             };
         },

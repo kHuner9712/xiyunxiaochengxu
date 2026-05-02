@@ -1,4 +1,4 @@
-# 孕禧母婴商城 (ShopXO 二开) - 开发指南
+# 禧孕母婴商城 (ShopXO 二开) - 开发指南
 
 > **当前版本**：v0.1.0-rc1 | **封板日期**：2026-04-25 | **状态**：代码已封板，体验版可部署
 
@@ -6,12 +6,12 @@
 
 **封板报告**：[docs/release/rc-gate-report.md](docs/release/rc-gate-report.md)  
 **Release Notes**：[docs/release/rc-release-notes.md](docs/release/rc-release-notes.md)  
-**文档索引**：[docs/yunxi-docs-index.md](docs/yunxi-docs-index.md)
+**文档索引**：[docs/xiyun-docs-index.md](docs/xiyun-docs-index.md)
 
 ## 1. 项目结构
 
 ```
-yunxixiaochengxu/
+xiyunxiaochengxu/
 ├── shopxo-backend/       # 后端 (ThinkPHP 6)
 ├── shopxo-uniapp/        # 前端 (uni-app 微信小程序)
 ├── docker/               # Docker 构建文件 (Nginx/PHP)

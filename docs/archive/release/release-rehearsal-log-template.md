@@ -1,4 +1,4 @@
-# 孕禧小程序 — 发版彩排记录模板 (Release Rehearsal Log)
+# 禧孕小程序 — 发版彩排记录模板 (Release Rehearsal Log)
 
 > 每次彩排填写一份本文件。彩排 = 照着 `release-rehearsal-checklist.md` 从头走到尾。
 > 本文件是彩排的唯一产出物，用于判断是否允许进入正式发布。
@@ -64,7 +64,7 @@
 | 11 | DB_PASS | ☐ 已填 ☐ 未填 | |
 | 12 | DB_PREFIX | ☐ 已填 ☐ 未填 | |
 | 13 | CONTACT_PHONE | ☐ 已填 ☐ 未填 | |
-| 14 | 站点名称（孕禧） | ☐ 已填 ☐ 未填 | |
+| 14 | 站点名称（禧孕） | ☐ 已填 ☐ 未填 | |
 | 15 | Logo 图片 | ☐ 已上传 ☐ 未上传 | |
 | 16 | 隐私政策 URL | ☐ 已填 ☐ 未填 | |
 | 17 | 注册协议 URL | ☐ 已填 ☐ 未填 | |
@@ -137,9 +137,9 @@
 
 | # | SQL 文件 | 执行结果 | 错误信息（如有） |
 |---|---------|---------|----------------|
-| 1 | `docs/sql/yunxi-init-config.sql` | ☐ 成功 ☐ 失败 | |
-| 2 | `docs/sql/yunxi-init-activity-demo.sql` | ☐ 成功 ☐ 失败 | |
-| 3 | `docs/sql/yunxi-init-feedback-demo.sql` | ☐ 成功 ☐ 失败 | |
+| 1 | `docs/sql/xiyun-init-config.sql` | ☐ 成功 ☐ 失败 | |
+| 2 | `docs/sql/xiyun-init-activity-demo.sql` | ☐ 成功 ☐ 失败 | |
+| 3 | `docs/sql/xiyun-init-feedback-demo.sql` | ☐ 成功 ☐ 失败 | |
 
 ### 数据库验证
 

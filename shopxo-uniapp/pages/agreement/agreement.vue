@@ -13,7 +13,7 @@
                         <block v-if="agreement_type === 'privacy'">
                             <view class="margin-bottom-main">
                                 <text class="fw-b">一、我们如何收集和使用您的个人信息</text>
-                                <text class="block margin-top-xs">在您使用孕禧平台服务的过程中，我们可能会收集和使用您的以下信息：</text>
+                                <text class="block margin-top-xs">在您使用禧孕平台服务的过程中，我们可能会收集和使用您的以下信息：</text>
                                 <text class="block margin-top-xs">1. 账号信息：手机号（用于登录和身份验证）、昵称、头像等，用于创建和登录账号。</text>
                                 <text class="block margin-top-xs">2. 孕育信息：备孕/孕期/产后阶段、预产期、宝宝生日、宝宝月龄等，用于为您提供个性化的活动和内容推荐。</text>
                                 <text class="block margin-top-xs">3. 活动报名信息：姓名、联系方式等，用于活动报名确认和签到核实。</text>
@@ -65,7 +65,7 @@
                         <block v-else-if="agreement_type === 'userregister'">
                             <view class="margin-bottom-main">
                                 <text class="fw-b">一、服务范围</text>
-                                <text class="block margin-top-xs">孕禧平台（以下简称"本平台"）为用户提供孕育阶段管理、活动报名、签到核实、内容推荐等相关服务。</text>
+                                <text class="block margin-top-xs">禧孕平台（以下简称"本平台"）为用户提供孕育阶段管理、活动报名、签到核实、内容推荐等相关服务。</text>
                             </view>
                             <view class="margin-bottom-main">
                                 <text class="fw-b">二、账号注册与使用</text>

@@ -2044,7 +2044,7 @@ return [
             ]
         ],
         'muying_index' => [
-            'name'  => '孕禧运营',
+            'name'  => '禧孕运营',
             'item'  => [
                 'activity_index'           => '活动管理',
                 'activity_detail'          => '活动详情',

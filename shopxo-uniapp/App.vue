@@ -46,8 +46,8 @@
                 system_type: 'default',
 
                 // 基础信息
-                application_title: '孕禧',
-                application_describe: '孕禧 - 科学孕育·安心陪伴',
+                application_title: '禧孕',
+                application_describe: '禧孕 - 科学孕育·安心陪伴',
 
                 // 默认logo、如 /static/images/common/logo.png
                 application_logo: '',

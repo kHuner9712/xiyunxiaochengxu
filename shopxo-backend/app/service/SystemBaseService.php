@@ -222,7 +222,7 @@ class SystemBaseService
             'common_app_mini_kuaishou_describe'                  => AppMiniUserService::AppMiniConfig('common_app_mini_kuaishou_describe'),
         ];
 
-        // 孕禧一期功能开关
+        // 禧孕一期功能开关
         $feature_flags = [
             'feature_shop_enabled'              => (int) MyC('feature_shop_enabled', 0),
             'feature_realstore_enabled'          => (int) MyC('feature_realstore_enabled', 0),

@@ -1,4 +1,4 @@
-# 孕禧 V1.0 敏感数据加密迁移指南
+# 禧孕 V1.0 敏感数据加密迁移指南
 
 本文档说明如何使用 `scripts/migrate-encrypt-sensitive.php` 将数据库中的明文敏感数据加密存储。
 
@@ -55,7 +55,7 @@ php scripts/migrate-encrypt-sensitive.php --dry-run
 
 输出示例：
 ```
-孕禧 V1.0 — 敏感数据加密迁移脚本
+禧孕 V1.0 — 敏感数据加密迁移脚本
 ==================================================
 
 [OK] MUYING_PRIVACY_KEY 已配置（长度: 64）

@@ -1,6 +1,6 @@
 # 微信小程序测试号联调清单
 
-> 面向：孕禧小程序一期，使用微信测试号联调
+> 面向：禧孕小程序一期，使用微信测试号联调
 > 前提：后端已部署，数据库已迁移，Nginx 已配置
 
 ---
@@ -125,8 +125,8 @@
 
 | 配置项 | 值 | 说明 |
 |--------|-----|------|
-| 接口配置信息 URL | `https://api.yunxi.com/api.php?s=user/auth` | 微信服务器验证 |
-| JS接口安全域名 | `api.yunxi.com` | 微信JS-SDK |
-| webview域名 | `api.yunxi.com` | web-view组件 |
+| 接口配置信息 URL | `https://api.xiyun.com/api.php?s=user/auth` | 微信服务器验证 |
+| JS接口安全域名 | `api.xiyun.com` | 微信JS-SDK |
+| webview域名 | `api.xiyun.com` | web-view组件 |
 
 > 当前域名未备案，以上配置暂无法完成。测试阶段使用「不校验合法域名」绕过。

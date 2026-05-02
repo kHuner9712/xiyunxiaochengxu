@@ -5,7 +5,7 @@
 ### 1.1 Docker启动
 
 ```powershell
-cd c:\Users\15864\Desktop\yunxixiaochengxu
+cd c:\Users\15864\Desktop\xiyunxiaochengxu
 docker compose up -d
 ```
 

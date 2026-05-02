@@ -351,7 +351,7 @@
 
         onShareAppMessage() {
             return {
-                title: this.activity.title || '孕禧活动',
+                title: this.activity.title || '禧孕活动',
                 path: '/pages/activity-detail/activity-detail?id=' + this.activity_id,
                 imageUrl: this.activity.cover || '',
             };

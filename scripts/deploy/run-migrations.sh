@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — 数据库迁移执行脚本
+# 禧孕小程序 — 数据库迁移执行脚本
 # ============================================================
 #
 # 【用途】按正确顺序执行所有 muying 迁移 SQL
@@ -22,7 +22,7 @@
 #
 # 【迁移顺序】（不可调换）
 #   1.  shopxo.sql                                — 主库（不可重复执行）
-#   2.  muying-final-migration.sql                — 孕禧核心表（不可重复）
+#   2.  muying-final-migration.sql                — 禧孕核心表（不可重复）
 #   3.  sql/muying-feature-switch-migration.sql   — 功能开关完整初始化（幂等）
 #   4.  muying-feedback-review-migration.sql      — 反馈审核字段（幂等）
 #   5.  muying-invite-reward-unify-migration.sql  — 邀请奖励统一（幂等）
@@ -150,14 +150,14 @@ else
 fi
 
 # --- 2. muying-final-migration.sql（不可重复） ---
-step "2/11 muying-final-migration.sql — 孕禧核心表（不可重复）"
+step "2/11 muying-final-migration.sql — 禧孕核心表（不可重复）"
 SQL_FILE=$(find_sql "muying-final-migration.sql")
 if [[ -n "$SQL_FILE" ]]; then
     if table_exists "sxo_activity"; then
         warn "sxo_activity 表已存在，跳过核心表创建"
     else
         $MYSQL_CMD "$DB_NAME" < "$SQL_FILE" || fail "muying-final-migration.sql 执行失败"
-        ok "孕禧核心表创建成功"
+        ok "禧孕核心表创建成功"
     fi
 else
     warn "未找到 muying-final-migration.sql，跳过"
@@ -274,7 +274,7 @@ check_config "qualification_icp_filing"
 
 echo ""
 echo "--- 菜单验证 ---"
-check_power "孕禧数据看板"
+check_power "禧孕数据看板"
 check_power "合规中心"
 
 echo ""

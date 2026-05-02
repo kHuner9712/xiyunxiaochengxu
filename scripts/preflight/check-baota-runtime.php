@@ -3,7 +3,7 @@
 /**
  * [MUYING-二开] 宝塔运行环境检查脚本
  *
- * 用途：检查宝塔服务器 PHP 运行环境是否满足孕禧小程序部署要求
+ * 用途：检查宝塔服务器 PHP 运行环境是否满足禧孕小程序部署要求
  * 用法：php scripts/preflight/check-baota-runtime.php [--root=/path/to/shopxo-backend]
  *
  * 检查项：
@@ -64,7 +64,7 @@ if (empty($backendRoot)) {
     $backendRoot = realpath(__DIR__ . '/../../shopxo-backend');
 }
 
-echo "\n孕禧小程序 — 宝塔运行环境检查\n";
+echo "\n禧孕小程序 — 宝塔运行环境检查\n";
 echo "后端目录: " . ($backendRoot ?: '未指定') . "\n";
 echo "PHP 版本: " . PHP_VERSION . "\n";
 

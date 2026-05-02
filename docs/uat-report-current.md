@@ -1,4 +1,4 @@
-# 孕禧 V1.0 UAT 测试报告 — 当前版本
+# 禧孕 V1.0 UAT 测试报告 — 当前版本
 
 **⚠️ 重要说明**：本报告**不是服务器实测报告**，而是基于本地代码审查 + 静态分析 + .gitignore 安全检查的结果。服务器真实 UAT 尚未执行，所有"服务器实测"列均为"⏳ 待执行"。正式发布前必须完成真实服务器 UAT 并回填本文档底部的"真实 UAT 回填区"。
 
@@ -124,8 +124,8 @@
 
 ```bash
 cd /www/wwwroot
-git clone https://github.com/kHuner9712/xiyun.git yunxi
-cd yunxi
+git clone https://github.com/kHuner9712/xiyun.git xiyun
+cd xiyun
 ```
 
 ### 步骤 2：配置后端 .env
@@ -139,8 +139,8 @@ cp shopxo-backend/.env.production.example shopxo-backend/.env
 ```ini
 # 数据库配置
 DATABASE.HOSTNAME = 127.0.0.1
-DATABASE.DATABASE = yunxi_db          ; 改为实际数据库名
-DATABASE.USERNAME = yunxi_user        ; 改为实际数据库用户（非root）
+DATABASE.DATABASE = xiyun_db          ; 改为实际数据库名
+DATABASE.USERNAME = xiyun_user        ; 改为实际数据库用户（非root）
 DATABASE.PASSWORD = 实际密码           ; 替换
 DATABASE.PORT = 3306
 DATABASE.PREFIX = sxo_
@@ -163,15 +163,15 @@ cp shopxo-backend/config/database.php.example shopxo-backend/config/database.php
 ### 步骤 4：创建数据库和用户
 
 在宝塔面板 → 数据库 → 添加数据库：
-- 数据库名：yunxi_db
-- 用户名：yunxi_user
+- 数据库名：xiyun_db
+- 用户名：xiyun_user
 - 密码：自动生成或手动设置
 
 ### 步骤 5：执行数据库迁移
 
 ```bash
-mysql -u yunxi_user -p yunxi_db < /www/wwwroot/yunxi/docs/muying-final-migration.sql
-mysql -u yunxi_user -p yunxi_db < /www/wwwroot/yunxi/docs/sql/muying-v1-post-migration.sql
+mysql -u xiyun_user -p xiyun_db < /www/wwwroot/xiyun/docs/muying-final-migration.sql
+mysql -u xiyun_user -p xiyun_db < /www/wwwroot/xiyun/docs/sql/muying-v1-post-migration.sql
 ```
 
 检查是否有 SQL 错误：
@@ -182,7 +182,7 @@ echo $?  # 0 表示成功
 ### 步骤 6：设置目录权限
 
 ```bash
-cd /www/wwwroot/yunxi
+cd /www/wwwroot/xiyun
 chmod -R 755 shopxo-backend/runtime
 chown -R www:www shopxo-backend/runtime
 chmod -R 755 shopxo-backend/public/upload 2>/dev/null
@@ -194,7 +194,7 @@ chown -R www:www shopxo-backend/public/upload
 
 在宝塔面板 → 网站 → 添加站点：
 - 域名：实际域名或 IP
-- 根目录：`/www/wwwroot/yunxi/shopxo-backend/public`
+- 根目录：`/www/wwwroot/xiyun/shopxo-backend/public`
 - PHP 版本：PHP-81
 - 伪静态：选择 `thinkphp`
 
@@ -216,19 +216,19 @@ location ~* \.php\.bak {
 ### 步骤 8：安装 Composer 依赖
 
 ```bash
-cd /www/wwwroot/yunxi/shopxo-backend
+cd /www/wwwroot/xiyun/shopxo-backend
 php /usr/bin/composer install --no-dev --optimize-autoloader
 ```
 
 ### 步骤 9：运行检查脚本
 
 ```bash
-cd /www/wwwroot/yunxi
+cd /www/wwwroot/xiyun
 
-php scripts/preflight/check-baota-runtime.php --root=/www/wwwroot/yunxi/shopxo-backend
-php scripts/preflight/check-db-schema.php --root=/www/wwwroot/yunxi/shopxo-backend
-php scripts/preflight/preflight-production-check.php --env=/www/wwwroot/yunxi/shopxo-backend/.env --repo=/www/wwwroot/yunxi
-php scripts/preflight/check-doc-consistency.php --root=/www/wwwroot/yunxi
+php scripts/preflight/check-baota-runtime.php --root=/www/wwwroot/xiyun/shopxo-backend
+php scripts/preflight/check-db-schema.php --root=/www/wwwroot/xiyun/shopxo-backend
+php scripts/preflight/preflight-production-check.php --env=/www/wwwroot/xiyun/shopxo-backend/.env --repo=/www/wwwroot/xiyun
+php scripts/preflight/check-doc-consistency.php --root=/www/wwwroot/xiyun
 ```
 
 ### 步骤 10：执行敏感数据迁移
@@ -244,7 +244,7 @@ php scripts/migrate-encrypt-sensitive.php --force
 ### 步骤 11：删除安装入口
 
 ```bash
-rm -f /www/wwwroot/yunxi/shopxo-backend/public/install.php
+rm -f /www/wwwroot/xiyun/shopxo-backend/public/install.php
 ```
 
 ### 步骤 12：小程序联调

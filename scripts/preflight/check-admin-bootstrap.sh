@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — 后台管理初始化检查
+# 禧孕小程序 — 后台管理初始化检查
 # ============================================================
 #
 # 【用途】检查后台管理入口是否可用、菜单是否完整、
@@ -97,7 +97,7 @@ REQUIRED_CONTROLLERS=(
     "Activitysignup|活动报名"
     "Agreement|协议管理"
     "Invite|邀请奖励"
-    "Muyingstat|孕禧统计"
+    "Muyingstat|禧孕统计"
     "Site|站点设置"
     "Config|系统配置"
     "Goods|商品管理"
@@ -164,7 +164,7 @@ MUYING_SQL=$(find "$REPO_PATH" -path '*/shopxo-backend/sql/*muying*menu*' -o -pa
 if [[ -n "$MUYING_SQL" ]]; then
     pass "找到菜单权限 SQL: ${MUYING_SQL}"
 else
-    warn "未找到孕禧菜单权限 SQL 文件（需确认 sxo_power 表中是否有 muying_index 菜单组）"
+    warn "未找到禧孕菜单权限 SQL 文件（需确认 sxo_power 表中是否有 muying_index 菜单组）"
 fi
 
 # ============================================================

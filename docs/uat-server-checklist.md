@@ -18,7 +18,7 @@
 |---|--------|----------|----------|----------|----------|------|
 | 1 | 站点根目录 | 宝塔 → 网站 → 点击站点 → 网站目录 | 根目录指向 `shopxo-backend` | | 截图 | ☐ |
 | 2 | 运行目录 | 宝塔 → 网站 → 运行目录 | 运行目录为 `/public`（不是 `/`） | | 截图 | ☐ |
-| 3 | 目录权限 | SSH 执行 `ls -la /www/wwwroot/yunxi-api/shopxo-backend/public/` | public 可读，runtime 可写 | | 终端输出 | ☐ |
+| 3 | 目录权限 | SSH 执行 `ls -la /www/wwwroot/xiyun-api/shopxo-backend/public/` | public 可读，runtime 可写 | | 终端输出 | ☐ |
 
 ### 1.2 PHP 8.1
 
@@ -34,14 +34,14 @@
 | # | 检查项 | 操作步骤 | 预期结果 | 实际结果 | 证据位置 | 通过 |
 |---|--------|----------|----------|----------|----------|------|
 | 8 | MySQL 版本 | SSH 执行 `mysql -V` | mysql Ver 5.7.x | | 终端输出 | ☐ |
-| 9 | 数据库连接 | SSH 执行 `mysql -u yunxi_app -p -e "SELECT 1;" yunxi_prod` | 返回 1 | | 终端输出 | ☐ |
-| 10 | 字符集 | SSH 执行 `mysql -u yunxi_app -p -e "SHOW VARIABLES LIKE 'character_set_database';" yunxi_prod` | utf8mb4 | | 终端输出 | ☐ |
+| 9 | 数据库连接 | SSH 执行 `mysql -u xiyun_app -p -e "SELECT 1;" xiyun_prod` | 返回 1 | | 终端输出 | ☐ |
+| 10 | 字符集 | SSH 执行 `mysql -u xiyun_app -p -e "SHOW VARIABLES LIKE 'character_set_database';" xiyun_prod` | utf8mb4 | | 终端输出 | ☐ |
 
 ### 1.4 .env 配置
 
 | # | 检查项 | 操作步骤 | 预期结果 | 实际结果 | 证据位置 | 通过 |
 |---|--------|----------|----------|----------|----------|------|
-| 11 | .env 存在 | SSH 执行 `cat /www/wwwroot/yunxi-api/shopxo-backend/.env \| head -5` | 文件存在且非空 | | 终端输出 | ☐ |
+| 11 | .env 存在 | SSH 执行 `cat /www/wwwroot/xiyun-api/shopxo-backend/.env \| head -5` | 文件存在且非空 | | 终端输出 | ☐ |
 | 12 | APP_DEBUG | SSH 执行 `grep APP_DEBUG .env` | `APP_DEBUG = false` | | 终端输出 | ☐ |
 | 13 | DATABASE 配置 | SSH 执行 `grep -E 'HOSTNAME\|DATABASE\|USERNAME\|PREFIX' .env` | HOSTNAME=127.0.0.1, PREFIX=sxo_ | | 终端输出 | ☐ |
 | 14 | MUYING_PRIVACY_KEY | SSH 执行 `grep MUYING_PRIVACY_KEY .env` | 存在且为 64 位 hex 字符串 | | 终端输出（密钥部分打码） | ☐ |
@@ -50,9 +50,9 @@
 
 | # | 检查项 | 操作步骤 | 预期结果 | 实际结果 | 证据位置 | 通过 |
 |---|--------|----------|----------|----------|----------|------|
-| 15 | 基础表 | SSH 执行 `mysql -u yunxi_app -p -e "SHOW TABLES LIKE 'sxo_system%';" yunxi_prod \| wc -l` | > 0 | | 终端输出 | ☐ |
-| 16 | 活动报名表 | SSH 执行 `mysql -u yunxi_app -p -e "DESC sxo_activity_signup;" yunxi_prod` | 包含 profile_sync_agreed、profile_sync_agreed_time 字段 | | 终端输出 | ☐ |
-| 17 | 反馈表 | SSH 执行 `mysql -u yunxi_app -p -e "SHOW TABLES LIKE 'sxo_muying%';" yunxi_prod` | 包含 MuyingFeedback、MuyingComplianceLog 等 | | 终端输出 | ☐ |
+| 15 | 基础表 | SSH 执行 `mysql -u xiyun_app -p -e "SHOW TABLES LIKE 'sxo_system%';" xiyun_prod \| wc -l` | > 0 | | 终端输出 | ☐ |
+| 16 | 活动报名表 | SSH 执行 `mysql -u xiyun_app -p -e "DESC sxo_activity_signup;" xiyun_prod` | 包含 profile_sync_agreed、profile_sync_agreed_time 字段 | | 终端输出 | ☐ |
+| 17 | 反馈表 | SSH 执行 `mysql -u xiyun_app -p -e "SHOW TABLES LIKE 'sxo_muying%';" xiyun_prod` | 包含 MuyingFeedback、MuyingComplianceLog 等 | | 终端输出 | ☐ |
 
 ### 1.6 Feature Flags 一期默认值
 
@@ -92,8 +92,8 @@
 
 | # | 检查项 | 操作步骤 | 预期结果 | 实际结果 | 证据位置 | 通过 |
 |---|--------|----------|----------|----------|----------|------|
-| 20 | install.php 不存在 | SSH 执行 `test -f /www/wwwroot/yunxi-api/shopxo-backend/public/install.php && echo EXISTS || echo REMOVED` | REMOVED | | 终端输出 | ☐ |
-| 21 | install 静态资源不存在 | SSH 执行 `test -d /www/wwwroot/yunxi-api/shopxo-backend/public/static/install && echo EXISTS || echo REMOVED` | REMOVED | | 终端输出 | ☐ |
+| 20 | install.php 不存在 | SSH 执行 `test -f /www/wwwroot/xiyun-api/shopxo-backend/public/install.php && echo EXISTS || echo REMOVED` | REMOVED | | 终端输出 | ☐ |
+| 21 | install 静态资源不存在 | SSH 执行 `test -d /www/wwwroot/xiyun-api/shopxo-backend/public/static/install && echo EXISTS || echo REMOVED` | REMOVED | | 终端输出 | ☐ |
 | 22 | 后台入口已改名 | 浏览器访问 `https://域名/admin` | 返回 404 或拒绝访问 | | 截图 | ☐ |
 | 23 | 后台新入口可用 | 浏览器访问 `https://域名/你的后台路径` | 正常显示后台登录页 | | 截图 | ☐ |
 | 24 | phpMyAdmin 限制访问 | 浏览器从外部 IP 访问 `https://域名:888/phpmyadmin` | 无法访问或返回 403 | | 截图 | ☐ |

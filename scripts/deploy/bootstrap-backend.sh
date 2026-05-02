@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — 后端引导部署脚本
+# 禧孕小程序 — 后端引导部署脚本
 # ============================================================
 #
 # 【用途】在服务器上首次部署后端代码，完成从克隆到可访问的全流程
 # 【用法】bash bootstrap-backend.sh [选项]
 # 【选项】
-#   --site-dir PATH      站点目录（必填，如 /www/wwwroot/yunxi-api）
+#   --site-dir PATH      站点目录（必填，如 /www/wwwroot/xiyun-api）
 #   --repo URL           Git 仓库地址（默认 https://github.com/kHuner9712/xiyun.git）
 #   --env=experience     体验版模式（APP_DEBUG=true，允许 IP）
 #   --env=submit         提审模式（APP_DEBUG=false，要求 HTTPS 域名）
@@ -60,7 +60,7 @@ warn() { echo -e "${YELLOW}[WARN]${RESET} $1"; }
 fail() { echo -e "${RED}[FAIL]${RESET} $1"; exit 1; }
 
 # --- 参数校验 ---
-if [[ -z "$SITE_DIR" ]]; then fail "--site-dir 必填（如 /www/wwwroot/yunxi-api）"; fi
+if [[ -z "$SITE_DIR" ]]; then fail "--site-dir 必填（如 /www/wwwroot/xiyun-api）"; fi
 if [[ -z "$DB_NAME" ]]; then fail "--db-name 必填"; fi
 if [[ -z "$DB_USER" ]]; then fail "--db-user 必填"; fi
 if [[ "$DEPLOY_ENV" != "experience" && "$DEPLOY_ENV" != "submit" ]]; then
@@ -69,7 +69,7 @@ fi
 
 echo ""
 echo "=========================================="
-echo " 孕禧后端引导部署 (模式: ${DEPLOY_ENV})"
+echo " 禧孕后端引导部署 (模式: ${DEPLOY_ENV})"
 echo "=========================================="
 echo "  站点目录: ${SITE_DIR}"
 echo "  仓库地址: ${REPO_URL}"

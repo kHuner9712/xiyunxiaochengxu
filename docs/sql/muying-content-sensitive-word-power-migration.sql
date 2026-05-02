@@ -1,11 +1,11 @@
 -- ============================================================
--- 孕禧一期：内容合规敏感词管理 - 后台权限菜单注册迁移
+-- 禧孕一期：内容合规敏感词管理 - 后台权限菜单注册迁移
 -- 幂等性：使用 INSERT IGNORE，可重复执行
 -- 兼容：MySQL 5.7.44+
 -- 权限 ID 范围：793-796（避免与 muying-final-migration.sql 770-782 冲突）
 -- ============================================================
 
--- 内容合规管理（二级菜单，挂在孕禧运营 700 下，sort=11）
+-- 内容合规管理（二级菜单，挂在禧孕运营 700 下，sort=11）
 INSERT IGNORE INTO `sxo_power` (`id`, `pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
 (793, 700, '内容合规', 'Contentsensitiveword', 'Index', '', 11, 1, '', UNIX_TIMESTAMP(), 0),
 (794, 793, '添加敏感词', 'Contentsensitiveword', 'Save', '', 0, 0, '', UNIX_TIMESTAMP(), 0),

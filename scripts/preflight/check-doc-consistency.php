@@ -60,7 +60,7 @@ if (empty($projectRoot)) {
     $projectRoot = realpath(__DIR__ . '/../..');
 }
 
-echo "\n孕禧小程序 — 文档一致性检查\n";
+echo "\n禧孕小程序 — 文档一致性检查\n";
 echo "项目目录: {$projectRoot}\n";
 echo "模式: " . ($strict ? 'strict（UAT不一致/未完成=BLOCKER）' : '默认（UAT不一致=WARN）') . "\n";
 

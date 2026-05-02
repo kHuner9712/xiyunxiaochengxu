@@ -1,4 +1,4 @@
-# 孕禧小程序正式服务器部署执行手册
+# 禧孕小程序正式服务器部署执行手册
 
 ## 0. 上线前待替换项清单
 
@@ -8,9 +8,9 @@
 |--------|------|-----------------|---------|
 | `{{APP_ID}}` | 微信小程序 AppID | `wxda7779770f53e901` | `project.config.json`、微信后台 |
 | `{{APP_SECRET}}` | 微信小程序 AppSecret | （从微信后台获取） | 后端配置 |
-| `{{API_DOMAIN}}` | 后端 API 域名 | `api.yunxi.com` | Nginx 配置、前端环境变量、微信后台 |
-| `{{CDN_DOMAIN}}` | 静态资源 CDN 域名（可选） | `cdn.yunxi.com` | 前端环境变量 |
-| `{{DEPLOY_PATH}}` | 服务器部署目录 | `/var/www/yunxi` | Nginx 配置、目录权限 |
+| `{{API_DOMAIN}}` | 后端 API 域名 | `api.xiyun.com` | Nginx 配置、前端环境变量、微信后台 |
+| `{{CDN_DOMAIN}}` | 静态资源 CDN 域名（可选） | `cdn.xiyun.com` | 前端环境变量 |
+| `{{DEPLOY_PATH}}` | 服务器部署目录 | `/var/www/xiyun` | Nginx 配置、目录权限 |
 | `{{DB_NAME}}` | 数据库名 | `shopxo` | 数据库连接配置 |
 | `{{DB_USER}}` | 数据库用户名 | `shopxo` | 数据库连接配置 |
 | `{{DB_PASS}}` | 数据库密码 | （强密码） | 数据库连接配置 |
@@ -80,9 +80,9 @@ tar czf backend_backup_$(date +%Y%m%d%H%M%S).tar.gz {{DEPLOY_PATH}}/shopxo-backe
 | D8 | 邀请奖励配置项 | `muying-final-migration.sql` C5 段 | **必须执行**，可重复执行（幂等） |
 | D9 | 菜单权限 | `muying-final-migration.sql` C6 段 | 可选，仅当后台无运营菜单 |
 | D10 | 隐藏一期菜单 | `muying-final-migration.sql` C7 段 | 可选 |
-| D11 | 初始化配置项 | `yunxi-init-config.sql` | **必须执行**，可重复执行（幂等） |
-| D12 | 活动演示数据 | `yunxi-init-activity-demo.sql` | 可选，正式环境可替换为真实数据 |
-| D13 | 妈妈说演示数据 | `yunxi-init-feedback-demo.sql` | 可选，正式环境可替换为真实数据 |
+| D11 | 初始化配置项 | `xiyun-init-config.sql` | **必须执行**，可重复执行（幂等） |
+| D12 | 活动演示数据 | `xiyun-init-activity-demo.sql` | 可选，正式环境可替换为真实数据 |
+| D13 | 妈妈说演示数据 | `xiyun-init-feedback-demo.sql` | 可选，正式环境可替换为真实数据 |
 
 ### 2.2 不要执行的 SQL
 
@@ -136,8 +136,8 @@ SELECT * FROM sxo_config WHERE only_tag IN ('muying_invite_register_reward', 'mu
 
 ```bash
 cd {{DEPLOY_PATH}}/
-git clone https://github.com/kHuner9712/xiyun.git yunxi
-cd yunxi/shopxo-backend
+git clone https://github.com/kHuner9712/xiyun.git xiyun
+cd xiyun/shopxo-backend
 composer install --no-dev --optimize-autoloader
 ```
 
@@ -265,18 +265,18 @@ server {
 
 | 序号 | 配置项 | 后台路径 | 操作 |
 |------|--------|----------|------|
-| 1 | 站点名称 | 系统设置 → 基础 → `home_site_name` | 改为"孕禧" |
-| 2 | 站点 Logo | 系统设置 → 基础 → `home_site_logo` | 上传孕禧 Logo |
-| 3 | 移动端 Logo | 系统设置 → 基础 → `home_site_logo_wap` | 上传孕禧 Logo |
+| 1 | 站点名称 | 系统设置 → 基础 → `home_site_name` | 改为"禧孕" |
+| 2 | 站点 Logo | 系统设置 → 基础 → `home_site_logo` | 上传禧孕 Logo |
+| 3 | 移动端 Logo | 系统设置 → 基础 → `home_site_logo_wap` | 上传禧孕 Logo |
 | 4 | 热门搜索 | 系统设置 → 搜索 → `home_search_keywords` | 改为"叶酸,孕妇装,奶瓶,纸尿裤" |
 
 ### 5.2 协议配置
 
 | 序号 | 配置项 | 后台路径 | 操作 |
 |------|--------|----------|------|
-| 1 | 注册协议 | 协议管理 → 注册协议 | 填写孕禧注册协议正文 |
-| 2 | 隐私政策 | 协议管理 → 隐私政策 | 填写孕禧隐私政策正文 |
-| 3 | 注销协议 | 协议管理 → 注销协议 | 填写孕禧注销协议正文 |
+| 1 | 注册协议 | 协议管理 → 注册协议 | 填写禧孕注册协议正文 |
+| 2 | 隐私政策 | 协议管理 → 隐私政策 | 填写禧孕隐私政策正文 |
+| 3 | 注销协议 | 协议管理 → 注销协议 | 填写禧孕注销协议正文 |
 
 ### 5.3 邀请奖励配置
 

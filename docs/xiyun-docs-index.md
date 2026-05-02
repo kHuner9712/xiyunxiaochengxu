@@ -1,4 +1,4 @@
-# 孕禧小程序 — 文档索引
+# 禧孕小程序 — 文档索引
 
 > 最后更新：2026-04-25
 > 本索引只保留当前发布链路中真正有用的文档入口
@@ -64,7 +64,7 @@
 | 序号 | 文件 | 路径 | 用途 | 可重复 |
 |:---:|------|------|------|:---:|
 | 1 | shopxo.sql | `shopxo-backend/config/shopxo.sql` | ShopXO 主库初始化 | ❌ |
-| 2 | muying-final-migration.sql | [docs/muying-final-migration.sql](muying-final-migration.sql) | 孕禧核心表+补丁+索引（唯一真相源） | ❌ |
+| 2 | muying-final-migration.sql | [docs/muying-final-migration.sql](muying-final-migration.sql) | 禧孕核心表+补丁+索引（唯一真相源） | ❌ |
 | 3 | muying-feature-switch-migration.sql | [docs/sql/muying-feature-switch-migration.sql](sql/muying-feature-switch-migration.sql) | 功能开关完整初始化+资质门禁 | ✅ |
 | 4 | muying-feedback-review-migration.sql | [docs/muying-feedback-review-migration.sql](muying-feedback-review-migration.sql) | 反馈审核字段 | ✅ |
 | 5 | muying-invite-reward-unify-migration.sql | [docs/muying-invite-reward-unify-migration.sql](muying-invite-reward-unify-migration.sql) | 邀请奖励统一 | ✅ |
@@ -79,9 +79,9 @@
 
 | 文件 | 路径 | 用途 |
 |------|------|------|
-| yunxi-init-config.sql | [docs/sql/yunxi-init-config.sql](sql/yunxi-init-config.sql) | 配置项初始化 |
-| yunxi-init-activity-demo.sql | [docs/sql/yunxi-init-activity-demo.sql](sql/yunxi-init-activity-demo.sql) | 活动演示数据 |
-| yunxi-init-feedback-demo.sql | [docs/sql/yunxi-init-feedback-demo.sql](sql/yunxi-init-feedback-demo.sql) | 妈妈说演示数据 |
+| xiyun-init-config.sql | [docs/sql/xiyun-init-config.sql](sql/xiyun-init-config.sql) | 配置项初始化 |
+| xiyun-init-activity-demo.sql | [docs/sql/xiyun-init-activity-demo.sql](sql/xiyun-init-activity-demo.sql) | 活动演示数据 |
+| xiyun-init-feedback-demo.sql | [docs/sql/xiyun-init-feedback-demo.sql](sql/xiyun-init-feedback-demo.sql) | 妈妈说演示数据 |
 
 ## 六、自动化脚本
 
@@ -113,13 +113,13 @@
 
 ```bash
 # 上线前一键检查（推荐，Shell 版）
-bash scripts/preflight/preflight-production-check.sh --env /www/wwwroot/yunxi/.env --repo /path/to/repo
+bash scripts/preflight/preflight-production-check.sh --env /www/wwwroot/xiyun/.env --repo /path/to/repo
 
 # 上线前一键检查（Windows/PHP 版）
 php scripts/preflight/preflight-production-check.php --env=shopxo-backend/.env
 
 # RC 门禁完整检查
-bash scripts/preflight/run-rc-gate.sh --mode=submit --env /www/wwwroot/yunxi/.env .
+bash scripts/preflight/run-rc-gate.sh --mode=submit --env /www/wwwroot/xiyun/.env .
 ```
 
 ## 七、已归档文档
@@ -152,7 +152,7 @@ bash scripts/preflight/run-rc-gate.sh --mode=submit --env /www/wwwroot/yunxi/.en
 ├── docs/
 │   ├── muying-final-migration.sql         # 核心迁移 SQL（唯一真相源）
 │   ├── muying-*-migration.sql             # 增量迁移 SQL（5 个）
-│   ├── yunxi-docs-index.md                # 本索引
+│   ├── xiyun-docs-index.md                # 本索引
 │   ├── compliance/                        # 合规文档（3 个）
 │   │   ├── phase-one-scope.md             # 一期允许功能范围
 │   │   ├── privacy-data-map.md            # 隐私数据映射表

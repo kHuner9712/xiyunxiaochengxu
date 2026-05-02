@@ -1,5 +1,5 @@
 -- ============================================================
--- 孕禧小程序 — 上线前数据库结构预检
+-- 禧孕小程序 — 上线前数据库结构预检
 -- ============================================================
 --
 -- 【用途】在 MySQL 中执行，自动检查上线所需数据库条件
@@ -12,7 +12,7 @@
 -- ============================================================
 
 SELECT '========================================' AS '';
-SELECT ' 孕禧上线前数据库预检' AS '';
+SELECT ' 禧孕上线前数据库预检' AS '';
 SELECT '========================================' AS '';
 
 -- ============================================================
@@ -152,7 +152,7 @@ SELECT
     CASE
         WHEN c.value IS NOT NULL AND c.value != '' THEN CONCAT('PASS: ', c.only_tag, ' = ', c.value)
         WHEN c.value = '' THEN CONCAT('WARN: ', c.only_tag, ' 存在但值为空 | 修复: 在后台设置有效值')
-        ELSE CONCAT('FAIL: ', expected.only_tag, ' 缺失 | 修复: 执行 yunxi-init-config.sql')
+        ELSE CONCAT('FAIL: ', expected.only_tag, ' 缺失 | 修复: 执行 xiyun-init-config.sql')
     END AS result
 FROM (
     SELECT 'muying_invite_register_reward' AS only_tag
@@ -197,7 +197,7 @@ FROM (
 SELECT
     CASE
         WHEN act_count > 0 THEN CONCAT('PASS: 活动数据 ', act_count, ' 条')
-        ELSE 'WARN: 无活动数据 | 建议: 执行 yunxi-init-activity-demo.sql 或在后台添加'
+        ELSE 'WARN: 无活动数据 | 建议: 执行 xiyun-init-activity-demo.sql 或在后台添加'
     END AS result
 FROM (SELECT COUNT(*) AS act_count FROM sxo_activity WHERE is_enable = 1 AND is_delete_time = 0) t;
 
@@ -205,7 +205,7 @@ FROM (SELECT COUNT(*) AS act_count FROM sxo_activity WHERE is_enable = 1 AND is_
 SELECT
     CASE
         WHEN fb_count > 0 THEN CONCAT('PASS: 妈妈说数据 ', fb_count, ' 条')
-        ELSE 'WARN: 无妈妈说数据 | 建议: 执行 yunxi-init-feedback-demo.sql 或在后台添加'
+        ELSE 'WARN: 无妈妈说数据 | 建议: 执行 xiyun-init-feedback-demo.sql 或在后台添加'
     END AS result
 FROM (SELECT COUNT(*) AS fb_count FROM sxo_muying_feedback WHERE is_enable = 1 AND is_delete_time = 0) t;
 

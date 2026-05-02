@@ -1,4 +1,4 @@
-# 孕禧小程序 — 发版彩排执行清单 (Release Rehearsal Checklist)
+# 禧孕小程序 — 发版彩排执行清单 (Release Rehearsal Checklist)
 
 > **用途**：照着这份清单从头到尾走一遍，验证你是否真的准备好了上线。
 > 不是"文档准备好了"，而是"我亲手跑通了全流程"。
@@ -60,8 +60,8 @@
 |---|------|---------|---------|
 | 1 | 替换 `manifest.json` 中的 AppID（空字符串 → 真实 AppID） | `shopxo-uniapp/manifest.json` → `mp-weixin.appid` | `grep '"appid"' manifest.json` 显示真实值 |
 | 2 | 替换前端环境变量中的 `API_DOMAIN` | `shopxo-uniapp/.env.production` 或 HBuilderX 配置 | 构建产物中搜索域名确认 |
-| 3 | 替换 SQL 中 `{{CONTACT_PHONE}}` | `docs/sql/yunxi-init-activity-demo.sql`（6 处） | `grep CONTACT_PHONE docs/sql/yunxi-init-activity-demo.sql` → 无命中 |
-| 4 | 替换 SQL 中其他占位符（如有） | `docs/sql/yunxi-init-config.sql` | 同上 |
+| 3 | 替换 SQL 中 `{{CONTACT_PHONE}}` | `docs/sql/xiyun-init-activity-demo.sql`（6 处） | `grep CONTACT_PHONE docs/sql/xiyun-init-activity-demo.sql` → 无命中 |
+| 4 | 替换 SQL 中其他占位符（如有） | `docs/sql/xiyun-init-config.sql` | 同上 |
 | 5 | 替换 Nginx 配置中 `localhost` → 实际域名 | `deploy/nginx.production.example.conf` | `nginx -t` 通过 |
 | 6 | 确认后端 `.env` 中数据库配置已填入真实值 | `shopxo-backend/.env`（从 `.env.production.example` 复制） | `mysql -u USER -p -h HOST DB_NAME -e "SELECT 1"` 成功 |
 
@@ -217,13 +217,13 @@ mysql -u USER -p -h HOST DB_NAME < docs/muying-final-migration.sql
 
 ```bash
 # 1. 配置初始化
-mysql -u USER -p -h HOST DB_NAME < docs/sql/yunxi-init-config.sql
+mysql -u USER -p -h HOST DB_NAME < docs/sql/xiyun-init-config.sql
 
 # 2. 活动演示数据
-mysql -u USER -p -h HOST DB_NAME < docs/sql/yunxi-init-activity-demo.sql
+mysql -u USER -p -h HOST DB_NAME < docs/sql/xiyun-init-activity-demo.sql
 
 # 3. 反馈演示数据
-mysql -u USER -p -h HOST DB_NAME < docs/sql/yunxi-init-feedback-demo.sql
+mysql -u USER -p -h HOST DB_NAME < docs/sql/xiyun-init-feedback-demo.sql
 ```
 
 ### 成功标准
@@ -293,7 +293,7 @@ mysql -u USER -p -h HOST DB_NAME < docs/sql/yunxi-init-feedback-demo.sql
 | P0 | L06 活动详情 | 详情页加载、客服电话非占位符 |
 | P0 | L07 活动报名 | 完整报名流程 + 重复报名拦截 |
 | P0 | L09 邀请码 | 邀请码显示与复制 |
-| P0 | L13 品牌检查 | 名称=孕禧、无 ShopXO 残留、Logo 正确 |
+| P0 | L13 品牌检查 | 名称=禧孕、无 ShopXO 残留、Logo 正确 |
 
 ### 成功标准
 - 所有 P0 项通过

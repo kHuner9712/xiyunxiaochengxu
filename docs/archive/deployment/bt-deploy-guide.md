@@ -1,6 +1,6 @@
 # 宝塔部署实施文档
 
-> 面向：孕禧小程序一期上线部署
+> 面向：禧孕小程序一期上线部署
 > 环境：宝塔面板 + Nginx 1.28 + MySQL 5.7.44 + PHP 8.1
 > 日期：2026-04-23
 
@@ -10,13 +10,13 @@
 
 | 目录         | 建议路径                               | 说明                            |
 | ------------ | -------------------------------------- | ------------------------------- |
-| 后端根目录   | `/www/wwwroot/yunxi-api`               | ShopXO 后端代码，Git clone 到此 |
-| Nginx root   | `/www/wwwroot/yunxi-api`               | 指向项目根目录（不是 public/）  |
-| 上传目录     | `/www/wwwroot/yunxi-api/public/upload` | 自动创建，需可写                |
-| 日志目录     | `/www/wwwroot/yunxi-api/runtime/log`   | 自动创建，需可写                |
-| 缓存目录     | `/www/wwwroot/yunxi-api/runtime/cache` | 自动创建，需可写                |
-| 备份目录     | `/www/backup/yunxi`                    | 数据库+代码备份                 |
-| uni-app 源码 | `/www/wwwroot/yunxi-uniapp`            | 仅构建时使用，不对外暴露        |
+| 后端根目录   | `/www/wwwroot/xiyun-api`               | ShopXO 后端代码，Git clone 到此 |
+| Nginx root   | `/www/wwwroot/xiyun-api`               | 指向项目根目录（不是 public/）  |
+| 上传目录     | `/www/wwwroot/xiyun-api/public/upload` | 自动创建，需可写                |
+| 日志目录     | `/www/wwwroot/xiyun-api/runtime/log`   | 自动创建，需可写                |
+| 缓存目录     | `/www/wwwroot/xiyun-api/runtime/cache` | 自动创建，需可写                |
+| 备份目录     | `/www/backup/xiyun`                    | 数据库+代码备份                 |
+| uni-app 源码 | `/www/wwwroot/xiyun-uniapp`            | 仅构建时使用，不对外暴露        |
 
 > **关键说明**：ShopXO 的入口文件 `api.php`、`adminwlmqhs.php`、`index.php` 都在项目根目录下（不在 public/ 下），它们内部 require 到 `public/` 下的对应文件。因此 Nginx root 必须指向项目根目录，不能指向 public/。
 
@@ -26,8 +26,8 @@
 
 | 配置项   | 值                                 |
 | -------- | ---------------------------------- |
-| 域名     | `api.yunxi.com`（替换为实际域名）  |
-| 根目录   | `/www/wwwroot/yunxi-api`           |
+| 域名     | `api.xiyun.com`（替换为实际域名）  |
+| 根目录   | `/www/wwwroot/xiyun-api`           |
 | 运行目录 | `/`（宝塔面板设置，即项目根目录）  |
 | PHP版本  | PHP-81                             |
 | HTTPS    | 域名备案完成后开启，当前可暂不开启 |
@@ -35,7 +35,7 @@
 ### 2.2 后台入口安全
 
 ShopXO 后台入口文件名为 `adminwlmqhs.php`（已混淆），不要改回 `admin.php`。
-后台访问地址：`https://api.yunxi.com/adminwlmqhs.php`
+后台访问地址：`https://api.xiyun.com/adminwlmqhs.php`
 
 ## 3. Nginx 配置
 
@@ -56,8 +56,8 @@ location / {
 ```nginx
 server {
     listen 80;
-    server_name api.yunxi.com;
-    root /www/wwwroot/yunxi-api;
+    server_name api.xiyun.com;
+    root /www/wwwroot/xiyun-api;
     index index.php index.html;
 
     # 伪静态
@@ -99,8 +99,8 @@ server {
     }
 
     # 日志
-    access_log /www/wwwlogs/yunxi-api.log;
-    error_log /www/wwwlogs/yunxi-api.error.log;
+    access_log /www/wwwlogs/xiyun-api.log;
+    error_log /www/wwwlogs/xiyun-api.error.log;
 }
 ```
 
@@ -259,16 +259,16 @@ MySQL 5.7 InnoDB 索引键长度限制：
 #    排序规则: utf8mb4_general_ci
 
 # 2. 导入核心建表
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/config/shopxo.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/xiyun-api/config/shopxo.sql
 
 # 3. 导入母婴迁移（按 sql-runbook.md 顺序）
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-final-migration.sql
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-audit-log-migration.sql
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-feature-switch-migration.sql
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-enhancement-migration.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-final-migration.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-audit-log-migration.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-feature-switch-migration.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-enhancement-migration.sql
 
 # 4. 验证
-mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/scripts/preflight/check-db.sql
+mysql -u root -p shopxo_dev < /www/wwwroot/xiyun-api/scripts/preflight/check-db.sql
 ```
 
 > **注意**：如果从 MySQL 8.0 迁移到 5.7，必须重新导出数据（使用 `mysqldump --compatible=mysql56` 或在 5.7 环境下重新执行建表 SQL），不能直接导入 8.0 的 dump 文件。
@@ -310,10 +310,10 @@ mysql -u root -p shopxo_dev < /www/wwwroot/yunxi-api/scripts/preflight/check-db.
 ### 7.1 需要可写的目录
 
 ```bash
-chmod -R 755 /www/wwwroot/yunxi-api/runtime
-chmod -R 755 /www/wwwroot/yunxi-api/public/upload
-chown -R www:www /www/wwwroot/yunxi-api/runtime
-chown -R www:www /www/wwwroot/yunxi-api/public/upload
+chmod -R 755 /www/wwwroot/xiyun-api/runtime
+chmod -R 755 /www/wwwroot/xiyun-api/public/upload
+chown -R www:www /www/wwwroot/xiyun-api/runtime
+chown -R www:www /www/wwwroot/xiyun-api/public/upload
 ```
 
 ### 7.2 上线后需清理的缓存
@@ -328,7 +328,7 @@ chown -R www:www /www/wwwroot/yunxi-api/public/upload
 ### 8.1 代码回滚
 
 ```bash
-cd /www/wwwroot/yunxi-api
+cd /www/wwwroot/xiyun-api
 git log --oneline -5          # 查看最近5次提交
 git checkout <commit-hash>    # 回滚到指定版本
 # 清缓存

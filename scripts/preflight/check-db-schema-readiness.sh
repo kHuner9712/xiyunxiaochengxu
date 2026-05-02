@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — 数据库 Schema 就绪检查
+# 禧孕小程序 — 数据库 Schema 就绪检查
 # 检查所有关键表、字段、配置项、菜单是否存在
 # 用法：bash check-db-schema-readiness.sh --env /path/to/.env
 # ============================================================
@@ -142,9 +142,9 @@ done
 
 section "8. 菜单权限检查"
 
-POWER_DASHBOARD=$(q "SELECT COUNT(*) FROM sxo_power WHERE name='孕禧数据看板';")
-if [[ "${POWER_DASHBOARD:-0}" -gt 0 ]]; then pass "孕禧数据看板菜单存在"
-else blocker "孕禧数据看板菜单不存在，需执行 muying-admin-power-migration.sql"; fi
+POWER_DASHBOARD=$(q "SELECT COUNT(*) FROM sxo_power WHERE name='禧孕数据看板';")
+if [[ "${POWER_DASHBOARD:-0}" -gt 0 ]]; then pass "禧孕数据看板菜单存在"
+else blocker "禧孕数据看板菜单不存在，需执行 muying-admin-power-migration.sql"; fi
 
 POWER_COMPLIANCE=$(q "SELECT COUNT(*) FROM sxo_power WHERE name='合规中心';")
 if [[ "${POWER_COMPLIANCE:-0}" -gt 0 ]]; then pass "合规中心菜单存在"
@@ -156,7 +156,7 @@ CONTROL_760=$(q "SELECT control FROM sxo_power WHERE id=760 LIMIT 1;" 2>/dev/nul
 if [[ "$CONTROL_760" == "Muyingcompliance" ]]; then
     blocker "id=760 被合规中心占用（应为数据看板），需执行修复 SQL"
 elif [[ "$CONTROL_760" == "Muyingstat" ]]; then
-    pass "id=760 为孕禧数据看板，正确"
+    pass "id=760 为禧孕数据看板，正确"
 else
     warn "id=760 不存在或 control 值异常: ${CONTROL_760}"
 fi

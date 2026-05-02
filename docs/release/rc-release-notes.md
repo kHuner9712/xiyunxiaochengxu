@@ -1,6 +1,6 @@
 # Release Notes — v0.1.0-rc1
 
-> 孕禧母婴自营商城一期  
+> 禧孕母婴自营商城一期  
 > 发布日期：2026-04-25  
 > 仓库：https://github.com/kHuner9712/xiyun  
 > 分支：trae/phase-one-rc-handoff
@@ -9,7 +9,7 @@
 
 ## 概述
 
-孕禧母婴自营商城一期 RC1 版本。本版本为首个可交付候选版本，代码层面已封板，体验版可立即部署。提审需等待正式 AppID 和备案域名。
+禧孕母婴自营商城一期 RC1 版本。本版本为首个可交付候选版本，代码层面已封板，体验版可立即部署。提审需等待正式 AppID 和备案域名。
 
 ---
 
@@ -95,7 +95,7 @@
 3. `cp .env.production.example .env` → 填入数据库连接
 4. 按顺序执行 11 个 SQL 迁移文件（除前 2 个外均为幂等，可安全重复执行）
 5. `composer install --no-dev --optimize-autoloader`
-6. `bash scripts/deploy/fix-permissions.sh /www/wwwroot/yunxi-api`
+6. `bash scripts/deploy/fix-permissions.sh /www/wwwroot/xiyun-api`
 7. Nginx 配置参照 `deploy/nginx.production.example.conf`
 
 ### 前端构建
@@ -109,7 +109,7 @@
 ### 验证
 
 ```bash
-bash scripts/preflight/preflight-production-check.sh --env /www/wwwroot/yunxi/.env --repo /path/to/repo
+bash scripts/preflight/preflight-production-check.sh --env /www/wwwroot/xiyun/.env --repo /path/to/repo
 ```
 
 ---
@@ -133,11 +133,11 @@ bash scripts/preflight/preflight-production-check.sh --env /www/wwwroot/yunxi/.e
 mysql -u USER -p DB < backup_before_deploy.sql
 
 # 2. 代码回滚
-cd /www/wwwroot/yunxi-api
+cd /www/wwwroot/xiyun-api
 git log --oneline -5
 git reset --hard <commit_hash>
 composer install --no-dev
-bash scripts/deploy/fix-permissions.sh /www/wwwroot/yunxi-api
+bash scripts/deploy/fix-permissions.sh /www/wwwroot/xiyun-api
 
 # 3. 前端回滚
 # 在微信公众平台"版本管理"中选择上一版本回退
@@ -173,4 +173,4 @@ bash scripts/deploy/fix-permissions.sh /www/wwwroot/yunxi-api
 | 一期禁用功能清单 | [docs/compliance/disabled-features.md](../compliance/disabled-features.md) |
 | 隐私数据映射表 | [docs/compliance/privacy-data-map.md](../compliance/privacy-data-map.md) |
 | 数据看板指标口径 | [docs/release/dashboard-metrics-spec.md](dashboard-metrics-spec.md) |
-| 文档总索引 | [docs/yunxi-docs-index.md](../yunxi-docs-index.md) |
+| 文档总索引 | [docs/xiyun-docs-index.md](../xiyun-docs-index.md) |

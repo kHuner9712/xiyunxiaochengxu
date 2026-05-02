@@ -1,4 +1,4 @@
-# 孕禧 宝塔正式部署与回滚手册
+# 禧孕 宝塔正式部署与回滚手册
 
 > 适用环境：宝塔面板 9.x + Nginx 1.28.1 + PHP 8.1.x + MySQL 5.7.44  
 > 目标域名：待填写（见《正式上线前人工配置清单》）  
@@ -135,7 +135,7 @@ chmod -R 555 thinkphp/
 # 1. 导入基础表结构
 mysql -u 你的用户 -p 你的数据库名 < config/shopxo.sql
 
-# 2. 导入孕禧迁移脚本（按顺序执行）
+# 2. 导入禧孕迁移脚本（按顺序执行）
 mysql -u 你的用户 -p 你的数据库名 < docs/muying-final-migration.sql
 mysql -u 你的用户 -p 你的数据库名 < docs/muying-feedback-review-migration.sql
 mysql -u 你的用户 -p 你的数据库名 < docs/muying-invite-reward-unify-migration.sql

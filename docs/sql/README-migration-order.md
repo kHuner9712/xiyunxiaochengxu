@@ -21,9 +21,9 @@
 | 10 | `docs/sql/muying-goods-compliance-migration.sql` | ALTER 加字段 | ✅ 必须 | ✅ 幂等 | information_schema 检查 |
 | 11 | `docs/sql/muying-privacy-security-migration.sql` | ALTER 加字段+建表 | ✅ 必须 | ✅ 幂等 | information_schema + CREATE TABLE IF NOT EXISTS |
 | 12 | `docs/sql/muying-v1-post-migration.sql` | 统一增量入口 | ✅ 必须 | ⚠️ 部分不幂等 | 包含 P1-P4，依赖 #7 #8 |
-| 13 | `docs/sql/yunxi-init-config.sql` | 配置初始化 | ✅ 必须 | ✅ 幂等 | INSERT ON DUPLICATE KEY UPDATE |
-| 14 | `docs/sql/yunxi-init-activity-demo.sql` | 演示数据 | ❌ 可选 | ⚠️ 不幂等 | INSERT 无去重，重复执行会插入重复数据 |
-| 15 | `docs/sql/yunxi-init-feedback-demo.sql` | 演示数据 | ❌ 可选 | ⚠️ 不幂等 | INSERT 无去重，重复执行会插入重复数据 |
+| 13 | `docs/sql/xiyun-init-config.sql` | 配置初始化 | ✅ 必须 | ✅ 幂等 | INSERT ON DUPLICATE KEY UPDATE |
+| 14 | `docs/sql/xiyun-init-activity-demo.sql` | 演示数据 | ❌ 可选 | ⚠️ 不幂等 | INSERT 无去重，重复执行会插入重复数据 |
+| 15 | `docs/sql/xiyun-init-feedback-demo.sql` | 演示数据 | ❌ 可选 | ⚠️ 不幂等 | INSERT 无去重，重复执行会插入重复数据 |
 
 ---
 
@@ -46,9 +46,9 @@ muying-final-migration.sql (主迁移)
         └── P3 敏感词表+合规日志表 → 依赖 #7
         └── P2/P4 权限菜单 → INSERT IGNORE 幂等
 
-yunxi-init-config.sql (配置初始化，在所有迁移之后)
-yunxi-init-activity-demo.sql (演示数据，可选)
-yunxi-init-feedback-demo.sql (演示数据，可选)
+xiyun-init-config.sql (配置初始化，在所有迁移之后)
+xiyun-init-activity-demo.sql (演示数据，可选)
+xiyun-init-feedback-demo.sql (演示数据，可选)
 ```
 
 ---
@@ -69,7 +69,7 @@ yunxi-init-feedback-demo.sql (演示数据，可选)
 | muying-activity-signup-privacy-split-migration.sql | `information_schema` 检查字段是否存在 |
 | muying-goods-compliance-migration.sql | `information_schema` 检查字段/索引是否存在 |
 | muying-privacy-security-migration.sql | `information_schema` 检查字段是否存在 + `CREATE TABLE IF NOT EXISTS` |
-| yunxi-init-config.sql | `INSERT ... ON DUPLICATE KEY UPDATE` |
+| xiyun-init-config.sql | `INSERT ... ON DUPLICATE KEY UPDATE` |
 
 ### ⚠️ 不可重复执行（或部分不幂等）
 
@@ -77,8 +77,8 @@ yunxi-init-feedback-demo.sql (演示数据，可选)
 |------|-----------|
 | muying-final-migration.sql | C 段部分 SQL 不可重复执行：唯一索引只能加一次、C4 枚举修复会修改已有数据 |
 | muying-v1-post-migration.sql | P1 ALTER 部分幂等，但 P2/P4 INSERT IGNORE 幂等；整体建议只执行一次 |
-| yunxi-init-activity-demo.sql | `INSERT INTO` 无去重，重复执行会产生重复活动数据 |
-| yunxi-init-feedback-demo.sql | `INSERT INTO` 无去重，重复执行会产生重复反馈数据 |
+| xiyun-init-activity-demo.sql | `INSERT INTO` 无去重，重复执行会产生重复活动数据 |
+| xiyun-init-feedback-demo.sql | `INSERT INTO` 无去重，重复执行会产生重复反馈数据 |
 
 ---
 

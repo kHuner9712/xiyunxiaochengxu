@@ -65,7 +65,7 @@ if (empty($projectRoot)) {
     $projectRoot = realpath(__DIR__ . '/../../');
 }
 
-echo "\n孕禧小程序 — 发布冻结检查\n";
+echo "\n禧孕小程序 — 发布冻结检查\n";
 echo "项目目录: {$projectRoot}\n";
 
 // ============================================================

@@ -1,14 +1,14 @@
 -- ============================================================
--- 孕禧一期：后台权限菜单注册迁移
+-- 禧孕一期：后台权限菜单注册迁移
 -- 将 Activity/Activitysignup/Invite/Inviteconfig/Feedback/Featureswitch
 -- 注册到 sxo_power 表和 sxo_role_power 表，使后台左侧菜单可见可操作
 -- 幂等性：使用 INSERT IGNORE，可重复执行
 -- 兼容：MySQL 5.7.44+
 -- ============================================================
 
--- 1. 一级菜单：孕禧运营（sort=15，排在"仓库"之后"手机"之前）
+-- 1. 一级菜单：禧孕运营（sort=15，排在"仓库"之后"手机"之前）
 INSERT IGNORE INTO `sxo_power` (`id`, `pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
-(700, 0, '孕禧运营', 'Muying', 'Index', '', 15, 1, 'icon-admin-article', UNIX_TIMESTAMP(), 0);
+(700, 0, '禧孕运营', 'Muying', 'Index', '', 15, 1, 'icon-admin-article', UNIX_TIMESTAMP(), 0);
 
 -- 2. 活动管理（二级菜单）
 INSERT IGNORE INTO `sxo_power` (`id`, `pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
@@ -53,9 +53,9 @@ INSERT IGNORE INTO `sxo_power` (`id`, `pid`, `name`, `control`, `action`, `url`,
 (750, 700, '功能开关', 'Featureswitch', 'Index', '', 6, 1, '', UNIX_TIMESTAMP(), 0),
 (751, 750, '功能开关保存', 'Featureswitch', 'Save', '', 0, 0, '', UNIX_TIMESTAMP(), 0);
 
--- 8. 孕禧数据看板（二级菜单）
+-- 8. 禧孕数据看板（二级菜单）
 INSERT IGNORE INTO `sxo_power` (`id`, `pid`, `name`, `control`, `action`, `url`, `sort`, `is_show`, `icon`, `add_time`, `upd_time`) VALUES
-(760, 700, '孕禧数据看板', 'Muyingstat', 'Index', '', 7, 1, '', UNIX_TIMESTAMP(), 0);
+(760, 700, '禧孕数据看板', 'Muyingstat', 'Index', '', 7, 1, '', UNIX_TIMESTAMP(), 0);
 
 -- 9. 将所有新权限分配给超级管理员角色（role_id=1）
 INSERT IGNORE INTO `sxo_role_power` (`role_id`, `power_id`, `add_time`) VALUES

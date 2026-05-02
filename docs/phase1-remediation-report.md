@@ -1,4 +1,4 @@
-# 孕禧母婴商城 — 一期合规整改报告
+# 禧孕母婴商城 — 一期合规整改报告
 
 > 分支：`review-remediation-phase1`
 > 日期：2026-04-26
@@ -8,7 +8,7 @@
 
 ## 1. 整改目标
 
-孕禧母婴商城基于 ShopXO + uni-app 构建，一期提审微信小程序需满足以下合规要求：
+禧孕母婴商城基于 ShopXO + uni-app 构建，一期提审微信小程序需满足以下合规要求：
 
 - 不暴露未准备好的高风险功能（支付、分销、钱包、积分、优惠券、会员、直播、医院等）
 - 不触碰医疗诊疗、互联网医院、药械销售等敏感边界
@@ -239,9 +239,9 @@ compliance-scope.js
 9. docs/sql/muying-compliance-center-migration.sql # 合规中心
 10. docs/sql/muying-activity-signup-privacy-split-migration.sql # 隐私授权拆分（前缀安全+幂等，历史数据默认不回填）
 11. docs/sql/muying-feedback-type-migration.sql # 反馈类型
-12. docs/sql/yunxi-init-config.sql             # 初始配置数据
-13. docs/sql/yunxi-init-activity-demo.sql      # 活动演示数据
-14. docs/sql/yunxi-init-feedback-demo.sql      # 反馈演示数据
+12. docs/sql/xiyun-init-config.sql             # 初始配置数据
+13. docs/sql/xiyun-init-activity-demo.sql      # 活动演示数据
+14. docs/sql/xiyun-init-feedback-demo.sql      # 反馈演示数据
 ```
 
 ### 动态页面收敛（二次加固）

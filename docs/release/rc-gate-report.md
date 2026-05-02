@@ -1,6 +1,6 @@
-# RC 封板报告 — 孕禧母婴自营商城一期 v0.1.0-rc1
+# RC 封板报告 — 禧孕母婴自营商城一期 v0.1.0-rc1
 
-> 项目：孕禧母婴自营商城一期  
+> 项目：禧孕母婴自营商城一期  
 > 版本：v0.1.0-rc1  
 > 封板日期：2026-04-25  
 > 仓库：https://github.com/kHuner9712/xiyun  
@@ -10,7 +10,7 @@
 
 ## 一、版本定位
 
-孕禧母婴自营商城一期，包含以下核心功能：
+禧孕母婴自营商城一期，包含以下核心功能：
 
 | 功能模块 | 说明 | 状态 |
 |----------|------|------|
@@ -120,7 +120,7 @@
 | 序号 | SQL 文件 | 位置 | 用途 | 可否重复 |
 |------|----------|------|------|---------|
 | 1 | `shopxo.sql` | `shopxo-backend/config/shopxo.sql` | ShopXO 主库初始化（含 DROP TABLE） | ❌ |
-| 2 | `muying-final-migration.sql` | `docs/muying-final-migration.sql` | 孕禧核心表+补丁+索引 | ❌ |
+| 2 | `muying-final-migration.sql` | `docs/muying-final-migration.sql` | 禧孕核心表+补丁+索引 | ❌ |
 | 3 | `muying-feature-switch-migration.sql` | `docs/sql/muying-feature-switch-migration.sql` | 功能开关完整初始化+资质门禁 | ✅ 幂等 |
 | 4 | `muying-feedback-review-migration.sql` | `docs/muying-feedback-review-migration.sql` | 反馈审核字段 | ✅ 幂等 |
 | 5 | `muying-invite-reward-unify-migration.sql` | `docs/muying-invite-reward-unify-migration.sql` | 邀请奖励统一 | ✅ 幂等 |
@@ -166,13 +166,13 @@
 
 ```bash
 # 一键生产环境检查（推荐）
-bash scripts/preflight/preflight-production-check.sh --env /www/wwwroot/yunxi/.env --repo /path/to/repo
+bash scripts/preflight/preflight-production-check.sh --env /www/wwwroot/xiyun/.env --repo /path/to/repo
 
 # Windows/PHP 版
 php scripts/preflight/preflight-production-check.php --env=shopxo-backend/.env
 
 # RC 门禁完整检查
-bash scripts/preflight/run-rc-gate.sh --mode=experience --env /www/wwwroot/yunxi/.env .
+bash scripts/preflight/run-rc-gate.sh --mode=experience --env /www/wwwroot/xiyun/.env .
 
 # 提审就绪检查
 bash scripts/preflight/check-wechat-submit-readiness.sh .
@@ -296,11 +296,11 @@ bash scripts/preflight/check-wechat-submit-readiness.sh .
 mysql -u USER -p DB < backup_before_deploy.sql
 
 # 代码回滚
-cd /www/wwwroot/yunxi-api
+cd /www/wwwroot/xiyun-api
 git log --oneline -5          # 找到回滚版本
 git reset --hard <commit_hash>
 composer install --no-dev
-bash scripts/deploy/fix-permissions.sh /www/wwwroot/yunxi-api
+bash scripts/deploy/fix-permissions.sh /www/wwwroot/xiyun-api
 ```
 
 ---

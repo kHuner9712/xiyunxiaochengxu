@@ -39,12 +39,12 @@ PHP 8.1 必装扩展（宝塔 → PHP 8.1 → 安装扩展）：
 
 ```
 宝塔面板 → 网站 → 添加站点
-  域名：填写服务器 IP 或测试域名（如 test.yunxi.com）
-  根目录：/www/wwwroot/yunxi-api
+  域名：填写服务器 IP 或测试域名（如 test.xiyun.com）
+  根目录：/www/wwwroot/xiyun-api
   PHP 版本：PHP-81
   数据库：创建 MySQL 数据库
-    数据库名：yunxi_test
-    用户名：yunxi_test
+    数据库名：xiyun_test
+    用户名：xiyun_test
     密码：生成强密码（≥16位，含大小写+数字+特殊字符）
     字符集：utf8mb4
     排序规则：utf8mb4_general_ci
@@ -54,10 +54,10 @@ PHP 8.1 必装扩展（宝塔 → PHP 8.1 → 安装扩展）：
 ```
 DB_HOST = 127.0.0.1
 DB_PORT = 3306
-DB_NAME = yunxi_test
-DB_USER = yunxi_test
+DB_NAME = xiyun_test
+DB_USER = xiyun_test
 DB_PASS = _____________
-SITE_DIR = /www/wwwroot/yunxi-api
+SITE_DIR = /www/wwwroot/xiyun-api
 ```
 
 ### 1.3 设置网站运行目录
@@ -75,7 +75,7 @@ SITE_DIR = /www/wwwroot/yunxi-api
 ### 2.1 上传代码
 
 ```bash
-cd /www/wwwroot/yunxi-api
+cd /www/wwwroot/xiyun-api
 
 # 克隆仓库
 git clone https://github.com/kHuner9712/xiyun.git /tmp/xiyun
@@ -99,8 +99,8 @@ APP_DEBUG = false
 [DATABASE]
 TYPE = mysql
 HOSTNAME = 127.0.0.1
-DATABASE = yunxi_test
-USERNAME = yunxi_test
+DATABASE = xiyun_test
+USERNAME = xiyun_test
 PASSWORD = 你的强密码
 HOSTPORT = 3306
 CHARSET = utf8mb4
@@ -113,7 +113,7 @@ default_lang = zh-cn
 ### 2.3 Composer 安装
 
 ```bash
-cd /www/wwwroot/yunxi-api
+cd /www/wwwroot/xiyun-api
 
 # 如果服务器没有 composer
 curl -sS https://getcomposer.org/installer | php
@@ -126,7 +126,7 @@ composer install --no-dev --optimize-autoloader
 ### 2.4 目录权限
 
 ```bash
-cd /www/wwwroot/yunxi-api
+cd /www/wwwroot/xiyun-api
 chown -R www:www .
 
 find . -type d -exec chmod 755 {} \;
@@ -210,19 +210,19 @@ curl -s -o /dev/null -w "%{http_code}" http://你的IP/你的秘密入口名.php
 ```bash
 DB_HOST="127.0.0.1"
 DB_PORT="3306"
-DB_NAME="yunxi_test"
-DB_USER="yunxi_test"
+DB_NAME="xiyun_test"
+DB_USER="xiyun_test"
 DB_PASS="你的强密码"
 MYSQL="mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -p$DB_PASS $DB_NAME"
-SITE_DIR="/www/wwwroot/yunxi-api"
+SITE_DIR="/www/wwwroot/xiyun-api"
 
 # 1. ShopXO 主库（不可重复执行！）
 $MYSQL < $SITE_DIR/config/shopxo.sql
 
-# 2. 孕禧核心表（不可重复执行！）
+# 2. 禧孕核心表（不可重复执行！）
 $MYSQL < /tmp/xiyun/docs/muying-final-migration.sql
 # 如果已删除临时目录，从仓库重新获取
-cd /www/wwwroot/yunxi-api && git clone --depth 1 https://github.com/kHuner9712/xiyun.git /tmp/xiyun
+cd /www/wwwroot/xiyun-api && git clone --depth 1 https://github.com/kHuner9712/xiyun.git /tmp/xiyun
 $MYSQL < /tmp/xiyun/docs/muying-final-migration.sql
 
 # 3. 功能开关初始化（幂等，可重复执行）
@@ -244,9 +244,9 @@ $MYSQL < /tmp/xiyun/docs/muying-admin-power-migration.sql
 ### 3.2 导入演示数据（可选）
 
 ```bash
-$MYSQL < /tmp/xiyun/docs/sql/yunxi-init-config.sql
-$MYSQL < /tmp/xiyun/docs/sql/yunxi-init-activity-demo.sql
-$MYSQL < /tmp/xiyun/docs/sql/yunxi-init-feedback-demo.sql
+$MYSQL < /tmp/xiyun/docs/sql/xiyun-init-config.sql
+$MYSQL < /tmp/xiyun/docs/sql/xiyun-init-activity-demo.sql
+$MYSQL < /tmp/xiyun/docs/sql/xiyun-init-feedback-demo.sql
 ```
 
 ### 3.3 验证数据库
@@ -260,8 +260,8 @@ $MYSQL -e "SELECT only_tag, value, name FROM sxo_config WHERE only_tag LIKE 'fea
 # 预期：高风险=0，一期核心=1
 
 # 检查后台菜单
-$MYSQL -e "SELECT id, name FROM sxo_power WHERE name='孕禧运营';"
-# 预期：返回孕禧运营菜单
+$MYSQL -e "SELECT id, name FROM sxo_power WHERE name='禧孕运营';"
+# 预期：返回禧孕运营菜单
 ```
 
 ---
@@ -274,11 +274,11 @@ cd /tmp/xiyun
 # Shell 版
 bash scripts/preflight/preflight-production-check.sh \
   --repo /tmp/xiyun \
-  --env /www/wwwroot/yunxi-api/.env
+  --env /www/wwwroot/xiyun-api/.env
 
 # PHP 版
 php scripts/preflight/preflight-production-check.php \
-  --env=/www/wwwroot/yunxi-api/.env \
+  --env=/www/wwwroot/xiyun-api/.env \
   --repo=/tmp/xiyun
 ```
 
@@ -301,7 +301,7 @@ php scripts/preflight/preflight-production-check.php \
 ### 5.2 方式二：使用测试域名 + Let's Encrypt
 
 ```
-1. 将测试域名（如 test.yunxi.com）A 记录指向服务器 IP
+1. 将测试域名（如 test.xiyun.com）A 记录指向服务器 IP
 2. 宝塔面板 → 网站 → 设置 → SSL → Let's Encrypt
 3. 勾选域名 → 申请证书
 4. 开启强制 HTTPS
@@ -405,8 +405,8 @@ grep appid project.config.json | head -1
 1. 浏览器访问 `https://你的域名/你的秘密入口名.php`
 2. 使用默认管理员账号登录
 3. 修改默认密码
-4. 确认"孕禧运营"菜单完整（6 个子菜单）
-5. 配置站点名称：孕禧母婴
+4. 确认"禧孕运营"菜单完整（6 个子菜单）
+5. 配置站点名称：禧孕母婴
 6. 配置客服电话
 7. 配置隐私弹窗文案
 8. 确认功能开关（activity/invite/feedback/content 应为开启）
@@ -446,7 +446,7 @@ grep appid project.config.json | head -1
 
 ```bash
 # 1. 查看 ThinkPHP 运行日志
-tail -50 /www/wwwroot/yunxi-api/runtime/log/$(date +%Y%m)/$(date +%d).log
+tail -50 /www/wwwroot/xiyun-api/runtime/log/$(date +%Y%m)/$(date +%d).log
 
 # 2. 查看 Nginx 错误日志
 tail -50 /www/wwwlogs/你的域名.error.log
@@ -500,6 +500,6 @@ curl -v "https://你的域名/api.php?s=plugins/index&pluginsname=distribution&p
 
 | 任务类型 | 执行周期 | 脚本内容 |
 |----------|----------|----------|
-| Shell 脚本 | 每 1 分钟 | `cd /www/wwwroot/yunxi-api && php think order_close` |
-| Shell 脚本 | 每 5 分钟 | `cd /www/wwwroot/yunxi-api && php think order_auto_confirm` |
+| Shell 脚本 | 每 1 分钟 | `cd /www/wwwroot/xiyun-api && php think order_close` |
+| Shell 脚本 | 每 5 分钟 | `cd /www/wwwroot/xiyun-api && php think order_auto_confirm` |
 | 备份数据库 | 每天 2:00 | 宝塔自动备份，保留 7 份 |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — preflight 脚本 fixture 自测
+# 禧孕小程序 — preflight 脚本 fixture 自测
 # ============================================================
 #
 # 【用法】bash scripts/preflight/tests/run-tests.sh
@@ -126,8 +126,8 @@ DB_HOST=""; DB_PORT=""; DB_NAME=""; DB_USER=""; DB_PASS=""; DB_PREFIX=""
 parse_env_file "${FIXTURES_DIR}/env/env.ini-style"
 assert_eq "DB_HOST from INI"   "10.0.1.50"     "$DB_HOST"
 assert_eq "DB_PORT from INI"   "3307"          "$DB_PORT"
-assert_eq "DB_NAME from INI"   "yunxi_prod"    "$DB_NAME"
-assert_eq "DB_USER from INI"   "yunxi_app"     "$DB_USER"
+assert_eq "DB_NAME from INI"   "xiyun_prod"    "$DB_NAME"
+assert_eq "DB_USER from INI"   "xiyun_app"     "$DB_USER"
 assert_eq "DB_PASS from INI"   "test_pass_123" "$DB_PASS"
 assert_eq "DB_PREFIX from INI" "sxo_"          "$DB_PREFIX"
 

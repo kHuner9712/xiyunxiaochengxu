@@ -86,7 +86,7 @@ bash scripts/preflight/check-release-placeholders.sh --mode=experience .
 
 ### 2.1 注册后台菜单
 - [ ] 上一步执行 muying-admin-power-migration.sql 后，刷新后台页面
-- [ ] 确认左侧菜单出现"孕禧运营"分组及其下 6 个子菜单
+- [ ] 确认左侧菜单出现"禧孕运营"分组及其下 6 个子菜单
 
 ### 2.2 填写后台配置
 - [ ] 系统设置 → 小程序配置 → 填写隐私弹窗文案（`common_app_mini_weixin_privacy_content`）
@@ -178,9 +178,9 @@ bash scripts/preflight/check-admin-bootstrap.sh .
 ### 5.3 运行自动检查脚本
 ```bash
 bash scripts/deploy/post-deploy-check.sh \
-  --site-dir /www/wwwroot/yunxi-api \
+  --site-dir /www/wwwroot/xiyun-api \
   --api-url http://你的IP/ \
-  --db-name yunxi --db-user yunxi --db-pass YOUR_PASSWORD \
+  --db-name xiyun --db-user xiyun --db-pass YOUR_PASSWORD \
   --env=experience
 ```
 - [ ] 确认 0 BLOCKER

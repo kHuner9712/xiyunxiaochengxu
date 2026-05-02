@@ -221,7 +221,7 @@ function extractConfigTags(sql) {
 }
 
 function main() {
-  console.log('=== 孕禧数据库迁移安全检查 ===\n');
+  console.log('=== 禧孕数据库迁移安全检查 ===\n');
 
   if (!fs.existsSync(MIGRATION_FILE)) {
     console.log(`❌ 迁移文件不存在: ${MIGRATION_FILE}`);

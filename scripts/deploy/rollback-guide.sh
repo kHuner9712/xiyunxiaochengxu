@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — 回滚指南与脚本
+# 禧孕小程序 — 回滚指南与脚本
 # ============================================================
 #
 # 【用途】部署失败或上线后出问题时，快速回滚到上一版本
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
             echo "二、回滚执行"
             echo ""
             echo "  bash scripts/deploy/rollback-guide.sh \\"
-            echo "    --site-dir /www/wwwroot/yunxi-api \\"
+            echo "    --site-dir /www/wwwroot/xiyun-api \\"
             echo "    --backup-dir /path/to/backup \\"
             echo "    --db-name DB_NAME --db-user DB_USER --db-pass DB_PASS \\"
             echo "    --confirm"

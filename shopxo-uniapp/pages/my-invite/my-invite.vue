@@ -116,7 +116,7 @@
 
         onShareAppMessage() {
             return {
-                title: '孕禧邀请你一起科学孕育，赢积分好礼！',
+                title: '禧孕邀请你一起科学孕育，赢积分好礼！',
                 path: '/pages/invite/invite?invite_code=' + (this.invite_code || ''),
                 imageUrl: '/static/images/common/logo.png',
             };
@@ -124,7 +124,7 @@
 
         onShareTimeline() {
             return {
-                title: '孕禧邀请你一起科学孕育，赢积分好礼！',
+                title: '禧孕邀请你一起科学孕育，赢积分好礼！',
                 query: 'invite_code=' + (this.invite_code || ''),
             };
         },

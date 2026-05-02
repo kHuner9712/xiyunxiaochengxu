@@ -1,6 +1,6 @@
 # MySQL 5.7.44 部署说明
 
-> 面向：孕禧小程序正式环境
+> 面向：禧孕小程序正式环境
 > 标准环境：宝塔面板 + Nginx 1.28.1 + PHP 8.1.x + MySQL 5.7.44
 > 日期：2026-04-23
 
@@ -169,24 +169,24 @@ STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_A
 #    密码: 自动生成（记录到 .env）
 
 # 2. 导入 ShopXO 核心建表
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/config/shopxo.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/config/shopxo.sql
 
 # 3. 导入母婴迁移（严格按顺序）
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-final-migration.sql
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-audit-log-migration.sql
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-feature-switch-migration.sql
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-enhancement-migration.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-final-migration.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-audit-log-migration.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-feature-switch-migration.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-enhancement-migration.sql
 
 # 4. 可选：演示数据（仅开发/测试环境）
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/docs/muying-demo-data.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/docs/muying-demo-data.sql
 
 # 5. 可选：初始化配置和演示数据
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/docs/sql/yunxi-init-config.sql
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/docs/sql/yunxi-init-activity-demo.sql
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/docs/sql/yunxi-init-feedback-demo.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/docs/sql/xiyun-init-config.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/docs/sql/xiyun-init-activity-demo.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/docs/sql/xiyun-init-feedback-demo.sql
 
 # 6. 验证
-mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/yunxi-api/scripts/preflight/check-db.sql
+mysql -u shopxo_dev -p shopxo_dev < /www/wwwroot/xiyun-api/scripts/preflight/check-db.sql
 ```
 
 ### 6.2 从 MySQL 8.0 迁移到 5.7

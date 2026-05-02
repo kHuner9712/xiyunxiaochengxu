@@ -58,18 +58,18 @@ UNI_APP_WX_APPID=你的正式AppID
 
 ```bash
 # 3.1 APP_DEBUG 改为 false
-# 编辑 /www/wwwroot/yunxi-api/.env
+# 编辑 /www/wwwroot/xiyun-api/.env
 # APP_DEBUG = false
 
 # 3.2 删除 install.php
-rm -f /www/wwwroot/yunxi-api/public/install.php
+rm -f /www/wwwroot/xiyun-api/public/install.php
 
 # 3.3 重命名后台入口
-mv /www/wwwroot/yunxi-api/public/admin.php /www/wwwroot/yunxi-api/public/你的随机名.php
+mv /www/wwwroot/xiyun-api/public/admin.php /www/wwwroot/xiyun-api/public/你的随机名.php
 
 # 3.4 清除缓存
-rm -rf /www/wwwroot/yunxi-api/runtime/cache/*
-rm -rf /www/wwwroot/yunxi-api/runtime/temp/*
+rm -rf /www/wwwroot/xiyun-api/runtime/cache/*
+rm -rf /www/wwwroot/xiyun-api/runtime/temp/*
 ```
 
 ---
@@ -121,7 +121,7 @@ rm -rf /www/wwwroot/yunxi-api/runtime/temp/*
 ```bash
 bash scripts/preflight/check-wechat-submit-readiness.sh .
 
-bash scripts/preflight/run-rc-gate.sh --mode=submit --env /www/wwwroot/yunxi-api/.env .
+bash scripts/preflight/run-rc-gate.sh --mode=submit --env /www/wwwroot/xiyun-api/.env .
 ```
 
 确认：**0 BLOCKER**（WARN 项需人工确认）

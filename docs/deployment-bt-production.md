@@ -1,4 +1,4 @@
-# 孕禧小程序 — 宝塔面板生产部署指南
+# 禧孕小程序 — 宝塔面板生产部署指南
 
 > 适用环境：Nginx 1.28.1 / MySQL 5.7.44 / PHP 8.1.32 / phpMyAdmin 5.2 / 宝塔面板
 >
@@ -46,9 +46,9 @@
 
 1. **创建独立数据库用户**（不要使用 root）：
    ```sql
-   CREATE DATABASE yunxi_prod CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-   CREATE USER 'yunxi_app'@'127.0.0.1' IDENTIFIED BY '强密码（≥16位，含大小写+数字+特殊字符）';
-   GRANT ALL PRIVILEGES ON yunxi_prod.* TO 'yunxi_app'@'127.0.0.1';
+   CREATE DATABASE xiyun_prod CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+   CREATE USER 'xiyun_app'@'127.0.0.1' IDENTIFIED BY '强密码（≥16位，含大小写+数字+特殊字符）';
+   GRANT ALL PRIVILEGES ON xiyun_prod.* TO 'xiyun_app'@'127.0.0.1';
    FLUSH PRIVILEGES;
    ```
 
@@ -69,11 +69,11 @@
 
 宝塔 → 网站 → 添加站点：
 
-- **域名**：你的 API 域名（如 api.yunxi.com）
-- **根目录**：`/www/wwwroot/yunxi-api/shopxo-backend`
+- **域名**：你的 API 域名（如 api.xiyun.com）
+- **根目录**：`/www/wwwroot/xiyun-api/shopxo-backend`
 - **运行目录**：`/public`（⚠️ 不是根目录！这是 ThinkPHP 要求）
 - **PHP 版本**：PHP-81
-- **数据库**：选择已创建的 yunxi_prod
+- **数据库**：选择已创建的 xiyun_prod
 
 ### 3.2 伪静态配置
 
@@ -168,7 +168,7 @@ add_header X-XSS-Protection "1; mode=block" always;
 ### 4.1 环境配置
 
 ```bash
-cd /www/wwwroot/yunxi-api/shopxo-backend
+cd /www/wwwroot/xiyun-api/shopxo-backend
 cp .env.production.example .env
 ```
 
@@ -180,8 +180,8 @@ APP_DEBUG = false
 [DATABASE]
 TYPE = mysql
 HOSTNAME = 127.0.0.1
-DATABASE = yunxi_prod
-USERNAME = yunxi_app
+DATABASE = xiyun_prod
+USERNAME = xiyun_app
 PASSWORD = 你的强密码
 HOSTPORT = 3306
 CHARSET = utf8mb4
@@ -211,12 +211,12 @@ php -r "echo bin2hex(openssl_random_pseudo_bytes(32));"
 1. **确认 install.php 已删除**：
    ```bash
    # ⚠️ 生产部署前必须确认以下文件不存在
-   ls -la /www/wwwroot/yunxi-api/shopxo-backend/public/install.php
+   ls -la /www/wwwroot/xiyun-api/shopxo-backend/public/install.php
    # 如果存在，必须删除：
-   rm -f /www/wwwroot/yunxi-api/shopxo-backend/public/install.php
-   rm -rf /www/wwwroot/yunxi-api/shopxo-backend/public/static/install/
+   rm -f /www/wwwroot/xiyun-api/shopxo-backend/public/install.php
+   rm -rf /www/wwwroot/xiyun-api/shopxo-backend/public/static/install/
    # 确认删除成功
-   test -f /www/wwwroot/yunxi-api/shopxo-backend/public/install.php && echo "BLOCKER: install.php 仍存在！" || echo "OK: install.php 已删除"
+   test -f /www/wwwroot/xiyun-api/shopxo-backend/public/install.php && echo "BLOCKER: install.php 仍存在！" || echo "OK: install.php 已删除"
    ```
    > 本项目已从代码仓库中移除 `public/install.php`，安装入口已归档至 `docs/archive/install.php.disabled`。
    > 如需重新安装，将该文件复制回 `shopxo-backend/public/install.php`，安装完成后必须立即删除。
@@ -244,14 +244,14 @@ php -r "echo bin2hex(openssl_random_pseudo_bytes(32));"
 ### 5.1 执行迁移
 
 ```bash
-cd /www/wwwroot/yunxi-api
+cd /www/wwwroot/xiyun-api
 
 # 基础表结构（ShopXO 原始）
-mysql -u yunxi_app -p yunxi_prod < shopxo-backend/app/install/data/shopxo.sql
+mysql -u xiyun_app -p xiyun_prod < shopxo-backend/app/install/data/shopxo.sql
 
 # 母婴二开迁移脚本
-mysql -u yunxi_app -p yunxi_prod < docs/sql/muying_feedback.sql
-mysql -u yunxi_app -p yunxi_prod < docs/sql/muying-activity-signup-privacy-split-migration.sql
+mysql -u xiyun_app -p xiyun_prod < docs/sql/muying_feedback.sql
+mysql -u xiyun_app -p xiyun_prod < docs/sql/muying-activity-signup-privacy-split-migration.sql
 ```
 
 ### 5.2 数据库备份
@@ -270,7 +270,7 @@ mysql -u yunxi_app -p yunxi_prod < docs/sql/muying-activity-signup-privacy-split
 宝塔 → 计划任务 → 添加：
 
 - **任务类型**：备份网站目录
-- **备份目录**：`/www/wwwroot/yunxi-api/shopxo-backend/public/static/upload/`
+- **备份目录**：`/www/wwwroot/xiyun-api/shopxo-backend/public/static/upload/`
 - **执行周期**：每天凌晨 4:00
 - **保留份数**：7 天
 

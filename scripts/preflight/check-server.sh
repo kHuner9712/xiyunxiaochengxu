@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — 上线前服务器环境预检
+# 禧孕小程序 — 上线前服务器环境预检
 # ============================================================
 #
 # 【用途】在部署服务器上执行，自动检查上线所需环境条件
@@ -369,7 +369,7 @@ if [[ "$DB_CONNECT_OK" -eq 1 ]]; then
         if [[ -n "$VAL" ]]; then
             pass "配置项: ${tag} = ${VAL}"
         else
-            fail "配置项缺失: ${tag} | 修复: 执行 yunxi-init-config.sql"
+            fail "配置项缺失: ${tag} | 修复: 执行 xiyun-init-config.sql"
         fi
     done
 
@@ -390,7 +390,7 @@ if [[ "$DB_CONNECT_OK" -eq 1 ]]; then
     if [[ "$ACT_COUNT" -gt 0 ]]; then
         pass "活动数据: ${ACT_COUNT} 条"
     else
-        warn "活动数据为空 | 建议: 执行 yunxi-init-activity-demo.sql 或在后台添加活动"
+        warn "活动数据为空 | 建议: 执行 xiyun-init-activity-demo.sql 或在后台添加活动"
     fi
 
     FB_COUNT=$(mysql_query "SELECT COUNT(*) FROM ${DB_PREFIX}muying_feedback WHERE is_enable=1 AND is_delete_time=0;")
@@ -398,7 +398,7 @@ if [[ "$DB_CONNECT_OK" -eq 1 ]]; then
     if [[ "$FB_COUNT" -gt 0 ]]; then
         pass "妈妈说数据: ${FB_COUNT} 条"
     else
-        warn "妈妈说数据为空 | 建议: 执行 yunxi-init-feedback-demo.sql 或在后台添加"
+        warn "妈妈说数据为空 | 建议: 执行 xiyun-init-feedback-demo.sql 或在后台添加"
     fi
 fi
 

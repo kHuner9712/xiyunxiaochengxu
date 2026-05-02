@@ -14,9 +14,9 @@
 
 ```bash
 bash scripts/deploy/run-migrations.sh \
-  --site-dir /www/wwwroot/yunxi-api \
+  --site-dir /www/wwwroot/xiyun-api \
   --db-host 127.0.0.1 --db-port 3306 \
-  --db-name yunxi --db-user yunxi --db-pass YOUR_PASSWORD
+  --db-name xiyun --db-user xiyun --db-pass YOUR_PASSWORD
 ```
 
 脚本会自动按顺序执行、检查幂等性、跳过已执行的迁移，并在最后验证关键字段/表/配置/菜单。
@@ -34,7 +34,7 @@ bash scripts/deploy/run-migrations.sh \
 | 序号 | SQL 文件 | 位置 | 用途 | 可否重复 |
 |------|----------|------|------|---------|
 | 1 | `shopxo.sql` | `shopxo-backend/config/shopxo.sql` | ShopXO 主库初始化（含 DROP TABLE，仅全新安装） | ❌ |
-| 2 | `muying-final-migration.sql` | `docs/muying-final-migration.sql` | 孕禧核心表+补丁+索引（唯一真相源） | ❌ |
+| 2 | `muying-final-migration.sql` | `docs/muying-final-migration.sql` | 禧孕核心表+补丁+索引（唯一真相源） | ❌ |
 | 3 | `muying-feature-switch-migration.sql` | `docs/sql/muying-feature-switch-migration.sql` | 功能开关完整初始化（高风险默认关闭+一期核心默认开启+资质门禁） | ✅ 幂等 |
 | 4 | `muying-feedback-review-migration.sql` | `docs/muying-feedback-review-migration.sql` | 反馈审核字段 | ✅ 幂等 |
 | 5 | `muying-invite-reward-unify-migration.sql` | `docs/muying-invite-reward-unify-migration.sql` | 邀请奖励统一 | ✅ 幂等 |
@@ -42,23 +42,23 @@ bash scripts/deploy/run-migrations.sh \
 | 7 | `muying-goods-compliance-migration.sql` | `docs/sql/muying-goods-compliance-migration.sql` | 商品合规字段（risk_category/qualification_status） | ✅ 幂等 |
 | 8 | `muying-activity-upgrade-migration.sql` | `docs/muying-activity-upgrade-migration.sql` | 活动升级（候补/签到码/分类重构） | ✅ 幂等 |
 | 9 | `muying-feature-flag-upgrade-migration.sql` | `docs/muying-feature-flag-upgrade-migration.sql` | 功能开关升级补丁（补充 v2 开关） | ✅ 幂等 |
-| 10 | `muying-admin-power-migration.sql` | `docs/muying-admin-power-migration.sql` | 后台菜单权限（孕禧运营 700-760） | ✅ 幂等 |
+| 10 | `muying-admin-power-migration.sql` | `docs/muying-admin-power-migration.sql` | 后台菜单权限（禧孕运营 700-760） | ✅ 幂等 |
 | 11 | `muying-compliance-center-migration.sql` | `docs/sql/muying-compliance-center-migration.sql` | 合规中心菜单（770-775）+合规日志表+ICP备案配置 | ✅ 幂等 |
 
 ### 依赖关系说明
 
 - **步骤 6 必须在步骤 8 之前**：activity-upgrade 的 `is_waitlist` 字段在 `privacy_version` 之后，privacy-security 必须先执行
 - **步骤 7 必须在代码访问商品风险字段前**：goods-compliance 提供 risk_category/qualification_status
-- **步骤 11 必须在步骤 10 之后**：合规中心菜单依赖孕禧运营一级菜单（id=700）
+- **步骤 11 必须在步骤 10 之后**：合规中心菜单依赖禧孕运营一级菜单（id=700）
 - **步骤 3 是完整初始化，步骤 9 是升级补丁**：feature-switch 包含所有功能开关+资质门禁，feature-flag-upgrade 只补充 v2 扩展开关
 
 ### 演示数据（可选，非必须）
 
 | 文件 | 位置 | 用途 |
 |------|------|------|
-| `yunxi-init-config.sql` | `docs/sql/yunxi-init-config.sql` | 配置项初始化 |
-| `yunxi-init-activity-demo.sql` | `docs/sql/yunxi-init-activity-demo.sql` | 活动演示数据 |
-| `yunxi-init-feedback-demo.sql` | `docs/sql/yunxi-init-feedback-demo.sql` | 妈妈说反馈演示数据 |
+| `xiyun-init-config.sql` | `docs/sql/xiyun-init-config.sql` | 配置项初始化 |
+| `xiyun-init-activity-demo.sql` | `docs/sql/xiyun-init-activity-demo.sql` | 活动演示数据 |
+| `xiyun-init-feedback-demo.sql` | `docs/sql/xiyun-init-feedback-demo.sql` | 妈妈说反馈演示数据 |
 
 ### 已归档（不要执行，内容已合并到 muying-final-migration.sql 或已被替代）
 
@@ -80,14 +80,14 @@ bash scripts/deploy/run-migrations.sh \
 ## 手动执行命令
 
 ```bash
-DB_HOST="127.0.0.1"; DB_PORT="3306"; DB_NAME="yunxi"; DB_USER="yunxi"; DB_PASS="YOUR_PASSWORD"
-SITE_DIR="/www/wwwroot/yunxi-api"
+DB_HOST="127.0.0.1"; DB_PORT="3306"; DB_NAME="xiyun"; DB_USER="xiyun"; DB_PASS="YOUR_PASSWORD"
+SITE_DIR="/www/wwwroot/xiyun-api"
 MYSQL="mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -p$DB_PASS $DB_NAME"
 
 # 1. 主库（不可重复）
 $MYSQL < $SITE_DIR/config/shopxo.sql
 
-# 2. 孕禧核心表（不可重复）
+# 2. 禧孕核心表（不可重复）
 $MYSQL < $SITE_DIR/../docs/muying-final-migration.sql
 
 # 3. 功能开关完整初始化（幂等）
@@ -139,5 +139,5 @@ $MYSQL -e "SELECT only_tag, value FROM sxo_config WHERE only_tag LIKE 'qualifica
 $MYSQL -e "SELECT id, pid, name, control FROM sxo_power WHERE id IN (700,760,770) ORDER BY id;"
 
 # 一键 Schema 就绪检查
-bash scripts/preflight/check-db-schema-readiness.sh --env /www/wwwroot/yunxi-api/.env
+bash scripts/preflight/check-db-schema-readiness.sh --env /www/wwwroot/xiyun-api/.env
 ```

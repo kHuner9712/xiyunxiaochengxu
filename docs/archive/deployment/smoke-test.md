@@ -1,6 +1,6 @@
 # 上线 Smoke Test 清单
 
-> 面向：孕禧小程序一期部署后验收
+> 面向：禧孕小程序一期部署后验收
 > 执行时机：代码部署 + SQL迁移 + 缓存清理完成后
 
 ---
@@ -17,13 +17,13 @@
 
 | # | 测试项 | 操作 | 预期结果 | 实际 |
 |---|--------|------|---------|------|
-| 4 | 首页接口 | `curl https://api.yunxi.com/api.php?s=index/index` | `{code:0, data:{...}}` | |
-| 5 | 活动列表 | `curl https://api.yunxi.com/api.php?s=activity/index` | `{code:0, data:{total,page_total,items}}` | |
-| 6 | 活动详情 | `curl https://api.yunxi.com/api.php?s=activity/detail&id=1` | `{code:0, data:{activity,...}}` | |
-| 7 | 邀请信息 | `curl https://api.yunxi.com/api.php?s=invite/index`（需登录） | `{code:0, data:{invite_code,...}}` | |
-| 8 | 邀请奖励配置 | `curl https://api.yunxi.com/api.php?s=invite/rewardconfigpublic` | `{code:0, data:{register_reward,...}}` | |
-| 9 | 内容列表 | `curl https://api.yunxi.com/api.php?s=article/datalist` | `{code:0, data:{total,page_total,items}}` | |
-| 10 | 标签列表 | `curl https://api.yunxi.com/api.php?s=muyinguser/taglist` | `{code:0, data:{total,page_total,items}}` | |
+| 4 | 首页接口 | `curl https://api.xiyun.com/api.php?s=index/index` | `{code:0, data:{...}}` | |
+| 5 | 活动列表 | `curl https://api.xiyun.com/api.php?s=activity/index` | `{code:0, data:{total,page_total,items}}` | |
+| 6 | 活动详情 | `curl https://api.xiyun.com/api.php?s=activity/detail&id=1` | `{code:0, data:{activity,...}}` | |
+| 7 | 邀请信息 | `curl https://api.xiyun.com/api.php?s=invite/index`（需登录） | `{code:0, data:{invite_code,...}}` | |
+| 8 | 邀请奖励配置 | `curl https://api.xiyun.com/api.php?s=invite/rewardconfigpublic` | `{code:0, data:{register_reward,...}}` | |
+| 9 | 内容列表 | `curl https://api.xiyun.com/api.php?s=article/datalist` | `{code:0, data:{total,page_total,items}}` | |
+| 10 | 标签列表 | `curl https://api.xiyun.com/api.php?s=muyinguser/taglist` | `{code:0, data:{total,page_total,items}}` | |
 
 ## 后台页面
 

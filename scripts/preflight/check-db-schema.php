@@ -61,7 +61,7 @@ if (empty($backendRoot)) {
     $backendRoot = realpath(__DIR__ . '/../../shopxo-backend');
 }
 
-echo "\n孕禧小程序 — 数据库 Schema 完整性检查\n";
+echo "\n禧孕小程序 — 数据库 Schema 完整性检查\n";
 
 $envPath = $backendRoot . '/.env';
 if (!file_exists($envPath)) {

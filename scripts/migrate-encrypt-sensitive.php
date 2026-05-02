@@ -65,7 +65,7 @@ function maskValue(string $value): string {
     return mb_substr($value, 0, 1) . '***' . mb_substr($value, -1);
 }
 
-echo "\n孕禧 V1.0 — 敏感数据加密迁移脚本\n";
+echo "\n禧孕 V1.0 — 敏感数据加密迁移脚本\n";
 echo str_repeat('=', 50) . "\n\n";
 
 // ============================================================

@@ -28,11 +28,11 @@
 
 ```bash
 bash scripts/deploy/bootstrap-backend.sh \
-  --site-dir /www/wwwroot/yunxi-api \
+  --site-dir /www/wwwroot/xiyun-api \
   --env=experience \
   --db-host 127.0.0.1 \
-  --db-name yunxi \
-  --db-user yunxi \
+  --db-name xiyun \
+  --db-user xiyun \
   --db-pass YOUR_DB_PASSWORD
 ```
 
@@ -61,7 +61,7 @@ curl -s http://你的IP/api.php?s=common.index.index | head -20
 按 [admin-first-login-checklist.md](admin-first-login-checklist.md) 执行 11 步：
 
 1. 修改默认密码
-2. 确认"孕禧运营"菜单完整（7 个子菜单，含孕禧数据看板）
+2. 确认"禧孕运营"菜单完整（7 个子菜单，含禧孕数据看板）
 3. 配置站点名称
 4. 配置客服电话
 5. 配置隐私弹窗文案
@@ -100,9 +100,9 @@ EOF
 ```bash
 # 自动验收
 bash scripts/deploy/post-deploy-check.sh \
-  --site-dir /www/wwwroot/yunxi-api \
+  --site-dir /www/wwwroot/xiyun-api \
   --api-url http://你的IP/ \
-  --db-name yunxi --db-user yunxi --db-pass YOUR_DB_PASSWORD \
+  --db-name xiyun --db-user xiyun --db-pass YOUR_DB_PASSWORD \
   --env=experience
 ```
 
@@ -119,17 +119,17 @@ bash scripts/deploy/post-deploy-check.sh \
 ## 部署前备份（每次部署前必做）
 
 ```bash
-BACKUP_DIR="/www/backup/yunxi/$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR="/www/backup/xiyun/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 
 # 备份数据库
-mysqldump -h 127.0.0.1 -u yunxi -pYOUR_DB_PASSWORD yunxi > "$BACKUP_DIR/db.sql"
+mysqldump -h 127.0.0.1 -u xiyun -pYOUR_DB_PASSWORD xiyun > "$BACKUP_DIR/db.sql"
 
 # 备份 .env
-cp /www/wwwroot/yunxi-api/.env "$BACKUP_DIR/env"
+cp /www/wwwroot/xiyun-api/.env "$BACKUP_DIR/env"
 
 # 记录当前 commit
-cd /www/wwwroot/yunxi-api && git rev-parse HEAD > "$BACKUP_DIR/commit.txt"
+cd /www/wwwroot/xiyun-api && git rev-parse HEAD > "$BACKUP_DIR/commit.txt"
 ```
 
 ---
@@ -138,8 +138,8 @@ cd /www/wwwroot/yunxi-api && git rev-parse HEAD > "$BACKUP_DIR/commit.txt"
 
 ```bash
 bash scripts/deploy/rollback-guide.sh \
-  --site-dir /www/wwwroot/yunxi-api \
-  --backup-dir /www/backup/yunxi/YYYYMMDD_HHMMSS \
-  --db-name yunxi --db-user yunxi --db-pass YOUR_DB_PASSWORD \
+  --site-dir /www/wwwroot/xiyun-api \
+  --backup-dir /www/backup/xiyun/YYYYMMDD_HHMMSS \
+  --db-name xiyun --db-user xiyun --db-pass YOUR_DB_PASSWORD \
   --confirm
 ```

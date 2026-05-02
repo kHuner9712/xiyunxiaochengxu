@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# 孕禧小程序 — 部署后自动验收脚本
+# 禧孕小程序 — 部署后自动验收脚本
 # ============================================================
 #
 # 【用途】服务器部署完成后，自动检查后端健康、数据库完整性、
@@ -187,9 +187,9 @@ if command -v mysql &>/dev/null; then
         fi
 
         # 后台菜单
-        POWER_COUNT=$($MYSQL_CMD -N -e "SELECT COUNT(*) FROM sxo_power WHERE name='孕禧运营';" "$DB_NAME" 2>/dev/null || echo "0")
+        POWER_COUNT=$($MYSQL_CMD -N -e "SELECT COUNT(*) FROM sxo_power WHERE name='禧孕运营';" "$DB_NAME" 2>/dev/null || echo "0")
         if [[ "${POWER_COUNT:-0}" -gt 0 ]]; then
-            pass "后台菜单已注册（孕禧运营）"
+            pass "后台菜单已注册（禧孕运营）"
         else
             blocker "后台菜单未注册（需执行 muying-admin-power-migration.sql）"
         fi
