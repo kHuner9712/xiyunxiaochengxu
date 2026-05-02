@@ -105,12 +105,22 @@ shopxo-uniapp/                          ← uni-app 源码（HBuilderX 打开这
     └── ...
 ```
 
-### appid 配置说明
+### appid 配置说明 ⚠️
 
-- **主来源**：`manifest.json` → `mp-weixin.appid`（当前值：`wxda7779770f53e901`）
-- **辅助**：`project.config.json` → `appid`（应与 manifest.json 保持一致）
-- HBuilderX 编译时，会将 manifest.json 的 appid 写入编译产物的 project.config.json
-- 修改 appid 时，**必须同时修改两个文件**，以 manifest.json 为准
+**仓库默认不包含真实 AppID**。`manifest.json` 和 `project.config.json` 中的 appid 刻意保持为空——真实 AppID 绝不能提交到公开仓库。
+
+部署或提审前，操作者必须在本地手动修改以下三处，并确保值一致：
+
+| 文件 | 字段 | 说明 |
+|------|------|------|
+| `manifest.json` | `mp-weixin.appid` | **主来源**，HBuilderX 编译时写入产物 `project.config.json` |
+| `project.config.json` | `appid` | 辅助配置，应与 manifest.json 保持一致 |
+| `.env.production` | `UNI_APP_WX_APPID` | 构建阶段校验用（`prod.js` 门禁） |
+
+- **测试号不能用于正式提审**（如微信测试号 `wxda7779770f53e901` 仅限体验版/本地调试，提审会被拒）
+- 推荐使用 `manifest.local.json`（已被 `.gitignore` 忽略）本地覆盖 manifest.json，避免误提交 AppID
+- HBuilderX 编译时合并优先级：`manifest.local.json` > `manifest.json`
+- 正式 AppID 获取：[微信公众平台](https://mp.weixin.qq.com) → 开发管理 → 开发设置 → AppID
 
 ### 本地开发配置
 

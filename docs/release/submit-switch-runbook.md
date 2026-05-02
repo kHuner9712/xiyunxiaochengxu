@@ -151,7 +151,7 @@ bash scripts/preflight/run-rc-gate.sh --mode=submit --env /www/wwwroot/xiyun-api
 # mv public/你的随机名.php public/admin.php
 
 # 4. 恢复前端配置
-# manifest.json → 测试号 AppID
+# manifest.json → 改回体验版配置（如测试号 wxda7779770f53e901 或留空）
 # .env.production → IP 地址
 
 # 5. 重新编译上传
