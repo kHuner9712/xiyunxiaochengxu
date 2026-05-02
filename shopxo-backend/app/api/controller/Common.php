@@ -321,8 +321,10 @@ class Common extends BaseController
         }
 
         // 分页信息
+        // [MUYING-二开] page_size 上限从 ShopXO 原 1000 降至 200，防止小程序端被恶意拉取全量数据拖垮接口
+        // 200 仍远超移动端每页合理展示量（通常 15-20），不影响正常列表使用
         $this->page = max(1, isset($this->data_request['page']) ? intval($this->data_request['page']) : 1);
-        $this->page_size = min(empty($this->data_request['page_size']) ? MyC('common_page_size', 15, true) : intval($this->data_request['page_size']), 1000);
+        $this->page_size = min(empty($this->data_request['page_size']) ? MyC('common_page_size', 15, true) : intval($this->data_request['page_size']), 200);
         $this->page_start = intval(($this->page-1)*$this->page_size);
 
         // [MUYING-二开] 集中式合规安全网：自动检查当前控制器是否需要功能开关
