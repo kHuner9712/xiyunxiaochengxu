@@ -8,7 +8,17 @@
 > **RC 封板版本**：v0.1.0-rc1 | 封板报告：[rc-gate-report.md](rc-gate-report.md)  
 > 最后更新：2026-04-25
 
----
+### 2.4 收货地址
+- **接口**：wx.chooseAddress
+- **用途**：填写收货地址
+- **是否必须**：否，用户可拒绝或手动输入
+- **注意**：此接口已声明在 manifest.json → mp-weixin → requiredPrivateInfos
+
+### 2.5 权限声明位置
+- manifest.json → mp-weixin → `requiredPrivateInfos`: `["getLocation", "chooseLocation", "chooseAddress"]`
+- manifest.json → mp-weixin → `permission.scope.userLocation`: 位置使用说明
+- 相册/摄像头 通过 `<button open-type="chooseAvatar">` / `wx.chooseMedia` 触发，无需在 requiredPrivateInfos 中声明
+- app-plus 区块的 Android/iOS 权限仅用于 APP 端，不影响小程序编译和提审
 
 > **自动化检查脚本对应关系**
 > 本清单中代码/配置相关项可通过脚本自动验证：
@@ -53,7 +63,8 @@
 | 1.3 | 小程序简介 | 设置 → 基本设置 | ⬜ 待配置 | 20-120字描述 |
 | 1.4 | 小程序图标 | 设置 → 基本设置 | ⬜ 待配置 | 144×144 PNG |
 | 1.5 | 服务器域名 | 开发管理 → 开发设置 | ⬜ 待配置 | request/upload/download 合法域名 |
-| 1.6 | 隐私保护指引 | 设置 → 服务内容声明 | ⬜ 待配置 | 位置/相册/摄像头/手机号 |
+| 1.6 | 隐私保护指引 | 设置 → 服务内容声明 | ⬜ 待配置 | 位置/相册/摄像头/手机号/收货地址 |
+| 1.7 | 用户隐私保护指引 | 设置 → 用户隐私保护指引 | ⬜ 待配置 | 必须与 app.json (manifest.json) 中 requiredPrivateInfos 一致：getLocation, chooseLocation, chooseAddress |
 
 ---
 

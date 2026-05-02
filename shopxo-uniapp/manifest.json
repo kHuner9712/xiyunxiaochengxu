@@ -6,6 +6,7 @@
     "versionCode": 100,
     "transformPx": false,
     "app-plus": {
+        "//MUYING-COMMENT": "[MUYING-二开] app-plus 配置仅用于 APP 端（Android/iOS），不影响微信小程序编译和提审。小程序权限见下方 mp-weixin 区块。",
         "usingComponents": true,
         "nvueCompiler": "uni-app",
         "nvueStyleCompiler": "uni-app",
@@ -140,7 +141,6 @@
     },
     "quickapp": {},
     "mp-weixin": {
-        "requiredPrivateInfos": [],
         "appid": "",
         "setting": {
             "urlCheck": true,
@@ -155,6 +155,12 @@
         "lazyCodeLoading": "requiredComponents",
         "usingComponents": true,
         "__usePrivacyCheck__": true,
+        "permission": {
+            "scope.userLocation": {
+                "desc": "用于活动签到、收货地址选择，为您提供附近的活动和服务"
+            }
+        },
+        "requiredPrivateInfos": ["getLocation", "chooseLocation", "chooseAddress"],
         "plugins": {}
     },
     "mp-alipay": {
