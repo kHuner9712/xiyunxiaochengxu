@@ -98,6 +98,7 @@ export class AuthService {
         avatar: admin.avatar,
         roles,
         permissions: [...new Set(permissions)],
+        mustChangePassword: admin.mustChangePassword,
       },
     };
   }
@@ -137,6 +138,7 @@ export class AuthService {
       phone: admin.phone,
       roles,
       permissions: [...new Set(permissions)],
+      mustChangePassword: admin.mustChangePassword,
     };
   }
 
@@ -161,7 +163,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.prisma.adminUser.update({
       where: { id: BigInt(adminId) },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, mustChangePassword: false },
     });
 
     return null;

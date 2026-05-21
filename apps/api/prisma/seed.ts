@@ -204,14 +204,45 @@ async function main() {
 
   console.log('超级管理员角色关联所有权限');
 
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const adminUsername = process.env.ADMIN_DEFAULT_USERNAME || 'admin';
+  const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'admin123';
+
+  if (nodeEnv === 'production') {
+    if (!process.env.ADMIN_DEFAULT_USERNAME) {
+      throw new Error('生产环境必须配置 ADMIN_DEFAULT_USERNAME');
+    }
+    if (!process.env.ADMIN_DEFAULT_PASSWORD) {
+      throw new Error('生产环境必须配置 ADMIN_DEFAULT_PASSWORD');
+    }
+    const weakPasswords = ['admin123', 'password', '123456', 'change_this_password'];
+    if (weakPasswords.includes(adminPassword)) {
+      throw new Error('生产环境不允许使用弱密码(admin123/password/123456/change_this_password)');
+    }
+    if (adminPassword.length < 12) {
+      throw new Error('生产环境管理员密码长度不能少于12位');
+    }
+    const hasUpper = /[A-Z]/.test(adminPassword);
+    const hasLower = /[a-z]/.test(adminPassword);
+    const hasDigit = /[0-9]/.test(adminPassword);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(adminPassword);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      throw new Error('生产环境管理员密码必须包含大小写字母、数字和特殊字符');
+    }
+  }
+
+  const mustChangePassword = nodeEnv === 'production';
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
+  console.log(`Creating admin user: ${adminUsername}${nodeEnv === 'production' ? ' (must change password on first login)' : ''}`);
+
   const admin = await prisma.adminUser.upsert({
-    where: { username: 'admin' },
+    where: { username: adminUsername },
     update: {},
     create: {
-      username: 'admin',
+      username: adminUsername,
       password: hashedPassword,
       realName: '超级管理员',
+      mustChangePassword,
       status: 1,
     },
   });
@@ -230,7 +261,7 @@ async function main() {
     },
   });
 
-  console.log('创建超级管理员账号 admin/admin123');
+  console.log(`创建超级管理员账号 ${adminUsername}/${nodeEnv === 'production' ? '***' : adminPassword}`);
 
   const configs = [
     { groupName: 'basic', configKey: 'shop_name', configValue: '禧孕母婴商城', valueType: 'string', description: '商城名称' },

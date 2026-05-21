@@ -769,6 +769,7 @@ model AdminUser {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
+  mustChangePassword Boolean @default(false) @map("must_change_password")
 
   adminUserRoles  AdminUserRole[]
   operationLogs   AdminOperationLog[]

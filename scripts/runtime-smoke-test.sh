@@ -3,6 +3,7 @@
 BASE_URL="${1:-http://localhost:3000/api}"
 PASS=0
 FAIL=0
+SKIP=0
 
 check_body_code() {
   local name="$1"
@@ -57,7 +58,7 @@ echo "============================================"
 echo ""
 
 echo "--- 1. 健康检查 ---"
-check_http_status "GET /health (HTTP 200 when healthy)" GET "/health" 200
+check_http_status "GET /health" GET "/health" 200
 
 echo ""
 echo "--- 2. 公开接口 ---"
@@ -73,17 +74,27 @@ check_body_code "GET /admin/order/list (未登录)" GET "/admin/order/list" 401
 
 echo ""
 echo "--- 4. 管理员登录 ---"
-LOGIN_RESP=$(curl -s -X POST "$BASE_URL/admin/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123","captchaId":"smoke-test","captchaCode":"bypass"}')
-ADMIN_TOKEN=$(echo "$LOGIN_RESP" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
+ADMIN_TOKEN="${ADMIN_TOKEN:-}"
 
 if [ -n "$ADMIN_TOKEN" ]; then
-  echo "✅ 管理员登录成功"
+  echo "⏭️  使用外部传入的ADMIN_TOKEN"
   PASS=$((PASS + 1))
+elif [ "$SMOKE_TEST_BYPASS_CAPTCHA" = "true" ]; then
+  LOGIN_RESP=$(curl -s -X POST "$BASE_URL/admin/auth/login" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"admin","password":"admin123","captchaId":"smoke-test","captchaCode":"bypass"}')
+  ADMIN_TOKEN=$(echo "$LOGIN_RESP" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+  if [ -n "$ADMIN_TOKEN" ]; then
+    echo "✅ 管理员登录成功(测试模式)"
+    PASS=$((PASS + 1))
+  else
+    echo "❌ 管理员登录失败: ${LOGIN_RESP:0:200}"
+    FAIL=$((FAIL + 1))
+  fi
 else
-  echo "❌ 管理员登录失败: ${LOGIN_RESP:0:200}"
-  FAIL=$((FAIL + 1))
+  echo "⏭️  管理员登录(需设置ADMIN_TOKEN或SMOKE_TEST_BYPASS_CAPTCHA=true)"
+  SKIP=$((SKIP + 1))
 fi
 
 echo ""
@@ -99,7 +110,8 @@ if [ -n "$ADMIN_TOKEN" ]; then
     FAIL=$((FAIL + 1))
   fi
 else
-  echo "⏭️  跳过（无管理员token）"
+  echo "⏭️  管理员接口验证(需ADMIN_TOKEN)"
+  SKIP=$((SKIP + 1))
 fi
 
 echo ""
@@ -140,7 +152,7 @@ fi
 
 echo ""
 echo "============================================"
-echo "  测试结果: ✅ $PASS 通过  ❌ $FAIL 失败"
+echo "  测试结果: ✅ $PASS 通过  ❌ $FAIL 失败  ⏭️  $SKIP 跳过"
 echo "============================================"
 
 if [ "$FAIL" -gt 0 ]; then
