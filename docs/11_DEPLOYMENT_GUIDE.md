@@ -951,6 +951,38 @@ CONFIG GET *
 docker exec -it baby-mall-redis redis-cli -a your_redis_password_here MONITOR
 ```
 
+### 8.3 Redis 密码配置
+
+生产环境**必须**设置 Redis 密码，否则任何能访问 Redis 端口的进程都可以读写数据，造成严重安全隐患。
+
+**密码设置方式**：Redis 通过 `--requirepass` 命令行参数设置密码，而非 redis.conf 文件。在 `docker-compose.yml` 中，Redis 服务的启动命令已包含该参数：
+
+```yaml
+redis:
+  image: redis:7-alpine
+  environment:
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  command: redis-server /etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:-}
+```
+
+**API 连接密码**：后端通过 `REDIS_PASSWORD` 环境变量读取密码并连接 Redis。在 `.env` 文件中配置：
+
+```env
+REDIS_PASSWORD=your_redis_password_here
+```
+
+**配置要点**：
+
+| 项目 | 说明 |
+|------|------|
+| 密码设置方式 | `--requirepass` 命令行参数（docker-compose.yml 中已配置） |
+| API 连接方式 | `REDIS_PASSWORD` 环境变量 |
+| 生产环境 | **必须设置**强密码 |
+| 开发环境 | 可留空（`REDIS_PASSWORD=`），但 Redis 不应暴露到公网 |
+| 密码一致性 | `.env` 中的 `REDIS_PASSWORD` 必须与 `docker-compose.yml` 中 `REDIS_PASSWORD` 一致 |
+
+> **注意**：`deploy/redis/redis.conf` 中**不需要**配置 `requirepass`，密码通过命令行参数传入。如果 redis.conf 中也配置了 `requirepass`，两者必须保持一致，否则 Redis 将使用命令行参数的值。
+
 ---
 
 ## 9. 后端环境变量
@@ -2147,6 +2179,249 @@ docker-compose up -d --build
 
 ---
 
-> **文档版本**：v1.1
+## 23. 微信支付证书配置
+
+微信支付 APIv3 使用非对称加密，需要配置商户私钥和微信支付平台证书。
+
+### 23.1 证书文件说明
+
+| 文件 | 宿主机路径 | 容器内路径 | 用途 |
+|------|-----------|-----------|------|
+| 商户私钥 | `deploy/certs/apiclient_key.pem` | `/app/certs/apiclient_key.pem` | 请求签名 |
+| 平台证书 | `deploy/certs/wechatpay_platform.pem` | `/app/certs/wechatpay_platform.pem` | 验证回调签名 |
+
+Docker 部署时，两个证书文件通过 `wechat_certs` volume 挂载到容器内 `/app/certs/` 目录：
+
+```yaml
+volumes:
+  - wechat_certs:/app/certs:ro
+```
+
+### 23.2 证书部署步骤
+
+```bash
+mkdir -p deploy/certs
+cp apiclient_key.pem deploy/certs/
+cp wechatpay_platform.pem deploy/certs/
+chmod 600 deploy/certs/*
+```
+
+### 23.3 相关环境变量
+
+| 变量名 | 说明 | 示例值 |
+|--------|------|--------|
+| `WECHAT_PRIVATE_KEY_PATH` | 商户私钥路径（容器内） | `/app/certs/apiclient_key.pem` |
+| `WECHAT_PLATFORM_CERT_PATH` | 平台证书路径（容器内） | `/app/certs/wechatpay_platform.pem` |
+| `WECHAT_PLATFORM_CERT_SERIAL_NO` | 平台证书序列号 | 微信商户平台查看 |
+| `WECHAT_API_V3_KEY` | APIv3 密钥 | 在微信商户平台「API安全」中设置 |
+| `WECHAT_SKIP_VERIFY` | 跳过验签 | `false`（生产环境） |
+
+### 23.4 API V3 Key 配置
+
+API V3 Key 在微信商户平台「账户中心 → API安全」中设置，设置后填入 `.env` 的 `WECHAT_API_V3_KEY`。该密钥用于解密支付回调通知中的加密数据。
+
+### 23.5 平台证书序列号
+
+`WECHAT_PLATFORM_CERT_SERIAL_NO` 是微信支付平台证书的序列号，可在微信商户平台「账户中心 → API安全 → 平台证书」中查看。该序列号用于回调验签时匹配正确的平台证书。
+
+### 23.6 回调地址配置
+
+回调地址必须为：`https://域名/api/weapp/pay/callback`
+
+```env
+WECHAT_NOTIFY_URL=https://api.xiyun.com/api/weapp/pay/callback
+```
+
+确保：
+- 域名已备案且配置了 HTTPS
+- 回调地址可从微信服务器访问（防火墙/安全组放行 443 端口）
+- 回调路径与代码中路由一致
+
+### 23.7 生产环境强制配置
+
+当 `NODE_ENV=production` 时，`WECHAT_PLATFORM_CERT_PATH` **必须配置**，否则支付模块无法启动。这是生产环境的安全保障，确保回调验签正常工作。
+
+### 23.8 开发环境跳过验签
+
+非生产环境可设置 `WECHAT_SKIP_VERIFY=true` 跳过微信支付回调验签，方便本地开发调试：
+
+```env
+NODE_ENV=development
+WECHAT_SKIP_VERIFY=true
+```
+
+> **警告**：`WECHAT_SKIP_VERIFY=true` 仅用于开发测试环境，**绝对不能**在生产环境使用，否则存在伪造支付通知的安全风险。
+
+---
+
+## 24. 生产环境数据库迁移
+
+### 24.1 迁移命令说明
+
+生产环境使用 `prisma migrate deploy` 执行数据库迁移，**不是** `prisma db push`：
+
+| 命令 | 适用场景 | 说明 |
+|------|---------|------|
+| `prisma migrate deploy` | 生产环境 | 应用所有未执行的迁移，可追踪、可回滚 |
+| `prisma db push` | 开发环境 | 直接推送 schema 变更，不生成迁移记录 |
+
+API 容器的 `entrypoint.sh` 已根据 `NODE_ENV` 自动选择迁移方式：
+
+- `NODE_ENV=production` → 执行 `prisma migrate deploy`
+- 其他环境 → 执行 `prisma db push`
+
+### 24.2 种子数据执行
+
+种子数据（seed）仅在 `RUN_SEED=true` 时执行。生产环境中 `RUN_SEED` 默认为 `false`，避免重复插入数据。
+
+### 24.3 首次部署流程
+
+```bash
+cd /opt/baby-mall/deploy
+
+docker compose up -d
+
+RUN_SEED=true docker compose up -d
+```
+
+首次部署时需要执行两步：
+1. 先 `docker compose up -d` 启动所有服务，`prisma migrate deploy` 自动执行迁移
+2. 再设置 `RUN_SEED=true` 重启 API 容器，执行种子数据初始化（创建管理员账号、基础配置等）
+
+> **注意**：`RUN_SEED=true` 仅首次部署时使用，后续更新**不要**再设置，否则可能产生重复数据。
+
+### 24.4 后续更新流程
+
+```bash
+cd /opt/baby-mall/deploy
+
+docker compose up -d
+```
+
+后续版本更新只需执行 `docker compose up -d`，`prisma migrate deploy` 会自动检测并执行新的迁移文件，无需手动干预。
+
+### 24.5 迁移排查
+
+如果迁移失败，API 容器将无法启动。排查步骤：
+
+```bash
+docker logs baby-mall-api 2>&1 | grep -i "prisma\|migrate"
+
+docker exec baby-mall-api npx prisma migrate status
+```
+
+---
+
+## 25. 健康检查
+
+### 25.1 健康检查接口
+
+`GET /api/health` 返回服务健康状态，包含数据库和 Redis 的连接状态：
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-05-22T10:30:00.000Z",
+  "services": {
+    "database": "ok",
+    "redis": "ok"
+  }
+}
+```
+
+当某个服务不可用时，`status` 变为 `degraded`，对应服务的值为 `error`：
+
+```json
+{
+  "status": "degraded",
+  "timestamp": "2026-05-22T10:30:00.000Z",
+  "services": {
+    "database": "ok",
+    "redis": "error"
+  }
+}
+```
+
+### 25.2 Docker 健康检查
+
+`docker-compose.yml` 中已为 API 容器配置 healthcheck：
+
+```yaml
+healthcheck:
+  test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+```
+
+查看容器健康状态：
+
+```bash
+docker inspect --format='{{.State.Health.Status}}' baby-mall-api
+```
+
+### 25.3 负载均衡器健康检查
+
+可将 `GET /api/health` 配置为负载均衡器的健康检查端点：
+
+- **检查路径**：`/api/health`
+- **期望状态码**：`200`
+- **建议检查间隔**：30 秒
+- **建议超时时间**：10 秒
+- **不健康阈值**：连续 3 次失败
+
+---
+
+## 26. 运行时冒烟测试
+
+### 26.1 执行方式
+
+部署完成后，可运行冒烟测试脚本验证服务基本功能：
+
+```bash
+bash scripts/runtime-smoke-test.sh http://your-domain/api
+```
+
+本地测试：
+
+```bash
+bash scripts/runtime-smoke-test.sh http://localhost:3000/api
+```
+
+### 26.2 检查项列表
+
+| 序号 | 检查类别 | 检查内容 | 期望结果 |
+|------|---------|---------|---------|
+| 1 | 健康检查 | `GET /health` | HTTP 200，body 包含 `ok` |
+| 2 | 公开接口 | `GET /weapp/home/data` | HTTP 200 |
+| 2 | 公开接口 | `GET /weapp/category/tree` | HTTP 200 |
+| 2 | 公开接口 | `GET /weapp/product/list` | HTTP 200 |
+| 3 | 权限控制 | 未登录访问 `/weapp/cart/list` | HTTP 401 |
+| 3 | 权限控制 | 未登录访问 `/weapp/order/list` | HTTP 401 |
+| 3 | 权限控制 | 未登录访问 `/admin/order/list` | HTTP 401 |
+| 4 | 管理员登录 | `POST /admin/auth/login` | 登录成功，获取 token |
+| 5 | 管理员接口 | 携带 token 访问 `/admin/auth/info` | HTTP 200 |
+| 6 | 权限隔离 | 用户 token 访问 `/admin/*` | HTTP 401 或 403 |
+| 7 | 支付回调 | `POST /weapp/pay/callback` | 返回原始格式（不被统一包装） |
+
+### 26.3 结果解读
+
+脚本执行完毕后会输出汇总结果：
+
+```
+============================================
+  测试结果: ✅ 10 通过  ❌ 0 失败
+============================================
+```
+
+- **全部通过**：退出码为 0，服务功能正常
+- **存在失败**：退出码为 1，需根据 `❌` 标记逐项排查
+
+> **注意**：冒烟测试中的管理员登录使用默认账号密码，生产环境部署后请及时修改管理员密码。
+
+---
+
+> **文档版本**：v1.2
 > **最后更新**：2026-05-22
 > **维护团队**：禧孕文化传媒有限公司技术部

@@ -57,4 +57,8 @@ export class RedisService {
   async keys(pattern: string): Promise<string[]> {
     return this.client.keys(pattern);
   }
+
+  async ping(): Promise<string> {
+    return this.client.ping();
+  }
 }

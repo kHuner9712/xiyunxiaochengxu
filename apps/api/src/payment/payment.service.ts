@@ -39,6 +39,16 @@ export class PaymentService {
     } else {
       this.wechatpayCertificate = '';
     }
+
+    const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
+    const skipVerify = this.configService.get<string>('WECHAT_SKIP_VERIFY', 'false');
+
+    if (nodeEnv === 'production' && !this.wechatpayCertificate) {
+      throw new Error('生产环境必须配置微信支付平台证书(WECHAT_PLATFORM_CERT_PATH)，支付模块不可启动');
+    }
+    if (nodeEnv !== 'production' && skipVerify !== 'true' && !this.wechatpayCertificate) {
+      this.logger.warn('微信平台证书未配置，非生产环境允许跳过验签(设置WECHAT_SKIP_VERIFY=true)');
+    }
   }
 
   async createPayment(orderId: string, userId: string) {
@@ -109,7 +119,7 @@ export class PaymentService {
     };
   }
 
-  async handleCallback(body: any, headers: any) {
+  async handleCallback(body: any, headers: any, rawBody?: string) {
     const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
 
@@ -123,11 +133,21 @@ export class PaymentService {
       return { code: 'FAIL', message: '缺少签名信息' };
     }
 
-    const message = `${timestamp}\n${nonce}\n${JSON.stringify(body)}\n`;
+    if (!rawBody) {
+      this.logger.warn('微信回调缺少rawBody，无法验签');
+      return { code: 'FAIL', message: '缺少rawBody' };
+    }
+    const message = `${timestamp}\n${nonce}\n${rawBody}\n`;
 
     if (!this.verifyWechatSignature(message, signature)) {
       this.logger.warn('微信回调签名验证失败');
       return { code: 'FAIL', message: '签名验证失败' };
+    }
+
+    const configuredSerialNo = this.configService.get<string>('WECHAT_PLATFORM_CERT_SERIAL_NO', '');
+    if (configuredSerialNo && serialNo !== configuredSerialNo) {
+      this.logger.warn(`微信回调证书序列号不匹配: ${serialNo} vs ${configuredSerialNo}`);
+      return { code: 'FAIL', message: '证书序列号不匹配' };
     }
 
     const resource = body.resource;
@@ -328,8 +348,14 @@ export class PaymentService {
 
   private verifyWechatSignature(message: string, signature: string): boolean {
     if (!this.wechatpayCertificate) {
-      this.logger.warn('微信平台证书未配置，跳过签名验证');
-      return true;
+      const skipVerify = this.configService.get<string>('WECHAT_SKIP_VERIFY', 'false');
+      const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
+      if (nodeEnv !== 'production' && skipVerify === 'true') {
+        this.logger.warn('微信平台证书未配置，已跳过签名验证（仅限非生产环境）');
+        return true;
+      }
+      this.logger.error('微信平台证书未配置，签名验证失败');
+      return false;
     }
     try {
       const verify = crypto.createVerify('SHA256');

@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body, Param, Headers, Req } from '@nestjs/common
 import { PaymentService } from './payment.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { IsString, IsNotEmpty } from 'class-validator';
 
 class CreatePaymentDto {
@@ -20,9 +21,11 @@ export class PaymentController {
   }
 
   @Public()
+  @SkipTransform()
   @Post('callback')
-  async callback(@Body() body: any, @Headers() headers: any) {
-    return this.paymentService.handleCallback(body, headers);
+  async callback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
+    const rawBody = req.rawBody;
+    return this.paymentService.handleCallback(body, headers, rawBody);
   }
 
   @Get('status/:orderId')
