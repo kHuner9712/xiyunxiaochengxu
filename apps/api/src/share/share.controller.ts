@@ -7,7 +7,7 @@ import { Type } from 'class-transformer';
 class ShareRecordDto {
   @IsString()
   @IsNotEmpty()
-  shareType: string;
+  shareType!: string;
 
   @IsOptional()
   @IsString()

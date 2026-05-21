@@ -35,6 +35,7 @@ model User {
   avatarUrl       String?       @db.VarChar(500) @map("avatar_url")
   gender          Int           @default(0) @map("gender")
   memberLevelId   BigInt?       @map("member_level_id")
+  memberLevel     MemberLevel?  @relation(fields: [memberLevelId], references: [id])
   growthValue     Int           @default(0) @map("growth_value")
   totalPoints     Int           @default(0) @map("total_points")
   availablePoints Int           @default(0) @map("available_points")
@@ -264,6 +265,7 @@ model Product {
   stockLogs    ProductStockLog[]
   activityProducts ActivityProduct[]
   orderItems   OrderItem[]
+  carts        Cart[]
 
   @@index([categoryId], name: "idx_category_id")
   @@index([brandId], name: "idx_brand_id")
@@ -294,6 +296,7 @@ model ProductSku {
   stockLogs ProductStockLog[]
   carts     Cart[]
   orderItems OrderItem[]
+  activityProducts ActivityProduct[]
 
   @@unique([skuCode], name: "idx_sku_code")
   @@index([productId], name: "idx_product_id")
@@ -451,7 +454,7 @@ model OrderItem {
 
 model OrderPayment {
   id             BigInt   @id @default(autoincrement()) @map("id")
-  orderId        BigInt   @map("order_id")
+  orderId        BigInt   @unique @map("order_id")
   paymentNo      String?  @db.VarChar(64) @map("payment_no")
   transactionId  String?  @db.VarChar(64) @map("transaction_id")
   amount         Int      @map("amount")
@@ -472,7 +475,7 @@ model OrderPayment {
 
 model OrderDelivery {
   id                BigInt   @id @default(autoincrement()) @map("id")
-  orderId           BigInt   @map("order_id")
+  orderId           BigInt   @unique @map("order_id")
   logisticsCompany  String?  @db.VarChar(50) @map("logistics_company")
   logisticsNo       String?  @db.VarChar(50) @map("logistics_no")
   deliveryImages    Json?    @map("delivery_images")
@@ -584,7 +587,7 @@ model ActivityProduct {
   id            BigInt   @id @default(autoincrement()) @map("id")
   activityId    BigInt   @map("activity_id")
   productId     BigInt   @map("product_id")
-  skuId         BigInt   @default(0) @map("sku_id")
+  skuId         BigInt?   @map("sku_id")
   activityPrice Int?     @map("activity_price")
   activityStock Int?     @map("activity_stock")
   activitySales Int      @default(0) @map("activity_sales")
@@ -595,6 +598,7 @@ model ActivityProduct {
 
   activity Activity @relation(fields: [activityId], references: [id])
   product  Product  @relation(fields: [productId], references: [id])
+  sku      ProductSku? @relation(fields: [skuId], references: [id])
 
   @@index([activityId], name: "idx_activity_id")
   @@index([productId], name: "idx_product_id")
@@ -889,4 +893,18 @@ model SystemConfig {
 
   @@unique([groupName, configKey], name: "uk_group_key")
   @@map("system_configs")
+}
+
+model SearchKeyword {
+  id          BigInt   @id @default(autoincrement()) @map("id")
+  keyword     String   @db.VarChar(100) @map("keyword")
+  searchCount Int      @default(0) @map("search_count")
+  status      Int      @default(1) @map("status")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([keyword], name: "uk_keyword")
+  @@index([searchCount], name: "idx_search_count")
+  @@index([status], name: "idx_status")
+  @@map("search_keywords")
 }

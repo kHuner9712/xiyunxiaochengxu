@@ -19,7 +19,7 @@ export class ShareService {
       data: {
         userId: BigInt(userId),
         shareType,
-        shareTargetId: shareTargetId ? BigInt(shareTargetId) : null,
+        shareId: shareTargetId ? BigInt(shareTargetId) : null,
         shareChannel: shareChannel || 'wechat',
       },
     });
@@ -87,7 +87,7 @@ export class ShareService {
     } else if (type === 'invite') {
       const user = await this.prisma.user.findFirst({
         where: { id: BigInt(userId) },
-        select: { id: true, nickname: true, avatar: true },
+        select: { id: true, nickname: true, avatarUrl: true },
       });
       if (user) {
         posterData.inviter = {

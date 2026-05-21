@@ -9,15 +9,15 @@ export function getAftersaleList(params: { page: number; pageSize: number }) {
 }
 
 export function getAftersaleDetail(id: number) {
-  return get<AftersaleDetail>(`/aftersale/detail/${id}`)
+  return get<AftersaleDetail>(`/weapp/aftersale/detail/${id}`)
 }
 
 export function cancelAftersale(id: number) {
-  return post(`/aftersale/cancel/${id}`)
+  return post(`/weapp/aftersale/cancel/${id}`)
 }
 
 export function getAftersaleReasons() {
-  return get<string[]>('/aftersale/reasons')
+  return get<string[]>('/weapp/aftersale/reasons')
 }
 
 export interface AftersaleForm {

@@ -1,7 +1,7 @@
 import { get } from '@/utils/request'
 
 export function getCategoryTree() {
-  return get<CategoryItem[]>('/category/tree')
+  return get<CategoryItem[]>('/weapp/category/tree')
 
 }
 

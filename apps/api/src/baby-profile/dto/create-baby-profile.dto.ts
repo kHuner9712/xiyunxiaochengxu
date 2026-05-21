@@ -13,7 +13,7 @@ export class CreateBabyProfileDto {
 
   @IsString()
   @IsNotEmpty()
-  birthday: string;
+  birthday!: string;
 
   @IsOptional()
   @IsString()

@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 class ActivityProductDto {
   @Type(() => Number)
   @IsInt()
-  productId: number;
+  productId!: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -30,11 +30,11 @@ class ActivityProductDto {
 export class CreateActivityDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @IsString()
   @IsNotEmpty()
-  type: string;
+  type!: string;
 
   @IsOptional()
   @IsString()
@@ -49,11 +49,11 @@ export class CreateActivityDto {
 
   @IsString()
   @IsNotEmpty()
-  startTime: string;
+  startTime!: string;
 
   @IsString()
   @IsNotEmpty()
-  endTime: string;
+  endTime!: string;
 
   @IsOptional()
   @IsArray()

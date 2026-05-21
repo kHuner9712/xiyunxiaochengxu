@@ -23,7 +23,7 @@ export function getOrderDetail(id: number) {
 }
 
 export function cancelOrder(id: number) {
-  return put(`/order/cancel/${id}`)
+  return put(`/weapp/order/cancel/${id}`)
 }
 
 export function confirmReceive(id: number) {
@@ -35,7 +35,7 @@ export function deleteOrder(id: number) {
 }
 
 export function getOrderCount() {
-  return get<{ unpaid: number; unshipped: number; unreceived: number; aftersale: number }>('/order/count')
+  return get<{ unpaid: number; unshipped: number; unreceived: number; aftersale: number }>('/weapp/order/count')
 }
 
 export interface OrderItemInput {

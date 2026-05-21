@@ -43,7 +43,7 @@ export class HomeService {
         status: 1,
         isRecommend: 1,
       },
-      orderBy: { recommendSort: 'asc' },
+      orderBy: { sortOrder: 'asc' },
       take: 10,
       select: {
         id: true,
@@ -79,7 +79,6 @@ export class HomeService {
       where: {
         deletedAt: null,
         status: 1,
-        isNew: 1,
       },
       orderBy: { createdAt: 'desc' },
       take: 10,
@@ -89,7 +88,6 @@ export class HomeService {
         mainImage: true,
         minPrice: true,
         totalSales: true,
-        isNew: true,
       },
     }).then((list) => list.map((p) => ({ ...p, id: p.id.toString() })));
   }
@@ -131,8 +129,8 @@ export class HomeService {
       where: {
         deletedAt: null,
         status: 1,
-        applicableMinAge: { lte: maxMonth },
-        applicableMaxAge: { gte: minMonth },
+        recommendAgeMin: { lte: maxMonth },
+        recommendAgeMax: { gte: minMonth },
       },
       orderBy: { totalSales: 'desc' },
       take: 10,
@@ -142,8 +140,8 @@ export class HomeService {
         mainImage: true,
         minPrice: true,
         totalSales: true,
-        applicableMinAge: true,
-        applicableMaxAge: true,
+        recommendAgeMin: true,
+        recommendAgeMax: true,
       },
     }).then((list) => list.map((p) => ({ ...p, id: p.id.toString(), monthAge })));
   }

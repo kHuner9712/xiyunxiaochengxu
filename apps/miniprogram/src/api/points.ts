@@ -5,11 +5,11 @@ export function getPointsBalance() {
 }
 
 export function getPointsDetail(params: { type?: number; page: number; pageSize: number }) {
-  return get<{ list: PointsRecord[]; total: number }>('/points/detail', params)
+  return get<{ list: PointsRecord[]; total: number }>('/weapp/points/detail', params)
 }
 
 export function checkIn() {
-  return post<{ points: number; continuous: number }>('/points/check-in')
+  return post<{ points: number; continuous: number }>('/weapp/points/check-in')
 }
 
 export function getCheckInStatus() {
@@ -17,7 +17,7 @@ export function getCheckInStatus() {
 }
 
 export function getPointsRules() {
-  return get<PointsRule[]>('/points/rules')
+  return get<PointsRule[]>('/weapp/points/rules')
 }
 
 export interface PointsRecord {

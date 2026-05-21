@@ -3,11 +3,11 @@ import { IsString, IsNotEmpty, IsOptional, IsArray } from 'class-validator';
 export class CreateAdminUserDto {
   @IsString()
   @IsNotEmpty()
-  username: string;
+  username!: string;
 
   @IsString()
   @IsNotEmpty()
-  password: string;
+  password!: string;
 
   @IsOptional()
   @IsString()

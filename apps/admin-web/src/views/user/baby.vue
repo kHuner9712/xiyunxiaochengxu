@@ -69,7 +69,8 @@ async function fetchList() {
     const res = await userApi.getBabyList({
       page: pagination.page,
       pageSize: pagination.pageSize,
-      ...searchForm,
+      name: searchForm.name || undefined,
+      userId: searchForm.userId ? Number(searchForm.userId) : undefined,
     })
     tableData.value = res.data.list || []
     pagination.total = res.data.total || 0

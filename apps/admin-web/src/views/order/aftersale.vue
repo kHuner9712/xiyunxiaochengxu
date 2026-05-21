@@ -29,7 +29,7 @@
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="orderNo" label="订单号" width="200" />
         <el-table-column label="售后类型" width="100">
-          <template #default="{ row }">{{ { 1: '仅退款', 2: '退货退款', 3: '换货' }[row.type] || '-' }}</template>
+          <template #default="{ row }">{{ AFTERSALE_TYPE_MAP[row.type] || '-' }}</template>
         </el-table-column>
         <el-table-column label="退款金额" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.refundAmount) }}</template>
@@ -73,6 +73,7 @@ import { useRouter } from 'vue-router'
 import { aftersaleApi } from '@/api/aftersale'
 import { formatPrice, formatDate, formatAftersaleStatus, AFTERSALE_STATUS_MAP } from '@/utils/format'
 
+const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款', 3: '换货' }
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<any[]>([])

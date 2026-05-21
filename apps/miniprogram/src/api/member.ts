@@ -9,7 +9,7 @@ export function getMemberRights() {
 }
 
 export function getGrowthRules() {
-  return get<GrowthRule[]>('/member/growth-rules')
+  return get<GrowthRule[]>('/weapp/member/growth-rules')
 }
 
 export interface MemberInfo {

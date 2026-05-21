@@ -9,7 +9,7 @@
           <el-descriptions :column="2" border>
             <el-descriptions-item label="售后单号">{{ detail.id }}</el-descriptions-item>
             <el-descriptions-item label="订单号">{{ detail.orderNo }}</el-descriptions-item>
-            <el-descriptions-item label="售后类型">{{ { 1: '仅退款', 2: '退货退款', 3: '换货' }[detail.type] || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="售后类型">{{ AFTERSALE_TYPE_MAP[detail.type] || '-' }}</el-descriptions-item>
             <el-descriptions-item label="状态">
               <el-tag :type="detail.status === 0 ? 'warning' : detail.status === 4 ? 'success' : detail.status === 2 ? 'danger' : 'info'">
                 {{ formatAftersaleStatus(detail.status) }}
@@ -102,6 +102,7 @@ import { ElMessage } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
 import { formatPrice, formatDate, formatAftersaleStatus, priceToFen } from '@/utils/format'
 
+const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款', 3: '换货' }
 const router = useRouter()
 const route = useRoute()
 const submitting = ref(false)

@@ -1,7 +1,7 @@
 import { get } from '@/utils/request'
 
 export function getContentList(params: { categoryId?: number; page: number; pageSize: number }) {
-  return get<{ list: ContentItem[]; total: number }>('/content/list', params)
+  return get<{ list: ContentItem[]; total: number }>('/weapp/content/list', params)
 }
 
 export function getContentDetail(id: number) {
@@ -9,7 +9,7 @@ export function getContentDetail(id: number) {
 }
 
 export function getContentCategories() {
-  return get<ContentCategory[]>('/content/categories')
+  return get<ContentCategory[]>('/weapp/content/categories')
 }
 
 export interface ContentItem {

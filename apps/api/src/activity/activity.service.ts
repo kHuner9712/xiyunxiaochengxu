@@ -76,7 +76,7 @@ export class ActivityService {
           name: activityData.name,
           type: activityData.type,
           description: activityData.description,
-          rules: activityData.rules ? JSON.stringify(activityData.rules) : null,
+          rules: activityData.rules ? JSON.stringify(activityData.rules) : undefined,
           bannerImage: activityData.bannerImage,
           startTime: new Date(activityData.startTime),
           endTime: new Date(activityData.endTime),

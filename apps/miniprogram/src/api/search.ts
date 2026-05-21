@@ -14,7 +14,7 @@ export function getHotKeywords() {
 }
 
 export function getSearchHistory() {
-  return get<string[]>('/search/history')
+  return get<string[]>('/weapp/search/history')
 }
 
 export function clearSearchHistory() {
@@ -22,5 +22,5 @@ export function clearSearchHistory() {
 }
 
 export function getSearchSuggest(keyword: string) {
-  return get<string[]>('/search/suggest', { keyword })
+  return get<string[]>('/weapp/search/suggest', { keyword })
 }

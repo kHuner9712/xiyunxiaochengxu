@@ -11,11 +11,11 @@ export function getProductList(params: {
 }
 
 export function getProductDetail(id: number) {
-  return get<ProductDetail>(`/product/detail/${id}`)
+  return get<ProductDetail>(`/weapp/product/detail/${id}`)
 }
 
 export function getProductRecommend(params: { productId: number; page: number; pageSize: number }) {
-  return get<{ list: ProductDetail[]; total: number }>('/product/recommend', params)
+  return get<{ list: ProductDetail[]; total: number }>('/weapp/product/recommend', params)
 }
 
 export interface ProductDetail {

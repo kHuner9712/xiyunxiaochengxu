@@ -9,7 +9,7 @@ export class CreateContentDto {
 
   @IsString()
   @IsNotEmpty()
-  title: string;
+  title!: string;
 
   @IsOptional()
   @IsString()
@@ -17,7 +17,7 @@ export class CreateContentDto {
 
   @IsString()
   @IsNotEmpty()
-  content: string;
+  content!: string;
 
   @IsOptional()
   @IsString()

@@ -4,7 +4,7 @@ export function uploadImage(filePath: string): Promise<{ url: string }> {
   return new Promise((resolve, reject) => {
     const token = uni.getStorageSync('baby_mall_token')
     uni.uploadFile({
-      url: `${import.meta.env.VITE_API_BASE_URL || '/api'}/upload/image`,
+      url: `${import.meta.env.VITE_API_BASE_URL || ''}/weapp/upload/image`,
       filePath,
       name: 'file',
       header: {

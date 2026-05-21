@@ -26,8 +26,10 @@ import { SystemConfigModule } from './system-config/system-config.module';
 import { HomeModule } from './home/home.module';
 import { SearchModule } from './search/search.module';
 import { ShareModule } from './share/share.module';
+import { ScheduleModule } from './schedule/schedule.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { PermissionGuard } from './common/guards/permission.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
@@ -60,9 +62,11 @@ import { ThrottlerModule } from '@nestjs/throttler';
     HomeModule,
     SearchModule,
     ShareModule,
+    ScheduleModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PermissionGuard },
   ],
 })
 export class AppModule {}

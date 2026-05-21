@@ -3,9 +3,9 @@ import { IsString, IsNotEmpty } from 'class-validator';
 export class ReturnLogisticsDto {
   @IsString()
   @IsNotEmpty()
-  returnLogisticsCompany: string;
+  returnLogisticsCompany!: string;
 
   @IsString()
   @IsNotEmpty()
-  returnLogisticsNo: string;
+  returnLogisticsNo!: string;
 }

@@ -2021,6 +2021,132 @@ curl https://api.xiyun.com/health
 
 ---
 
-> **文档版本**：v1.0
-> **最后更新**：2026-05-20
+## 22. 生产部署快速命令
+
+### 22.1 首次部署
+
+```bash
+# 1. 进入项目部署目录
+cd /opt/baby-mall
+
+# 2. 克隆代码（如尚未克隆）
+git clone <repository-url> .
+
+# 3. 复制并编辑环境变量
+cp .env.example .env
+vim .env
+# 必须修改以下变量：
+# - DB_PASSWORD（数据库密码）
+# - JWT_SECRET（JWT 密钥）
+# - WECHAT_APP_ID（微信小程序 AppID）
+# - WECHAT_APP_SECRET（微信小程序 AppSecret）
+# - WECHAT_MCH_ID（微信支付商户号）
+# - WECHAT_MCH_SERIAL_NO（微信支付证书序列号）
+# - WECHAT_API_V3_KEY（微信支付 APIv3 密钥）
+# - WECHAT_PRIVATE_KEY_PATH（微信支付私钥路径，容器内默认 /app/certs/apiclient_key.pem）
+# - WECHAT_NOTIFY_URL（微信支付回调地址）
+
+# 4. 设置 .env 文件权限
+chmod 600 .env
+
+# 5. 上传微信支付证书到 certs 目录
+mkdir -p /opt/baby-mall/certs
+cp apiclient_key.pem /opt/baby-mall/certs/
+chmod 600 /opt/baby-mall/certs/*
+
+# 6. 构建并启动所有服务
+cd deploy
+docker-compose up -d --build
+
+# 7. 查看启动日志
+docker-compose logs -f api
+
+# 8. 等待 API 启动完成后，执行数据库迁移和种子数据
+docker exec baby-mall-api npx prisma migrate deploy
+docker exec baby-mall-api npx prisma db seed
+
+# 9. 验证服务状态
+docker-compose ps
+curl http://localhost:3000/api/health
+```
+
+### 22.2 日常更新部署
+
+```bash
+cd /opt/baby-mall
+
+# 1. 拉取最新代码
+git pull origin main
+
+# 2. 重新构建并启动 API
+cd deploy
+docker-compose up -d --build api
+
+# 3. 查看启动日志（entrypoint 会自动执行 prisma migrate deploy）
+docker-compose logs -f api
+
+# 4. 验证
+curl http://localhost:3000/api/health
+```
+
+### 22.3 数据库迁移
+
+API 容器启动时会自动执行 `prisma migrate deploy`（通过 entrypoint.sh）。
+
+如需手动执行迁移：
+
+```bash
+docker exec baby-mall-api npx prisma migrate deploy
+```
+
+### 22.4 环境变量说明（Docker 部署专用）
+
+| 变量名 | 说明 | Docker 默认值 |
+|--------|------|--------------|
+| `DATABASE_URL` | Prisma 数据库连接字符串 | `mysql://root:${DB_PASSWORD}@mysql:3306/${DB_NAME}` |
+| `WECHAT_PRIVATE_KEY_PATH` | 微信支付私钥路径 | `/app/certs/apiclient_key.pem` |
+| `WECHAT_MCH_SERIAL_NO` | 微信支付证书序列号 | 空（必须填写） |
+
+### 22.5 微信支付证书挂载
+
+微信支付私钥文件通过 Docker Volume 挂载到容器内：
+
+```bash
+# 将证书放到宿主机 certs 目录
+mkdir -p /opt/baby-mall/certs
+cp apiclient_key.pem /opt/baby-mall/certs/
+chmod 600 /opt/baby-mall/certs/*
+
+# docker-compose.yml 中已配置 wechat_certs volume
+# 容器内路径：/app/certs/apiclient_key.pem
+# 环境变量：WECHAT_PRIVATE_KEY_PATH=/app/certs/apiclient_key.pem
+```
+
+### 22.6 常用运维命令
+
+```bash
+# 查看所有服务状态
+docker-compose ps
+
+# 查看 API 日志
+docker-compose logs -f api
+
+# 重启 API 服务
+docker-compose restart api
+
+# 进入 API 容器
+docker exec -it baby-mall-api /bin/sh
+
+# 执行数据库备份
+/opt/baby-mall/deploy/scripts/backup.sh
+
+# 完全重建所有服务
+docker-compose down
+docker-compose up -d --build
+```
+
+---
+
+> **文档版本**：v1.1
+> **最后更新**：2026-05-22
 > **维护团队**：禧孕文化传媒有限公司技术部

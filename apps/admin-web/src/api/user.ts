@@ -13,7 +13,7 @@ export const userApi = {
   adjustPoints(id: number, points: number, reason: string) {
     return request.put(`/admin/user/points/${id}`, { points, reason })
   },
-  getBabyList(params: { page: number; pageSize: number; userId?: number }) {
+  getBabyList(params: { page: number; pageSize: number; name?: string; userId?: number }) {
     return request.get('/admin/user/baby-list', { params })
   },
 }

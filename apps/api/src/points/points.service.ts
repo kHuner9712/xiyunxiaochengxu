@@ -262,7 +262,8 @@ export class PointsService {
           cleanedCount++;
         }
       } catch (error) {
-        this.logger.error(`清理过期积分失败：${record.id}，${error.message}`);
+        const err = error as Error;
+        this.logger.error(`清理过期积分失败：${record.id}，${err.message}`);
       }
     }
 

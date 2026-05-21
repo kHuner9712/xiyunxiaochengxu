@@ -1,11 +1,11 @@
 import { get } from '@/utils/request'
 
 export function getActivityList(params: { type?: number; page: number; pageSize: number }) {
-  return get<{ list: ActivityDetail[]; total: number }>('/activity/list', params)
+  return get<{ list: ActivityDetail[]; total: number }>('/weapp/activity/list', params)
 }
 
 export function getActivityDetail(id: number) {
-  return get<ActivityDetail>(`/activity/detail/${id}`)
+  return get<ActivityDetail>(`/weapp/activity/detail/${id}`)
 }
 
 export function getActivityProducts(params: { activityId: number; page: number; pageSize: number }) {

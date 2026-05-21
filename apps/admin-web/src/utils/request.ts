@@ -32,11 +32,13 @@ interface ApiResponse<T = any> {
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     const res = response.data
-    if (res.code !== 0 && res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
+    if (res.code !== 0) {
       if (res.code === 401) {
+        ElMessage.error('登录已过期，请重新登录')
         localStorage.removeItem('token')
         router.push('/login')
+      } else {
+        ElMessage.error(res.message || '请求失败')
       }
       return Promise.reject(new Error(res.message || '请求失败'))
     }

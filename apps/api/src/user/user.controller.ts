@@ -1,8 +1,7 @@
 import { Controller, Get, Put, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
-import { RolesGuard } from '../common/guards/roles.guard';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { UserQueryDto } from './dto/user-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -25,24 +24,23 @@ export class WeappUserController {
 }
 
 @Controller('admin/user')
-@UseGuards(RolesGuard)
 export class AdminUserController {
   constructor(private readonly userService: UserService) {}
 
   @Get('list')
-  @Roles('admin')
+  @RequirePermission('user:list')
   async findAll(@Query() dto: UserQueryDto) {
     return this.userService.findAll(dto);
   }
 
   @Get('detail/:id')
-  @Roles('admin')
+  @RequirePermission('user:detail')
   async findOne(@Param('id') id: string) {
     return this.userService.findOne(id);
   }
 
   @Put('level/:id')
-  @Roles('admin')
+  @RequirePermission('user:member')
   async adjustLevel(
     @Param('id') id: string,
     @Body() body: { memberLevelId: number; reason?: string },
@@ -51,7 +49,7 @@ export class AdminUserController {
   }
 
   @Put('status/:id')
-  @Roles('admin')
+  @RequirePermission('user:detail')
   async toggleStatus(@Param('id') id: string) {
     return this.userService.toggleStatus(id);
   }

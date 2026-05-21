@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 export class CreateSupplierDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @IsOptional()
   @IsString()

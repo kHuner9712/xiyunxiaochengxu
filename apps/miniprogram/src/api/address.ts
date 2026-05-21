@@ -1,7 +1,7 @@
 import { get, post, put, del } from '@/utils/request'
 
 export function getAddressList() {
-  return get<AddressItem[]>('/address/list')
+  return get<AddressItem[]>('/weapp/address/list')
 }
 
 export function getAddressDetail(id: number) {
@@ -13,7 +13,7 @@ export function createAddress(data: AddressForm) {
 }
 
 export function updateAddress(data: AddressForm & { id: number }) {
-  return put('/address/update', data)
+  return put('/weapp/address/update', data)
 }
 
 export function deleteAddress(id: number) {
@@ -21,11 +21,11 @@ export function deleteAddress(id: number) {
 }
 
 export function setDefaultAddress(id: number) {
-  return put(`/address/set-default/${id}`)
+  return put(`/weapp/address/set-default/${id}`)
 }
 
 export function getDefaultAddress() {
-  return get<AddressItem>('/address/default')
+  return get<AddressItem>('/weapp/address/default')
 }
 
 export interface AddressItem {

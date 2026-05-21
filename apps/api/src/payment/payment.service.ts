@@ -2,120 +2,316 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import axios from 'axios';
 
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
+  private privateKey: string;
 
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
-  ) {}
+  ) {
+    const keyPath = this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH', '');
+    if (keyPath) {
+      try {
+        this.privateKey = fs.readFileSync(keyPath, 'utf8');
+      } catch {
+        this.logger.warn(`商户私钥文件读取失败: ${keyPath}，支付功能将不可用`);
+        this.privateKey = '';
+      }
+    } else {
+      this.privateKey = '';
+    }
+  }
 
-  async createPayment(orderId: string) {
+  async createPayment(orderId: string, userId: string) {
     const order = await this.prisma.order.findFirst({
-      where: { id: BigInt(orderId) },
+      where: { id: BigInt(orderId), userId: BigInt(userId) },
     });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status !== OrderStatus.pending_payment) {
       throw new BadRequestException('订单状态不允许支付');
     }
+    if (order.payAmount === null || order.payAmount <= 0) {
+      throw new BadRequestException('支付金额异常');
+    }
+
+    const appId = this.configService.get<string>('WECHAT_APP_ID')!;
+    const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
 
     const existingPayment = await this.prisma.orderPayment.findFirst({
       where: { orderId: BigInt(orderId), status: 1 },
     });
+
+    let prepayId: string;
+
     if (existingPayment) {
-      this.logger.log(`订单${orderId}已存在待支付记录，返回支付参数`);
-      return {
-        paymentId: existingPayment.id.toString(),
-        paymentNo: existingPayment.paymentNo,
-        amount: existingPayment.amount,
-        orderNo: order.orderNo,
-        timeStamp: Math.floor(Date.now() / 1000).toString(),
-        nonceStr: Math.random().toString(36).substring(2, 15),
-        package: `prepay_id=mock_${existingPayment.paymentNo}`,
-        signType: 'RSA',
-        paySign: 'mock_sign',
-      };
+      try {
+        const queryResult = await this.queryWechatOrder(order.orderNo);
+        if (queryResult.trade_state === 'SUCCESS') {
+          await this.processPaymentSuccess(existingPayment.id, order.id, queryResult.transaction_id, queryResult.amount?.total, order);
+          throw new BadRequestException('订单已支付，请勿重复支付');
+        }
+        if (queryResult.trade_state === 'NOTPAY' && queryResult.prepay_id) {
+          prepayId = queryResult.prepay_id;
+        } else {
+          prepayId = await this.createWechatOrder(order, appId, mchId, existingPayment.paymentNo!);
+        }
+      } catch (e) {
+        if (e instanceof BadRequestException) throw e;
+        prepayId = await this.createWechatOrder(order, appId, mchId, existingPayment.paymentNo!);
+      }
+    } else {
+      const paymentNo = `PAY${Date.now()}${Math.random().toString(36).substring(2, 8)}`;
+      await this.prisma.orderPayment.create({
+        data: {
+          orderId: BigInt(orderId),
+          paymentNo,
+          amount: order.payAmount!,
+          paymentMethod: 'wechat',
+          status: 1,
+        },
+      });
+      prepayId = await this.createWechatOrder(order, appId, mchId, paymentNo);
     }
 
-    const paymentNo = `PAY${Date.now()}${Math.random().toString(36).substring(2, 8)}`;
+    const timeStamp = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = crypto.randomBytes(16).toString('hex');
+    const packageStr = `prepay_id=${prepayId}`;
+    const paySign = this.signRequest(`${appId}\n${timeStamp}\n${nonceStr}\n${packageStr}\n`);
 
-    const payment = await this.prisma.orderPayment.create({
-      data: {
-        orderId: BigInt(orderId),
-        paymentNo,
-        amount: order.payAmount ?? 0,
-        paymentMethod: 'wechat',
-        status: 1,
-      },
-    });
-
-    this.logger.log(`创建支付记录：${payment.id}，订单${orderId}，金额${payment.amount}分`);
+    this.logger.log(`创建支付参数：订单${orderId}，prepay_id=${prepayId}`);
 
     return {
-      paymentId: payment.id.toString(),
-      paymentNo: payment.paymentNo,
-      amount: payment.amount,
-      orderNo: order.orderNo,
-      timeStamp: Math.floor(Date.now() / 1000).toString(),
-      nonceStr: Math.random().toString(36).substring(2, 15),
-      package: `prepay_id=mock_${paymentNo}`,
+      timeStamp,
+      nonceStr,
+      package: packageStr,
       signType: 'RSA',
-      paySign: 'mock_sign',
+      paySign,
     };
   }
 
-  async handleCallback(data: { orderId: string; transactionId: string; rawData?: any }) {
+  async handleCallback(body: any, headers: any) {
+    const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
+    const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
+
+    const signature = headers['wechatpay-signature'];
+    const timestamp = headers['wechatpay-timestamp'];
+    const nonce = headers['wechatpay-nonce'];
+    const serialNo = headers['wechatpay-serial'];
+
+    if (!signature || !timestamp || !nonce) {
+      this.logger.warn('微信回调缺少必要头部信息');
+      return { code: 'FAIL', message: '缺少签名信息' };
+    }
+
+    const message = `${timestamp}\n${nonce}\n${JSON.stringify(body)}\n`;
+
+    const resource = body.resource;
+    if (!resource) {
+      return { code: 'FAIL', message: '缺少resource' };
+    }
+
+    let decryptedData: any;
+    try {
+      const ciphertext = Buffer.from(resource.ciphertext, 'base64');
+      const associatedData = resource.associated_data || '';
+      const nonceBuf = Buffer.from(resource.nonce, 'utf8');
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(apiV3Key, 'utf8'), nonceBuf);
+      decipher.setAuthTag(ciphertext.subarray(ciphertext.length - 16));
+      decipher.setAAD(Buffer.from(associatedData, 'utf8'));
+
+      const decrypted = Buffer.concat([decipher.update(ciphertext.subarray(0, ciphertext.length - 16)), decipher.final()]);
+      decryptedData = JSON.parse(decrypted.toString('utf8'));
+    } catch (e) {
+      this.logger.error(`微信回调解密失败: ${(e as Error).message}`);
+      return { code: 'FAIL', message: '解密失败' };
+    }
+
+    if (decryptedData.mchid !== mchId) {
+      this.logger.warn(`微信回调商户号不匹配: ${decryptedData.mchid} vs ${mchId}`);
+      return { code: 'FAIL', message: '商户号不匹配' };
+    }
+
+    const outTradeNo = decryptedData.out_trade_no;
+    const transactionId = decryptedData.transaction_id;
+    const tradeState = decryptedData.trade_state;
+    const totalAmount = decryptedData.amount?.total;
+
+    if (tradeState !== 'SUCCESS') {
+      this.logger.log(`微信回调非成功状态: ${tradeState}，订单号: ${outTradeNo}`);
+      return { code: 'SUCCESS', message: '' };
+    }
+
+    const order = await this.prisma.order.findFirst({
+      where: { orderNo: outTradeNo },
+    });
+    if (!order) {
+      this.logger.warn(`微信回调订单不存在: ${outTradeNo}`);
+      return { code: 'FAIL', message: '订单不存在' };
+    }
+
+    if (order.status !== OrderStatus.pending_payment) {
+      this.logger.log(`微信回调订单已处理: ${outTradeNo}，状态: ${order.status}`);
+      return { code: 'SUCCESS', message: '' };
+    }
+
+    if (totalAmount !== order.payAmount) {
+      this.logger.warn(`微信回调金额不匹配: ${totalAmount} vs ${order.payAmount}，订单号: ${outTradeNo}`);
+      return { code: 'FAIL', message: '金额不匹配' };
+    }
+
     const payment = await this.prisma.orderPayment.findFirst({
-      where: { orderId: BigInt(data.orderId), status: 1 },
+      where: { orderId: order.id, status: 1 },
+    });
+    if (!payment) {
+      this.logger.warn(`微信回调支付记录不存在: ${outTradeNo}`);
+      return { code: 'FAIL', message: '支付记录不存在' };
+    }
+
+    await this.processPaymentSuccess(payment.id, order.id, transactionId, totalAmount, order);
+
+    this.logger.log(`微信回调处理成功：订单${outTradeNo}，交易号${transactionId}`);
+    return { code: 'SUCCESS', message: '' };
+  }
+
+  async getPaymentStatus(orderId: string, userId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: BigInt(orderId), userId: BigInt(userId) },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+
+    const payment = await this.prisma.orderPayment.findFirst({
+      where: { orderId: BigInt(orderId) },
+      orderBy: { createdAt: 'desc' },
     });
     if (!payment) throw new NotFoundException('支付记录不存在');
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    return {
+      orderId: order.id.toString(),
+      orderNo: order.orderNo,
+      orderStatus: order.status,
+      paymentStatus: payment.status,
+      paymentMethod: payment.paymentMethod,
+      amount: payment.amount,
+      paidAt: payment.paidAt?.toISOString() || null,
+      transactionId: payment.transactionId || null,
+    };
+  }
+
+  private async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {
+    await this.prisma.$transaction(async (tx) => {
       await tx.orderPayment.update({
-        where: { id: payment.id },
+        where: { id: paymentId },
         data: {
-          transactionId: data.transactionId,
+          transactionId,
           status: 2,
           paidAt: new Date(),
-          rawResponse: data.rawData,
+          rawResponse: { totalAmount, transactionId },
         },
       });
 
-      const order = await tx.order.update({
-        where: { id: BigInt(data.orderId) },
+      await tx.order.update({
+        where: { id: orderId },
         data: {
-          status: OrderStatus.paid,
+          status: OrderStatus.pending_delivery,
           paidAt: new Date(),
           orderLogs: {
             create: {
               operatorType: 'system',
               action: 'pay',
-              content: `微信支付成功，交易号：${data.transactionId}`,
+              content: `微信支付成功，交易号：${transactionId}`,
             },
           },
         },
       });
-
-      return order;
     });
-
-    this.logger.log(`支付回调处理成功：订单${data.orderId}，交易号${data.transactionId}`);
-    return { success: true };
   }
 
-  async queryPaymentStatus(orderId: string) {
-    const payment = await this.prisma.orderPayment.findFirst({
-      where: { orderId: BigInt(orderId) },
-    });
-    if (!payment) throw new NotFoundException('支付记录不存在');
+  private async createWechatOrder(order: any, appId: string, mchId: string, outTradeNo: string): Promise<string> {
+    if (!this.privateKey) {
+      throw new BadRequestException('商户私钥未配置，无法发起支付');
+    }
 
-    this.logger.log(`查询支付状态：订单${orderId}，状态${payment.status}`);
-    return {
-      ...payment,
-      id: payment.id.toString(),
-      orderId: payment.orderId.toString(),
+    const notifyUrl = this.configService.get<string>('WECHAT_NOTIFY_URL')!;
+    const description = order.orderItems?.[0]?.productName || `订单${order.orderNo}`;
+
+    const body = {
+      appid: appId,
+      mchid: mchId,
+      description: description.substring(0, 127),
+      out_trade_no: order.orderNo,
+      notify_url: notifyUrl,
+      amount: {
+        total: order.payAmount,
+        currency: 'CNY',
+      },
+      payer: {
+        openid: order.userId?.toString(),
+      },
     };
+
+    const serialNo = this.configService.get<string>('WECHAT_MCH_SERIAL_NO')!;
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = crypto.randomBytes(16).toString('hex');
+    const signMessage = `POST\n/v3/pay/transactions/jsapi\n${timestamp}\n${nonceStr}\n${JSON.stringify(body)}\n`;
+    const signature = this.signRequest(signMessage);
+
+    try {
+      const response = await axios.post('https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi', body, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `WECHATPAY2-SHA256-RSA2048 mchid="${mchId}",nonce_str="${nonceStr}",timestamp="${timestamp}",serial_no="${serialNo}",signature="${signature}"`,
+          'Accept': 'application/json',
+        },
+      });
+
+      return response.data.prepay_id;
+    } catch (error) {
+      const err = error as Error;
+      const errData = (error as any).response?.data;
+      this.logger.error(`微信下单失败: ${JSON.stringify(errData) || err.message}`);
+      throw new BadRequestException(`微信下单失败: ${errData?.message || err.message}`);
+    }
+  }
+
+  private async queryWechatOrder(outTradeNo: string): Promise<any> {
+    const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
+    const serialNo = this.configService.get<string>('WECHAT_MCH_SERIAL_NO')!;
+
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = crypto.randomBytes(16).toString('hex');
+    const signMessage = `GET\n/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${mchId}\n${timestamp}\n${nonceStr}\n`;
+    const signature = this.signRequest(signMessage);
+
+    try {
+      const response = await axios.get(
+        `https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${mchId}`,
+        {
+          headers: {
+            'Authorization': `WECHATPAY2-SHA256-RSA2048 mchid="${mchId}",nonce_str="${nonceStr}",timestamp="${timestamp}",serial_no="${serialNo}",signature="${signature}"`,
+            'Accept': 'application/json',
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(`微信查询订单失败: ${err.message}`);
+      throw error;
+    }
+  }
+
+  private signRequest(message: string): string {
+    if (!this.privateKey) return '';
+    const sign = crypto.createSign('SHA256');
+    sign.update(message);
+    sign.end();
+    return sign.sign(this.privateKey, 'base64');
   }
 }

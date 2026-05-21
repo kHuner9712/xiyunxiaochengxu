@@ -1,7 +1,7 @@
 import { get, post, put, del } from '@/utils/request'
 
 export function getBabyList() {
-  return get<BabyItem[]>('/baby/list')
+  return get<BabyItem[]>('/weapp/baby/list')
 }
 
 export function getBabyDetail(id: number) {
@@ -9,11 +9,11 @@ export function getBabyDetail(id: number) {
 }
 
 export function createBaby(data: BabyForm) {
-  return post('/baby/create', data)
+  return post('/weapp/baby/create', data)
 }
 
 export function updateBaby(data: BabyForm & { id: number }) {
-  return put('/baby/update', data)
+  return put('/weapp/baby/update', data)
 }
 
 export function deleteBaby(id: number) {

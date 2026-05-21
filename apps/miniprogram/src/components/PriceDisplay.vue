@@ -24,13 +24,14 @@ const props = withDefaults(defineProps<{
 const priceStr = computed(() => formatPrice(props.price))
 const integerPart = computed(() => priceStr.value.split('.')[0])
 const decimalPart = computed(() => priceStr.value.split('.')[1])
+const priceColor = computed(() => props.color || '#ff4d4f')
 </script>
 
 <style lang="scss" scoped>
 .price-display {
   display: inline-flex;
   align-items: baseline;
-  color: v-bind(color || '$primary-color');
+  color: v-bind(priceColor);
   font-weight: 700;
 }
 

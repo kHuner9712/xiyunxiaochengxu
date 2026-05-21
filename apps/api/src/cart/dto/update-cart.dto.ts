@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 export class UpdateCartDto {
   @Type(() => Number)
   @IsInt()
-  id: number;
+  id!: number;
 
   @IsOptional()
   @Type(() => Number)

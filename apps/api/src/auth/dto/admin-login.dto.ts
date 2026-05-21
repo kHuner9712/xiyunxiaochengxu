@@ -3,31 +3,31 @@ import { IsString, IsNotEmpty } from 'class-validator';
 export class AdminLoginDto {
   @IsString()
   @IsNotEmpty()
-  username: string;
+  username!: string;
 
   @IsString()
   @IsNotEmpty()
-  password: string;
+  password!: string;
 
   @IsString()
   @IsNotEmpty()
-  captchaId: string;
+  captchaId!: string;
 
   @IsString()
   @IsNotEmpty()
-  captchaCode: string;
+  captchaCode!: string;
 }
 
 export class ChangePasswordDto {
   @IsString()
   @IsNotEmpty()
-  oldPassword: string;
+  oldPassword!: string;
 
   @IsString()
   @IsNotEmpty()
-  newPassword: string;
+  newPassword!: string;
 
   @IsString()
   @IsNotEmpty()
-  confirmPassword: string;
+  confirmPassword!: string;
 }

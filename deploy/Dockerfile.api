@@ -1,20 +1,49 @@
 FROM node:18-alpine AS builder
+
 WORKDIR /app
+
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/api/package.json ./apps/api/
+COPY apps/admin-web/package.json ./apps/admin-web/
 COPY packages/shared/package.json ./packages/shared/
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+RUN npm install -g pnpm && pnpm install --no-frozen-lockfile
+
 COPY packages/shared/ ./packages/shared/
 RUN cd packages/shared && pnpm build
+
 COPY apps/api/ ./apps/api/
 RUN cd apps/api && npx prisma generate && pnpm build
 
-FROM node:18-alpine
+FROM node:18-alpine AS admin-builder
+
 WORKDIR /app
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/admin-web/package.json ./apps/admin-web/
+COPY packages/shared/package.json ./packages/shared/
+
+RUN npm install -g pnpm && pnpm install --no-frozen-lockfile
+
+COPY packages/shared/ ./packages/shared/
+RUN cd packages/shared && pnpm build
+
+COPY apps/admin-web/ ./apps/admin-web/
+RUN cd apps/admin-web && pnpm build
+
+FROM node:18-alpine
+
+WORKDIR /app
+
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/node_modules ./node_modules
 COPY --from=builder /app/apps/api/prisma ./prisma
 COPY --from=builder /app/node_modules/.pnpm ./node_modules/.pnpm
-RUN mkdir -p uploads logs
+COPY --from=builder /app/apps/api/package.json ./
+COPY deploy/scripts/entrypoint.sh ./entrypoint.sh
+
+RUN mkdir -p uploads logs certs && chmod +x ./entrypoint.sh
+
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+
+ENTRYPOINT ["./entrypoint.sh"]

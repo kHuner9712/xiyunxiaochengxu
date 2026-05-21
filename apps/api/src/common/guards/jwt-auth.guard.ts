@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
@@ -26,6 +27,7 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
+    const url: string = request.url || '';
     const authHeader = request.headers.authorization;
 
     if (!authHeader) {
@@ -36,12 +38,32 @@ export class JwtAuthGuard implements CanActivate {
       ? authHeader.substring(7)
       : authHeader;
 
+    let payload: any;
     try {
-      const payload = await this.jwtService.verifyAsync(token);
+      payload = await this.jwtService.verifyAsync(token);
       request.user = payload;
-      return true;
     } catch {
       throw new UnauthorizedException('登录已过期');
     }
+
+    if (url.startsWith('/api/common/')) {
+      return true;
+    }
+
+    if (url.startsWith('/api/weapp/')) {
+      if (payload.roleType !== 'user') {
+        throw new ForbiddenException('仅允许小程序用户访问');
+      }
+      return true;
+    }
+
+    if (url.startsWith('/api/admin/')) {
+      if (payload.roleType !== 'admin') {
+        throw new ForbiddenException('仅允许管理员访问');
+      }
+      return true;
+    }
+
+    return true;
   }
 }

@@ -4,15 +4,15 @@ import { Type } from 'class-transformer';
 export class CreateCouponDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @Type(() => Number)
   @IsInt()
-  type: number;
+  type!: number;
 
   @Type(() => Number)
   @IsInt()
-  value: number;
+  value!: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -36,11 +36,11 @@ export class CreateCouponDto {
 
   @IsString()
   @IsNotEmpty()
-  startTime: string;
+  startTime!: string;
 
   @IsString()
   @IsNotEmpty()
-  endTime: string;
+  endTime!: string;
 
   @IsOptional()
   @Type(() => Number)

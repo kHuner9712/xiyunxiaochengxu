@@ -17,7 +17,7 @@ export function removeCartItem(id: number) {
 }
 
 export function clearCart() {
-  return del('/cart/clear')
+  return del('/weapp/cart/clear')
 }
 
 export interface CartItem {

@@ -4,27 +4,27 @@ import { Type } from 'class-transformer';
 export class CreateAddressDto {
   @IsString()
   @IsNotEmpty()
-  receiverName: string;
+  receiverName!: string;
 
   @IsString()
   @IsNotEmpty()
-  receiverPhone: string;
+  receiverPhone!: string;
 
   @IsString()
   @IsNotEmpty()
-  province: string;
+  province!: string;
 
   @IsString()
   @IsNotEmpty()
-  city: string;
+  city!: string;
 
   @IsString()
   @IsNotEmpty()
-  district: string;
+  district!: string;
 
   @IsString()
   @IsNotEmpty()
-  detailAddress: string;
+  detailAddress!: string;
 
   @IsOptional()
   @Type(() => Number)

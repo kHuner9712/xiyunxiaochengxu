@@ -17,7 +17,7 @@ export class DashboardService {
 
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const paidStatuses = [OrderStatus.paid, OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+    const paidStatuses = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
 
     const [
       todaySales,
@@ -123,7 +123,7 @@ export class DashboardService {
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
 
-      const paidStatuses = [OrderStatus.paid, OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+      const paidStatuses = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
 
       const [orderCount, revenue] = await Promise.all([
         this.prisma.order.count({

@@ -163,7 +163,7 @@ export class AuthService {
   }
 
   async weappLogin(code: string) {
-    const appId = this.configService.get('WECHAT_APPID');
+    const appId = this.configService.get('WECHAT_APP_ID');
     const appSecret = this.configService.get('WECHAT_APP_SECRET');
     const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${appId}&secret=${appSecret}&js_code=${code}&grant_type=authorization_code`;
 
@@ -225,7 +225,7 @@ export class AuthService {
       throw new UnauthorizedException('会话已过期，请重新登录');
     }
 
-    const newAppId = this.configService.get('WECHAT_APPID');
+    const newAppId = this.configService.get('WECHAT_APP_ID');
     const newUrl = `https://api.weixin.qq.com/sns/jscode2session?appid=${newAppId}&secret=${this.configService.get('WECHAT_APP_SECRET')}&js_code=${code}&grant_type=authorization_code`;
     const newResponse = await axios.get(newUrl);
     const { session_key: newSessionKey, errcode, errmsg } = newResponse.data;

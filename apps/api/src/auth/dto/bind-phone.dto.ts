@@ -3,13 +3,13 @@ import { IsString, IsNotEmpty } from 'class-validator';
 export class BindPhoneDto {
   @IsString()
   @IsNotEmpty()
-  code: string;
+  code!: string;
 
   @IsString()
   @IsNotEmpty()
-  encryptedData: string;
+  encryptedData!: string;
 
   @IsString()
   @IsNotEmpty()
-  iv: string;
+  iv!: string;
 }

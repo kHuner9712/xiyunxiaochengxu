@@ -28,7 +28,7 @@
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="name" label="活动名称" min-width="150" />
         <el-table-column label="活动类型" width="100">
-          <template #default="{ row }">{{ { 1: '限时折扣', 2: '满减活动', 3: '满赠活动', 4: '组合套餐', 5: '新人礼包' }[row.type] || '-' }}</template>
+          <template #default="{ row }">{{ ACTIVITY_TYPE_MAP[row.type] || '-' }}</template>
         </el-table-column>
         <el-table-column label="活动时间" min-width="200">
           <template #default="{ row }">{{ formatDate(row.startTime) }} ~ {{ formatDate(row.endTime) }}</template>
@@ -71,6 +71,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { activityApi } from '@/api/activity'
 import { formatDate, formatActivityStatus } from '@/utils/format'
 
+const ACTIVITY_TYPE_MAP: Record<number, string> = { 1: '限时折扣', 2: '满减活动', 3: '满赠活动', 4: '组合套餐', 5: '新人礼包' }
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<any[]>([])

@@ -13,7 +13,7 @@ interface RequestConfig {
   showError?: boolean
 }
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const TOKEN_KEY = 'baby_mall_token'
 
 function getToken(): string {
@@ -73,7 +73,7 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
 
         const response = res.data as ApiResponse<T>
 
-        if (response.code === 0 || response.code === 200) {
+        if (response.code === 0) {
           resolve(response.data)
         } else if (response.code === 401) {
           removeToken()

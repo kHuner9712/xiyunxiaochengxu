@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/
 import { CouponService } from './coupon.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateCouponDto } from './dto/create-coupon.dto';
 import { CouponQueryDto } from './dto/coupon-query.dto';
 
@@ -45,16 +46,19 @@ export class AdminCouponController {
   constructor(private readonly couponService: CouponService) {}
 
   @Get('list')
+  @RequirePermission('marketing:coupon')
   async list(@Query() dto: CouponQueryDto) {
     return this.couponService.findAllAdmin(dto);
   }
 
   @Get(':id')
+  @RequirePermission('marketing:coupon')
   async detail(@Param('id') id: string) {
     return this.couponService.findById(id);
   }
 
   @Post()
+  @RequirePermission('marketing:coupon')
   async create(@Body() dto: CreateCouponDto) {
     return this.couponService.create({
       ...dto,
@@ -65,6 +69,7 @@ export class AdminCouponController {
   }
 
   @Put(':id')
+  @RequirePermission('marketing:coupon')
   async update(@Param('id') id: string, @Body() dto: Partial<CreateCouponDto>) {
     const data: any = { ...dto };
     if (dto.startTime) data.startTime = new Date(dto.startTime);
@@ -74,6 +79,7 @@ export class AdminCouponController {
   }
 
   @Delete(':id')
+  @RequirePermission('marketing:coupon')
   async delete(@Param('id') id: string) {
     return this.couponService.delete(id);
   }

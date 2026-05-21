@@ -4,15 +4,15 @@ import { Type } from 'class-transformer';
 export class CreateAftersaleDto {
   @Type(() => Number)
   @IsInt()
-  orderItemId: number;
+  orderItemId!: number;
 
   @Type(() => Number)
   @IsInt()
-  type: number;
+  type!: number;
 
   @IsString()
   @IsNotEmpty()
-  reason: string;
+  reason!: string;
 
   @IsOptional()
   @IsString()

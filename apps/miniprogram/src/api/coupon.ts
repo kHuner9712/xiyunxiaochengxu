@@ -1,7 +1,7 @@
 import { get, post } from '@/utils/request'
 
 export function getCouponCenter(params: { page: number; pageSize: number }) {
-  return get<{ list: CouponItem[]; total: number }>('/coupon/center', params)
+  return get<{ list: CouponItem[]; total: number }>('/weapp/coupon/center', params)
 }
 
 export function getMyCoupons(params: { status?: number; page: number; pageSize: number }) {
@@ -13,7 +13,7 @@ export function receiveCoupon(couponId: number) {
 }
 
 export function getAvailableCoupons(params: { amount: number; productIds: number[] }) {
-  return get<MyCouponItem[]>('/coupon/available', params)
+  return get<MyCouponItem[]>('/weapp/coupon/available', params)
 }
 
 export interface CouponItem {

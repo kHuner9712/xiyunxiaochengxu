@@ -40,7 +40,7 @@
         </el-table-column>
         <el-table-column prop="title" label="标题" show-overflow-tooltip min-width="200" />
         <el-table-column label="类型" width="80">
-          <template #default="{ row }">{{ { 1: '文章', 2: '视频', 3: '图文' }[row.type] || '-' }}</template>
+          <template #default="{ row }">{{ CONTENT_TYPE_MAP[row.type] || '-' }}</template>
         </el-table-column>
         <el-table-column prop="viewCount" label="浏览量" width="80" />
         <el-table-column label="状态" width="80">
@@ -84,6 +84,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { contentApi } from '@/api/content'
 import { formatDate } from '@/utils/format'
 
+const CONTENT_TYPE_MAP: Record<number, string> = { 1: '文章', 2: '视频', 3: '图文' }
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<any[]>([])

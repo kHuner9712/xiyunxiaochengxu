@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 export class CreateBrandDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @IsOptional()
   @IsString()

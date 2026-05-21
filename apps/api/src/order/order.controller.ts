@@ -1,8 +1,9 @@
 import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { DeliverDto } from './dto/deliver.dto';
+import { DeliverDto, BatchDeliverDto } from './dto/deliver.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 
 @Controller('weapp/order')
@@ -64,31 +65,55 @@ export class AdminOrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Get('list')
+  @RequirePermission('order:list')
   async list(@Query() dto: OrderQueryDto) {
     return this.orderService.findAllAdmin(dto);
   }
 
   @Get('detail/:id')
+  @RequirePermission('order:detail')
   async detail(@Param('id') id: string) {
     return this.orderService.findAdminById(id);
   }
 
   @Put('status/:id')
+  @RequirePermission('order:deliver')
   async updateStatus(@Param('id') id: string, @Body() body: { status: string }) {
     return this.orderService.adminUpdateStatus(id, body.status);
   }
 
   @Put('remark/:id')
+  @RequirePermission('order:remark')
   async remark(@Param('id') id: string, @Body() body: { remark: string }) {
     return this.orderService.adminRemark(id, body.remark);
   }
 
+  @Put('cancel/:id')
+  @RequirePermission('order:cancel')
+  async cancel(@Param('id') id: string, @Body() body: { reason: string }) {
+    return this.orderService.adminCancel(id, body.reason);
+  }
+
+  @Get('delivery-list')
+  @RequirePermission('order:list')
+  async deliveryList(@Query() dto: OrderQueryDto) {
+    return this.orderService.findDeliveryList(dto);
+  }
+
+  @Post('batch-deliver')
+  @RequirePermission('order:deliver')
+  async batchDeliver(@Body() dto: BatchDeliverDto) {
+    return this.orderService.batchDeliver(dto);
+  }
+
   @Post('deliver')
+  @RequirePermission('order:deliver')
   async deliver(@Body() dto: DeliverDto) {
     return this.orderService.adminDeliver(dto);
   }
 
   @Get('export')
+  @RequirePermission('order:list')
   async export(@Query() dto: OrderQueryDto) {
     return this.orderService.exportOrders(dto);
   }

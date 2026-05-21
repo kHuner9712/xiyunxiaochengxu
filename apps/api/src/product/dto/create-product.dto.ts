@@ -11,7 +11,7 @@ export class SkuDto {
 
   @Type(() => Number)
   @IsInt()
-  price: number;
+  price!: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -45,11 +45,11 @@ export class SkuDto {
 export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @Type(() => Number)
   @IsInt()
-  categoryId: number;
+  categoryId!: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -81,7 +81,7 @@ export class CreateProductDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SkuDto)
-  skus: SkuDto[];
+  skus!: SkuDto[];
 
   @IsOptional()
   @Type(() => Number)

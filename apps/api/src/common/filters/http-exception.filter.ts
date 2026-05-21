@@ -13,7 +13,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
-    let code = -1;
+    let code = 500;
     let message = '服务器内部错误';
 
     if (exception instanceof HttpException) {
@@ -31,16 +31,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
           : exception.message;
       }
 
-      if (status === HttpStatus.UNAUTHORIZED) {
-        code = 40101;
+      if (status === HttpStatus.BAD_REQUEST) {
+        code = 400;
+      } else if (status === HttpStatus.UNAUTHORIZED) {
+        code = 401;
       } else if (status === HttpStatus.FORBIDDEN) {
-        code = 40301;
+        code = 403;
       } else if (status === HttpStatus.NOT_FOUND) {
-        code = 40401;
-      } else if (status === HttpStatus.BAD_REQUEST) {
-        code = 40001;
+        code = 404;
       } else {
-        code = -1;
+        code = 500;
       }
     }
 

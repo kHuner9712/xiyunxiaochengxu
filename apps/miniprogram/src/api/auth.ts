@@ -5,9 +5,9 @@ export function wxLogin(data: { code: string }) {
 }
 
 export function bindPhone(data: { code: string }) {
-  return post<{ token: string }>('/auth/bind-phone', data)
+  return post<{ token: string }>('/weapp/auth/bind-phone', data)
 }
 
 export function getPhone(data: { code: string }) {
-  return post<{ phone: string }>('/auth/get-phone', data)
+  return post<{ phone: string }>('/weapp/auth/get-phone', data)
 }

@@ -13,7 +13,7 @@
         <el-table-column prop="name" label="推荐位名称" min-width="150" />
         <el-table-column prop="code" label="推荐位编码" width="150" />
         <el-table-column label="推荐类型" width="100">
-          <template #default="{ row }">{{ { 1: '商品', 2: '活动', 3: '内容' }[row.type] || '-' }}</template>
+          <template #default="{ row }">{{ RECOMMENDATION_TYPE_MAP[row.type] || '-' }}</template>
         </el-table-column>
         <el-table-column prop="sort" label="排序" width="80" />
         <el-table-column label="状态" width="80">
@@ -88,6 +88,7 @@ import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import request from '@/utils/request'
 
+const RECOMMENDATION_TYPE_MAP: Record<number, string> = { 1: '商品', 2: '活动', 3: '内容' }
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)

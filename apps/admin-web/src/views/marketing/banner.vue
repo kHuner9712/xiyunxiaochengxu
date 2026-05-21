@@ -17,7 +17,7 @@
         </el-table-column>
         <el-table-column prop="title" label="标题" min-width="150" />
         <el-table-column label="位置" width="100">
-          <template #default="{ row }">{{ { 1: '首页', 2: '分类页', 3: '活动页' }[row.position] || '-' }}</template>
+          <template #default="{ row }">{{ BANNER_POSITION_MAP[row.position] || '-' }}</template>
         </el-table-column>
         <el-table-column prop="linkUrl" label="跳转链接" show-overflow-tooltip min-width="200" />
         <el-table-column prop="sort" label="排序" width="80" />
@@ -80,6 +80,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { bannerApi } from '@/api/banner'
 import { uploadApi } from '@/api/upload'
 
+const BANNER_POSITION_MAP: Record<number, string> = { 1: '首页', 2: '分类页', 3: '活动页' }
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)

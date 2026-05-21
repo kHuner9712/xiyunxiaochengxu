@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { OrderQueryDto } from './dto/order-query.dto';
-import { DeliverDto } from './dto/deliver.dto';
+import { DeliverDto, BatchDeliverDto } from './dto/deliver.dto';
 import { generateOrderNo, paginate } from '@baby-mall/shared';
 import {
   OrderStatus,
@@ -80,7 +80,7 @@ export class OrderService {
         include: { coupon: true },
       });
       if (!userCoupon) throw new BadRequestException('优惠券不可用');
-      if (new Date() > userCoupon.expireAt) throw new BadRequestException('优惠券已过期');
+      if (!userCoupon.expireAt || new Date() > userCoupon.expireAt) throw new BadRequestException('优惠券已过期');
       if (totalAmount < userCoupon.coupon.minAmount) throw new BadRequestException('未达到优惠券使用门槛');
 
       if (userCoupon.coupon.type === 1) {
@@ -181,7 +181,7 @@ export class OrderService {
         include: { coupon: true },
       });
       if (!userCoupon) throw new BadRequestException('优惠券不可用');
-      if (new Date() > userCoupon.expireAt) throw new BadRequestException('优惠券已过期');
+      if (!userCoupon.expireAt || new Date() > userCoupon.expireAt) throw new BadRequestException('优惠券已过期');
       if (totalAmount < userCoupon.coupon.minAmount) throw new BadRequestException('未达到优惠券使用门槛');
 
       couponId = userCoupon.id;
@@ -421,7 +421,7 @@ export class OrderService {
   async confirmReceive(userId: string, id: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: BigInt(id), userId: BigInt(userId) },
-      include: { orderItems: true },
+      include: { orderItems: true, delivery: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status !== OrderStatus.delivered) {
@@ -429,7 +429,7 @@ export class OrderService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const earnedPoints = Math.floor(order.payAmount / 100);
+      const earnedPoints = Math.floor(order.payAmount! / 100);
 
       if (earnedPoints > 0) {
         const user = await tx.user.findFirst({ where: { id: BigInt(userId) } });
@@ -439,7 +439,7 @@ export class OrderService {
             data: {
               availablePoints: { increment: earnedPoints },
               totalPoints: { increment: earnedPoints },
-              growthValue: { increment: Math.floor(order.payAmount / 100) },
+              growthValue: { increment: Math.floor(order.payAmount! / 100) },
             },
           });
           await tx.pointsRecord.create({
@@ -564,6 +564,132 @@ export class OrderService {
     });
     if (!order) throw new NotFoundException('订单不存在');
     return this.serializeOrder(order);
+  }
+
+  async adminCancel(id: string, reason: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: BigInt(id) },
+      include: { orderItems: true },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    if (order.status !== OrderStatus.pending_payment) {
+      throw new BadRequestException('只能取消待付款订单');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      for (const item of order.orderItems) {
+        const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
+        if (sku) {
+          await tx.productSku.update({
+            where: { id: item.skuId },
+            data: { stock: { increment: item.quantity }, sales: { decrement: item.quantity } },
+          });
+          await tx.productStockLog.create({
+            data: {
+              productId: item.productId,
+              skuId: item.skuId,
+              type: 2,
+              quantity: item.quantity,
+              beforeStock: sku.stock,
+              afterStock: sku.stock + item.quantity,
+              reason: '管理员取消订单归还库存',
+            },
+          });
+        }
+      }
+
+      if (order.pointsDeducted > 0) {
+        const user = await tx.user.findFirst({ where: { id: order.userId } });
+        if (user) {
+          await tx.user.update({
+            where: { id: order.userId },
+            data: {
+              availablePoints: { increment: order.pointsDeducted },
+              totalPoints: { increment: order.pointsDeducted },
+            },
+          });
+          await tx.pointsRecord.create({
+            data: {
+              userId: order.userId,
+              type: 1,
+              points: order.pointsDeducted,
+              balance: user.availablePoints + order.pointsDeducted,
+              source: 'admin_cancel',
+              description: `管理员取消订单归还积分${order.pointsDeducted}`,
+            },
+          });
+        }
+      }
+
+      if (order.couponId) {
+        await tx.userCoupon.update({
+          where: { id: order.couponId },
+          data: { status: 1 },
+        });
+      }
+
+      return tx.order.update({
+        where: { id: BigInt(id) },
+        data: {
+          status: OrderStatus.cancelled,
+          cancelledAt: new Date(),
+          cancelReason: reason || '管理员取消',
+          orderLogs: {
+            create: {
+              operatorType: 'admin',
+              action: 'cancel',
+              content: `管理员取消订单，原因：${reason || '无'}`,
+            },
+          },
+        },
+      });
+    });
+
+    this.logger.log(`管理员取消订单：${id}，原因：${reason}`);
+    return this.serializeOrder(result);
+  }
+
+  async findDeliveryList(dto: OrderQueryDto) {
+    const where: any = { status: OrderStatus.pending_delivery };
+    if (dto.orderNo) where.orderNo = { contains: dto.orderNo };
+
+    const [list, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        skip: dto.skip,
+        take: dto.take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          orderItems: true,
+          user: { select: { id: true, nickname: true, phone: true } },
+        },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    this.logger.log(`查询待发货列表，共${total}条`);
+    return paginate(list.map((o) => this.serializeOrder(o)), total, dto.page, dto.pageSize);
+  }
+
+  async batchDeliver(dto: BatchDeliverDto) {
+    const results: any[] = [];
+    const errors: any[] = [];
+
+    for (const item of dto.orders) {
+      try {
+        const result = await this.adminDeliver({
+          orderId: item.orderId,
+          logisticsCompany: item.logisticsCompany,
+          logisticsNo: item.logisticsNo,
+        });
+        results.push({ orderId: item.orderId, success: true, data: result });
+      } catch (error) {
+        errors.push({ orderId: item.orderId, success: false, message: (error as Error).message });
+      }
+    }
+
+    this.logger.log(`批量发货完成，成功${results.length}条，失败${errors.length}条`);
+    return { successCount: results.length, failCount: errors.length, results, errors };
   }
 
   async adminDeliver(dto: DeliverDto) {
@@ -726,7 +852,7 @@ export class OrderService {
 
         closedCount++;
       } catch (error) {
-        this.logger.error(`自动关闭订单${order.orderNo}失败：${error.message}`);
+        this.logger.error(`自动关闭订单${order.orderNo}失败：${(error as Error).message}`);
       }
     }
 
@@ -761,7 +887,7 @@ export class OrderService {
         });
         completedCount++;
       } catch (error) {
-        this.logger.error(`自动完成订单${order.orderNo}失败：${error.message}`);
+        this.logger.error(`自动完成订单${order.orderNo}失败：${(error as Error).message}`);
       }
     }
 

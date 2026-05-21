@@ -17,7 +17,7 @@ export function getHomeBanners() {
 }
 
 export function getGuessProducts(params: { page: number; pageSize: number }) {
-  return get<{ list: ProductItem[]; total: number }>('/home/guess', params)
+  return get<{ list: ProductItem[]; total: number }>('/weapp/home/guess', params)
 }
 
 export interface BannerItem {

@@ -4,18 +4,18 @@ import { Type } from 'class-transformer';
 class OrderItemDto {
   @Type(() => Number)
   @IsInt()
-  skuId: number;
+  skuId!: number;
 
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  quantity: number;
+  quantity!: number;
 }
 
 export class CreateOrderDto {
   @Type(() => Number)
   @IsInt()
-  addressId: number;
+  addressId!: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -34,5 +34,5 @@ export class CreateOrderDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
-  items: OrderItemDto[];
+  items!: OrderItemDto[];
 }
