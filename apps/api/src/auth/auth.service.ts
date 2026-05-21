@@ -31,11 +31,16 @@ export class AuthService {
   }
 
   async adminLogin(username: string, password: string, captchaId: string, captchaCode: string) {
-    const cachedCode = await this.redisService.get(captchaId);
-    if (!cachedCode || cachedCode !== captchaCode.toLowerCase()) {
-      throw new BadRequestException('验证码错误');
+    const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
+    const smokeTestBypass = this.configService.get<string>('SMOKE_TEST_BYPASS_CAPTCHA', 'false');
+
+    if (!(nodeEnv !== 'production' && smokeTestBypass === 'true' && captchaId === 'smoke-test' && captchaCode === 'bypass')) {
+      const cachedCode = await this.redisService.get(captchaId);
+      if (!cachedCode || cachedCode !== captchaCode.toLowerCase()) {
+        throw new BadRequestException('验证码错误');
+      }
+      await this.redisService.del(captchaId);
     }
-    await this.redisService.del(captchaId);
 
     const admin = await this.prisma.adminUser.findFirst({
       where: { username, deletedAt: null, status: 1 },

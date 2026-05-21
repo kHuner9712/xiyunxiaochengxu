@@ -34,9 +34,10 @@ services:
     volumes:
       - redis_data:/data
       - ./redis/redis.conf:/etc/redis/redis.conf
-    command: redis-server /etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:-}
+      - ./scripts/redis-entrypoint.sh:/usr/local/bin/redis-entrypoint.sh:ro
+    entrypoint: ["/usr/local/bin/redis-entrypoint.sh"]
     healthcheck:
-      test: ["CMD", "sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"]
+      test: ["CMD", "sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG; else redis-cli ping | grep PONG; fi"]
       interval: 10s
       timeout: 5s
       retries: 5

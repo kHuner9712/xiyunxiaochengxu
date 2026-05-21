@@ -12,21 +12,22 @@ export class ScheduleService {
     private readonly orderService: OrderService,
   ) {}
 
-  private async acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
-    const value = `${process.pid}-${Date.now()}`;
-    return this.redisService.setNX(key, value, ttlSeconds);
+  private async acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
+    const value = `${process.pid}-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+    const acquired = await this.redisService.setNX(key, value, ttlSeconds);
+    return acquired ? value : null;
   }
 
-  private async releaseLock(key: string): Promise<void> {
-    await this.redisService.del(key);
+  private async releaseLock(key: string, value: string): Promise<void> {
+    await this.redisService.releaseLockWithLua(key, value);
   }
 
   @Cron('*/1 * * * *')
   async handleCloseTimeoutOrders() {
     const lockKey = 'schedule:close_timeout_orders';
-    const lockAcquired = await this.acquireLock(lockKey, 120);
+    const lockValue = await this.acquireLock(lockKey, 120);
 
-    if (!lockAcquired) {
+    if (!lockValue) {
       return;
     }
 
@@ -38,16 +39,16 @@ export class ScheduleService {
       const err = error as Error;
       this.logger.error(`关闭超时订单任务失败：${err.message}`, err.stack);
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, lockValue);
     }
   }
 
   @Cron('0 0 2 * * *')
   async handleAutoCompleteOrders() {
     const lockKey = 'schedule:auto_complete_orders';
-    const lockAcquired = await this.acquireLock(lockKey, 3600);
+    const lockValue = await this.acquireLock(lockKey, 3600);
 
-    if (!lockAcquired) {
+    if (!lockValue) {
       return;
     }
 
@@ -59,7 +60,7 @@ export class ScheduleService {
       const err = error as Error;
       this.logger.error(`自动完成订单任务失败：${err.message}`, err.stack);
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, lockValue);
     }
   }
 }

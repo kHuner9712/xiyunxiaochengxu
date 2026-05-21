@@ -43,11 +43,46 @@ export class PaymentService {
     const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
     const skipVerify = this.configService.get<string>('WECHAT_SKIP_VERIFY', 'false');
 
-    if (nodeEnv === 'production' && !this.wechatpayCertificate) {
-      throw new Error('生产环境必须配置微信支付平台证书(WECHAT_PLATFORM_CERT_PATH)，支付模块不可启动');
+    if (nodeEnv === 'production') {
+      const requiredConfigs = [
+        { key: 'WECHAT_APP_ID', value: this.configService.get<string>('WECHAT_APP_ID') },
+        { key: 'WECHAT_MCH_ID', value: this.configService.get<string>('WECHAT_MCH_ID') },
+        { key: 'WECHAT_MCH_SERIAL_NO', value: this.configService.get<string>('WECHAT_MCH_SERIAL_NO') },
+        { key: 'WECHAT_API_V3_KEY', value: this.configService.get<string>('WECHAT_API_V3_KEY') },
+        { key: 'WECHAT_PRIVATE_KEY_PATH', value: this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH') },
+        { key: 'WECHAT_PLATFORM_CERT_PATH', value: this.configService.get<string>('WECHAT_PLATFORM_CERT_PATH') },
+        { key: 'WECHAT_NOTIFY_URL', value: this.configService.get<string>('WECHAT_NOTIFY_URL') },
+      ];
+
+      const missing = requiredConfigs.filter(c => !c.value);
+      if (missing.length > 0) {
+        throw new Error(`生产环境缺少必要支付配置: ${missing.map(c => c.key).join(', ')}，支付模块不可启动`);
+      }
+
+      const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
+      if (Buffer.byteLength(apiV3Key, 'utf8') !== 32) {
+        throw new Error('WECHAT_API_V3_KEY 必须为32字节，支付模块不可启动');
+      }
+
+      const notifyUrl = this.configService.get<string>('WECHAT_NOTIFY_URL')!;
+      if (!notifyUrl.startsWith('https://')) {
+        throw new Error('WECHAT_NOTIFY_URL 必须以 https:// 开头，支付模块不可启动');
+      }
+
+      if (!this.privateKey) {
+        throw new Error('生产环境商户私钥文件不可读(WECHAT_PRIVATE_KEY_PATH)，支付模块不可启动');
+      }
+
+      if (!this.wechatpayCertificate) {
+        throw new Error('生产环境必须配置微信支付平台证书(WECHAT_PLATFORM_CERT_PATH)，支付模块不可启动');
+      }
     }
-    if (nodeEnv !== 'production' && skipVerify !== 'true' && !this.wechatpayCertificate) {
-      this.logger.warn('微信平台证书未配置，非生产环境允许跳过验签(设置WECHAT_SKIP_VERIFY=true)');
+
+    if (nodeEnv !== 'production') {
+      const hasAnyPaymentConfig = this.configService.get<string>('WECHAT_APP_ID') || this.configService.get<string>('WECHAT_MCH_ID');
+      if (!hasAnyPaymentConfig) {
+        this.logger.warn('支付配置缺失，支付功能不可用。非生产环境允许继续运行');
+      }
     }
   }
 

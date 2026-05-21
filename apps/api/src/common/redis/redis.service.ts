@@ -61,4 +61,10 @@ export class RedisService {
   async ping(): Promise<string> {
     return this.client.ping();
   }
+
+  async releaseLockWithLua(key: string, value: string): Promise<boolean> {
+    const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
+    const result = await this.client.eval(lua, 1, key, value);
+    return result === 1;
+  }
 }
