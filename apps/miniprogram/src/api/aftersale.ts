@@ -1,11 +1,11 @@
-import { get, post } from '@/utils/request'
+import { get, post, put } from '@/utils/request'
 
 export function applyAftersale(data: AftersaleForm) {
-  return post<{ id: number }>('/aftersale/apply', data)
+  return post<{ id: number }>('/weapp/aftersale/create', data)
 }
 
 export function getAftersaleList(params: { page: number; pageSize: number }) {
-  return get<{ list: AftersaleItem[]; total: number }>('/aftersale/list', params)
+  return get<{ list: AftersaleItem[]; total: number }>('/weapp/aftersale/list', params)
 }
 
 export function getAftersaleDetail(id: number) {
@@ -13,11 +13,7 @@ export function getAftersaleDetail(id: number) {
 }
 
 export function cancelAftersale(id: number) {
-  return post(`/weapp/aftersale/cancel/${id}`)
-}
-
-export function getAftersaleReasons() {
-  return get<string[]>('/weapp/aftersale/reasons')
+  return put(`/weapp/aftersale/cancel/${id}`)
 }
 
 export interface AftersaleForm {

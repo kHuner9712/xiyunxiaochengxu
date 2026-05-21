@@ -51,12 +51,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { applyAftersale, getAftersaleReasons } from '@/api/aftersale'
+import { applyAftersale } from '@/api/aftersale'
 import { chooseAndUploadImage } from '@/api/upload'
 
 const orderId = ref(0)
 const orderItemId = ref(0)
-const reasons = ref<string[]>([])
+const reasons = ref<string[]>(['不想要了', '商品与描述不符', '质量问题', '收到商品损坏', '其他原因'])
 const imageList = ref<string[]>([])
 
 const form = ref({
@@ -65,12 +65,6 @@ const form = ref({
   description: '',
   images: [] as string[]
 })
-
-async function loadReasons() {
-  try {
-    reasons.value = await getAftersaleReasons()
-  } catch {}
-}
 
 function onReasonChange(e: any) {
   form.value.reason = reasons.value[e.detail.value]
@@ -113,7 +107,6 @@ async function handleSubmit() {
 onLoad((options) => {
   if (options?.orderId) orderId.value = Number(options.orderId)
   if (options?.orderItemId) orderItemId.value = Number(options.orderItemId)
-  loadReasons()
 })
 </script>
 

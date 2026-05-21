@@ -2,18 +2,12 @@ import request from '@/utils/request'
 
 export const memberApi = {
   getList() {
-    return request.get('/admin/member-level/list')
-  },
-  getDetail(id: number) {
-    return request.get(`/admin/member-level/detail/${id}`)
+    return request.get('/admin/member/levels')
   },
   create(data: any) {
-    return request.post('/admin/member-level/create', data)
+    return request.post('/admin/member/levels', data)
   },
   update(data: any) {
-    return request.put(`/admin/member-level/update/${data.id}`, data)
-  },
-  delete(id: number) {
-    return request.delete(`/admin/member-level/delete/${id}`)
+    return request.put(`/admin/member/levels/${data.id}`, data)
   },
 }

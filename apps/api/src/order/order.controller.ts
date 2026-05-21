@@ -10,6 +10,11 @@ import { OrderQueryDto } from './dto/order-query.dto';
 export class WeappOrderController {
   constructor(private readonly orderService: OrderService) {}
 
+  @Get('count')
+  async getOrderCount(@CurrentUser('id') userId: string) {
+    return this.orderService.getOrderCountByUser(userId);
+  }
+
   @Post('confirm')
   async confirm(
     @CurrentUser('id') userId: string,

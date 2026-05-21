@@ -28,21 +28,13 @@
         </view>
       </view>
     </view>
-
-    <view class="growth-section card">
-      <text class="section-title">成长值规则</text>
-      <view v-for="rule in growthRules" :key="rule.action" class="rule-item">
-        <text class="rule-action">{{ rule.action }}</text>
-        <text class="rule-value">+{{ rule.growthValue }}</text>
-      </view>
-    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { getMemberInfo, getMemberRights, getGrowthRules, type MemberInfo, type MemberRight, type GrowthRule } from '@/api/member'
+import { getMemberInfo, getMemberRights, type MemberInfo, type MemberRight } from '@/api/member'
 
 const userStore = useUserStore()
 
@@ -51,7 +43,6 @@ const memberInfo = ref<MemberInfo>({
   nextLevelGrowth: 100, currentLevelGrowth: 0, rights: []
 })
 const rights = ref<MemberRight[]>([])
-const growthRules = ref<GrowthRule[]>([])
 
 const growthPercent = computed(() => {
   if (memberInfo.value.nextLevelGrowth <= 0) return 100
@@ -70,16 +61,9 @@ async function loadRights() {
   } catch {}
 }
 
-async function loadGrowthRules() {
-  try {
-    growthRules.value = await getGrowthRules()
-  } catch {}
-}
-
 onMounted(() => {
   loadMemberInfo()
   loadRights()
-  loadGrowthRules()
 })
 </script>
 
@@ -158,8 +142,7 @@ onMounted(() => {
   display: block;
 }
 
-.rights-section,
-.growth-section {
+.rights-section {
   margin: $spacing-md;
 }
 
@@ -198,24 +181,5 @@ onMounted(() => {
   font-size: 20rpx;
   color: $text-hint;
   margin-top: 4rpx;
-}
-
-.rule-item {
-  @include flex-between;
-  padding: 12rpx 0;
-  border-bottom: 1rpx solid $divider-color;
-
-  &:last-child { border-bottom: none; }
-}
-
-.rule-action {
-  font-size: $font-sm;
-  color: $text-secondary;
-}
-
-.rule-value {
-  font-size: $font-sm;
-  color: $primary-color;
-  font-weight: 500;
 }
 </style>

@@ -125,7 +125,7 @@ function resetSearch() {
 
 async function handleToggleStatus(row: any) {
   try {
-    await couponApi.updateStatus(row.id, row.status === 1 ? 0 : 1)
+    await couponApi.update({ id: row.id, status: row.status === 1 ? 0 : 1 })
     ElMessage.success('操作成功')
     fetchList()
   } catch {}

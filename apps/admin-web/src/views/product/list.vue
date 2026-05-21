@@ -9,7 +9,7 @@
           <el-tree-select
             v-model="searchForm.categoryId"
             :data="categoryTree"
-            :props="{ label: 'name', value: 'id', children: 'children' }"
+            :props="{ label: 'name', value: 'id', children: 'children' } as any"
             placeholder="请选择分类"
             clearable
             check-strictly
@@ -37,12 +37,10 @@
       <div style="margin-bottom: 16px; display: flex; justify-content: space-between">
         <div>
           <el-button v-permission="'product:edit'" type="primary" @click="handleAdd">新增商品</el-button>
-          <el-button v-permission="'product:edit'" type="danger" :disabled="!selectedIds.length" @click="handleBatchOff">批量下架</el-button>
         </div>
       </div>
 
-      <el-table :data="tableData" stripe v-loading="loading" @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="55" />
+      <el-table :data="tableData" stripe v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column label="商品图片" width="100">
           <template #default="{ row }">
@@ -110,7 +108,6 @@ import { formatPrice } from '@/utils/format'
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<any[]>([])
-const selectedIds = ref<number[]>([])
 const categoryTree = ref<any[]>([])
 const brandList = ref<any[]>([])
 
@@ -151,8 +148,8 @@ async function fetchCategoryTree() {
 
 async function fetchBrandList() {
   try {
-    const res = await brandApi.getAll()
-    brandList.value = res.data || []
+    const res = await brandApi.getList({ page: 1, pageSize: 1000 })
+    brandList.value = (res.data as any)?.list || res.data || []
   } catch {}
 }
 
@@ -167,10 +164,6 @@ function resetSearch() {
   searchForm.brandId = undefined
   searchForm.status = undefined
   handleSearch()
-}
-
-function handleSelectionChange(rows: any[]) {
-  selectedIds.value = rows.map((r) => r.id)
 }
 
 function handleAdd() {
@@ -195,15 +188,6 @@ async function handleDelete(row: any) {
     await ElMessageBox.confirm('确定删除该商品吗？', '提示', { type: 'warning' })
     await productApi.delete(row.id)
     ElMessage.success('删除成功')
-    fetchList()
-  } catch {}
-}
-
-async function handleBatchOff() {
-  try {
-    await ElMessageBox.confirm(`确定下架选中的 ${selectedIds.value.length} 个商品吗？`, '提示', { type: 'warning' })
-    await productApi.batchUpdateStatus(selectedIds.value, 0)
-    ElMessage.success('操作成功')
     fetchList()
   } catch {}
 }

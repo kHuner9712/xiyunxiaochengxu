@@ -1,4 +1,4 @@
-import { get } from '@/utils/request'
+import { get, del } from '@/utils/request'
 
 export function searchProducts(params: {
   keyword: string
@@ -6,11 +6,11 @@ export function searchProducts(params: {
   page: number
   pageSize: number
 }) {
-  return get<{ list: any[]; total: number }>('/search', params)
+  return get<{ list: any[]; total: number }>('/weapp/search', params)
 }
 
 export function getHotKeywords() {
-  return get<string[]>('/search/hot')
+  return get<string[]>('/weapp/search/hot')
 }
 
 export function getSearchHistory() {
@@ -18,9 +18,5 @@ export function getSearchHistory() {
 }
 
 export function clearSearchHistory() {
-  return get('/search/history/clear')
-}
-
-export function getSearchSuggest(keyword: string) {
-  return get<string[]>('/weapp/search/suggest', { keyword })
+  return del('/weapp/search/history')
 }

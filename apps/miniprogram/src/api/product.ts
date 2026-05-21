@@ -7,7 +7,7 @@ export function getProductList(params: {
   page: number
   pageSize: number
 }) {
-  return get<{ list: ProductDetail[]; total: number }>('/product/list', params)
+  return get<{ list: ProductDetail[]; total: number }>('/weapp/product/list', params)
 }
 
 export function getProductDetail(id: number) {

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
+import { paginate } from '@baby-mall/shared';
 
 @Injectable()
 export class SearchService {
@@ -10,6 +11,55 @@ export class SearchService {
     private prisma: PrismaService,
     private redisService: RedisService,
   ) {}
+
+  async search(keyword: string, page: number = 1, pageSize: number = 10, sort?: string, userId?: string) {
+    const where: any = {
+      deletedAt: null,
+      status: 1,
+    };
+
+    if (keyword) {
+      where.OR = [
+        { name: { contains: keyword } },
+        { description: { contains: keyword } },
+      ];
+    }
+
+    let orderBy: any = { totalSales: 'desc' };
+    if (sort === 'price_asc') orderBy = { minPrice: 'asc' };
+    else if (sort === 'price_desc') orderBy = { minPrice: 'desc' };
+    else if (sort === 'new') orderBy = { createdAt: 'desc' };
+    else if (sort === 'sales') orderBy = { totalSales: 'desc' };
+
+    const [list, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          name: true,
+          mainImage: true,
+          minPrice: true,
+          totalSales: true,
+          isRecommend: true,
+        },
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    if (keyword && userId) {
+      await this.addSearchHistory(userId, keyword);
+    }
+
+    return paginate(
+      list.map((p) => ({ ...p, id: p.id.toString() })),
+      total,
+      page,
+      pageSize,
+    );
+  }
 
   async getHotKeywords() {
     const cached = await this.redisService.get('search:hot_keywords');

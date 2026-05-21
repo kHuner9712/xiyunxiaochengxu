@@ -9,7 +9,7 @@
           <el-descriptions :column="2" border>
             <el-descriptions-item label="订单号">{{ order.orderNo }}</el-descriptions-item>
             <el-descriptions-item label="订单状态">
-              <el-tag :type="getOrderStatusTagType(order.status)">{{ formatOrderStatus(order.status) }}</el-tag>
+              <el-tag :type="getOrderStatusTagType(order.status) as any">{{ formatOrderStatus(order.status) }}</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="下单时间">{{ formatDate(order.createTime) }}</el-descriptions-item>
             <el-descriptions-item label="付款时间">{{ formatDate(order.payTime) }}</el-descriptions-item>

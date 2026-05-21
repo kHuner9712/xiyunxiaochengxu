@@ -2,7 +2,7 @@ import request from '@/utils/request'
 
 export const categoryApi = {
   getTree() {
-    return request.get('/admin/category/tree')
+    return request.get('/admin/category/list')
   },
   getDetail(id: number) {
     return request.get(`/admin/category/detail/${id}`)
@@ -15,8 +15,5 @@ export const categoryApi = {
   },
   delete(id: number) {
     return request.delete(`/admin/category/delete/${id}`)
-  },
-  updateSort(data: { id: number; sort: number }[]) {
-    return request.put('/admin/category/sort', data)
   },
 }

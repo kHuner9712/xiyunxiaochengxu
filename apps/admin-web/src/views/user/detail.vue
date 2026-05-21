@@ -30,10 +30,10 @@
               <el-statistic title="总订单数" :value="user.orderCount || 0" />
             </el-col>
             <el-col :span="8">
-              <el-statistic title="总消费金额" :value="formatPrice(user.totalSpent)" prefix="¥" />
+              <el-statistic title="总消费金额" :value="Number(formatPrice(user.totalSpent))" prefix="¥" />
             </el-col>
             <el-col :span="8">
-              <el-statistic title="平均客单价" :value="formatPrice(user.avgOrderAmount)" prefix="¥" />
+              <el-statistic title="平均客单价" :value="Number(formatPrice(user.avgOrderAmount))" prefix="¥" />
             </el-col>
           </el-row>
         </el-card>
@@ -61,7 +61,7 @@
             </el-table-column>
             <el-table-column label="状态" width="80">
               <template #default="{ row }">
-                <el-tag :type="getOrderStatusTagType(row.status)" size="small">{{ formatOrderStatus(row.status) }}</el-tag>
+                <el-tag :type="getOrderStatusTagType(row.status) as any" size="small">{{ formatOrderStatus(row.status) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="时间" width="180">

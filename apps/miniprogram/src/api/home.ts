@@ -9,11 +9,7 @@ export function getHomeData() {
     newProducts: ProductItem[]
     activities: ActivityItem[]
     guessProducts: ProductItem[]
-  }>('/home/data')
-}
-
-export function getHomeBanners() {
-  return get<BannerItem[]>('/home/banners')
+  }>('/weapp/home/data')
 }
 
 export function getGuessProducts(params: { page: number; pageSize: number }) {

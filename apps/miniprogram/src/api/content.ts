@@ -5,7 +5,7 @@ export function getContentList(params: { categoryId?: number; page: number; page
 }
 
 export function getContentDetail(id: number) {
-  return get<ContentDetail>(`/content/detail/${id}`)
+  return get<ContentDetail>(`/weapp/content/${id}`)
 }
 
 export function getContentCategories() {

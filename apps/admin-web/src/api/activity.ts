@@ -5,18 +5,18 @@ export const activityApi = {
     return request.get('/admin/activity/list', { params })
   },
   getDetail(id: number) {
-    return request.get(`/admin/activity/detail/${id}`)
+    return request.get(`/admin/activity/${id}`)
   },
   create(data: any) {
-    return request.post('/admin/activity/create', data)
+    return request.post('/admin/activity', data)
   },
   update(data: any) {
-    return request.put(`/admin/activity/update/${data.id}`, data)
+    return request.put(`/admin/activity/${data.id}`, data)
   },
   delete(id: number) {
-    return request.delete(`/admin/activity/delete/${id}`)
+    return request.delete(`/admin/activity/${id}`)
   },
   updateStatus(id: number, status: number) {
-    return request.put(`/admin/activity/status/${id}`, { status })
+    return request.put(`/admin/activity/${id}/status`, { status })
   },
 }

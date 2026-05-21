@@ -7,7 +7,7 @@ export function createOrder(data: {
   pointsDeduct?: number
   remark?: string
 }) {
-  return post<{ orderId: number; orderNo: string }>('/order/create', data)
+  return post<{ orderId: number; orderNo: string }>('/weapp/order/create', data)
 }
 
 export function getOrderList(params: {
@@ -15,11 +15,11 @@ export function getOrderList(params: {
   page: number
   pageSize: number
 }) {
-  return get<{ list: OrderItem[]; total: number }>('/order/list', params)
+  return get<{ list: OrderItem[]; total: number }>('/weapp/order/list', params)
 }
 
 export function getOrderDetail(id: number) {
-  return get<OrderDetail>(`/order/detail/${id}`)
+  return get<OrderDetail>(`/weapp/order/detail/${id}`)
 }
 
 export function cancelOrder(id: number) {
@@ -27,11 +27,7 @@ export function cancelOrder(id: number) {
 }
 
 export function confirmReceive(id: number) {
-  return put(`/order/confirm/${id}`)
-}
-
-export function deleteOrder(id: number) {
-  return put(`/order/delete/${id}`)
+  return put(`/weapp/order/confirm-receive/${id}`)
 }
 
 export function getOrderCount() {

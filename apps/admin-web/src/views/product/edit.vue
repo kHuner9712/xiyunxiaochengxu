@@ -14,7 +14,7 @@
           <el-tree-select
             v-model="form.categoryId"
             :data="categoryTree"
-            :props="{ label: 'name', value: 'id', children: 'children' }"
+            :props="{ label: 'name', value: 'id', children: 'children' } as any"
             placeholder="请选择分类"
             check-strictly
           />
@@ -270,11 +270,11 @@ onMounted(async () => {
   try {
     const [catRes, brandRes, supplierRes] = await Promise.all([
       categoryApi.getTree(),
-      brandApi.getAll(),
+      brandApi.getList({ page: 1, pageSize: 1000 }),
       supplierApi.getList({ page: 1, pageSize: 999 }),
     ])
     categoryTree.value = catRes.data || []
-    brandList.value = brandRes.data || []
+    brandList.value = (brandRes.data as any)?.list || brandRes.data || []
     supplierList.value = (supplierRes.data as any)?.list || supplierRes.data || []
   } catch {}
 

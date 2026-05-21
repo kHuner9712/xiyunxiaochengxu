@@ -11,9 +11,9 @@ export const userApi = {
     return request.put(`/admin/user/status/${id}`, { status })
   },
   adjustPoints(id: number, points: number, reason: string) {
-    return request.put(`/admin/user/points/${id}`, { points, reason })
+    return request.put(`/admin/user/level/${id}`, { points, reason })
   },
   getBabyList(params: { page: number; pageSize: number; name?: string; userId?: number }) {
-    return request.get('/admin/user/baby-list', { params })
+    return request.get('/admin/baby-profile', { params })
   },
 }

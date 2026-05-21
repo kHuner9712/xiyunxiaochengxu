@@ -122,7 +122,7 @@ function resetSearch() {
 
 async function handleToggleStatus(row: any) {
   try {
-    await contentApi.updateStatus(row.id, row.status === 1 ? 0 : 1)
+    await contentApi.update({ id: row.id, status: row.status === 1 ? 0 : 1 })
     ElMessage.success('操作成功')
     fetchList()
   } catch {}

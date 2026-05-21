@@ -36,7 +36,7 @@
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getOrderStatusTagType(row.status)" size="small">{{ formatOrderStatus(row.status) }}</el-tag>
+            <el-tag :type="getOrderStatusTagType(row.status) as any" size="small">{{ formatOrderStatus(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="下单时间" width="180">

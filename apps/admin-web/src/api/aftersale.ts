@@ -8,12 +8,12 @@ export const aftersaleApi = {
     return request.get(`/admin/aftersale/detail/${id}`)
   },
   approve(id: number) {
-    return request.put(`/admin/aftersale/approve/${id}`)
+    return request.put(`/admin/aftersale/${id}/approve`)
   },
   reject(id: number, reason: string) {
-    return request.put(`/admin/aftersale/reject/${id}`, { reason })
+    return request.put(`/admin/aftersale/${id}/reject`, { reason })
   },
   refund(id: number, refundAmount: number) {
-    return request.put(`/admin/aftersale/refund/${id}`, { refundAmount })
+    return request.put(`/admin/aftersale/${id}/refund`, { refundAmount })
   },
 }

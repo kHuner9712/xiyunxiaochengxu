@@ -14,66 +14,24 @@
       <text class="section-title">活动规则</text>
       <text class="rules-content">{{ activity.rules }}</text>
     </view>
-
-    <view class="products-section">
-      <text class="section-title">活动商品</text>
-      <view class="product-grid">
-        <ProductCard v-for="item in products" :key="item.productId" :product="{
-          id: item.productId,
-          name: item.name,
-          image: item.image,
-          price: item.activityPrice,
-          originalPrice: item.originalPrice,
-          sales: 0
-        }" />
-      </view>
-      <Loading v-if="loading" />
-      <Empty v-if="!loading && products.length === 0" text="暂无活动商品" />
-    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { onLoad, onReachBottom, onShareAppMessage } from '@dcloudio/uni-app'
-import { getActivityDetail, getActivityProducts, type ActivityDetail, type ActivityProduct } from '@/api/activity'
-import ProductCard from '@/components/ProductCard.vue'
+import { ref } from 'vue'
+import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
+import { getActivityDetail, type ActivityDetail } from '@/api/activity'
 import CountdownTimer from '@/components/CountdownTimer.vue'
-import Loading from '@/components/Loading.vue'
-import Empty from '@/components/Empty.vue'
 
 const activity = ref<ActivityDetail>({
   id: 0, name: '', image: '', description: '', type: 0,
   startTime: 0, endTime: 0, rules: ''
 })
-const products = ref<ActivityProduct[]>([])
-const loading = ref(false)
-const page = ref(1)
-const finished = ref(false)
 
 async function loadActivity(id: number) {
   try {
     activity.value = await getActivityDetail(id)
   } catch {}
-}
-
-async function loadProducts(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    products.value = []
-  }
-  loading.value = true
-  try {
-    const data = await getActivityProducts({ activityId: activity.value.id, page: page.value, pageSize: 10 })
-    products.value.push(...data.list)
-    finished.value = products.value.length >= data.total
-    page.value++
-  } catch {} finally {
-    loading.value = false
-  }
 }
 
 onShareAppMessage(() => ({
@@ -86,14 +44,6 @@ onLoad((options) => {
     const id = Number(options.id)
     loadActivity(id)
   }
-})
-
-onReachBottom(() => {
-  loadProducts()
-})
-
-onMounted(() => {
-  if (activity.value.id) loadProducts()
 })
 </script>
 
@@ -147,16 +97,5 @@ onMounted(() => {
   font-size: $font-sm;
   color: $text-secondary;
   line-height: 1.6;
-}
-
-.products-section {
-  padding: 0 $spacing-md;
-  margin-top: $spacing-sm;
-}
-
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-sm;
 }
 </style>

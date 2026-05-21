@@ -11,6 +11,18 @@ export class WeappCouponController {
   constructor(private readonly couponService: CouponService) {}
 
   @Public()
+  @Get('center')
+  async findCenterList(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.couponService.findCenterList(
+      page ? Number(page) : 1,
+      pageSize ? Number(pageSize) : 10,
+    );
+  }
+
+  @Public()
   @Get('available')
   async findAvailable(@CurrentUser('id') userId: string) {
     return this.couponService.findAvailable(userId);

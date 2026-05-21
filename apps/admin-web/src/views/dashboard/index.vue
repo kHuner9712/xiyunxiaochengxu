@@ -72,7 +72,7 @@
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getOrderStatusTagType(row.status)" size="small">
+            <el-tag :type="getOrderStatusTagType(row.status) as any" size="small">
               {{ formatOrderStatus(row.status) }}
             </el-tag>
           </template>

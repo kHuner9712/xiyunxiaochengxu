@@ -2,9 +2,9 @@ import request from '@/utils/request'
 
 export const systemApi = {
   getConfig() {
-    return request.get('/admin/system/config')
+    return request.get('/admin/system-config/list')
   },
   updateConfig(data: any) {
-    return request.put('/admin/system/config', data)
+    return request.put('/admin/system-config/update', data)
   },
 }

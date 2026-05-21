@@ -149,8 +149,8 @@ async function fetchList() {
 
 async function fetchRoleList() {
   try {
-    const res = await roleApi.getAll()
-    roleList.value = res.data || []
+    const res = await roleApi.getList({ page: 1, pageSize: 1000 })
+    roleList.value = (res.data as any)?.list || res.data || []
   } catch {}
 }
 
@@ -187,15 +187,8 @@ function handleEdit(row: any) {
   dialogVisible.value = true
 }
 
-async function handleResetPassword(row: any) {
-  try {
-    const { value } = await ElMessageBox.prompt('请输入新密码', '重置密码', {
-      inputPattern: /^.{6,20}$/,
-      inputErrorMessage: '密码长度6-20位',
-    })
-    await adminApi.resetPassword(row.id, value)
-    ElMessage.success('重置成功')
-  } catch {}
+async function handleResetPassword(_row: any) {
+  ElMessage.info('请联系超级管理员重置密码')
 }
 
 async function handleToggleStatus(row: any) {

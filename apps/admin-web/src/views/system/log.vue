@@ -137,15 +137,9 @@ function resetSearch() {
   handleSearch()
 }
 
-async function handleDetail(row: any) {
-  try {
-    const res = await operationLogApi.getDetail(row.id)
-    detail.value = res.data || row
-    detailVisible.value = true
-  } catch {
-    detail.value = row
-    detailVisible.value = true
-  }
+function handleDetail(row: any) {
+  detail.value = row
+  detailVisible.value = true
 }
 
 function formatRequestData(data: any): string {

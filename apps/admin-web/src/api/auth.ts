@@ -8,9 +8,6 @@ export const authApi = {
     return request.get('/admin/auth/captcha')
   },
   getUserInfo() {
-    return request.get('/admin/auth/user-info')
-  },
-  logout() {
-    return request.post('/admin/auth/logout')
+    return request.get('/admin/auth/info')
   },
 }

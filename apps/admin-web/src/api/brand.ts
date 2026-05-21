@@ -4,9 +4,6 @@ export const brandApi = {
   getList(params: { page: number; pageSize: number; name?: string }) {
     return request.get('/admin/brand/list', { params })
   },
-  getAll() {
-    return request.get('/admin/brand/all')
-  },
   getDetail(id: number) {
     return request.get(`/admin/brand/detail/${id}`)
   },

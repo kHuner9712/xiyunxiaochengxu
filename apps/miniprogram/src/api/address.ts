@@ -1,31 +1,27 @@
 import { get, post, put, del } from '@/utils/request'
 
 export function getAddressList() {
-  return get<AddressItem[]>('/weapp/address/list')
+  return get<AddressItem[]>('/weapp/address')
 }
 
 export function getAddressDetail(id: number) {
-  return get<AddressItem>(`/address/detail/${id}`)
+  return get<AddressItem>(`/weapp/address/${id}`)
 }
 
 export function createAddress(data: AddressForm) {
-  return post('/address/create', data)
+  return post('/weapp/address', data)
 }
 
 export function updateAddress(data: AddressForm & { id: number }) {
-  return put('/weapp/address/update', data)
+  return put(`/weapp/address/${data.id}`, data)
 }
 
 export function deleteAddress(id: number) {
-  return del(`/address/delete/${id}`)
+  return del(`/weapp/address/${id}`)
 }
 
 export function setDefaultAddress(id: number) {
-  return put(`/weapp/address/set-default/${id}`)
-}
-
-export function getDefaultAddress() {
-  return get<AddressItem>('/weapp/address/default')
+  return put(`/weapp/address/${id}/default`)
 }
 
 export interface AddressItem {

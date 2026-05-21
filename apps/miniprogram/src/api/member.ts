@@ -1,15 +1,11 @@
 import { get } from '@/utils/request'
 
 export function getMemberInfo() {
-  return get<MemberInfo>('/member/info')
+  return get<MemberInfo>('/weapp/member/info')
 }
 
 export function getMemberRights() {
-  return get<MemberRight[]>('/member/rights')
-}
-
-export function getGrowthRules() {
-  return get<GrowthRule[]>('/weapp/member/growth-rules')
+  return get<MemberRight[]>('/weapp/member/benefits')
 }
 
 export interface MemberInfo {

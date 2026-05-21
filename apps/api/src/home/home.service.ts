@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { calculateBabyMonthAge, getMemberLevelByGrowth, MEMBER_LEVELS } from '@baby-mall/shared';
+import { calculateBabyMonthAge, getMemberLevelByGrowth, MEMBER_LEVELS, paginate } from '@baby-mall/shared';
 
 @Injectable()
 export class HomeService {
@@ -26,6 +26,37 @@ export class HomeService {
       activities,
       monthAgeRecommend,
     };
+  }
+
+  async getGuessProducts(page: number = 1, pageSize: number = 10) {
+    const where = {
+      deletedAt: null,
+      status: 1,
+    };
+
+    const [list, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        orderBy: { totalSales: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          name: true,
+          mainImage: true,
+          minPrice: true,
+          totalSales: true,
+        },
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return paginate(
+      list.map((p) => ({ ...p, id: p.id.toString() })),
+      total,
+      page,
+      pageSize,
+    );
   }
 
   private async getBanners() {

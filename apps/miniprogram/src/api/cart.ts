@@ -1,23 +1,19 @@
 import { get, post, put, del } from '@/utils/request'
 
 export function getCartList() {
-  return get<CartItem[]>('/cart/list')
+  return get<CartItem[]>('/weapp/cart/list')
 }
 
 export function addToCart(data: { productId: number; skuId: number; quantity: number }) {
-  return post('/cart/add', data)
+  return post('/weapp/cart/add', data)
 }
 
 export function updateCartItem(data: { id: number; quantity: number }) {
-  return put('/cart/update', data)
+  return put('/weapp/cart/update', data)
 }
 
 export function removeCartItem(id: number) {
-  return del(`/cart/remove/${id}`)
-}
-
-export function clearCart() {
-  return del('/weapp/cart/clear')
+  return del(`/weapp/cart/delete/${id}`)
 }
 
 export interface CartItem {

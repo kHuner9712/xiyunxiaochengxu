@@ -5,18 +5,15 @@ export const contentApi = {
     return request.get('/admin/content/list', { params })
   },
   getDetail(id: number) {
-    return request.get(`/admin/content/detail/${id}`)
+    return request.get(`/admin/content/${id}`)
   },
   create(data: any) {
-    return request.post('/admin/content/create', data)
+    return request.post('/admin/content', data)
   },
   update(data: any) {
-    return request.put(`/admin/content/update/${data.id}`, data)
+    return request.put(`/admin/content/${data.id}`, data)
   },
   delete(id: number) {
-    return request.delete(`/admin/content/delete/${id}`)
-  },
-  updateStatus(id: number, status: number) {
-    return request.put(`/admin/content/status/${id}`, { status })
+    return request.delete(`/admin/content/${id}`)
   },
 }

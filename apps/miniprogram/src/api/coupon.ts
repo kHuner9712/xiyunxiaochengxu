@@ -5,15 +5,15 @@ export function getCouponCenter(params: { page: number; pageSize: number }) {
 }
 
 export function getMyCoupons(params: { status?: number; page: number; pageSize: number }) {
-  return get<{ list: MyCouponItem[]; total: number }>('/coupon/my', params)
+  return get<{ list: MyCouponItem[]; total: number }>('/weapp/coupon/my', params)
 }
 
 export function receiveCoupon(couponId: number) {
-  return post('/coupon/receive', { couponId })
+  return post(`/weapp/coupon/receive/${couponId}`)
 }
 
 export function getAvailableCoupons(params: { amount: number; productIds: number[] }) {
-  return get<MyCouponItem[]>('/weapp/coupon/available', params)
+  return get<MyCouponItem[]>('/weapp/coupon/usable', params)
 }
 
 export interface CouponItem {

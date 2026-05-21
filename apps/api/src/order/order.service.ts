@@ -24,6 +24,19 @@ export class OrderService {
 
   constructor(private prisma: PrismaService) {}
 
+  async getOrderCountByUser(userId: string) {
+    const where = { userId: BigInt(userId) };
+
+    const [unpaid, unshipped, unreceived, aftersale] = await Promise.all([
+      this.prisma.order.count({ where: { ...where, status: OrderStatus.pending_payment } }),
+      this.prisma.order.count({ where: { ...where, status: OrderStatus.pending_delivery } }),
+      this.prisma.order.count({ where: { ...where, status: OrderStatus.delivered } }),
+      this.prisma.order.count({ where: { ...where, status: OrderStatus.aftersale } }),
+    ]);
+
+    return { unpaid, unshipped, unreceived, aftersale };
+  }
+
   async confirm(userId: string, data: { items: { skuId: string; quantity: number }[]; addressId?: string; couponId?: string; pointsDeduct?: number }) {
     let totalAmount = 0;
     let discountAmount = 0;

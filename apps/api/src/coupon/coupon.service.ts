@@ -9,6 +9,27 @@ export class CouponService {
 
   constructor(private prisma: PrismaService) {}
 
+  async findCenterList(page: number = 1, pageSize: number = 10) {
+    const now = new Date();
+    const where: any = {
+      status: 1,
+      startTime: { lte: now },
+      endTime: { gte: now },
+    };
+
+    const [list, total] = await Promise.all([
+      this.prisma.coupon.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.coupon.count({ where }),
+    ]);
+
+    return paginate(list.map((c) => this.serializeCoupon(c)), total, page, pageSize);
+  }
+
   async findAvailable(userId: string) {
     const now = new Date();
     const where: any = {

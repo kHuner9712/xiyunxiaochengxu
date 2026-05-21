@@ -82,7 +82,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { createOrder } from '@/api/order'
-import { getDefaultAddress, type AddressItem } from '@/api/address'
+import { getAddressList, type AddressItem } from '@/api/address'
 import { getAvailableCoupons, type MyCouponItem } from '@/api/coupon'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatPrice } from '@/utils/format'
@@ -127,7 +127,8 @@ const payAmount = computed(() => {
 
 async function loadDefaultAddress() {
   try {
-    address.value = await getDefaultAddress()
+    const list = await getAddressList()
+    address.value = list.find(item => item.isDefault) || list[0] || null
   } catch {}
 }
 

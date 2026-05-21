@@ -5,18 +5,15 @@ export const couponApi = {
     return request.get('/admin/coupon/list', { params })
   },
   getDetail(id: number) {
-    return request.get(`/admin/coupon/detail/${id}`)
+    return request.get(`/admin/coupon/${id}`)
   },
   create(data: any) {
-    return request.post('/admin/coupon/create', data)
+    return request.post('/admin/coupon', data)
   },
   update(data: any) {
-    return request.put(`/admin/coupon/update/${data.id}`, data)
+    return request.put(`/admin/coupon/${data.id}`, data)
   },
   delete(id: number) {
-    return request.delete(`/admin/coupon/delete/${id}`)
-  },
-  updateStatus(id: number, status: number) {
-    return request.put(`/admin/coupon/status/${id}`, { status })
+    return request.delete(`/admin/coupon/${id}`)
   },
 }

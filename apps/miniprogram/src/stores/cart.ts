@@ -54,7 +54,7 @@ export const useCartStore = defineStore('cart', () => {
   async function fetchCart() {
     loading.value = true
     try {
-      const data = await get<CartItem[]>('/cart/list')
+      const data = await get<CartItem[]>('/weapp/cart/list')
       items.value = data.map(item => ({ ...item, checked: true }))
       updateTabBadge()
     } catch {
@@ -65,24 +65,26 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   async function addToCart(params: { productId: number; skuId: number; quantity: number }) {
-    await post('/cart/add', params)
+    await post('/weapp/cart/add', params)
     await fetchCart()
   }
 
   async function updateQuantity(cartItemId: number, quantity: number) {
-    await put('/cart/update', { id: cartItemId, quantity })
+    await put('/weapp/cart/update', { id: cartItemId, quantity })
     await fetchCart()
   }
 
   async function removeItem(cartItemId: number) {
-    await del(`/cart/remove/${cartItemId}`)
+    await del(`/weapp/cart/delete/${cartItemId}`)
     await fetchCart()
   }
 
-  async function clearCart() {
-    await del('/cart/clear')
-    items.value = []
-    updateTabBadge()
+  async function removeSelected() {
+    const selectedIds = checkedItems.value.map(item => item.id)
+    for (const id of selectedIds) {
+      await del(`/weapp/cart/delete/${id}`)
+    }
+    await fetchCart()
   }
 
   function toggleCheck(index: number) {
@@ -106,7 +108,7 @@ export const useCartStore = defineStore('cart', () => {
     addToCart,
     updateQuantity,
     removeItem,
-    clearCart,
+    removeSelected,
     toggleCheck,
     toggleCheckAll,
     updateTabBadge

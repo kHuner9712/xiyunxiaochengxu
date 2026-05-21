@@ -25,7 +25,6 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'user:member'" type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'user:member'" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -62,7 +61,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { memberApi } from '@/api/member'
 import { formatPrice, priceToFen } from '@/utils/format'
 
@@ -119,15 +118,6 @@ function handleEdit(row: any) {
   form.pointsRate = row.pointsRate || 1
   form.description = row.description || ''
   dialogVisible.value = true
-}
-
-async function handleDelete(row: any) {
-  try {
-    await ElMessageBox.confirm('确定删除该等级吗？', '提示', { type: 'warning' })
-    await memberApi.delete(row.id)
-    ElMessage.success('删除成功')
-    fetchList()
-  } catch {}
 }
 
 async function handleSubmit() {

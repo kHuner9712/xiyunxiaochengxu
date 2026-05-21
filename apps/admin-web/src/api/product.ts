@@ -17,9 +17,6 @@ export const productApi = {
     return request.delete(`/admin/product/delete/${id}`)
   },
   updateStatus(id: number, status: number) {
-    return request.put(`/admin/product/status`, { id, status })
-  },
-  batchUpdateStatus(ids: number[], status: number) {
-    return request.put('/admin/product/batch-status', { ids, status })
+    return request.put(`/admin/product/status/${id}`, { status })
   },
 }
