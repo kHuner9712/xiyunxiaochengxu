@@ -35,7 +35,7 @@ services:
       - redis_data:/data
       - ./redis/redis.conf:/etc/redis/redis.conf
       - ./scripts/redis-entrypoint.sh:/usr/local/bin/redis-entrypoint.sh:ro
-    entrypoint: ["/usr/local/bin/redis-entrypoint.sh"]
+    entrypoint: ["sh", "/usr/local/bin/redis-entrypoint.sh"]
     healthcheck:
       test: ["CMD", "sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG; else redis-cli ping | grep PONG; fi"]
       interval: 10s
@@ -121,7 +121,6 @@ volumes:
   redis_data:
   upload_data:
   log_data:
-  wechat_certs:
   admin_dist:
 
 networks:

@@ -21,6 +21,14 @@ fi
 - `REDIS_PASSWORD` 为空时：不启用 requirepass，无需密码连接
 - `REDIS_PASSWORD` 非空时：启用 requirepass，连接需密码认证
 
+### entrypoint 执行方式
+
+```yaml
+entrypoint: ["sh", "/usr/local/bin/redis-entrypoint.sh"]
+```
+
+使用 `sh` 执行脚本，不依赖宿主机文件的可执行权限（`+x`），避免 permission denied。
+
 ### API 客户端适配
 
 `apps/api/src/common/redis/redis.module.ts` 中：
@@ -55,27 +63,50 @@ Docker healthcheck 配置为调用 `/api/health`，HTTP 503 会被 Docker 识别
 
 ## 三、runtime-smoke-test.sh 如何执行
 
+### 开发/测试环境
+
 ```bash
-# 前置条件：API 服务已启动，且设置了以下环境变量
-# NODE_ENV=development（非 production）
-# SMOKE_TEST_BYPASS_CAPTCHA=true
-
-# 执行
-bash scripts/runtime-smoke-test.sh http://localhost:3000/api
-
-# 或生产环境
-bash scripts/runtime-smoke-test.sh https://your-domain.com/api
+SMOKE_TEST_BYPASS_CAPTCHA=true bash scripts/runtime-smoke-test.sh http://localhost:3000/api
 ```
+
+### 生产环境（使用 ADMIN_TOKEN）
+
+```bash
+ADMIN_TOKEN="eyJhbGci..." IS_PRODUCTION=true bash scripts/runtime-smoke-test.sh https://你的域名.com/api
+```
+
+### 生产环境（无 ADMIN_TOKEN）
+
+```bash
+IS_PRODUCTION=true bash scripts/runtime-smoke-test.sh https://你的域名.com/api
+```
+
+无 ADMIN_TOKEN 时，管理员登录项会被标记为 SKIP，不影响核心测试通过。
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `ADMIN_TOKEN` | 空 | 外部传入的管理员 JWT token |
+| `IS_PRODUCTION` | `false` | 是否为生产环境 |
+| `SMOKE_TEST_BYPASS_CAPTCHA` | 空 | 是否允许绕过验证码（仅非生产环境生效） |
 
 ### 检查项
 
 1. GET /api/health 返回 HTTP 200
 2. 公开接口返回 `code: 0`
 3. 未登录访问受保护接口返回 `code: 401`（注意：后端统一返回 HTTP 200，错误码在 body 中）
-4. 管理员登录（使用 SMOKE_TEST_BYPASS_CAPTCHA 测试模式）
+4. 管理员登录（生产环境使用 ADMIN_TOKEN，非生产环境可用 SMOKE_TEST_BYPASS_CAPTCHA）
 5. 管理员 token 访问 /admin/auth/info 返回 `code: 0`
 6. 普通用户 token 不能访问 /admin/*
 7. 支付回调返回原始 `{"code":"FAIL",...}` 格式（不被统一包装）
+
+### 测试结果
+
+脚本输出区分三种结果：
+- **PASS**：测试通过
+- **FAIL**：测试失败（核心接口失败会导致 exit 1）
+- **SKIP**：跳过（管理员登录在生产环境无 ADMIN_TOKEN 时跳过，不影响最终结果）
 
 ---
 
@@ -100,6 +131,7 @@ bash scripts/runtime-smoke-test.sh https://your-domain.com/api
 - 生产环境（`NODE_ENV=production`）**永远无法**绕过验证码
 - 即使配置了 `SMOKE_TEST_BYPASS_CAPTCHA=true`，生产环境下也不生效
 - 必须使用特定的 captchaId 和 captchaCode，不能用于任意登录
+- 冒烟测试脚本中 `IS_PRODUCTION=true` 时，不会尝试 SMOKE_TEST_BYPASS_CAPTCHA 绕过
 
 ---
 
@@ -128,10 +160,12 @@ bash scripts/runtime-smoke-test.sh https://your-domain.com/api
 
 ### 证书文件
 
-| 证书 | 路径 | Docker 挂载 |
-|------|------|------------|
-| 商户私钥 | `deploy/certs/apiclient_key.pem` | `/app/certs/apiclient_key.pem` |
-| 微信支付平台证书 | `deploy/certs/wechatpay_platform.pem` | `/app/certs/wechatpay_platform.pem` |
+| 证书 | 宿主机路径 | 容器内路径 | Docker 挂载方式 |
+|------|------|------|------|
+| 商户私钥 | `deploy/certs/apiclient_key.pem` | `/app/certs/apiclient_key.pem` | bind mount `./certs:/app/certs:ro` |
+| 微信支付平台证书 | `deploy/certs/wechatpay_platform.pem` | `/app/certs/wechatpay_platform.pem` | bind mount `./certs:/app/certs:ro` |
+
+> **重要**：使用 bind mount（`./certs:/app/certs:ro`）而非命名卷，确保障书文件从宿主机 `deploy/certs/` 目录直接映射到容器内。
 
 ### 环境变量
 
@@ -150,10 +184,33 @@ bash scripts/runtime-smoke-test.sh https://your-domain.com/api
 | `REDIS_PASSWORD` | Redis 密码 | 强密码 |
 | `DB_PASSWORD` | MySQL 密码 | 强密码 |
 | `JWT_SECRET` | JWT 签名密钥 | 随机长字符串 |
+| `ADMIN_DEFAULT_USERNAME` | 生产管理员用户名（必填） | `admin` |
+| `ADMIN_DEFAULT_PASSWORD` | 生产管理员密码（必填，≥12位含大小写+数字+特殊字符） | `Xiyun@2026!Prod` |
 
 ---
 
-## 七、仍需真实服务器验证的项目
+## 七、管理员密码安全
+
+### 生产环境密码要求
+
+- `ADMIN_DEFAULT_USERNAME` 必填
+- `ADMIN_DEFAULT_PASSWORD` 必填
+- 密码长度不少于 12 位
+- 必须包含大写字母、小写字母、数字和特殊字符
+- 不允许弱密码：`admin123`、`password`、`123456`、`change_this_password`
+- seed 输出不会打印真实密码
+
+### 首次登录强制改密
+
+- 生产环境 seed 创建的管理员 `mustChangePassword=true`
+- 管理员登录返回 `mustChangePassword` 字段
+- 修改密码成功后 `mustChangePassword=false`
+- 非生产环境默认不强制改密
+- 前端拦截（mustChangePassword=true 时只允许进入修改密码页）待验收
+
+---
+
+## 八、仍需真实服务器验证的项目
 
 | 项目 | 原因 |
 |------|------|
@@ -165,3 +222,4 @@ bash scripts/runtime-smoke-test.sh https://your-domain.com/api
 | 微信支付真实回调 | 需要微信支付平台证书和域名 |
 | 定时任务执行 | 需要长时间运行的服务 |
 | SSL 证书 | 需要域名和证书 |
+| 前端 mustChangePassword 拦截 | 后端已完成，前端拦截待验收 |

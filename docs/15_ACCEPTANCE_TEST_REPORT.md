@@ -214,3 +214,38 @@
 **✅ 可准备上线**
 
 所有核心项已通过验收。代码审查发现 21 个 Bug 已全部修复，四个模块构建全部成功。剩余运行时验证项需在部署服务器（有 MySQL + Redis + Docker 环境）上执行。
+
+---
+
+## 十、服务器部署前最终修复记录
+
+| # | 修复项 | 修复内容 | 状态 |
+|---|--------|---------|------|
+| 1 | 支付证书 bind mount | `wechat_certs` 命名卷改为 `./certs:/app/certs:ro` bind mount | ✅ |
+| 2 | 删除 wechat_certs 命名卷 | docker-compose.yml volumes 中移除 | ✅ |
+| 3 | deploy/certs/.gitkeep | 新增空文件保持目录结构 | ✅ |
+| 4 | deploy/certs/README.md | 证书放置说明 | ✅ |
+| 5 | .gitignore 忽略证书 | 添加 `deploy/certs/*.pem` | ✅ |
+| 6 | Redis entrypoint 权限 | 改为 `["sh", "/usr/local/bin/redis-entrypoint.sh"]` | ✅ |
+| 7 | 生产冒烟测试 ADMIN_TOKEN | 支持 ADMIN_TOKEN 环境变量 | ✅ |
+| 8 | 生产冒烟测试 IS_PRODUCTION | IS_PRODUCTION=true 时不尝试验证码绕过 | ✅ |
+| 9 | SKIP 结果分类 | 区分 PASS/FAIL/SKIP，SKIP 不导致 exit 1 | ✅ |
+| 10 | seed.ts 管理员密码 | 读取 ADMIN_DEFAULT_USERNAME/PASSWORD 环境变量 | ✅ |
+| 11 | 生产密码强校验 | ≥12位 + 大小写 + 数字 + 特殊字符 + 禁止弱密码 | ✅ |
+| 12 | seed 不打印密码 | 输出"密码已隐藏" | ✅ |
+| 13 | mustChangePassword 字段 | AdminUser 表新增字段 + migration | ✅ |
+| 14 | 登录返回 mustChangePassword | adminLogin + getAdminInfo 返回 | ✅ |
+| 15 | 修改密码清除标记 | changePassword 成功后 mustChangePassword=false | ✅ |
+| 16 | Docker @baby-mall/shared | Dockerfile.api 添加 COPY packages/shared | ✅ |
+| 17 | .env.example 安全示例 | ADMIN_DEFAULT_PASSWORD=Xiyun@2026!Prod | ✅ |
+| 18 | docs/18_SERVER_DEPLOYMENT_RUNBOOK.md | 新增服务器部署 Runbook | ✅ |
+| 19 | docs/11_DEPLOYMENT_GUIDE.md | 更新证书挂载 + 管理员密码 + 冒烟测试 | ✅ |
+| 20 | docs/17_RUNTIME_DEPLOYMENT_VALIDATION.md | 更新 ADMIN_TOKEN + 生产冒烟测试 + 密码安全 | ✅ |
+
+### 待验收项
+
+| 项目 | 说明 |
+|------|------|
+| 前端 mustChangePassword 拦截 | 后端已完成，前端拦截待验收 |
+| Docker build + runtime | 需在服务器上执行 |
+| 微信支付真实回调 | 需要平台证书和域名 |

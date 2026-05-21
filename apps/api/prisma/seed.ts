@@ -261,7 +261,7 @@ async function main() {
     },
   });
 
-  console.log(`创建超级管理员账号 ${adminUsername}/${nodeEnv === 'production' ? '***' : adminPassword}`);
+  console.log(`创建超级管理员账号 ${adminUsername} (密码已隐藏)`);
 
   const configs = [
     { groupName: 'basic', configKey: 'shop_name', configValue: '禧孕母婴商城', valueType: 'string', description: '商城名称' },

@@ -2077,6 +2077,8 @@ vim .env
 # - WECHAT_API_V3_KEY（微信支付 APIv3 密钥）
 # - WECHAT_PRIVATE_KEY_PATH（微信支付私钥路径，容器内默认 /app/certs/apiclient_key.pem）
 # - WECHAT_NOTIFY_URL（微信支付回调地址）
+# - ADMIN_DEFAULT_USERNAME（生产环境管理员用户名，必填）
+# - ADMIN_DEFAULT_PASSWORD（生产环境管理员密码，必填，至少12位含大小写字母+数字+特殊字符）
 
 # 4. 设置 .env 文件权限
 chmod 600 .env
@@ -2149,7 +2151,7 @@ mkdir -p /opt/baby-mall/certs
 cp apiclient_key.pem /opt/baby-mall/certs/
 chmod 600 /opt/baby-mall/certs/*
 
-# docker-compose.yml 中已配置 wechat_certs volume
+# docker-compose.yml 中已配置 bind mount
 # 容器内路径：/app/certs/apiclient_key.pem
 # 环境变量：WECHAT_PRIVATE_KEY_PATH=/app/certs/apiclient_key.pem
 ```
@@ -2190,12 +2192,14 @@ docker-compose up -d --build
 | 商户私钥 | `deploy/certs/apiclient_key.pem` | `/app/certs/apiclient_key.pem` | 请求签名 |
 | 平台证书 | `deploy/certs/wechatpay_platform.pem` | `/app/certs/wechatpay_platform.pem` | 验证回调签名 |
 
-Docker 部署时，两个证书文件通过 `wechat_certs` volume 挂载到容器内 `/app/certs/` 目录：
+Docker 部署时，两个证书文件通过 bind mount 挂载到容器内 `/app/certs/` 目录：
 
 ```yaml
 volumes:
-  - wechat_certs:/app/certs:ro
+  - ./certs:/app/certs:ro
 ```
+
+> **重要**：使用 bind mount（`./certs`）而非命名卷（`wechat_certs`），确保障书文件从宿主机 `deploy/certs/` 目录直接映射到容器内。
 
 ### 23.2 证书部署步骤
 
@@ -2419,6 +2423,66 @@ bash scripts/runtime-smoke-test.sh http://localhost:3000/api
 - **存在失败**：退出码为 1，需根据 `❌` 标记逐项排查
 
 > **注意**：冒烟测试中的管理员登录使用默认账号密码，生产环境部署后请及时修改管理员密码。
+
+---
+
+## 27. 管理员密码安全
+
+### 27.1 生产环境密码要求
+
+生产环境（`NODE_ENV=production`）首次部署时，**必须**通过环境变量配置强管理员密码：
+
+```env
+ADMIN_DEFAULT_USERNAME=admin
+ADMIN_DEFAULT_PASSWORD=<强密码>
+```
+
+**密码规则**：
+- 长度不少于 12 位
+- 必须包含大写字母、小写字母、数字和特殊字符
+- 不允许使用弱密码：`admin123`、`password`、`123456`、`change_this_password`
+
+**示例强密码**：`Xiyun@2026!Prod`
+
+### 27.2 首次登录强制改密
+
+生产环境 seed 创建的管理员账号，`mustChangePassword` 字段默认为 `true`。
+
+- 管理员登录后，返回数据中包含 `mustChangePassword: true`
+- 管理后台应检测此字段，强制跳转到修改密码页面
+- 修改密码成功后，`mustChangePassword` 自动变为 `false`
+- 非生产环境默认不强制改密
+
+### 27.3 非生产环境
+
+非生产环境如果未配置 `ADMIN_DEFAULT_USERNAME` 和 `ADMIN_DEFAULT_PASSWORD`，允许使用默认值 `admin/admin123`，但仅限开发测试。
+
+---
+
+## 28. 生产冒烟测试
+
+### 28.1 使用 ADMIN_TOKEN
+
+生产环境无法绕过验证码，需要通过外部传入 `ADMIN_TOKEN`：
+
+```bash
+ADMIN_TOKEN="eyJhbGci..." IS_PRODUCTION=true bash scripts/runtime-smoke-test.sh https://你的域名.com/api
+```
+
+### 28.2 无 ADMIN_TOKEN
+
+如果没有 `ADMIN_TOKEN`，管理员登录项会被标记为 SKIP，不影响核心公开接口和鉴权拦截的测试：
+
+```bash
+IS_PRODUCTION=true bash scripts/runtime-smoke-test.sh https://你的域名.com/api
+```
+
+### 28.3 测试结果
+
+脚本输出区分三种结果：
+- **PASS**：测试通过
+- **FAIL**：测试失败（核心接口失败会导致 exit 1）
+- **SKIP**：跳过（管理员登录在生产环境无 ADMIN_TOKEN 时跳过，不影响最终结果）
 
 ---
 
