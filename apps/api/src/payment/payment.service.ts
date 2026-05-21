@@ -10,6 +10,7 @@ import axios from 'axios';
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
   private privateKey: string;
+  private wechatpayCertificate: string;
 
   constructor(
     private prisma: PrismaService,
@@ -26,11 +27,24 @@ export class PaymentService {
     } else {
       this.privateKey = '';
     }
+
+    const certPath = this.configService.get<string>('WECHAT_PLATFORM_CERT_PATH', '');
+    if (certPath) {
+      try {
+        this.wechatpayCertificate = fs.readFileSync(certPath, 'utf8');
+      } catch {
+        this.logger.warn(`微信平台证书文件读取失败: ${certPath}，回调验签将不可用`);
+        this.wechatpayCertificate = '';
+      }
+    } else {
+      this.wechatpayCertificate = '';
+    }
   }
 
   async createPayment(orderId: string, userId: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: BigInt(orderId), userId: BigInt(userId) },
+      include: { user: { select: { id: true, openid: true } } },
     });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status !== OrderStatus.pending_payment) {
@@ -110,6 +124,11 @@ export class PaymentService {
     }
 
     const message = `${timestamp}\n${nonce}\n${JSON.stringify(body)}\n`;
+
+    if (!this.verifyWechatSignature(message, signature)) {
+      this.logger.warn('微信回调签名验证失败');
+      return { code: 'FAIL', message: '签名验证失败' };
+    }
 
     const resource = body.resource;
     if (!resource) {
@@ -252,7 +271,7 @@ export class PaymentService {
         currency: 'CNY',
       },
       payer: {
-        openid: order.userId?.toString(),
+        openid: order.user?.openid || '',
       },
     };
 
@@ -304,6 +323,22 @@ export class PaymentService {
       const err = error as Error;
       this.logger.error(`微信查询订单失败: ${err.message}`);
       throw error;
+    }
+  }
+
+  private verifyWechatSignature(message: string, signature: string): boolean {
+    if (!this.wechatpayCertificate) {
+      this.logger.warn('微信平台证书未配置，跳过签名验证');
+      return true;
+    }
+    try {
+      const verify = crypto.createVerify('SHA256');
+      verify.update(message);
+      verify.end();
+      return verify.verify(this.wechatpayCertificate, signature, 'base64');
+    } catch (e) {
+      this.logger.error(`微信回调签名验证异常: ${(e as Error).message}`);
+      return false;
     }
   }
 

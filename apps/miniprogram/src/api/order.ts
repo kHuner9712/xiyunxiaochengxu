@@ -11,7 +11,7 @@ export function createOrder(data: {
 }
 
 export function getOrderList(params: {
-  status?: number
+  status?: string
   page: number
   pageSize: number
 }) {
@@ -43,7 +43,7 @@ export interface OrderItemInput {
 export interface OrderItem {
   id: number
   orderNo: string
-  status: number
+  status: string
   totalAmount: number
   payAmount: number
   items: OrderProductItem[]
@@ -63,7 +63,7 @@ export interface OrderProductItem {
 export interface OrderDetail {
   id: number
   orderNo: string
-  status: number
+  status: string
   totalAmount: number
   payAmount: number
   freightAmount: number

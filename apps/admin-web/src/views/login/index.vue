@@ -53,7 +53,7 @@ const userStore = useUserStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const captchaUrl = ref('')
-const captchaKey = ref('')
+const captchaId = ref('')
 
 const form = reactive({
   username: '',
@@ -70,8 +70,8 @@ const rules: FormRules = {
 async function refreshCaptcha() {
   try {
     const res = await authApi.getCaptcha()
-    captchaUrl.value = res.data.image
-    captchaKey.value = res.data.key
+    captchaUrl.value = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(res.data.captchaSvg)}`
+    captchaId.value = res.data.captchaId
   } catch {
     captchaUrl.value = ''
   }
@@ -83,7 +83,7 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    await userStore.login(form.username, form.password, form.captchaCode, captchaKey.value)
+    await userStore.login(form.username, form.password, form.captchaCode, captchaId.value)
     ElMessage.success('登录成功')
     const redirect = (route.query.redirect as string) || '/dashboard'
     router.push(redirect)

@@ -89,8 +89,8 @@
         <el-card>
           <template #header><span>订单操作</span></template>
           <div style="display: flex; flex-direction: column; gap: 10px">
-            <el-button v-if="order.status === 1" v-permission="'order:delivery'" type="primary" @click="showDeliverDialog">发货</el-button>
-            <el-button v-if="order.status === 0" v-permission="'order:detail'" type="danger" @click="handleCancelOrder">取消订单</el-button>
+            <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:delivery'" type="primary" @click="showDeliverDialog">发货</el-button>
+            <el-button v-if="order.status === 'pending_payment'" v-permission="'order:detail'" type="danger" @click="handleCancelOrder">取消订单</el-button>
           </div>
         </el-card>
       </el-col>

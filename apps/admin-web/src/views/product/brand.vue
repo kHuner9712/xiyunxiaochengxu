@@ -3,7 +3,7 @@
     <div class="search-bar">
       <el-form :model="searchForm" inline>
         <el-form-item label="品牌名称">
-          <el-input v-model="searchForm.name" placeholder="请输入品牌名称" clearable />
+          <el-input v-model="searchForm.keyword" placeholder="请输入品牌名称" clearable />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
@@ -87,7 +87,7 @@ const dialogVisible = ref(false)
 const tableData = ref<any[]>([])
 const formRef = ref<FormInstance>()
 
-const searchForm = reactive({ name: '' })
+const searchForm = reactive({ keyword: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
@@ -121,7 +121,7 @@ function handleSearch() {
 }
 
 function resetSearch() {
-  searchForm.name = ''
+  searchForm.keyword = ''
   handleSearch()
 }
 

@@ -165,7 +165,7 @@ async function handleSubmit() {
       remark: remark.value
     }
     const order = await createOrder(orderData)
-    const payment = await createPayment({ orderId: order.orderId, payMethod: 'wxpay' })
+    const payment = await createPayment({ orderId: String(order.orderId) })
     try {
       await wxPay(payment.payParams)
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}&success=true` })

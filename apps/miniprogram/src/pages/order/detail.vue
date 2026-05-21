@@ -75,10 +75,10 @@
     </view>
 
     <view class="bottom-bar" v-if="order.status">
-      <view v-if="order.status === 10" class="action-btn cancel" @tap="handleCancel">取消订单</view>
-      <view v-if="order.status === 10" class="action-btn primary" @tap="handlePay">去支付</view>
-      <view v-if="order.status === 30" class="action-btn primary" @tap="handleConfirm">确认收货</view>
-      <view v-if="order.status === 40" class="action-btn" @tap="goAftersale">申请售后</view>
+      <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap="handleCancel">取消订单</view>
+      <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap="handlePay">去支付</view>
+      <view v-if="order.status === 'delivered'" class="action-btn primary" @tap="handleConfirm">确认收货</view>
+      <view v-if="order.status === 'completed'" class="action-btn" @tap="goAftersale">申请售后</view>
     </view>
   </view>
 </template>
@@ -92,7 +92,7 @@ import { formatOrderStatus, formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
 const order = ref<OrderDetail>({
-  id: 0, orderNo: '', status: 0, totalAmount: 0, payAmount: 0,
+  id: 0, orderNo: '', status: '' as any, totalAmount: 0, payAmount: 0,
   freightAmount: 0, couponAmount: 0, pointsAmount: 0,
   addressId: 0, addressName: '', addressPhone: '', addressDetail: '',
   items: [], createTime: ''
@@ -106,14 +106,15 @@ async function loadOrder(id: number) {
   } catch {}
 }
 
-function getStatusClass(status: number): string {
-  const map: Record<number, string> = {
-    10: 'status-unpaid',
-    20: 'status-shipping',
-    30: 'status-receiving',
-    40: 'status-done',
-    50: 'status-cancelled',
-    60: 'status-aftersale'
+function getStatusClass(status: string): string {
+  const map: Record<string, string> = {
+    pending_payment: 'status-unpaid',
+    paid: 'status-shipping',
+    pending_delivery: 'status-shipping',
+    delivered: 'status-receiving',
+    completed: 'status-done',
+    cancelled: 'status-cancelled',
+    aftersale: 'status-aftersale'
   }
   return map[status] || ''
 }
@@ -133,7 +134,7 @@ async function handleCancel() {
 
 async function handlePay() {
   try {
-    const payment = await createPayment({ orderId: order.value.id, payMethod: 'wxpay' })
+    const payment = await createPayment({ orderId: String(order.value.id) })
     try {
       await wxPay(payment.payParams)
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}&success=true` })

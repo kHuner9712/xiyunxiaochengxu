@@ -33,10 +33,10 @@
           <text class="order-total">共{{ order.items.length }}件商品 合计：<text class="total-price">¥{{ formatPrice(order.payAmount) }}</text></text>
         </view>
         <view class="order-actions">
-          <view v-if="order.status === 10" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
-          <view v-if="order.status === 10" class="action-btn primary" @tap.stop="handlePay(order)">去支付</view>
-          <view v-if="order.status === 30" class="action-btn primary" @tap.stop="handleConfirm(order.id)">确认收货</view>
-          <view v-if="order.status === 40" class="action-btn" @tap.stop="goAftersale(order.id)">申请售后</view>
+          <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
+          <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap.stop="handlePay(order)">去支付</view>
+          <view v-if="order.status === 'delivered'" class="action-btn primary" @tap.stop="handleConfirm(order.id)">确认收货</view>
+          <view v-if="order.status === 'completed'" class="action-btn" @tap.stop="goAftersale(order.id)">申请售后</view>
         </view>
       </view>
     </view>
@@ -57,15 +57,15 @@ import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
 const tabs = [
-  { label: '全部', value: 0 },
-  { label: '待付款', value: 10 },
-  { label: '待发货', value: 20 },
-  { label: '待收货', value: 30 },
-  { label: '已完成', value: 40 },
-  { label: '售后', value: 60 }
+  { label: '全部', value: '' },
+  { label: '待付款', value: 'pending_payment' },
+  { label: '待发货', value: 'pending_delivery' },
+  { label: '待收货', value: 'delivered' },
+  { label: '已完成', value: 'completed' },
+  { label: '售后', value: 'aftersale' },
 ]
 
-const currentTab = ref(0)
+const currentTab = ref('')
 const orders = ref<OrderItem[]>([])
 const loading = ref(false)
 const page = ref(1)
@@ -92,7 +92,7 @@ async function loadOrders(reset = false) {
   }
 }
 
-function switchTab(value: number) {
+function switchTab(value: string) {
   currentTab.value = value
   loadOrders(true)
 }
@@ -132,7 +132,7 @@ async function handleCancel(id: number) {
 
 async function handlePay(order: OrderItem) {
   try {
-    const payment = await createPayment({ orderId: order.id, payMethod: 'wxpay' })
+    const payment = await createPayment({ orderId: String(order.id) })
     try {
       await wxPay(payment.payParams)
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.id}&success=true` })

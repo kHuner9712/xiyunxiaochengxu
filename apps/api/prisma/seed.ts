@@ -113,53 +113,73 @@ async function main() {
 
   console.log('创建 4 个角色');
 
-  const permissions = [
+  const parentPermissions = [
     { name: '首页', code: 'dashboard', type: 1, parentId: 0n, sortOrder: 1 },
     { name: '商品管理', code: 'product', type: 1, parentId: 0n, sortOrder: 2 },
-    { name: '商品列表', code: 'product:list', type: 1, parentId: 0n, sortOrder: 1 },
-    { name: '新增商品', code: 'product:create', type: 2, parentId: 0n, sortOrder: 2 },
-    { name: '编辑商品', code: 'product:update', type: 2, parentId: 0n, sortOrder: 3 },
-    { name: '删除商品', code: 'product:delete', type: 2, parentId: 0n, sortOrder: 4 },
-    { name: '上架/下架', code: 'product:publish', type: 2, parentId: 0n, sortOrder: 5 },
-    { name: '分类管理', code: 'product:category', type: 1, parentId: 0n, sortOrder: 6 },
-    { name: '品牌管理', code: 'product:brand', type: 1, parentId: 0n, sortOrder: 7 },
-    { name: '供应商管理', code: 'product:supplier', type: 1, parentId: 0n, sortOrder: 8 },
     { name: '订单管理', code: 'order', type: 1, parentId: 0n, sortOrder: 3 },
-    { name: '订单列表', code: 'order:list', type: 1, parentId: 0n, sortOrder: 1 },
-    { name: '订单详情', code: 'order:detail', type: 2, parentId: 0n, sortOrder: 2 },
-    { name: '订单发货', code: 'order:deliver', type: 2, parentId: 0n, sortOrder: 3 },
-    { name: '订单备注', code: 'order:remark', type: 2, parentId: 0n, sortOrder: 4 },
-    { name: '取消订单', code: 'order:cancel', type: 2, parentId: 0n, sortOrder: 5 },
-    { name: '售后管理', code: 'order:aftersale', type: 1, parentId: 0n, sortOrder: 6 },
-    { name: '审核售后', code: 'order:aftersale:review', type: 2, parentId: 0n, sortOrder: 7 },
-    { name: '退款', code: 'order:aftersale:refund', type: 2, parentId: 0n, sortOrder: 8 },
     { name: '用户管理', code: 'user', type: 1, parentId: 0n, sortOrder: 4 },
-    { name: '用户列表', code: 'user:list', type: 1, parentId: 0n, sortOrder: 1 },
-    { name: '用户详情', code: 'user:detail', type: 2, parentId: 0n, sortOrder: 2 },
-    { name: '会员管理', code: 'user:member', type: 2, parentId: 0n, sortOrder: 3 },
-    { name: '积分管理', code: 'user:points', type: 2, parentId: 0n, sortOrder: 4 },
     { name: '营销管理', code: 'marketing', type: 1, parentId: 0n, sortOrder: 5 },
-    { name: '优惠券管理', code: 'marketing:coupon', type: 1, parentId: 0n, sortOrder: 1 },
-    { name: '活动管理', code: 'marketing:activity', type: 1, parentId: 0n, sortOrder: 2 },
-    { name: 'Banner 管理', code: 'marketing:banner', type: 1, parentId: 0n, sortOrder: 3 },
-    { name: '首页配置', code: 'marketing:home', type: 1, parentId: 0n, sortOrder: 4 },
     { name: '内容管理', code: 'content', type: 1, parentId: 0n, sortOrder: 6 },
-    { name: '内容列表', code: 'content:list', type: 1, parentId: 0n, sortOrder: 1 },
-    { name: '内容分类', code: 'content:category', type: 1, parentId: 0n, sortOrder: 2 },
     { name: '系统设置', code: 'system', type: 1, parentId: 0n, sortOrder: 7 },
-    { name: '系统配置', code: 'system:config', type: 1, parentId: 0n, sortOrder: 1 },
-    { name: '管理员管理', code: 'system:admin', type: 1, parentId: 0n, sortOrder: 2 },
-    { name: '角色权限', code: 'system:role', type: 1, parentId: 0n, sortOrder: 3 },
-    { name: '文件管理', code: 'system:file', type: 1, parentId: 0n, sortOrder: 4 },
-    { name: '操作日志', code: 'system:log', type: 1, parentId: 0n, sortOrder: 5 },
   ];
 
-  const createdPermissions = [];
-  for (const perm of permissions) {
+  const parentMap: Record<string, any> = {};
+  for (const perm of parentPermissions) {
     const p = await prisma.adminPermission.upsert({
       where: { code: perm.code },
       update: {},
       create: perm,
+    });
+    parentMap[perm.code] = p;
+  }
+
+  const childPermissions = [
+    { name: '商品列表', code: 'product:list', type: 1, parentCode: 'product', sortOrder: 1 },
+    { name: '新增商品', code: 'product:create', type: 2, parentCode: 'product', sortOrder: 2 },
+    { name: '编辑商品', code: 'product:update', type: 2, parentCode: 'product', sortOrder: 3 },
+    { name: '删除商品', code: 'product:delete', type: 2, parentCode: 'product', sortOrder: 4 },
+    { name: '上架/下架', code: 'product:publish', type: 2, parentCode: 'product', sortOrder: 5 },
+    { name: '分类管理', code: 'product:category', type: 1, parentCode: 'product', sortOrder: 6 },
+    { name: '品牌管理', code: 'product:brand', type: 1, parentCode: 'product', sortOrder: 7 },
+    { name: '供应商管理', code: 'product:supplier', type: 1, parentCode: 'product', sortOrder: 8 },
+    { name: '订单列表', code: 'order:list', type: 1, parentCode: 'order', sortOrder: 1 },
+    { name: '订单详情', code: 'order:detail', type: 2, parentCode: 'order', sortOrder: 2 },
+    { name: '订单发货', code: 'order:deliver', type: 2, parentCode: 'order', sortOrder: 3 },
+    { name: '订单备注', code: 'order:remark', type: 2, parentCode: 'order', sortOrder: 4 },
+    { name: '取消订单', code: 'order:cancel', type: 2, parentCode: 'order', sortOrder: 5 },
+    { name: '售后管理', code: 'order:aftersale', type: 1, parentCode: 'order', sortOrder: 6 },
+    { name: '审核售后', code: 'order:aftersale:review', type: 2, parentCode: 'order', sortOrder: 7 },
+    { name: '退款', code: 'order:aftersale:refund', type: 2, parentCode: 'order', sortOrder: 8 },
+    { name: '用户列表', code: 'user:list', type: 1, parentCode: 'user', sortOrder: 1 },
+    { name: '用户详情', code: 'user:detail', type: 2, parentCode: 'user', sortOrder: 2 },
+    { name: '会员管理', code: 'user:member', type: 2, parentCode: 'user', sortOrder: 3 },
+    { name: '积分管理', code: 'user:points', type: 2, parentCode: 'user', sortOrder: 4 },
+    { name: '优惠券管理', code: 'marketing:coupon', type: 1, parentCode: 'marketing', sortOrder: 1 },
+    { name: '活动管理', code: 'marketing:activity', type: 1, parentCode: 'marketing', sortOrder: 2 },
+    { name: 'Banner 管理', code: 'marketing:banner', type: 1, parentCode: 'marketing', sortOrder: 3 },
+    { name: '首页配置', code: 'marketing:home', type: 1, parentCode: 'marketing', sortOrder: 4 },
+    { name: '内容列表', code: 'content:list', type: 1, parentCode: 'content', sortOrder: 1 },
+    { name: '内容分类', code: 'content:category', type: 1, parentCode: 'content', sortOrder: 2 },
+    { name: '系统配置', code: 'system:config', type: 1, parentCode: 'system', sortOrder: 1 },
+    { name: '管理员管理', code: 'system:admin', type: 1, parentCode: 'system', sortOrder: 2 },
+    { name: '角色权限', code: 'system:role', type: 1, parentCode: 'system', sortOrder: 3 },
+    { name: '文件管理', code: 'system:file', type: 1, parentCode: 'system', sortOrder: 4 },
+    { name: '操作日志', code: 'system:log', type: 1, parentCode: 'system', sortOrder: 5 },
+  ];
+
+  const createdPermissions = [...Object.values(parentMap)];
+  for (const perm of childPermissions) {
+    const parent = parentMap[perm.parentCode];
+    const p = await prisma.adminPermission.upsert({
+      where: { code: perm.code },
+      update: {},
+      create: {
+        name: perm.name,
+        code: perm.code,
+        type: perm.type,
+        parentId: parent.id,
+        sortOrder: perm.sortOrder,
+      },
     });
     createdPermissions.push(p);
   }

@@ -14,9 +14,7 @@ export class ScheduleService {
 
   private async acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
     const value = `${process.pid}-${Date.now()}`;
-    const result = await this.redisService.set(key, value, ttlSeconds);
-    const stored = await this.redisService.get(key);
-    return stored === value;
+    return this.redisService.setNX(key, value, ttlSeconds);
   }
 
   private async releaseLock(key: string): Promise<void> {

@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 export const brandApi = {
-  getList(params: { page: number; pageSize: number; name?: string }) {
+  getList(params: { page: number; pageSize: number; keyword?: string }) {
     return request.get('/admin/brand/list', { params })
   },
   getDetail(id: number) {

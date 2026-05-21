@@ -134,10 +134,20 @@ export class CouponService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.coupon.update({
-        where: { id: BigInt(couponId) },
-        data: { receivedCount: { increment: 1 } },
-      });
+      if (coupon.totalCount > 0) {
+        const updated = await tx.coupon.updateMany({
+          where: { id: BigInt(couponId), receivedCount: { lt: coupon.totalCount } },
+          data: { receivedCount: { increment: 1 } },
+        });
+        if (updated.count === 0) {
+          throw new BadRequestException('优惠券已领完');
+        }
+      } else {
+        await tx.coupon.update({
+          where: { id: BigInt(couponId) },
+          data: { receivedCount: { increment: 1 } },
+        });
+      }
 
       return tx.userCoupon.create({
         data: {

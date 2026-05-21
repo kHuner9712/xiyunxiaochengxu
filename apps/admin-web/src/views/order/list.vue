@@ -7,7 +7,7 @@
         </el-form-item>
         <el-form-item label="订单状态">
           <el-select v-model="searchForm.status" placeholder="请选择" clearable>
-            <el-option v-for="(label, key) in ORDER_STATUS_MAP" :key="key" :label="label" :value="Number(key)" />
+            <el-option v-for="(label, key) in ORDER_STATUS_MAP" :key="key" :label="label" :value="key" />
           </el-select>
         </el-form-item>
         <el-form-item label="下单时间">
@@ -45,7 +45,7 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="handleDetail(row)">查看</el-button>
-            <el-button v-permission="'order:detail'" v-if="row.status === 0" type="danger" link @click="handleCancel(row)">取消</el-button>
+            <el-button v-permission="'order:detail'" v-if="row.status === 'pending_payment'" type="danger" link @click="handleCancel(row)">取消</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -79,7 +79,7 @@ const dateRange = ref<string[]>([])
 
 const searchForm = reactive({
   orderNo: '',
-  status: undefined as number | undefined,
+  status: undefined as string | undefined,
 })
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })

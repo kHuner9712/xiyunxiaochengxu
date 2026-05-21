@@ -30,14 +30,15 @@ export function formatDate(timestamp: number | string, format = 'YYYY-MM-DD HH:m
     .replace('ss', seconds)
 }
 
-export function formatOrderStatus(status: number): string {
-  const statusMap: Record<number, string> = {
-    10: '待付款',
-    20: '待发货',
-    30: '待收货',
-    40: '已完成',
-    50: '已取消',
-    60: '售后中'
+export function formatOrderStatus(status: string): string {
+  const statusMap: Record<string, string> = {
+    pending_payment: '待付款',
+    paid: '已付款',
+    pending_delivery: '待发货',
+    delivered: '待收货',
+    completed: '已完成',
+    cancelled: '已取消',
+    aftersale: '售后中'
   }
   return statusMap[status] || '未知状态'
 }

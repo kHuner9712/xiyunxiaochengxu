@@ -879,24 +879,54 @@ export class OrderService {
         status: OrderStatus.delivered,
         autoCompleteAt: { lte: new Date() },
       },
+      include: { orderItems: true },
     });
 
     let completedCount = 0;
     for (const order of orders) {
       try {
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: {
-            status: OrderStatus.completed,
-            completedAt: new Date(),
-            orderLogs: {
-              create: {
-                operatorType: 'system',
-                action: 'auto_complete',
-                content: '超时未确认收货，系统自动完成',
+        await this.prisma.$transaction(async (tx) => {
+          const earnedPoints = Math.floor(order.payAmount! / 100);
+
+          if (earnedPoints > 0) {
+            const user = await tx.user.findFirst({ where: { id: order.userId } });
+            if (user) {
+              await tx.user.update({
+                where: { id: order.userId },
+                data: {
+                  availablePoints: { increment: earnedPoints },
+                  totalPoints: { increment: earnedPoints },
+                  growthValue: { increment: Math.floor(order.payAmount! / 100) },
+                },
+              });
+              await tx.pointsRecord.create({
+                data: {
+                  userId: order.userId,
+                  type: 1,
+                  points: earnedPoints,
+                  balance: user.availablePoints + earnedPoints,
+                  source: 'order_auto_complete',
+                  sourceId: order.id,
+                  description: `自动完成订单奖励${earnedPoints}积分`,
+                },
+              });
+            }
+          }
+
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              status: OrderStatus.completed,
+              completedAt: new Date(),
+              orderLogs: {
+                create: {
+                  operatorType: 'system',
+                  action: 'auto_complete',
+                  content: '超时未确认收货，系统自动完成' + (earnedPoints > 0 ? `，发放积分${earnedPoints}` : ''),
+                },
               },
             },
-          },
+          });
         });
         completedCount++;
       } catch (error) {

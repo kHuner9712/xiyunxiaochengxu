@@ -40,6 +40,7 @@ COPY --from=builder /app/apps/api/node_modules ./node_modules
 COPY --from=builder /app/apps/api/prisma ./prisma
 COPY --from=builder /app/node_modules/.pnpm ./node_modules/.pnpm
 COPY --from=builder /app/apps/api/package.json ./
+COPY --from=admin-builder /app/apps/admin-web/dist /usr/share/nginx/admin
 COPY deploy/scripts/entrypoint.sh ./entrypoint.sh
 
 RUN mkdir -p uploads logs certs && chmod +x ./entrypoint.sh

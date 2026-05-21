@@ -112,8 +112,9 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await roleApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    const list = Array.isArray(res.data) ? res.data : (res.data.list || [])
+    tableData.value = list
+    pagination.total = Array.isArray(res.data) ? list.length : (res.data.total || 0)
   } catch {} finally {
     loading.value = false
   }

@@ -27,42 +27,44 @@ export function formatDateShort(value: string | number | Date | null | undefined
   return formatDate(value, 'YYYY-MM-DD')
 }
 
-export const ORDER_STATUS_MAP: Record<number, string> = {
-  0: '待付款',
-  1: '待发货',
-  2: '已发货',
-  3: '已完成',
-  4: '已取消',
-  5: '已关闭',
+export const ORDER_STATUS_MAP: Record<string, string> = {
+  pending_payment: '待付款',
+  paid: '已付款',
+  pending_delivery: '待发货',
+  delivered: '已发货',
+  completed: '已完成',
+  cancelled: '已取消',
+  aftersale: '售后中',
 }
 
-export const ORDER_STATUS_TAG_TYPE: Record<number, string> = {
-  0: 'warning',
-  1: 'primary',
-  2: '',
-  3: 'success',
-  4: 'info',
-  5: 'danger',
+export const ORDER_STATUS_TAG_TYPE: Record<string, string> = {
+  pending_payment: 'warning',
+  paid: 'primary',
+  pending_delivery: 'primary',
+  delivered: '',
+  completed: 'success',
+  cancelled: 'info',
+  aftersale: 'danger',
 }
 
-export function formatOrderStatus(status: number): string {
+export function formatOrderStatus(status: string): string {
   return ORDER_STATUS_MAP[status] || '未知'
 }
 
-export function getOrderStatusTagType(status: number): string {
+export function getOrderStatusTagType(status: string): string {
   return ORDER_STATUS_TAG_TYPE[status] || 'info'
 }
 
-export const AFTERSALE_STATUS_MAP: Record<number, string> = {
-  0: '待审核',
-  1: '审核通过',
-  2: '已拒绝',
-  3: '退款中',
-  4: '已退款',
-  5: '已取消',
+export const AFTERSALE_STATUS_MAP: Record<string, string> = {
+  pending_review: '待审核',
+  approved: '审核通过',
+  rejected: '已拒绝',
+  returned: '已退货',
+  refunded: '已退款',
+  closed: '已关闭',
 }
 
-export function formatAftersaleStatus(status: number): string {
+export function formatAftersaleStatus(status: string): string {
   return AFTERSALE_STATUS_MAP[status] || '未知'
 }
 

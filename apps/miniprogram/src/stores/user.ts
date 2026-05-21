@@ -34,7 +34,7 @@ export const useUserStore = defineStore('user', () => {
 
   async function fetchUserInfo() {
     try {
-      const data = await get<UserInfo>('/user/info')
+      const data = await get<UserInfo>('/weapp/user/info')
       userInfo.value = data
     } catch {
       userInfo.value = null

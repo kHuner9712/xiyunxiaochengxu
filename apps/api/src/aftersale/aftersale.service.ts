@@ -175,9 +175,10 @@ export class AftersaleService {
         },
       });
       if (!otherAftersales) {
+        const restoreStatus = aftersale.order.completedAt ? OrderStatus.completed : OrderStatus.delivered;
         await tx.order.update({
           where: { id: aftersale.orderId },
-          data: { status: OrderStatus.delivered },
+          data: { status: restoreStatus },
         });
       }
 
@@ -297,9 +298,10 @@ export class AftersaleService {
         },
       });
       if (!otherAftersales) {
+        const restoreStatus = aftersale.order.completedAt ? OrderStatus.completed : OrderStatus.delivered;
         await tx.order.update({
           where: { id: aftersale.orderId },
-          data: { status: OrderStatus.delivered },
+          data: { status: restoreStatus },
         });
       }
 
@@ -313,7 +315,7 @@ export class AftersaleService {
   async refund(id: string, adminId: string) {
     const aftersale = await this.prisma.aftersaleOrder.findFirst({
       where: { id: BigInt(id) },
-      include: { order: true },
+      include: { order: true, orderItem: true },
     });
     if (!aftersale) throw new NotFoundException('售后单不存在');
 
@@ -325,6 +327,81 @@ export class AftersaleService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
+      if (aftersale.type === 2 && aftersale.orderItem) {
+        const sku = await tx.productSku.findFirst({ where: { id: aftersale.orderItem.skuId } });
+        if (sku) {
+          await tx.productSku.update({
+            where: { id: aftersale.orderItem.skuId },
+            data: { stock: { increment: aftersale.orderItem.quantity }, sales: { decrement: aftersale.orderItem.quantity } },
+          });
+          await tx.productStockLog.create({
+            data: {
+              productId: aftersale.orderItem.productId,
+              skuId: aftersale.orderItem.skuId,
+              type: 4,
+              quantity: aftersale.orderItem.quantity,
+              beforeStock: sku.stock,
+              afterStock: sku.stock + aftersale.orderItem.quantity,
+              reason: '售后退款归还库存',
+            },
+          });
+        }
+      }
+
+      if (aftersale.refundAmount && aftersale.refundAmount > 0 && aftersale.order.payAmount) {
+        const deductedPoints = Math.floor(aftersale.refundAmount / 100);
+        if (deductedPoints > 0) {
+          const user = await tx.user.findFirst({ where: { id: aftersale.userId } });
+          if (user && user.availablePoints >= deductedPoints) {
+            await tx.user.update({
+              where: { id: aftersale.userId },
+              data: {
+                availablePoints: { decrement: deductedPoints },
+                totalPoints: { decrement: deductedPoints },
+              },
+            });
+            await tx.pointsRecord.create({
+              data: {
+                userId: aftersale.userId,
+                type: 2,
+                points: -deductedPoints,
+                balance: user.availablePoints - deductedPoints,
+                source: 'aftersale_refund',
+                sourceId: aftersale.orderId,
+                description: `售后退款扣回${deductedPoints}积分`,
+              },
+            });
+          }
+        }
+      }
+
+      if (aftersale.order.pointsDeducted > 0 && aftersale.refundAmount && aftersale.order.payAmount) {
+        const restorePoints = Math.floor(aftersale.order.pointsDeducted * aftersale.refundAmount / aftersale.order.payAmount);
+        if (restorePoints > 0) {
+          const user = await tx.user.findFirst({ where: { id: aftersale.userId } });
+          if (user) {
+            await tx.user.update({
+              where: { id: aftersale.userId },
+              data: {
+                availablePoints: { increment: restorePoints },
+                totalPoints: { increment: restorePoints },
+              },
+            });
+            await tx.pointsRecord.create({
+              data: {
+                userId: aftersale.userId,
+                type: 1,
+                points: restorePoints,
+                balance: user.availablePoints + restorePoints,
+                source: 'aftersale_refund_restore',
+                sourceId: aftersale.orderId,
+                description: `售后退款归还抵扣积分${restorePoints}`,
+              },
+            });
+          }
+        }
+      }
+
       const updated = await tx.aftersaleOrder.update({
         where: { id: BigInt(id) },
         data: {
@@ -349,9 +426,10 @@ export class AftersaleService {
         },
       });
       if (!otherAftersales) {
+        const restoreStatus = aftersale.order.completedAt ? OrderStatus.completed : OrderStatus.delivered;
         await tx.order.update({
           where: { id: aftersale.orderId },
-          data: { status: OrderStatus.completed },
+          data: { status: restoreStatus },
         });
       }
 

@@ -9,11 +9,13 @@
         <text class="form-label">手机号</text>
         <input class="form-input" v-model="form.phone" placeholder="请输入手机号" type="number" maxlength="11" />
       </view>
-      <view class="form-item" @tap="chooseRegion">
-        <text class="form-label">所在地区</text>
-        <text class="form-value" :class="{ placeholder: !regionText }">{{ regionText || '请选择省/市/区' }}</text>
-        <text class="form-arrow">›</text>
-      </view>
+      <picker mode="region" @change="onRegionChange" :value="regionValue">
+        <view class="form-item">
+          <text class="form-label">所在地区</text>
+          <text class="form-value" :class="{ placeholder: !regionText }">{{ regionText || '请选择省/市/区' }}</text>
+          <text class="form-arrow">›</text>
+        </view>
+      </picker>
       <view class="form-item">
         <text class="form-label">详细地址</text>
         <textarea class="form-textarea" v-model="form.detail" placeholder="请输入详细地址" />
@@ -58,17 +60,23 @@ const regionText = computed(() => {
   return ''
 })
 
-function chooseRegion() {
-  uni.chooseLocation({
-    success: (res) => {
-    }
-  })
+const regionValue = ref<string[]>([])
+
+function onRegionChange(e: any) {
+  const { value, code } = e.detail
+  regionValue.value = value
+  form.value.province = value[0]
+  form.value.city = value[1]
+  form.value.district = value[2]
 }
 
 async function loadAddress(id: number) {
   try {
     const data = await getAddressDetail(id)
     form.value = { ...data, id: data.id }
+    if (data.province) {
+      regionValue.value = [data.province, data.city || '', data.district || '']
+    }
     isEdit.value = true
   } catch {}
 }
