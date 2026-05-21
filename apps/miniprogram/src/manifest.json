@@ -1,0 +1,22 @@
+{
+  "name": "禧孕母婴",
+  "appid": "",
+  "description": "禧孕母婴商城小程序",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "wx0000000000000000",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "postcss": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "optimization": {
+      "subPackages": true
+    },
+    "lazyCodeLoading": "requiredComponents"
+  }
+}

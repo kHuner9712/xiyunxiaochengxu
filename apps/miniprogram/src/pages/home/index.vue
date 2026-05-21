@@ -1,0 +1,331 @@
+<template>
+  <view class="home-page">
+    <view class="search-bar" @tap="goSearch">
+      <view class="search-input">
+        <text class="search-icon">🔍</text>
+        <text class="search-placeholder">搜索商品</text>
+      </view>
+    </view>
+
+    <swiper class="banner-swiper" indicator-dots autoplay circular :interval="4000">
+      <swiper-item v-for="banner in homeData.banners" :key="banner.id" @tap="handleBannerTap(banner)">
+        <image class="banner-image" :src="banner.image" mode="aspectFill" />
+      </swiper-item>
+    </swiper>
+
+    <view class="quick-entries">
+      <view v-for="entry in homeData.quickEntries" :key="entry.id" class="entry-item" @tap="handleEntryTap(entry)">
+        <image class="entry-icon" :src="entry.icon" mode="aspectFit" />
+        <text class="entry-name">{{ entry.name }}</text>
+      </view>
+    </view>
+
+    <view v-if="homeData.monthRecommend.length" class="section">
+      <view class="section-header">
+        <text class="section-title">月龄推荐</text>
+      </view>
+      <scroll-view scroll-x class="month-scroll">
+        <view class="month-list">
+          <ProductCard v-for="item in homeData.monthRecommend" :key="item.id" :product="item" class="month-item" />
+        </view>
+      </scroll-view>
+    </view>
+
+    <view v-if="homeData.hotProducts.length" class="section">
+      <view class="section-header">
+        <text class="section-title">热门推荐</text>
+        <text class="section-more" @tap="goProductList('hot')">更多 ›</text>
+      </view>
+      <view class="product-grid">
+        <ProductCard v-for="item in homeData.hotProducts" :key="item.id" :product="item" />
+      </view>
+    </view>
+
+    <view v-if="homeData.newProducts.length" class="section">
+      <view class="section-header">
+        <text class="section-title">新品上架</text>
+        <text class="section-more" @tap="goProductList('new')">更多 ›</text>
+      </view>
+      <view class="product-grid">
+        <ProductCard v-for="item in homeData.newProducts" :key="item.id" :product="item" />
+      </view>
+    </view>
+
+    <view v-if="homeData.activities.length" class="section">
+      <view class="section-header">
+        <text class="section-title">热门活动</text>
+        <text class="section-more" @tap="goActivityList">更多 ›</text>
+      </view>
+      <scroll-view scroll-x class="activity-scroll">
+        <view class="activity-list">
+          <view v-for="act in homeData.activities" :key="act.id" class="activity-card" @tap="goActivityDetail(act.id)">
+            <image class="activity-image" :src="act.image" mode="aspectFill" />
+            <view class="activity-info">
+              <text class="activity-name">{{ act.name }}</text>
+              <CountdownTimer :endTime="act.endTime" :showLabel="true" />
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="section">
+      <view class="section-header">
+        <text class="section-title">猜你喜欢</text>
+      </view>
+      <view class="product-grid">
+        <ProductCard v-for="item in guessProducts" :key="item.id" :product="item" />
+      </view>
+      <Loading v-if="guessLoading" />
+      <Empty v-if="!guessLoading && guessProducts.length === 0" text="暂无推荐商品" />
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { getHomeData, getGuessProducts, type BannerItem, type QuickEntry, type ProductItem, type ActivityItem } from '@/api/home'
+import ProductCard from '@/components/ProductCard.vue'
+import CountdownTimer from '@/components/CountdownTimer.vue'
+import Loading from '@/components/Loading.vue'
+import Empty from '@/components/Empty.vue'
+
+const homeData = reactive<{
+  banners: BannerItem[]
+  quickEntries: QuickEntry[]
+  monthRecommend: ProductItem[]
+  hotProducts: ProductItem[]
+  newProducts: ProductItem[]
+  activities: ActivityItem[]
+  guessProducts: ProductItem[]
+}>({
+  banners: [],
+  quickEntries: [],
+  monthRecommend: [],
+  hotProducts: [],
+  newProducts: [],
+  activities: [],
+  guessProducts: []
+})
+
+const guessProducts = ref<ProductItem[]>([])
+const guessLoading = ref(false)
+const guessPage = ref(1)
+const guessFinished = ref(false)
+
+async function loadHomeData() {
+  try {
+    const data = await getHomeData()
+    Object.assign(homeData, data)
+  } catch {}
+}
+
+async function loadGuessProducts() {
+  if (guessLoading.value || guessFinished.value) return
+  guessLoading.value = true
+  try {
+    const data = await getGuessProducts({ page: guessPage.value, pageSize: 10 })
+    guessProducts.value.push(...data.list)
+    guessFinished.value = guessProducts.value.length >= data.total
+    guessPage.value++
+  } catch {} finally {
+    guessLoading.value = false
+  }
+}
+
+function goSearch() {
+  uni.navigateTo({ url: '/pages/search/index' })
+}
+
+function handleBannerTap(banner: BannerItem) {
+  if (banner.linkType === 1) {
+    uni.navigateTo({ url: `/pages/product/detail?id=${banner.linkValue}` })
+  } else if (banner.linkType === 2) {
+    uni.navigateTo({ url: `/pages/activity/detail?id=${banner.linkValue}` })
+  }
+}
+
+function handleEntryTap(entry: QuickEntry) {
+  const routes: Record<string, string> = {
+    'gift': '/pages/coupon/center',
+    'discount': '/pages/activity/index',
+    'points': '/pages/points/index',
+    'member': '/pages/member/index'
+  }
+  const url = routes[entry.linkValue]
+  if (url) uni.navigateTo({ url })
+}
+
+function goProductList(sort: string) {
+  uni.navigateTo({ url: `/pages/product/list?sort=${sort}` })
+}
+
+function goActivityList() {
+  uni.switchTab({ url: '/pages/activity/index' })
+}
+
+function goActivityDetail(id: number) {
+  uni.navigateTo({ url: `/pages/activity/detail?id=${id}` })
+}
+
+onPullDownRefresh(async () => {
+  guessPage.value = 1
+  guessFinished.value = false
+  guessProducts.value = []
+  await Promise.all([loadHomeData(), loadGuessProducts()])
+  uni.stopPullDownRefresh()
+})
+
+onReachBottom(() => {
+  loadGuessProducts()
+})
+
+onMounted(() => {
+  loadHomeData()
+  loadGuessProducts()
+})
+</script>
+
+<style lang="scss" scoped>
+.home-page {
+  padding-bottom: 20rpx;
+}
+
+.search-bar {
+  padding: $spacing-sm $spacing-md;
+  background: $bg-white;
+}
+
+.search-input {
+  @include flex-center;
+  background: $bg-gray;
+  border-radius: $radius-round;
+  padding: 16rpx 24rpx;
+}
+
+.search-icon {
+  margin-right: 8rpx;
+  font-size: $font-sm;
+}
+
+.search-placeholder {
+  font-size: $font-sm;
+  color: $text-hint;
+}
+
+.banner-swiper {
+  height: 320rpx;
+  margin: $spacing-sm $spacing-md;
+  border-radius: $radius-lg;
+  overflow: hidden;
+}
+
+.banner-image {
+  width: 100%;
+  height: 100%;
+}
+
+.quick-entries {
+  display: flex;
+  justify-content: space-around;
+  padding: $spacing-md;
+  background: $bg-white;
+  margin: $spacing-sm $spacing-md;
+  border-radius: $radius-lg;
+}
+
+.entry-item {
+  @include flex-center;
+  @include flex-column;
+}
+
+.entry-icon {
+  width: 80rpx;
+  height: 80rpx;
+  margin-bottom: 8rpx;
+}
+
+.entry-name {
+  font-size: $font-xs;
+  color: $text-secondary;
+}
+
+.section {
+  margin-top: $spacing-md;
+}
+
+.section-header {
+  @include flex-between;
+  padding: 0 $spacing-md;
+  margin-bottom: $spacing-sm;
+}
+
+.section-title {
+  font-size: $font-lg;
+  font-weight: 600;
+  color: $text-color;
+}
+
+.section-more {
+  font-size: $font-sm;
+  color: $text-hint;
+}
+
+.month-scroll {
+  white-space: nowrap;
+}
+
+.month-list {
+  display: inline-flex;
+  padding: 0 $spacing-md;
+  gap: $spacing-sm;
+}
+
+.month-item {
+  width: 240rpx;
+  flex-shrink: 0;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $spacing-sm;
+  padding: 0 $spacing-md;
+}
+
+.activity-scroll {
+  white-space: nowrap;
+}
+
+.activity-list {
+  display: inline-flex;
+  padding: 0 $spacing-md;
+  gap: $spacing-sm;
+}
+
+.activity-card {
+  width: 500rpx;
+  flex-shrink: 0;
+  background: $bg-white;
+  border-radius: $radius-lg;
+  overflow: hidden;
+}
+
+.activity-image {
+  width: 100%;
+  height: 240rpx;
+}
+
+.activity-info {
+  padding: $spacing-sm;
+}
+
+.activity-name {
+  font-size: $font-md;
+  color: $text-color;
+  @include text-ellipsis;
+  display: block;
+  margin-bottom: 8rpx;
+}
+</style>

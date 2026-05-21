@@ -1,0 +1,64 @@
+import { Controller, Post, Get, Param, Query, UploadedFile, UseInterceptors, Body, Res } from '@nestjs/common';
+import { UploadService } from './upload.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { IsOptional, IsString } from 'class-validator';
+
+class FileListDto extends PaginationDto {
+  @IsOptional()
+  @IsString()
+  groupName?: string;
+
+  @IsOptional()
+  @IsString()
+  fileType?: string;
+}
+
+@Controller('common/file')
+export class UploadController {
+  constructor(private readonly uploadService: UploadService) {}
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async upload(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('roleType') roleType: string,
+    @Body('groupName') groupName?: string,
+  ) {
+    return this.uploadService.uploadFile(file, userId, roleType === 'admin' ? 'admin' : 'user', groupName);
+  }
+
+  @Public()
+  @Get(':id')
+  async findById(@Param('id') id: string) {
+    return this.uploadService.findById(id);
+  }
+}
+
+@Controller('admin/file')
+export class AdminUploadController {
+  constructor(private readonly uploadService: UploadService) {}
+
+  @Get('list')
+  async list(@Query() dto: FileListDto) {
+    return this.uploadService.findAll(dto);
+  }
+
+  @Get(':id')
+  async detail(@Param('id') id: string) {
+    return this.uploadService.findById(id);
+  }
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async upload(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser('id') userId: string,
+    @Body('groupName') groupName?: string,
+  ) {
+    return this.uploadService.uploadFile(file, userId, 'admin', groupName);
+  }
+}

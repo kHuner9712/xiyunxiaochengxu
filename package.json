@@ -1,0 +1,20 @@
+{
+  "name": "baby-mall",
+  "version": "1.0.0",
+  "private": true,
+  "description": "禧孕母婴用品私域商城小程序",
+  "scripts": {
+    "dev:api": "pnpm --filter @baby-mall/api dev",
+    "dev:admin": "pnpm --filter @baby-mall/admin-web dev",
+    "dev:mini": "pnpm --filter @baby-mall/miniprogram dev:mp-weixin",
+    "build:api": "pnpm --filter @baby-mall/api build",
+    "build:admin": "pnpm --filter @baby-mall/admin-web build",
+    "build:mini": "pnpm --filter @baby-mall/miniprogram build:mp-weixin",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r clean"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

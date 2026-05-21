@@ -1,0 +1,327 @@
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+
+const AdminLayout = () => import('@/layouts/AdminLayout.vue')
+
+const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('@/views/login/index.vue'),
+    meta: { title: '登录', requiresAuth: false },
+  },
+  {
+    path: '/',
+    component: AdminLayout,
+    redirect: '/dashboard',
+    children: [
+      {
+        path: 'dashboard',
+        name: 'Dashboard',
+        component: () => import('@/views/dashboard/index.vue'),
+        meta: { title: '工作台', icon: 'Odometer', permission: 'dashboard' },
+      },
+      {
+        path: 'product',
+        name: 'Product',
+        redirect: '/product/list',
+        meta: { title: '商品管理', icon: 'Goods', permission: 'product' },
+        children: [
+          {
+            path: 'list',
+            name: 'ProductList',
+            component: () => import('@/views/product/list.vue'),
+            meta: { title: '商品列表', permission: 'product:list' },
+          },
+          {
+            path: 'edit',
+            name: 'ProductEdit',
+            component: () => import('@/views/product/edit.vue'),
+            meta: { title: '商品编辑', permission: 'product:edit', hidden: true },
+          },
+          {
+            path: 'edit/:id',
+            name: 'ProductEditById',
+            component: () => import('@/views/product/edit.vue'),
+            meta: { title: '编辑商品', permission: 'product:edit', hidden: true },
+          },
+          {
+            path: 'category',
+            name: 'ProductCategory',
+            component: () => import('@/views/product/category.vue'),
+            meta: { title: '分类管理', permission: 'product:category' },
+          },
+          {
+            path: 'brand',
+            name: 'ProductBrand',
+            component: () => import('@/views/product/brand.vue'),
+            meta: { title: '品牌管理', permission: 'product:brand' },
+          },
+          {
+            path: 'stock',
+            name: 'ProductStock',
+            component: () => import('@/views/product/stock.vue'),
+            meta: { title: '库存管理', permission: 'product:stock' },
+          },
+        ],
+      },
+      {
+        path: 'order',
+        name: 'Order',
+        redirect: '/order/list',
+        meta: { title: '订单管理', icon: 'List', permission: 'order' },
+        children: [
+          {
+            path: 'list',
+            name: 'OrderList',
+            component: () => import('@/views/order/list.vue'),
+            meta: { title: '订单列表', permission: 'order:list' },
+          },
+          {
+            path: 'detail/:id',
+            name: 'OrderDetail',
+            component: () => import('@/views/order/detail.vue'),
+            meta: { title: '订单详情', permission: 'order:detail', hidden: true },
+          },
+          {
+            path: 'delivery',
+            name: 'OrderDelivery',
+            component: () => import('@/views/order/delivery.vue'),
+            meta: { title: '发货管理', permission: 'order:delivery' },
+          },
+          {
+            path: 'aftersale',
+            name: 'OrderAftersale',
+            component: () => import('@/views/order/aftersale.vue'),
+            meta: { title: '售后列表', permission: 'order:aftersale' },
+          },
+          {
+            path: 'aftersale-detail/:id',
+            name: 'AftersaleDetail',
+            component: () => import('@/views/order/aftersale-detail.vue'),
+            meta: { title: '售后详情', permission: 'order:aftersale', hidden: true },
+          },
+        ],
+      },
+      {
+        path: 'user',
+        name: 'User',
+        redirect: '/user/list',
+        meta: { title: '用户管理', icon: 'User', permission: 'user' },
+        children: [
+          {
+            path: 'list',
+            name: 'UserList',
+            component: () => import('@/views/user/list.vue'),
+            meta: { title: '用户列表', permission: 'user:list' },
+          },
+          {
+            path: 'detail/:id',
+            name: 'UserDetail',
+            component: () => import('@/views/user/detail.vue'),
+            meta: { title: '用户详情', permission: 'user:detail', hidden: true },
+          },
+          {
+            path: 'member-level',
+            name: 'MemberLevel',
+            component: () => import('@/views/user/member-level.vue'),
+            meta: { title: '会员等级', permission: 'user:member' },
+          },
+          {
+            path: 'points-rule',
+            name: 'PointsRule',
+            component: () => import('@/views/user/points-rule.vue'),
+            meta: { title: '积分规则', permission: 'user:points' },
+          },
+          {
+            path: 'baby',
+            name: 'BabyProfile',
+            component: () => import('@/views/user/baby.vue'),
+            meta: { title: '宝宝档案', permission: 'user:baby' },
+          },
+        ],
+      },
+      {
+        path: 'marketing',
+        name: 'Marketing',
+        redirect: '/marketing/coupon-list',
+        meta: { title: '营销管理', icon: 'Present', permission: 'marketing' },
+        children: [
+          {
+            path: 'coupon-list',
+            name: 'CouponList',
+            component: () => import('@/views/marketing/coupon-list.vue'),
+            meta: { title: '优惠券列表', permission: 'marketing:coupon' },
+          },
+          {
+            path: 'coupon-edit',
+            name: 'CouponEdit',
+            component: () => import('@/views/marketing/coupon-edit.vue'),
+            meta: { title: '优惠券编辑', permission: 'marketing:coupon', hidden: true },
+          },
+          {
+            path: 'coupon-edit/:id',
+            name: 'CouponEditById',
+            component: () => import('@/views/marketing/coupon-edit.vue'),
+            meta: { title: '编辑优惠券', permission: 'marketing:coupon', hidden: true },
+          },
+          {
+            path: 'activity-list',
+            name: 'ActivityList',
+            component: () => import('@/views/marketing/activity-list.vue'),
+            meta: { title: '活动列表', permission: 'marketing:activity' },
+          },
+          {
+            path: 'activity-edit',
+            name: 'ActivityEdit',
+            component: () => import('@/views/marketing/activity-edit.vue'),
+            meta: { title: '活动编辑', permission: 'marketing:activity', hidden: true },
+          },
+          {
+            path: 'activity-edit/:id',
+            name: 'ActivityEditById',
+            component: () => import('@/views/marketing/activity-edit.vue'),
+            meta: { title: '编辑活动', permission: 'marketing:activity', hidden: true },
+          },
+          {
+            path: 'banner',
+            name: 'Banner',
+            component: () => import('@/views/marketing/banner.vue'),
+            meta: { title: 'Banner管理', permission: 'marketing:banner' },
+          },
+          {
+            path: 'recommendation',
+            name: 'Recommendation',
+            component: () => import('@/views/marketing/recommendation.vue'),
+            meta: { title: '推荐位管理', permission: 'marketing:recommendation' },
+          },
+          {
+            path: 'home-decor',
+            name: 'HomeDecor',
+            component: () => import('@/views/marketing/home-decor.vue'),
+            meta: { title: '首页装修', permission: 'marketing:decor' },
+          },
+        ],
+      },
+      {
+        path: 'content',
+        name: 'Content',
+        redirect: '/content/list',
+        meta: { title: '内容管理', icon: 'Document', permission: 'content' },
+        children: [
+          {
+            path: 'list',
+            name: 'ContentList',
+            component: () => import('@/views/content/list.vue'),
+            meta: { title: '内容列表', permission: 'content:list' },
+          },
+          {
+            path: 'edit',
+            name: 'ContentEdit',
+            component: () => import('@/views/content/edit.vue'),
+            meta: { title: '内容编辑', permission: 'content:edit', hidden: true },
+          },
+          {
+            path: 'edit/:id',
+            name: 'ContentEditById',
+            component: () => import('@/views/content/edit.vue'),
+            meta: { title: '编辑内容', permission: 'content:edit', hidden: true },
+          },
+        ],
+      },
+      {
+        path: 'supplier',
+        name: 'Supplier',
+        redirect: '/supplier/list',
+        meta: { title: '供应商管理', icon: 'Van', permission: 'supplier' },
+        children: [
+          {
+            path: 'list',
+            name: 'SupplierList',
+            component: () => import('@/views/supplier/list.vue'),
+            meta: { title: '供应商管理', permission: 'supplier:list' },
+          },
+        ],
+      },
+      {
+        path: 'statistics',
+        name: 'Statistics',
+        redirect: '/statistics/index',
+        meta: { title: '数据统计', icon: 'DataAnalysis', permission: 'statistics' },
+        children: [
+          {
+            path: 'index',
+            name: 'StatisticsIndex',
+            component: () => import('@/views/statistics/index.vue'),
+            meta: { title: '数据统计', permission: 'statistics:index' },
+          },
+        ],
+      },
+      {
+        path: 'system',
+        name: 'System',
+        redirect: '/system/admin',
+        meta: { title: '系统管理', icon: 'Setting', permission: 'system' },
+        children: [
+          {
+            path: 'admin',
+            name: 'SystemAdmin',
+            component: () => import('@/views/system/admin.vue'),
+            meta: { title: '管理员管理', permission: 'system:admin' },
+          },
+          {
+            path: 'role',
+            name: 'SystemRole',
+            component: () => import('@/views/system/role.vue'),
+            meta: { title: '角色权限', permission: 'system:role' },
+          },
+          {
+            path: 'config',
+            name: 'SystemConfig',
+            component: () => import('@/views/system/config.vue'),
+            meta: { title: '系统配置', permission: 'system:config' },
+          },
+          {
+            path: 'log',
+            name: 'SystemLog',
+            component: () => import('@/views/system/log.vue'),
+            meta: { title: '操作日志', permission: 'system:log' },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/login/index.vue'),
+    meta: { title: '404' },
+  },
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+})
+
+router.beforeEach((to, _from, next) => {
+  const userStore = useUserStore()
+
+  if (to.meta.requiresAuth === false || to.path === '/login') {
+    if (to.path === '/login' && userStore.token) {
+      next('/dashboard')
+      return
+    }
+    next()
+    return
+  }
+
+  if (!userStore.token) {
+    next({ path: '/login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  next()
+})
+
+export default router
