@@ -168,13 +168,42 @@ docker exec baby-mall-api ls -la /app/packages/shared/dist/
 
 ## 七、验证数据库 migration
 
-```bash
-# 检查 admin_users 表结构（确认 must_change_password 字段存在）
-docker exec baby-mall-mysql mysql -uroot -p"$DB_PASSWORD" -e "DESC baby_mall.admin_users;"
+### 7.1 检查 admin_users 表结构
 
-# 应该看到 must_change_password 行：
-# | must_change_password | tinyint(1) | NO   |     | 0       |       |
+```bash
+docker exec baby-mall-mysql mysql -uroot -p"$DB_PASSWORD" -e "DESC baby_mall.admin_users;"
 ```
+
+**验收标准**：输出中必须包含 `must_change_password` 行：
+
+```
+| must_change_password | tinyint(1) | NO   |     | 0       |       |
+```
+
+### 7.2 验证 seed 执行
+
+```bash
+# 设置 RUN_SEED=true 启动 API 容器（会执行 prisma migrate deploy + prisma db seed）
+RUN_SEED=true docker compose -f deploy/docker-compose.yml up -d api
+
+# 检查日志
+docker logs baby-mall-api --tail=200
+```
+
+**验收标准**：
+1. `prisma migrate deploy` 成功（3 个 migration 全部应用）
+2. `prisma db seed` 成功
+3. 不出现 `Unknown argument mustChangePassword`
+4. 不出现 `Unknown column must_change_password`
+5. `admin_users` 表存在 `must_change_password` 字段
+
+### 7.3 Migration 文件清单
+
+| Migration | 说明 |
+|-----------|------|
+| `20260522000000_init` | 创建所有基础表（admin_users 不含 must_change_password） |
+| `20260522000001_add_must_change_password` | 添加 must_change_password 字段 |
+| `20260522010000_add_admin_must_change_password` | 幂等补充：确保 must_change_password 字段存在 |
 
 ---
 
