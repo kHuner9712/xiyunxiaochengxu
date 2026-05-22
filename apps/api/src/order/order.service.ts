@@ -17,6 +17,7 @@ import {
   ORDER_AUTO_CLOSE_MINUTES,
   ORDER_AUTO_COMPLETE_DAYS,
 } from '@baby-mall/shared';
+import { assertOrderTransition } from './order-state-machine';
 
 @Injectable()
 export class OrderService {
@@ -263,14 +264,13 @@ export class OrderService {
           where: { id: BigInt(userId) },
           data: {
             availablePoints: { decrement: pointsDeducted },
-            totalPoints: { decrement: pointsDeducted },
           },
         });
         await tx.pointsRecord.create({
           data: {
             userId: BigInt(userId),
             type: 2,
-            points: -pointsDeducted,
+            points: pointsDeducted,
             balance: user.availablePoints - pointsDeducted,
             source: 'order_deduct',
             description: `订单积分抵扣，扣除${pointsDeducted}积分`,
@@ -353,9 +353,7 @@ export class OrderService {
       include: { orderItems: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.status !== OrderStatus.pending_payment) {
-      throw new BadRequestException('只能取消待付款订单');
-    }
+    assertOrderTransition(order.status, OrderStatus.cancelled, '取消订单');
 
     const result = await this.prisma.$transaction(async (tx) => {
       for (const item of order.orderItems) {
@@ -386,7 +384,6 @@ export class OrderService {
             where: { id: BigInt(userId) },
             data: {
               availablePoints: { increment: order.pointsDeducted },
-              totalPoints: { increment: order.pointsDeducted },
             },
           });
           await tx.pointsRecord.create({
@@ -437,9 +434,7 @@ export class OrderService {
       include: { orderItems: true, delivery: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.status !== OrderStatus.delivered) {
-      throw new BadRequestException('只能确认已发货订单');
-    }
+    assertOrderTransition(order.status, OrderStatus.completed, '确认收货');
 
     const result = await this.prisma.$transaction(async (tx) => {
       const earnedPoints = Math.floor(order.payAmount! / 100);
@@ -585,9 +580,7 @@ export class OrderService {
       include: { orderItems: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.status !== OrderStatus.pending_payment) {
-      throw new BadRequestException('只能取消待付款订单');
-    }
+    assertOrderTransition(order.status, OrderStatus.cancelled, '管理员取消订单');
 
     const result = await this.prisma.$transaction(async (tx) => {
       for (const item of order.orderItems) {
@@ -618,7 +611,6 @@ export class OrderService {
             where: { id: order.userId },
             data: {
               availablePoints: { increment: order.pointsDeducted },
-              totalPoints: { increment: order.pointsDeducted },
             },
           });
           await tx.pointsRecord.create({
@@ -710,9 +702,7 @@ export class OrderService {
       where: { id: BigInt(dto.orderId) },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.status !== OrderStatus.pending_delivery) {
-      throw new BadRequestException('只能发货待发货订单');
-    }
+    assertOrderTransition(order.status, OrderStatus.delivered, '发货');
 
     const result = await this.prisma.order.update({
       where: { id: BigInt(dto.orderId) },
@@ -739,30 +729,6 @@ export class OrderService {
     });
 
     this.logger.log(`管理员发货订单：${dto.orderId}，物流：${dto.logisticsCompany} ${dto.logisticsNo}`);
-    return this.serializeOrder(result);
-  }
-
-  async adminUpdateStatus(id: string, status: string) {
-    const order = await this.prisma.order.findFirst({
-      where: { id: BigInt(id) },
-    });
-    if (!order) throw new NotFoundException('订单不存在');
-
-    const result = await this.prisma.order.update({
-      where: { id: BigInt(id) },
-      data: {
-        status: status as OrderStatus,
-        orderLogs: {
-          create: {
-            operatorType: 'admin',
-            action: 'update_status',
-            content: `管理员更新订单状态为${status}`,
-          },
-        },
-      },
-    });
-
-    this.logger.log(`管理员更新订单状态：${id} -> ${status}`);
     return this.serializeOrder(result);
   }
 
@@ -795,6 +761,8 @@ export class OrderService {
     for (const order of timeoutOrders) {
       try {
         await this.prisma.$transaction(async (tx) => {
+          assertOrderTransition(order.status, OrderStatus.cancelled, '超时自动关闭');
+
           for (const item of order.orderItems) {
             const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
             if (sku) {
@@ -823,7 +791,6 @@ export class OrderService {
                 where: { id: order.userId },
                 data: {
                   availablePoints: { increment: order.pointsDeducted },
-                  totalPoints: { increment: order.pointsDeducted },
                 },
               });
               await tx.pointsRecord.create({
@@ -886,6 +853,8 @@ export class OrderService {
     for (const order of orders) {
       try {
         await this.prisma.$transaction(async (tx) => {
+          assertOrderTransition(order.status, OrderStatus.completed, '自动完成');
+
           const earnedPoints = Math.floor(order.payAmount! / 100);
 
           if (earnedPoints > 0) {
@@ -980,7 +949,7 @@ export class OrderService {
       orderItems: order.orderItems?.map((i: any) => ({
         ...i,
         id: i.id.toString(),
-        orderId: i.orderId.toString(),
+        orderId: i.orderId?.toString(),
         productId: i.productId.toString(),
         skuId: i.skuId.toString(),
         activityId: i.activityId?.toString(),
@@ -990,20 +959,20 @@ export class OrderService {
         ? {
             ...order.payment,
             id: order.payment.id.toString(),
-            orderId: order.payment.orderId.toString(),
+            orderId: order.payment.orderId?.toString(),
           }
         : null,
       delivery: order.delivery
         ? {
             ...order.delivery,
             id: order.delivery.id.toString(),
-            orderId: order.delivery.orderId.toString(),
+            orderId: order.delivery.orderId?.toString(),
           }
         : null,
       orderLogs: order.orderLogs?.map((l: any) => ({
         ...l,
         id: l.id.toString(),
-        orderId: l.orderId.toString(),
+        orderId: l.orderId?.toString(),
         operatorId: l.operatorId?.toString(),
       })),
       user: order.user

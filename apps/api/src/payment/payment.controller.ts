@@ -28,6 +28,14 @@ export class PaymentController {
     return this.paymentService.handleCallback(body, headers, rawBody);
   }
 
+  @Public()
+  @SkipTransform()
+  @Post('refund-callback')
+  async refundCallback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
+    const rawBody = req.rawBody;
+    return this.paymentService.handleRefundCallback(body, headers, rawBody);
+  }
+
   @Get('status/:orderId')
   async queryStatus(@CurrentUser('id') userId: string, @Param('orderId') orderId: string) {
     return this.paymentService.getPaymentStatus(orderId, userId);

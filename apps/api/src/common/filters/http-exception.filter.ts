@@ -6,6 +6,10 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ThrottlerException } from '@nestjs/throttler';
+import {
+  ERROR_CODE,
+} from '../constants';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -13,11 +17,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
-    let code = 500;
+    let code: number = ERROR_CODE.INTERNAL_ERROR;
     let message = '服务器内部错误';
 
     if (exception instanceof HttpException) {
-      const status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
       if (typeof exceptionResponse === 'string') {
@@ -31,16 +34,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
           : exception.message;
       }
 
-      if (status === HttpStatus.BAD_REQUEST) {
-        code = 400;
-      } else if (status === HttpStatus.UNAUTHORIZED) {
-        code = 401;
-      } else if (status === HttpStatus.FORBIDDEN) {
-        code = 403;
-      } else if (status === HttpStatus.NOT_FOUND) {
-        code = 404;
+      if (exception instanceof ThrottlerException) {
+        code = ERROR_CODE.THROTTLER;
+        message = '请求频率超限，请稍后再试';
+      } else if (exception.getStatus() === HttpStatus.BAD_REQUEST) {
+        code = ERROR_CODE.PARAM_ERROR;
+      } else if (exception.getStatus() === HttpStatus.UNAUTHORIZED) {
+        code = this.mapUnauthorizedCode(message);
+      } else if (exception.getStatus() === HttpStatus.FORBIDDEN) {
+        code = ERROR_CODE.FORBIDDEN;
+      } else if (exception.getStatus() === HttpStatus.NOT_FOUND) {
+        code = ERROR_CODE.NOT_FOUND;
       } else {
-        code = 500;
+        code = ERROR_CODE.INTERNAL_ERROR;
       }
     }
 
@@ -49,5 +55,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message,
       data: null,
     });
+  }
+
+  private mapUnauthorizedCode(message: string): number {
+    const msg = message || '';
+    if (msg.includes('过期')) {
+      return ERROR_CODE.TOKEN_EXPIRED;
+    }
+    if (msg.includes('无效') || msg.includes('非法') || msg.includes('签名')) {
+      return ERROR_CODE.TOKEN_INVALID;
+    }
+    return ERROR_CODE.UNAUTHORIZED;
   }
 }

@@ -10,6 +10,8 @@
     "build:api": "pnpm --filter @baby-mall/api build",
     "build:admin": "pnpm --filter @baby-mall/admin-web build",
     "build:mini": "pnpm --filter @baby-mall/miniprogram build:mp-weixin",
+    "build": "pnpm build:api && pnpm build:admin",
+    "typecheck": "pnpm --filter @baby-mall/api build && pnpm --filter @baby-mall/admin-web build",
     "lint": "pnpm -r lint",
     "clean": "pnpm -r clean"
   },

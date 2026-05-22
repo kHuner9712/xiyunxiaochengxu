@@ -75,7 +75,7 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
 
         if (response.code === 0) {
           resolve(response.data)
-        } else if (response.code === 401) {
+        } else if (response.code === 40101 || response.code === 40102 || response.code === 40103) {
           removeToken()
           navigateToLogin()
           reject(new Error('登录已过期，请重新登录'))

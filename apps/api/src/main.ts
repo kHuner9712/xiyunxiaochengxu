@@ -1,21 +1,72 @@
-import { NestFactory, Reflector } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ConfigService } from '@nestjs/config';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { PrismaService } from './common/prisma/prisma.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create(AppModule);
+
+  const configService = app.get(ConfigService);
+  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+
   app.setGlobalPrefix('api');
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+
+  const corsOrigins = configService.get<string>('CORS_ORIGINS', '');
+  if (nodeEnv === 'production' && !corsOrigins) {
+    logger.error('生产环境必须配置 CORS_ORIGINS 环境变量');
+    process.exit(1);
+  }
+
+  const allowedOrigins = corsOrigins
+    ? corsOrigins.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+
+  app.enableCors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  });
+
+  if (nodeEnv !== 'production') {
+    app.useGlobalPipes(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: false,
+        transformOptions: {
+          enableImplicitConversion: true,
+        },
+      }),
+    );
+  } else {
+    app.useGlobalPipes(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transformOptions: {
+          enableImplicitConversion: true,
+        },
+      }),
+    );
+  }
+
+  app.useGlobalInterceptors(new TransformInterceptor(app.get(Reflector)));
   app.useGlobalFilters(new HttpExceptionFilter());
-  const reflector = app.get(Reflector);
-  app.useGlobalInterceptors(new TransformInterceptor(reflector));
-  app.enableCors();
-  await app.listen(process.env.PORT || 3000);
+
+  const prismaService = app.get(PrismaService);
+  await (prismaService as any).enableShutdownHooks?.(app);
+
+  const port = configService.get<number>('PORT', 3000);
+  await app.listen(port, '0.0.0.0');
+  logger.log(`Application is running on: http://0.0.0.0:${port}`);
+  logger.log(`Environment: ${nodeEnv}`);
 }
+
 bootstrap();

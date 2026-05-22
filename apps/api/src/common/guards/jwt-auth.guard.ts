@@ -46,6 +46,10 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('登录已过期');
     }
 
+    if (payload.tokenType !== 'access') {
+      throw new UnauthorizedException('无效的 token 类型，请使用 access token');
+    }
+
     if (url.startsWith('/api/common/')) {
       return true;
     }

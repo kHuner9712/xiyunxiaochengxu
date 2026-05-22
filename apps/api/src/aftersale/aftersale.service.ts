@@ -1,16 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { PaginationDto } from '../common/dto/pagination.dto';
 import { CreateAftersaleDto } from './dto/create-aftersale.dto';
 import { ReturnLogisticsDto } from './dto/return-logistics.dto';
 import { generateAftersaleNo, paginate, AFTERSALE_APPLY_DAYS } from '@baby-mall/shared';
 import { AftersaleStatus, OrderStatus } from '@prisma/client';
+import { PaymentService } from '../payment/payment.service';
 
 @Injectable()
 export class AftersaleService {
   private readonly logger = new Logger(AftersaleService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private paymentService: PaymentService) {}
 
   async create(userId: string, dto: CreateAftersaleDto) {
     const orderItem = await this.prisma.orderItem.findFirst({
@@ -78,7 +78,7 @@ export class AftersaleService {
     return this.serializeAftersale(aftersale);
   }
 
-  async findByUser(userId: string, dto: PaginationDto) {
+  async findByUser(userId: string, dto: { skip?: number; take?: number; page?: number; pageSize?: number }) {
     const where = { userId: BigInt(userId) };
     const [list, total] = await Promise.all([
       this.prisma.aftersaleOrder.findMany({
@@ -92,7 +92,7 @@ export class AftersaleService {
     ]);
 
     this.logger.log(`用户${userId}查询售后列表，共${total}条`);
-    return paginate(list.map((a) => this.serializeAftersale(a)), total, dto.page, dto.pageSize);
+    return paginate(list.map((a) => this.serializeAftersale(a)), total, dto.page ?? 1, dto.pageSize ?? 10);
   }
 
   async findUserDetail(userId: string, id: string) {
@@ -189,7 +189,7 @@ export class AftersaleService {
     return this.serializeAftersale(result);
   }
 
-  async findAllAdmin(dto: PaginationDto & { status?: string }) {
+  async findAllAdmin(dto: { skip?: number; take?: number; page?: number; pageSize?: number; status?: string }) {
     const where: any = {};
     if (dto.status) where.status = dto.status;
     const [list, total] = await Promise.all([
@@ -208,7 +208,7 @@ export class AftersaleService {
     ]);
 
     this.logger.log(`管理员查询售后列表，共${total}条`);
-    return paginate(list.map((a) => this.serializeAftersale(a)), total, dto.page, dto.pageSize);
+    return paginate(list.map((a) => this.serializeAftersale(a)), total, dto.page ?? 1, dto.pageSize ?? 10);
   }
 
   async findAdminDetail(id: string) {
@@ -325,118 +325,36 @@ export class AftersaleService {
     if (aftersale.type === 2 && aftersale.status !== AftersaleStatus.returned) {
       throw new BadRequestException('退货退款类型需用户填写退货物流后才能退款');
     }
+    if (!aftersale.refundAmount) {
+      throw new BadRequestException('退款金额未设置');
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      if (aftersale.type === 2 && aftersale.orderItem) {
-        const sku = await tx.productSku.findFirst({ where: { id: aftersale.orderItem.skuId } });
-        if (sku) {
-          await tx.productSku.update({
-            where: { id: aftersale.orderItem.skuId },
-            data: { stock: { increment: aftersale.orderItem.quantity }, sales: { decrement: aftersale.orderItem.quantity } },
-          });
-          await tx.productStockLog.create({
-            data: {
-              productId: aftersale.orderItem.productId,
-              skuId: aftersale.orderItem.skuId,
-              type: 4,
-              quantity: aftersale.orderItem.quantity,
-              beforeStock: sku.stock,
-              afterStock: sku.stock + aftersale.orderItem.quantity,
-              reason: '售后退款归还库存',
-            },
-          });
-        }
-      }
-
-      if (aftersale.refundAmount && aftersale.refundAmount > 0 && aftersale.order.payAmount) {
-        const deductedPoints = Math.floor(aftersale.refundAmount / 100);
-        if (deductedPoints > 0) {
-          const user = await tx.user.findFirst({ where: { id: aftersale.userId } });
-          if (user && user.availablePoints >= deductedPoints) {
-            await tx.user.update({
-              where: { id: aftersale.userId },
-              data: {
-                availablePoints: { decrement: deductedPoints },
-                totalPoints: { decrement: deductedPoints },
-              },
-            });
-            await tx.pointsRecord.create({
-              data: {
-                userId: aftersale.userId,
-                type: 2,
-                points: -deductedPoints,
-                balance: user.availablePoints - deductedPoints,
-                source: 'aftersale_refund',
-                sourceId: aftersale.orderId,
-                description: `售后退款扣回${deductedPoints}积分`,
-              },
-            });
-          }
-        }
-      }
-
-      if (aftersale.order.pointsDeducted > 0 && aftersale.refundAmount && aftersale.order.payAmount) {
-        const restorePoints = Math.floor(aftersale.order.pointsDeducted * aftersale.refundAmount / aftersale.order.payAmount);
-        if (restorePoints > 0) {
-          const user = await tx.user.findFirst({ where: { id: aftersale.userId } });
-          if (user) {
-            await tx.user.update({
-              where: { id: aftersale.userId },
-              data: {
-                availablePoints: { increment: restorePoints },
-                totalPoints: { increment: restorePoints },
-              },
-            });
-            await tx.pointsRecord.create({
-              data: {
-                userId: aftersale.userId,
-                type: 1,
-                points: restorePoints,
-                balance: user.availablePoints + restorePoints,
-                source: 'aftersale_refund_restore',
-                sourceId: aftersale.orderId,
-                description: `售后退款归还抵扣积分${restorePoints}`,
-              },
-            });
-          }
-        }
-      }
-
       const updated = await tx.aftersaleOrder.update({
         where: { id: BigInt(id) },
         data: {
-          status: AftersaleStatus.refunded,
-          refundedAt: new Date(),
+          status: AftersaleStatus.pending_refund,
           aftersaleLogs: {
             create: {
               operatorType: 'admin',
               operatorId: BigInt(adminId),
-              action: 'refund',
-              content: `管理员完成退款，金额：${aftersale.refundAmount}分`,
+              action: 'initiate_refund',
+              content: `管理员发起微信退款，金额：${aftersale.refundAmount}分`,
             },
           },
         },
       });
-
-      const otherAftersales = await tx.aftersaleOrder.findFirst({
-        where: {
-          orderId: aftersale.orderId,
-          id: { not: BigInt(id) },
-          status: { notIn: [AftersaleStatus.closed, AftersaleStatus.rejected, AftersaleStatus.refunded] },
-        },
-      });
-      if (!otherAftersales) {
-        const restoreStatus = aftersale.order.completedAt ? OrderStatus.completed : OrderStatus.delivered;
-        await tx.order.update({
-          where: { id: aftersale.orderId },
-          data: { status: restoreStatus },
-        });
-      }
-
       return updated;
     });
 
-    this.logger.log(`管理员完成退款：${id}，金额${aftersale.refundAmount}分`);
+    await this.paymentService.createRefund({
+      orderId: aftersale.orderId.toString(),
+      aftersaleId: id,
+      refundAmount: aftersale.refundAmount,
+      reason: aftersale.reason,
+    });
+
+    this.logger.log(`管理员发起退款：${id}，金额${aftersale.refundAmount}分`);
     return this.serializeAftersale(result);
   }
 
@@ -455,7 +373,7 @@ export class AftersaleService {
         ? {
             ...aftersale.orderItem,
             id: aftersale.orderItem.id.toString(),
-            orderId: aftersale.orderItem.orderId.toString(),
+            orderId: aftersale.orderItem.orderId?.toString(),
             productId: aftersale.orderItem.productId.toString(),
             skuId: aftersale.orderItem.skuId.toString(),
           }
@@ -466,7 +384,7 @@ export class AftersaleService {
       aftersaleLogs: aftersale.aftersaleLogs?.map((l: any) => ({
         ...l,
         id: l.id.toString(),
-        aftersaleId: l.aftersaleId.toString(),
+        aftersaleId: l.aftersaleId?.toString(),
         operatorId: l.operatorId?.toString(),
       })),
     };

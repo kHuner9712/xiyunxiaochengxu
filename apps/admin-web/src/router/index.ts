@@ -87,7 +87,7 @@ const routes: RouteRecordRaw[] = [
             path: 'delivery',
             name: 'OrderDelivery',
             component: () => import('@/views/order/delivery.vue'),
-            meta: { title: '发货管理', permission: 'order:delivery' },
+            meta: { title: '发货管理', permission: 'order:deliver' },
           },
           {
             path: 'aftersale',
@@ -314,7 +314,7 @@ router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore()
 
   if (to.meta.requiresAuth === false || to.path === '/login') {
-    if (to.path === '/login' && userStore.token) {
+    if (to.path === '/login' && userStore.accessToken) {
       next('/dashboard')
       return
     }
@@ -322,12 +322,12 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if (!userStore.token) {
+  if (!userStore.accessToken) {
     next({ path: '/login', query: { redirect: to.fullPath } })
     return
   }
 
-  if (!userStore.userInfo.id && userStore.token) {
+  if (!userStore.userInfo.id && userStore.accessToken) {
     try {
       await userStore.fetchUserInfo()
     } catch {

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
+import { assertOrderTransition } from '../order/order-state-machine';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import axios from 'axios';
@@ -280,6 +281,8 @@ export class PaymentService {
 
   private async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {
     await this.prisma.$transaction(async (tx) => {
+      assertOrderTransition(OrderStatus.pending_payment, OrderStatus.pending_delivery, '支付成功');
+
       await tx.orderPayment.update({
         where: { id: paymentId },
         data: {
@@ -409,5 +412,346 @@ export class PaymentService {
     sign.update(message);
     sign.end();
     return sign.sign(this.privateKey, 'base64');
+  }
+
+  async createRefund(params: {
+    orderId: string;
+    aftersaleId?: string;
+    refundAmount: number;
+    reason?: string;
+  }) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: BigInt(params.orderId) },
+      include: { payment: true },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    if (order.status !== 'aftersale') {
+      throw new BadRequestException('订单状态不允许退款');
+    }
+    if (!order.payment || order.payment.status !== 2) {
+      throw new BadRequestException('订单未支付成功');
+    }
+    if (params.refundAmount > order.payAmount!) {
+      throw new BadRequestException('退款金额不能超过订单实付金额');
+    }
+
+    const appId = this.configService.get<string>('WECHAT_APP_ID')!;
+    const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
+    const refundNotifyUrl = this.configService.get<string>('WECHAT_REFUND_NOTIFY_URL')!;
+    const outRefundNo = `REFUND${Date.now()}${Math.random().toString(36).substring(2, 8)}`;
+    const refundNo = outRefundNo;
+
+    const requestBody = {
+      out_trade_no: order.orderNo,
+      out_refund_no: outRefundNo,
+      reason: params.reason || '用户申请退款',
+      notify_url: refundNotifyUrl,
+      amount: {
+        refund: params.refundAmount,
+        total: order.payAmount,
+        currency: 'CNY',
+      },
+    };
+
+    const request = {
+      app_id: appId,
+      mch_id: mchId,
+      ...requestBody,
+    };
+
+    let response: any;
+    if (this.privateKey) {
+      const serialNo = this.configService.get<string>('WECHAT_MCH_SERIAL_NO')!;
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const nonceStr = crypto.randomBytes(16).toString('hex');
+      const signMessage = `POST\n/v3/refund/domestic/refunds\n${timestamp}\n${nonceStr}\n${JSON.stringify(requestBody)}\n`;
+      const signature = this.signRequest(signMessage);
+      const authHeader = `WECHATPAY2-SHA256-RSA2048 mchid="${mchId}",nonce_str="${nonceStr}",timestamp="${timestamp}",serial_no="${serialNo}",signature="${signature}"`;
+
+      try {
+        response = await axios.post('https://api.mch.weixin.qq.com/v3/refund/domestic/refunds', requestBody, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: authHeader,
+            Accept: 'application/json',
+          },
+        });
+      } catch (error) {
+        this.logger.error('微信退款请求失败', (error as any).response?.data || (error as Error).message);
+      }
+    }
+
+    const refund = await this.prisma.orderRefund.create({
+      data: {
+        refundNo,
+        orderId: BigInt(params.orderId),
+        aftersaleId: params.aftersaleId ? BigInt(params.aftersaleId) : null,
+        paymentId: order.payment.id,
+        outTradeNo: order.orderNo,
+        transactionId: order.payment.transactionId,
+        outRefundNo,
+        refundId: response?.data?.refund_id || null,
+        refundAmount: params.refundAmount,
+        totalAmount: order.payAmount!,
+        status: 'pending',
+        reason: params.reason,
+        rawRequest: request,
+        rawResponse: response?.data || null,
+      },
+    });
+
+    this.logger.log(`创建退款成功: ${refundNo}, 订单: ${order.orderNo}`);
+
+    return { refundId: refund.id.toString(), refundNo, outRefundNo };
+  }
+
+  async handleRefundCallback(body: any, headers: any, rawBody?: string) {
+    const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
+    const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
+
+    const signature = headers['wechatpay-signature'];
+    const timestamp = headers['wechatpay-timestamp'];
+    const nonce = headers['wechatpay-nonce'];
+    const serialNo = headers['wechatpay-serial'];
+
+    if (!signature || !timestamp || !nonce) {
+      this.logger.warn('微信退款回调缺少必要头部信息');
+      return { code: 'FAIL', message: '缺少签名信息' };
+    }
+
+    if (!rawBody) {
+      this.logger.warn('微信退款回调缺少rawBody，无法验签');
+      return { code: 'FAIL', message: '缺少rawBody' };
+    }
+    const message = `${timestamp}\n${nonce}\n${rawBody}\n`;
+
+    if (!this.verifyWechatSignature(message, signature)) {
+      this.logger.warn('微信退款回调签名验证失败');
+      return { code: 'FAIL', message: '签名验证失败' };
+    }
+
+    const configuredSerialNo = this.configService.get<string>('WECHAT_PLATFORM_CERT_SERIAL_NO', '');
+    if (configuredSerialNo && serialNo !== configuredSerialNo) {
+      this.logger.warn(`微信退款回调证书序列号不匹配: ${serialNo} vs ${configuredSerialNo}`);
+      return { code: 'FAIL', message: '证书序列号不匹配' };
+    }
+
+    let decryptedData: any;
+    try {
+      const resource = body.resource;
+      if (!resource) {
+        throw new Error('缺少resource');
+      }
+
+      const ciphertext = Buffer.from(resource.ciphertext, 'base64');
+      const associatedData = resource.associated_data || '';
+      const nonceBuf = Buffer.from(resource.nonce, 'utf8');
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(apiV3Key, 'utf8'), nonceBuf);
+      decipher.setAuthTag(ciphertext.subarray(ciphertext.length - 16));
+      decipher.setAAD(Buffer.from(associatedData, 'utf8'));
+
+      const decrypted = Buffer.concat([decipher.update(ciphertext.subarray(0, ciphertext.length - 16)), decipher.final()]);
+      decryptedData = JSON.parse(decrypted.toString('utf8'));
+    } catch (e) {
+      this.logger.error(`微信退款回调解密失败: ${(e as Error).message}`);
+      return { code: 'FAIL', message: '解密失败' };
+    }
+
+    if (decryptedData.mchid !== mchId) {
+      this.logger.warn(`微信退款回调商户号不匹配: ${decryptedData.mchid} vs ${mchId}`);
+      return { code: 'FAIL', message: '商户号不匹配' };
+    }
+
+    const outRefundNo = decryptedData.out_refund_no;
+    const refundId = decryptedData.refund_id;
+    const refundStatus = decryptedData.refund_status;
+    const successAmount = decryptedData.amount?.refund;
+
+    const refund = await this.prisma.orderRefund.findFirst({
+      where: { outRefundNo },
+    });
+
+    if (!refund) {
+      this.logger.warn(`微信退款回调退款记录不存在: ${outRefundNo}`);
+      return { code: 'SUCCESS', message: '' };
+    }
+
+    if (refund.status === 'success') {
+      this.logger.log(`微信退款回调已处理成功，跳过: ${outRefundNo}`);
+      return { code: 'SUCCESS', message: '' };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (refundStatus === 'SUCCESS') {
+        await tx.orderRefund.update({
+          where: { id: refund.id },
+          data: {
+            status: 'success',
+            refundId: refundId,
+            notifiedAt: new Date(),
+            rawResponse: decryptedData,
+          },
+        });
+
+        if (refund.aftersaleId) {
+          const aftersale = await tx.aftersaleOrder.findFirst({
+            where: { id: refund.aftersaleId },
+            include: { orderItem: true, order: true },
+          });
+
+          if (aftersale) {
+            await tx.aftersaleOrder.update({
+              where: { id: aftersale.id },
+              data: {
+                status: 'refunded',
+                refundedAt: new Date(),
+                aftersaleLogs: {
+                  create: {
+                    operatorType: 'system',
+                    action: 'refund',
+                    content: `微信退款成功，金额: ${successAmount}分`,
+                  },
+                },
+              },
+            });
+
+            if (aftersale.type === 2 && aftersale.orderItem) {
+              const sku = await tx.productSku.findFirst({ where: { id: aftersale.orderItem.skuId } });
+              if (sku) {
+                await tx.productSku.update({
+                  where: { id: aftersale.orderItem.skuId },
+                  data: { stock: { increment: aftersale.orderItem.quantity }, sales: { decrement: aftersale.orderItem.quantity } },
+                });
+                await tx.productStockLog.create({
+                  data: {
+                    productId: aftersale.orderItem.productId,
+                    skuId: aftersale.orderItem.skuId,
+                    type: 4,
+                    quantity: aftersale.orderItem.quantity,
+                    beforeStock: sku.stock,
+                    afterStock: sku.stock + aftersale.orderItem.quantity,
+                    reason: '售后退款归还库存',
+                  },
+                });
+              }
+            }
+
+            if (aftersale.refundAmount && aftersale.refundAmount > 0 && aftersale.order.payAmount) {
+              const deductedPoints = Math.floor(aftersale.refundAmount / 100);
+              if (deductedPoints > 0) {
+                const user = await tx.user.findFirst({ where: { id: aftersale.userId } });
+                if (user && user.availablePoints >= deductedPoints) {
+                  await tx.user.update({
+                    where: { id: aftersale.userId },
+                    data: {
+                      availablePoints: { decrement: deductedPoints },
+                    },
+                  });
+                  await tx.pointsRecord.create({
+                    data: {
+                      userId: aftersale.userId,
+                      type: 2,
+                      points: deductedPoints,
+                      balance: user.availablePoints - deductedPoints,
+                      source: 'aftersale_refund',
+                      sourceId: aftersale.orderId,
+                      description: `售后退款扣回${deductedPoints}积分`,
+                    },
+                  });
+                }
+              }
+            }
+
+            if (aftersale.order.pointsDeducted > 0 && aftersale.refundAmount && aftersale.order.payAmount) {
+              const restorePoints = Math.floor(aftersale.order.pointsDeducted * aftersale.refundAmount / aftersale.order.payAmount);
+              if (restorePoints > 0) {
+                const user = await tx.user.findFirst({ where: { id: aftersale.userId } });
+                if (user) {
+                  await tx.user.update({
+                    where: { id: aftersale.userId },
+                    data: {
+                      availablePoints: { increment: restorePoints },
+                    },
+                  });
+                  await tx.pointsRecord.create({
+                    data: {
+                      userId: aftersale.userId,
+                      type: 1,
+                      points: restorePoints,
+                      balance: user.availablePoints + restorePoints,
+                      source: 'aftersale_refund_restore',
+                      sourceId: aftersale.orderId,
+                      description: `售后退款归还抵扣积分${restorePoints}`,
+                    },
+                  });
+                }
+              }
+            }
+
+            const otherAftersales = await tx.aftersaleOrder.findFirst({
+              where: {
+                orderId: aftersale.orderId,
+                id: { not: aftersale.id },
+                status: { notIn: ['closed', 'rejected', 'refunded'] },
+              },
+            });
+            if (!otherAftersales) {
+              const restoreStatus = aftersale.order.completedAt ? 'completed' : 'delivered';
+              await tx.order.update({
+                where: { id: aftersale.orderId },
+                data: { status: restoreStatus },
+              });
+            }
+          }
+        }
+      } else if (refundStatus === 'CLOSED' || refundStatus === 'ABNORMAL') {
+        await tx.orderRefund.update({
+          where: { id: refund.id },
+          data: {
+            status: 'failed',
+            notifiedAt: new Date(),
+            rawResponse: decryptedData,
+          },
+        });
+
+        if (refund.aftersaleId) {
+          await tx.aftersaleOrder.update({
+            where: { id: refund.aftersaleId },
+            data: {
+              status: 'closed',
+              aftersaleLogs: {
+                create: {
+                  operatorType: 'system',
+                  action: 'refund_failed',
+                  content: `微信退款失败，状态: ${refundStatus}`,
+                },
+              },
+            },
+          });
+        }
+      }
+    });
+
+    this.logger.log(`微信退款回调处理成功: ${outRefundNo}, 状态: ${refundStatus}`);
+    return { code: 'SUCCESS', message: '' };
+  }
+
+  async queryRefund(outRefundNo: string) {
+    const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
+    const serialNo = this.configService.get<string>('WECHAT_MCH_SERIAL_NO')!;
+
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = crypto.randomBytes(16).toString('hex');
+    const signMessage = `GET\n/v3/refund/domestic/refunds/${outRefundNo}?mchid=${mchId}\n${timestamp}\n${nonceStr}\n`;
+    const signature = this.signRequest(signMessage);
+
+    const response = await axios.get(`https://api.mch.weixin.qq.com/v3/refund/domestic/refunds/${outRefundNo}?mchid=${mchId}`, {
+      headers: {
+        Authorization: `WECHATPAY2-SHA256-RSA2048 mchid="${mchId}",nonce_str="${nonceStr}",timestamp="${timestamp}",serial_no="${serialNo}",signature="${signature}"`,
+        Accept: 'application/json',
+      },
+    });
+    return response.data;
   }
 }

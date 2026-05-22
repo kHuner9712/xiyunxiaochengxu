@@ -52,7 +52,7 @@ export class AdminProductController {
   }
 
   @Put('update/:id')
-  @RequirePermission('product:update')
+  @RequirePermission('product:edit')
   async update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productService.update(id, dto);
   }

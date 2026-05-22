@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
+import { useUserStore } from '@/stores/user'
 
 const request = axios.create({
   baseURL: '/api',
@@ -10,9 +11,12 @@ const request = axios.create({
   },
 })
 
+let refreshPromise: Promise<any> | null = null
+
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const userStore = useUserStore()
+    const token = userStore.accessToken || localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -29,12 +33,60 @@ interface ApiResponse<T = any> {
   data: T
 }
 
+async function handleUnauthorized() {
+  const userStore = useUserStore()
+  const refreshToken = userStore.refreshToken || localStorage.getItem('refreshToken')
+
+  if (!refreshToken) {
+    userStore.clearTokens()
+    router.push('/login')
+    return null
+  }
+
+  if (refreshPromise) {
+    return refreshPromise
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const res = await axios.post('/api/admin/auth/refresh', {
+        refreshToken,
+      })
+      if (res.data.code === 0) {
+        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = res.data.data
+        userStore.setTokens(newAccessToken, newRefreshToken)
+        return { accessToken: newAccessToken, refreshToken: newRefreshToken }
+      } else {
+        userStore.clearTokens()
+        router.push('/login')
+        return null
+      }
+    } catch (e) {
+      userStore.clearTokens()
+      router.push('/login')
+      return null
+    } finally {
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
+}
+
+async function retryRequest(config: AxiosRequestConfig, newToken: string) {
+  config.headers = config.headers || {}
+  config.headers.Authorization = `Bearer ${newToken}`
+  return request(config)
+}
+
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     const res = response.data
     if (res.code !== 0) {
-      if (res.code === 401) {
+      if (res.code === 40101 || res.code === 40102 || res.code === 40103) {
         ElMessage.error('登录已过期，请重新登录')
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
         localStorage.removeItem('token')
         router.push('/login')
       } else {
@@ -44,12 +96,27 @@ request.interceptors.response.use(
     }
     return res as any
   },
-  (error) => {
+  async (error) => {
     if (error.response) {
       const status = error.response.status
+      const originalRequest = error.config
+
+      if (status === 401 && originalRequest && !originalRequest._retry) {
+        originalRequest._retry = true
+
+        const newTokens = await handleUnauthorized()
+        if (newTokens) {
+          originalRequest.headers = originalRequest.headers || {}
+          originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`
+          return request(originalRequest)
+        }
+      }
+
       switch (status) {
         case 401:
           ElMessage.error('登录已过期，请重新登录')
+          localStorage.removeItem('accessToken')
+          localStorage.removeItem('refreshToken')
           localStorage.removeItem('token')
           router.push('/login')
           break

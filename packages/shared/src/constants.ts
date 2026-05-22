@@ -1,8 +1,8 @@
 export const MEMBER_LEVELS = [
-  { code: 0, name: '普通会员', minGrowth: 0, maxGrowth: 999, discount: null, pointsRate: 1.0 },
-  { code: 1, name: '银卡会员', minGrowth: 1000, maxGrowth: 4999, discount: 0.98, pointsRate: 2.0 },
-  { code: 2, name: '金卡会员', minGrowth: 5000, maxGrowth: 19999, discount: 0.95, pointsRate: 3.0 },
-  { code: 3, name: '黑金会员', minGrowth: 20000, maxGrowth: null, discount: 0.90, pointsRate: 5.0 },
+  { code: 0, name: '普通会员', minGrowth: 0, maxGrowth: 999, discountRate: null, pointsRate: 10 },
+  { code: 1, name: '银卡会员', minGrowth: 1000, maxGrowth: 4999, discountRate: 98, pointsRate: 20 },
+  { code: 2, name: '金卡会员', minGrowth: 5000, maxGrowth: 19999, discountRate: 95, pointsRate: 30 },
+  { code: 3, name: '黑金会员', minGrowth: 20000, maxGrowth: null, discountRate: 90, pointsRate: 50 },
 ] as const;
 
 export const ORDER_AUTO_CLOSE_MINUTES = 30;

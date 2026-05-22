@@ -10,6 +10,9 @@ export const authApi = {
   getUserInfo() {
     return request.get('/admin/auth/info')
   },
+  logout() {
+    return request.post('/admin/auth/logout')
+  },
   changePassword(data: { oldPassword: string; newPassword: string; confirmPassword: string }) {
     return request.put('/admin/auth/password', data)
   },

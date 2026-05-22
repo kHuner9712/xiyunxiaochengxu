@@ -81,12 +81,6 @@ export class AdminOrderController {
     return this.orderService.findAdminById(id);
   }
 
-  @Put('status/:id')
-  @RequirePermission('order:deliver')
-  async updateStatus(@Param('id') id: string, @Body() body: { status: string }) {
-    return this.orderService.adminUpdateStatus(id, body.status);
-  }
-
   @Put('remark/:id')
   @RequirePermission('order:remark')
   async remark(@Param('id') id: string, @Body() body: { remark: string }) {
@@ -118,7 +112,7 @@ export class AdminOrderController {
   }
 
   @Get('export')
-  @RequirePermission('order:list')
+  @RequirePermission('order:export')
   async export(@Query() dto: OrderQueryDto) {
     return this.orderService.exportOrders(dto);
   }

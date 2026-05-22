@@ -22,6 +22,7 @@ enum AftersaleStatus {
   approved
   rejected
   returned
+  pending_refund
   refunded
   closed
 }
@@ -413,6 +414,7 @@ model Order {
   delivery       OrderDelivery?
   orderLogs      OrderLog[]
   aftersaleOrders AftersaleOrder[]
+  orderRefunds   OrderRefund[]
 
   @@unique([orderNo], name: "uk_order_no")
   @@index([userId], name: "idx_user_id")
@@ -717,6 +719,37 @@ model AftersaleLog {
 
   @@index([aftersaleId], name: "idx_aftersale_id")
   @@map("aftersale_logs")
+}
+
+model OrderRefund {
+  id          BigInt   @id @default(autoincrement()) @map("id")
+  refundNo    String   @db.VarChar(64) @map("refund_no")
+  orderId     BigInt   @map("order_id")
+  aftersaleId BigInt?  @map("aftersale_id")
+  paymentId   BigInt?  @map("payment_id")
+  outTradeNo  String   @db.VarChar(32) @map("out_trade_no")
+  transactionId String? @db.VarChar(64) @map("transaction_id")
+  outRefundNo String   @db.VarChar(64) @map("out_refund_no")
+  refundId    String?  @db.VarChar(64) @map("refund_id")
+  refundAmount Int     @map("refund_amount")
+  totalAmount Int     @map("total_amount")
+  status      String  @db.VarChar(20) @default("pending") @map("status")
+  reason      String? @db.VarChar(200) @map("reason")
+  rawRequest  Json?   @map("raw_request")
+  rawResponse Json?   @map("raw_response")
+  notifiedAt  DateTime? @map("notified_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@unique([refundNo], name: "uk_refund_no")
+  @@unique([outRefundNo], name: "uk_out_refund_no")
+  @@index([orderId], name: "idx_order_id")
+  @@index([aftersaleId], name: "idx_aftersale_id")
+  @@index([status], name: "idx_status")
+  @@index([refundId], name: "idx_refund_id")
+  @@map("order_refunds")
 }
 
 model ContentCategory {

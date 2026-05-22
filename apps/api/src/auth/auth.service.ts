@@ -78,19 +78,39 @@ export class AuthService {
       ur.role.adminRolePermissions.map((rp) => rp.permission.code),
     );
 
-    const token = await this.jwtService.signAsync(
+    const tokenId = crypto.randomUUID();
+    const accessToken = await this.jwtService.signAsync(
       {
         id: admin.id.toString(),
         username: admin.username,
         roleType: 'admin',
         type: 'admin',
         roles,
+        tokenType: 'access',
+        tokenId,
       },
       { expiresIn: '2h' },
     );
 
+    const refreshToken = await this.jwtService.signAsync(
+      {
+        id: admin.id.toString(),
+        username: admin.username,
+        roleType: 'admin',
+        type: 'admin',
+        roles,
+        tokenType: 'refresh',
+        tokenId,
+      },
+      { expiresIn: '30d' },
+    );
+
+    const refreshKey = `admin_refresh_token:${admin.id.toString()}:${tokenId}`;
+    await this.redisService.set(refreshKey, refreshToken, 30 * 24 * 60 * 60);
+
     return {
-      token,
+      accessToken,
+      refreshToken,
       adminUser: {
         id: admin.id.toString(),
         username: admin.username,
@@ -101,6 +121,92 @@ export class AuthService {
         mustChangePassword: admin.mustChangePassword,
       },
     };
+  }
+
+  async refreshToken(refreshToken: string) {
+    let payload: any;
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken);
+    } catch {
+      throw new UnauthorizedException('Refresh token 无效或已过期');
+    }
+
+    if (payload.tokenType !== 'refresh') {
+      throw new UnauthorizedException('无效的 token 类型');
+    }
+
+    const refreshKey = `admin_refresh_token:${payload.id}:${payload.tokenId}`;
+    const storedToken = await this.redisService.get(refreshKey);
+    if (!storedToken || storedToken !== refreshToken) {
+      throw new UnauthorizedException('Refresh token 已失效，请重新登录');
+    }
+
+    const admin = await this.prisma.adminUser.findFirst({
+      where: { id: BigInt(payload.id), deletedAt: null, status: 1 },
+      include: {
+        adminUserRoles: {
+          include: {
+            role: {
+              include: {
+                adminRolePermissions: {
+                  include: { permission: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!admin) {
+      throw new UnauthorizedException('管理员账号已禁用或删除');
+    }
+
+    const roles = admin.adminUserRoles.map((ur) => ur.role.code);
+    const permissions = admin.adminUserRoles.flatMap((ur) =>
+      ur.role.adminRolePermissions.map((rp) => rp.permission.code),
+    );
+
+    const newTokenId = crypto.randomUUID();
+    const newAccessToken = await this.jwtService.signAsync(
+      {
+        id: admin.id.toString(),
+        username: admin.username,
+        roleType: 'admin',
+        type: 'admin',
+        roles,
+        tokenType: 'access',
+        tokenId: newTokenId,
+      },
+      { expiresIn: '2h' },
+    );
+
+    const newRefreshToken = await this.jwtService.signAsync(
+      {
+        id: admin.id.toString(),
+        username: admin.username,
+        roleType: 'admin',
+        type: 'admin',
+        roles,
+        tokenType: 'refresh',
+        tokenId: newTokenId,
+      },
+      { expiresIn: '30d' },
+    );
+
+    await this.redisService.del(refreshKey);
+    await this.redisService.set(`admin_refresh_token:${admin.id.toString()}:${newTokenId}`, newRefreshToken, 30 * 24 * 60 * 60);
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    };
+  }
+
+  async adminLogout(adminId: string, tokenId: string) {
+    const refreshKey = `admin_refresh_token:${adminId}:${tokenId}`;
+    await this.redisService.del(refreshKey);
+    return null;
   }
 
   async getAdminInfo(adminId: string) {

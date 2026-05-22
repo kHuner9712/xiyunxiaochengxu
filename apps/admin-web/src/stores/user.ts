@@ -4,15 +4,32 @@ import { authApi } from '@/api/auth'
 import router from '@/router'
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref<string>(localStorage.getItem('token') || '')
+  const accessToken = ref<string>(localStorage.getItem('accessToken') || localStorage.getItem('token') || '')
+  const refreshToken = ref<string>(localStorage.getItem('refreshToken') || '')
   const userInfo = ref<Record<string, any>>({})
   const permissions = ref<string[]>([])
   const roles = ref<string[]>([])
 
+  function setTokens(access: string, refresh: string) {
+    accessToken.value = access
+    refreshToken.value = refresh
+    localStorage.setItem('accessToken', access)
+    localStorage.setItem('refreshToken', refresh)
+    if (localStorage.getItem('token')) {
+      localStorage.removeItem('token')
+    }
+  }
+
+  function clearTokens() {
+    accessToken.value = ''
+    refreshToken.value = ''
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('refreshToken')
+  }
+
   async function login(username: string, password: string, captchaCode: string, captchaId: string) {
     const res = await authApi.login({ username, password, captchaCode, captchaId })
-    token.value = res.data.token
-    localStorage.setItem('token', res.data.token)
+    setTokens(res.data.accessToken, res.data.refreshToken)
     await fetchUserInfo()
     if (userInfo.value.mustChangePassword) {
       router.push('/system/change-password')
@@ -30,12 +47,16 @@ export const useUserStore = defineStore('user', () => {
     return res
   }
 
-  function logout() {
-    token.value = ''
+  async function logout() {
+    try {
+      await authApi.logout()
+    } catch (e) {
+      // ignore
+    }
+    clearTokens()
     userInfo.value = {}
     permissions.value = []
     roles.value = []
-    localStorage.removeItem('token')
     router.push('/login')
   }
 
@@ -50,10 +71,13 @@ export const useUserStore = defineStore('user', () => {
   }
 
   return {
-    token,
+    accessToken,
+    refreshToken,
     userInfo,
     permissions,
     roles,
+    setTokens,
+    clearTokens,
     login,
     fetchUserInfo,
     logout,

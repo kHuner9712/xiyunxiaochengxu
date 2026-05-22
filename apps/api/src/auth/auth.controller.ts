@@ -5,6 +5,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AdminLoginDto, ChangePasswordDto } from './dto/admin-login.dto';
 import { WeappLoginDto } from './dto/weapp-login.dto';
 import { BindPhoneDto } from './dto/bind-phone.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Controller('admin/auth')
 export class AdminAuthController {
@@ -25,6 +26,18 @@ export class AdminAuthController {
       dto.captchaId,
       dto.captchaCode,
     );
+  }
+
+  @Public()
+  @Post('refresh')
+  async refresh(@Body() dto: RefreshTokenDto) {
+    return this.authService.refreshToken(dto.refreshToken);
+  }
+
+  @Post('logout')
+  async logout(@CurrentUser('id') adminId: string, @CurrentUser('tokenId') tokenId: string) {
+    await this.authService.adminLogout(adminId, tokenId);
+    return null;
   }
 
   @Get('info')
