@@ -1,0 +1,104 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: baby-mall-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-baby_mall_2024}
+      MYSQL_DATABASE: ${DB_NAME:-baby_mall}
+      MYSQL_CHARSET: utf8mb4
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - baby-mall-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: baby-mall-redis
+    restart: always
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/etc/redis/redis.conf
+      - ./scripts/redis-entrypoint.sh:/usr/local/bin/redis-entrypoint.sh:ro
+    entrypoint: ["sh", "/usr/local/bin/redis-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD", "sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG; else redis-cli ping | grep PONG; fi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - baby-mall-network
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: baby-mall-api
+    restart: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: mysql://root:${DB_PASSWORD:-baby_mall_2024}@mysql:3306/${DB_NAME:-baby_mall}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-baby_mall}
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-baby_mall_2024}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-change_this_jwt_secret}
+      WECHAT_APP_ID: ${WECHAT_APP_ID}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET}
+      WECHAT_MCH_ID: ${WECHAT_MCH_ID}
+      WECHAT_MCH_SERIAL_NO: ${WECHAT_MCH_SERIAL_NO:-}
+      WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY}
+      WECHAT_PRIVATE_KEY_PATH: /app/apps/api/certs/apiclient_key.pem
+      WECHAT_PLATFORM_CERT_PATH: /app/apps/api/certs/wechatpay_platform.pem
+      WECHAT_PLATFORM_CERT_SERIAL_NO: ${WECHAT_PLATFORM_CERT_SERIAL_NO:-}
+      WECHAT_SKIP_VERIFY: ${WECHAT_SKIP_VERIFY:-false}
+      WECHAT_NOTIFY_URL: ${WECHAT_NOTIFY_URL}
+      UPLOAD_DIR: /app/apps/api/uploads
+      RUN_SEED: ${RUN_SEED:-false}
+      ADMIN_DEFAULT_USERNAME: ${ADMIN_DEFAULT_USERNAME:-admin}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
+    volumes:
+      - upload_data:/app/apps/api/uploads
+      - log_data:/app/apps/api/logs
+      - ./certs:/app/apps/api/certs:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - baby-mall-network
+
+volumes:
+  mysql_data:
+  redis_data:
+  upload_data:
+  log_data:
+
+networks:
+  baby-mall-network:
+    driver: bridge
