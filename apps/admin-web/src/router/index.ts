@@ -287,6 +287,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/system/log.vue'),
             meta: { title: '操作日志', permission: 'system:log' },
           },
+          {
+            path: 'change-password',
+            name: 'ChangePassword',
+            component: () => import('@/views/system/change-password.vue'),
+            meta: { title: '修改密码', skipMustChangePassword: true },
+          },
         ],
       },
     ],
@@ -304,7 +310,7 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore()
 
   if (to.meta.requiresAuth === false || to.path === '/login') {
@@ -318,6 +324,20 @@ router.beforeEach((to, _from, next) => {
 
   if (!userStore.token) {
     next({ path: '/login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  if (!userStore.userInfo.id && userStore.token) {
+    try {
+      await userStore.fetchUserInfo()
+    } catch {
+      userStore.logout()
+      return
+    }
+  }
+
+  if (userStore.userInfo.mustChangePassword && !to.meta.skipMustChangePassword) {
+    next('/system/change-password')
     return
   }
 

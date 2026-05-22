@@ -221,7 +221,7 @@
 
 | # | 修复项 | 修复内容 | 状态 |
 |---|--------|---------|------|
-| 1 | 支付证书 bind mount | `wechat_certs` 命名卷改为 `./certs:/app/certs:ro` bind mount | ✅ |
+| 1 | 支付证书 bind mount | `wechat_certs` 命名卷改为 `./certs:/app/apps/api/certs:ro` bind mount | ✅ |
 | 2 | 删除 wechat_certs 命名卷 | docker-compose.yml volumes 中移除 | ✅ |
 | 3 | deploy/certs/.gitkeep | 新增空文件保持目录结构 | ✅ |
 | 4 | deploy/certs/README.md | 证书放置说明 | ✅ |
@@ -236,16 +236,19 @@
 | 13 | mustChangePassword 字段 | AdminUser 表新增字段 + migration | ✅ |
 | 14 | 登录返回 mustChangePassword | adminLogin + getAdminInfo 返回 | ✅ |
 | 15 | 修改密码清除标记 | changePassword 成功后 mustChangePassword=false | ✅ |
-| 16 | Docker @baby-mall/shared | Dockerfile.api 添加 COPY packages/shared | ✅ |
+| 16 | Docker @baby-mall/shared | 方案A：WORKDIR=/app/apps/api，保持原始目录结构 | ✅ |
 | 17 | .env.example 安全示例 | ADMIN_DEFAULT_PASSWORD=Xiyun@2026!Prod | ✅ |
 | 18 | docs/18_SERVER_DEPLOYMENT_RUNBOOK.md | 新增服务器部署 Runbook | ✅ |
 | 19 | docs/11_DEPLOYMENT_GUIDE.md | 更新证书挂载 + 管理员密码 + 冒烟测试 | ✅ |
 | 20 | docs/17_RUNTIME_DEPLOYMENT_VALIDATION.md | 更新 ADMIN_TOKEN + 生产冒烟测试 + 密码安全 | ✅ |
+| 21 | Prisma migration 一致性 | 20260522000001_add_must_change_password migration 确保字段存在 | ✅ |
+| 22 | 后端 changePassword 强密码校验 | ≥12位 + 大小写 + 数字 + 特殊字符 + 禁止弱密码 + 不能与旧密码相同 | ✅ |
+| 23 | 前端 mustChangePassword 闭环 | change-password 页 + 路由守卫 + 登录后强制跳转 | ✅ |
+| 24 | Dockerfile.api 方案A | WORKDIR=/app/apps/api，packages/shared 在 /app/packages/shared | ✅ |
 
 ### 待验收项
 
 | 项目 | 说明 |
 |------|------|
-| 前端 mustChangePassword 拦截 | 后端已完成，前端拦截待验收 |
 | Docker build + runtime | 需在服务器上执行 |
 | 微信支付真实回调 | 需要平台证书和域名 |

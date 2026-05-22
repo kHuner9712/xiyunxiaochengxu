@@ -147,6 +147,27 @@ export class AuthService {
       throw new BadRequestException('两次输入的新密码不一致');
     }
 
+    if (oldPassword === newPassword) {
+      throw new BadRequestException('新密码不能与旧密码相同');
+    }
+
+    if (newPassword.length < 12) {
+      throw new BadRequestException('新密码长度不能少于12位');
+    }
+
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasDigit = /[0-9]/.test(newPassword);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      throw new BadRequestException('新密码必须包含大小写字母、数字和特殊字符');
+    }
+
+    const weakPasswords = ['admin123', 'password', '123456', 'change_this_password'];
+    if (weakPasswords.includes(newPassword)) {
+      throw new BadRequestException('不允许使用弱密码');
+    }
+
     const admin = await this.prisma.adminUser.findFirst({
       where: { id: BigInt(adminId), deletedAt: null },
     });

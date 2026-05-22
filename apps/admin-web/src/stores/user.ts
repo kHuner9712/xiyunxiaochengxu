@@ -14,6 +14,11 @@ export const useUserStore = defineStore('user', () => {
     token.value = res.data.token
     localStorage.setItem('token', res.data.token)
     await fetchUserInfo()
+    if (userInfo.value.mustChangePassword) {
+      router.push('/system/change-password')
+    } else {
+      router.push('/dashboard')
+    }
     return res
   }
 

@@ -33,18 +33,20 @@ RUN cd apps/admin-web && pnpm build
 
 FROM node:18-alpine
 
-WORKDIR /app
+WORKDIR /app/apps/api
 
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/node_modules ./node_modules
-COPY --from=builder /app/packages/shared ./packages/shared
+COPY --from=builder /app/packages/shared /app/packages/shared
+COPY --from=builder /app/node_modules/.pnpm /app/node_modules/.pnpm
 COPY --from=builder /app/apps/api/prisma ./prisma
-COPY --from=builder /app/node_modules/.pnpm ./node_modules/.pnpm
 COPY --from=builder /app/apps/api/package.json ./
+COPY --from=builder /app/package.json /app/package.json
+COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
 COPY --from=admin-builder /app/apps/admin-web/dist /usr/share/nginx/admin
 COPY deploy/scripts/entrypoint.sh ./entrypoint.sh
 
-RUN mkdir -p uploads logs certs && chmod +x ./entrypoint.sh
+RUN mkdir -p /app/apps/api/uploads /app/apps/api/logs /app/apps/api/certs && chmod +x ./entrypoint.sh
 
 EXPOSE 3000
 
