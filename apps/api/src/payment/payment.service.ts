@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { assertOrderTransition } from '../order/order-state-machine';
+import { REFUND_STATUS, PAYMENT_STATUS, WECHAT_REFUND_STATUS, RefundStatus } from '../common/constants';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import axios from 'axios';
@@ -280,6 +281,28 @@ export class PaymentService {
   }
 
   private async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {
+    // 基于数据库订单状态判断，幂等处理
+    const currentOrder = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!currentOrder) {
+      this.logger.error(`支付成功处理时订单不存在: ${orderId}`);
+      throw new InternalServerErrorException('订单不存在');
+    }
+
+    // 如果订单已处理完成，直接幂等返回
+    const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+    if (processedStatuses.includes(currentOrder.status)) {
+      this.logger.log(`支付成功幂等处理: 订单${orderId}已处于${currentOrder.status}状态`);
+      return;
+    }
+
+    // 如果订单既不是待支付也不是已支付状态，记录异常并拒绝
+    if (currentOrder.status !== OrderStatus.pending_payment) {
+      this.logger.error(`支付成功处理时订单状态异常: ${orderId}，状态: ${currentOrder.status}`);
+      throw new BadRequestException('订单状态异常');
+    }
+
     await this.prisma.$transaction(async (tx) => {
       assertOrderTransition(OrderStatus.pending_payment, OrderStatus.pending_delivery, '支付成功');
 
@@ -287,7 +310,7 @@ export class PaymentService {
         where: { id: paymentId },
         data: {
           transactionId,
-          status: 2,
+          status: PAYMENT_STATUS.SUCCESS,
           paidAt: new Date(),
           rawResponse: { totalAmount, transactionId },
         },
@@ -428,11 +451,63 @@ export class PaymentService {
     if (order.status !== 'aftersale') {
       throw new BadRequestException('订单状态不允许退款');
     }
-    if (!order.payment || order.payment.status !== 2) {
+    if (!order.payment || order.payment.status !== PAYMENT_STATUS.SUCCESS) {
       throw new BadRequestException('订单未支付成功');
     }
     if (params.refundAmount > order.payAmount!) {
       throw new BadRequestException('退款金额不能超过订单实付金额');
+    }
+
+    // 退款幂等: 检查同一售后单是否已有 pending 或 success 的退款单
+    if (params.aftersaleId) {
+      const existingRefund = await this.prisma.orderRefund.findFirst({
+        where: {
+          aftersaleId: BigInt(params.aftersaleId),
+          status: { in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCESS] },
+        },
+      });
+
+      if (existingRefund) {
+        if (existingRefund.status === REFUND_STATUS.SUCCESS) {
+          throw new BadRequestException('该售后单已成功退款，请勿重复退款');
+        }
+        this.logger.log(`退款幂等处理: 售后单${params.aftersaleId}已有${existingRefund.status}状态退款单`);
+        return {
+          refundId: existingRefund.id.toString(),
+          refundNo: existingRefund.refundNo,
+          outRefundNo: existingRefund.outRefundNo,
+        };
+      }
+    }
+
+    // 退款累计金额限制: 计算同一订单已成功和待处理的退款金额
+    const existingRefunds = await this.prisma.orderRefund.findMany({
+      where: {
+        orderId: BigInt(params.orderId),
+        status: { in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCESS] },
+      },
+    });
+
+    const totalRefundedAmount = existingRefunds.reduce((sum, r) => sum + r.refundAmount, 0);
+    if (totalRefundedAmount + params.refundAmount > order.payAmount!) {
+      throw new BadRequestException(`累计退款金额不能超过订单实付金额。当前已退款${totalRefundedAmount}分，申请${params.refundAmount}分，订单实付${order.payAmount}分`);
+    }
+
+    // 更新售后单状态为待退款
+    if (params.aftersaleId) {
+      await this.prisma.aftersaleOrder.update({
+        where: { id: BigInt(params.aftersaleId) },
+        data: {
+          status: 'pending_refund',
+          aftersaleLogs: {
+            create: {
+              operatorType: 'admin',
+              action: 'request_refund',
+              content: `管理员发起退款申请，金额: ${params.refundAmount}分`,
+            },
+          },
+        },
+      });
     }
 
     const appId = this.configService.get<string>('WECHAT_APP_ID')!;
@@ -477,8 +552,22 @@ export class PaymentService {
           },
         });
       } catch (error) {
-        this.logger.error('微信退款请求失败', (error as any).response?.data || (error as Error).message);
+        // 微信退款请求失败时不创建退款记录
+        const err = error as any;
+        const errData = err.response?.data;
+        this.logger.error(`微信退款请求失败: ${JSON.stringify(errData) || err.message}`);
+        throw new BadRequestException(`微信退款请求失败: ${errData?.message || err.message}`);
       }
+    } else {
+      const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
+      const mockRefund = this.configService.get<string>('WECHAT_REFUND_MOCK', 'false');
+      if (nodeEnv === 'production' && mockRefund === 'true') {
+        throw new BadRequestException('生产环境禁止使用退款 Mock');
+      }
+      if (mockRefund !== 'true') {
+        throw new BadRequestException('商户私钥未配置，无法发起退款');
+      }
+      this.logger.warn('微信退款 Mock 模式（仅限非生产环境测试）');
     }
 
     const refund = await this.prisma.orderRefund.create({
@@ -493,7 +582,7 @@ export class PaymentService {
         refundId: response?.data?.refund_id || null,
         refundAmount: params.refundAmount,
         totalAmount: order.payAmount!,
-        status: 'pending',
+        status: REFUND_STATUS.PENDING,
         reason: params.reason,
         rawRequest: request,
         rawResponse: response?.data || null,
@@ -577,17 +666,18 @@ export class PaymentService {
       return { code: 'SUCCESS', message: '' };
     }
 
-    if (refund.status === 'success') {
+    // 退款回调幂等: 已成功的退款不再处理
+    if (refund.status === REFUND_STATUS.SUCCESS) {
       this.logger.log(`微信退款回调已处理成功，跳过: ${outRefundNo}`);
       return { code: 'SUCCESS', message: '' };
     }
 
     await this.prisma.$transaction(async (tx) => {
-      if (refundStatus === 'SUCCESS') {
+      if (refundStatus === WECHAT_REFUND_STATUS.SUCCESS) {
         await tx.orderRefund.update({
           where: { id: refund.id },
           data: {
-            status: 'success',
+            status: REFUND_STATUS.SUCCESS,
             refundId: refundId,
             notifiedAt: new Date(),
             rawResponse: decryptedData,
@@ -705,26 +795,28 @@ export class PaymentService {
             }
           }
         }
-      } else if (refundStatus === 'CLOSED' || refundStatus === 'ABNORMAL') {
+      } else if (refundStatus === WECHAT_REFUND_STATUS.CLOSED || refundStatus === WECHAT_REFUND_STATUS.ABNORMAL) {
+        const localRefundStatus: RefundStatus = refundStatus === WECHAT_REFUND_STATUS.CLOSED ? REFUND_STATUS.CLOSED : REFUND_STATUS.ABNORMAL;
         await tx.orderRefund.update({
           where: { id: refund.id },
           data: {
-            status: 'failed',
+            status: localRefundStatus,
             notifiedAt: new Date(),
             rawResponse: decryptedData,
           },
         });
 
+        // 退款失败时，不要直接关闭售后单，保持待退款状态并记录日志
         if (refund.aftersaleId) {
           await tx.aftersaleOrder.update({
             where: { id: refund.aftersaleId },
             data: {
-              status: 'closed',
+              status: 'pending_refund', // 保持待退款状态，避免误关闭
               aftersaleLogs: {
                 create: {
                   operatorType: 'system',
                   action: 'refund_failed',
-                  content: `微信退款失败，状态: ${refundStatus}`,
+                  content: `微信退款失败，状态: ${refundStatus}，请管理员检查后重试`,
                 },
               },
             },
@@ -753,5 +845,76 @@ export class PaymentService {
       },
     });
     return response.data;
+  }
+
+  // 管理后台退款查询方法
+  async getRefundList(params: {
+    page: number;
+    pageSize: number;
+    orderId?: string;
+    status?: string;
+    refundNo?: string;
+  }) {
+    const { page, pageSize, orderId, status, refundNo } = params;
+    const skip = (page - 1) * pageSize;
+
+    const where: any = {};
+    if (orderId) {
+      where.orderId = BigInt(orderId);
+    }
+    if (status) {
+      where.status = status;
+    }
+    if (refundNo) {
+      where.refundNo = refundNo;
+    }
+
+    const [refunds, total] = await Promise.all([
+      this.prisma.orderRefund.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          order: { select: { id: true, orderNo: true, totalAmount: true, payAmount: true } },
+        },
+      }),
+      this.prisma.orderRefund.count({ where }),
+    ]);
+
+    return {
+      list: refunds.map(r => ({
+        ...r,
+        id: r.id.toString(),
+        orderId: r.orderId?.toString() || null,
+        aftersaleId: r.aftersaleId?.toString() || null,
+        paymentId: r.paymentId?.toString() || null,
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  async getRefundDetail(id: string) {
+    const refund = await this.prisma.orderRefund.findUnique({
+      where: { id: BigInt(id) },
+      include: {
+        order: true,
+      },
+    });
+    if (!refund) {
+      throw new NotFoundException('退款记录不存在');
+    }
+    return {
+      ...refund,
+      id: refund.id.toString(),
+      orderId: refund.orderId?.toString() || null,
+      aftersaleId: refund.aftersaleId?.toString() || null,
+      paymentId: refund.paymentId?.toString() || null,
+    };
   }
 }

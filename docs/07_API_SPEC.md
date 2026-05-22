@@ -80,9 +80,9 @@ API 按调用端分为三大部分：
 
 ### 1.4 认证方式
 
-**小程序端**：登录后获取 JWT Token，后续请求在 Header 中携带 `Authorization: Bearer <token>`，Token 有效期 7 天。
+**小程序端**：登录后获取 accessToken + refreshToken，后续请求在 Header 中携带 `Authorization: Bearer <accessToken>`。accessToken payload 包含 tokenType=access，有效期 7 天；refreshToken 有效期 30 天。
 
-**管理后台**：登录后获取 JWT Token，后续请求在 Header 中携带 `Authorization: Bearer <token>`，Token 有效期 2 小时，支持 Refresh Token 刷新。
+**管理后台**：登录后获取 accessToken + refreshToken，后续请求在 Header 中携带 `Authorization: Bearer <accessToken>`。accessToken payload 包含 tokenType=access，有效期 2 小时；refreshToken 有效期 30 天。
 
 ### 1.5 请求头规范
 
@@ -177,7 +177,8 @@ API 按调用端分为三大部分：
 
 | 字段名 | 类型 | 说明 |
 |--------|------|------|
-| token | string | JWT Token |
+| accessToken | string | JWT AccessToken，payload 包含 tokenType=access |
+| refreshToken | string | 刷新 Token |
 | tokenExpireAt | string | Token 过期时间 |
 | userInfo | object | 用户信息 |
 | userInfo.id | number | 用户 ID |
@@ -2223,7 +2224,7 @@ API 按调用端分为三大部分：
 
 | 字段名 | 类型 | 说明 |
 |--------|------|------|
-| token | string | JWT Token |
+| accessToken | string | JWT AccessToken |
 | refreshToken | string | 刷新 Token |
 | tokenExpireAt | string | Token 过期时间 |
 | userInfo | object | 管理员信息（含 id/username/realName/avatar/roleId/roleName/permissions） |
@@ -2234,7 +2235,53 @@ API 按调用端分为三大部分：
 
 ---
 
-#### 5.1.3 管理员信息
+#### 5.1.3 刷新 Token
+
+- **请求方法**：`POST`
+- **URL**：`/api/admin/auth/refresh`
+- **权限要求**：无（Public）
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| refreshToken | string | 是 | 刷新 Token |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| accessToken | string | 新的 JWT AccessToken |
+| refreshToken | string | 新的刷新 Token |
+| tokenExpireAt | string | Token 过期时间 |
+
+**错误码**：40103（Token 无效）、40102（Token 已过期）
+
+**业务说明**：使用 refreshToken 换取新的 accessToken 和 refreshToken。refreshToken 有效期 30 天，过期后需重新登录。
+
+---
+
+#### 5.1.4 退出登录
+
+- **请求方法**：`POST`
+- **URL**：`/api/admin/auth/logout`
+- **权限要求**：需管理员登录
+
+**请求参数**：无
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| null | null | 无返回数据 |
+
+**错误码**：40101（未登录）
+
+**业务说明**：退出登录，使当前 accessToken 和 refreshToken 失效。
+
+---
+
+#### 5.1.5 管理员信息
 
 - **请求方法**：`GET`
 - **URL**：`/api/admin/auth/info`
@@ -2264,7 +2311,7 @@ API 按调用端分为三大部分：
 
 ---
 
-#### 5.1.4 修改密码
+#### 5.1.6 修改密码
 
 - **请求方法**：`PUT`
 - **URL**：`/api/admin/auth/password`
@@ -3709,9 +3756,77 @@ API 按调用端分为三大部分：
 
 ---
 
+### 5.22 支付退款回调
+
+#### 5.22.1 微信支付回调
+
+- **请求方法**：`POST`
+- **URL**：`/api/weapp/pay/callback`
+- **权限要求**：无（Public，SkipTransform）
+
+**请求参数**：微信支付回调 XML/JSON 数据（由微信服务器发送）
+
+**响应字段**：按微信支付规范返回处理结果
+
+**业务说明**：微信支付成功后回调，验签后更新订单状态。支付成功则将订单状态改为待发货，扣减实际库存，发放积分；支付失败则将订单状态改为已取消，释放预扣库存。需处理重复通知（幂等性），确保同一笔订单只处理一次。
+
+---
+
+#### 5.22.2 微信退款回调
+
+- **请求方法**：`POST`
+- **URL**：`/api/weapp/pay/refund-callback`
+- **权限要求**：无（Public，SkipTransform）
+
+**请求参数**：微信退款回调 XML/JSON 数据（由微信服务器发送）
+
+**响应字段**：按微信支付规范返回处理结果
+
+**业务说明**：微信退款状态变更回调，验签后更新退款单和售后单状态。退款成功则更新退款单状态为已退款，同步更新售后单状态；退款异常则标记退款异常，需人工处理。
+
+---
+
+### 5.23 退款记录管理
+
+#### 5.23.1 退款记录列表
+
+- **请求方法**：`GET`
+- **URL**：`/api/admin/refund/list`
+- **权限要求**：需管理员登录 + `order:refund` 或 `order:aftersale:refund`
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| page | number | 否 | 页码，默认 1 |
+| pageSize | number | 否 | 每页条数，默认 10 |
+| orderId | number | 否 | 订单 ID |
+| status | number | 否 | 退款状态：0-全部 1-退款中 2-已退款 3-退款失败 |
+| refundNo | string | 否 | 退款单号 |
+
+**响应字段**：list[]含 id/refundNo/orderId/orderNo/aftersaleNo/refundAmount/status/statusText/transactionId/reason/createdAt + pagination
+
+**错误码**：40301
+
+---
+
+#### 5.23.2 退款记录详情
+
+- **请求方法**：`GET`
+- **URL**：`/api/admin/refund/detail/:id`
+- **权限要求**：需管理员登录 + `order:refund` 或 `order:aftersale:refund`
+
+**请求参数**：id(路径)
+
+**响应字段**：id/refundNo/orderId/orderNo/aftersaleNo/refundAmount/status/statusText/transactionId/reason/operateLogs[]/createdAt/updatedAt
+
+**错误码**：40401、40301
+
+---
+
 ## 6. 接口汇总
 
-### 6.1 小程序端接口（69 个）
+### 6.1 小程序端接口（70 个）
 
 | 序号 | 方法 | 路径 | 说明 |
 |------|------|------|------|
@@ -3755,145 +3870,150 @@ API 按调用端分为三大部分：
 | 38 | PUT | /api/weapp/aftersale/cancel/:id | 取消售后 |
 | 39 | POST | /api/weapp/pay/create | 创建支付 |
 | 40 | POST | /api/weapp/pay/callback | 支付回调(Public) |
-| 41 | GET | /api/weapp/pay/status/:orderId | 支付状态 |
-| 42 | GET | /api/weapp/member/levels | 会员等级列表 |
-| 43 | GET | /api/weapp/member/info | 会员信息 |
-| 44 | GET | /api/weapp/member/benefits | 会员权益 |
-| 45 | GET | /api/weapp/points/balance | 积分余额 |
-| 46 | GET | /api/weapp/points/records | 积分记录 |
-| 47 | POST | /api/weapp/points/sign-in | 签到 |
-| 48 | GET | /api/weapp/points/sign-in/status | 签到状态 |
-| 49 | GET | /api/weapp/points/rules | 积分规则 |
-| 50 | GET | /api/weapp/baby-profile | 宝宝档案列表 |
-| 51 | GET | /api/weapp/baby-profile/:id | 宝宝档案详情 |
-| 52 | POST | /api/weapp/baby-profile | 创建宝宝档案 |
-| 53 | PUT | /api/weapp/baby-profile/:id | 更新宝宝档案 |
-| 54 | DELETE | /api/weapp/baby-profile/:id | 删除宝宝档案 |
-| 55 | GET | /api/weapp/activity/active | 进行中活动 |
-| 56 | GET | /api/weapp/activity/:id | 活动详情 |
-| 57 | GET | /api/weapp/activity/type/:type | 按类型查活动 |
-| 58 | GET | /api/weapp/search | 商品搜索 |
-| 59 | GET | /api/weapp/search/hot | 热门关键词 |
-| 60 | GET | /api/weapp/search/history | 搜索历史 |
-| 61 | DELETE | /api/weapp/search/history | 清空搜索历史 |
-| 62 | GET | /api/weapp/content/categories | 内容分类 |
-| 63 | GET | /api/weapp/content/list | 内容列表 |
-| 64 | GET | /api/weapp/content/:id | 内容详情 |
-| 65 | POST | /api/weapp/share/record | 记录分享 |
-| 66 | GET | /api/weapp/share/poster | 分享海报 |
-| 67 | GET | /api/weapp/user/info | 用户信息 |
-| 68 | PUT | /api/weapp/user/profile | 更新用户资料 |
-| 69 | GET | /api/weapp/brand/list | 品牌列表 |
+| 41 | POST | /api/weapp/pay/refund-callback | 退款回调(Public) |
+| 42 | GET | /api/weapp/pay/status/:orderId | 支付状态 |
+| 43 | GET | /api/weapp/member/levels | 会员等级列表 |
+| 44 | GET | /api/weapp/member/info | 会员信息 |
+| 45 | GET | /api/weapp/member/benefits | 会员权益 |
+| 46 | GET | /api/weapp/points/balance | 积分余额 |
+| 47 | GET | /api/weapp/points/records | 积分记录 |
+| 48 | POST | /api/weapp/points/sign-in | 签到 |
+| 49 | GET | /api/weapp/points/sign-in/status | 签到状态 |
+| 50 | GET | /api/weapp/points/rules | 积分规则 |
+| 51 | GET | /api/weapp/baby-profile | 宝宝档案列表 |
+| 52 | GET | /api/weapp/baby-profile/:id | 宝宝档案详情 |
+| 53 | POST | /api/weapp/baby-profile | 创建宝宝档案 |
+| 54 | PUT | /api/weapp/baby-profile/:id | 更新宝宝档案 |
+| 55 | DELETE | /api/weapp/baby-profile/:id | 删除宝宝档案 |
+| 56 | GET | /api/weapp/activity/active | 进行中活动 |
+| 57 | GET | /api/weapp/activity/:id | 活动详情 |
+| 58 | GET | /api/weapp/activity/type/:type | 按类型查活动 |
+| 59 | GET | /api/weapp/search | 商品搜索 |
+| 60 | GET | /api/weapp/search/hot | 热门关键词 |
+| 61 | GET | /api/weapp/search/history | 搜索历史 |
+| 62 | DELETE | /api/weapp/search/history | 清空搜索历史 |
+| 63 | GET | /api/weapp/content/categories | 内容分类 |
+| 64 | GET | /api/weapp/content/list | 内容列表 |
+| 65 | GET | /api/weapp/content/:id | 内容详情 |
+| 66 | POST | /api/weapp/share/record | 记录分享 |
+| 67 | GET | /api/weapp/share/poster | 分享海报 |
+| 68 | GET | /api/weapp/user/info | 用户信息 |
+| 69 | PUT | /api/weapp/user/profile | 更新用户资料 |
+| 70 | GET | /api/weapp/brand/list | 品牌列表 |
 
 ### 6.2 公共接口（2 个）
 
 | 序号 | 方法 | 路径 | 说明 |
 |------|------|------|------|
-| 70 | POST | /api/common/file/upload | 文件上传 |
-| 71 | GET | /api/common/file/:id | 文件详情 |
+| 71 | POST | /api/common/file/upload | 文件上传 |
+| 72 | GET | /api/common/file/:id | 文件详情 |
 
-### 6.3 管理后台接口（101 个）
+### 6.3 管理后台接口（105 个）
 
 | 序号 | 方法 | 路径 | 说明 |
 |------|------|------|------|
-| 72 | GET | /api/admin/auth/captcha | 验证码(Public) |
-| 73 | POST | /api/admin/auth/login | 管理员登录(Public) |
-| 74 | GET | /api/admin/auth/info | 管理员信息 |
-| 75 | PUT | /api/admin/auth/password | 修改密码 |
-| 76 | GET | /api/admin/product/list | 商品列表 |
-| 77 | GET | /api/admin/product/detail/:id | 商品详情 |
-| 78 | POST | /api/admin/product/create | 创建商品 |
-| 79 | PUT | /api/admin/product/update/:id | 更新商品 |
-| 80 | DELETE | /api/admin/product/delete/:id | 删除商品 |
-| 81 | PUT | /api/admin/product/status/:id | 上下架 |
-| 82 | GET | /api/admin/category/list | 分类列表 |
-| 83 | GET | /api/admin/category/detail/:id | 分类详情 |
-| 84 | POST | /api/admin/category/create | 创建分类 |
-| 85 | PUT | /api/admin/category/update/:id | 更新分类 |
-| 86 | DELETE | /api/admin/category/delete/:id | 删除分类 |
-| 87 | GET | /api/admin/brand/list | 品牌列表 |
-| 88 | GET | /api/admin/brand/detail/:id | 品牌详情 |
-| 89 | POST | /api/admin/brand/create | 创建品牌 |
-| 90 | PUT | /api/admin/brand/update/:id | 更新品牌 |
-| 91 | DELETE | /api/admin/brand/delete/:id | 删除品牌 |
-| 92 | GET | /api/admin/banner/list | Banner列表 |
-| 93 | POST | /api/admin/banner | 创建Banner |
-| 94 | PUT | /api/admin/banner/:id | 更新Banner |
-| 95 | DELETE | /api/admin/banner/:id | 删除Banner |
-| 96 | GET | /api/admin/coupon/list | 优惠券列表 |
-| 97 | GET | /api/admin/coupon/:id | 优惠券详情 |
-| 98 | POST | /api/admin/coupon | 创建优惠券 |
-| 99 | PUT | /api/admin/coupon/:id | 更新优惠券 |
-| 100 | DELETE | /api/admin/coupon/:id | 删除优惠券 |
-| 101 | GET | /api/admin/activity/list | 活动列表 |
-| 102 | GET | /api/admin/activity/:id | 活动详情 |
-| 103 | POST | /api/admin/activity | 创建活动 |
-| 104 | PUT | /api/admin/activity/:id | 更新活动 |
-| 105 | DELETE | /api/admin/activity/:id | 删除活动 |
-| 106 | PUT | /api/admin/activity/:id/status | 更新活动状态 |
-| 107 | POST | /api/admin/activity/:activityId/product | 添加活动商品 |
-| 108 | DELETE | /api/admin/activity/product/:id | 删除活动商品 |
-| 109 | GET | /api/admin/order/list | 订单列表 |
-| 110 | GET | /api/admin/order/detail/:id | 订单详情 |
-| 111 | PUT | /api/admin/order/status/:id | 更新订单状态 |
-| 112 | PUT | /api/admin/order/remark/:id | 订单备注 |
-| 113 | PUT | /api/admin/order/cancel/:id | 取消订单 |
-| 114 | GET | /api/admin/order/delivery-list | 待发货列表 |
-| 115 | POST | /api/admin/order/batch-deliver | 批量发货 |
-| 116 | POST | /api/admin/order/deliver | 发货 |
-| 117 | GET | /api/admin/order/export | 导出订单 |
-| 118 | GET | /api/admin/aftersale/list | 售后列表 |
-| 119 | GET | /api/admin/aftersale/detail/:id | 售后详情 |
-| 120 | PUT | /api/admin/aftersale/:id/approve | 审核通过 |
-| 121 | PUT | /api/admin/aftersale/:id/reject | 审核拒绝 |
-| 122 | PUT | /api/admin/aftersale/:id/refund | 退款 |
-| 123 | GET | /api/admin/user/list | 用户列表 |
-| 124 | GET | /api/admin/user/detail/:id | 用户详情 |
-| 125 | PUT | /api/admin/user/level/:id | 调整会员等级 |
-| 126 | PUT | /api/admin/user/status/:id | 切换用户状态 |
-| 127 | PUT | /api/admin/user/points/:id | 调整用户积分 |
-| 128 | GET | /api/admin/baby-profile | 宝宝档案列表(管理) |
-| 129 | GET | /api/admin/member/levels | 会员等级列表 |
-| 130 | POST | /api/admin/member/levels | 创建会员等级 |
-| 131 | PUT | /api/admin/member/levels/:id | 更新会员等级 |
-| 132 | GET | /api/admin/points/records | 积分记录 |
-| 133 | POST | /api/admin/points/adjust | 调整积分 |
-| 134 | POST | /api/admin/points/expire-clean | 清理过期积分 |
-| 135 | GET | /api/admin/supplier/list | 供应商列表 |
-| 136 | GET | /api/admin/supplier/detail/:id | 供应商详情 |
-| 137 | POST | /api/admin/supplier/create | 创建供应商 |
-| 138 | PUT | /api/admin/supplier/update/:id | 更新供应商 |
-| 139 | DELETE | /api/admin/supplier/delete/:id | 删除供应商 |
-| 140 | PUT | /api/admin/supplier/status/:id | 更新供应商状态 |
-| 141 | GET | /api/admin/content/list | 内容列表 |
-| 142 | GET | /api/admin/content/:id | 内容详情 |
-| 143 | POST | /api/admin/content | 创建内容 |
-| 144 | PUT | /api/admin/content/:id | 更新内容 |
-| 145 | DELETE | /api/admin/content/:id | 删除内容 |
-| 146 | POST | /api/admin/content/category | 创建内容分类 |
-| 147 | PUT | /api/admin/content/category/:id | 更新内容分类 |
-| 148 | DELETE | /api/admin/content/category/:id | 删除内容分类 |
-| 149 | GET | /api/admin/dashboard/stats | 仪表盘统计 |
-| 150 | GET | /api/admin/dashboard/sales-chart | 销售趋势 |
-| 151 | GET | /api/admin/dashboard/top-products | 热销商品 |
-| 152 | GET | /api/admin/dashboard/recent-orders | 最近订单 |
-| 153 | GET | /api/admin/admin-user | 管理员列表 |
-| 154 | GET | /api/admin/admin-user/:id | 管理员详情 |
-| 155 | POST | /api/admin/admin-user | 创建管理员 |
-| 156 | PUT | /api/admin/admin-user/:id | 更新管理员 |
-| 157 | PUT | /api/admin/admin-user/:id/status | 更新管理员状态 |
-| 158 | DELETE | /api/admin/admin-user/:id | 删除管理员 |
-| 159 | GET | /api/admin/role | 角色列表 |
-| 160 | GET | /api/admin/role/:id | 角色详情 |
-| 161 | POST | /api/admin/role | 创建角色 |
-| 162 | PUT | /api/admin/role/:id | 更新角色 |
-| 163 | DELETE | /api/admin/role/:id | 删除角色 |
-| 164 | GET | /api/admin/permission/tree | 权限树 |
-| 165 | GET | /api/admin/operation-log | 操作日志列表 |
-| 166 | GET | /api/admin/system-config/list | 系统配置列表 |
-| 167 | GET | /api/admin/system-config/group/:groupName | 按组查配置 |
-| 168 | PUT | /api/admin/system-config/update | 更新配置 |
-| 169 | PUT | /api/admin/system-config/batch-update | 批量更新配置 |
-| 170 | GET | /api/admin/file/list | 文件列表 |
-| 171 | GET | /api/admin/file/:id | 文件详情 |
-| 172 | POST | /api/admin/file/upload | 文件上传 |
+| 73 | GET | /api/admin/auth/captcha | 验证码(Public) |
+| 74 | POST | /api/admin/auth/login | 管理员登录(Public) |
+| 75 | POST | /api/admin/auth/refresh | 刷新Token(Public) |
+| 76 | POST | /api/admin/auth/logout | 退出登录 |
+| 77 | GET | /api/admin/auth/info | 管理员信息 |
+| 78 | PUT | /api/admin/auth/password | 修改密码 |
+| 79 | GET | /api/admin/product/list | 商品列表 |
+| 80 | GET | /api/admin/product/detail/:id | 商品详情 |
+| 81 | POST | /api/admin/product/create | 创建商品 |
+| 82 | PUT | /api/admin/product/update/:id | 更新商品 |
+| 83 | DELETE | /api/admin/product/delete/:id | 删除商品 |
+| 84 | PUT | /api/admin/product/status/:id | 上下架 |
+| 85 | GET | /api/admin/category/list | 分类列表 |
+| 86 | GET | /api/admin/category/detail/:id | 分类详情 |
+| 87 | POST | /api/admin/category/create | 创建分类 |
+| 88 | PUT | /api/admin/category/update/:id | 更新分类 |
+| 89 | DELETE | /api/admin/category/delete/:id | 删除分类 |
+| 90 | GET | /api/admin/brand/list | 品牌列表 |
+| 91 | GET | /api/admin/brand/detail/:id | 品牌详情 |
+| 92 | POST | /api/admin/brand/create | 创建品牌 |
+| 93 | PUT | /api/admin/brand/update/:id | 更新品牌 |
+| 94 | DELETE | /api/admin/brand/delete/:id | 删除品牌 |
+| 95 | GET | /api/admin/banner/list | Banner列表 |
+| 96 | POST | /api/admin/banner | 创建Banner |
+| 97 | PUT | /api/admin/banner/:id | 更新Banner |
+| 98 | DELETE | /api/admin/banner/:id | 删除Banner |
+| 99 | GET | /api/admin/coupon/list | 优惠券列表 |
+| 100 | GET | /api/admin/coupon/:id | 优惠券详情 |
+| 101 | POST | /api/admin/coupon | 创建优惠券 |
+| 102 | PUT | /api/admin/coupon/:id | 更新优惠券 |
+| 103 | DELETE | /api/admin/coupon/:id | 删除优惠券 |
+| 104 | GET | /api/admin/activity/list | 活动列表 |
+| 105 | GET | /api/admin/activity/:id | 活动详情 |
+| 106 | POST | /api/admin/activity | 创建活动 |
+| 107 | PUT | /api/admin/activity/:id | 更新活动 |
+| 108 | DELETE | /api/admin/activity/:id | 删除活动 |
+| 109 | PUT | /api/admin/activity/:id/status | 更新活动状态 |
+| 110 | POST | /api/admin/activity/:activityId/product | 添加活动商品 |
+| 111 | DELETE | /api/admin/activity/product/:id | 删除活动商品 |
+| 112 | GET | /api/admin/order/list | 订单列表 |
+| 113 | GET | /api/admin/order/detail/:id | 订单详情 |
+| 114 | PUT | /api/admin/order/status/:id | 更新订单状态 |
+| 115 | PUT | /api/admin/order/remark/:id | 订单备注 |
+| 116 | PUT | /api/admin/order/cancel/:id | 取消订单 |
+| 117 | GET | /api/admin/order/delivery-list | 待发货列表 |
+| 118 | POST | /api/admin/order/batch-deliver | 批量发货 |
+| 119 | POST | /api/admin/order/deliver | 发货 |
+| 120 | GET | /api/admin/order/export | 导出订单 |
+| 121 | GET | /api/admin/aftersale/list | 售后列表 |
+| 122 | GET | /api/admin/aftersale/detail/:id | 售后详情 |
+| 123 | PUT | /api/admin/aftersale/:id/approve | 审核通过 |
+| 124 | PUT | /api/admin/aftersale/:id/reject | 审核拒绝 |
+| 125 | PUT | /api/admin/aftersale/:id/refund | 退款 |
+| 126 | GET | /api/admin/user/list | 用户列表 |
+| 127 | GET | /api/admin/user/detail/:id | 用户详情 |
+| 128 | PUT | /api/admin/user/level/:id | 调整会员等级 |
+| 129 | PUT | /api/admin/user/status/:id | 切换用户状态 |
+| 130 | PUT | /api/admin/user/points/:id | 调整用户积分 |
+| 131 | GET | /api/admin/baby-profile | 宝宝档案列表(管理) |
+| 132 | GET | /api/admin/member/levels | 会员等级列表 |
+| 133 | POST | /api/admin/member/levels | 创建会员等级 |
+| 134 | PUT | /api/admin/member/levels/:id | 更新会员等级 |
+| 135 | GET | /api/admin/points/records | 积分记录 |
+| 136 | POST | /api/admin/points/adjust | 调整积分 |
+| 137 | POST | /api/admin/points/expire-clean | 清理过期积分 |
+| 138 | GET | /api/admin/supplier/list | 供应商列表 |
+| 139 | GET | /api/admin/supplier/detail/:id | 供应商详情 |
+| 140 | POST | /api/admin/supplier/create | 创建供应商 |
+| 141 | PUT | /api/admin/supplier/update/:id | 更新供应商 |
+| 142 | DELETE | /api/admin/supplier/delete/:id | 删除供应商 |
+| 143 | PUT | /api/admin/supplier/status/:id | 更新供应商状态 |
+| 144 | GET | /api/admin/content/list | 内容列表 |
+| 145 | GET | /api/admin/content/:id | 内容详情 |
+| 146 | POST | /api/admin/content | 创建内容 |
+| 147 | PUT | /api/admin/content/:id | 更新内容 |
+| 148 | DELETE | /api/admin/content/:id | 删除内容 |
+| 149 | POST | /api/admin/content/category | 创建内容分类 |
+| 150 | PUT | /api/admin/content/category/:id | 更新内容分类 |
+| 151 | DELETE | /api/admin/content/category/:id | 删除内容分类 |
+| 152 | GET | /api/admin/dashboard/stats | 仪表盘统计 |
+| 153 | GET | /api/admin/dashboard/sales-chart | 销售趋势 |
+| 154 | GET | /api/admin/dashboard/top-products | 热销商品 |
+| 155 | GET | /api/admin/dashboard/recent-orders | 最近订单 |
+| 156 | GET | /api/admin/admin-user | 管理员列表 |
+| 157 | GET | /api/admin/admin-user/:id | 管理员详情 |
+| 158 | POST | /api/admin/admin-user | 创建管理员 |
+| 159 | PUT | /api/admin/admin-user/:id | 更新管理员 |
+| 160 | PUT | /api/admin/admin-user/:id/status | 更新管理员状态 |
+| 161 | DELETE | /api/admin/admin-user/:id | 删除管理员 |
+| 162 | GET | /api/admin/role | 角色列表 |
+| 163 | GET | /api/admin/role/:id | 角色详情 |
+| 164 | POST | /api/admin/role | 创建角色 |
+| 165 | PUT | /api/admin/role/:id | 更新角色 |
+| 166 | DELETE | /api/admin/role/:id | 删除角色 |
+| 167 | GET | /api/admin/permission/tree | 权限树 |
+| 168 | GET | /api/admin/operation-log | 操作日志列表 |
+| 169 | GET | /api/admin/system-config/list | 系统配置列表 |
+| 170 | GET | /api/admin/system-config/group/:groupName | 按组查配置 |
+| 171 | PUT | /api/admin/system-config/update | 更新配置 |
+| 172 | PUT | /api/admin/system-config/batch-update | 批量更新配置 |
+| 173 | GET | /api/admin/file/list | 文件列表 |
+| 174 | GET | /api/admin/file/:id | 文件详情 |
+| 175 | POST | /api/admin/file/upload | 文件上传 |
+| 176 | GET | /api/admin/refund/list | 退款记录列表 |
+| 177 | GET | /api/admin/refund/detail/:id | 退款记录详情 |

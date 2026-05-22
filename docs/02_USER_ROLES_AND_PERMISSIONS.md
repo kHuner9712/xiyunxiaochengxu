@@ -194,11 +194,23 @@
 
 ## 3. 后台角色定义
 
-### 3.1 超级管理员
+### 角色总览
+
+| 角色代码 | 角色名称 | 说明 |
+|---------|---------|------|
+| super_admin | 超级管理员 | 拥有所有权限 |
+| operator | 运营管理 | 商品管理、订单管理、营销管理、内容管理 |
+| cs | 客服 | 订单查看、售后处理 |
+| finance | 财务 | 订单查看、退款审核、数据导出 |
+
+---
+
+### 3.1 超级管理员（super_admin）
 
 | 属性 | 说明 |
 |------|------|
 | 定义 | 拥有所有后台模块的完整操作权限 |
+| 角色代码 | super_admin |
 | 默认账号 | 系统初始化时自动创建 |
 | 账号数量 | 建议不超过2个 |
 | 权限范围 | 全部模块的增删改查权限 |
@@ -215,93 +227,51 @@
 
 ---
 
-### 3.2 运营管理员
+### 3.2 运营管理（operator）
 
 | 属性 | 说明 |
 |------|------|
 | 定义 | 负责日常运营管理的工作人员 |
-| 权限范围 | 数据看板、活动管理、Banner管理、推荐位管理、首页装修、内容管理、优惠券管理、数据统计 |
+| 角色代码 | operator |
+| 权限范围 | 商品管理、订单管理、营销管理、内容管理 |
 
-**权限详情：**
+**职责范围：**
 
-| 模块 | 查看 | 创建 | 编辑 | 删除 |
-|------|------|------|------|------|
-| 数据看板 | ✓ | — | — | — |
-| 活动管理 | ✓ | ✓ | ✓ | ✓ |
-| Banner管理 | ✓ | ✓ | ✓ | ✓ |
-| 推荐位管理 | ✓ | ✓ | ✓ | ✓ |
-| 首页装修 | ✓ | ✓ | ✓ | — |
-| 内容管理 | ✓ | ✓ | ✓ | ✓ |
-| 优惠券管理 | ✓ | ✓ | ✓ | ✓ |
-| 数据统计 | ✓ | — | — | — |
+- 商品管理（商品列表、新增/编辑/删除商品、上下架、库存管理、分类管理、品牌管理）
+- 订单管理（订单列表、订单详情、订单发货、订单备注、取消订单、售后管理、审核售后、退款、订单导出）
+- 营销管理（优惠券管理、活动管理、Banner 管理、推荐位管理、首页装修）
+- 内容管理（内容列表、编辑内容）
 
 ---
 
-### 3.3 商品管理员
+### 3.3 客服（cs）
 
 | 属性 | 说明 |
 |------|------|
-| 定义 | 负责商品相关管理的工作人员 |
-| 权限范围 | 商品管理、分类管理、品牌管理、库存管理、推荐位管理 |
+| 定义 | 负责客户服务和售后处理的工作人员 |
+| 角色代码 | cs |
+| 权限范围 | 订单查看、售后处理 |
 
-**权限详情：**
+**职责范围：**
 
-| 模块 | 查看 | 创建 | 编辑 | 删除 |
-|------|------|------|------|------|
-| 商品管理 | ✓ | ✓ | ✓ | ✓ |
-| 分类管理 | ✓ | ✓ | ✓ | ✓ |
-| 品牌管理 | ✓ | ✓ | ✓ | ✓ |
-| 库存管理 | ✓ | — | ✓ | — |
-| 推荐位管理 | ✓ | ✓ | ✓ | ✓ |
+- 订单查看（订单列表、订单详情）
+- 售后处理（售后管理、审核售后、退款）
 
 ---
 
-### 3.4 订单管理员
+### 3.4 财务（finance）
 
 | 属性 | 说明 |
 |------|------|
-| 定义 | 负责订单处理和发货管理的工作人员 |
-| 权限范围 | 订单管理、发货管理 |
+| 定义 | 负责财务数据查看和退款审核的工作人员 |
+| 角色代码 | finance |
+| 权限范围 | 订单查看、退款审核、数据导出 |
 
-**权限详情：**
+**职责范围：**
 
-| 模块 | 查看 | 编辑 | 其他操作 |
-|------|------|------|----------|
-| 订单管理 | ✓ | 修改备注 | 取消订单、改价（待付款状态） |
-| 发货管理 | ✓ | — | 确认发货、批量发货、打印面单 |
-
----
-
-### 3.5 售后管理员
-
-| 属性 | 说明 |
-|------|------|
-| 定义 | 负责售后处理的工作人员 |
-| 权限范围 | 售后管理 |
-
-**权限详情：**
-
-| 模块 | 查看 | 编辑 | 其他操作 |
-|------|------|------|----------|
-| 售后管理 | ✓ | 修改备注 | 同意退款、拒绝退款、同意退货、确认收货退款 |
-
----
-
-### 3.6 财务查看员
-
-| 属性 | 说明 |
-|------|------|
-| 定义 | 只读查看财务相关数据的人员 |
-| 权限范围 | 订单查看（只读）、数据统计（只读）、退款记录查看 |
-| 权限特征 | 所有模块均为只读，不可进行任何增删改操作 |
-
-**权限详情：**
-
-| 模块 | 查看 | 创建 | 编辑 | 删除 |
-|------|------|------|------|------|
-| 订单查看 | ✓ | — | — | — |
-| 数据统计 | ✓ | — | — | — |
-| 退款记录 | ✓ | — | — | — |
+- 订单查看（订单列表、订单详情）
+- 退款审核（审核售后、退款）
+- 数据统计与导出
 
 ---
 
@@ -381,22 +351,55 @@ admin ──1:N──> admin_role <──N:1── role ──1:N──> role_pe
 #### 命名格式
 
 ```
+module
 module:action
+module:submodule:action
 ```
 
-- `module`：模块标识，使用小写英文，多单词用下划线连接
-- `action`：操作类型，使用小写英文
+- `module`：一级模块标识，使用小写英文，对应菜单/模块级权限
+- `module:action`：二级操作标识，`action` 表示具体操作或子模块
+- `module:submodule:action`：三级操作标识，用于子模块下的具体操作
+
+#### 权限类型定义
+
+| 类型值 | 类型名称 | 说明 |
+|--------|---------|------|
+| 1 | 菜单 | 菜单/模块级权限，控制页面和子模块的访问 |
+| 2 | 按钮 | 操作/按钮级权限，控制具体操作的执行 |
 
 #### 操作类型定义
 
-| action | 说明 | 对应HTTP方法 |
-|--------|------|-------------|
-| read | 查看/读取 | GET |
-| create | 创建/新增 | POST |
-| update | 编辑/修改 | PUT/PATCH |
-| delete | 删除 | DELETE |
-| export | 导出 | GET（导出接口） |
-| audit | 审核 | PUT（审核接口） |
+| action | 说明 | 权限类型 |
+|--------|------|---------|
+| list | 列表/查看 | 1(菜单) |
+| create | 创建/新增 | 2(按钮) |
+| edit | 编辑/修改 | 2(按钮) |
+| delete | 删除 | 2(按钮) |
+| detail | 详情 | 2(按钮) |
+| publish | 上架/下架 | 2(按钮) |
+| deliver | 发货 | 2(按钮) |
+| remark | 备注 | 2(按钮) |
+| cancel | 取消 | 2(按钮) |
+| review | 审核 | 2(按钮) |
+| refund | 退款 | 2(按钮) |
+| export | 导出 | 2(按钮) |
+| member | 会员管理 | 2(按钮) |
+| points | 积分管理 | 2(按钮) |
+| baby | 宝宝档案 | 2(按钮) |
+| stock | 库存管理 | 1(菜单) |
+| category | 分类管理 | 1(菜单) |
+| brand | 品牌管理 | 1(菜单) |
+| coupon | 优惠券管理 | 1(菜单) |
+| activity | 活动管理 | 1(菜单) |
+| banner | Banner 管理 | 1(菜单) |
+| recommendation | 推荐位管理 | 1(菜单) |
+| decor | 首页装修 | 1(菜单) |
+| config | 系统配置 | 1(菜单) |
+| admin | 管理员管理 | 1(菜单) |
+| role | 角色权限 | 1(菜单) |
+| log | 操作日志 | 1(菜单) |
+| index | 数据统计 | 1(菜单) |
+| aftersale | 售后管理 | 1(菜单) |
 
 #### 完整权限标识列表
 
@@ -404,370 +407,249 @@ module:action
 
 ---
 
-## 5. 完整权限列表
+## 5. 完整权限码表
 
-### 5.1 商品中心
+> **重要说明**：以下权限码必须与 `seed.ts`、`router/index.ts`、`RequirePermission` 装饰器保持完全一致。
+
+### 5.1 一级权限（菜单/模块）
+
+| 权限码 | 名称 | 类型 |
+|--------|------|------|
+| dashboard | 首页 | 1(菜单) |
+| product | 商品管理 | 1(菜单) |
+| order | 订单管理 | 1(菜单) |
+| user | 用户管理 | 1(菜单) |
+| marketing | 营销管理 | 1(菜单) |
+| content | 内容管理 | 1(菜单) |
+| supplier | 供应商管理 | 1(菜单) |
+| statistics | 数据统计 | 1(菜单) |
+| system | 系统设置 | 1(菜单) |
+
+---
+
+### 5.2 二级权限（操作/按钮）
 
 #### 商品管理（product）
 
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| product:read | 查看商品 | 查看商品列表和详情 |
-| product:create | 创建商品 | 新增商品 |
-| product:update | 编辑商品 | 修改商品信息、上下架 |
-| product:delete | 删除商品 | 删除商品（逻辑删除） |
-
-#### 分类管理（category）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| category:read | 查看分类 | 查看分类列表和详情 |
-| category:create | 创建分类 | 新增分类 |
-| category:update | 编辑分类 | 修改分类信息、排序 |
-| category:delete | 删除分类 | 删除分类 |
-
-#### 品牌管理（brand）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| brand:read | 查看品牌 | 查看品牌列表和详情 |
-| brand:create | 创建品牌 | 新增品牌 |
-| brand:update | 编辑品牌 | 修改品牌信息 |
-| brand:delete | 删除品牌 | 删除品牌 |
-
-#### 库存管理（stock）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| stock:read | 查看库存 | 查看库存数据 |
-| stock:update | 调整库存 | 修改库存数量 |
-
----
-
-### 5.2 订单中心
+| 权限码 | 名称 | 类型 | 父级 |
+|--------|------|------|------|
+| product:list | 商品列表 | 1(菜单) | product |
+| product:create | 新增商品 | 2(按钮) | product |
+| product:edit | 编辑商品 | 2(按钮) | product |
+| product:delete | 删除商品 | 2(按钮) | product |
+| product:publish | 上架/下架 | 2(按钮) | product |
+| product:stock | 库存管理 | 1(菜单) | product |
+| product:category | 分类管理 | 1(菜单) | product |
+| product:brand | 品牌管理 | 1(菜单) | product |
 
 #### 订单管理（order）
 
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| order:read | 查看订单 | 查看订单列表和详情 |
-| order:update | 编辑订单 | 修改备注、改价、取消订单 |
-
-#### 发货管理（delivery）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| delivery:read | 查看发货 | 查看发货列表和详情 |
-| delivery:create | 创建发货 | 确认发货、录入物流单号 |
-| delivery:update | 编辑发货 | 修改物流信息 |
-
-#### 售后管理（aftersale）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| aftersale:read | 查看售后 | 查看售后列表和详情 |
-| aftersale:update | 处理售后 | 同意/拒绝退款、同意退货、确认收货退款 |
-| aftersale:audit | 审核售后 | 售后单审核 |
-
----
-
-### 5.3 用户中心
+| 权限码 | 名称 | 类型 | 父级 |
+|--------|------|------|------|
+| order:list | 订单列表 | 1(菜单) | order |
+| order:detail | 订单详情 | 2(按钮) | order |
+| order:deliver | 订单发货 | 2(按钮) | order |
+| order:remark | 订单备注 | 2(按钮) | order |
+| order:cancel | 取消订单 | 2(按钮) | order |
+| order:aftersale | 售后管理 | 1(菜单) | order |
+| order:aftersale:review | 审核售后 | 2(按钮) | order |
+| order:aftersale:refund | 退款 | 2(按钮) | order |
+| order:export | 订单导出 | 2(按钮) | order |
 
 #### 用户管理（user）
 
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| user:read | 查看用户 | 查看用户列表和详情 |
-| user:update | 编辑用户 | 修改用户信息、调整积分、调整成长值 |
+| 权限码 | 名称 | 类型 | 父级 |
+|--------|------|------|------|
+| user:list | 用户列表 | 1(菜单) | user |
+| user:detail | 用户详情 | 2(按钮) | user |
+| user:member | 会员管理 | 2(按钮) | user |
+| user:points | 积分管理 | 2(按钮) | user |
+| user:baby | 宝宝档案 | 2(按钮) | user |
 
-#### 会员等级管理（member_level）
+#### 营销管理（marketing）
 
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| member_level:read | 查看会员等级 | 查看会员等级配置 |
-| member_level:update | 编辑会员等级 | 修改等级规则、权益配置 |
-
-#### 积分管理（points）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| points:read | 查看积分 | 查看积分流水记录 |
-| points:update | 调整积分 | 手动增减用户积分 |
-
----
-
-### 5.4 会员营销
-
-#### 优惠券管理（coupon）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| coupon:read | 查看优惠券 | 查看优惠券列表和详情 |
-| coupon:create | 创建优惠券 | 新增优惠券 |
-| coupon:update | 编辑优惠券 | 修改优惠券信息 |
-| coupon:delete | 删除优惠券 | 删除优惠券 |
-
-#### 活动管理（activity）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| activity:read | 查看活动 | 查看活动列表和详情 |
-| activity:create | 创建活动 | 新增活动 |
-| activity:update | 编辑活动 | 修改活动信息 |
-| activity:delete | 删除活动 | 删除活动 |
-
-#### Banner管理（banner）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| banner:read | 查看Banner | 查看Banner列表和详情 |
-| banner:create | 创建Banner | 新增Banner |
-| banner:update | 编辑Banner | 修改Banner信息、排序 |
-| banner:delete | 删除Banner | 删除Banner |
-
-#### 推荐位管理（recommendation）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| recommendation:read | 查看推荐位 | 查看推荐位列表和详情 |
-| recommendation:create | 创建推荐位 | 新增推荐位 |
-| recommendation:update | 编辑推荐位 | 修改推荐位信息、排序 |
-| recommendation:delete | 删除推荐位 | 删除推荐位 |
-
-#### 首页装修（home_decor）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| home_decor:read | 查看首页装修 | 查看首页装修配置 |
-| home_decor:update | 编辑首页装修 | 修改首页装修布局和内容 |
-
----
-
-### 5.5 内容管理
+| 权限码 | 名称 | 类型 | 父级 |
+|--------|------|------|------|
+| marketing:coupon | 优惠券管理 | 1(菜单) | marketing |
+| marketing:activity | 活动管理 | 1(菜单) | marketing |
+| marketing:banner | Banner 管理 | 1(菜单) | marketing |
+| marketing:recommendation | 推荐位管理 | 1(菜单) | marketing |
+| marketing:decor | 首页装修 | 1(菜单) | marketing |
 
 #### 内容管理（content）
 
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| content:read | 查看内容 | 查看内容列表和详情 |
-| content:create | 创建内容 | 新增文章/资讯 |
-| content:update | 编辑内容 | 修改内容信息 |
-| content:delete | 删除内容 | 删除内容 |
-
-#### 文件资源管理（file_asset）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| file_asset:read | 查看文件 | 查看文件资源列表 |
-| file_asset:create | 上传文件 | 上传图片/文件 |
-| file_asset:delete | 删除文件 | 删除文件资源 |
-
----
-
-### 5.6 供应商管理
+| 权限码 | 名称 | 类型 | 父级 |
+|--------|------|------|------|
+| content:list | 内容列表 | 1(菜单) | content |
+| content:edit | 编辑内容 | 2(按钮) | content |
 
 #### 供应商管理（supplier）
 
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| supplier:read | 查看供应商 | 查看供应商列表和详情 |
-| supplier:create | 创建供应商 | 新增供应商 |
-| supplier:update | 编辑供应商 | 修改供应商信息 |
-| supplier:delete | 删除供应商 | 删除供应商 |
-
-> **重要说明**：供应商不是系统用户，不能登录后台。详见第7章。
-
----
-
-### 5.7 数据统计
+| 权限码 | 名称 | 类型 | 父级 |
+|--------|------|------|------|
+| supplier:list | 供应商列表 | 1(菜单) | supplier |
+| supplier:create | 新增供应商 | 2(按钮) | supplier |
+| supplier:edit | 编辑供应商 | 2(按钮) | supplier |
+| supplier:delete | 删除供应商 | 2(按钮) | supplier |
 
 #### 数据统计（statistics）
 
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| statistics:read | 查看统计 | 查看数据看板和统计报表 |
-| statistics:export | 导出统计 | 导出统计数据 |
+| 权限码 | 名称 | 类型 | 父级 |
+|--------|------|------|------|
+| statistics:index | 数据统计 | 1(菜单) | statistics |
+
+#### 系统设置（system）
+
+| 权限码 | 名称 | 类型 | 父级 |
+|--------|------|------|------|
+| system:config | 系统配置 | 1(菜单) | system |
+| system:admin | 管理员管理 | 1(菜单) | system |
+| system:role | 角色权限 | 1(菜单) | system |
+| system:log | 操作日志 | 1(菜单) | system |
 
 ---
 
-### 5.8 系统设置
+### 5.3 权限码汇总
 
-#### 管理员管理（admin）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| admin:read | 查看管理员 | 查看管理员列表和详情 |
-| admin:create | 创建管理员 | 新增管理员账号 |
-| admin:update | 编辑管理员 | 修改管理员信息、重置密码 |
-| admin:delete | 删除管理员 | 删除管理员账号 |
-
-#### 角色管理（role）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| role:read | 查看角色 | 查看角色列表和详情 |
-| role:create | 创建角色 | 新增角色 |
-| role:update | 编辑角色 | 修改角色信息和权限分配 |
-| role:delete | 删除角色 | 删除角色 |
-
-#### 系统配置（system_config）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| system_config:read | 查看系统配置 | 查看系统配置项 |
-| system_config:update | 编辑系统配置 | 修改系统配置项 |
-
-#### 操作日志（operation_log）
-
-| 权限标识 | 权限名称 | 说明 |
-|----------|----------|------|
-| operation_log:read | 查看操作日志 | 查看操作日志列表和详情 |
-| operation_log:export | 导出操作日志 | 导出操作日志 |
-
----
-
-### 5.9 权限标识汇总
-
-| 模块 | 标识 | read | create | update | delete | export | audit |
-|------|------|------|--------|--------|--------|--------|-------|
-| 商品管理 | product | ✓ | ✓ | ✓ | ✓ | — | — |
-| 分类管理 | category | ✓ | ✓ | ✓ | ✓ | — | — |
-| 品牌管理 | brand | ✓ | ✓ | ✓ | ✓ | — | — |
-| 库存管理 | stock | ✓ | — | ✓ | — | — | — |
-| 订单管理 | order | ✓ | — | ✓ | — | — | — |
-| 发货管理 | delivery | ✓ | ✓ | ✓ | — | — | — |
-| 售后管理 | aftersale | ✓ | — | ✓ | — | — | ✓ |
-| 用户管理 | user | ✓ | — | ✓ | — | — | — |
-| 会员等级管理 | member_level | ✓ | — | ✓ | — | — | — |
-| 积分管理 | points | ✓ | — | ✓ | — | — | — |
-| 优惠券管理 | coupon | ✓ | ✓ | ✓ | ✓ | — | — |
-| 活动管理 | activity | ✓ | ✓ | ✓ | ✓ | — | — |
-| Banner管理 | banner | ✓ | ✓ | ✓ | ✓ | — | — |
-| 推荐位管理 | recommendation | ✓ | ✓ | ✓ | ✓ | — | — |
-| 首页装修 | home_decor | ✓ | — | ✓ | — | — | — |
-| 内容管理 | content | ✓ | ✓ | ✓ | ✓ | — | — |
-| 文件资源管理 | file_asset | ✓ | ✓ | — | ✓ | — | — |
-| 供应商管理 | supplier | ✓ | ✓ | ✓ | ✓ | — | — |
-| 数据统计 | statistics | ✓ | — | — | — | ✓ | — |
-| 管理员管理 | admin | ✓ | ✓ | ✓ | ✓ | — | — |
-| 角色管理 | role | ✓ | ✓ | ✓ | ✓ | — | — |
-| 系统配置 | system_config | ✓ | — | ✓ | — | — | — |
-| 操作日志 | operation_log | ✓ | — | — | — | ✓ | — |
+| 一级权限 | 二级权限码 | 名称 | 类型 |
+|---------|-----------|------|------|
+| dashboard | — | 首页 | 1(菜单) |
+| product | product:list | 商品列表 | 1(菜单) |
+| product | product:create | 新增商品 | 2(按钮) |
+| product | product:edit | 编辑商品 | 2(按钮) |
+| product | product:delete | 删除商品 | 2(按钮) |
+| product | product:publish | 上架/下架 | 2(按钮) |
+| product | product:stock | 库存管理 | 1(菜单) |
+| product | product:category | 分类管理 | 1(菜单) |
+| product | product:brand | 品牌管理 | 1(菜单) |
+| order | order:list | 订单列表 | 1(菜单) |
+| order | order:detail | 订单详情 | 2(按钮) |
+| order | order:deliver | 订单发货 | 2(按钮) |
+| order | order:remark | 订单备注 | 2(按钮) |
+| order | order:cancel | 取消订单 | 2(按钮) |
+| order | order:aftersale | 售后管理 | 1(菜单) |
+| order | order:aftersale:review | 审核售后 | 2(按钮) |
+| order | order:aftersale:refund | 退款 | 2(按钮) |
+| order | order:export | 订单导出 | 2(按钮) |
+| user | user:list | 用户列表 | 1(菜单) |
+| user | user:detail | 用户详情 | 2(按钮) |
+| user | user:member | 会员管理 | 2(按钮) |
+| user | user:points | 积分管理 | 2(按钮) |
+| user | user:baby | 宝宝档案 | 2(按钮) |
+| marketing | marketing:coupon | 优惠券管理 | 1(菜单) |
+| marketing | marketing:activity | 活动管理 | 1(菜单) |
+| marketing | marketing:banner | Banner 管理 | 1(菜单) |
+| marketing | marketing:recommendation | 推荐位管理 | 1(菜单) |
+| marketing | marketing:decor | 首页装修 | 1(菜单) |
+| content | content:list | 内容列表 | 1(菜单) |
+| content | content:edit | 编辑内容 | 2(按钮) |
+| supplier | supplier:list | 供应商列表 | 1(菜单) |
+| supplier | supplier:create | 新增供应商 | 2(按钮) |
+| supplier | supplier:edit | 编辑供应商 | 2(按钮) |
+| supplier | supplier:delete | 删除供应商 | 2(按钮) |
+| statistics | statistics:index | 数据统计 | 1(菜单) |
+| system | system:config | 系统配置 | 1(菜单) |
+| system | system:admin | 管理员管理 | 1(菜单) |
+| system | system:role | 角色权限 | 1(菜单) |
+| system | system:log | 操作日志 | 1(菜单) |
 
 ---
 
 ## 6. 角色权限矩阵
 
-### 6.1 商品中心权限矩阵
+> 超级管理员（super_admin）拥有所有权限，矩阵中不再逐一列出，以「✓」统一表示。
 
-| 权限标识 | 超级管理员 | 运营管理员 | 商品管理员 | 订单管理员 | 售后管理员 | 财务查看员 |
-|----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
-| product:read | ✓ | — | ✓ | — | — | — |
-| product:create | ✓ | — | ✓ | — | — | — |
-| product:update | ✓ | — | ✓ | — | — | — |
-| product:delete | ✓ | — | ✓ | — | — | — |
-| category:read | ✓ | — | ✓ | — | — | — |
-| category:create | ✓ | — | ✓ | — | — | — |
-| category:update | ✓ | — | ✓ | — | — | — |
-| category:delete | ✓ | — | ✓ | — | — | — |
-| brand:read | ✓ | — | ✓ | — | — | — |
-| brand:create | ✓ | — | ✓ | — | — | — |
-| brand:update | ✓ | — | ✓ | — | — | — |
-| brand:delete | ✓ | — | ✓ | — | — | — |
-| stock:read | ✓ | — | ✓ | — | — | — |
-| stock:update | ✓ | — | ✓ | — | — | — |
+### 6.1 商品管理权限矩阵
 
-### 6.2 订单中心权限矩阵
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| product | ✓ | ✓ | — | — |
+| product:list | ✓ | ✓ | — | — |
+| product:create | ✓ | ✓ | — | — |
+| product:edit | ✓ | ✓ | — | — |
+| product:delete | ✓ | ✓ | — | — |
+| product:publish | ✓ | ✓ | — | — |
+| product:stock | ✓ | ✓ | — | — |
+| product:category | ✓ | ✓ | — | — |
+| product:brand | ✓ | ✓ | — | — |
 
-| 权限标识 | 超级管理员 | 运营管理员 | 商品管理员 | 订单管理员 | 售后管理员 | 财务查看员 |
-|----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
-| order:read | ✓ | — | — | ✓ | — | ✓ |
-| order:update | ✓ | — | — | ✓ | — | — |
-| delivery:read | ✓ | — | — | ✓ | — | — |
-| delivery:create | ✓ | — | — | ✓ | — | — |
-| delivery:update | ✓ | — | — | ✓ | — | — |
-| aftersale:read | ✓ | — | — | — | ✓ | ✓ |
-| aftersale:update | ✓ | — | — | — | ✓ | — |
-| aftersale:audit | ✓ | — | — | — | ✓ | — |
+### 6.2 订单管理权限矩阵
 
-### 6.3 用户中心权限矩阵
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| order | ✓ | ✓ | ✓ | ✓ |
+| order:list | ✓ | ✓ | ✓ | ✓ |
+| order:detail | ✓ | ✓ | ✓ | ✓ |
+| order:deliver | ✓ | ✓ | — | — |
+| order:remark | ✓ | ✓ | — | — |
+| order:cancel | ✓ | ✓ | — | — |
+| order:aftersale | ✓ | ✓ | ✓ | ✓ |
+| order:aftersale:review | ✓ | ✓ | ✓ | ✓ |
+| order:aftersale:refund | ✓ | ✓ | ✓ | ✓ |
+| order:export | ✓ | ✓ | — | ✓ |
 
-| 权限标识 | 超级管理员 | 运营管理员 | 商品管理员 | 订单管理员 | 售后管理员 | 财务查看员 |
-|----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
-| user:read | ✓ | — | — | — | — | — |
-| user:update | ✓ | — | — | — | — | — |
-| member_level:read | ✓ | — | — | — | — | — |
-| member_level:update | ✓ | — | — | — | — | — |
-| points:read | ✓ | — | — | — | — | — |
-| points:update | ✓ | — | — | — | — | — |
+### 6.3 用户管理权限矩阵
 
-### 6.4 会员营销权限矩阵
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| user | ✓ | — | — | — |
+| user:list | ✓ | — | — | — |
+| user:detail | ✓ | — | — | — |
+| user:member | ✓ | — | — | — |
+| user:points | ✓ | — | — | — |
+| user:baby | ✓ | — | — | — |
 
-| 权限标识 | 超级管理员 | 运营管理员 | 商品管理员 | 订单管理员 | 售后管理员 | 财务查看员 |
-|----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
-| coupon:read | ✓ | ✓ | — | — | — | — |
-| coupon:create | ✓ | ✓ | — | — | — | — |
-| coupon:update | ✓ | ✓ | — | — | — | — |
-| coupon:delete | ✓ | ✓ | — | — | — | — |
-| activity:read | ✓ | ✓ | — | — | — | — |
-| activity:create | ✓ | ✓ | — | — | — | — |
-| activity:update | ✓ | ✓ | — | — | — | — |
-| activity:delete | ✓ | ✓ | — | — | — | — |
-| banner:read | ✓ | ✓ | — | — | — | — |
-| banner:create | ✓ | ✓ | — | — | — | — |
-| banner:update | ✓ | ✓ | — | — | — | — |
-| banner:delete | ✓ | ✓ | — | — | — | — |
-| recommendation:read | ✓ | ✓ | ✓ | — | — | — |
-| recommendation:create | ✓ | ✓ | ✓ | — | — | — |
-| recommendation:update | ✓ | ✓ | ✓ | — | — | — |
-| recommendation:delete | ✓ | ✓ | ✓ | — | — | — |
-| home_decor:read | ✓ | ✓ | — | — | — | — |
-| home_decor:update | ✓ | ✓ | — | — | — | — |
+### 6.4 营销管理权限矩阵
+
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| marketing | ✓ | ✓ | — | — |
+| marketing:coupon | ✓ | ✓ | — | — |
+| marketing:activity | ✓ | ✓ | — | — |
+| marketing:banner | ✓ | ✓ | — | — |
+| marketing:recommendation | ✓ | ✓ | — | — |
+| marketing:decor | ✓ | ✓ | — | — |
 
 ### 6.5 内容管理权限矩阵
 
-| 权限标识 | 超级管理员 | 运营管理员 | 商品管理员 | 订单管理员 | 售后管理员 | 财务查看员 |
-|----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
-| content:read | ✓ | ✓ | — | — | — | — |
-| content:create | ✓ | ✓ | — | — | — | — |
-| content:update | ✓ | ✓ | — | — | — | — |
-| content:delete | ✓ | ✓ | — | — | — | — |
-| file_asset:read | ✓ | ✓ | ✓ | — | — | — |
-| file_asset:create | ✓ | ✓ | ✓ | — | — | — |
-| file_asset:delete | ✓ | ✓ | ✓ | — | — | — |
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| content | ✓ | ✓ | — | — |
+| content:list | ✓ | ✓ | — | — |
+| content:edit | ✓ | ✓ | — | — |
 
 ### 6.6 供应商管理权限矩阵
 
-| 权限标识 | 超级管理员 | 运营管理员 | 商品管理员 | 订单管理员 | 售后管理员 | 财务查看员 |
-|----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
-| supplier:read | ✓ | — | ✓ | — | — | — |
-| supplier:create | ✓ | — | ✓ | — | — | — |
-| supplier:update | ✓ | — | ✓ | — | — | — |
-| supplier:delete | ✓ | — | ✓ | — | — | — |
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| supplier | ✓ | — | — | — |
+| supplier:list | ✓ | — | — | — |
+| supplier:create | ✓ | — | — | — |
+| supplier:edit | ✓ | — | — | — |
+| supplier:delete | ✓ | — | — | — |
 
 ### 6.7 数据统计权限矩阵
 
-| 权限标识 | 超级管理员 | 运营管理员 | 商品管理员 | 订单管理员 | 售后管理员 | 财务查看员 |
-|----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
-| statistics:read | ✓ | ✓ | — | — | — | ✓ |
-| statistics:export | ✓ | ✓ | — | — | — | ✓ |
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| statistics | ✓ | — | — | ✓ |
+| statistics:index | ✓ | — | — | ✓ |
 
 ### 6.8 系统设置权限矩阵
 
-| 权限标识 | 超级管理员 | 运营管理员 | 商品管理员 | 订单管理员 | 售后管理员 | 财务查看员 |
-|----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
-| admin:read | ✓ | — | — | — | — | — |
-| admin:create | ✓ | — | — | — | — | — |
-| admin:update | ✓ | — | — | — | — | — |
-| admin:delete | ✓ | — | — | — | — | — |
-| role:read | ✓ | — | — | — | — | — |
-| role:create | ✓ | — | — | — | — | — |
-| role:update | ✓ | — | — | — | — | — |
-| role:delete | ✓ | — | — | — | — | — |
-| system_config:read | ✓ | — | — | — | — | — |
-| system_config:update | ✓ | — | — | — | — | — |
-| operation_log:read | ✓ | — | — | — | — | — |
-| operation_log:export | ✓ | — | — | — | — | — |
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| system | ✓ | — | — | — |
+| system:config | ✓ | — | — | — |
+| system:admin | ✓ | — | — | — |
+| system:role | ✓ | — | — | — |
+| system:log | ✓ | — | — | — |
+
+### 6.9 首页权限矩阵
+
+| 权限码 | 超级管理员 | 运营管理(operator) | 客服(cs) | 财务(finance) |
+|--------|:----------:|:------------------:|:--------:|:-------------:|
+| dashboard | ✓ | ✓ | ✓ | ✓ |
 
 ---
 
@@ -958,9 +840,9 @@ supplier ──(1:N)──> product
 - 示例：
 
 ```
-GET    /api/admin/products      → 需要 product:read
+GET    /api/admin/products      → 需要 product:list
 POST   /api/admin/products      → 需要 product:create
-PUT    /api/admin/products/:id  → 需要 product:update
+PUT    /api/admin/products/:id  → 需要 product:edit
 DELETE /api/admin/products/:id  → 需要 product:delete
 ```
 
@@ -989,13 +871,13 @@ DELETE /api/admin/products/:id  → 需要 product:delete
   "path": "/product",
   "icon": "shopping",
   "sort": 1,
-  "permission": "product:read",
+  "permission": "product",
   "children": [
     {
       "id": 2,
       "name": "商品列表",
       "path": "/product/list",
-      "permission": "product:read"
+      "permission": "product:list"
     }
   ]
 }
@@ -1023,10 +905,10 @@ DELETE /api/admin/products/:id  → 需要 product:delete
 | 按钮类型 | 权限标识后缀 | 示例 |
 |----------|-------------|------|
 | 新增按钮 | :create | product:create → 新增商品按钮 |
-| 编辑按钮 | :update | product:update → 编辑商品按钮 |
+| 编辑按钮 | :edit | product:edit → 编辑商品按钮 |
 | 删除按钮 | :delete | product:delete → 删除商品按钮 |
-| 导出按钮 | :export | statistics:export → 导出统计按钮 |
-| 审核按钮 | :audit | aftersale:audit → 审核售后按钮 |
+| 导出按钮 | :export | order:export → 订单导出按钮 |
+| 审核按钮 | :review | order:aftersale:review → 审核售后按钮 |
 
 **前端实现方式：**
 
@@ -1048,8 +930,8 @@ v-if="hasPermission('product:create')"
 | 数据范围 | 说明 | 适用角色 |
 |----------|------|----------|
 | 全部数据 | 可查看系统中该模块的所有数据 | 超级管理员 |
-| 角色范围数据 | 可查看该角色职责范围内的数据 | 各职能管理员 |
-| 只读数据 | 可查看但不可修改 | 财务查看员 |
+| 角色范围数据 | 可查看该角色职责范围内的数据 | 运营管理、客服 |
+| 只读数据 | 可查看但不可修改 | 财务 |
 
 **数据权限实现：**
 
@@ -1057,10 +939,10 @@ v-if="hasPermission('product:create')"
 -- 超级管理员：查看所有订单
 SELECT * FROM orders WHERE 1=1;
 
--- 订单管理员：查看所有订单（职责范围内）
+-- 客服：查看所有订单（职责范围内）
 SELECT * FROM orders WHERE 1=1;
 
--- 财务查看员：查看所有订单（只读）
+-- 财务：查看所有订单（仅限查看，退款审核需 order:aftersale:review 权限）
 SELECT * FROM orders WHERE 1=1;
 -- 但 UPDATE/DELETE 操作被权限标识拦截
 ```
@@ -1069,8 +951,8 @@ SELECT * FROM orders WHERE 1=1;
 
 | 维度 | 说明 | 示例 |
 |------|------|------|
-| 模块维度 | 只能查看有权限模块的数据 | 商品管理员无法查看订单数据 |
-| 操作维度 | 只能执行有权限的操作 | 财务查看员只能查看不能修改 |
+| 模块维度 | 只能查看有权限模块的数据 | 客服无法查看商品管理数据 |
+| 操作维度 | 只能执行有权限的操作 | 财务只能查看不能修改订单 |
 | 行维度 | 只能查看特定条件的数据 | 按组织架构/部门过滤（预留） |
 
 **数据权限校验流程：**

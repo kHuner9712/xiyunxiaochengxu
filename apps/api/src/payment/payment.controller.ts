@@ -1,14 +1,39 @@
-import { Controller, Post, Get, Body, Param, Headers, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Headers, Req, Query } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, Min } from 'class-validator';
 
 class CreatePaymentDto {
   @IsString()
   @IsNotEmpty()
   orderId!: string;
+}
+
+class GetRefundListDto {
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  page?: number = 1;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  pageSize?: number = 20;
+
+  @IsString()
+  @IsOptional()
+  orderId?: string;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @IsString()
+  @IsOptional()
+  refundNo?: string;
 }
 
 @Controller('weapp/pay')
@@ -39,5 +64,27 @@ export class PaymentController {
   @Get('status/:orderId')
   async queryStatus(@CurrentUser('id') userId: string, @Param('orderId') orderId: string) {
     return this.paymentService.getPaymentStatus(orderId, userId);
+  }
+}
+
+@Controller('admin/refund')
+@RequirePermission('order:refund', 'order:aftersale:refund')
+export class RefundController {
+  constructor(private readonly paymentService: PaymentService) {}
+
+  @Get('list')
+  async getList(@Query() query: GetRefundListDto) {
+    return this.paymentService.getRefundList({
+      page: query.page || 1,
+      pageSize: query.pageSize || 20,
+      orderId: query.orderId,
+      status: query.status,
+      refundNo: query.refundNo,
+    });
+  }
+
+  @Get('detail/:id')
+  async getDetail(@Param('id') id: string) {
+    return this.paymentService.getRefundDetail(id);
   }
 }

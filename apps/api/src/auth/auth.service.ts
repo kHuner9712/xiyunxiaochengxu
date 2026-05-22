@@ -346,6 +346,7 @@ export class AuthService {
         openid: user.openid,
         roleType: 'user',
         type: 'user',
+        tokenType: 'access',
       },
       { expiresIn: '7d' },
     );

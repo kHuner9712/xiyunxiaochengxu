@@ -16,12 +16,12 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermission = this.reflector.getAllAndOverride<string>(
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
       REQUIRE_PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
     );
 
-    if (!requiredPermission) {
+    if (!requiredPermissions || requiredPermissions.length === 0) {
       return true;
     }
 
@@ -58,10 +58,12 @@ export class PermissionGuard implements CanActivate {
       ur.role.adminRolePermissions.map((rp) => rp.permission.code),
     );
 
-    if (permissions.includes(requiredPermission)) {
+    // 检查用户是否拥有任一需要的权限
+    const hasPermission = requiredPermissions.some(perm => permissions.includes(perm));
+    if (hasPermission) {
       return true;
     }
 
-    throw new ForbiddenException(`缺少权限：${requiredPermission}`);
+    throw new ForbiddenException(`缺少权限：${requiredPermissions.join(' 或 ')}`);
   }
 }

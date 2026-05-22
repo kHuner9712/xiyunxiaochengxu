@@ -1134,6 +1134,29 @@ THROTTLE_LIMIT=100
 > ```
 > 且 `.env` 文件不应纳入版本控制，确保 `.gitignore` 中已包含 `.env`。
 
+### 9.3 环境变量重要说明
+
+**CORS_ORIGINS（必填）**：
+- 说明：允许跨域请求的域名列表，多个域名用逗号分隔
+- 生产环境必须配置，不能为空
+- 示例：`CORS_ORIGINS=https://admin.example.com,https://www.example.com`
+- 如果未配置，API 将拒绝所有跨域请求
+- 生产环境启动时会校验 CORS_ORIGINS 是否已配置
+
+**JWT_SECRET（强度要求）**：
+- 说明：JWT 签名密钥
+- 生产环境要求：至少 32 个字符，包含大小写字母、数字和特殊字符
+- 生产环境启动时会校验 JWT_SECRET 长度和强度
+- 禁止使用默认值或简单密码（如 `your_jwt_secret`、`123456` 等）
+- 示例：`JWT_SECRET=MyS3cur3!Jwt$ecretKey2024#Pr0d`
+
+**WECHAT_REFUND_NOTIFY_URL**：
+- 说明：微信退款回调通知地址
+- 必须是 HTTPS 地址
+- 格式：`https://your-domain.com/api/weapp/pay/refund-callback`
+- 微信退款结果将通过此地址回调
+- 如果未配置，退款回调将无法接收，退款流程无法自动完成
+
 ---
 
 ## 10. 管理后台构建
@@ -1370,7 +1393,16 @@ chmod 600 /opt/baby-mall/ssl/wechat/*
 - 确保回调地址可从外网访问
 - 在 `.env` 中配置 `WECHAT_NOTIFY_URL`
 
-### 13.5 支付产品开通
+### 13.5 rawBody 对微信回调的重要性
+
+微信支付/退款回调需要验签，验签需要原始请求体（rawBody）。
+
+- NestJS 默认使用 `body-parser` 解析 JSON，会修改原始请求体
+- 必须在 main.ts 中配置 `app.use(json())` 之前或通过 `req.rawBody` 保存原始请求体
+- 当前项目已在 main.ts 中配置了 `req.rawBody` 中间件
+- 如果 rawBody 缺失，微信回调验签将失败，返回 `{ code: 'FAIL', message: '缺少rawBody' }`
+
+### 13.6 支付产品开通
 
 1. 登录微信支付商户平台
 2. 进入"产品中心 → 我的产品"
@@ -2483,6 +2515,41 @@ IS_PRODUCTION=true bash scripts/runtime-smoke-test.sh https://你的域名.com/a
 - **PASS**：测试通过
 - **FAIL**：测试失败（核心接口失败会导致 exit 1）
 - **SKIP**：跳过（管理员登录在生产环境无 ADMIN_TOKEN 时跳过，不影响最终结果）
+
+---
+
+## 29. CI 自动化测试与冒烟测试
+
+### CI 自动化测试
+
+项目已配置 GitHub Actions CI，每次推送和 PR 时自动运行：
+
+1. API 测试：`pnpm --filter @baby-mall/api test`
+2. 构建检查：`pnpm build:api` 和 `pnpm build:admin`
+
+### 冒烟测试
+
+部署后使用冒烟测试验证核心功能：
+
+```bash
+# 基础冒烟测试（检查 Docker、MySQL、Redis、API、Nginx）
+pnpm smoke
+
+# 后台登录冒烟测试
+pnpm smoke:login
+```
+
+详细使用方法请参考 [冒烟测试指南](13_SMOKE_TEST_GUIDE.md)。
+
+### Docker 快速启动
+
+```bash
+# 启动所有服务
+pnpm docker:up
+
+# 停止所有服务
+pnpm docker:down
+```
 
 ---
 

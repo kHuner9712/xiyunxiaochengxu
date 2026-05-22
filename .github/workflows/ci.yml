@@ -34,6 +34,9 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @baby-mall/shared build
 
+      - name: Run API tests
+        run: pnpm --filter @baby-mall/api test
+
       - name: Build API
         run: pnpm build:api
 

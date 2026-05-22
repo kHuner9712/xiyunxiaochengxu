@@ -79,6 +79,7 @@ services:
       RUN_SEED: ${RUN_SEED:-false}
       ADMIN_DEFAULT_USERNAME: ${ADMIN_DEFAULT_USERNAME:-admin}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
+      SMOKE_TEST_BYPASS_CAPTCHA: ${SMOKE_TEST_BYPASS_CAPTCHA:-false}
     volumes:
       - upload_data:/app/apps/api/uploads
       - log_data:/app/apps/api/logs

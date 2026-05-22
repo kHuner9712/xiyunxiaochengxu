@@ -1,7 +1,11 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios'
+import axios, { type AxiosRequestConfig, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 import { useUserStore } from '@/stores/user'
+
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean
+}
 
 const request = axios.create({
   baseURL: '/api',
@@ -80,15 +84,24 @@ async function retryRequest(config: AxiosRequestConfig, newToken: string) {
 }
 
 request.interceptors.response.use(
-  (response: AxiosResponse<ApiResponse>) => {
+  async (response: AxiosResponse<ApiResponse>) => {
     const res = response.data
     if (res.code !== 0) {
       if (res.code === 40101 || res.code === 40102 || res.code === 40103) {
-        ElMessage.error('登录已过期，请重新登录')
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
-        localStorage.removeItem('token')
+        const originalRequest = response.config as RetryableRequestConfig
+        if (originalRequest && !originalRequest._retry) {
+          originalRequest._retry = true
+          const newTokens = await handleUnauthorized()
+          if (newTokens) {
+            originalRequest.headers = originalRequest.headers || {}
+            originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`
+            return request(originalRequest as AxiosRequestConfig)
+          }
+        }
+        const userStore = useUserStore()
+        userStore.clearTokens()
         router.push('/login')
+        return Promise.reject(new Error('登录已过期，请重新登录'))
       } else {
         ElMessage.error(res.message || '请求失败')
       }
@@ -99,7 +112,7 @@ request.interceptors.response.use(
   async (error) => {
     if (error.response) {
       const status = error.response.status
-      const originalRequest = error.config
+      const originalRequest = error.config as RetryableRequestConfig
 
       if (status === 401 && originalRequest && !originalRequest._retry) {
         originalRequest._retry = true
@@ -108,7 +121,7 @@ request.interceptors.response.use(
         if (newTokens) {
           originalRequest.headers = originalRequest.headers || {}
           originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`
-          return request(originalRequest)
+          return request(originalRequest as AxiosRequestConfig)
         }
       }
 
