@@ -12,7 +12,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "ts-node -P prisma/tsconfig.seed.json prisma/seed.ts",
-    "prisma:seed:demo": "ts-node -P prisma/tsconfig.seed.json prisma/seed-demo.ts",
+    "prisma:seed:demo": "ts-node --transpile-only -P prisma/tsconfig.seed.json prisma/seed-demo.ts",
     "lint": "eslint src --ext .ts",
     "test": "jest",
     "test:watch": "jest --watch",

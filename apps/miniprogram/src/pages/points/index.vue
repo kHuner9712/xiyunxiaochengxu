@@ -58,6 +58,8 @@ import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { getPointsBalance, getPointsDetail, checkIn, getCheckInStatus, getPointsRules, type PointsRecord, type PointsRule } from '@/api/points'
 import Loading from '@/components/Loading.vue'
 
+const isDemo = ref(false)
+
 const pointsBalance = ref({ balance: 0, totalEarned: 0, totalSpent: 0 })
 const checkInStatus = ref({ checked: false, continuous: 0, todayPoints: 0 })
 const pointsDetail = ref<PointsRecord[]>([])
@@ -66,7 +68,18 @@ const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
 
+const demoRules: PointsRule[] = [
+  { action: '每日签到', points: 10 },
+  { action: '完成订单', points: 50 },
+  { action: '商品评价', points: 20 },
+  { action: '分享商品', points: 5 },
+]
+
 async function loadBalance() {
+  if (isDemo.value) {
+    pointsBalance.value = { balance: 120, totalEarned: 580, totalSpent: 460 }
+    return
+  }
   try {
     pointsBalance.value = await getPointsBalance()
   } catch {
@@ -75,6 +88,10 @@ async function loadBalance() {
 }
 
 async function loadCheckInStatus() {
+  if (isDemo.value) {
+    checkInStatus.value = { checked: false, continuous: 3, todayPoints: 10 }
+    return
+  }
   try {
     checkInStatus.value = await getCheckInStatus()
   } catch {
@@ -90,6 +107,18 @@ async function loadPointsDetail(reset = false) {
     finished.value = false
     pointsDetail.value = []
   }
+
+  if (isDemo.value) {
+    pointsDetail.value = [
+      { id: 'd1', points: 10, description: '每日签到', createTime: '2025-05-23' },
+      { id: 'd2', points: 50, description: '完成订单', createTime: '2025-05-22' },
+      { id: 'd3', points: 20, description: '商品评价', createTime: '2025-05-21' },
+      { id: 'd4', points: -100, description: '积分抵扣', createTime: '2025-05-20' },
+    ]
+    finished.value = true
+    return
+  }
+
   loading.value = true
   try {
     const data = await getPointsDetail({ page: page.value, pageSize: 10 })
@@ -104,6 +133,10 @@ async function loadPointsDetail(reset = false) {
 }
 
 async function loadRules() {
+  if (isDemo.value) {
+    pointsRules.value = demoRules
+    return
+  }
   try {
     pointsRules.value = await getPointsRules()
   } catch {
@@ -113,6 +146,10 @@ async function loadRules() {
 
 async function handleCheckIn() {
   if (checkInStatus.value.checked) return
+  if (isDemo.value) {
+    uni.showToast({ title: '演示模式，签到功能暂不可用', icon: 'none' })
+    return
+  }
   try {
     const data = await checkIn()
     checkInStatus.value.checked = true
@@ -135,6 +172,9 @@ onReachBottom(() => {
 })
 
 onMounted(() => {
+  const pages = getCurrentPages()
+  const currentPage = pages[pages.length - 1]
+  isDemo.value = (currentPage as any)?.$page?.options?.demo === '1' || (currentPage as any)?.options?.demo === '1'
   loadBalance()
   loadCheckInStatus()
   loadPointsDetail()

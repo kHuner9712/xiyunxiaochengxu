@@ -102,7 +102,15 @@ async function loadOrderCount() {
 }
 
 function handleLogin() {
-  userStore.wxLogin()
+  userStore.wxLogin().catch((err: any) => {
+    console.error('[baby-mall] wxLogin failed:', err)
+    uni.showModal({
+      title: '登录失败',
+      content: '登录失败，请稍后重试。当前为演示版，你可以先浏览公开演示内容。',
+      showCancel: false,
+      confirmText: '我知道了'
+    })
+  })
 }
 
 function handleLogout() {
@@ -121,24 +129,89 @@ function goProfile() {
 }
 
 function goMember() {
-  uni.navigateTo({ url: '/pages/member/index' })
+  smartNavigate('/pages/member/index', { allowDemo: true })
 }
 
 function goOrderList(status?: number) {
   if (!userStore.isLoggedIn) {
-    handleLogin()
+    showLoginRequired()
     return
   }
   const url = status ? `/pages/order/list?status=${status}` : '/pages/order/list'
-  uni.navigateTo({ url })
+  console.log('[baby-mall] navigateTo:', url)
+  uni.navigateTo({
+    url,
+    fail: (err) => {
+      console.error('[baby-mall] navigateTo failed:', url, err)
+      uni.showToast({ title: '页面跳转失败', icon: 'none' })
+    }
+  })
+}
+
+interface NavOptions {
+  requireLogin?: boolean
+  allowDemo?: boolean
+}
+
+function smartNavigate(url: string, options: NavOptions = {}) {
+  const { requireLogin = false, allowDemo = false } = options
+  console.log('[baby-mall] smartNavigate:', url, options)
+
+  if (!userStore.isLoggedIn) {
+    if (allowDemo) {
+      const separator = url.includes('?') ? '&' : '?'
+      const fullUrl = `${url}${separator}demo=1`
+      uni.navigateTo({
+        url: fullUrl,
+        fail: (err) => {
+          console.error('[baby-mall] navigateTo failed:', fullUrl, err)
+          uni.showToast({ title: '页面跳转失败', icon: 'none' })
+        }
+      })
+      return
+    }
+    if (requireLogin) {
+      showLoginRequired()
+      return
+    }
+    showLoginRequired()
+    return
+  }
+
+  uni.navigateTo({
+    url,
+    fail: (err) => {
+      console.error('[baby-mall] navigateTo failed:', url, err)
+      uni.showToast({ title: '页面跳转失败', icon: 'none' })
+    }
+  })
+}
+
+function showLoginRequired() {
+  uni.showModal({
+    title: '需要登录',
+    content: '该功能需要登录后使用。当前为演示版，你也可以先浏览公开演示内容。',
+    cancelText: '取消',
+    confirmText: '去登录',
+    success: (res) => {
+      if (res.confirm) {
+        handleLogin()
+      }
+    }
+  })
 }
 
 function navigateTo(url: string) {
-  if (!userStore.isLoggedIn) {
-    handleLogin()
-    return
+  const demoPages = ['/pages/coupon/my', '/pages/coupon/center', '/pages/member/index', '/pages/points/index', '/pages/content/list']
+  const loginRequiredPages = ['/pages/baby/list', '/pages/address/list']
+
+  if (demoPages.some(p => url.startsWith(p))) {
+    smartNavigate(url, { allowDemo: true })
+  } else if (loginRequiredPages.some(p => url.startsWith(p))) {
+    smartNavigate(url, { requireLogin: true })
+  } else {
+    smartNavigate(url)
   }
-  uni.navigateTo({ url })
 }
 
 onShow(() => {

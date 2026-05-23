@@ -46,6 +46,8 @@ import { formatPrice, formatCouponValue } from '@/utils/format'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
+const isDemo = ref(false)
+
 const tabs = [
   { label: '可用', value: 1 },
   { label: '已使用', value: 2 },
@@ -58,6 +60,12 @@ const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
 
+const demoCoupons: MyCouponItem[] = [
+  { id: 'demo-1', name: '[Demo] 新人无门槛券', type: 1, value: 500, minAmount: 0, status: 1, startTime: '2025-01-01', endTime: '2025-12-31' },
+  { id: 'demo-2', name: '[Demo] 满199减20', type: 1, value: 2000, minAmount: 19900, status: 1, startTime: '2025-01-01', endTime: '2025-12-31' },
+  { id: 'demo-3', name: '[Demo] 满399减50', type: 1, value: 5000, minAmount: 39900, status: 1, startTime: '2025-01-01', endTime: '2025-12-31' },
+]
+
 async function loadCoupons(reset = false) {
   if (loading.value) return
   if (!reset && finished.value) return
@@ -66,6 +74,13 @@ async function loadCoupons(reset = false) {
     finished.value = false
     coupons.value = []
   }
+
+  if (isDemo.value) {
+    coupons.value = currentTab.value === 1 ? demoCoupons : []
+    finished.value = true
+    return
+  }
+
   loading.value = true
   try {
     const data = await getMyCoupons({ status: currentTab.value, page: page.value, pageSize: 10 })
@@ -98,6 +113,9 @@ onReachBottom(() => {
 })
 
 onMounted(() => {
+  const pages = getCurrentPages()
+  const currentPage = pages[pages.length - 1]
+  isDemo.value = (currentPage as any)?.$page?.options?.demo === '1' || (currentPage as any)?.options?.demo === '1'
   loadCoupons()
 })
 </script>

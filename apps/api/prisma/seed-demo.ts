@@ -1,4 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -12,20 +14,47 @@ const now = new Date();
 const futureDate = (days: number) => new Date(now.getTime() + days * 86400000);
 const pastDate = (days: number) => new Date(now.getTime() - days * 86400000);
 
+function ensureDemoAssets(): void {
+  const srcDir = path.resolve(process.cwd(), 'prisma', 'demo-assets');
+  const destDir = path.resolve(process.cwd(), 'uploads', 'demo');
+
+  if (!fs.existsSync(srcDir)) {
+    console.warn(`演示图片源目录不存在: ${srcDir}，跳过图片复制`);
+    return;
+  }
+
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+    console.log(`创建目标目录: ${destDir}`);
+  }
+
+  const files = fs.readdirSync(srcDir).filter(f => f.endsWith('.png'));
+  let copied = 0;
+  for (const file of files) {
+    const src = path.join(srcDir, file);
+    const dest = path.join(destDir, file);
+    fs.copyFileSync(src, dest);
+    copied++;
+  }
+  console.log(`复制演示图片: ${copied} 个文件 -> ${destDir}`);
+}
+
 async function main() {
   console.log('开始演示数据初始化...');
 
-  const categories = await seedCategories();
-  const brands = await seedBrands();
-  const suppliers = await seedSuppliers();
-  const products = await seedProducts(categories, brands, suppliers);
-  const banners = await seedBanners();
-  const homeSections = await seedHomeSections();
-  const activities = await seedActivities(products);
-  const coupons = await seedCoupons();
-  const contentCategory = await seedContentCategory();
-  const contents = await seedContents(contentCategory);
-  const systemConfigs = await seedSystemConfigs();
+  ensureDemoAssets();
+
+  const categories: any[] = await seedCategories();
+  const brands: any[] = await seedBrands();
+  const suppliers: any[] = await seedSuppliers();
+  const products: any[] = await seedProducts(categories, brands, suppliers);
+  const banners: any[] = await seedBanners();
+  const homeSections: any[] = await seedHomeSections();
+  const activities: any[] = await seedActivities(products);
+  const coupons: any[] = await seedCoupons();
+  const contentCategory: any = await seedContentCategory();
+  const contents: any[] = await seedContents(contentCategory);
+  const systemConfigs: any[] = await seedSystemConfigs();
 
   console.log('演示数据初始化完成！');
   console.log(`  分类: ${categories.length}`);
@@ -49,12 +78,15 @@ async function seedCategories() {
     { name: '母婴出行', icon: '/uploads/demo/category-travel.png', sortOrder: 5 },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const item of items) {
-    const cat = await prisma.productCategory.upsert({
-      where: { id: BigInt(result.length + 1) },
-      update: { name: demoName(item.name), icon: item.icon, sortOrder: item.sortOrder, isShow: 1, parentId: 0n },
-      create: { name: demoName(item.name), icon: item.icon, sortOrder: item.sortOrder, isShow: 1, parentId: 0n },
+    const existing: any = await prisma.productCategory.findFirst({ where: { name: demoName(item.name) } });
+    if (existing) {
+      result.push(existing);
+      continue;
+    }
+    const cat: any = await prisma.productCategory.create({
+      data: { name: demoName(item.name), icon: item.icon, sortOrder: item.sortOrder, isShow: 1, parentId: 0n },
     });
     result.push(cat);
   }
@@ -68,14 +100,14 @@ async function seedBrands() {
     { name: '安心母婴', logo: '/uploads/demo/brand-3.png', description: '安心之选', sortOrder: 3 },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const item of items) {
-    const existing = await prisma.brand.findFirst({ where: { name: demoName(item.name) } });
+    const existing: any = await prisma.brand.findFirst({ where: { name: demoName(item.name) } });
     if (existing) {
       result.push(existing);
       continue;
     }
-    const brand = await prisma.brand.create({
+    const brand: any = await prisma.brand.create({
       data: { name: demoName(item.name), logo: item.logo, description: item.description, sortOrder: item.sortOrder, status: 1 },
     });
     result.push(brand);
@@ -89,14 +121,14 @@ async function seedSuppliers() {
     { name: '演示供应商B', contactName: '李经理', contactPhone: '13800000002', address: '广州市天河区' },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const item of items) {
-    const existing = await prisma.supplier.findFirst({ where: { name: demoName(item.name) } });
+    const existing: any = await prisma.supplier.findFirst({ where: { name: demoName(item.name) } });
     if (existing) {
       result.push(existing);
       continue;
     }
-    const supplier = await prisma.supplier.create({
+    const supplier: any = await prisma.supplier.create({
       data: { name: demoName(item.name), contactName: item.contactName, contactPhone: item.contactPhone, address: item.address, status: 1 },
     });
     result.push(supplier);
@@ -165,14 +197,14 @@ async function seedProducts(categories: any[], brands: any[], suppliers: any[]) 
     },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const def of productDefs) {
-    const existing = await prisma.product.findFirst({ where: { name: demoName(def.name), deletedAt: null } });
+    const existing: any = await prisma.product.findFirst({ where: { name: demoName(def.name), deletedAt: null } });
     if (existing) {
       result.push(existing);
       continue;
     }
-    const product = await prisma.product.create({
+    const product: any = await prisma.product.create({
       data: {
         name: demoName(def.name),
         categoryId: def.categoryId,
@@ -218,14 +250,14 @@ async function seedBanners() {
     { title: '纸尿裤囤货季', image: '/uploads/demo/banner-3.png', linkType: 1, linkValue: '', sortOrder: 3 },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const item of items) {
-    const existing = await prisma.banner.findFirst({ where: { title: demoName(item.title) } });
+    const existing: any = await prisma.banner.findFirst({ where: { title: demoName(item.title) } });
     if (existing) {
       result.push(existing);
       continue;
     }
-    const banner = await prisma.banner.create({
+    const banner: any = await prisma.banner.create({
       data: {
         title: demoName(item.title),
         image: item.image,
@@ -251,14 +283,14 @@ async function seedHomeSections() {
     { type: 'hot_products', title: '热销好物', config: { count: 4 }, sortOrder: 5 },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const item of items) {
-    const existing = await prisma.homeSection.findFirst({ where: { type: item.type, title: demoName(item.title) } });
+    const existing: any = await prisma.homeSection.findFirst({ where: { type: item.type, title: demoName(item.title) } });
     if (existing) {
       result.push(existing);
       continue;
     }
-    const section = await prisma.homeSection.create({
+    const section: any = await prisma.homeSection.create({
       data: {
         type: item.type,
         title: demoName(item.title),
@@ -280,14 +312,14 @@ async function seedActivities(products: any[]) {
     { name: '组合套餐', type: 'bundle', description: '超值组合', rules: { bundleDiscount: 0.85 } },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const item of items) {
-    const existing = await prisma.activity.findFirst({ where: { name: demoName(item.name) } });
+    const existing: any = await prisma.activity.findFirst({ where: { name: demoName(item.name) } });
     if (existing) {
       result.push(existing);
       continue;
     }
-    const activity = await prisma.activity.create({
+    const activity: any = await prisma.activity.create({
       data: {
         name: demoName(item.name),
         type: item.type,
@@ -303,9 +335,9 @@ async function seedActivities(products: any[]) {
 
     const activityProducts = products.slice(0, Math.min(5, products.length));
     for (const product of activityProducts) {
-      const firstSku = await prisma.productSku.findFirst({ where: { productId: product.id } });
+      const firstSku: any = await prisma.productSku.findFirst({ where: { productId: product.id } });
       if (!firstSku) continue;
-      const existingAP = await prisma.activityProduct.findFirst({
+      const existingAP: any = await prisma.activityProduct.findFirst({
         where: { activityId: activity.id, productId: product.id, skuId: firstSku.id },
       });
       if (existingAP) continue;
@@ -334,14 +366,14 @@ async function seedCoupons() {
     { name: '满399减50', type: 1, value: 5000, minAmount: 39900, totalCount: 300, perLimit: 1, isNewUser: 0 },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const item of items) {
-    const existing = await prisma.coupon.findFirst({ where: { name: demoName(item.name) } });
+    const existing: any = await prisma.coupon.findFirst({ where: { name: demoName(item.name) } });
     if (existing) {
       result.push(existing);
       continue;
     }
-    const coupon = await prisma.coupon.create({
+    const coupon: any = await prisma.coupon.create({
       data: {
         name: demoName(item.name),
         type: item.type,
@@ -365,7 +397,7 @@ async function seedCoupons() {
 }
 
 async function seedContentCategory() {
-  const existing = await prisma.contentCategory.findFirst({ where: { name: demoName('育儿知识') } });
+  const existing: any = await prisma.contentCategory.findFirst({ where: { name: demoName('育儿知识') } });
   if (existing) return existing;
   return prisma.contentCategory.create({
     data: { name: demoName('育儿知识'), icon: '/uploads/demo/content-cat.png', sortOrder: 1, status: 1 },
@@ -379,14 +411,14 @@ async function seedContents(contentCategory: any) {
     { title: '换季宝宝护肤注意事项', summary: '换季时节如何呵护宝宝娇嫩肌肤', content: '<p>换季时节宝宝皮肤容易出现干燥、过敏等问题。本文为您介绍换季护肤的关键要点。</p>' },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const item of items) {
-    const existing = await prisma.content.findFirst({ where: { title: demoName(item.title), deletedAt: null } });
+    const existing: any = await prisma.content.findFirst({ where: { title: demoName(item.title), deletedAt: null } });
     if (existing) {
       result.push(existing);
       continue;
     }
-    const content = await prisma.content.create({
+    const content: any = await prisma.content.create({
       data: {
         categoryId: contentCategory.id,
         title: demoName(item.title),
@@ -411,9 +443,9 @@ async function seedSystemConfigs() {
     { groupName: 'payment', configKey: 'payment_enabled', configValue: 'false', valueType: 'boolean', description: '支付功能是否开通' },
   ];
 
-  const result = [];
+  const result: any[] = [];
   for (const config of configs) {
-    const upserted = await prisma.systemConfig.upsert({
+    const upserted: any = await prisma.systemConfig.upsert({
       where: { uk_group_key: { groupName: config.groupName, configKey: config.configKey } },
       update: { configValue: config.configValue },
       create: config,
