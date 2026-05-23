@@ -48,6 +48,7 @@ config/local.*
 *.p12
 *.pfx
 deploy/certs/
+deploy/nginx/ssl/
 certs/
 secrets/
 *.secret

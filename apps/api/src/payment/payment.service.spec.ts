@@ -75,6 +75,7 @@ function createPaymentService(mockPrisma?: any, mockConfigService?: any, mockBus
   const businessEvent = mockBusinessEvent || createMockBusinessEventService();
   const service = new PaymentService(prisma as any, configService as any, businessEvent as any);
   jest.spyOn(service as any, 'verifyWechatSignature').mockReturnValue(true);
+  jest.spyOn(service as any, 'isWechatPaymentConfigured').mockReturnValue(true);
   jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
@@ -464,6 +465,7 @@ describe('PaymentService.createRefund', () => {
     const configNoMock = createMockConfigService({ WECHAT_REFUND_MOCK: 'false' });
     const mockBE = createMockBusinessEventService();
     const svc = new PaymentService(mockPrisma as any, configNoMock as any, mockBE as any);
+    jest.spyOn(svc as any, 'isWechatPaymentConfigured').mockReturnValue(true);
     jest.spyOn(svc['logger'], 'log').mockImplementation(() => {});
     jest.spyOn(svc['logger'], 'warn').mockImplementation(() => {});
     jest.spyOn(svc['logger'], 'error').mockImplementation(() => {});

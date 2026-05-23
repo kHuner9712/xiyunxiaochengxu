@@ -20,10 +20,11 @@ export class AuthService {
   async getCaptcha() {
     const captcha = svgCaptcha.create({
       size: 4,
-      noise: 3,
-      color: true,
+      noise: 1,
+      color: false,
       width: 120,
       height: 40,
+      charPreset: '0123456789',
     });
     const captchaId = `captcha:${Date.now()}:${Math.random().toString(36).substring(2)}`;
     await this.redisService.set(captchaId, captcha.text.toLowerCase(), 300);

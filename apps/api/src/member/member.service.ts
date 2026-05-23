@@ -34,7 +34,7 @@ export class MemberService {
       growthValue: user.growthValue,
       currentLevel: currentLevelConfig.name,
       currentLevelCode: levelCode,
-      discountRate: currentLevelConfig.discount,
+      discountRate: currentLevelConfig.discountRate,
       pointsRate: currentLevelConfig.pointsRate,
       nextLevel: nextLevelConfig ? nextLevelConfig.name : null,
       nextLevelGrowth: nextLevelConfig ? nextLevelConfig.minGrowth : null,
@@ -54,12 +54,12 @@ export class MemberService {
 
     const benefits: any[] = [];
 
-    if (currentLevelConfig.discount) {
+    if (currentLevelConfig.discountRate) {
       benefits.push({
         type: 'discount',
         name: `${currentLevelConfig.name}专属折扣`,
-        description: `享受${(currentLevelConfig.discount * 100).toFixed(0)}折优惠`,
-        value: currentLevelConfig.discount,
+        description: `享受${(currentLevelConfig.discountRate / 10).toFixed(1).replace(/\.0$/, '')}折优惠`,
+        value: currentLevelConfig.discountRate,
       });
     }
 

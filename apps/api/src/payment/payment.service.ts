@@ -62,30 +62,30 @@ export class PaymentService {
 
       const missing = requiredConfigs.filter(c => !c.value);
       if (missing.length > 0) {
-        throw new Error(`生产环境缺少必要支付配置: ${missing.map(c => c.key).join(', ')}，支付模块不可启动`);
+        this.logger.warn(`生产环境缺少必要支付配置: ${missing.map(c => c.key).join(', ')}，支付功能将不可用`);
       }
 
       const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
-      if (Buffer.byteLength(apiV3Key, 'utf8') !== 32) {
-        throw new Error('WECHAT_API_V3_KEY 必须为32字节，支付模块不可启动');
+      if (apiV3Key && Buffer.byteLength(apiV3Key, 'utf8') !== 32) {
+        this.logger.warn('WECHAT_API_V3_KEY 必须为32字节，支付功能将不可用');
       }
 
       const notifyUrl = this.configService.get<string>('WECHAT_NOTIFY_URL')!;
-      if (!notifyUrl.startsWith('https://')) {
-        throw new Error('WECHAT_NOTIFY_URL 必须以 https:// 开头，支付模块不可启动');
+      if (notifyUrl && !notifyUrl.startsWith('https://')) {
+        this.logger.warn('WECHAT_NOTIFY_URL 必须以 https:// 开头，支付功能将不可用');
       }
 
       const refundNotifyUrl = this.configService.get<string>('WECHAT_REFUND_NOTIFY_URL')!;
-      if (!refundNotifyUrl.startsWith('https://')) {
-        throw new Error('WECHAT_REFUND_NOTIFY_URL 必须以 https:// 开头，支付模块不可启动');
+      if (refundNotifyUrl && !refundNotifyUrl.startsWith('https://')) {
+        this.logger.warn('WECHAT_REFUND_NOTIFY_URL 必须以 https:// 开头，支付功能将不可用');
       }
 
       if (!this.privateKey) {
-        throw new Error('生产环境商户私钥文件不可读(WECHAT_PRIVATE_KEY_PATH)，支付模块不可启动');
+        this.logger.warn('生产环境商户私钥文件不可读(WECHAT_PRIVATE_KEY_PATH)，支付功能将不可用');
       }
 
       if (!this.wechatpayCertificate) {
-        throw new Error('生产环境必须配置微信支付平台证书(WECHAT_PLATFORM_CERT_PATH)，支付模块不可启动');
+        this.logger.warn('生产环境必须配置微信支付平台证书(WECHAT_PLATFORM_CERT_PATH)，回调验签将不可用');
       }
     }
 
@@ -97,7 +97,24 @@ export class PaymentService {
     }
   }
 
+  private isWechatPaymentConfigured(): boolean {
+    return !!(
+      this.configService.get<string>('WECHAT_APP_ID') &&
+      this.configService.get<string>('WECHAT_MCH_ID') &&
+      this.configService.get<string>('WECHAT_MCH_SERIAL_NO') &&
+      this.configService.get<string>('WECHAT_API_V3_KEY') &&
+      this.privateKey
+    );
+  }
+
+  private ensureWechatPaymentAvailable(): void {
+    if (!this.isWechatPaymentConfigured()) {
+      throw new BadRequestException('微信支付暂未开通，请联系客服');
+    }
+  }
+
   async createPayment(orderId: string, userId: string) {
+    this.ensureWechatPaymentAvailable();
     const order = await this.prisma.order.findFirst({
       where: { id: BigInt(orderId), userId: BigInt(userId) },
       include: { user: { select: { id: true, openid: true } } },
@@ -675,6 +692,7 @@ export class PaymentService {
   }
 
   async queryWechatOrder(outTradeNo: string): Promise<any> {
+    this.ensureWechatPaymentAvailable();
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
     const serialNo = this.configService.get<string>('WECHAT_MCH_SERIAL_NO')!;
 
@@ -737,6 +755,7 @@ export class PaymentService {
     refundAmount: number;
     reason?: string;
   }) {
+    this.ensureWechatPaymentAvailable();
     const order = await this.prisma.order.findFirst({
       where: { id: BigInt(params.orderId) },
       include: { payment: true },
@@ -1285,6 +1304,7 @@ export class PaymentService {
   }
 
   async queryRefund(outRefundNo: string) {
+    this.ensureWechatPaymentAvailable();
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
     const serialNo = this.configService.get<string>('WECHAT_MCH_SERIAL_NO')!;
 
