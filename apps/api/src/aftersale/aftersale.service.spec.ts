@@ -70,12 +70,10 @@ describe('AftersaleService.create 售后申请幂等', () => {
     ({ service, mockPrisma } = createService());
   });
 
-  it('正常申请售后成功', async () => {
+  it('正常申请售后成功，设置 activeOrderItemId', async () => {
     mockPrisma.orderItem.findFirst.mockResolvedValue(ORDER_ITEM_WITH_DELIVERED_ORDER);
-    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue(null);
 
     setupTransaction(mockPrisma);
-    mockPrisma._mockTx.aftersaleOrder.findFirst.mockResolvedValue(null);
     mockPrisma._mockTx.aftersaleOrder.create.mockResolvedValue({
       id: BigInt(50), aftersaleNo: 'AS20260523001', status: AftersaleStatus.pending_review,
     });
@@ -83,7 +81,13 @@ describe('AftersaleService.create 售后申请幂等', () => {
 
     const result = await service.create('100', CREATE_DTO);
 
-    expect(mockPrisma._mockTx.aftersaleOrder.create).toHaveBeenCalled();
+    expect(mockPrisma._mockTx.aftersaleOrder.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          activeOrderItemId: BigInt(10),
+        }),
+      }),
+    );
     expect(mockPrisma._mockTx.order.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: OrderStatus.aftersale }),
@@ -91,71 +95,26 @@ describe('AftersaleService.create 售后申请幂等', () => {
     );
   });
 
-  it('事务外已有未终态售后单时拒绝', async () => {
+  it('并发申请售后：unique constraint P2002 拦截重复', async () => {
     mockPrisma.orderItem.findFirst.mockResolvedValue(ORDER_ITEM_WITH_DELIVERED_ORDER);
-    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue({
-      id: BigInt(50), status: AftersaleStatus.pending_review,
-    });
+
+    const prismaError: any = new Error('Unique constraint failed');
+    prismaError.code = 'P2002';
+    mockPrisma.$transaction.mockRejectedValue(prismaError);
 
     await expect(service.create('100', CREATE_DTO))
       .rejects.toThrow('该商品已申请售后');
   });
 
-  it('并发申请售后：事务内检查拦截重复', async () => {
+  it('其他 Prisma 错误不被吞掉', async () => {
     mockPrisma.orderItem.findFirst.mockResolvedValue(ORDER_ITEM_WITH_DELIVERED_ORDER);
-    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue(null);
 
-    setupTransaction(mockPrisma);
-    mockPrisma._mockTx.aftersaleOrder.findFirst.mockResolvedValue({
-      id: BigInt(50), status: AftersaleStatus.pending_review,
-    });
+    const prismaError: any = new Error('Some other error');
+    prismaError.code = 'P2003';
+    mockPrisma.$transaction.mockRejectedValue(prismaError);
 
     await expect(service.create('100', CREATE_DTO))
-      .rejects.toThrow('该商品已申请售后');
-
-    expect(mockPrisma._mockTx.aftersaleOrder.create).not.toHaveBeenCalled();
-  });
-
-  it('已 closed 的售后单不阻止重新申请', async () => {
-    mockPrisma.orderItem.findFirst.mockResolvedValue(ORDER_ITEM_WITH_DELIVERED_ORDER);
-    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue(null);
-
-    setupTransaction(mockPrisma);
-    mockPrisma._mockTx.aftersaleOrder.findFirst.mockResolvedValue(null);
-    mockPrisma._mockTx.aftersaleOrder.create.mockResolvedValue({
-      id: BigInt(51), aftersaleNo: 'AS20260523002', status: AftersaleStatus.pending_review,
-    });
-    mockPrisma._mockTx.order.update.mockResolvedValue({});
-
-    await service.create('100', CREATE_DTO);
-
-    expect(mockPrisma._mockTx.aftersaleOrder.create).toHaveBeenCalled();
-  });
-
-  it('已 rejected 的售后单不阻止重新申请', async () => {
-    mockPrisma.orderItem.findFirst.mockResolvedValue(ORDER_ITEM_WITH_DELIVERED_ORDER);
-    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue(null);
-
-    setupTransaction(mockPrisma);
-    mockPrisma._mockTx.aftersaleOrder.findFirst.mockResolvedValue(null);
-    mockPrisma._mockTx.aftersaleOrder.create.mockResolvedValue({
-      id: BigInt(51), aftersaleNo: 'AS20260523002', status: AftersaleStatus.pending_review,
-    });
-    mockPrisma._mockTx.order.update.mockResolvedValue({});
-
-    await service.create('100', CREATE_DTO);
-
-    expect(mockPrisma._mockTx.aftersaleOrder.create).toHaveBeenCalled();
-  });
-
-  it('pending_refund 状态的售后单阻止重新申请', async () => {
-    mockPrisma.orderItem.findFirst.mockResolvedValue(ORDER_ITEM_WITH_DELIVERED_ORDER);
-    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue({
-      id: BigInt(50), status: AftersaleStatus.pending_refund,
-    });
-
-    await expect(service.create('100', CREATE_DTO))
-      .rejects.toThrow('该商品已申请售后');
+      .rejects.toThrow('Some other error');
   });
 
   it('非 delivered/completed 订单不能申请售后', async () => {

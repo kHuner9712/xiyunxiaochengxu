@@ -692,6 +692,7 @@ model AftersaleOrder {
   adminId                BigInt?        @map("admin_id")
   reviewedAt             DateTime?      @map("reviewed_at")
   refundedAt             DateTime?      @map("refunded_at")
+  activeOrderItemId      BigInt?        @unique @map("active_order_item_id")
   createdAt              DateTime       @default(now()) @map("created_at")
   updatedAt              DateTime       @updatedAt @map("updated_at")
 

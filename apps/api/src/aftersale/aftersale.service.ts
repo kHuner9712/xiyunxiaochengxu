@@ -31,61 +31,51 @@ export class AftersaleService {
       }
     }
 
-    const NON_TERMINAL_STATUSES = [AftersaleStatus.pending_review, AftersaleStatus.approved, AftersaleStatus.returned, AftersaleStatus.pending_refund];
-
-    const existing = await this.prisma.aftersaleOrder.findFirst({
-      where: {
-        orderItemId: BigInt(dto.orderItemId),
-        status: { in: NON_TERMINAL_STATUSES },
-      },
-    });
-    if (existing) throw new BadRequestException('该商品已申请售后');
-
     if (dto.type !== 1 && dto.type !== 2) {
       throw new BadRequestException('售后类型只能为1(仅退款)或2(退货退款)');
     }
 
-    const aftersale = await this.prisma.$transaction(async (tx) => {
-      const concurrentCheck = await tx.aftersaleOrder.findFirst({
-        where: {
-          orderItemId: BigInt(dto.orderItemId),
-          status: { in: NON_TERMINAL_STATUSES },
-        },
-      });
-      if (concurrentCheck) throw new BadRequestException('该商品已申请售后');
-
-      const created = await tx.aftersaleOrder.create({
-        data: {
-          aftersaleNo: generateAftersaleNo(),
-          orderId: orderItem.orderId,
-          orderItemId: BigInt(dto.orderItemId),
-          userId: BigInt(userId),
-          type: dto.type,
-          reason: dto.reason,
-          description: dto.description,
-          images: dto.images,
-          status: AftersaleStatus.pending_review,
-          aftersaleLogs: {
-            create: {
-              operatorType: 'user',
-              operatorId: BigInt(userId),
-              action: 'apply',
-              content: `用户申请售后，类型：${dto.type === 1 ? '仅退款' : '退货退款'}，原因：${dto.reason}`,
+    try {
+      const aftersale = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.aftersaleOrder.create({
+          data: {
+            aftersaleNo: generateAftersaleNo(),
+            orderId: orderItem.orderId,
+            orderItemId: BigInt(dto.orderItemId),
+            userId: BigInt(userId),
+            type: dto.type,
+            reason: dto.reason,
+            description: dto.description,
+            images: dto.images,
+            status: AftersaleStatus.pending_review,
+            activeOrderItemId: BigInt(dto.orderItemId),
+            aftersaleLogs: {
+              create: {
+                operatorType: 'user',
+                operatorId: BigInt(userId),
+                action: 'apply',
+                content: `用户申请售后，类型：${dto.type === 1 ? '仅退款' : '退货退款'}，原因：${dto.reason}`,
+              },
             },
           },
-        },
+        });
+
+        await tx.order.update({
+          where: { id: orderItem.orderId },
+          data: { status: OrderStatus.aftersale },
+        });
+
+        return created;
       });
 
-      await tx.order.update({
-        where: { id: orderItem.orderId },
-        data: { status: OrderStatus.aftersale },
-      });
-
-      return created;
-    });
-
-    this.logger.log(`用户${userId}申请售后：${aftersale.aftersaleNo}，类型${dto.type}`);
-    return this.serializeAftersale(aftersale);
+      this.logger.log(`用户${userId}申请售后：${aftersale.aftersaleNo}，类型${dto.type}`);
+      return this.serializeAftersale(aftersale);
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        throw new BadRequestException('该商品已申请售后');
+      }
+      throw error;
+    }
   }
 
   async findByUser(userId: string, dto: { skip?: number; take?: number; page?: number; pageSize?: number }) {
@@ -166,6 +156,7 @@ export class AftersaleService {
         where: { id: BigInt(id) },
         data: {
           status: AftersaleStatus.closed,
+          activeOrderItemId: null,
           aftersaleLogs: {
             create: {
               operatorType: 'user',
@@ -289,6 +280,7 @@ export class AftersaleService {
           rejectReason,
           adminId: BigInt(adminId),
           reviewedAt: new Date(),
+          activeOrderItemId: null,
           aftersaleLogs: {
             create: {
               operatorType: 'admin',

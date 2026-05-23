@@ -521,6 +521,7 @@ export class PaymentService {
             data: {
               status: 'refunded',
               refundedAt: new Date(),
+              activeOrderItemId: null,
               aftersaleLogs: {
                 create: {
                   operatorType: 'system',

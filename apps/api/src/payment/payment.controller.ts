@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Headers, Req, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -40,6 +40,8 @@ class GetRefundListDto {
 
 @Controller('weapp/pay')
 export class PaymentController {
+  private readonly logger = new Logger(PaymentController.name);
+
   constructor(private readonly paymentService: PaymentService) {}
 
   @Post('create')
@@ -52,7 +54,12 @@ export class PaymentController {
   @Post('callback')
   async callback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
     const rawBody = req.rawBody;
-    return this.paymentService.handleCallback(body, headers, rawBody);
+    try {
+      return await this.paymentService.handleCallback(body, headers, rawBody);
+    } catch (error: any) {
+      this.logger.error(`支付回调处理异常: ${error?.message}`, error?.stack);
+      return { code: 'FAIL', message: error?.message || '支付回调处理失败' };
+    }
   }
 
   @Public()
@@ -60,7 +67,12 @@ export class PaymentController {
   @Post('refund-callback')
   async refundCallback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
     const rawBody = req.rawBody;
-    return this.paymentService.handleRefundCallback(body, headers, rawBody);
+    try {
+      return await this.paymentService.handleRefundCallback(body, headers, rawBody);
+    } catch (error: any) {
+      this.logger.error(`退款回调处理异常: ${error?.message}`, error?.stack);
+      return { code: 'FAIL', message: error?.message || '退款回调处理失败' };
+    }
   }
 
   @Get('status/:orderId')
