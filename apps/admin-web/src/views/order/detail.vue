@@ -149,7 +149,7 @@ const deliverRules: FormRules = {
 
 async function fetchDetail() {
   try {
-    const res = await orderApi.getDetail(Number(route.params.id))
+    const res = await orderApi.getDetail(route.params.id as string)
     order.value = res.data || {}
   } catch {}
 }

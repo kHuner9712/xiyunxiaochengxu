@@ -60,7 +60,7 @@ const RETURNED_AFTERSALE = {
   orderItem: ORDER_ITEM_WITH_DELIVERED_ORDER,
 };
 
-const CREATE_DTO = { orderItemId: 10, type: 1, reason: '不想要了' };
+const CREATE_DTO = { orderItemId: '10', type: 1, reason: '不想要了' };
 
 describe('AftersaleService.create 售后申请幂等', () => {
   let service: AftersaleService;

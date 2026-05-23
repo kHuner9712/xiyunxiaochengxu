@@ -93,8 +93,8 @@ async function fetchList() {
       ...searchForm,
     }
     if (dateRange.value?.length === 2) {
-      params.startTime = dateRange.value[0]
-      params.endTime = dateRange.value[1]
+      params.startDate = dateRange.value[0]
+      params.endDate = dateRange.value[1]
     }
     const res = await orderApi.getList(params)
     tableData.value = res.data.list || []

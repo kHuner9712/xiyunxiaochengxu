@@ -1,13 +1,12 @@
-import { IsInt, IsString, IsNotEmpty, IsOptional, IsArray } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsOptional, IsArray, Matches, IsIn } from 'class-validator';
 
 export class CreateAftersaleDto {
-  @Type(() => Number)
-  @IsInt()
-  orderItemId!: number;
+  @IsString()
+  @Matches(/^\d+$/)
+  @IsNotEmpty()
+  orderItemId!: string;
 
-  @Type(() => Number)
-  @IsInt()
+  @IsIn([1, 2])
   type!: number;
 
   @IsString()

@@ -36,7 +36,7 @@
           <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
           <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap.stop="handlePay(order)">去支付</view>
           <view v-if="order.status === 'delivered'" class="action-btn primary" @tap.stop="handleConfirm(order.id)">确认收货</view>
-          <view v-if="order.status === 'completed' || order.status === 'delivered'" class="action-btn" @tap.stop="goAftersale(order.id)">申请售后</view>
+          <view v-if="order.status === 'completed' || order.status === 'delivered'" class="action-btn" @tap.stop="goAftersaleWithItem(order.id, order.items?.[0]?.id || '')">申请售后</view>
         </view>
       </view>
     </view>
@@ -100,12 +100,16 @@ function switchTab(value: string) {
   loadOrders(true)
 }
 
-function goDetail(id: number) {
+function goDetail(id: string) {
   uni.navigateTo({ url: `/pages/order/detail?id=${id}` })
 }
 
-function goAftersale(orderId: number) {
+function goAftersale(orderId: string) {
   uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${orderId}` })
+}
+
+function goAftersaleWithItem(orderId: string, orderItemId: string) {
+  uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${orderId}&orderItemId=${orderItemId}` })
 }
 
 function getStatusClass(status: string): string {

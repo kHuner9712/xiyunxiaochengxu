@@ -363,7 +363,7 @@ export class OrderService {
     });
 
     this.logger.log(`用户${userId}创建订单：${order.orderNo}，实付${payAmount}分`);
-    return this.serializeOrder(order);
+    return { orderId: order.id.toString(), orderNo: order.orderNo };
   }
 
   async cancel(userId: string, id: string) {
@@ -460,7 +460,7 @@ export class OrderService {
     });
 
     this.logger.log(`用户${userId}取消订单：${id}`);
-    return this.serializeOrder(result);
+    return this.serializeOrderView(result);
   }
 
   async confirmReceive(userId: string, id: string) {
@@ -538,7 +538,7 @@ export class OrderService {
     });
 
     this.logger.log(`用户${userId}确认收货：${id}`);
-    return this.serializeOrder(result);
+    return this.serializeOrderView(result);
   }
 
   async findByUser(userId: string, dto: OrderQueryDto) {
@@ -563,7 +563,7 @@ export class OrderService {
     ]);
 
     this.logger.log(`用户${userId}查询订单列表，共${total}条`);
-    return paginate(list.map((o) => this.serializeOrder(o)), total, dto.page, dto.pageSize);
+    return paginate(list.map((o) => this.serializeOrderView(o)), total, dto.page, dto.pageSize);
   }
 
   async findById(userId: string, id: string) {
@@ -577,7 +577,7 @@ export class OrderService {
       },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    return this.serializeOrder(order);
+    return this.serializeOrderView(order);
   }
 
   async findAllAdmin(dto: OrderQueryDto) {
@@ -605,7 +605,7 @@ export class OrderService {
     ]);
 
     this.logger.log(`管理员查询订单列表，共${total}条`);
-    return paginate(list.map((o) => this.serializeOrder(o)), total, dto.page, dto.pageSize);
+    return paginate(list.map((o) => this.serializeOrderView(o)), total, dto.page, dto.pageSize);
   }
 
   async findAdminById(id: string) {
@@ -620,7 +620,7 @@ export class OrderService {
       },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    return this.serializeOrder(order);
+    return this.serializeOrderView(order);
   }
 
   async adminCancel(id: string, reason: string) {
@@ -716,7 +716,7 @@ export class OrderService {
     });
 
     this.logger.log(`管理员取消订单：${id}，原因：${reason}`);
-    return this.serializeOrder(result);
+    return this.serializeOrderView(result);
   }
 
   async findDeliveryList(dto: OrderQueryDto) {
@@ -794,7 +794,7 @@ export class OrderService {
     });
 
     this.logger.log(`管理员发货订单：${dto.orderId}，物流：${dto.logisticsCompany} ${dto.logisticsNo}`);
-    return this.serializeOrder(result);
+    return this.serializeOrderView(result);
   }
 
   async adminRemark(id: string, remark: string) {
@@ -808,7 +808,7 @@ export class OrderService {
       data: { adminRemark: remark },
     });
     this.logger.log(`管理员备注订单：${id}`);
-    return this.serializeOrder(result);
+    return this.serializeOrderView(result);
   }
 
   async closeTimeoutOrders() {
@@ -1015,7 +1015,7 @@ export class OrderService {
     });
 
     this.logger.log(`导出订单，共${orders.length}条`);
-    return orders.map((o) => this.serializeOrder(o));
+    return orders.map((o) => this.serializeOrderView(o));
   }
 
   private calculateFreight(totalAmount: number, province?: string): number {
@@ -1066,6 +1066,62 @@ export class OrderService {
       user: order.user
         ? { ...order.user, id: order.user.id.toString() }
         : null,
+    };
+  }
+
+  private serializeOrderView(order: any) {
+    const base = this.serializeOrder(order);
+    const addressDetail = [order.province, order.city, order.district, order.detailAddress].filter(Boolean).join(' ');
+    return {
+      id: base.id,
+      orderNo: base.orderNo,
+      status: base.status,
+      totalAmount: base.totalAmount,
+      discountAmount: base.discountAmount,
+      couponAmount: base.couponAmount,
+      activityDiscountAmount: base.activityDiscountAmount,
+      pointsAmount: base.pointsAmount,
+      freightAmount: base.freightAmount,
+      payAmount: base.payAmount,
+      addressId: base.couponId ? undefined : undefined,
+      addressName: order.receiverName || '',
+      addressPhone: order.receiverPhone || '',
+      addressDetail,
+      consignee: order.receiverName || '',
+      phone: order.receiverPhone || '',
+      address: addressDetail,
+      items: (base.orderItems || []).map((i: any) => ({
+        id: i.id,
+        productId: i.productId,
+        skuId: i.skuId,
+        productName: i.productName,
+        skuName: i.skuSpecs || '',
+        productImage: i.productImage || '',
+        price: i.price,
+        originalPrice: i.originalPrice,
+        quantity: i.quantity,
+        subtotal: i.subtotal,
+      })),
+      logistics: base.delivery ? {
+        company: base.delivery.logisticsCompany || '',
+        trackingNo: base.delivery.logisticsNo || '',
+        traces: base.delivery.logisticsTraces ? (typeof base.delivery.logisticsTraces === 'string' ? JSON.parse(base.delivery.logisticsTraces) : base.delivery.logisticsTraces) : [],
+      } : null,
+      createTime: order.createdAt ? new Date(order.createdAt).toLocaleString('zh-CN') : '',
+      payTime: order.paidAt ? new Date(order.paidAt).toLocaleString('zh-CN') : undefined,
+      deliveryTime: order.shippedAt ? new Date(order.shippedAt).toLocaleString('zh-CN') : undefined,
+      shipTime: order.shippedAt ? new Date(order.shippedAt).toLocaleString('zh-CN') : undefined,
+      finishTime: order.completedAt ? new Date(order.completedAt).toLocaleString('zh-CN') : undefined,
+      receiveTime: order.completedAt ? new Date(order.completedAt).toLocaleString('zh-CN') : undefined,
+      remark: order.remark || undefined,
+      operationLogs: (base.orderLogs || []).map((l: any) => ({
+        ...l,
+        operator: l.operatorType === 'admin' ? '管理员' : '用户',
+        content: l.content,
+        createTime: l.createdAt ? new Date(l.createdAt).toLocaleString('zh-CN') : '',
+      })),
+      user: base.user || undefined,
+      couponId: base.couponId,
     };
   }
 }

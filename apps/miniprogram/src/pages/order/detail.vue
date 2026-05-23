@@ -92,9 +92,9 @@ import { formatOrderStatus, formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
 const order = ref<OrderDetail>({
-  id: 0, orderNo: '', status: '' as any, totalAmount: 0, payAmount: 0,
+  id: '', orderNo: '', status: '' as any, totalAmount: 0, payAmount: 0,
   freightAmount: 0, couponAmount: 0, pointsAmount: 0,
-  addressId: 0, addressName: '', addressPhone: '', addressDetail: '',
+  addressId: '', addressName: '', addressPhone: '', addressDetail: '',
   items: [], createTime: ''
 })
 
@@ -170,7 +170,11 @@ async function handleConfirm() {
 }
 
 function goAftersale() {
-  uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${order.value.id}` })
+  const firstItemId = order.value.items?.[0]?.id || ''
+  const url = firstItemId
+    ? `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${firstItemId}`
+    : `/pages/aftersale/apply?orderId=${order.value.id}`
+  uni.navigateTo({ url })
 }
 
 onLoad((options) => {

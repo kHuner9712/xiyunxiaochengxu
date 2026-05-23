@@ -10,9 +10,6 @@
           <view class="type-option" :class="{ active: form.type === 2 }" @tap="form.type = 2">
             <text class="type-text">退货退款</text>
           </view>
-          <view class="type-option" :class="{ active: form.type === 3 }" @tap="form.type = 3">
-            <text class="type-text">换货</text>
-          </view>
         </view>
       </view>
 
@@ -89,6 +86,10 @@ function removeImage(index: number) {
 }
 
 async function handleSubmit() {
+  if (!orderItemId.value) {
+    uni.showToast({ title: '缺少商品信息，请从订单详情页申请售后', icon: 'none' })
+    return
+  }
   if (!form.value.reason) {
     uni.showToast({ title: '请选择原因', icon: 'none' })
     return

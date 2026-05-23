@@ -642,7 +642,7 @@ describe('订单主链路', () => {
       addressId: '1', items: [{ skuId: '200', quantity: 1 }],
     });
 
-    expect(result.id).toBe('1');
+    expect(result.orderId).toBe('1');
     expect(result.orderNo).toBe('XY20260523001');
     expect(mockPrisma._mockTx.productSku.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -963,5 +963,155 @@ describe('OrderService.autoCompleteOrders 自动完成', () => {
     const result = await service.autoCompleteOrders();
 
     expect(result.completedCount).toBe(0);
+  });
+});
+
+describe('接口契约：createOrder 返回 orderId/orderNo', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('create 返回 { orderId, orderNo }，不返回完整 order 对象', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU(10));
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(42), orderNo: 'XY20260523001', orderItems: [],
+    });
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.create('100', {
+      addressId: '1', items: [{ skuId: '200', quantity: 1 }],
+    });
+
+    expect(result).toHaveProperty('orderId', '42');
+    expect(result).toHaveProperty('orderNo', 'XY20260523001');
+    expect(result).not.toHaveProperty('orderItems');
+    expect(result).not.toHaveProperty('userId');
+  });
+});
+
+describe('接口契约：订单列表/详情字段映射', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  const ORDER_WITH_ITEMS = {
+    id: BigInt(1), orderNo: 'XY20260523001', status: OrderStatus.pending_payment,
+    totalAmount: 9900, discountAmount: 0, couponAmount: 0, activityDiscountAmount: 0,
+    pointsAmount: 0, freightAmount: 0, payAmount: 9900,
+    receiverName: '张三', receiverPhone: '13800138000',
+    province: '北京', city: '北京', district: '朝阳区', detailAddress: 'xxx路1号',
+    remark: null, couponId: null,
+    createdAt: new Date('2026-05-23T10:00:00Z'), paidAt: null, shippedAt: null, completedAt: null,
+    orderItems: [{
+      id: BigInt(10), orderId: BigInt(1), productId: BigInt(300), skuId: BigInt(200),
+      productName: '测试商品', skuSpecs: '红色/L', productImage: 'img.jpg',
+      price: 9900, originalPrice: 12900, quantity: 1, subtotal: 9900,
+      activityId: null, supplierId: null,
+    }],
+    payment: null, delivery: null, orderLogs: [], user: null,
+  };
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('findByUser 返回 list[0].items（不是 orderItems）', async () => {
+    mockPrisma.order.findMany.mockResolvedValue([ORDER_WITH_ITEMS]);
+    mockPrisma.order.count.mockResolvedValue(1);
+
+    const result = await service.findByUser('100', { skip: 0, take: 10, page: 1, pageSize: 10 });
+
+    expect(result.list[0]).toHaveProperty('items');
+    expect(result.list[0]).not.toHaveProperty('orderItems');
+    expect(result.list[0].items[0]).toHaveProperty('skuName', '红色/L');
+    expect(result.list[0].items[0]).toHaveProperty('productName', '测试商品');
+  });
+
+  it('findById 返回 items/addressName/addressPhone/addressDetail/createTime', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER_WITH_ITEMS);
+
+    const result = await service.findById('100', '1');
+
+    expect(result).toHaveProperty('items');
+    expect(result).toHaveProperty('addressName', '张三');
+    expect(result).toHaveProperty('addressPhone', '13800138000');
+    expect(result).toHaveProperty('addressDetail');
+    expect(result).toHaveProperty('createTime');
+    expect(result).not.toHaveProperty('orderItems');
+    expect(result).not.toHaveProperty('receiverName');
+  });
+
+  it('findAllAdmin 也返回 items 而非 orderItems', async () => {
+    mockPrisma.order.findMany.mockResolvedValue([ORDER_WITH_ITEMS]);
+    mockPrisma.order.count.mockResolvedValue(1);
+
+    const result = await service.findAllAdmin({ skip: 0, take: 10, page: 1, pageSize: 10 });
+
+    expect(result.list[0]).toHaveProperty('items');
+    expect(result.list[0]).not.toHaveProperty('orderItems');
+  });
+});
+
+describe('接口契约：售后申请 orderItemId 必传', () => {
+  it('DTO orderItemId 为空字符串时校验不通过', async () => {
+    const { CreateAftersaleDto } = await import('../aftersale/dto/create-aftersale.dto');
+    const dto = new CreateAftersaleDto();
+    dto.orderItemId = '';
+    dto.type = 1;
+    dto.reason = '不想要了';
+
+    const { validate } = await import('class-validator');
+    const errors = await validate(dto);
+    const orderItemIdErrors = errors.filter(e => e.property === 'orderItemId');
+    expect(orderItemIdErrors.length).toBeGreaterThan(0);
+  });
+
+  it('DTO type=3 换货时校验不通过', async () => {
+    const { CreateAftersaleDto } = await import('../aftersale/dto/create-aftersale.dto');
+    const dto = new CreateAftersaleDto();
+    dto.orderItemId = '10';
+    dto.type = 3;
+    dto.reason = '不想要了';
+
+    const { validate } = await import('class-validator');
+    const errors = await validate(dto);
+    const typeErrors = errors.filter(e => e.property === 'type');
+    expect(typeErrors.length).toBeGreaterThan(0);
+  });
+});
+
+describe('接口契约：后台订单日期筛选', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('findAllAdmin 传 startDate/endDate 字符串可正常查询', async () => {
+    mockPrisma.order.findMany.mockResolvedValue([]);
+    mockPrisma.order.count.mockResolvedValue(0);
+
+    await service.findAllAdmin({ skip: 0, take: 10, page: 1, pageSize: 10, startDate: '2026-05-01', endDate: '2026-05-31' });
+
+    expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          createdAt: expect.objectContaining({
+            gte: expect.any(Date),
+            lte: expect.any(Date),
+          }),
+        }),
+      }),
+    );
   });
 });
