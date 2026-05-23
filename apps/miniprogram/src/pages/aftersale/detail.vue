@@ -114,7 +114,7 @@ async function handleCancel() {
 }
 
 onLoad((options) => {
-  if (options?.id) loadDetail(Number(options.id))
+  if (options?.id) loadDetail(options.id)
 })
 </script>
 

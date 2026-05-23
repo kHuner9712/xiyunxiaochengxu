@@ -59,7 +59,7 @@ async function loadList(reset = false) {
   }
 }
 
-function goDetail(id: number) {
+function goDetail(id: string) {
   uni.navigateTo({ url: `/pages/aftersale/detail?id=${id}` })
 }
 

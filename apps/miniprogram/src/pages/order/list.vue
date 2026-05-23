@@ -120,7 +120,7 @@ function getStatusClass(status: string): string {
   return map[status] || ''
 }
 
-async function handleCancel(id: number) {
+async function handleCancel(id: string) {
   uni.showModal({
     title: '提示',
     content: '确定取消该订单吗？',
@@ -139,7 +139,7 @@ async function handleCancel(id: number) {
 
 async function handlePay(order: OrderItem) {
   try {
-    const payment = await createPayment({ orderId: String(order.id) })
+    const payment = await createPayment({ orderId: order.id })
     try {
       await wxPay(payment)
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.id}` })
@@ -151,7 +151,7 @@ async function handlePay(order: OrderItem) {
   }
 }
 
-async function handleConfirm(id: number) {
+async function handleConfirm(id: string) {
   uni.showModal({
     title: '提示',
     content: '确认已收到商品吗？',

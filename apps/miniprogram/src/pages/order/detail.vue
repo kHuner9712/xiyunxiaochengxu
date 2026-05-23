@@ -100,7 +100,7 @@ const order = ref<OrderDetail>({
 
 const showLogistics = ref(false)
 
-async function loadOrder(id: number) {
+async function loadOrder(id: string) {
   try {
     order.value = await getOrderDetail(id)
   } catch {
@@ -140,7 +140,7 @@ async function handleCancel() {
 
 async function handlePay() {
   try {
-    const payment = await createPayment({ orderId: String(order.value.id) })
+    const payment = await createPayment({ orderId: order.value.id })
     try {
       await wxPay(payment)
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}` })
@@ -174,7 +174,7 @@ function goAftersale() {
 }
 
 onLoad((options) => {
-  if (options?.id) loadOrder(Number(options.id))
+  if (options?.id) loadOrder(options.id)
 })
 </script>
 

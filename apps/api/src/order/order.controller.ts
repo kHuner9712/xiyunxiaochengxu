@@ -18,12 +18,12 @@ export class WeappOrderController {
   @Post('confirm')
   async confirm(
     @CurrentUser('id') userId: string,
-    @Body() body: { items: { skuId: number; quantity: number }[]; addressId?: number; couponId?: number; pointsDeduct?: number },
+    @Body() body: { items: { skuId: string; quantity: number }[]; addressId?: string; couponId?: string; pointsDeduct?: number },
   ) {
     return this.orderService.confirm(userId, {
-      items: body.items.map((i) => ({ skuId: String(i.skuId), quantity: i.quantity })),
-      addressId: body.addressId ? String(body.addressId) : undefined,
-      couponId: body.couponId ? String(body.couponId) : undefined,
+      items: body.items,
+      addressId: body.addressId || undefined,
+      couponId: body.couponId || undefined,
       pointsDeduct: body.pointsDeduct,
     });
   }
@@ -31,11 +31,11 @@ export class WeappOrderController {
   @Post('create')
   async create(@CurrentUser('id') userId: string, @Body() dto: CreateOrderDto) {
     return this.orderService.create(userId, {
-      addressId: String(dto.addressId),
-      couponId: dto.couponId ? String(dto.couponId) : undefined,
+      addressId: dto.addressId,
+      couponId: dto.couponId || undefined,
       pointsDeduct: dto.pointsDeduct,
       remark: dto.remark,
-      items: dto.items.map((i) => ({ skuId: String(i.skuId), quantity: i.quantity })),
+      items: dto.items.map((i) => ({ skuId: i.skuId, quantity: i.quantity })),
     });
   }
 

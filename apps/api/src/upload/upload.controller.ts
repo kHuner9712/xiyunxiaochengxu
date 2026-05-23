@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Query, UploadedFile, UseInterceptors, Body, Res } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, UploadedFile, UseInterceptors, Body, Res, BadRequestException } from '@nestjs/common';
 import { UploadService } from './upload.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -29,6 +29,7 @@ export class UploadController {
     @CurrentUser('roleType') roleType: string,
     @Body('groupName') groupName?: string,
   ) {
+    if (!file) throw new BadRequestException('请选择要上传的文件');
     return this.uploadService.uploadFile(file, userId, roleType === 'admin' ? 'admin' : 'user', groupName);
   }
 
@@ -63,6 +64,7 @@ export class AdminUploadController {
     @CurrentUser('id') userId: string,
     @Body('groupName') groupName?: string,
   ) {
+    if (!file) throw new BadRequestException('请选择要上传的文件');
     return this.uploadService.uploadFile(file, userId, 'admin', groupName);
   }
 }

@@ -70,7 +70,7 @@ function onRegionChange(e: any) {
   form.value.district = value[2]
 }
 
-async function loadAddress(id: number) {
+async function loadAddress(id: string) {
   try {
     const data = await getAddressDetail(id)
     form.value = { ...data, id: data.id }
@@ -137,7 +137,7 @@ async function handleDelete() {
 }
 
 onLoad((options) => {
-  if (options?.id) loadAddress(Number(options.id))
+  if (options?.id) loadAddress(options.id)
 })
 </script>
 

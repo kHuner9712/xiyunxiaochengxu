@@ -16,6 +16,12 @@ interface RequestConfig {
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const TOKEN_KEY = 'baby_mall_token'
 
+const IS_PRODUCTION = import.meta.env.PROD
+
+if (IS_PRODUCTION && !BASE_URL) {
+  throw new Error('[baby-mall] VITE_API_BASE_URL 未配置，生产构建必须设置完整的 https:// 域名')
+}
+
 function getToken(): string {
   return uni.getStorageSync(TOKEN_KEY) || ''
 }
@@ -47,6 +53,11 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
     showLoading = false,
     showError = true
   } = config
+
+  if (!BASE_URL) {
+    uni.showToast({ title: 'API 地址未配置', icon: 'none', duration: 2000 })
+    return Promise.reject(new Error('API 地址未配置'))
+  }
 
   if (showLoading) {
     uni.showLoading({ title: '加载中...', mask: true })

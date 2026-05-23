@@ -8,16 +8,16 @@ export function getMyCoupons(params: { status?: number; page: number; pageSize: 
   return get<{ list: MyCouponItem[]; total: number }>('/weapp/coupon/my', params)
 }
 
-export function receiveCoupon(couponId: number) {
+export function receiveCoupon(couponId: string | number) {
   return post(`/weapp/coupon/receive/${couponId}`)
 }
 
-export function getAvailableCoupons(params: { amount: number; productIds: number[] }) {
+export function getAvailableCoupons(params: { amount: number; productIds: (string | number)[] }) {
   return get<MyCouponItem[]>('/weapp/coupon/usable', params)
 }
 
 export interface CouponItem {
-  id: number
+  id: string
   name: string
   type: number
   value: number
@@ -29,8 +29,8 @@ export interface CouponItem {
 }
 
 export interface MyCouponItem {
-  id: number
-  couponId: number
+  id: string
+  couponId: string
   name: string
   type: number
   value: number

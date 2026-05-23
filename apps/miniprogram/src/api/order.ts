@@ -1,13 +1,13 @@
 import { get, post, put } from '@/utils/request'
 
 export function createOrder(data: {
-  addressId: number
+  addressId: string
   items: OrderItemInput[]
-  couponId?: number
+  couponId?: string
   pointsDeduct?: number
   remark?: string
 }) {
-  return post<{ orderId: number; orderNo: string }>('/weapp/order/create', data)
+  return post<{ orderId: string; orderNo: string }>('/weapp/order/create', data)
 }
 
 export function getOrderList(params: {
@@ -18,15 +18,15 @@ export function getOrderList(params: {
   return get<{ list: OrderItem[]; total: number }>('/weapp/order/list', params)
 }
 
-export function getOrderDetail(id: number) {
+export function getOrderDetail(id: string | number) {
   return get<OrderDetail>(`/weapp/order/detail/${id}`)
 }
 
-export function cancelOrder(id: number) {
+export function cancelOrder(id: string | number) {
   return put(`/weapp/order/cancel/${id}`)
 }
 
-export function confirmReceive(id: number) {
+export function confirmReceive(id: string | number) {
   return put(`/weapp/order/confirm-receive/${id}`)
 }
 
@@ -35,13 +35,13 @@ export function getOrderCount() {
 }
 
 export interface OrderItemInput {
-  productId: number
-  skuId: number
+  productId?: string
+  skuId: string
   quantity: number
 }
 
 export interface OrderItem {
-  id: number
+  id: string
   orderNo: string
   status: string
   totalAmount: number
@@ -51,8 +51,8 @@ export interface OrderItem {
 }
 
 export interface OrderProductItem {
-  productId: number
-  skuId: number
+  productId: string
+  skuId: string
   productName: string
   productImage: string
   skuName: string
@@ -61,7 +61,7 @@ export interface OrderProductItem {
 }
 
 export interface OrderDetail {
-  id: number
+  id: string
   orderNo: string
   status: string
   totalAmount: number
@@ -69,7 +69,7 @@ export interface OrderDetail {
   freightAmount: number
   couponAmount: number
   pointsAmount: number
-  addressId: number
+  addressId: string
   addressName: string
   addressPhone: string
   addressDetail: string
@@ -94,9 +94,9 @@ export interface LogisticsTrace {
 }
 
 export function previewOrder(data: {
-  items: { skuId: number; quantity: number }[]
-  addressId?: number
-  couponId?: number
+  items: { skuId: string; quantity: number }[]
+  addressId?: string
+  couponId?: string
   pointsDeduct?: number
 }) {
   return post<OrderPreview>('/weapp/order/confirm', data)

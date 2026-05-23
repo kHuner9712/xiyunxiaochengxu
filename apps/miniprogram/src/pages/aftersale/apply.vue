@@ -55,8 +55,8 @@ import { applyAftersale } from '@/api/aftersale'
 import { getOrderDetail } from '@/api/order'
 import { chooseAndUploadImage } from '@/api/upload'
 
-const orderId = ref(0)
-const orderItemId = ref(0)
+const orderId = ref('')
+const orderItemId = ref('')
 const reasons = ref<string[]>(['不想要了', '商品与描述不符', '质量问题', '收到商品损坏', '其他原因'])
 const imageList = ref<string[]>([])
 
@@ -110,8 +110,8 @@ async function handleSubmit() {
 }
 
 onLoad(async (options) => {
-  if (options?.orderId) orderId.value = Number(options.orderId)
-  if (options?.orderItemId) orderItemId.value = Number(options.orderItemId)
+  if (options?.orderId) orderId.value = options.orderId
+  if (options?.orderItemId) orderItemId.value = options.orderItemId
   if (orderId.value) {
     try {
       const order = await getOrderDetail(orderId.value)

@@ -1,10 +1,10 @@
-import { IsInt, IsOptional, IsString, IsArray, ValidateNested, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Matches } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class OrderItemDto {
-  @Type(() => Number)
-  @IsInt()
-  skuId!: number;
+  @IsString()
+  @Matches(/^\d+$/)
+  skuId!: string;
 
   @Type(() => Number)
   @IsInt()
@@ -13,14 +13,14 @@ class OrderItemDto {
 }
 
 export class CreateOrderDto {
-  @Type(() => Number)
-  @IsInt()
-  addressId!: number;
+  @IsString()
+  @Matches(/^\d+$/)
+  addressId!: string;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  couponId?: number;
+  @IsString()
+  @Matches(/^\d+$/)
+  couponId?: string;
 
   @IsOptional()
   @Type(() => Number)

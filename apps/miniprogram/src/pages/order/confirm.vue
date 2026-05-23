@@ -28,10 +28,14 @@
       </view>
     </view>
 
-    <view class="coupon-section card" @tap="showCouponPicker = true">
+    <view class="coupon-section card" @tap="openCouponPicker">
       <text class="section-label">优惠券</text>
-      <text class="section-value">{{ selectedCoupon ? `-¥${formatPrice(couponDiscount)}` : '选择优惠券' }}</text>
-      <text class="section-arrow">›</text>
+      <text class="section-value" :class="{ 'coupon-selected': selectedCoupon }">
+        <template v-if="selectedCoupon">-¥{{ formatPrice(couponDiscount) }}</template>
+        <template v-else-if="couponList.length === 0">暂无可用优惠券</template>
+        <template v-else>选择优惠券</template>
+      </text>
+      <text v-if="couponList.length > 0" class="section-arrow">›</text>
     </view>
 
     <view class="points-section card">
@@ -75,6 +79,47 @@
         <text class="submit-text">{{ submitting ? '提交中...' : '提交订单' }}</text>
       </view>
     </view>
+
+    <view v-if="showCouponPicker" class="coupon-mask" @tap="closeCouponPicker">
+      <view class="coupon-popup" @tap.stop>
+        <view class="popup-header">
+          <text class="popup-title">选择优惠券</text>
+          <text class="popup-close" @tap="closeCouponPicker">✕</text>
+        </view>
+        <scroll-view scroll-y class="popup-body">
+          <view
+            class="coupon-item"
+            :class="{ active: !selectedCoupon }"
+            @tap="selectCoupon(null)"
+          >
+            <view class="coupon-item-info">
+              <text class="coupon-item-name">不使用优惠券</text>
+            </view>
+            <view v-if="!selectedCoupon" class="coupon-check">✓</view>
+          </view>
+          <view
+            v-for="coupon in couponList"
+            :key="coupon.id"
+            class="coupon-item"
+            :class="{ active: selectedCoupon?.id === coupon.id }"
+            @tap="selectCoupon(coupon)"
+          >
+            <view class="coupon-item-left">
+              <text class="coupon-item-value">¥{{ formatPrice(coupon.value) }}</text>
+              <text class="coupon-item-condition">满{{ formatPrice(coupon.minAmount) }}可用</text>
+            </view>
+            <view class="coupon-item-info">
+              <text class="coupon-item-name">{{ coupon.name }}</text>
+              <text class="coupon-item-time">{{ coupon.startTime?.slice(0, 10) }} - {{ coupon.endTime?.slice(0, 10) }}</text>
+            </view>
+            <view v-if="selectedCoupon?.id === coupon.id" class="coupon-check">✓</view>
+          </view>
+          <view v-if="couponList.length === 0" class="coupon-empty">
+            <text class="coupon-empty-text">暂无可用优惠券</text>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -89,8 +134,8 @@ import { formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
 interface OrderItemInput {
-  productId: number
-  skuId: number
+  productId: string
+  skuId: string
   quantity: number
   productName: string
   productImage: string
@@ -108,6 +153,7 @@ const showCouponPicker = ref(false)
 const submitting = ref(false)
 const loading = ref(false)
 const preview = ref<OrderPreview | null>(null)
+const couponList = ref<MyCouponItem[]>([])
 
 const totalProductPrice = computed(() => {
   if (preview.value) return preview.value.totalAmount
@@ -116,14 +162,12 @@ const totalProductPrice = computed(() => {
 
 const couponDiscount = computed(() => {
   if (preview.value) return preview.value.couponAmount
-  if (!selectedCoupon.value) return 0
-  return selectedCoupon.value.value
+  return 0
 })
 
 const pointsDeduct = computed(() => {
   if (preview.value) return preview.value.pointsAmount
-  if (!usePoints.value) return 0
-  return Math.min(availablePoints.value, Math.floor(totalProductPrice.value / 100) * 100)
+  return 0
 })
 
 const freightAmount = computed(() => {
@@ -152,8 +196,8 @@ async function loadPreview() {
     preview.value = data
     if (data.items?.length) {
       orderItems.value = data.items.map(item => ({
-        productId: Number(item.productId),
-        skuId: Number(item.skuId),
+        productId: item.productId,
+        skuId: item.skuId,
         quantity: item.quantity,
         productName: item.productName,
         productImage: item.productImage,
@@ -162,6 +206,7 @@ async function loadPreview() {
       }))
     }
   } catch (e: any) {
+    preview.value = null
     uni.showToast({ title: e.message || '获取订单金额失败', icon: 'none' })
   } finally {
     loading.value = false
@@ -177,6 +222,16 @@ async function loadDefaultAddress() {
   }
 }
 
+async function loadCoupons() {
+  try {
+    const totalAmount = orderItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
+    const productIds = orderItems.value.map(item => item.productId)
+    couponList.value = await getAvailableCoupons({ amount: totalAmount, productIds })
+  } catch {
+    couponList.value = []
+  }
+}
+
 function selectAddress() {
   uni.navigateTo({
     url: '/pages/address/list?select=true',
@@ -189,6 +244,21 @@ function selectAddress() {
   })
 }
 
+function openCouponPicker() {
+  if (couponList.value.length === 0) return
+  showCouponPicker.value = true
+}
+
+function closeCouponPicker() {
+  showCouponPicker.value = false
+}
+
+async function selectCoupon(coupon: MyCouponItem | null) {
+  selectedCoupon.value = coupon
+  showCouponPicker.value = false
+  await loadPreview()
+}
+
 function togglePoints(e: any) {
   usePoints.value = e.detail.value
   loadPreview()
@@ -198,6 +268,14 @@ async function handleSubmit() {
   if (submitting.value) return
   if (!address.value) {
     uni.showToast({ title: '请选择收货地址', icon: 'none' })
+    return
+  }
+  if (orderItems.value.length === 0) {
+    uni.showToast({ title: '订单商品为空', icon: 'none' })
+    return
+  }
+  if (!preview.value) {
+    uni.showToast({ title: '金额试算失败，请返回重试', icon: 'none' })
     return
   }
   try {
@@ -214,7 +292,7 @@ async function handleSubmit() {
       remark: remark.value
     }
     const order = await createOrder(orderData)
-    const payment = await createPayment({ orderId: String(order.orderId) })
+    const payment = await createPayment({ orderId: order.orderId })
     try {
       await wxPay(payment)
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
@@ -228,13 +306,13 @@ async function handleSubmit() {
   }
 }
 
-onLoad((options) => {
+onLoad(async (options) => {
   if (options?.items) {
     orderItems.value = JSON.parse(decodeURIComponent(options.items))
   } else if (options?.productId) {
     orderItems.value = [{
-      productId: Number(options.productId),
-      skuId: Number(options.skuId),
+      productId: options.productId,
+      skuId: options.skuId,
       quantity: Number(options.quantity || 1),
       productName: '',
       productImage: '',
@@ -242,8 +320,9 @@ onLoad((options) => {
       price: 0
     }]
   }
-  loadDefaultAddress()
-  loadPreview()
+  await loadDefaultAddress()
+  await loadPreview()
+  loadCoupons()
 })
 </script>
 
@@ -367,6 +446,10 @@ onLoad((options) => {
   font-size: $font-sm;
   color: $text-hint;
   text-align: right;
+
+  &.coupon-selected {
+    color: $danger-color;
+  }
 }
 
 .section-arrow {
@@ -456,5 +539,119 @@ onLoad((options) => {
   color: #FFFFFF;
   font-size: $font-md;
   font-weight: 500;
+}
+
+.coupon-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: flex;
+  align-items: flex-end;
+}
+
+.coupon-popup {
+  width: 100%;
+  max-height: 70vh;
+  background: $bg-white;
+  border-radius: $radius-xl $radius-xl 0 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md $spacing-lg;
+  border-bottom: 1rpx solid $divider-color;
+}
+
+.popup-title {
+  font-size: $font-lg;
+  font-weight: 600;
+  color: $text-color;
+}
+
+.popup-close {
+  font-size: $font-lg;
+  color: $text-hint;
+  padding: $spacing-xs;
+}
+
+.popup-body {
+  flex: 1;
+  padding: $spacing-sm $spacing-md;
+  max-height: 60vh;
+}
+
+.coupon-item {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md;
+  margin-bottom: $spacing-sm;
+  border-radius: $radius-md;
+  border: 2rpx solid $border-color;
+
+  &.active {
+    border-color: $primary-color;
+    background: rgba($primary-color, 0.03);
+  }
+}
+
+.coupon-item-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: $spacing-md;
+  min-width: 120rpx;
+}
+
+.coupon-item-value {
+  font-size: $font-xl;
+  font-weight: 700;
+  color: $danger-color;
+}
+
+.coupon-item-condition {
+  font-size: $font-xs;
+  color: $text-hint;
+  margin-top: 4rpx;
+}
+
+.coupon-item-info {
+  flex: 1;
+}
+
+.coupon-item-name {
+  font-size: $font-md;
+  color: $text-color;
+  display: block;
+}
+
+.coupon-item-time {
+  font-size: $font-xs;
+  color: $text-hint;
+  margin-top: 4rpx;
+  display: block;
+}
+
+.coupon-check {
+  font-size: $font-lg;
+  color: $primary-color;
+  margin-left: $spacing-sm;
+}
+
+.coupon-empty {
+  padding: $spacing-xl 0;
+  text-align: center;
+}
+
+.coupon-empty-text {
+  font-size: $font-sm;
+  color: $text-hint;
 }
 </style>

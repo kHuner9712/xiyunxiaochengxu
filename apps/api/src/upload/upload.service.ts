@@ -35,6 +35,9 @@ export class UploadService {
   constructor(private prisma: PrismaService) {}
 
   async uploadFile(file: Express.Multer.File, uploaderId: string, uploaderType: string, groupName?: string) {
+    if (!file || !file.originalname) {
+      throw new BadRequestException('请选择要上传的文件');
+    }
     const ext = path.extname(file.originalname).toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
       throw new BadRequestException(`不支持的文件类型: ${ext}，仅允许图片、视频、PDF和Office文档`);

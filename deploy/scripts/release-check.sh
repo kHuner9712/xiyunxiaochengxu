@@ -190,6 +190,20 @@ else
   fail ".env.example 不存在"
 fi
 
+section "8.5. Docker Compose 退款回调 URL 检查"
+COMPOSE_FILES=("deploy/docker-compose.yml" "deploy/docker-compose.bt.yml")
+for compose_file in "${COMPOSE_FILES[@]}"; do
+  if [ -f "$compose_file" ]; then
+    if grep -q "WECHAT_REFUND_NOTIFY_URL" "$compose_file" 2>/dev/null; then
+      pass "$compose_file 包含 WECHAT_REFUND_NOTIFY_URL"
+    else
+      fail "$compose_file 缺少 WECHAT_REFUND_NOTIFY_URL，微信退款回调将无法到达服务"
+    fi
+  else
+    warn "$compose_file 不存在，跳过检查"
+  fi
+done
+
 section "9. 部署脚本可执行权限检查"
 SCRIPT_DIR="deploy/scripts"
 if [ -d "$SCRIPT_DIR" ]; then

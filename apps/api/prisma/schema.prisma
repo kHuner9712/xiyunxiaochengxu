@@ -172,6 +172,7 @@ model PointsRecord {
   @@index([type], name: "idx_type")
   @@index([source], name: "idx_source")
   @@index([expireAt], name: "idx_expire_at")
+  @@unique([source, sourceId], name: "idx_points_records_source_source_id")
   @@map("points_records")
 }
 

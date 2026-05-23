@@ -1,10 +1,10 @@
 import { post, get } from '@/utils/request'
 
-export function createPayment(data: { orderId: string | number }) {
+export function createPayment(data: { orderId: string }) {
   return post<PaymentResult>('/weapp/pay/create', data)
 }
 
-export function getPaymentStatus(orderId: string | number) {
+export function getPaymentStatus(orderId: string) {
   return get<PaymentStatus>(`/weapp/pay/status/${orderId}`)
 }
 

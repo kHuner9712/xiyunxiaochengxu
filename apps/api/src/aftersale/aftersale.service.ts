@@ -31,10 +31,12 @@ export class AftersaleService {
       }
     }
 
+    const NON_TERMINAL_STATUSES = [AftersaleStatus.pending_review, AftersaleStatus.approved, AftersaleStatus.returned, AftersaleStatus.pending_refund];
+
     const existing = await this.prisma.aftersaleOrder.findFirst({
       where: {
         orderItemId: BigInt(dto.orderItemId),
-        status: { notIn: [AftersaleStatus.closed, AftersaleStatus.rejected] },
+        status: { in: NON_TERMINAL_STATUSES },
       },
     });
     if (existing) throw new BadRequestException('该商品已申请售后');
@@ -44,6 +46,14 @@ export class AftersaleService {
     }
 
     const aftersale = await this.prisma.$transaction(async (tx) => {
+      const concurrentCheck = await tx.aftersaleOrder.findFirst({
+        where: {
+          orderItemId: BigInt(dto.orderItemId),
+          status: { in: NON_TERMINAL_STATUSES },
+        },
+      });
+      if (concurrentCheck) throw new BadRequestException('该商品已申请售后');
+
       const created = await tx.aftersaleOrder.create({
         data: {
           aftersaleNo: generateAftersaleNo(),
@@ -319,6 +329,10 @@ export class AftersaleService {
     });
     if (!aftersale) throw new NotFoundException('售后单不存在');
 
+    if (aftersale.status === AftersaleStatus.pending_refund || aftersale.status === AftersaleStatus.refunded) {
+      throw new BadRequestException('退款已在处理中或已完成');
+    }
+
     if (aftersale.type === 1 && aftersale.status !== AftersaleStatus.approved) {
       throw new BadRequestException('仅退款类型需审核通过后才能退款');
     }
@@ -329,30 +343,28 @@ export class AftersaleService {
       throw new BadRequestException('退款金额未设置');
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.aftersaleOrder.update({
-        where: { id: BigInt(id) },
+    try {
+      await this.paymentService.createRefund({
+        orderId: aftersale.orderId.toString(),
+        aftersaleId: id,
+        refundAmount: aftersale.refundAmount,
+        reason: aftersale.reason,
+      });
+    } catch (error) {
+      this.logger.error(`发起退款失败，售后单${id}保持原状态: ${(error as Error).message}`);
+      await this.prisma.aftersaleLog.create({
         data: {
-          status: AftersaleStatus.pending_refund,
-          aftersaleLogs: {
-            create: {
-              operatorType: 'admin',
-              operatorId: BigInt(adminId),
-              action: 'initiate_refund',
-              content: `管理员发起微信退款，金额：${aftersale.refundAmount}分`,
-            },
-          },
+          aftersaleId: BigInt(id),
+          operatorType: 'admin',
+          operatorId: BigInt(adminId),
+          action: 'refund_failed',
+          content: `发起退款失败: ${(error as Error).message}，售后单保持原状态`,
         },
       });
-      return updated;
-    });
+      throw error;
+    }
 
-    await this.paymentService.createRefund({
-      orderId: aftersale.orderId.toString(),
-      aftersaleId: id,
-      refundAmount: aftersale.refundAmount,
-      reason: aftersale.reason,
-    });
+    const result = await this.prisma.aftersaleOrder.findFirst({ where: { id: BigInt(id) } });
 
     this.logger.log(`管理员发起退款：${id}，金额${aftersale.refundAmount}分`);
     return this.serializeAftersale(result);

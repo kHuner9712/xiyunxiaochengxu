@@ -1,24 +1,24 @@
 import { get, post, put } from '@/utils/request'
 
 export function applyAftersale(data: AftersaleForm) {
-  return post<{ id: number }>('/weapp/aftersale/create', data)
+  return post<{ id: string }>('/weapp/aftersale/create', data)
 }
 
 export function getAftersaleList(params: { page: number; pageSize: number }) {
   return get<{ list: AftersaleItem[]; total: number }>('/weapp/aftersale/list', params)
 }
 
-export function getAftersaleDetail(id: number) {
+export function getAftersaleDetail(id: string | number) {
   return get<AftersaleDetail>(`/weapp/aftersale/detail/${id}`)
 }
 
-export function cancelAftersale(id: number) {
+export function cancelAftersale(id: string | number) {
   return put(`/weapp/aftersale/cancel/${id}`)
 }
 
 export interface AftersaleForm {
-  orderId: number
-  orderItemId: number
+  orderId: string | number
+  orderItemId: string | number
   type: number
   reason: string
   description: string
@@ -26,7 +26,7 @@ export interface AftersaleForm {
 }
 
 export interface AftersaleItem {
-  id: number
+  id: string
   orderNo: string
   type: number
   reason: string
@@ -38,8 +38,8 @@ export interface AftersaleItem {
 }
 
 export interface AftersaleDetail {
-  id: number
-  orderId: number
+  id: string
+  orderId: string
   orderNo: string
   type: number
   reason: string

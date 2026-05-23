@@ -802,6 +802,18 @@ describe('PaymentService.processPaymentSuccess (via handleCallback)', () => {
     );
     expect(result.code).toBe('FAIL');
   });
+
+  it('订单已取消时返回 FAIL 并记录 critical event', async () => {
+    const cancelledOrder = { ...PAYMENT_ORDER, status: 'cancelled' };
+    mockPrisma.order.findFirst.mockResolvedValue(cancelledOrder);
+
+    const result = await service.handleCallback(
+      buildPaymentCallbackBody(DECRYPTED_PAYMENT_SUCCESS), CALLBACK_HEADERS, RAW_BODY,
+    );
+
+    expect(result.code).toBe('FAIL');
+    expect(result.message).toContain('已取消');
+  });
 });
 
 describe('PaymentService.processPaymentSuccess (half-success compensation)', () => {
@@ -851,7 +863,7 @@ describe('PaymentService.processPaymentSuccess (half-success compensation)', () 
 
     expect(mockPrisma.userCoupon.update).toHaveBeenCalledWith({
       where: { id: BigInt(100) },
-      data: { status: COUPON_STATUS.USED },
+      data: { status: COUPON_STATUS.USED, usedAt: expect.any(Date) },
     });
   });
 
@@ -906,7 +918,7 @@ describe('PaymentService.processPaymentSuccess (half-success compensation)', () 
 
     expect(mockPrisma.userCoupon.update).toHaveBeenCalledWith({
       where: { id: BigInt(100) },
-      data: { status: COUPON_STATUS.USED },
+      data: { status: COUPON_STATUS.USED, usedAt: expect.any(Date) },
     });
     expect(mockPrisma.order.updateMany).not.toHaveBeenCalled();
   });
@@ -929,9 +941,10 @@ describe('PaymentService.processPaymentSuccess (half-success compensation)', () 
     setupTransaction(mockPrisma);
     mockPrisma.orderPayment.findUnique.mockResolvedValue(HALF_SUCCESS_PAYMENT);
     mockPrisma.order.findUnique.mockResolvedValue(abnormalOrder);
+    mockPrisma.order.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(service.processPaymentSuccess(BigInt(1), BigInt(1), 'TXN456', 10000, abnormalOrder))
-      .rejects.toThrow('订单状态异常');
+      .rejects.toThrow('订单已取消');
   });
 
   it('正常路径: coupon LOCKED -> USED', async () => {
@@ -950,7 +963,7 @@ describe('PaymentService.processPaymentSuccess (half-success compensation)', () 
 
     expect(mockPrisma.userCoupon.update).toHaveBeenCalledWith({
       where: { id: BigInt(100) },
-      data: { status: COUPON_STATUS.USED },
+      data: { status: COUPON_STATUS.USED, usedAt: expect.any(Date) },
     });
   });
 

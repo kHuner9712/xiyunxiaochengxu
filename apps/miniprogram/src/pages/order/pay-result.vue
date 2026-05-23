@@ -49,7 +49,7 @@ import { getPaymentStatus } from '@/api/payment'
 import { formatPrice } from '@/utils/format'
 
 const paymentSuccess = ref<boolean | null>(null)
-const orderId = ref(0)
+const orderId = ref('')
 const orderInfo = ref<OrderDetail | null>(null)
 const checking = ref(true)
 
@@ -87,7 +87,7 @@ function goHome() {
 }
 
 onLoad((options) => {
-  if (options?.orderId) orderId.value = Number(options.orderId)
+  if (options?.orderId) orderId.value = options.orderId
   checkPaymentStatus()
 })
 </script>

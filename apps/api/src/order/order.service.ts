@@ -288,10 +288,13 @@ export class OrderService {
       }
 
       if (couponId) {
-        await tx.userCoupon.update({
-          where: { id: couponId },
+        const lockResult = await tx.userCoupon.updateMany({
+          where: { id: couponId, userId: BigInt(userId), status: COUPON_STATUS.FREE },
           data: { status: COUPON_STATUS.LOCKED },
         });
+        if (lockResult.count === 0) {
+          throw new BadRequestException('优惠券已被使用或锁定');
+        }
       }
 
       const createdOrder = await tx.order.create({
@@ -331,6 +334,13 @@ export class OrderService {
         include: { orderItems: true },
       });
 
+      if (couponId) {
+        await tx.userCoupon.update({
+          where: { id: couponId },
+          data: { usedOrderId: createdOrder.id },
+        });
+      }
+
       const paymentNo = `PAY${Date.now()}${Math.random().toString(36).substring(2, 8)}`;
       await tx.orderPayment.create({
         data: {
@@ -362,9 +372,30 @@ export class OrderService {
       include: { orderItems: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    assertOrderTransition(order.status, OrderStatus.cancelled, '取消订单');
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const claimResult = await tx.order.updateMany({
+        where: { id: BigInt(id), userId: BigInt(userId), status: OrderStatus.pending_payment },
+        data: {
+          status: OrderStatus.cancelled,
+          cancelledAt: new Date(),
+          cancelReason: '用户主动取消',
+        },
+      });
+
+      if (claimResult.count === 0) {
+        const currentOrder = await tx.order.findFirst({ where: { id: BigInt(id) } });
+        if (!currentOrder) throw new NotFoundException('订单不存在');
+        if (currentOrder.status === OrderStatus.cancelled) {
+          return currentOrder;
+        }
+        const paidStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed, OrderStatus.aftersale];
+        if (paidStatuses.includes(currentOrder.status)) {
+          throw new BadRequestException('订单已支付或状态已变化，不能取消');
+        }
+        throw new BadRequestException(`订单状态不允许取消: ${currentOrder.status}`);
+      }
+
       for (const item of order.orderItems) {
         const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
         if (sku) {
@@ -409,31 +440,23 @@ export class OrderService {
       }
 
       if (order.couponId) {
-        const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
-        if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
-          await tx.userCoupon.update({
-            where: { id: order.couponId },
-            data: { status: COUPON_STATUS.FREE },
-          });
-        }
+        await tx.userCoupon.updateMany({
+          where: { id: order.couponId, status: COUPON_STATUS.LOCKED },
+          data: { status: COUPON_STATUS.FREE, usedOrderId: null },
+        });
       }
 
-      return tx.order.update({
-        where: { id: BigInt(id) },
+      await tx.orderLog.create({
         data: {
-          status: OrderStatus.cancelled,
-          cancelledAt: new Date(),
-          cancelReason: '用户主动取消',
-          orderLogs: {
-            create: {
-              operatorType: 'user',
-              operatorId: BigInt(userId),
-              action: 'cancel',
-              content: '用户取消订单',
-            },
-          },
+          orderId: BigInt(id),
+          operatorType: 'user',
+          operatorId: BigInt(userId),
+          action: 'cancel',
+          content: '用户取消订单',
         },
       });
+
+      return tx.order.findFirst({ where: { id: BigInt(id) } });
     });
 
     this.logger.log(`用户${userId}取消订单：${id}`);
@@ -446,33 +469,51 @@ export class OrderService {
       include: { orderItems: true, delivery: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    assertOrderTransition(order.status, OrderStatus.completed, '确认收货');
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const claimResult = await tx.order.updateMany({
+        where: { id: BigInt(id), userId: BigInt(userId), status: OrderStatus.delivered },
+        data: { status: OrderStatus.completed, completedAt: new Date() },
+      });
+
+      if (claimResult.count === 0) {
+        const currentOrder = await tx.order.findFirst({ where: { id: BigInt(id) } });
+        if (!currentOrder) throw new NotFoundException('订单不存在');
+        if (currentOrder.status === OrderStatus.completed) {
+          return currentOrder;
+        }
+        throw new BadRequestException(`订单状态不允许确认收货: ${currentOrder.status}`);
+      }
+
       const earnedPoints = Math.floor(order.payAmount! / 100);
 
       if (earnedPoints > 0) {
-        const user = await tx.user.findFirst({ where: { id: BigInt(userId) } });
-        if (user) {
-          await tx.user.update({
-            where: { id: BigInt(userId) },
-            data: {
-              availablePoints: { increment: earnedPoints },
-              totalPoints: { increment: earnedPoints },
-              growthValue: { increment: Math.floor(order.payAmount! / 100) },
-            },
-          });
-          await tx.pointsRecord.create({
-            data: {
-              userId: BigInt(userId),
-              type: 1,
-              points: earnedPoints,
-              balance: user.availablePoints + earnedPoints,
-              source: 'order_complete',
-              sourceId: order.id,
-              description: `完成订单奖励${earnedPoints}积分`,
-            },
-          });
+        const existingRecord = await tx.pointsRecord.findFirst({
+          where: { source: 'order_complete', sourceId: order.id },
+        });
+        if (!existingRecord) {
+          const user = await tx.user.findFirst({ where: { id: BigInt(userId) } });
+          if (user) {
+            await tx.user.update({
+              where: { id: BigInt(userId) },
+              data: {
+                availablePoints: { increment: earnedPoints },
+                totalPoints: { increment: earnedPoints },
+                growthValue: { increment: Math.floor(order.payAmount! / 100) },
+              },
+            });
+            await tx.pointsRecord.create({
+              data: {
+                userId: BigInt(userId),
+                type: 1,
+                points: earnedPoints,
+                balance: user.availablePoints + earnedPoints,
+                source: 'order_complete',
+                sourceId: order.id,
+                description: `完成订单奖励${earnedPoints}积分`,
+              },
+            });
+          }
         }
       }
 
@@ -483,21 +524,17 @@ export class OrderService {
         });
       }
 
-      return tx.order.update({
-        where: { id: BigInt(id) },
+      await tx.orderLog.create({
         data: {
-          status: OrderStatus.completed,
-          completedAt: new Date(),
-          orderLogs: {
-            create: {
-              operatorType: 'user',
-              operatorId: BigInt(userId),
-              action: 'confirm_receive',
-              content: '用户确认收货，发放积分' + earnedPoints,
-            },
-          },
+          orderId: BigInt(id),
+          operatorType: 'user',
+          operatorId: BigInt(userId),
+          action: 'confirm_receive',
+          content: '用户确认收货，发放积分' + earnedPoints,
         },
       });
+
+      return tx.order.findFirst({ where: { id: BigInt(id) } });
     });
 
     this.logger.log(`用户${userId}确认收货：${id}`);
@@ -592,9 +629,30 @@ export class OrderService {
       include: { orderItems: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    assertOrderTransition(order.status, OrderStatus.cancelled, '管理员取消订单');
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const claimResult = await tx.order.updateMany({
+        where: { id: BigInt(id), status: OrderStatus.pending_payment },
+        data: {
+          status: OrderStatus.cancelled,
+          cancelledAt: new Date(),
+          cancelReason: reason || '管理员取消',
+        },
+      });
+
+      if (claimResult.count === 0) {
+        const currentOrder = await tx.order.findFirst({ where: { id: BigInt(id) } });
+        if (!currentOrder) throw new NotFoundException('订单不存在');
+        if (currentOrder.status === OrderStatus.cancelled) {
+          return currentOrder;
+        }
+        const paidStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed, OrderStatus.aftersale];
+        if (paidStatuses.includes(currentOrder.status)) {
+          throw new BadRequestException('订单已支付，不能取消');
+        }
+        throw new BadRequestException(`订单状态不允许取消: ${currentOrder.status}`);
+      }
+
       for (const item of order.orderItems) {
         const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
         if (sku) {
@@ -639,30 +697,22 @@ export class OrderService {
       }
 
       if (order.couponId) {
-        const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
-        if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
-          await tx.userCoupon.update({
-            where: { id: order.couponId },
-            data: { status: COUPON_STATUS.FREE },
-          });
-        }
+        await tx.userCoupon.updateMany({
+          where: { id: order.couponId, status: COUPON_STATUS.LOCKED },
+          data: { status: COUPON_STATUS.FREE, usedOrderId: null },
+        });
       }
 
-      return tx.order.update({
-        where: { id: BigInt(id) },
+      await tx.orderLog.create({
         data: {
-          status: OrderStatus.cancelled,
-          cancelledAt: new Date(),
-          cancelReason: reason || '管理员取消',
-          orderLogs: {
-            create: {
-              operatorType: 'admin',
-              action: 'cancel',
-              content: `管理员取消订单，原因：${reason || '无'}`,
-            },
-          },
+          orderId: BigInt(id),
+          operatorType: 'admin',
+          action: 'cancel',
+          content: `管理员取消订单，原因：${reason || '无'}`,
         },
       });
+
+      return tx.order.findFirst({ where: { id: BigInt(id) } });
     });
 
     this.logger.log(`管理员取消订单：${id}，原因：${reason}`);
@@ -775,8 +825,23 @@ export class OrderService {
     let closedCount = 0;
     for (const order of timeoutOrders) {
       try {
-        await this.prisma.$transaction(async (tx) => {
-          assertOrderTransition(order.status, OrderStatus.cancelled, '超时自动关闭');
+        const claimed = await this.prisma.$transaction(async (tx) => {
+          const claimResult = await tx.order.updateMany({
+            where: {
+              id: order.id,
+              status: OrderStatus.pending_payment,
+              autoCloseAt: { lte: new Date() },
+            },
+            data: {
+              status: OrderStatus.cancelled,
+              cancelledAt: new Date(),
+              cancelReason: '超时未支付自动关闭',
+            },
+          });
+
+          if (claimResult.count === 0) {
+            return false;
+          }
 
           for (const item of order.orderItems) {
             const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
@@ -822,33 +887,27 @@ export class OrderService {
           }
 
           if (order.couponId) {
-            const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
-            if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
-              await tx.userCoupon.update({
-                where: { id: order.couponId },
-                data: { status: COUPON_STATUS.FREE },
-              });
-            }
+            await tx.userCoupon.updateMany({
+              where: { id: order.couponId, status: COUPON_STATUS.LOCKED },
+              data: { status: COUPON_STATUS.FREE, usedOrderId: null },
+            });
           }
 
-          await tx.order.update({
-            where: { id: order.id },
+          await tx.orderLog.create({
             data: {
-              status: OrderStatus.cancelled,
-              cancelledAt: new Date(),
-              cancelReason: '超时未支付自动关闭',
-              orderLogs: {
-                create: {
-                  operatorType: 'system',
-                  action: 'auto_close',
-                  content: '超时未支付，系统自动关闭订单',
-                },
-              },
+              orderId: order.id,
+              operatorType: 'system',
+              action: 'auto_close',
+              content: '超时未支付，系统自动关闭订单',
             },
           });
+
+          return true;
         });
 
-        closedCount++;
+        if (claimed) {
+          closedCount++;
+        }
       } catch (error) {
         this.logger.error(`自动关闭订单${order.orderNo}失败：${(error as Error).message}`);
       }
@@ -870,52 +929,63 @@ export class OrderService {
     let completedCount = 0;
     for (const order of orders) {
       try {
-        await this.prisma.$transaction(async (tx) => {
-          assertOrderTransition(order.status, OrderStatus.completed, '自动完成');
+        const completed = await this.prisma.$transaction(async (tx) => {
+          const claimResult = await tx.order.updateMany({
+            where: { id: order.id, status: OrderStatus.delivered, autoCompleteAt: { lte: new Date() } },
+            data: { status: OrderStatus.completed, completedAt: new Date() },
+          });
+
+          if (claimResult.count === 0) {
+            return false;
+          }
 
           const earnedPoints = Math.floor(order.payAmount! / 100);
 
           if (earnedPoints > 0) {
-            const user = await tx.user.findFirst({ where: { id: order.userId } });
-            if (user) {
-              await tx.user.update({
-                where: { id: order.userId },
-                data: {
-                  availablePoints: { increment: earnedPoints },
-                  totalPoints: { increment: earnedPoints },
-                  growthValue: { increment: Math.floor(order.payAmount! / 100) },
-                },
-              });
-              await tx.pointsRecord.create({
-                data: {
-                  userId: order.userId,
-                  type: 1,
-                  points: earnedPoints,
-                  balance: user.availablePoints + earnedPoints,
-                  source: 'order_auto_complete',
-                  sourceId: order.id,
-                  description: `自动完成订单奖励${earnedPoints}积分`,
-                },
-              });
+            const existingRecord = await tx.pointsRecord.findFirst({
+              where: { source: 'order_auto_complete', sourceId: order.id },
+            });
+            if (!existingRecord) {
+              const user = await tx.user.findFirst({ where: { id: order.userId } });
+              if (user) {
+                await tx.user.update({
+                  where: { id: order.userId },
+                  data: {
+                    availablePoints: { increment: earnedPoints },
+                    totalPoints: { increment: earnedPoints },
+                    growthValue: { increment: Math.floor(order.payAmount! / 100) },
+                  },
+                });
+                await tx.pointsRecord.create({
+                  data: {
+                    userId: order.userId,
+                    type: 1,
+                    points: earnedPoints,
+                    balance: user.availablePoints + earnedPoints,
+                    source: 'order_auto_complete',
+                    sourceId: order.id,
+                    description: `自动完成订单奖励${earnedPoints}积分`,
+                  },
+                });
+              }
             }
           }
 
-          await tx.order.update({
-            where: { id: order.id },
+          await tx.orderLog.create({
             data: {
-              status: OrderStatus.completed,
-              completedAt: new Date(),
-              orderLogs: {
-                create: {
-                  operatorType: 'system',
-                  action: 'auto_complete',
-                  content: '超时未确认收货，系统自动完成' + (earnedPoints > 0 ? `，发放积分${earnedPoints}` : ''),
-                },
-              },
+              orderId: order.id,
+              operatorType: 'system',
+              action: 'auto_complete',
+              content: '超时未确认收货，系统自动完成' + (earnedPoints > 0 ? `，发放积分${earnedPoints}` : ''),
             },
           });
+
+          return true;
         });
-        completedCount++;
+
+        if (completed) {
+          completedCount++;
+        }
       } catch (error) {
         this.logger.error(`自动完成订单${order.orderNo}失败：${(error as Error).message}`);
       }

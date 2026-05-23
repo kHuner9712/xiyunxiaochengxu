@@ -57,6 +57,7 @@ export class PaymentService {
         { key: 'WECHAT_PRIVATE_KEY_PATH', value: this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH') },
         { key: 'WECHAT_PLATFORM_CERT_PATH', value: this.configService.get<string>('WECHAT_PLATFORM_CERT_PATH') },
         { key: 'WECHAT_NOTIFY_URL', value: this.configService.get<string>('WECHAT_NOTIFY_URL') },
+        { key: 'WECHAT_REFUND_NOTIFY_URL', value: this.configService.get<string>('WECHAT_REFUND_NOTIFY_URL') },
       ];
 
       const missing = requiredConfigs.filter(c => !c.value);
@@ -72,6 +73,11 @@ export class PaymentService {
       const notifyUrl = this.configService.get<string>('WECHAT_NOTIFY_URL')!;
       if (!notifyUrl.startsWith('https://')) {
         throw new Error('WECHAT_NOTIFY_URL 必须以 https:// 开头，支付模块不可启动');
+      }
+
+      const refundNotifyUrl = this.configService.get<string>('WECHAT_REFUND_NOTIFY_URL')!;
+      if (!refundNotifyUrl.startsWith('https://')) {
+        throw new Error('WECHAT_REFUND_NOTIFY_URL 必须以 https:// 开头，支付模块不可启动');
       }
 
       if (!this.privateKey) {
@@ -237,6 +243,16 @@ export class PaymentService {
     }
 
     if (order.status !== OrderStatus.pending_payment) {
+      if (order.status === OrderStatus.cancelled) {
+        this.businessEvent.emitCritical(
+          'payment_callback_on_cancelled_order',
+          'payment',
+          `支付回调到达但订单已取消: ${outTradeNo}，微信交易号: ${transactionId}，需人工补偿`,
+          outTradeNo,
+          { outTradeNo, transactionId, totalAmount, orderStatus: order.status },
+        );
+        return { code: 'FAIL', message: '订单已取消，支付回调需人工补偿' };
+      }
       this.logger.log(`微信回调订单已处理: ${outTradeNo}，状态: ${order.status}`);
       return { code: 'SUCCESS', message: '' };
     }
@@ -312,7 +328,7 @@ export class PaymentService {
             if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
               await tx.userCoupon.update({
                 where: { id: order.couponId },
-                data: { status: COUPON_STATUS.USED },
+                data: { status: COUPON_STATUS.USED, usedAt: new Date() },
               });
               this.logger.log(`支付成功补偿: 优惠券${order.couponId}从 LOCKED 修复为 USED`);
             }
@@ -350,7 +366,7 @@ export class PaymentService {
               if (coupon.status === COUPON_STATUS.LOCKED) {
                 await tx.userCoupon.update({
                   where: { id: order.couponId },
-                  data: { status: COUPON_STATUS.USED },
+                  data: { status: COUPON_STATUS.USED, usedAt: new Date() },
                 });
               } else if (coupon.status === COUPON_STATUS.USED) {
                 this.logger.log(`支付半成功补偿: 优惠券${order.couponId}已USED，幂等跳过`);
@@ -362,6 +378,18 @@ export class PaymentService {
           }
 
           return;
+        }
+
+        if (currentOrder.status === OrderStatus.cancelled) {
+          this.logger.error(`支付半成功补偿时订单已取消: ${orderId}，交易号: ${transactionId}，需人工补偿`);
+          this.businessEvent.emitCritical(
+            'payment_half_success_on_cancelled_order',
+            'payment',
+            `支付半成功补偿但订单已取消: 订单${orderId}，交易号${transactionId}，需人工补偿`,
+            orderId.toString(),
+            { orderId: orderId.toString(), transactionId, orderStatus: currentOrder.status },
+          );
+          throw new BadRequestException('订单已取消，支付成功需人工补偿');
         }
 
         this.logger.error(`支付成功处理时订单状态异常: ${orderId}，状态: ${currentOrder.status}`);
@@ -390,6 +418,18 @@ export class PaymentService {
         if (processedStatuses.includes(currentOrder.status)) {
           this.logger.log(`支付成功幂等处理: 订单${orderId}已处于${currentOrder.status}状态`);
           return;
+        }
+
+        if (currentOrder.status === OrderStatus.cancelled) {
+          this.logger.error(`支付成功处理时订单已取消: ${orderId}，交易号: ${transactionId}，需人工补偿`);
+          this.businessEvent.emitCritical(
+            'payment_success_on_cancelled_order',
+            'payment',
+            `支付成功但订单已取消: 订单${orderId}，交易号${transactionId}，需人工补偿`,
+            orderId.toString(),
+            { orderId: orderId.toString(), transactionId, orderStatus: currentOrder.status },
+          );
+          throw new BadRequestException('订单已取消，支付成功需人工补偿');
         }
 
         this.logger.error(`支付成功处理时订单状态异常: ${orderId}，状态: ${currentOrder.status}`);
@@ -423,7 +463,7 @@ export class PaymentService {
           if (coupon.status === COUPON_STATUS.LOCKED) {
             await tx.userCoupon.update({
               where: { id: order.couponId },
-              data: { status: COUPON_STATUS.USED },
+              data: { status: COUPON_STATUS.USED, usedAt: new Date() },
             });
           } else if (coupon.status === COUPON_STATUS.USED) {
             this.logger.log(`支付成功: 优惠券${order.couponId}已USED，幂等跳过`);

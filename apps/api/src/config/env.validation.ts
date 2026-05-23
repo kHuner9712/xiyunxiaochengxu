@@ -103,11 +103,24 @@ export function validateEnv(env: Record<string, any>) {
       'WECHAT_APP_ID',
       'WECHAT_APP_SECRET',
       'CORS_ORIGINS',
+      'WECHAT_REFUND_NOTIFY_URL',
     ];
 
     const missing = requiredVars.filter((key) => !env[key]);
     if (missing.length > 0) {
       logger.error(`生产环境缺少必需的环境变量: ${missing.join(', ')}`);
+      process.exit(1);
+    }
+
+    const refundNotifyUrl = env.WECHAT_REFUND_NOTIFY_URL;
+    if (refundNotifyUrl && !refundNotifyUrl.startsWith('https://')) {
+      logger.error('WECHAT_REFUND_NOTIFY_URL 必须以 https:// 开头');
+      process.exit(1);
+    }
+
+    const notifyUrl = env.WECHAT_NOTIFY_URL;
+    if (notifyUrl && !notifyUrl.startsWith('https://')) {
+      logger.error('WECHAT_NOTIFY_URL 必须以 https:// 开头');
       process.exit(1);
     }
 
