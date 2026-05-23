@@ -101,6 +101,18 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/order/aftersale-detail.vue'),
             meta: { title: '售后详情', permission: 'order:aftersale', hidden: true },
           },
+          {
+            path: 'refund',
+            name: 'OrderRefund',
+            component: () => import('@/views/order/refund-list.vue'),
+            meta: { title: '退款记录', permission: 'order:aftersale:refund' },
+          },
+          {
+            path: 'refund-detail/:id',
+            name: 'RefundDetail',
+            component: () => import('@/views/order/refund-detail.vue'),
+            meta: { title: '退款详情', permission: 'order:aftersale:refund', hidden: true },
+          },
         ],
       },
       {

@@ -281,31 +281,60 @@ export class PaymentService {
   }
 
   private async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {
-    // 基于数据库订单状态判断，幂等处理
-    const currentOrder = await this.prisma.order.findUnique({
-      where: { id: orderId },
-    });
-    if (!currentOrder) {
-      this.logger.error(`支付成功处理时订单不存在: ${orderId}`);
-      throw new InternalServerErrorException('订单不存在');
-    }
-
-    // 如果订单已处理完成，直接幂等返回
-    const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
-    if (processedStatuses.includes(currentOrder.status)) {
-      this.logger.log(`支付成功幂等处理: 订单${orderId}已处于${currentOrder.status}状态`);
-      return;
-    }
-
-    // 如果订单既不是待支付也不是已支付状态，记录异常并拒绝
-    if (currentOrder.status !== OrderStatus.pending_payment) {
-      this.logger.error(`支付成功处理时订单状态异常: ${orderId}，状态: ${currentOrder.status}`);
-      throw new BadRequestException('订单状态异常');
-    }
-
     await this.prisma.$transaction(async (tx) => {
+      // 1. 幂等检查和更新订单支付
+      const existingPayment = await tx.orderPayment.findUnique({ where: { id: paymentId } });
+      if (!existingPayment) {
+        this.logger.error(`支付成功处理时支付记录不存在: ${paymentId}`);
+        throw new InternalServerErrorException('支付记录不存在');
+      }
+
+      // 检查支付记录是否已成功
+      if (existingPayment.status === PAYMENT_STATUS.SUCCESS) {
+        if (existingPayment.transactionId === transactionId) {
+          // transactionId 一致，幂等返回
+          this.logger.log(`支付成功幂等处理: 支付${paymentId}已成功处理`);
+          return;
+        } else {
+          // transactionId 不一致，严重异常
+          this.logger.error(`支付记录 transactionId 不一致: 支付${paymentId}现有${existingPayment.transactionId}, 回调${transactionId}`);
+          throw new BadRequestException('支付交易号不一致');
+        }
+      }
+
+      // 2. 使用条件更新更新订单，确保并发安全
+      const updateResult = await tx.order.updateMany({
+        where: { 
+          id: orderId, 
+          status: OrderStatus.pending_payment 
+        },
+        data: {
+          status: OrderStatus.pending_delivery,
+          paidAt: new Date(),
+        },
+      });
+
+      if (updateResult.count === 0) {
+        // 订单状态不是 pending_payment，重新查询确认
+        const currentOrder = await tx.order.findUnique({ where: { id: orderId } });
+        if (!currentOrder) {
+          this.logger.error(`支付成功处理时订单不存在: ${orderId}`);
+          throw new InternalServerErrorException('订单不存在');
+        }
+
+        const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+        if (processedStatuses.includes(currentOrder.status)) {
+          this.logger.log(`支付成功幂等处理: 订单${orderId}已处于${currentOrder.status}状态`);
+          return;
+        }
+
+        this.logger.error(`支付成功处理时订单状态异常: ${orderId}，状态: ${currentOrder.status}`);
+        throw new BadRequestException('订单状态异常');
+      }
+
       assertOrderTransition(OrderStatus.pending_payment, OrderStatus.pending_delivery, '支付成功');
 
+      // 3. 更新支付记录
       await tx.orderPayment.update({
         where: { id: paymentId },
         data: {
@@ -316,18 +345,13 @@ export class PaymentService {
         },
       });
 
-      await tx.order.update({
-        where: { id: orderId },
+      // 4. 创建订单日志
+      await tx.orderLog.create({
         data: {
-          status: OrderStatus.pending_delivery,
-          paidAt: new Date(),
-          orderLogs: {
-            create: {
-              operatorType: 'system',
-              action: 'pay',
-              content: `微信支付成功，交易号：${transactionId}`,
-            },
-          },
+          orderId,
+          operatorType: 'system',
+          action: 'pay',
+          content: `微信支付成功，交易号：${transactionId}`,
         },
       });
     });
@@ -493,23 +517,6 @@ export class PaymentService {
       throw new BadRequestException(`累计退款金额不能超过订单实付金额。当前已退款${totalRefundedAmount}分，申请${params.refundAmount}分，订单实付${order.payAmount}分`);
     }
 
-    // 更新售后单状态为待退款
-    if (params.aftersaleId) {
-      await this.prisma.aftersaleOrder.update({
-        where: { id: BigInt(params.aftersaleId) },
-        data: {
-          status: 'pending_refund',
-          aftersaleLogs: {
-            create: {
-              operatorType: 'admin',
-              action: 'request_refund',
-              content: `管理员发起退款申请，金额: ${params.refundAmount}分`,
-            },
-          },
-        },
-      });
-    }
-
     const appId = this.configService.get<string>('WECHAT_APP_ID')!;
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
     const refundNotifyUrl = this.configService.get<string>('WECHAT_REFUND_NOTIFY_URL')!;
@@ -552,7 +559,7 @@ export class PaymentService {
           },
         });
       } catch (error) {
-        // 微信退款请求失败时不创建退款记录
+        // 微信退款请求失败时不创建退款记录，不修改售后单状态
         const err = error as any;
         const errData = err.response?.data;
         this.logger.error(`微信退款请求失败: ${JSON.stringify(errData) || err.message}`);
@@ -570,28 +577,62 @@ export class PaymentService {
       this.logger.warn('微信退款 Mock 模式（仅限非生产环境测试）');
     }
 
-    const refund = await this.prisma.orderRefund.create({
-      data: {
-        refundNo,
-        orderId: BigInt(params.orderId),
-        aftersaleId: params.aftersaleId ? BigInt(params.aftersaleId) : null,
-        paymentId: order.payment.id,
-        outTradeNo: order.orderNo,
-        transactionId: order.payment.transactionId,
-        outRefundNo,
-        refundId: response?.data?.refund_id || null,
-        refundAmount: params.refundAmount,
-        totalAmount: order.payAmount!,
-        status: REFUND_STATUS.PENDING,
-        reason: params.reason,
-        rawRequest: request,
-        rawResponse: response?.data || null,
-      },
-    });
+    // 微信退款接口成功返回后，在事务中创建退款记录和更新售后单状态
+    try {
+      // 确保 order.payment 存在
+      if (!order.payment) {
+        throw new BadRequestException('订单支付信息不存在');
+      }
 
-    this.logger.log(`创建退款成功: ${refundNo}, 订单: ${order.orderNo}`);
+      const refund = await this.prisma.$transaction(async (tx) => {
+        // 1. 创建 OrderRefund 记录
+        const newRefund = await tx.orderRefund.create({
+          data: {
+            refundNo,
+            orderId: BigInt(params.orderId),
+            aftersaleId: params.aftersaleId ? BigInt(params.aftersaleId) : null,
+            paymentId: order.payment!.id,
+            outTradeNo: order.orderNo,
+            transactionId: order.payment!.transactionId,
+            outRefundNo,
+            refundId: response?.data?.refund_id || null,
+            refundAmount: params.refundAmount,
+            totalAmount: order.payAmount!,
+            status: REFUND_STATUS.PENDING,
+            reason: params.reason,
+            rawRequest: request,
+            rawResponse: response?.data || null,
+          },
+        });
 
-    return { refundId: refund.id.toString(), refundNo, outRefundNo };
+        // 2. 如果有售后单，更新售后单状态为 pending_refund 并记录日志
+        if (params.aftersaleId) {
+          await tx.aftersaleOrder.update({
+            where: { id: BigInt(params.aftersaleId) },
+            data: {
+              status: 'pending_refund',
+              aftersaleLogs: {
+                create: {
+                  operatorType: 'admin',
+                  action: 'request_refund',
+                  content: `管理员发起退款申请，金额: ${params.refundAmount}分`,
+                },
+              },
+            },
+          });
+        }
+
+        return newRefund;
+      });
+
+      this.logger.log(`创建退款成功: ${refundNo}, 订单: ${order.orderNo}`);
+      return { refundId: refund.id.toString(), refundNo, outRefundNo };
+    } catch (error) {
+      // TODO: 数据库事务失败时的补偿策略
+      // 此时微信退款可能已经被受理，可以通过 outRefundNo 查询并处理
+      this.logger.error(`数据库事务失败，退款记录未创建，但微信退款可能已受理。退款单号: ${outRefundNo}`, error);
+      throw new InternalServerErrorException('退款处理失败，请稍后重试或联系管理员');
+    }
   }
 
   async handleRefundCallback(body: any, headers: any, rawBody?: string) {
@@ -656,6 +697,7 @@ export class PaymentService {
     const refundId = decryptedData.refund_id;
     const refundStatus = decryptedData.refund_status;
     const successAmount = decryptedData.amount?.refund;
+    const totalAmount = decryptedData.amount?.total;
 
     const refund = await this.prisma.orderRefund.findFirst({
       where: { outRefundNo },
@@ -666,16 +708,37 @@ export class PaymentService {
       return { code: 'SUCCESS', message: '' };
     }
 
-    // 退款回调幂等: 已成功的退款不再处理
+    // 1. 基本校验
+    if (refund.outRefundNo !== outRefundNo) {
+      this.logger.error(`微信退款回调退款单号不匹配: ${refund.outRefundNo} vs ${outRefundNo}`);
+      return { code: 'FAIL', message: '退款单号不匹配' };
+    }
+
+    // 2. 退款状态校验
     if (refund.status === REFUND_STATUS.SUCCESS) {
       this.logger.log(`微信退款回调已处理成功，跳过: ${outRefundNo}`);
       return { code: 'SUCCESS', message: '' };
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      if (refundStatus === WECHAT_REFUND_STATUS.SUCCESS) {
-        await tx.orderRefund.update({
-          where: { id: refund.id },
+    if (refundStatus === WECHAT_REFUND_STATUS.SUCCESS) {
+      // 3. 金额校验
+      if (successAmount !== refund.refundAmount) {
+        this.logger.error(`微信退款回调金额不匹配: 退款${refund.id}期望${refund.refundAmount}分, 回调${successAmount}分`);
+        return { code: 'FAIL', message: '退款金额不匹配' };
+      }
+
+      if (totalAmount !== undefined && totalAmount !== refund.totalAmount) {
+        this.logger.error(`微信退款回调订单总金额不匹配: 退款${refund.id}期望${refund.totalAmount}分, 回调${totalAmount}分`);
+        return { code: 'FAIL', message: '订单总金额不匹配' };
+      }
+
+      // 4. 使用条件更新确保并发幂等
+      const result = await this.prisma.$transaction(async (tx) => {
+        const updateRefundResult = await tx.orderRefund.updateMany({
+          where: {
+            id: refund.id,
+            status: { in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] },
+          },
           data: {
             status: REFUND_STATUS.SUCCESS,
             refundId: refundId,
@@ -684,9 +747,38 @@ export class PaymentService {
           },
         });
 
-        if (refund.aftersaleId) {
+        if (updateRefundResult.count === 0) {
+          // 重新查询状态确认
+          const currentRefund = await tx.orderRefund.findUnique({ where: { id: refund.id } });
+          if (!currentRefund) {
+            this.logger.error(`退款记录不存在: ${refund.id}`);
+            return { shouldContinue: false };
+          }
+
+          if (currentRefund.status === REFUND_STATUS.SUCCESS) {
+            this.logger.log(`退款已被其他进程处理: ${outRefundNo}`);
+            return { shouldContinue: false };
+          }
+
+          this.logger.error(`退款状态异常，无法处理: ${refund.id}当前状态${currentRefund.status}`);
+          return { shouldContinue: false };
+        }
+
+        return { shouldContinue: true };
+      });
+
+      if (!result.shouldContinue) {
+        return { code: 'SUCCESS', message: '' };
+      }
+
+      // 5. 处理退款成功的副作用（库存归还、积分处理等）
+      if (refund.aftersaleId) {
+        await this.prisma.$transaction(async (tx) => {
+          // 显式类型转换以解决 TypeScript 类型问题
+          const aftersaleId = refund.aftersaleId as bigint;
+          
           const aftersale = await tx.aftersaleOrder.findFirst({
-            where: { id: refund.aftersaleId },
+            where: { id: aftersaleId },
             include: { orderItem: true, order: true },
           });
 
@@ -706,46 +798,49 @@ export class PaymentService {
               },
             });
 
-            if (aftersale.type === 2 && aftersale.orderItem) {
-              const sku = await tx.productSku.findFirst({ where: { id: aftersale.orderItem.skuId } });
+            // 显式类型转换
+            const aftersaleWithRelations = aftersale as any;
+
+            if (aftersaleWithRelations.type === 2 && aftersaleWithRelations.orderItem) {
+              const sku = await tx.productSku.findFirst({ where: { id: aftersaleWithRelations.orderItem.skuId } });
               if (sku) {
                 await tx.productSku.update({
-                  where: { id: aftersale.orderItem.skuId },
-                  data: { stock: { increment: aftersale.orderItem.quantity }, sales: { decrement: aftersale.orderItem.quantity } },
+                  where: { id: aftersaleWithRelations.orderItem.skuId },
+                  data: { stock: { increment: aftersaleWithRelations.orderItem.quantity }, sales: { decrement: aftersaleWithRelations.orderItem.quantity } },
                 });
                 await tx.productStockLog.create({
                   data: {
-                    productId: aftersale.orderItem.productId,
-                    skuId: aftersale.orderItem.skuId,
+                    productId: aftersaleWithRelations.orderItem.productId,
+                    skuId: aftersaleWithRelations.orderItem.skuId,
                     type: 4,
-                    quantity: aftersale.orderItem.quantity,
+                    quantity: aftersaleWithRelations.orderItem.quantity,
                     beforeStock: sku.stock,
-                    afterStock: sku.stock + aftersale.orderItem.quantity,
+                    afterStock: sku.stock + aftersaleWithRelations.orderItem.quantity,
                     reason: '售后退款归还库存',
                   },
                 });
               }
             }
 
-            if (aftersale.refundAmount && aftersale.refundAmount > 0 && aftersale.order.payAmount) {
-              const deductedPoints = Math.floor(aftersale.refundAmount / 100);
+            if (aftersaleWithRelations.refundAmount && aftersaleWithRelations.refundAmount > 0 && aftersaleWithRelations.order?.payAmount) {
+              const deductedPoints = Math.floor(aftersaleWithRelations.refundAmount / 100);
               if (deductedPoints > 0) {
-                const user = await tx.user.findFirst({ where: { id: aftersale.userId } });
+                const user = await tx.user.findFirst({ where: { id: aftersaleWithRelations.userId } });
                 if (user && user.availablePoints >= deductedPoints) {
                   await tx.user.update({
-                    where: { id: aftersale.userId },
+                    where: { id: aftersaleWithRelations.userId },
                     data: {
                       availablePoints: { decrement: deductedPoints },
                     },
                   });
                   await tx.pointsRecord.create({
                     data: {
-                      userId: aftersale.userId,
+                      userId: aftersaleWithRelations.userId,
                       type: 2,
                       points: deductedPoints,
                       balance: user.availablePoints - deductedPoints,
                       source: 'aftersale_refund',
-                      sourceId: aftersale.orderId,
+                      sourceId: aftersaleWithRelations.orderId,
                       description: `售后退款扣回${deductedPoints}积分`,
                     },
                   });
@@ -753,25 +848,25 @@ export class PaymentService {
               }
             }
 
-            if (aftersale.order.pointsDeducted > 0 && aftersale.refundAmount && aftersale.order.payAmount) {
-              const restorePoints = Math.floor(aftersale.order.pointsDeducted * aftersale.refundAmount / aftersale.order.payAmount);
+            if (aftersaleWithRelations.order?.pointsDeducted > 0 && aftersaleWithRelations.refundAmount && aftersaleWithRelations.order?.payAmount) {
+              const restorePoints = Math.floor(aftersaleWithRelations.order.pointsDeducted * aftersaleWithRelations.refundAmount / aftersaleWithRelations.order.payAmount);
               if (restorePoints > 0) {
-                const user = await tx.user.findFirst({ where: { id: aftersale.userId } });
+                const user = await tx.user.findFirst({ where: { id: aftersaleWithRelations.userId } });
                 if (user) {
                   await tx.user.update({
-                    where: { id: aftersale.userId },
+                    where: { id: aftersaleWithRelations.userId },
                     data: {
                       availablePoints: { increment: restorePoints },
                     },
                   });
                   await tx.pointsRecord.create({
                     data: {
-                      userId: aftersale.userId,
+                      userId: aftersaleWithRelations.userId,
                       type: 1,
                       points: restorePoints,
                       balance: user.availablePoints + restorePoints,
                       source: 'aftersale_refund_restore',
-                      sourceId: aftersale.orderId,
+                      sourceId: aftersaleWithRelations.orderId,
                       description: `售后退款归还抵扣积分${restorePoints}`,
                     },
                   });
@@ -781,22 +876,25 @@ export class PaymentService {
 
             const otherAftersales = await tx.aftersaleOrder.findFirst({
               where: {
-                orderId: aftersale.orderId,
-                id: { not: aftersale.id },
+                orderId: aftersaleWithRelations.orderId,
+                id: { not: aftersaleWithRelations.id },
                 status: { notIn: ['closed', 'rejected', 'refunded'] },
               },
             });
-            if (!otherAftersales) {
-              const restoreStatus = aftersale.order.completedAt ? 'completed' : 'delivered';
+            if (!otherAftersales && aftersaleWithRelations.order) {
+              const restoreStatus = aftersaleWithRelations.order.completedAt ? 'completed' : 'delivered';
               await tx.order.update({
-                where: { id: aftersale.orderId },
+                where: { id: aftersaleWithRelations.orderId },
                 data: { status: restoreStatus },
               });
             }
           }
-        }
-      } else if (refundStatus === WECHAT_REFUND_STATUS.CLOSED || refundStatus === WECHAT_REFUND_STATUS.ABNORMAL) {
-        const localRefundStatus: RefundStatus = refundStatus === WECHAT_REFUND_STATUS.CLOSED ? REFUND_STATUS.CLOSED : REFUND_STATUS.ABNORMAL;
+        });
+      }
+    } else if (refundStatus === WECHAT_REFUND_STATUS.CLOSED || refundStatus === WECHAT_REFUND_STATUS.ABNORMAL) {
+      const localRefundStatus: RefundStatus = refundStatus === WECHAT_REFUND_STATUS.CLOSED ? REFUND_STATUS.CLOSED : REFUND_STATUS.ABNORMAL;
+      
+      await this.prisma.$transaction(async (tx) => {
         await tx.orderRefund.update({
           where: { id: refund.id },
           data: {
@@ -808,8 +906,9 @@ export class PaymentService {
 
         // 退款失败时，不要直接关闭售后单，保持待退款状态并记录日志
         if (refund.aftersaleId) {
+          const aftersaleId = refund.aftersaleId as bigint;
           await tx.aftersaleOrder.update({
-            where: { id: refund.aftersaleId },
+            where: { id: aftersaleId },
             data: {
               status: 'pending_refund', // 保持待退款状态，避免误关闭
               aftersaleLogs: {
@@ -822,8 +921,11 @@ export class PaymentService {
             },
           });
         }
-      }
-    });
+      });
+    } else {
+      this.logger.warn(`微信退款回调未知状态: ${refundStatus}`);
+      return { code: 'FAIL', message: '未知退款状态' };
+    }
 
     this.logger.log(`微信退款回调处理成功: ${outRefundNo}, 状态: ${refundStatus}`);
     return { code: 'SUCCESS', message: '' };

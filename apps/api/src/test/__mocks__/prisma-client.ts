@@ -8,6 +8,30 @@ export const OrderStatus = {
   cancelled: 'cancelled',
 };
 
+export const AftersaleStatus = {
+  pending_review: 'pending_review',
+  approved: 'approved',
+  rejected: 'rejected',
+  returned: 'returned',
+  pending_refund: 'pending_refund',
+  refunded: 'refunded',
+  closed: 'closed',
+};
+
+export const PAYMENT_STATUS = {
+  CREATED: 1,
+  SUCCESS: 2,
+  FAILED: 3,
+};
+
+export const REFUND_STATUS = {
+  PENDING: 'pending',
+  PROCESSING: 'processing',
+  SUCCESS: 'success',
+  CLOSED: 'closed',
+  ABNORMAL: 'abnormal',
+};
+
 export class PrismaClient {
   constructor() {}
 }
@@ -20,3 +44,4 @@ export const Prisma = {
 };
 
 export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
+export type AftersaleStatus = typeof AftersaleStatus[keyof typeof AftersaleStatus];

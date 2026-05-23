@@ -17,7 +17,8 @@
     "docker:up": "cd deploy && docker compose up -d --build",
     "docker:down": "cd deploy && docker compose down",
     "smoke": "cd deploy && bash scripts/smoke-test.sh",
-    "smoke:login": "cd deploy && bash scripts/smoke-admin-login.sh"
+    "smoke:login": "cd deploy && bash scripts/smoke-admin-login.sh",
+    "smoke:all": "cd deploy && bash scripts/smoke-all.sh"
   },
   "engines": {
     "node": ">=18.0.0",
