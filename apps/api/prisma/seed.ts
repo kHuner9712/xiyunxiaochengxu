@@ -174,6 +174,7 @@ async function main() {
     { name: '管理员管理', code: 'system:admin', type: 1, parentCode: 'system', sortOrder: 2 },
     { name: '角色权限', code: 'system:role', type: 1, parentCode: 'system', sortOrder: 3 },
     { name: '操作日志', code: 'system:log', type: 1, parentCode: 'system', sortOrder: 4 },
+    { name: '文件管理', code: 'system:file', type: 1, parentCode: 'system', sortOrder: 5 },
   ];
 
   const createdPermissions = [...Object.values(parentMap)];

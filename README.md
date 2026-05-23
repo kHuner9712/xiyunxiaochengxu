@@ -163,6 +163,26 @@ pnpm docker:up
 pnpm smoke:all
 ```
 
+## 上线前检查
+
+正式上线前必须完成 [GO_LIVE.md](GO_LIVE.md) 中的全部验收项。
+
+快速验证命令：
+
+```bash
+# API 验证（Prisma schema + 测试 + 构建）
+pnpm validate:api
+
+# Release Gate（上线前综合检查）
+pnpm release:check
+
+# 小程序构建
+pnpm build:mini
+
+# Docker 冒烟测试（需要 Docker 环境）
+pnpm smoke:all
+```
+
 ## 核心业务说明
 
 - **自营商城**：所有商品由甲方统一采购、定价、销售

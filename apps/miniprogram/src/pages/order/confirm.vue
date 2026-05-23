@@ -210,7 +210,7 @@ async function handleSubmit() {
         quantity: item.quantity
       })),
       couponId: selectedCoupon.value?.id,
-      pointsDeduct: pointsDeduct.value,
+      pointsDeduct: usePoints.value ? availablePoints.value : 0,
       remark: remark.value
     }
     const order = await createOrder(orderData)

@@ -11,7 +11,6 @@ const ALLOWED_MIME_TYPES = [
   'image/gif',
   'image/webp',
   'image/bmp',
-  'image/svg+xml',
   'video/mp4',
   'video/webm',
   'application/pdf',
@@ -22,7 +21,7 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 const ALLOWED_EXTENSIONS = [
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
   '.mp4', '.webm',
   '.pdf',
   '.doc', '.docx',

@@ -46,6 +46,7 @@ export const PERMISSIONS = {
   'system:role': 'system:role',
   'system:config': 'system:config',
   'system:log': 'system:log',
+  'system:file': 'system:file',
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

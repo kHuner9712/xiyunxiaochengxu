@@ -73,7 +73,9 @@ async function checkPaymentStatus() {
 async function loadOrder() {
   try {
     orderInfo.value = await getOrderDetail(orderId.value)
-  } catch {}
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '订单信息加载失败', icon: 'none' })
+  }
 }
 
 function goOrderDetail() {

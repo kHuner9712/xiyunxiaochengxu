@@ -142,10 +142,10 @@ async function handlePay() {
   try {
     const payment = await createPayment({ orderId: String(order.value.id) })
     try {
-      await wxPay(payment.payParams)
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}&success=true` })
+      await wxPay(payment)
+      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}` })
     } catch {
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}&success=false` })
+      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}` })
     }
   } catch {
     uni.showToast({ title: '支付发起失败', icon: 'none' })

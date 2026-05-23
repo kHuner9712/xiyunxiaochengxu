@@ -140,6 +140,11 @@ export function validateEnv(env: Record<string, any>) {
         }
       }
     }
+
+    if (env.SMOKE_TEST_BYPASS_CAPTCHA === 'true') {
+      logger.error('生产环境禁止启用 SMOKE_TEST_BYPASS_CAPTCHA，请设置为 false 或删除该变量');
+      process.exit(1);
+    }
   }
 
   const validatedEnv = plainToClass(EnvValidation, env, {
