@@ -51,6 +51,7 @@ export interface OrderItem {
 }
 
 export interface OrderProductItem {
+  id: string
   productId: string
   skuId: string
   productName: string
@@ -69,7 +70,6 @@ export interface OrderDetail {
   freightAmount: number
   couponAmount: number
   pointsAmount: number
-  addressId: string
   addressName: string
   addressPhone: string
   addressDetail: string

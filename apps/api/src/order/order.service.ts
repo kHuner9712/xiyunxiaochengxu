@@ -1083,7 +1083,6 @@ export class OrderService {
       pointsAmount: base.pointsAmount,
       freightAmount: base.freightAmount,
       payAmount: base.payAmount,
-      addressId: base.couponId ? undefined : undefined,
       addressName: order.receiverName || '',
       addressPhone: order.receiverPhone || '',
       addressDetail,

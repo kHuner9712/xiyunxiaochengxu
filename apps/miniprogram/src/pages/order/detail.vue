@@ -19,7 +19,7 @@
     </view>
 
     <view class="products-section card">
-      <view v-for="item in order.items" :key="item.skuId" class="product-item">
+      <view v-for="item in order.items" :key="item.id" class="product-item">
         <image class="product-image" :src="item.productImage" mode="aspectFill" />
         <view class="product-info">
           <text class="product-name">{{ item.productName }}</text>
@@ -28,6 +28,11 @@
         <view class="product-right">
           <PriceDisplay :price="item.price" />
           <text class="product-qty">x{{ item.quantity }}</text>
+          <view
+            v-if="order.status === 'completed'"
+            class="item-aftersale-btn"
+            @tap="goAftersale(item.id)"
+          >申请售后</view>
         </view>
       </view>
     </view>
@@ -78,7 +83,7 @@
       <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap="handleCancel">取消订单</view>
       <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap="handlePay">去支付</view>
       <view v-if="order.status === 'delivered'" class="action-btn primary" @tap="handleConfirm">确认收货</view>
-      <view v-if="order.status === 'completed'" class="action-btn" @tap="goAftersale">申请售后</view>
+      <view v-if="order.status === 'completed'" class="action-hint">请选择要售后的商品</view>
     </view>
   </view>
 </template>
@@ -94,7 +99,7 @@ import PriceDisplay from '@/components/PriceDisplay.vue'
 const order = ref<OrderDetail>({
   id: '', orderNo: '', status: '' as any, totalAmount: 0, payAmount: 0,
   freightAmount: 0, couponAmount: 0, pointsAmount: 0,
-  addressId: '', addressName: '', addressPhone: '', addressDetail: '',
+  addressName: '', addressPhone: '', addressDetail: '',
   items: [], createTime: ''
 })
 
@@ -169,12 +174,10 @@ async function handleConfirm() {
   })
 }
 
-function goAftersale() {
-  const firstItemId = order.value.items?.[0]?.id || ''
-  const url = firstItemId
-    ? `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${firstItemId}`
-    : `/pages/aftersale/apply?orderId=${order.value.id}`
-  uni.navigateTo({ url })
+function goAftersale(orderItemId: string) {
+  uni.navigateTo({
+    url: `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${orderItemId}`
+  })
 }
 
 onLoad((options) => {
@@ -305,6 +308,16 @@ onLoad((options) => {
   display: block;
 }
 
+.item-aftersale-btn {
+  margin-top: 8rpx;
+  font-size: $font-xs;
+  color: $primary-color;
+  border: 1rpx solid $primary-color;
+  border-radius: $radius-round;
+  padding: 4rpx 16rpx;
+  display: inline-block;
+}
+
 .price-row {
   @include flex-between;
   padding: 8rpx 0;
@@ -367,5 +380,11 @@ onLoad((options) => {
 
   &.primary { color: $primary-color; border-color: $primary-color; }
   &.cancel { color: $text-hint; }
+}
+
+.action-hint {
+  font-size: $font-sm;
+  color: $text-hint;
+  padding: 16rpx 0;
 }
 </style>
