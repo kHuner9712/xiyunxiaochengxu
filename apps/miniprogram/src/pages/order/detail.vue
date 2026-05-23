@@ -152,8 +152,14 @@ async function handlePay() {
     } catch {
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}` })
     }
-  } catch {
-    uni.showToast({ title: '支付发起失败', icon: 'none' })
+  } catch (e: any) {
+    const msg = e?.message || '支付发起失败'
+    uni.showModal({
+      title: '提示',
+      content: msg.includes('暂未开通') ? msg : '支付功能暂未开放，请联系客服',
+      showCancel: false,
+      confirmText: '我知道了'
+    })
   }
 }
 

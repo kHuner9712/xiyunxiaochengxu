@@ -16,10 +16,8 @@ interface RequestConfig {
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const TOKEN_KEY = 'baby_mall_token'
 
-const IS_PRODUCTION = import.meta.env.PROD
-
-if (IS_PRODUCTION && !BASE_URL) {
-  throw new Error('[baby-mall] VITE_API_BASE_URL 未配置，生产构建必须设置完整的 https:// 域名')
+if (!BASE_URL) {
+  console.error('[baby-mall] VITE_API_BASE_URL 未配置，所有 API 请求将失败')
 }
 
 function getToken(): string {
@@ -55,8 +53,10 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
   } = config
 
   if (!BASE_URL) {
-    uni.showToast({ title: 'API 地址未配置', icon: 'none', duration: 2000 })
-    return Promise.reject(new Error('API 地址未配置'))
+    const errMsg = 'API 地址未配置，请在 .env.production 中设置 VITE_API_BASE_URL'
+    console.error(`[baby-mall] ${errMsg}`)
+    uni.showToast({ title: errMsg, icon: 'none', duration: 3000 })
+    return Promise.reject(new Error(errMsg))
   }
 
   if (showLoading) {
@@ -68,9 +68,11 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
     header['Authorization'] = `Bearer ${token}`
   }
 
+  const fullUrl = `${BASE_URL}${url}`
+
   return new Promise<T>((resolve, reject) => {
     uni.request({
-      url: `${BASE_URL}${url}`,
+      url: fullUrl,
       method,
       data,
       header: {
@@ -91,20 +93,23 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
           navigateToLogin()
           reject(new Error('登录已过期，请重新登录'))
         } else {
+          const errMsg = response.message || '请求失败'
+          console.error(`[baby-mall] API error: ${method} ${fullUrl} code=${response.code} message=${errMsg}`)
           if (showError) {
             uni.showToast({
-              title: response.message || '请求失败',
+              title: errMsg,
               icon: 'none',
               duration: 2000
             })
           }
-          reject(new Error(response.message || '请求失败'))
+          reject(new Error(errMsg))
         }
       },
       fail: (err) => {
         if (showLoading) {
           uni.hideLoading()
         }
+        console.error(`[baby-mall] Network error: ${method} ${fullUrl}`, err.errMsg || err)
         if (showError) {
           uni.showToast({
             title: '网络异常，请稍后重试',

@@ -292,12 +292,25 @@ async function handleSubmit() {
       remark: remark.value
     }
     const order = await createOrder(orderData)
-    const payment = await createPayment({ orderId: order.orderId })
     try {
-      await wxPay(payment)
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
-    } catch {
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
+      const payment = await createPayment({ orderId: order.orderId })
+      try {
+        await wxPay(payment)
+        uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
+      } catch {
+        uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
+      }
+    } catch (payErr: any) {
+      const payMsg = payErr?.message || '支付发起失败'
+      uni.showModal({
+        title: '提示',
+        content: payMsg.includes('暂未开通') ? payMsg : '支付功能暂未开放，请联系客服',
+        showCancel: false,
+        confirmText: '我知道了',
+        success: () => {
+          uni.redirectTo({ url: `/pages/order/detail?id=${order.orderId}` })
+        }
+      })
     }
   } catch (e: any) {
     uni.showToast({ title: e.message || '下单失败，请重试', icon: 'none' })
