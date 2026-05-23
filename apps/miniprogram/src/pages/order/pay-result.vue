@@ -1,10 +1,19 @@
 <template>
   <view class="pay-result-page">
-    <view class="result-icon">
-      <text v-if="success" class="icon-success">✓</text>
-      <text v-else class="icon-fail">✕</text>
+    <view v-if="checking" class="result-icon">
+      <text class="icon-checking">...</text>
     </view>
-    <text class="result-text">{{ success ? '支付成功' : '支付失败' }}</text>
+    <view class="result-icon" v-else-if="paymentSuccess === true">
+      <text class="icon-success">✓</text>
+    </view>
+    <view class="result-icon" v-else-if="paymentSuccess === false">
+      <text class="icon-fail">✕</text>
+    </view>
+    <view class="result-icon" v-else>
+      <text class="icon-fail">?</text>
+    </view>
+
+    <text class="result-text">{{ checking ? '查询支付结果中...' : paymentSuccess === true ? '支付成功' : paymentSuccess === false ? '支付失败' : '支付结果未知' }}</text>
 
     <view v-if="orderInfo" class="order-info card">
       <view class="info-row">
@@ -36,11 +45,30 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, type OrderDetail } from '@/api/order'
+import { getPaymentStatus } from '@/api/payment'
 import { formatPrice } from '@/utils/format'
 
-const success = ref(false)
+const paymentSuccess = ref<boolean | null>(null)
 const orderId = ref(0)
 const orderInfo = ref<OrderDetail | null>(null)
+const checking = ref(true)
+
+async function checkPaymentStatus() {
+  checking.value = true
+  try {
+    const status = await getPaymentStatus(orderId.value)
+    if (status.paymentStatus === 2 || status.orderStatus === 'pending_delivery' || status.orderStatus === 'delivered' || status.orderStatus === 'completed') {
+      paymentSuccess.value = true
+    } else {
+      paymentSuccess.value = false
+    }
+  } catch {
+    paymentSuccess.value = null
+  } finally {
+    checking.value = false
+  }
+  loadOrder()
+}
 
 async function loadOrder() {
   try {
@@ -58,8 +86,7 @@ function goHome() {
 
 onLoad((options) => {
   if (options?.orderId) orderId.value = Number(options.orderId)
-  if (options?.success) success.value = options.success === 'true'
-  loadOrder()
+  checkPaymentStatus()
 })
 </script>
 
@@ -78,6 +105,16 @@ onLoad((options) => {
   border-radius: 50%;
   @include flex-center;
   margin-bottom: $spacing-lg;
+}
+
+.icon-checking {
+  font-size: 60rpx;
+  color: #FFFFFF;
+  background: $warning-color;
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  @include flex-center;
 }
 
 .icon-success {

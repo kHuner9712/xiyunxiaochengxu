@@ -87,7 +87,7 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { orderApi } from '@/api/order'
 import { formatPrice, formatDate } from '@/utils/format'
 
@@ -119,7 +119,9 @@ async function fetchList() {
     const res = await orderApi.getDeliveryList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
     tableData.value = res.data.list || []
     pagination.total = res.data.total || 0
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取发货列表失败')
+  } finally {
     loading.value = false
   }
 }
@@ -157,6 +159,13 @@ async function handleSubmitDeliver() {
   const valid = await deliverFormRef.value?.validate().catch(() => false)
   if (!valid) return
 
+  try {
+    const actionText = batchMode.value ? `确认为 ${selectedOrders.value.length} 个订单批量发货？` : '确认发货？'
+    await ElMessageBox.confirm(actionText, '发货确认', { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' })
+  } catch {
+    return
+  }
+
   submitting.value = true
   try {
     if (batchMode.value) {
@@ -172,7 +181,9 @@ async function handleSubmitDeliver() {
     ElMessage.success('发货成功')
     deliverVisible.value = false
     fetchList()
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '发货失败')
+  } finally {
     submitting.value = false
   }
 }

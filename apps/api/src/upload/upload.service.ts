@@ -1,9 +1,33 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { paginate } from '@baby-mall/shared';
 import * as path from 'path';
 import * as fs from 'fs';
+
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
+  'image/svg+xml',
+  'video/mp4',
+  'video/webm',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+
+const ALLOWED_EXTENSIONS = [
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
+  '.mp4', '.webm',
+  '.pdf',
+  '.doc', '.docx',
+  '.xls', '.xlsx',
+];
 
 @Injectable()
 export class UploadService {
@@ -12,9 +36,16 @@ export class UploadService {
   constructor(private prisma: PrismaService) {}
 
   async uploadFile(file: Express.Multer.File, uploaderId: string, uploaderType: string, groupName?: string) {
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      throw new BadRequestException(`不支持的文件类型: ${ext}，仅允许图片、视频、PDF和Office文档`);
+    }
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException(`不支持的MIME类型: ${file.mimetype}`);
+    }
+
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
-    const uploadDir = path.join(process.cwd(), 'uploads');
+    const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
 
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });

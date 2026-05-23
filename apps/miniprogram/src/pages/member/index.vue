@@ -52,13 +52,17 @@ const growthPercent = computed(() => {
 async function loadMemberInfo() {
   try {
     memberInfo.value = await getMemberInfo()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '会员信息加载失败', icon: 'none' })
+  }
 }
 
 async function loadRights() {
   try {
     rights.value = await getMemberRights()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '权益加载失败', icon: 'none' })
+  }
 }
 
 onMounted(() => {

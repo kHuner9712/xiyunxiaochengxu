@@ -5,7 +5,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { IsString, IsNotEmpty, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max } from 'class-validator';
 
 class CreatePaymentDto {
   @IsString()
@@ -22,6 +22,7 @@ class GetRefundListDto {
   @IsNumber()
   @IsOptional()
   @Min(1)
+  @Max(100)
   pageSize?: number = 20;
 
   @IsString()

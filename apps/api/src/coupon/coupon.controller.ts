@@ -17,8 +17,8 @@ export class WeappCouponController {
     @Query('pageSize') pageSize?: string,
   ) {
     return this.couponService.findCenterList(
-      page ? Number(page) : 1,
-      pageSize ? Number(pageSize) : 10,
+      page ? Math.max(1, Number(page)) : 1,
+      Math.min(100, Math.max(1, pageSize ? Number(pageSize) : 10)),
     );
   }
 

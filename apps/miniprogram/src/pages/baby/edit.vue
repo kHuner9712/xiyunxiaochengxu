@@ -57,7 +57,9 @@ async function loadBaby(id: number) {
     const data = await getBabyDetail(id)
     form.value = { ...data, id: data.id }
     isEdit.value = true
-  } catch {}
+  } catch {
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  }
 }
 
 function onDateChange(e: any) {
@@ -70,7 +72,9 @@ async function uploadAvatar() {
     if (results.length) {
       form.value.avatar = results[0].url
     }
-  } catch {}
+  } catch {
+    uni.showToast({ title: '图片上传失败', icon: 'none' })
+  }
 }
 
 function validate(): boolean {
@@ -95,7 +99,9 @@ async function handleSubmit() {
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1500)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '保存失败', icon: 'none' })
+  }
 }
 
 onLoad((options) => {

@@ -52,6 +52,7 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { applyAftersale } from '@/api/aftersale'
+import { getOrderDetail } from '@/api/order'
 import { chooseAndUploadImage } from '@/api/upload'
 
 const orderId = ref(0)
@@ -77,7 +78,9 @@ async function addImage() {
       imageList.value.push(r.url)
       form.value.images.push(r.url)
     })
-  } catch {}
+  } catch {
+    uni.showToast({ title: '图片上传失败', icon: 'none' })
+  }
 }
 
 function removeImage(index: number) {
@@ -101,12 +104,29 @@ async function handleSubmit() {
     })
     uni.showToast({ title: '申请已提交', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1500)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '提交失败', icon: 'none' })
+  }
 }
 
-onLoad((options) => {
+onLoad(async (options) => {
   if (options?.orderId) orderId.value = Number(options.orderId)
   if (options?.orderItemId) orderItemId.value = Number(options.orderItemId)
+  if (orderId.value) {
+    try {
+      const order = await getOrderDetail(orderId.value)
+      if (order.status !== 'completed' && order.status !== 'delivered') {
+        uni.showModal({
+          title: '提示',
+          content: '当前订单状态不允许申请售后',
+          showCancel: false,
+          success: () => uni.navigateBack()
+        })
+      }
+    } catch {
+      uni.showToast({ title: '订单信息获取失败', icon: 'none' })
+    }
+  }
 })
 </script>
 

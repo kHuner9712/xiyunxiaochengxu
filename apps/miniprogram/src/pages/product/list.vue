@@ -66,7 +66,9 @@ async function loadProducts(reset = false) {
     products.value.push(...data.list)
     finished.value = products.value.length >= data.total
     page.value++
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '商品加载失败', icon: 'none' })
+  } finally {
     loading.value = false
   }
 }

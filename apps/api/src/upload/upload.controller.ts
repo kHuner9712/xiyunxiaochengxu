@@ -2,6 +2,7 @@ import { Controller, Post, Get, Param, Query, UploadedFile, UseInterceptors, Bod
 import { UploadService } from './upload.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { IsOptional, IsString } from 'class-validator';
@@ -43,16 +44,19 @@ export class AdminUploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Get('list')
+  @RequirePermission('system:file')
   async list(@Query() dto: FileListDto) {
     return this.uploadService.findAll(dto);
   }
 
   @Get(':id')
+  @RequirePermission('system:file')
   async detail(@Param('id') id: string) {
     return this.uploadService.findById(id);
   }
 
   @Post('upload')
+  @RequirePermission('system:file')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async upload(
     @UploadedFile() file: Express.Multer.File,

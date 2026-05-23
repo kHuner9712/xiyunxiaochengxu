@@ -40,7 +40,9 @@ const babies = ref<BabyItem[]>([])
 async function loadBabies() {
   try {
     babies.value = await getBabyList()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  }
 }
 
 function addBaby() {
@@ -57,8 +59,12 @@ async function deleteBaby(item: BabyItem) {
     content: `确定删除${item.nickname}的档案吗？`,
     success: async (res) => {
       if (res.confirm) {
-        await deleteBabyApi(item.id)
-        await loadBabies()
+        try {
+          await deleteBabyApi(item.id)
+          await loadBabies()
+        } catch {
+          uni.showToast({ title: '删除失败', icon: 'none' })
+        }
       }
     }
   })

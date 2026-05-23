@@ -48,7 +48,9 @@ async function loadAddresses() {
   loading.value = true
   try {
     addresses.value = await getAddressList()
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '地址加载失败', icon: 'none' })
+  } finally {
     loading.value = false
   }
 }
@@ -75,7 +77,9 @@ async function setDefault(item: AddressItem) {
   try {
     await setDefaultAddress(item.id)
     await loadAddresses()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '设置失败', icon: 'none' })
+  }
 }
 
 async function deleteAddress(item: AddressItem) {
@@ -84,8 +88,12 @@ async function deleteAddress(item: AddressItem) {
     content: '确定删除该地址吗？',
     success: async (res) => {
       if (res.confirm) {
-        await deleteAddressApi(item.id)
-        await loadAddresses()
+        try {
+          await deleteAddressApi(item.id)
+          await loadAddresses()
+        } catch {
+          uni.showToast({ title: '删除失败', icon: 'none' })
+        }
       }
     }
   })

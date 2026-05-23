@@ -167,7 +167,7 @@ export class DashboardService {
       orderBy: { createdAt: 'desc' },
       include: {
         user: { select: { id: true, nickname: true, phone: true } },
-        orderItems: { select: { productName: true, quantity: true, price: true } },
+        orderItems: { select: { id: true, orderId: true, productId: true, skuId: true, activityId: true, supplierId: true, productName: true, quantity: true, price: true } },
       },
     });
 
@@ -180,7 +180,15 @@ export class DashboardService {
       payAmount: o.payAmount,
       createdAt: o.createdAt,
       user: o.user ? { ...o.user, id: o.user.id.toString() } : null,
-      items: o.orderItems,
+      items: o.orderItems.map((i) => ({
+        ...i,
+        id: i.id.toString(),
+        orderId: i.orderId.toString(),
+        productId: i.productId.toString(),
+        skuId: i.skuId.toString(),
+        activityId: i.activityId?.toString(),
+        supplierId: i.supplierId?.toString(),
+      })),
     }));
   }
 }

@@ -66,13 +66,17 @@ const finished = ref(false)
 async function loadHotKeywords() {
   try {
     hotKeywords.value = await getHotKeywords()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '热门搜索加载失败', icon: 'none' })
+  }
 }
 
 async function loadSearchHistory() {
   try {
     searchHistory.value = await getSearchHistory()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '搜索历史加载失败', icon: 'none' })
+  }
 }
 
 async function doSearch() {
@@ -105,7 +109,9 @@ async function loadProducts() {
     products.value.push(...data.list)
     finished.value = products.value.length >= data.total
     page.value++
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '搜索失败', icon: 'none' })
+  } finally {
     loading.value = false
   }
 }
@@ -114,7 +120,9 @@ async function clearHistory() {
   try {
     await clearSearchHistory()
     searchHistory.value = []
-  } catch {}
+  } catch {
+    uni.showToast({ title: '操作失败', icon: 'none' })
+  }
 }
 
 onMounted(() => {

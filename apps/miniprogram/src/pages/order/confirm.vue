@@ -71,17 +71,17 @@
         <text class="total-label">合计：</text>
         <PriceDisplay :price="payAmount" />
       </view>
-      <view class="submit-btn" @tap="handleSubmit">
-        <text class="submit-text">提交订单</text>
+      <view class="submit-btn" :class="{ disabled: submitting }" @tap="handleSubmit">
+        <text class="submit-text">{{ submitting ? '提交中...' : '提交订单' }}</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { createOrder } from '@/api/order'
+import { createOrder, previewOrder, type OrderPreview, type OrderPreviewItem } from '@/api/order'
 import { getAddressList, type AddressItem } from '@/api/address'
 import { getAvailableCoupons, type MyCouponItem } from '@/api/coupon'
 import { createPayment, wxPay } from '@/api/payment'
@@ -105,31 +105,76 @@ const usePoints = ref(false)
 const remark = ref('')
 const availablePoints = ref(0)
 const showCouponPicker = ref(false)
-const freightAmount = ref(0)
+const submitting = ref(false)
+const loading = ref(false)
+const preview = ref<OrderPreview | null>(null)
 
 const totalProductPrice = computed(() => {
+  if (preview.value) return preview.value.totalAmount
   return orderItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
 })
 
 const couponDiscount = computed(() => {
+  if (preview.value) return preview.value.couponAmount
   if (!selectedCoupon.value) return 0
   return selectedCoupon.value.value
 })
 
 const pointsDeduct = computed(() => {
+  if (preview.value) return preview.value.pointsAmount
   if (!usePoints.value) return 0
   return Math.min(availablePoints.value, Math.floor(totalProductPrice.value / 100) * 100)
 })
 
+const freightAmount = computed(() => {
+  if (preview.value) return preview.value.freightAmount
+  return 0
+})
+
 const payAmount = computed(() => {
+  if (preview.value) return preview.value.payAmount
   return Math.max(0, totalProductPrice.value + freightAmount.value - couponDiscount.value - pointsDeduct.value)
 })
+
+async function loadPreview() {
+  if (orderItems.value.length === 0) return
+  try {
+    loading.value = true
+    const data = await previewOrder({
+      items: orderItems.value.map(item => ({
+        skuId: item.skuId,
+        quantity: item.quantity
+      })),
+      addressId: address.value?.id,
+      couponId: selectedCoupon.value?.id,
+      pointsDeduct: usePoints.value ? availablePoints.value : 0
+    })
+    preview.value = data
+    if (data.items?.length) {
+      orderItems.value = data.items.map(item => ({
+        productId: Number(item.productId),
+        skuId: Number(item.skuId),
+        quantity: item.quantity,
+        productName: item.productName,
+        productImage: item.productImage,
+        skuName: item.skuSpecs,
+        price: item.price
+      }))
+    }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '获取订单金额失败', icon: 'none' })
+  } finally {
+    loading.value = false
+  }
+}
 
 async function loadDefaultAddress() {
   try {
     const list = await getAddressList()
     address.value = list.find(item => item.isDefault) || list[0] || null
-  } catch {}
+  } catch (e: any) {
+    uni.showToast({ title: '加载地址失败', icon: 'none' })
+  }
 }
 
 function selectAddress() {
@@ -138,6 +183,7 @@ function selectAddress() {
     events: {
       selectAddress: (data: AddressItem) => {
         address.value = data
+        loadPreview()
       }
     }
   })
@@ -145,14 +191,17 @@ function selectAddress() {
 
 function togglePoints(e: any) {
   usePoints.value = e.detail.value
+  loadPreview()
 }
 
 async function handleSubmit() {
+  if (submitting.value) return
   if (!address.value) {
     uni.showToast({ title: '请选择收货地址', icon: 'none' })
     return
   }
   try {
+    submitting.value = true
     const orderData = {
       addressId: address.value.id,
       items: orderItems.value.map(item => ({
@@ -167,12 +216,16 @@ async function handleSubmit() {
     const order = await createOrder(orderData)
     const payment = await createPayment({ orderId: String(order.orderId) })
     try {
-      await wxPay(payment.payParams)
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}&success=true` })
+      await wxPay(payment)
+      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
     } catch {
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}&success=false` })
+      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
     }
-  } catch {}
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '下单失败，请重试', icon: 'none' })
+  } finally {
+    submitting.value = false
+  }
 }
 
 onLoad((options) => {
@@ -190,6 +243,7 @@ onLoad((options) => {
     }]
   }
   loadDefaultAddress()
+  loadPreview()
 })
 </script>
 
@@ -391,6 +445,11 @@ onLoad((options) => {
   background: linear-gradient(135deg, $primary-color, $primary-light);
   border-radius: $radius-round;
   padding: 20rpx 48rpx;
+
+  &.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
 }
 
 .submit-text {

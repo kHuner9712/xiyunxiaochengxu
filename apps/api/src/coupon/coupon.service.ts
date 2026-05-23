@@ -229,6 +229,7 @@ export class CouponService {
       id: uc.id.toString(),
       userId: uc.userId.toString(),
       couponId: uc.couponId.toString(),
+      usedOrderId: uc.usedOrderId?.toString(),
     };
   }
 }

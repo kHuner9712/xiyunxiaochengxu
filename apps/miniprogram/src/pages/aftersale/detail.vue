@@ -76,7 +76,9 @@ const detail = ref<AftersaleDetail>({
 async function loadDetail(id: number) {
   try {
     detail.value = await getAftersaleDetail(id)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  }
 }
 
 function getStatusClass(status: number): string {
@@ -100,8 +102,12 @@ async function handleCancel() {
     content: '确定取消售后申请吗？',
     success: async (res) => {
       if (res.confirm) {
-        await cancelAftersale(detail.value.id)
-        loadDetail(detail.value.id)
+        try {
+          await cancelAftersale(detail.value.id)
+          loadDetail(detail.value.id)
+        } catch {
+          uni.showToast({ title: '取消失败', icon: 'none' })
+        }
       }
     }
   })

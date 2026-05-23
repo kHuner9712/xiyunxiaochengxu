@@ -50,7 +50,9 @@ async function loadCategories() {
     const data = await getContentCategories()
     categories.value = data
     if (data.length) currentCategoryId.value = data[0].id
-  } catch {}
+  } catch {
+    uni.showToast({ title: '分类加载失败', icon: 'none' })
+  }
 }
 
 async function loadContents(reset = false) {
@@ -69,7 +71,9 @@ async function loadContents(reset = false) {
     contents.value.push(...data.list)
     finished.value = contents.value.length >= data.total
     page.value++
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  } finally {
     loading.value = false
   }
 }

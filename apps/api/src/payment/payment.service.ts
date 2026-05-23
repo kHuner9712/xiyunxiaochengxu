@@ -1303,6 +1303,12 @@ export class PaymentService {
         orderId: r.orderId?.toString() || null,
         aftersaleId: r.aftersaleId?.toString() || null,
         paymentId: r.paymentId?.toString() || null,
+        order: r.order
+          ? {
+              ...r.order,
+              id: r.order.id.toString(),
+            }
+          : null,
       })),
       pagination: {
         page,
@@ -1329,6 +1335,14 @@ export class PaymentService {
       orderId: refund.orderId?.toString() || null,
       aftersaleId: refund.aftersaleId?.toString() || null,
       paymentId: refund.paymentId?.toString() || null,
+      order: refund.order
+        ? {
+            ...refund.order,
+            id: refund.order.id.toString(),
+            userId: refund.order.userId?.toString(),
+            couponId: refund.order.couponId?.toString(),
+          }
+        : null,
     };
   }
 }

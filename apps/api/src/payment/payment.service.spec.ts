@@ -25,7 +25,7 @@ function createMockPrisma() {
   return {
     order: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     orderRefund: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
-    orderPayment: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    orderPayment: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
     aftersaleOrder: { findFirst: jest.fn(), update: jest.fn() },
     refundCallbackLog: { create: jest.fn(), findFirst: jest.fn(), updateMany: jest.fn() },
     orderLog: { create: jest.fn() },
@@ -1419,5 +1419,62 @@ describe('BusinessEventService unit', () => {
 
     await service.emitCritical('t', 'payment', 'msg');
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ level: 'critical' }) }));
+  });
+});
+
+describe('支付契约测试', () => {
+  let service: PaymentService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    service = createPaymentService(mockPrisma = createMockPrisma());
+    mockPrisma.orderPayment.create.mockResolvedValue({ id: BigInt(1) });
+  });
+
+  it('createPayment 返回结构应与 wx.requestPayment 参数一致', async () => {
+    const ORDER = {
+      id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment',
+      payAmount: 10000, userId: BigInt(100),
+      user: { id: BigInt(100), openid: 'test_openid' },
+    };
+
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+    mockPrisma.orderPayment.findFirst.mockResolvedValue(null);
+
+    jest.spyOn(service as any, 'createWechatOrder').mockResolvedValue('wx_prepay_id_123');
+
+    const result = await service.createPayment('1', '100');
+
+    expect(result).toHaveProperty('timeStamp');
+    expect(result).toHaveProperty('nonceStr');
+    expect(result).toHaveProperty('package');
+    expect(result).toHaveProperty('signType');
+    expect(result).toHaveProperty('paySign');
+    expect(result.signType).toBe('RSA');
+    expect(result.package).toBe('prepay_id=wx_prepay_id_123');
+  });
+
+  it('getPaymentStatus 应返回正确的支付状态', async () => {
+    const ORDER = {
+      id: BigInt(1), orderNo: 'ORDER123', status: 'pending_delivery',
+    };
+    const PAYMENT = {
+      id: BigInt(1), orderId: BigInt(1), status: PAYMENT_STATUS.SUCCESS,
+      paymentMethod: 'wechat', amount: 10000, paidAt: new Date(), transactionId: 'TXN456',
+    };
+
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+    mockPrisma.orderPayment.findFirst.mockResolvedValue(PAYMENT);
+
+    const result = await service.getPaymentStatus('1', '100');
+
+    expect(result).toHaveProperty('orderId');
+    expect(result).toHaveProperty('orderNo');
+    expect(result).toHaveProperty('orderStatus');
+    expect(result).toHaveProperty('paymentStatus');
+    expect(result.orderId).toBe('1');
+    expect(result.orderNo).toBe('ORDER123');
+    expect(result.orderStatus).toBe('pending_delivery');
+    expect(result.paymentStatus).toBe(PAYMENT_STATUS.SUCCESS);
   });
 });

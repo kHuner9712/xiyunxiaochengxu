@@ -31,7 +31,9 @@ const activity = ref<ActivityDetail>({
 async function loadActivity(id: number) {
   try {
     activity.value = await getActivityDetail(id)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '活动加载失败', icon: 'none' })
+  }
 }
 
 onShareAppMessage(() => ({

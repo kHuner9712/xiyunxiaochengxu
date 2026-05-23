@@ -72,7 +72,11 @@ async function handleQuantity(index: number, delta: number) {
       content: '确定删除该商品吗？',
       success: async (res) => {
         if (res.confirm) {
-          await cartStore.removeItem(item.id)
+          try {
+            await cartStore.removeItem(item.id)
+          } catch {
+            uni.showToast({ title: '删除失败', icon: 'none' })
+          }
         }
       }
     })
@@ -91,7 +95,16 @@ function goCheckout() {
     return
   }
   userStore.requireLogin(() => {
-    uni.navigateTo({ url: '/pages/order/confirm' })
+    const items = cartStore.checkedItems.map(item => ({
+      productId: item.productId,
+      skuId: item.skuId,
+      quantity: item.quantity,
+      productName: item.productName,
+      productImage: item.productImage,
+      skuName: item.skuName,
+      price: item.price
+    }))
+    uni.navigateTo({ url: `/pages/order/confirm?items=${encodeURIComponent(JSON.stringify(items))}` })
   })
 }
 

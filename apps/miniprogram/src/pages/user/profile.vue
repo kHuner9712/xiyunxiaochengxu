@@ -53,7 +53,9 @@ async function changeAvatar() {
     if (results.length) {
       await userStore.fetchUserInfo()
     }
-  } catch {}
+  } catch {
+    uni.showToast({ title: '头像上传失败', icon: 'none' })
+  }
 }
 
 function editNickname() {

@@ -78,6 +78,13 @@ else
   tail -5 "$TMPFILE" | sed 's/^/    /'
 fi
 
+section "4.5 小程序构建"
+if run_pnpm build:mini; then
+  pass "build:mini 通过"
+else
+  warn "build:mini 失败（CI 环境可能缺少微信开发者工具依赖，需在本地/微信开发者工具中验证）"
+fi
+
 section "5. 敏感文件未提交检查"
 SENSITIVE_FILES=(".env" ".env.local" ".env.production.local" ".env.staging.local")
 for f in "${SENSITIVE_FILES[@]}"; do

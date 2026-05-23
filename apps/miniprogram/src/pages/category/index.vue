@@ -44,7 +44,9 @@ async function loadCategories() {
     if (data.length) {
       currentCategoryId.value = data[0].id
     }
-  } catch {}
+  } catch {
+    uni.showToast({ title: '分类加载失败', icon: 'none' })
+  }
 }
 
 function selectCategory(item: CategoryItem) {

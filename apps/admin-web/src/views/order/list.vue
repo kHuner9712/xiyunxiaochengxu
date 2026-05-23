@@ -99,7 +99,9 @@ async function fetchList() {
     const res = await orderApi.getList(params)
     tableData.value = res.data.list || []
     pagination.total = res.data.total || 0
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取订单列表失败')
+  } finally {
     loading.value = false
   }
 }
@@ -121,12 +123,21 @@ function handleDetail(row: any) {
 }
 
 async function handleCancel(row: any) {
+  let reason = ''
   try {
     const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /.+/, inputErrorMessage: '请输入取消原因' })
-    await orderApi.cancel(row.id, value)
+    reason = value
+  } catch {
+    return
+  }
+
+  try {
+    await orderApi.cancel(row.id, reason)
     ElMessage.success('取消成功')
     fetchList()
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.message || '取消订单失败')
+  }
 }
 
 async function handleExport() {
@@ -139,7 +150,9 @@ async function handleExport() {
     a.download = '订单列表.xlsx'
     a.click()
     window.URL.revokeObjectURL(url)
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.message || '导出失败')
+  }
 }
 
 fetchList()

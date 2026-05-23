@@ -106,14 +106,18 @@ async function loadProduct(id: number) {
   try {
     const data = await getProductDetail(id)
     product.value = data
-  } catch {}
+  } catch {
+    uni.showToast({ title: '商品加载失败', icon: 'none' })
+  }
 }
 
 async function loadRecommend(id: number) {
   try {
     const data = await getProductRecommend({ productId: id, page: 1, pageSize: 6 })
     recommendProducts.value = data.list
-  } catch {}
+  } catch {
+    uni.showToast({ title: '推荐加载失败', icon: 'none' })
+  }
 }
 
 function previewImage(index: number) {

@@ -103,7 +103,9 @@ const showLogistics = ref(false)
 async function loadOrder(id: number) {
   try {
     order.value = await getOrderDetail(id)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '订单加载失败', icon: 'none' })
+  }
 }
 
 function getStatusClass(status: string): string {
@@ -125,8 +127,12 @@ async function handleCancel() {
     content: '确定取消该订单吗？',
     success: async (res) => {
       if (res.confirm) {
-        await cancelOrder(order.value.id)
-        loadOrder(order.value.id)
+        try {
+          await cancelOrder(order.value.id)
+          loadOrder(order.value.id)
+        } catch {
+          uni.showToast({ title: '取消失败', icon: 'none' })
+        }
       }
     }
   })
@@ -141,7 +147,9 @@ async function handlePay() {
     } catch {
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}&success=false` })
     }
-  } catch {}
+  } catch {
+    uni.showToast({ title: '支付发起失败', icon: 'none' })
+  }
 }
 
 async function handleConfirm() {
@@ -150,8 +158,12 @@ async function handleConfirm() {
     content: '确认已收到商品吗？',
     success: async (res) => {
       if (res.confirm) {
-        await confirmReceive(order.value.id)
-        loadOrder(order.value.id)
+        try {
+          await confirmReceive(order.value.id)
+          loadOrder(order.value.id)
+        } catch {
+          uni.showToast({ title: '确认收货失败', icon: 'none' })
+        }
       }
     }
   })

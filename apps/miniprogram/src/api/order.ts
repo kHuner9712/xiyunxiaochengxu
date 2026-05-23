@@ -92,3 +92,35 @@ export interface LogisticsTrace {
   time: string
   content: string
 }
+
+export function previewOrder(data: {
+  items: { skuId: number; quantity: number }[]
+  addressId?: number
+  couponId?: number
+  pointsDeduct?: number
+}) {
+  return post<OrderPreview>('/weapp/order/confirm', data)
+}
+
+export interface OrderPreview {
+  items: OrderPreviewItem[]
+  totalAmount: number
+  discountAmount: number
+  couponAmount: number
+  activityDiscountAmount: number
+  pointsAmount: number
+  freightAmount: number
+  payAmount: number
+}
+
+export interface OrderPreviewItem {
+  productId: string
+  skuId: string
+  productName: string
+  skuSpecs: string
+  productImage: string
+  price: number
+  originalPrice: number
+  quantity: number
+  subtotal: number
+}

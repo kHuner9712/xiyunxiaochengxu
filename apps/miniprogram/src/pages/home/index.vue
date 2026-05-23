@@ -118,7 +118,9 @@ async function loadHomeData() {
   try {
     const data = await getHomeData()
     Object.assign(homeData, data)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '首页加载失败', icon: 'none' })
+  }
 }
 
 async function loadGuessProducts() {
@@ -129,7 +131,9 @@ async function loadGuessProducts() {
     guessProducts.value.push(...data.list)
     guessFinished.value = guessProducts.value.length >= data.total
     guessPage.value++
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '推荐加载失败', icon: 'none' })
+  } finally {
     guessLoading.value = false
   }
 }

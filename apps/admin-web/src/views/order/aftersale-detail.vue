@@ -98,7 +98,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
 import { formatPrice, formatDate, formatAftersaleStatus, priceToFen } from '@/utils/format'
 
@@ -116,10 +116,19 @@ async function fetchDetail() {
     const res = await aftersaleApi.getDetail(Number(route.params.id))
     detail.value = res.data || {}
     refundAmountYuan.value = (res.data?.refundAmount || 0) / 100
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取售后详情失败')
+  }
 }
 
 async function handleAudit() {
+  const actionLabel = auditResult.value === 'approve' ? '通过' : '拒绝'
+  try {
+    await ElMessageBox.confirm(`确认${actionLabel}该售后申请？`, '审核确认', { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' })
+  } catch {
+    return
+  }
+
   submitting.value = true
   try {
     if (auditResult.value === 'approve') {
@@ -134,18 +143,28 @@ async function handleAudit() {
       ElMessage.success('已拒绝')
     }
     fetchDetail()
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '审核操作失败')
+  } finally {
     submitting.value = false
   }
 }
 
 async function handleRefund() {
+  try {
+    await ElMessageBox.confirm(`确认退款 ¥${refundAmountYuan.value.toFixed(2)}？此操作将发起微信退款，请谨慎操作。`, '退款确认', { confirmButtonText: '确认退款', cancelButtonText: '取消', type: 'warning' })
+  } catch {
+    return
+  }
+
   submitting.value = true
   try {
     await aftersaleApi.refund(detail.value.id, priceToFen(refundAmountYuan.value))
     ElMessage.success('退款成功')
     fetchDetail()
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '退款失败')
+  } finally {
     submitting.value = false
   }
 }

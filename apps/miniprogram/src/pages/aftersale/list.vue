@@ -52,7 +52,9 @@ async function loadList(reset = false) {
     list.value.push(...data.list)
     finished.value = list.value.length >= data.total
     page.value++
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  } finally {
     loading.value = false
   }
 }

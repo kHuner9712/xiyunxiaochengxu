@@ -70,6 +70,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
 import { formatPrice, formatDate, formatAftersaleStatus, AFTERSALE_STATUS_MAP } from '@/utils/format'
 
@@ -92,7 +93,9 @@ async function fetchList() {
     const res = await aftersaleApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
     tableData.value = res.data.list || []
     pagination.total = res.data.total || 0
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取售后列表失败')
+  } finally {
     loading.value = false
   }
 }

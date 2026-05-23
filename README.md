@@ -137,6 +137,32 @@ cd deploy
 docker-compose up -d
 ```
 
+## 一键检查命令
+
+```bash
+# 安装依赖
+pnpm install
+
+# 验证 API（Prisma schema + 生成客户端）
+pnpm --filter @baby-mall/api prisma:validate
+pnpm --filter @baby-mall/api prisma:generate
+
+# 运行测试
+pnpm --filter @baby-mall/api test:ci
+
+# 构建验证
+pnpm build:api      # 后端构建
+pnpm build:admin    # 管理后台构建
+pnpm build:mini     # 小程序构建
+
+# Release Gate（上线前综合检查）
+pnpm release:check
+
+# Docker 冒烟测试（需要 Docker 环境）
+pnpm docker:up
+pnpm smoke:all
+```
+
 ## 核心业务说明
 
 - **自营商城**：所有商品由甲方统一采购、定价、销售

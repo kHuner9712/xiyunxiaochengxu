@@ -28,7 +28,9 @@ const content = ref<ContentDetail>({
 async function loadContent(id: number) {
   try {
     content.value = await getContentDetail(id)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  }
 }
 
 onShareAppMessage(() => ({

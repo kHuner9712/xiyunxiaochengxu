@@ -106,7 +106,9 @@ async function fetchList() {
     const res = await couponApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
     tableData.value = res.data.list || []
     pagination.total = res.data.total || 0
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取优惠券列表失败')
+  } finally {
     loading.value = false
   }
 }
@@ -124,11 +126,20 @@ function resetSearch() {
 }
 
 async function handleToggleStatus(row: any) {
+  const actionText = row.status === 1 ? '禁用' : '启用'
+  try {
+    await ElMessageBox.confirm(`确定${actionText}该优惠券吗？`, '提示', { type: 'warning' })
+  } catch {
+    return
+  }
+
   try {
     await couponApi.update({ id: row.id, status: row.status === 1 ? 0 : 1 })
     ElMessage.success('操作成功')
     fetchList()
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.message || '操作失败')
+  }
 }
 
 async function handleDelete(row: any) {

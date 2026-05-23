@@ -78,7 +78,9 @@ async function loadAddress(id: number) {
       regionValue.value = [data.province, data.city || '', data.district || '']
     }
     isEdit.value = true
-  } catch {}
+  } catch {
+    uni.showToast({ title: '地址加载失败', icon: 'none' })
+  }
 }
 
 function validate(): boolean {
@@ -111,7 +113,9 @@ async function handleSubmit() {
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1500)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '保存失败', icon: 'none' })
+  }
 }
 
 async function handleDelete() {
@@ -121,8 +125,12 @@ async function handleDelete() {
     content: '确定删除该地址吗？',
     success: async (res) => {
       if (res.confirm) {
-        await deleteAddressApi(form.value.id!)
-        uni.navigateBack()
+        try {
+          await deleteAddressApi(form.value.id!)
+          uni.navigateBack()
+        } catch {
+          uni.showToast({ title: '删除失败', icon: 'none' })
+        }
       }
     }
   })

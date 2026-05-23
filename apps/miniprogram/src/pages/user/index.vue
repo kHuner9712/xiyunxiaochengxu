@@ -96,7 +96,9 @@ async function loadOrderCount() {
   try {
     const data = await getOrderCount()
     orderCount.value = data
-  } catch {}
+  } catch {
+    uni.showToast({ title: '订单数量加载失败', icon: 'none' })
+  }
 }
 
 function handleLogin() {

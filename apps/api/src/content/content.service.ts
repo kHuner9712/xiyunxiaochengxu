@@ -10,10 +10,11 @@ export class ContentService {
   constructor(private prisma: PrismaService) {}
 
   async findCategories() {
-    return this.prisma.contentCategory.findMany({
+    const categories = await this.prisma.contentCategory.findMany({
       where: { status: 1 },
       orderBy: { sortOrder: 'asc' },
     });
+    return categories.map((c) => ({ ...c, id: c.id.toString() }));
   }
 
   async findPublished(dto: ContentQueryDto) {

@@ -110,7 +110,9 @@ async function fetchList() {
   try {
     const res = await bannerApi.getList({ page: 1, pageSize: 100 })
     tableData.value = res.data.list || res.data || []
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取Banner列表失败')
+  } finally {
     loading.value = false
   }
 }
@@ -150,7 +152,9 @@ async function handleUploadImage(options: any) {
   try {
     const res = await uploadApi.uploadImage(options.file)
     form.image = res.data.url
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.message || '图片上传失败')
+  }
 }
 
 async function handleSubmit() {
@@ -167,7 +171,9 @@ async function handleSubmit() {
     ElMessage.success('保存成功')
     dialogVisible.value = false
     fetchList()
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
     submitting.value = false
   }
 }

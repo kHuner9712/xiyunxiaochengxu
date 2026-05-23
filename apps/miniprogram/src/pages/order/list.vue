@@ -36,7 +36,7 @@
           <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
           <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap.stop="handlePay(order)">去支付</view>
           <view v-if="order.status === 'delivered'" class="action-btn primary" @tap.stop="handleConfirm(order.id)">确认收货</view>
-          <view v-if="order.status === 'completed'" class="action-btn" @tap.stop="goAftersale(order.id)">申请售后</view>
+          <view v-if="order.status === 'completed' || order.status === 'delivered'" class="action-btn" @tap.stop="goAftersale(order.id)">申请售后</view>
         </view>
       </view>
     </view>
@@ -62,6 +62,7 @@ const tabs = [
   { label: '待发货', value: 'pending_delivery' },
   { label: '待收货', value: 'delivered' },
   { label: '已完成', value: 'completed' },
+  { label: '已取消', value: 'cancelled' },
   { label: '售后', value: 'aftersale' },
 ]
 
@@ -87,7 +88,9 @@ async function loadOrders(reset = false) {
     orders.value.push(...data.list)
     finished.value = orders.value.length >= data.total
     page.value++
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '订单加载失败', icon: 'none' })
+  } finally {
     loading.value = false
   }
 }
@@ -105,14 +108,14 @@ function goAftersale(orderId: number) {
   uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${orderId}` })
 }
 
-function getStatusClass(status: number): string {
-  const map: Record<number, string> = {
-    10: 'status-unpaid',
-    20: 'status-shipping',
-    30: 'status-receiving',
-    40: 'status-done',
-    50: 'status-cancelled',
-    60: 'status-aftersale'
+function getStatusClass(status: string): string {
+  const map: Record<string, string> = {
+    pending_payment: 'status-unpaid',
+    pending_delivery: 'status-shipping',
+    delivered: 'status-receiving',
+    completed: 'status-done',
+    cancelled: 'status-cancelled',
+    aftersale: 'status-aftersale'
   }
   return map[status] || ''
 }
@@ -123,8 +126,12 @@ async function handleCancel(id: number) {
     content: '确定取消该订单吗？',
     success: async (res) => {
       if (res.confirm) {
-        await cancelOrder(id)
-        loadOrders(true)
+        try {
+          await cancelOrder(id)
+          loadOrders(true)
+        } catch {
+          uni.showToast({ title: '取消失败', icon: 'none' })
+        }
       }
     }
   })
@@ -139,7 +146,9 @@ async function handlePay(order: OrderItem) {
     } catch {
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.id}&success=false` })
     }
-  } catch {}
+  } catch {
+    uni.showToast({ title: '支付发起失败', icon: 'none' })
+  }
 }
 
 async function handleConfirm(id: number) {
@@ -148,15 +157,19 @@ async function handleConfirm(id: number) {
     content: '确认已收到商品吗？',
     success: async (res) => {
       if (res.confirm) {
-        await confirmReceive(id)
-        loadOrders(true)
+        try {
+          await confirmReceive(id)
+          loadOrders(true)
+        } catch {
+          uni.showToast({ title: '确认收货失败', icon: 'none' })
+        }
       }
     }
   })
 }
 
 onLoad((options) => {
-  if (options?.status) currentTab.value = Number(options.status)
+  if (options?.status) currentTab.value = options.status
   loadOrders()
 })
 

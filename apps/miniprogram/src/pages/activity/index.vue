@@ -70,7 +70,9 @@ async function loadActivities(reset = false) {
     activities.value.push(...data.list)
     finished.value = activities.value.length >= data.total
     page.value++
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '活动加载失败', icon: 'none' })
+  } finally {
     loading.value = false
   }
 }

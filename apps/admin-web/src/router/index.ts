@@ -306,6 +306,18 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '操作日志', permission: 'system:log' },
           },
           {
+            path: 'business-events',
+            name: 'BusinessEvents',
+            component: () => import('@/views/system/business-events.vue'),
+            meta: { title: '业务事件', permission: 'system:log' },
+          },
+          {
+            path: 'business-event-detail/:id',
+            name: 'BusinessEventDetail',
+            component: () => import('@/views/system/business-event-detail.vue'),
+            meta: { title: '事件详情', permission: 'system:log', hidden: true },
+          },
+          {
             path: 'change-password',
             name: 'ChangePassword',
             component: () => import('@/views/system/change-password.vue'),

@@ -69,13 +69,17 @@ const finished = ref(false)
 async function loadBalance() {
   try {
     pointsBalance.value = await getPointsBalance()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '积分加载失败', icon: 'none' })
+  }
 }
 
 async function loadCheckInStatus() {
   try {
     checkInStatus.value = await getCheckInStatus()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '签到状态加载失败', icon: 'none' })
+  }
 }
 
 async function loadPointsDetail(reset = false) {
@@ -92,7 +96,9 @@ async function loadPointsDetail(reset = false) {
     pointsDetail.value.push(...data.list)
     finished.value = pointsDetail.value.length >= data.total
     page.value++
-  } catch {} finally {
+  } catch {
+    uni.showToast({ title: '明细加载失败', icon: 'none' })
+  } finally {
     loading.value = false
   }
 }
@@ -100,7 +106,9 @@ async function loadPointsDetail(reset = false) {
 async function loadRules() {
   try {
     pointsRules.value = await getPointsRules()
-  } catch {}
+  } catch {
+    uni.showToast({ title: '规则加载失败', icon: 'none' })
+  }
 }
 
 async function handleCheckIn() {
@@ -112,7 +120,9 @@ async function handleCheckIn() {
     uni.showToast({ title: `签到成功，+${data.points}积分`, icon: 'none' })
     await loadBalance()
     loadPointsDetail(true)
-  } catch {}
+  } catch {
+    uni.showToast({ title: '签到失败', icon: 'none' })
+  }
 }
 
 onPullDownRefresh(async () => {
