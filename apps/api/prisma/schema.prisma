@@ -752,6 +752,22 @@ model OrderRefund {
   @@map("order_refunds")
 }
 
+model RefundCallbackLog {
+  id            BigInt   @id @default(autoincrement()) @map("id")
+  outRefundNo   String   @db.VarChar(64) @map("out_refund_no")
+  rawBody       Json?    @map("raw_body")
+  decryptedData Json?    @map("decrypted_data")
+  headers       Json?    @map("headers")
+  status        String   @db.VarChar(20) @default("orphan") @map("status")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([outRefundNo], name: "idx_out_refund_no")
+  @@index([status], name: "idx_status")
+  @@index([createdAt], name: "idx_created_at")
+  @@map("refund_callback_logs")
+}
+
 model ContentCategory {
   id        BigInt   @id @default(autoincrement()) @map("id")
   name      String   @db.VarChar(50) @map("name")

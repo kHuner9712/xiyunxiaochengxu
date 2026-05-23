@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CouponQueryDto } from './dto/coupon-query.dto';
 import { paginate } from '@baby-mall/shared';
+import { COUPON_STATUS } from '../common/constants/payment';
 
 @Injectable()
 export class CouponService {
@@ -66,7 +67,7 @@ export class CouponService {
     const now = new Date();
     const where: any = {
       userId: BigInt(userId),
-      status: 1,
+      status: COUPON_STATUS.FREE,
       expireAt: { gte: now },
     };
 

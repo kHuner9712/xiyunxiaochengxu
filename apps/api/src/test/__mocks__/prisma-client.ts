@@ -25,6 +25,7 @@ export const PAYMENT_STATUS = {
 };
 
 export const REFUND_STATUS = {
+  INITIATING: 'initiating',
   PENDING: 'pending',
   PROCESSING: 'processing',
   SUCCESS: 'success',

@@ -9,6 +9,7 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@prisma/client$': '<rootDir>/src/test/__mocks__/prisma-client.ts',
+    '^@baby-mall/shared$': '<rootDir>/../../packages/shared/src/index.ts',
   },
   collectCoverageFrom: [
     'src/**/*.ts',

@@ -3,7 +3,8 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { assertOrderTransition } from '../order/order-state-machine';
-import { REFUND_STATUS, PAYMENT_STATUS, WECHAT_REFUND_STATUS, RefundStatus } from '../common/constants';
+import { REFUND_STATUS, PAYMENT_STATUS, WECHAT_REFUND_STATUS, RefundStatus, COUPON_STATUS } from '../common/constants';
+import { Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import axios from 'axios';
@@ -280,7 +281,7 @@ export class PaymentService {
     };
   }
 
-  private async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {
+  async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {
     await this.prisma.$transaction(async (tx) => {
       // 1. 幂等检查和更新订单支付
       const existingPayment = await tx.orderPayment.findUnique({ where: { id: paymentId } });
@@ -354,6 +355,171 @@ export class PaymentService {
           content: `微信支付成功，交易号：${transactionId}`,
         },
       });
+
+      // 5. 锁定优惠券标记为已使用
+      if (order.couponId) {
+        const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
+        if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
+          await tx.userCoupon.update({
+            where: { id: order.couponId },
+            data: { status: COUPON_STATUS.USED },
+          });
+        }
+      }
+    });
+  }
+
+  async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {
+    const successAmount = wechatData.amount?.refund || refund.refundAmount;
+
+    await this.prisma.$transaction(async (tx) => {
+      const claimResult = await tx.orderRefund.updateMany({
+        where: {
+          id: refund.id,
+          status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING] },
+        },
+        data: {
+          status: REFUND_STATUS.PROCESSING,
+          refundId: refundId,
+          notifiedAt: new Date(),
+          rawResponse: wechatData,
+        },
+      });
+
+      if (claimResult.count === 0) {
+        const currentRefund = await tx.orderRefund.findUnique({ where: { id: refund.id } });
+        if (!currentRefund) {
+          this.logger.error(`退款记录不存在: ${refund.id}`);
+          throw new Error(`退款记录不存在: ${refund.id}`);
+        }
+        if (currentRefund.status === REFUND_STATUS.SUCCESS) {
+          this.logger.log(`退款已被其他进程处理成功: ${refund.outRefundNo}`);
+          return;
+        }
+        if (currentRefund.status === REFUND_STATUS.PROCESSING) {
+          this.logger.warn(`退款正在被其他进程处理: ${refund.outRefundNo}`);
+          throw new Error(`退款正在被其他进程处理: ${refund.outRefundNo}`);
+        }
+        this.logger.error(`退款状态异常，无法抢占处理权: ${refund.id}当前状态${currentRefund.status}`);
+        throw new Error(`退款状态异常: ${currentRefund.status}`);
+      }
+
+      if (refund.aftersaleId) {
+        const aftersaleId = refund.aftersaleId as bigint;
+
+        const aftersale = await tx.aftersaleOrder.findFirst({
+          where: { id: aftersaleId },
+          include: { orderItem: true, order: true },
+        });
+
+        if (aftersale) {
+          await tx.aftersaleOrder.update({
+            where: { id: aftersale.id },
+            data: {
+              status: 'refunded',
+              refundedAt: new Date(),
+              aftersaleLogs: {
+                create: {
+                  operatorType: 'system',
+                  action: 'refund',
+                  content: `微信退款成功，金额: ${successAmount}分`,
+                },
+              },
+            },
+          });
+
+          const aftersaleWithRelations = aftersale as any;
+
+          if (aftersaleWithRelations.type === 2 && aftersaleWithRelations.orderItem) {
+            const sku = await tx.productSku.findFirst({ where: { id: aftersaleWithRelations.orderItem.skuId } });
+            if (sku) {
+              await tx.productSku.update({
+                where: { id: aftersaleWithRelations.orderItem.skuId },
+                data: { stock: { increment: aftersaleWithRelations.orderItem.quantity }, sales: { decrement: aftersaleWithRelations.orderItem.quantity } },
+              });
+              await tx.productStockLog.create({
+                data: {
+                  productId: aftersaleWithRelations.orderItem.productId,
+                  skuId: aftersaleWithRelations.orderItem.skuId,
+                  type: 4,
+                  quantity: aftersaleWithRelations.orderItem.quantity,
+                  beforeStock: sku.stock,
+                  afterStock: sku.stock + aftersaleWithRelations.orderItem.quantity,
+                  reason: '售后退款归还库存',
+                },
+              });
+            }
+          }
+
+          if (aftersaleWithRelations.refundAmount && aftersaleWithRelations.refundAmount > 0 && aftersaleWithRelations.order?.payAmount) {
+            const deductedPoints = Math.floor(aftersaleWithRelations.refundAmount / 100);
+            if (deductedPoints > 0) {
+              const user = await tx.user.findFirst({ where: { id: aftersaleWithRelations.userId } });
+              if (user && user.availablePoints >= deductedPoints) {
+                await tx.user.update({
+                  where: { id: aftersaleWithRelations.userId },
+                  data: { availablePoints: { decrement: deductedPoints } },
+                });
+                await tx.pointsRecord.create({
+                  data: {
+                    userId: aftersaleWithRelations.userId,
+                    type: 2,
+                    points: deductedPoints,
+                    balance: user.availablePoints - deductedPoints,
+                    source: 'aftersale_refund',
+                    sourceId: aftersaleWithRelations.orderId,
+                    description: `售后退款扣回${deductedPoints}积分`,
+                  },
+                });
+              }
+            }
+          }
+
+          if (aftersaleWithRelations.order?.pointsDeducted > 0 && aftersaleWithRelations.refundAmount && aftersaleWithRelations.order?.payAmount) {
+            const restorePoints = Math.floor(aftersaleWithRelations.order.pointsDeducted * aftersaleWithRelations.refundAmount / aftersaleWithRelations.order.payAmount);
+            if (restorePoints > 0) {
+              const user = await tx.user.findFirst({ where: { id: aftersaleWithRelations.userId } });
+              if (user) {
+                await tx.user.update({
+                  where: { id: aftersaleWithRelations.userId },
+                  data: { availablePoints: { increment: restorePoints } },
+                });
+                await tx.pointsRecord.create({
+                  data: {
+                    userId: aftersaleWithRelations.userId,
+                    type: 1,
+                    points: restorePoints,
+                    balance: user.availablePoints + restorePoints,
+                    source: 'aftersale_refund_restore',
+                    sourceId: aftersaleWithRelations.orderId,
+                    description: `售后退款归还抵扣积分${restorePoints}`,
+                  },
+                });
+              }
+            }
+          }
+
+          const otherAftersales = await tx.aftersaleOrder.findFirst({
+            where: {
+              orderId: aftersaleWithRelations.orderId,
+              id: { not: aftersaleWithRelations.id },
+              status: { notIn: ['closed', 'rejected', 'refunded'] },
+            },
+          });
+          if (!otherAftersales && aftersaleWithRelations.order) {
+            const restoreStatus = aftersaleWithRelations.order.completedAt ? 'completed' : 'delivered';
+            await tx.order.update({
+              where: { id: aftersaleWithRelations.orderId },
+              data: { status: restoreStatus },
+            });
+          }
+        }
+      }
+
+      await tx.orderRefund.update({
+        where: { id: refund.id },
+        data: { status: REFUND_STATUS.SUCCESS },
+      });
     });
   }
 
@@ -404,7 +570,7 @@ export class PaymentService {
     }
   }
 
-  private async queryWechatOrder(outTradeNo: string): Promise<any> {
+  async queryWechatOrder(outTradeNo: string): Promise<any> {
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
     const serialNo = this.configService.get<string>('WECHAT_MCH_SERIAL_NO')!;
 
@@ -487,7 +653,7 @@ export class PaymentService {
       const existingRefund = await this.prisma.orderRefund.findFirst({
         where: {
           aftersaleId: BigInt(params.aftersaleId),
-          status: { in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCESS] },
+          status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCESS] },
         },
       });
 
@@ -508,13 +674,17 @@ export class PaymentService {
     const existingRefunds = await this.prisma.orderRefund.findMany({
       where: {
         orderId: BigInt(params.orderId),
-        status: { in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCESS] },
+        status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCESS] },
       },
     });
 
     const totalRefundedAmount = existingRefunds.reduce((sum, r) => sum + r.refundAmount, 0);
     if (totalRefundedAmount + params.refundAmount > order.payAmount!) {
       throw new BadRequestException(`累计退款金额不能超过订单实付金额。当前已退款${totalRefundedAmount}分，申请${params.refundAmount}分，订单实付${order.payAmount}分`);
+    }
+
+    if (!order.payment) {
+      throw new BadRequestException('订单支付信息不存在');
     }
 
     const appId = this.configService.get<string>('WECHAT_APP_ID')!;
@@ -541,6 +711,33 @@ export class PaymentService {
       ...requestBody,
     };
 
+    // A. 先创建 initiating 记录，确保微信受理后本地必有追踪
+    let initiatingRefund;
+    try {
+      initiatingRefund = await this.prisma.orderRefund.create({
+        data: {
+          refundNo,
+          orderId: BigInt(params.orderId),
+          aftersaleId: params.aftersaleId ? BigInt(params.aftersaleId) : null,
+          paymentId: order.payment.id,
+          outTradeNo: order.orderNo,
+          transactionId: order.payment.transactionId,
+          outRefundNo,
+          refundId: null,
+          refundAmount: params.refundAmount,
+          totalAmount: order.payAmount!,
+          status: REFUND_STATUS.INITIATING,
+          reason: params.reason,
+          rawRequest: request,
+          rawResponse: Prisma.DbNull,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`创建退款意图记录失败: ${outRefundNo}`, (error as Error).message);
+      throw new InternalServerErrorException('退款处理失败，请稍后重试');
+    }
+
+    // B. 调用微信退款接口
     let response: any;
     if (this.privateKey) {
       const serialNo = this.configService.get<string>('WECHAT_MCH_SERIAL_NO')!;
@@ -559,53 +756,61 @@ export class PaymentService {
           },
         });
       } catch (error) {
-        // 微信退款请求失败时不创建退款记录，不修改售后单状态
+        // C. 微信调用失败：将 OrderRefund 标记为 failed
         const err = error as any;
         const errData = err.response?.data;
         this.logger.error(`微信退款请求失败: ${JSON.stringify(errData) || err.message}`);
+
+        try {
+          await this.prisma.orderRefund.update({
+            where: { id: initiatingRefund.id },
+            data: {
+              status: REFUND_STATUS.FAILED,
+              rawResponse: errData || { error: err.message },
+            },
+          });
+        } catch (updateErr) {
+          this.logger.error(`更新退款记录为 failed 失败: ${outRefundNo}`, (updateErr as Error).message);
+        }
+
         throw new BadRequestException(`微信退款请求失败: ${errData?.message || err.message}`);
       }
     } else {
       const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
       const mockRefund = this.configService.get<string>('WECHAT_REFUND_MOCK', 'false');
       if (nodeEnv === 'production' && mockRefund === 'true') {
+        try {
+          await this.prisma.orderRefund.update({
+            where: { id: initiatingRefund.id },
+            data: { status: REFUND_STATUS.FAILED },
+          });
+        } catch {}
         throw new BadRequestException('生产环境禁止使用退款 Mock');
       }
       if (mockRefund !== 'true') {
+        try {
+          await this.prisma.orderRefund.update({
+            where: { id: initiatingRefund.id },
+            data: { status: REFUND_STATUS.FAILED },
+          });
+        } catch {}
         throw new BadRequestException('商户私钥未配置，无法发起退款');
       }
       this.logger.warn('微信退款 Mock 模式（仅限非生产环境测试）');
     }
 
-    // 微信退款接口成功返回后，在事务中创建退款记录和更新售后单状态
+    // D. 微信调用成功：更新 OrderRefund 为 pending + 更新售后单
     try {
-      // 确保 order.payment 存在
-      if (!order.payment) {
-        throw new BadRequestException('订单支付信息不存在');
-      }
-
-      const refund = await this.prisma.$transaction(async (tx) => {
-        // 1. 创建 OrderRefund 记录
-        const newRefund = await tx.orderRefund.create({
+      await this.prisma.$transaction(async (tx) => {
+        await tx.orderRefund.update({
+          where: { id: initiatingRefund.id },
           data: {
-            refundNo,
-            orderId: BigInt(params.orderId),
-            aftersaleId: params.aftersaleId ? BigInt(params.aftersaleId) : null,
-            paymentId: order.payment!.id,
-            outTradeNo: order.orderNo,
-            transactionId: order.payment!.transactionId,
-            outRefundNo,
-            refundId: response?.data?.refund_id || null,
-            refundAmount: params.refundAmount,
-            totalAmount: order.payAmount!,
             status: REFUND_STATUS.PENDING,
-            reason: params.reason,
-            rawRequest: request,
+            refundId: response?.data?.refund_id || null,
             rawResponse: response?.data || null,
           },
         });
 
-        // 2. 如果有售后单，更新售后单状态为 pending_refund 并记录日志
         if (params.aftersaleId) {
           await tx.aftersaleOrder.update({
             where: { id: BigInt(params.aftersaleId) },
@@ -621,17 +826,13 @@ export class PaymentService {
             },
           });
         }
-
-        return newRefund;
       });
 
       this.logger.log(`创建退款成功: ${refundNo}, 订单: ${order.orderNo}`);
-      return { refundId: refund.id.toString(), refundNo, outRefundNo };
+      return { refundId: initiatingRefund.id.toString(), refundNo, outRefundNo };
     } catch (error) {
-      // TODO: 数据库事务失败时的补偿策略
-      // 此时微信退款可能已经被受理，可以通过 outRefundNo 查询并处理
-      this.logger.error(`数据库事务失败，退款记录未创建，但微信退款可能已受理。退款单号: ${outRefundNo}`, error);
-      throw new InternalServerErrorException('退款处理失败，请稍后重试或联系管理员');
+      this.logger.error(`微信退款已受理但本地状态更新失败，退款记录保留 initiating 状态，可通过 admin sync 修复。退款单号: ${outRefundNo}`, (error as Error).message);
+      throw new InternalServerErrorException('退款已提交但状态更新失败，请通过退款同步接口修复');
     }
   }
 
@@ -704,8 +905,23 @@ export class PaymentService {
     });
 
     if (!refund) {
-      this.logger.warn(`微信退款回调退款记录不存在: ${outRefundNo}`);
-      return { code: 'SUCCESS', message: '' };
+      this.logger.error(`微信退款回调退款记录不存在(孤儿回调): ${outRefundNo}`);
+
+      try {
+        await this.prisma.refundCallbackLog.create({
+          data: {
+            outRefundNo,
+            rawBody: rawBody ? { raw: rawBody } : Prisma.DbNull,
+            decryptedData,
+            headers: { signature, timestamp, nonce, serialNo },
+            status: 'orphan',
+          },
+        });
+      } catch (logErr) {
+        this.logger.error(`写入孤儿回调日志失败: ${outRefundNo}`, (logErr as Error).message);
+      }
+
+      return { code: 'FAIL', message: '退款记录不存在' };
     }
 
     // 1. 基本校验
@@ -720,6 +936,21 @@ export class PaymentService {
       return { code: 'SUCCESS', message: '' };
     }
 
+    if (refund.status === REFUND_STATUS.PROCESSING) {
+      this.logger.warn(`微信退款回调退款记录正在处理中: ${outRefundNo}，返回 FAIL 让微信重试`);
+      return { code: 'FAIL', message: '退款正在处理中' };
+    }
+
+    if (refund.status === REFUND_STATUS.FAILED) {
+      this.logger.warn(`微信退款回调退款记录已失败: ${outRefundNo}，返回 FAIL 让微信重试`);
+      return { code: 'FAIL', message: '退款记录已失败' };
+    }
+
+    if (refund.status === REFUND_STATUS.CLOSED || refund.status === REFUND_STATUS.ABNORMAL) {
+      this.logger.warn(`微信退款回调退款记录已终态(${refund.status})，拒绝处理: ${outRefundNo}`);
+      return { code: 'FAIL', message: `退款记录已终态: ${refund.status}` };
+    }
+
     if (refundStatus === WECHAT_REFUND_STATUS.SUCCESS) {
       // 3. 金额校验
       if (successAmount !== refund.refundAmount) {
@@ -732,164 +963,12 @@ export class PaymentService {
         return { code: 'FAIL', message: '订单总金额不匹配' };
       }
 
-      // 4. 使用条件更新确保并发幂等
-      const result = await this.prisma.$transaction(async (tx) => {
-        const updateRefundResult = await tx.orderRefund.updateMany({
-          where: {
-            id: refund.id,
-            status: { in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] },
-          },
-          data: {
-            status: REFUND_STATUS.SUCCESS,
-            refundId: refundId,
-            notifiedAt: new Date(),
-            rawResponse: decryptedData,
-          },
-        });
-
-        if (updateRefundResult.count === 0) {
-          // 重新查询状态确认
-          const currentRefund = await tx.orderRefund.findUnique({ where: { id: refund.id } });
-          if (!currentRefund) {
-            this.logger.error(`退款记录不存在: ${refund.id}`);
-            return { shouldContinue: false };
-          }
-
-          if (currentRefund.status === REFUND_STATUS.SUCCESS) {
-            this.logger.log(`退款已被其他进程处理: ${outRefundNo}`);
-            return { shouldContinue: false };
-          }
-
-          this.logger.error(`退款状态异常，无法处理: ${refund.id}当前状态${currentRefund.status}`);
-          return { shouldContinue: false };
-        }
-
-        return { shouldContinue: true };
-      });
-
-      if (!result.shouldContinue) {
-        return { code: 'SUCCESS', message: '' };
-      }
-
-      // 5. 处理退款成功的副作用（库存归还、积分处理等）
-      if (refund.aftersaleId) {
-        await this.prisma.$transaction(async (tx) => {
-          // 显式类型转换以解决 TypeScript 类型问题
-          const aftersaleId = refund.aftersaleId as bigint;
-          
-          const aftersale = await tx.aftersaleOrder.findFirst({
-            where: { id: aftersaleId },
-            include: { orderItem: true, order: true },
-          });
-
-          if (aftersale) {
-            await tx.aftersaleOrder.update({
-              where: { id: aftersale.id },
-              data: {
-                status: 'refunded',
-                refundedAt: new Date(),
-                aftersaleLogs: {
-                  create: {
-                    operatorType: 'system',
-                    action: 'refund',
-                    content: `微信退款成功，金额: ${successAmount}分`,
-                  },
-                },
-              },
-            });
-
-            // 显式类型转换
-            const aftersaleWithRelations = aftersale as any;
-
-            if (aftersaleWithRelations.type === 2 && aftersaleWithRelations.orderItem) {
-              const sku = await tx.productSku.findFirst({ where: { id: aftersaleWithRelations.orderItem.skuId } });
-              if (sku) {
-                await tx.productSku.update({
-                  where: { id: aftersaleWithRelations.orderItem.skuId },
-                  data: { stock: { increment: aftersaleWithRelations.orderItem.quantity }, sales: { decrement: aftersaleWithRelations.orderItem.quantity } },
-                });
-                await tx.productStockLog.create({
-                  data: {
-                    productId: aftersaleWithRelations.orderItem.productId,
-                    skuId: aftersaleWithRelations.orderItem.skuId,
-                    type: 4,
-                    quantity: aftersaleWithRelations.orderItem.quantity,
-                    beforeStock: sku.stock,
-                    afterStock: sku.stock + aftersaleWithRelations.orderItem.quantity,
-                    reason: '售后退款归还库存',
-                  },
-                });
-              }
-            }
-
-            if (aftersaleWithRelations.refundAmount && aftersaleWithRelations.refundAmount > 0 && aftersaleWithRelations.order?.payAmount) {
-              const deductedPoints = Math.floor(aftersaleWithRelations.refundAmount / 100);
-              if (deductedPoints > 0) {
-                const user = await tx.user.findFirst({ where: { id: aftersaleWithRelations.userId } });
-                if (user && user.availablePoints >= deductedPoints) {
-                  await tx.user.update({
-                    where: { id: aftersaleWithRelations.userId },
-                    data: {
-                      availablePoints: { decrement: deductedPoints },
-                    },
-                  });
-                  await tx.pointsRecord.create({
-                    data: {
-                      userId: aftersaleWithRelations.userId,
-                      type: 2,
-                      points: deductedPoints,
-                      balance: user.availablePoints - deductedPoints,
-                      source: 'aftersale_refund',
-                      sourceId: aftersaleWithRelations.orderId,
-                      description: `售后退款扣回${deductedPoints}积分`,
-                    },
-                  });
-                }
-              }
-            }
-
-            if (aftersaleWithRelations.order?.pointsDeducted > 0 && aftersaleWithRelations.refundAmount && aftersaleWithRelations.order?.payAmount) {
-              const restorePoints = Math.floor(aftersaleWithRelations.order.pointsDeducted * aftersaleWithRelations.refundAmount / aftersaleWithRelations.order.payAmount);
-              if (restorePoints > 0) {
-                const user = await tx.user.findFirst({ where: { id: aftersaleWithRelations.userId } });
-                if (user) {
-                  await tx.user.update({
-                    where: { id: aftersaleWithRelations.userId },
-                    data: {
-                      availablePoints: { increment: restorePoints },
-                    },
-                  });
-                  await tx.pointsRecord.create({
-                    data: {
-                      userId: aftersaleWithRelations.userId,
-                      type: 1,
-                      points: restorePoints,
-                      balance: user.availablePoints + restorePoints,
-                      source: 'aftersale_refund_restore',
-                      sourceId: aftersaleWithRelations.orderId,
-                      description: `售后退款归还抵扣积分${restorePoints}`,
-                    },
-                  });
-                }
-              }
-            }
-
-            const otherAftersales = await tx.aftersaleOrder.findFirst({
-              where: {
-                orderId: aftersaleWithRelations.orderId,
-                id: { not: aftersaleWithRelations.id },
-                status: { notIn: ['closed', 'rejected', 'refunded'] },
-              },
-            });
-            if (!otherAftersales && aftersaleWithRelations.order) {
-              const restoreStatus = aftersaleWithRelations.order.completedAt ? 'completed' : 'delivered';
-              await tx.order.update({
-                where: { id: aftersaleWithRelations.orderId },
-                data: { status: restoreStatus },
-              });
-            }
-          }
-        });
+      // 4. 在单个事务中完成：抢占处理权 -> 副作用 -> 标记成功
+      try {
+        await this.processWechatRefundSuccess(refund, refundId, decryptedData);
+      } catch (error) {
+        this.logger.error(`退款回调事务失败，退款记录保留 processing 状态，微信将重试: ${outRefundNo}`, (error as Error).message);
+        return { code: 'FAIL', message: '退款处理失败，将重试' };
       }
     } else if (refundStatus === WECHAT_REFUND_STATUS.CLOSED || refundStatus === WECHAT_REFUND_STATUS.ABNORMAL) {
       const localRefundStatus: RefundStatus = refundStatus === WECHAT_REFUND_STATUS.CLOSED ? REFUND_STATUS.CLOSED : REFUND_STATUS.ABNORMAL;
@@ -929,6 +1008,159 @@ export class PaymentService {
 
     this.logger.log(`微信退款回调处理成功: ${outRefundNo}, 状态: ${refundStatus}`);
     return { code: 'SUCCESS', message: '' };
+  }
+
+  async syncRefund(outRefundNo: string) {
+    const refund = await this.prisma.orderRefund.findFirst({
+      where: { outRefundNo },
+    });
+
+    if (!refund) {
+      const orphanLog = await this.prisma.refundCallbackLog.findFirst({
+        where: { outRefundNo, status: 'orphan' },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (orphanLog) {
+        this.logger.log(`syncRefund: 发现孤儿回调记录，outRefundNo=${outRefundNo}，需要人工处理`);
+        return {
+          synced: false,
+          reason: 'orphan_callback_found',
+          message: '发现孤儿回调记录，退款记录缺失，需要人工创建退款记录后重试',
+          orphanLog: {
+            id: orphanLog.id.toString(),
+            decryptedData: orphanLog.decryptedData,
+            createdAt: orphanLog.createdAt,
+          },
+        };
+      }
+
+      throw new NotFoundException(`退款记录不存在: ${outRefundNo}`);
+    }
+
+    if (refund.status === REFUND_STATUS.SUCCESS) {
+      return { synced: true, reason: 'already_success', message: '退款已成功' };
+    }
+
+    if (refund.status === REFUND_STATUS.PROCESSING) {
+      return { synced: false, reason: 'processing', message: '退款正在处理中，等待回调' };
+    }
+
+    let wechatResult: any;
+    try {
+      wechatResult = await this.queryRefund(outRefundNo);
+    } catch (error) {
+      this.logger.error(`syncRefund: 查询微信退款状态失败: ${outRefundNo}`, (error as Error).message);
+      return {
+        synced: false,
+        reason: 'wechat_query_failed',
+        message: `查询微信退款状态失败: ${(error as Error).message}`,
+      };
+    }
+
+    const wechatStatus = wechatResult.status;
+    this.logger.log(`syncRefund: 微信退款状态=${wechatStatus}, outRefundNo=${outRefundNo}, 本地状态=${refund.status}`);
+
+    if (wechatStatus === 'SUCCESS') {
+      if (refund.status === REFUND_STATUS.INITIATING || refund.status === REFUND_STATUS.PENDING) {
+        await this.prisma.orderRefund.update({
+          where: { id: refund.id },
+          data: {
+            status: REFUND_STATUS.PENDING,
+            refundId: wechatResult.refund_id || refund.refundId,
+            rawResponse: wechatResult,
+          },
+        });
+
+        if (refund.aftersaleId) {
+          const aftersaleId = refund.aftersaleId as bigint;
+          await this.prisma.aftersaleOrder.update({
+            where: { id: aftersaleId },
+            data: {
+              status: 'pending_refund',
+              aftersaleLogs: {
+                create: {
+                  operatorType: 'admin',
+                  action: 'sync_refund',
+                  content: `管理员同步退款状态，微信已受理，金额: ${refund.refundAmount}分`,
+                },
+              },
+            },
+          });
+        }
+
+        return { synced: true, reason: 'fixed_initiating_to_pending', message: '已将 initiating 修复为 pending，等待回调处理副作用' };
+      }
+
+      return { synced: true, reason: 'already_pending', message: '退款已在 pending 状态，等待回调处理' };
+    }
+
+    if (wechatStatus === 'CLOSED' || wechatStatus === 'ABNORMAL') {
+      const localStatus = wechatStatus === 'CLOSED' ? REFUND_STATUS.CLOSED : REFUND_STATUS.ABNORMAL;
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.orderRefund.update({
+          where: { id: refund.id },
+          data: {
+            status: localStatus,
+            rawResponse: wechatResult,
+          },
+        });
+
+        if (refund.aftersaleId) {
+          const aftersaleId = refund.aftersaleId as bigint;
+          await tx.aftersaleOrder.update({
+            where: { id: aftersaleId },
+            data: {
+              status: 'pending_refund',
+              aftersaleLogs: {
+                create: {
+                  operatorType: 'admin',
+                  action: 'sync_refund_failed',
+                  content: `管理员同步退款状态，微信退款${wechatStatus}，请检查后重试`,
+                },
+              },
+            },
+          });
+        }
+      });
+
+      return { synced: true, reason: `wechat_${wechatStatus.toLowerCase()}`, message: `微信退款状态: ${wechatStatus}，本地已同步` };
+    }
+
+    if (wechatStatus === 'PROCESSING') {
+      if (refund.status === REFUND_STATUS.INITIATING) {
+        await this.prisma.orderRefund.update({
+          where: { id: refund.id },
+          data: {
+            status: REFUND_STATUS.PENDING,
+            refundId: wechatResult.refund_id || refund.refundId,
+            rawResponse: wechatResult,
+          },
+        });
+
+        if (refund.aftersaleId) {
+          const aftersaleId = refund.aftersaleId as bigint;
+          await this.prisma.aftersaleOrder.update({
+            where: { id: aftersaleId },
+            data: {
+              status: 'pending_refund',
+              aftersaleLogs: {
+                create: {
+                  operatorType: 'admin',
+                  action: 'sync_refund',
+                  content: `管理员同步退款状态，微信处理中，金额: ${refund.refundAmount}分`,
+                },
+              },
+            },
+          });
+        }
+      }
+
+      return { synced: true, reason: 'wechat_processing', message: '微信退款处理中，等待回调' };
+    }
+
+    return { synced: false, reason: 'unknown_wechat_status', message: `微信退款未知状态: ${wechatStatus}` };
   }
 
   async queryRefund(outRefundNo: string) {

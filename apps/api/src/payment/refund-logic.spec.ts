@@ -231,14 +231,18 @@ describe('RefundLogic', () => {
   });
 
   describe('退款状态流转', () => {
-    it('OrderRefund 应该有 pending -> success/failed 的状态流转', () => {
+    it('OrderRefund 应该有 initiating -> pending -> success/failed 的状态流转', () => {
       const validTransitions = {
-        pending: ['success', 'failed', 'closed'],
+        initiating: ['pending', 'failed'],
+        pending: ['processing', 'success', 'failed', 'closed'],
+        processing: ['success'],
         success: [],
         failed: [],
         closed: [],
       };
 
+      expect(validTransitions.initiating).toContain('pending');
+      expect(validTransitions.initiating).toContain('failed');
       expect(validTransitions.pending).toContain('success');
       expect(validTransitions.pending).toContain('failed');
     });

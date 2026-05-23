@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, Param, Headers, Req, Query } from '@nestjs/common';
 import { PaymentService } from './payment.service';
+import { PaymentReconcileService } from './payment-reconcile.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
@@ -86,5 +87,32 @@ export class RefundController {
   @Get('detail/:id')
   async getDetail(@Param('id') id: string) {
     return this.paymentService.getRefundDetail(id);
+  }
+
+  @Post('sync/:outRefundNo')
+  async syncRefund(@Param('outRefundNo') outRefundNo: string) {
+    return this.paymentService.syncRefund(outRefundNo);
+  }
+}
+
+@Controller('admin/payment')
+@RequirePermission('system:config', 'order:aftersale:refund')
+export class PaymentReconcileController {
+  constructor(private readonly reconcileService: PaymentReconcileService) {}
+
+  @Post('reconcile')
+  async reconcilePayments() {
+    return this.reconcileService.reconcilePendingPayments();
+  }
+}
+
+@Controller('admin/refund')
+@RequirePermission('system:config', 'order:aftersale:refund')
+export class RefundReconcileController {
+  constructor(private readonly reconcileService: PaymentReconcileService) {}
+
+  @Post('reconcile')
+  async reconcileRefunds() {
+    return this.reconcileService.reconcilePendingRefunds();
   }
 }

@@ -18,6 +18,7 @@ import {
   ORDER_AUTO_COMPLETE_DAYS,
 } from '@baby-mall/shared';
 import { assertOrderTransition } from './order-state-machine';
+import { COUPON_STATUS } from '../common/constants/payment';
 
 @Injectable()
 export class OrderService {
@@ -89,7 +90,7 @@ export class OrderService {
         where: {
           id: BigInt(data.couponId),
           userId: BigInt(userId),
-          status: 1,
+          status: COUPON_STATUS.FREE,
         },
         include: { coupon: true },
       });
@@ -190,7 +191,7 @@ export class OrderService {
         where: {
           id: BigInt(data.couponId),
           userId: BigInt(userId),
-          status: 1,
+          status: COUPON_STATUS.FREE,
         },
         include: { coupon: true },
       });
@@ -281,7 +282,7 @@ export class OrderService {
       if (couponId) {
         await tx.userCoupon.update({
           where: { id: couponId },
-          data: { status: 2 },
+          data: { status: COUPON_STATUS.LOCKED },
         });
       }
 
@@ -400,10 +401,13 @@ export class OrderService {
       }
 
       if (order.couponId) {
-        await tx.userCoupon.update({
-          where: { id: order.couponId },
-          data: { status: 1 },
-        });
+        const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
+        if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
+          await tx.userCoupon.update({
+            where: { id: order.couponId },
+            data: { status: COUPON_STATUS.FREE },
+          });
+        }
       }
 
       return tx.order.update({
@@ -627,10 +631,13 @@ export class OrderService {
       }
 
       if (order.couponId) {
-        await tx.userCoupon.update({
-          where: { id: order.couponId },
-          data: { status: 1 },
-        });
+        const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
+        if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
+          await tx.userCoupon.update({
+            where: { id: order.couponId },
+            data: { status: COUPON_STATUS.FREE },
+          });
+        }
       }
 
       return tx.order.update({
@@ -807,10 +814,13 @@ export class OrderService {
           }
 
           if (order.couponId) {
-            await tx.userCoupon.update({
-              where: { id: order.couponId },
-              data: { status: 1 },
-            });
+            const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
+            if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
+              await tx.userCoupon.update({
+                where: { id: order.couponId },
+                data: { status: COUPON_STATUS.FREE },
+              });
+            }
           }
 
           await tx.order.update({

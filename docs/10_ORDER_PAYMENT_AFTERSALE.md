@@ -1173,9 +1173,10 @@ wx.requestPayment 调用后网络异常
 
 | 状态值 | 说明 |
 |--------|------|
-| pending | 已发起，等待微信处理 |
-| processing | 微信处理中 |
-| success | 退款成功 |
+| initiating | 本地已创建退款意图，尚未完成微信退款请求 |
+| pending | 微信已受理，等待回调 |
+| processing | 本地正在处理回调副作用 |
+| success | 退款成功（所有本地副作用已完成） |
 | failed | 退款失败 |
 | closed | 退款关闭 |
 | abnormal | 退款异常 |
@@ -1873,3 +1874,86 @@ GET /v3/refund/domestic/refunds/{out_refund_no}
 | 积分有效期 | 12个月 | 自发放之日起 |
 | 对账执行时间 | 每日凌晨2:00 | 自动执行 |
 | 退款对账执行时间 | 每日凌晨2:30 | 自动执行 |
+
+---
+
+## 16. 资源锁定与释放规则
+
+### 16.1 优惠券状态流转
+
+| 状态值 | 状态名 | 说明 |
+|--------|--------|------|
+| 1 | 未使用(FREE) | 优惠券可用，可被选择使用 |
+| 2 | 锁定中(LOCKED) | 下单时锁定，不可被其他订单使用 |
+| 3 | 已使用(USED) | 支付成功后标记，不可恢复 |
+| 4 | 已过期(EXPIRED) | 超过有效期，不可使用 |
+
+**状态流转规则：**
+
+| 触发事件 | 状态变更 | 说明 |
+|----------|----------|------|
+| 下单 | FREE → LOCKED | 在订单创建事务中锁定 |
+| 支付成功 | LOCKED → USED | 在支付成功事务中标记已使用 |
+| 未支付取消 | LOCKED → FREE | 仅释放 LOCKED 状态的优惠券 |
+| 超时关闭 | LOCKED → FREE | 仅释放 LOCKED 状态的优惠券 |
+| 退款成功 | 不退回 | 已使用优惠券按业务规则不退回 |
+
+**关键约束：**
+- 取消/超时关闭时只释放 LOCKED 状态的优惠券，USED 状态不释放
+- 已使用优惠券退款后不退回（按业务规则）
+- 下单时校验优惠券必须为 FREE 状态
+
+### 16.2 库存扣减与释放
+
+| 触发事件 | 操作 | 说明 |
+|----------|------|------|
+| 下单 | 条件扣减 `stock >= quantity` | 使用 updateMany 原子操作，失败回滚整个订单 |
+| 未支付取消 | 归还库存 `stock += quantity` | 在取消事务中执行 |
+| 超时关闭 | 归还库存 `stock += quantity` | 在关闭事务中执行 |
+| 支付成功 | 不操作 | 库存已在下单时扣减，支付后无需再操作 |
+| 售后退款 | 归还库存 `stock += quantity` | 仅退货退款(type=2)时归还 |
+
+**并发安全：**
+- 下单扣减使用 `updateMany where stock >= quantity`，保证不会超卖
+- 扣减失败（count=0）时回滚整个订单创建事务
+- 写入 productStockLog 记录每次库存变动
+
+### 16.3 积分抵扣与返还
+
+| 触发事件 | 操作 | 说明 |
+|----------|------|------|
+| 下单抵扣 | 扣减 availablePoints | 在订单创建事务中扣减，写入 pointsRecord |
+| 未支付取消 | 返还抵扣积分 | 在取消事务中 increment |
+| 超时关闭 | 返还抵扣积分 | 在关闭事务中 increment |
+| 支付成功 | 不重复处理 | 抵扣积分已在下单时扣减 |
+| 确认收货 | 发放奖励积分 | 按实付金额计算，1元=1积分 |
+| 售后退款 | 扣回奖励积分 + 按比例返还抵扣积分 | 在退款成功事务中处理 |
+
+**积分返还规则：**
+- 抵扣积分返还：取消/超时时全额返还；退款时按退款金额占实付金额比例返还
+- 奖励积分扣回：退款金额占实付金额比例 × 确认收货时发放的积分数
+- 用户积分不足扣回时，扣回全部可用积分
+
+### 16.4 退款发起流程（initiating 模式）
+
+1. 管理员点击退款后，先创建 `status=initiating` 的 OrderRefund 记录
+2. 调用微信退款 API
+3. 微信失败 → 更新 OrderRefund 为 `failed`，不修改 AftersaleOrder
+4. 微信成功 → 事务内更新 OrderRefund 为 `pending`，AftersaleOrder 为 `pending_refund`
+5. 本地事务失败 → 保留 `initiating`，可通过 admin sync 接口修复
+
+### 16.5 退款回调一致性
+
+- 退款 SUCCESS 回调在单个事务中完成：`pending/initiating → processing → 副作用 → success`
+- `orderRefund.status=success` 代表所有本地副作用（库存归还、积分处理、售后单更新）已完成
+- 不存在"退款记录 success 但售后单/库存/积分未处理"的窗口
+- 重复回调不会重复副作用
+- 孤儿回调（找不到 OrderRefund）返回 FAIL 并写入 RefundCallbackLog
+
+### 16.6 对账与补偿
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| POST /api/admin/payment/reconcile | 支付对账 | 查询微信状态修复本地 |
+| POST /api/admin/refund/reconcile | 退款对账 | 查询微信状态修复本地 |
+| POST /api/admin/refund/sync/:outRefundNo | 单笔退款同步 | 根据微信状态修复本地 |

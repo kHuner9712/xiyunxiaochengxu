@@ -1,5 +1,6 @@
 // 退款状态枚举 (字符串常量)
 export const REFUND_STATUS = {
+  INITIATING: 'initiating',
   PENDING: 'pending',
   PROCESSING: 'processing',
   SUCCESS: 'success',
@@ -27,3 +28,12 @@ export const WECHAT_REFUND_STATUS = {
 } as const;
 
 export type WechatRefundStatus = typeof WECHAT_REFUND_STATUS[keyof typeof WECHAT_REFUND_STATUS];
+
+export const COUPON_STATUS = {
+  FREE: 1,
+  LOCKED: 2,
+  USED: 3,
+  EXPIRED: 4,
+} as const;
+
+export type CouponStatus = typeof COUPON_STATUS[keyof typeof COUPON_STATUS];
