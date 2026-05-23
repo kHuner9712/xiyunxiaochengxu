@@ -19,12 +19,16 @@ import {
 } from '@baby-mall/shared';
 import { assertOrderTransition } from './order-state-machine';
 import { COUPON_STATUS } from '../common/constants/payment';
+import { BusinessEventService } from '../common/business-event.service';
 
 @Injectable()
 export class OrderService {
   private readonly logger = new Logger(OrderService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private businessEvent: BusinessEventService,
+  ) {}
 
   async getOrderCountByUser(userId: string) {
     const where = { userId: BigInt(userId) };
@@ -53,7 +57,10 @@ export class OrderService {
       });
       if (!sku) throw new NotFoundException(`SKU ${item.skuId} 不存在或已下架`);
       if (sku.product.status !== 1) throw new BadRequestException(`商品 ${sku.product.name} 已下架`);
-      if (sku.stock < item.quantity) throw new BadRequestException(`商品 ${sku.product.name} 库存不足`);
+      if (sku.stock < item.quantity) {
+        this.businessEvent.emitWarn('stock_insufficient', 'stock', `库存不足: 商品${sku.product.name} SKU ${item.skuId}`, item.skuId.toString(), { skuId: item.skuId.toString(), stock: sku.stock, requested: item.quantity });
+        throw new BadRequestException(`商品 ${sku.product.name} 库存不足`);
+      }
 
       const subtotal = sku.price * item.quantity;
       totalAmount += subtotal;
@@ -239,6 +246,7 @@ export class OrderService {
           data: { stock: { decrement: check.quantity }, sales: { increment: check.quantity } },
         });
         if (updated.count === 0) {
+          this.businessEvent.emitWarn('stock_insufficient', 'stock', `并发扣库存失败: SKU ${check.skuId}`, check.skuId.toString(), { skuId: check.skuId.toString(), quantity: check.quantity, beforeStock: check.beforeStock });
           throw new BadRequestException('库存不足，下单失败');
         }
 

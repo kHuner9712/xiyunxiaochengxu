@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { assertOrderTransition } from '../order/order-state-machine';
 import { REFUND_STATUS, PAYMENT_STATUS, WECHAT_REFUND_STATUS, RefundStatus, COUPON_STATUS } from '../common/constants';
+import { BusinessEventService } from '../common/business-event.service';
 import { Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -18,6 +19,7 @@ export class PaymentService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private businessEvent: BusinessEventService,
   ) {
     const keyPath = this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH', '');
     if (keyPath) {
@@ -230,6 +232,7 @@ export class PaymentService {
     });
     if (!order) {
       this.logger.warn(`微信回调订单不存在: ${outTradeNo}`);
+      this.businessEvent.emitError('payment_order_not_found', 'payment', `支付回调订单不存在: ${outTradeNo}`, outTradeNo, { transactionId, totalAmount });
       return { code: 'FAIL', message: '订单不存在' };
     }
 
@@ -240,6 +243,7 @@ export class PaymentService {
 
     if (totalAmount !== order.payAmount) {
       this.logger.warn(`微信回调金额不匹配: ${totalAmount} vs ${order.payAmount}，订单号: ${outTradeNo}`);
+      this.businessEvent.emitCritical('payment_amount_mismatch', 'payment', `支付回调金额不匹配: 期望${order.payAmount}分, 回调${totalAmount}分`, outTradeNo, { expected: order.payAmount, actual: totalAmount, transactionId });
       return { code: 'FAIL', message: '金额不匹配' };
     }
 
@@ -283,27 +287,87 @@ export class PaymentService {
 
   async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {
     await this.prisma.$transaction(async (tx) => {
-      // 1. 幂等检查和更新订单支付
       const existingPayment = await tx.orderPayment.findUnique({ where: { id: paymentId } });
       if (!existingPayment) {
         this.logger.error(`支付成功处理时支付记录不存在: ${paymentId}`);
         throw new InternalServerErrorException('支付记录不存在');
       }
 
-      // 检查支付记录是否已成功
       if (existingPayment.status === PAYMENT_STATUS.SUCCESS) {
-        if (existingPayment.transactionId === transactionId) {
-          // transactionId 一致，幂等返回
-          this.logger.log(`支付成功幂等处理: 支付${paymentId}已成功处理`);
-          return;
-        } else {
-          // transactionId 不一致，严重异常
+        if (existingPayment.transactionId !== transactionId) {
           this.logger.error(`支付记录 transactionId 不一致: 支付${paymentId}现有${existingPayment.transactionId}, 回调${transactionId}`);
           throw new BadRequestException('支付交易号不一致');
         }
+
+        const currentOrder = await tx.order.findUnique({ where: { id: orderId } });
+        if (!currentOrder) {
+          this.logger.error(`支付成功处理时订单不存在: ${orderId}`);
+          throw new InternalServerErrorException('订单不存在');
+        }
+
+        const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+        if (processedStatuses.includes(currentOrder.status)) {
+          if (order.couponId) {
+            const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
+            if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
+              await tx.userCoupon.update({
+                where: { id: order.couponId },
+                data: { status: COUPON_STATUS.USED },
+              });
+              this.logger.log(`支付成功补偿: 优惠券${order.couponId}从 LOCKED 修复为 USED`);
+            }
+          }
+          this.logger.log(`支付成功幂等处理: 支付${paymentId}已成功处理，订单${orderId}状态${currentOrder.status}`);
+          return;
+        }
+
+        if (currentOrder.status === OrderStatus.pending_payment) {
+          this.logger.warn(`支付半成功状态补偿: 支付${paymentId}已SUCCESS，但订单${orderId}仍pending_payment，执行补偿修复`);
+          this.businessEvent.emitInfo('payment_half_success_fix', 'reconcile', `支付半成功补偿: 支付已SUCCESS但订单仍pending_payment，已修复`, orderId.toString(), { paymentId: paymentId.toString(), transactionId });
+
+          const updateResult = await tx.order.updateMany({
+            where: { id: orderId, status: OrderStatus.pending_payment },
+            data: { status: OrderStatus.pending_delivery, paidAt: new Date() },
+          });
+
+          if (updateResult.count === 0) {
+            this.logger.error(`支付半成功补偿失败: 订单${orderId}状态已变更，无法修复`);
+            throw new BadRequestException('订单状态已变更，补偿失败');
+          }
+
+          await tx.orderLog.create({
+            data: {
+              orderId,
+              operatorType: 'system',
+              action: 'payment_reconcile_fix',
+              content: `支付半成功补偿: 支付已SUCCESS但订单仍pending_payment，已修复为pending_delivery，交易号：${transactionId}`,
+            },
+          });
+
+          if (order.couponId) {
+            const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
+            if (coupon) {
+              if (coupon.status === COUPON_STATUS.LOCKED) {
+                await tx.userCoupon.update({
+                  where: { id: order.couponId },
+                  data: { status: COUPON_STATUS.USED },
+                });
+              } else if (coupon.status === COUPON_STATUS.USED) {
+                this.logger.log(`支付半成功补偿: 优惠券${order.couponId}已USED，幂等跳过`);
+              } else {
+                this.logger.warn(`支付半成功补偿: 优惠券${order.couponId}状态异常(${coupon.status})，不盲目修改`);
+                this.businessEvent.emitWarn('coupon_status_abnormal', 'coupon', `优惠券状态异常(${coupon.status})，不盲目修改`, order.couponId.toString(), { couponId: order.couponId.toString(), status: coupon.status, orderId: orderId.toString() });
+              }
+            }
+          }
+
+          return;
+        }
+
+        this.logger.error(`支付成功处理时订单状态异常: ${orderId}，状态: ${currentOrder.status}`);
+        throw new BadRequestException('订单状态异常');
       }
 
-      // 2. 使用条件更新更新订单，确保并发安全
       const updateResult = await tx.order.updateMany({
         where: { 
           id: orderId, 
@@ -316,7 +380,6 @@ export class PaymentService {
       });
 
       if (updateResult.count === 0) {
-        // 订单状态不是 pending_payment，重新查询确认
         const currentOrder = await tx.order.findUnique({ where: { id: orderId } });
         if (!currentOrder) {
           this.logger.error(`支付成功处理时订单不存在: ${orderId}`);
@@ -335,7 +398,6 @@ export class PaymentService {
 
       assertOrderTransition(OrderStatus.pending_payment, OrderStatus.pending_delivery, '支付成功');
 
-      // 3. 更新支付记录
       await tx.orderPayment.update({
         where: { id: paymentId },
         data: {
@@ -346,7 +408,6 @@ export class PaymentService {
         },
       });
 
-      // 4. 创建订单日志
       await tx.orderLog.create({
         data: {
           orderId,
@@ -356,14 +417,20 @@ export class PaymentService {
         },
       });
 
-      // 5. 锁定优惠券标记为已使用
       if (order.couponId) {
         const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
-        if (coupon && coupon.status === COUPON_STATUS.LOCKED) {
-          await tx.userCoupon.update({
-            where: { id: order.couponId },
-            data: { status: COUPON_STATUS.USED },
-          });
+        if (coupon) {
+          if (coupon.status === COUPON_STATUS.LOCKED) {
+            await tx.userCoupon.update({
+              where: { id: order.couponId },
+              data: { status: COUPON_STATUS.USED },
+            });
+          } else if (coupon.status === COUPON_STATUS.USED) {
+            this.logger.log(`支付成功: 优惠券${order.couponId}已USED，幂等跳过`);
+          } else {
+            this.logger.warn(`支付成功: 优惠券${order.couponId}状态异常(${coupon.status})，不盲目修改`);
+            this.businessEvent.emitWarn('coupon_status_abnormal', 'coupon', `优惠券状态异常(${coupon.status})，不盲目修改`, order.couponId.toString(), { couponId: order.couponId.toString(), status: coupon.status, orderId: orderId.toString() });
+          }
         }
       }
     });
@@ -376,7 +443,7 @@ export class PaymentService {
       const claimResult = await tx.orderRefund.updateMany({
         where: {
           id: refund.id,
-          status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING] },
+          status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] },
         },
         data: {
           status: REFUND_STATUS.PROCESSING,
@@ -395,10 +462,6 @@ export class PaymentService {
         if (currentRefund.status === REFUND_STATUS.SUCCESS) {
           this.logger.log(`退款已被其他进程处理成功: ${refund.outRefundNo}`);
           return;
-        }
-        if (currentRefund.status === REFUND_STATUS.PROCESSING) {
-          this.logger.warn(`退款正在被其他进程处理: ${refund.outRefundNo}`);
-          throw new Error(`退款正在被其他进程处理: ${refund.outRefundNo}`);
         }
         this.logger.error(`退款状态异常，无法抢占处理权: ${refund.id}当前状态${currentRefund.status}`);
         throw new Error(`退款状态异常: ${currentRefund.status}`);
@@ -906,6 +969,7 @@ export class PaymentService {
 
     if (!refund) {
       this.logger.error(`微信退款回调退款记录不存在(孤儿回调): ${outRefundNo}`);
+      this.businessEvent.emitCritical('refund_orphan_callback', 'refund', `退款孤儿回调: 本地无退款记录${outRefundNo}`, outRefundNo, { outRefundNo, refundId, refundStatus });
 
       try {
         await this.prisma.refundCallbackLog.create({
@@ -955,11 +1019,13 @@ export class PaymentService {
       // 3. 金额校验
       if (successAmount !== refund.refundAmount) {
         this.logger.error(`微信退款回调金额不匹配: 退款${refund.id}期望${refund.refundAmount}分, 回调${successAmount}分`);
+        this.businessEvent.emitCritical('refund_amount_mismatch', 'refund', `退款回调金额不匹配: 期望${refund.refundAmount}分, 回调${successAmount}分`, outRefundNo, { expected: refund.refundAmount, actual: successAmount, refundId });
         return { code: 'FAIL', message: '退款金额不匹配' };
       }
 
       if (totalAmount !== undefined && totalAmount !== refund.totalAmount) {
         this.logger.error(`微信退款回调订单总金额不匹配: 退款${refund.id}期望${refund.totalAmount}分, 回调${totalAmount}分`);
+        this.businessEvent.emitCritical('refund_total_amount_mismatch', 'refund', `退款回调订单总金额不匹配: 期望${refund.totalAmount}分, 回调${totalAmount}分`, outRefundNo, { expected: refund.totalAmount, actual: totalAmount, refundId });
         return { code: 'FAIL', message: '订单总金额不匹配' };
       }
 
@@ -968,6 +1034,7 @@ export class PaymentService {
         await this.processWechatRefundSuccess(refund, refundId, decryptedData);
       } catch (error) {
         this.logger.error(`退款回调事务失败，退款记录保留 processing 状态，微信将重试: ${outRefundNo}`, (error as Error).message);
+        this.businessEvent.emitError('refund_processing_failed', 'refund', `退款处理失败: ${(error as Error).message}`, outRefundNo, { outRefundNo, error: (error as Error).message });
         return { code: 'FAIL', message: '退款处理失败，将重试' };
       }
     } else if (refundStatus === WECHAT_REFUND_STATUS.CLOSED || refundStatus === WECHAT_REFUND_STATUS.ABNORMAL) {
@@ -1042,10 +1109,6 @@ export class PaymentService {
       return { synced: true, reason: 'already_success', message: '退款已成功' };
     }
 
-    if (refund.status === REFUND_STATUS.PROCESSING) {
-      return { synced: false, reason: 'processing', message: '退款正在处理中，等待回调' };
-    }
-
     let wechatResult: any;
     try {
       wechatResult = await this.queryRefund(outRefundNo);
@@ -1062,37 +1125,54 @@ export class PaymentService {
     this.logger.log(`syncRefund: 微信退款状态=${wechatStatus}, outRefundNo=${outRefundNo}, 本地状态=${refund.status}`);
 
     if (wechatStatus === 'SUCCESS') {
-      if (refund.status === REFUND_STATUS.INITIATING || refund.status === REFUND_STATUS.PENDING) {
-        await this.prisma.orderRefund.update({
-          where: { id: refund.id },
-          data: {
-            status: REFUND_STATUS.PENDING,
-            refundId: wechatResult.refund_id || refund.refundId,
-            rawResponse: wechatResult,
-          },
-        });
+      const wechatRefundAmount = wechatResult.amount?.refund;
+      const wechatTotalAmount = wechatResult.amount?.total;
 
-        if (refund.aftersaleId) {
-          const aftersaleId = refund.aftersaleId as bigint;
-          await this.prisma.aftersaleOrder.update({
-            where: { id: aftersaleId },
-            data: {
-              status: 'pending_refund',
-              aftersaleLogs: {
-                create: {
-                  operatorType: 'admin',
-                  action: 'sync_refund',
-                  content: `管理员同步退款状态，微信已受理，金额: ${refund.refundAmount}分`,
-                },
-              },
-            },
-          });
-        }
-
-        return { synced: true, reason: 'fixed_initiating_to_pending', message: '已将 initiating 修复为 pending，等待回调处理副作用' };
+      if (wechatRefundAmount !== refund.refundAmount) {
+        this.logger.error(`syncRefund: 退款金额不匹配: ${outRefundNo} 期望${refund.refundAmount}分, 微信${wechatRefundAmount}分`);
+        this.businessEvent.emitCritical('refund_sync_amount_mismatch', 'refund', `退款同步金额不匹配: 期望${refund.refundAmount}分, 微信${wechatRefundAmount}分`, outRefundNo, { expected: refund.refundAmount, actual: wechatRefundAmount });
+        return {
+          synced: false,
+          reason: 'amount_mismatch',
+          message: `退款金额不匹配: 本地${refund.refundAmount}分, 微信${wechatRefundAmount}分`,
+        };
       }
 
-      return { synced: true, reason: 'already_pending', message: '退款已在 pending 状态，等待回调处理' };
+      if (wechatTotalAmount !== undefined && wechatTotalAmount !== refund.totalAmount) {
+        this.logger.error(`syncRefund: 订单总金额不匹配: ${outRefundNo} 期望${refund.totalAmount}分, 微信${wechatTotalAmount}分`);
+        return {
+          synced: false,
+          reason: 'total_amount_mismatch',
+          message: `订单总金额不匹配: 本地${refund.totalAmount}分, 微信${wechatTotalAmount}分`,
+        };
+      }
+
+      if (([REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] as string[]).includes(refund.status)) {
+        try {
+          await this.processWechatRefundSuccess(refund, wechatResult.refund_id || refund.refundId, wechatResult);
+          this.businessEvent.emitInfo('refund_sync_success', 'reconcile', `退款同步补偿成功: ${outRefundNo}`, outRefundNo, { outRefundNo, localStatus: refund.status });
+        } catch (error) {
+          this.logger.error(`syncRefund: 调用 processWechatRefundSuccess 失败: ${outRefundNo}`, (error as Error).message);
+          return {
+            synced: false,
+            reason: 'process_failed',
+            message: `本地副作用处理失败: ${(error as Error).message}`,
+          };
+        }
+
+        try {
+          await this.prisma.refundCallbackLog.updateMany({
+            where: { outRefundNo, status: 'orphan' },
+            data: { status: 'processed' },
+          });
+        } catch (logErr) {
+          this.logger.error(`syncRefund: 标记孤儿回调日志失败: ${outRefundNo}`, (logErr as Error).message);
+        }
+
+        return { synced: true, reason: 'wechat_success_processed', message: '微信退款已成功，本地副作用已补偿完成' };
+      }
+
+      return { synced: false, reason: 'unexpected_local_status', message: `本地退款状态异常(${refund.status})，无法自动补偿` };
     }
 
     if (wechatStatus === 'CLOSED' || wechatStatus === 'ABNORMAL') {

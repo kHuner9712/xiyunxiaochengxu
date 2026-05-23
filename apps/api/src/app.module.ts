@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { RedisModule } from './common/redis/redis.module';
+import { BusinessEventModule } from './common/business-event.module';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { AddressModule } from './address/address.module';
@@ -40,6 +41,7 @@ import { validateEnv } from './config/env.validation';
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
     RedisModule,
+    BusinessEventModule,
     AuthModule,
     UserModule,
     AddressModule,

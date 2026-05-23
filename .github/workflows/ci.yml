@@ -34,8 +34,11 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @baby-mall/shared build
 
-      - name: Run API tests
-        run: pnpm --filter @baby-mall/api test
+      - name: Prisma validate
+        run: pnpm --filter @baby-mall/api prisma:validate
+
+      - name: Run API tests (unit + e2e)
+        run: pnpm --filter @baby-mall/api test:ci
 
       - name: Build API
         run: pnpm build:api

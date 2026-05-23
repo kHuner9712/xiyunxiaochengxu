@@ -1079,6 +1079,11 @@ LOG_DIR=/app/logs
 LOG_LEVEL=info
 
 # ================================
+# 告警配置
+# ================================
+ALERT_WEBHOOK_URL=
+
+# ================================
 # CORS 配置
 # ================================
 CORS_ENABLED=true
@@ -1127,6 +1132,7 @@ THROTTLE_LIMIT=100
 | `ORDER_AUTO_CLOSE_MINUTES` | 订单自动关闭时间（分钟） | `30` |
 | `ORDER_AUTO_COMPLETE_DAYS` | 订单自动完成时间（天） | `7` |
 | `ORDER_AUTO_COMMENT_DAYS` | 订单自动评价时间（天） | `7` |
+| `ALERT_WEBHOOK_URL` | 关键异常告警 Webhook 地址（可选） | `https://hooks.example.com/alert` |
 
 > **安全提醒**：`.env` 文件包含敏感信息，务必设置正确的文件权限：
 > ```bash

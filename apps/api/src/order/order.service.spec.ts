@@ -4,6 +4,16 @@ import { OrderStatus } from '@prisma/client';
 import { OrderService } from './order.service';
 import { COUPON_STATUS } from '../common/constants/payment';
 
+function createMockBusinessEventService() {
+  return {
+    emit: jest.fn(),
+    emitInfo: jest.fn(),
+    emitWarn: jest.fn(),
+    emitError: jest.fn(),
+    emitCritical: jest.fn(),
+  };
+}
+
 function createMockPrisma() {
   const mockTx = {
     productSku: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
@@ -32,11 +42,12 @@ function createMockPrisma() {
 
 function createService(mockPrisma?: any) {
   const prisma = mockPrisma || createMockPrisma();
-  const service = new OrderService(prisma as any);
+  const businessEvent = createMockBusinessEventService();
+  const service = new OrderService(prisma as any, businessEvent as any);
   jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
-  return { service, mockPrisma: prisma };
+  return { service, mockPrisma: prisma, mockBusinessEvent: businessEvent };
 }
 
 function setupTransaction(mockPrisma: any) {

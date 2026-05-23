@@ -733,7 +733,7 @@ model OrderRefund {
   refundId    String?  @db.VarChar(64) @map("refund_id")
   refundAmount Int     @map("refund_amount")
   totalAmount Int     @map("total_amount")
-  status      String  @db.VarChar(20) @default("pending") @map("status")
+  status      String  @db.VarChar(20) @default("initiating") @map("status")
   reason      String? @db.VarChar(200) @map("reason")
   rawRequest  Json?   @map("raw_request")
   rawResponse Json?   @map("raw_response")
@@ -957,4 +957,21 @@ model SearchKeyword {
   @@index([searchCount], name: "idx_search_count")
   @@index([status], name: "idx_status")
   @@map("search_keywords")
+}
+
+model BusinessEvent {
+  id        BigInt   @id @default(autoincrement()) @map("id")
+  eventType String   @db.VarChar(50) @map("event_type")
+  bizType   String   @db.VarChar(30) @map("biz_type")
+  bizId     String?  @db.VarChar(64) @map("biz_id")
+  level     String   @db.VarChar(20) @default("info") @map("level")
+  message   String   @db.Text @map("message")
+  payload   Json?    @map("payload")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([eventType], name: "idx_event_type")
+  @@index([bizType], name: "idx_biz_type")
+  @@index([level], name: "idx_level")
+  @@index([createdAt], name: "idx_created_at")
+  @@map("business_events")
 }

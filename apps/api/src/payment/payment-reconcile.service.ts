@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaymentService } from './payment.service';
 import { PAYMENT_STATUS, REFUND_STATUS, WECHAT_REFUND_STATUS } from '../common/constants';
+import { BusinessEventService } from '../common/business-event.service';
 import { OrderStatus } from '@prisma/client';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class PaymentReconcileService {
   constructor(
     private prisma: PrismaService,
     private paymentService: PaymentService,
+    private businessEvent: BusinessEventService,
   ) {}
 
   async reconcilePendingPayments() {
@@ -22,6 +24,14 @@ export class PaymentReconcileService {
       where: {
         status: PAYMENT_STATUS.CREATED,
         createdAt: { lt: fiveMinutesAgo },
+      },
+      include: { order: true },
+    });
+
+    const halfSuccessPayments = await this.prisma.orderPayment.findMany({
+      where: {
+        status: PAYMENT_STATUS.SUCCESS,
+        order: { status: OrderStatus.pending_payment },
       },
       include: { order: true },
     });
@@ -49,6 +59,7 @@ export class PaymentReconcileService {
           );
           fixed++;
           this.logger.log(`支付对账修复: 订单${payment.order.orderNo}已从 pending_payment 转为 pending_delivery`);
+          this.businessEvent.emitInfo('payment_reconcile_fix', 'reconcile', `支付对账修复: 订单${payment.order.orderNo}`, payment.order.orderNo, { paymentId: payment.id.toString(), transactionId: wechatResult.transaction_id });
         } else if (['CLOSED', 'REVOKED', 'PAYERROR'].includes(wechatResult.trade_state)) {
           this.logger.warn(`支付对账发现异常状态: 订单${payment.order.orderNo}微信状态=${wechatResult.trade_state}，本地保留等待业务超时`);
           skipped++;
@@ -62,7 +73,32 @@ export class PaymentReconcileService {
       }
     }
 
-    const summary = { total: pendingPayments.length, fixed, failed, skipped };
+    for (const payment of halfSuccessPayments) {
+      if (!payment.order) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        this.logger.warn(`支付半成功对账: 支付${payment.id}已SUCCESS，订单${payment.order.orderNo}仍pending_payment，尝试补偿修复`);
+        await this.paymentService.processPaymentSuccess(
+          payment.id,
+          payment.order.id,
+          payment.transactionId!,
+          null,
+          payment.order,
+        );
+        fixed++;
+        this.logger.log(`支付半成功对账修复: 订单${payment.order.orderNo}已从 pending_payment 修复为 pending_delivery`);
+        this.businessEvent.emitInfo('payment_half_success_reconcile_fix', 'reconcile', `支付半成功对账修复: 订单${payment.order.orderNo}`, payment.order.orderNo, { paymentId: payment.id.toString() });
+      } catch (error) {
+        this.logger.error(`支付半成功对账修复失败: 订单${payment.order.orderNo}`, (error as Error).message);
+        failed++;
+      }
+    }
+
+    const total = pendingPayments.length + halfSuccessPayments.length;
+    const summary = { total, fixed, failed, skipped };
     this.logger.log(`支付对账完成: ${JSON.stringify(summary)}`);
     return summary;
   }
@@ -99,6 +135,7 @@ export class PaymentReconcileService {
           await this.paymentService.processWechatRefundSuccess(refund, wechatResult.refund_id || refund.refundId, wechatResult);
           fixed++;
           this.logger.log(`退款对账修复: ${refund.outRefundNo}已从 ${refund.status} 转为 success`);
+          this.businessEvent.emitInfo('refund_reconcile_fix', 'reconcile', `退款对账修复: ${refund.outRefundNo}`, refund.outRefundNo, { refundId: refund.id.toString(), fromStatus: refund.status });
         } else if (wechatStatus === WECHAT_REFUND_STATUS.CLOSED || wechatStatus === WECHAT_REFUND_STATUS.ABNORMAL) {
           const localStatus = wechatStatus === WECHAT_REFUND_STATUS.CLOSED ? REFUND_STATUS.CLOSED : REFUND_STATUS.ABNORMAL;
 

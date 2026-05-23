@@ -113,6 +113,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/order/refund-detail.vue'),
             meta: { title: '退款详情', permission: 'order:aftersale:refund', hidden: true },
           },
+          {
+            path: 'reconcile',
+            name: 'ReconcileCenter',
+            component: () => import('@/views/order/reconcile-center.vue'),
+            meta: { title: '对账与补偿', permission: 'system:config' },
+          },
         ],
       },
       {

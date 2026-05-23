@@ -4,6 +4,7 @@ import { Reflector } from '@nestjs/core';
 import request from 'supertest';
 import { ConfigModule } from '@nestjs/config';
 import { PaymentModule } from '../src/payment/payment.module';
+import { BusinessEventModule } from '../src/common/business-event.module';
 import { PaymentController } from '../src/payment/payment.controller';
 import { PaymentService } from '../src/payment/payment.service';
 import { PrismaService } from '../src/common/prisma/prisma.service';
@@ -41,6 +42,7 @@ describe('PaymentController callback (e2e)', () => {
           load: [() => createTestEnvConfig()],
         }),
         PaymentModule,
+        BusinessEventModule,
       ],
     })
       .overrideProvider(PrismaService)

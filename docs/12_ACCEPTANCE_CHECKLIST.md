@@ -64,7 +64,16 @@
 - [ ] 40301 无权限
 - [ ] 40401 资源不存在
 
-### 2.4 CI 与测试
+### 2.4 可观测性
+- [ ] 关键异常有结构化事件记录（BusinessEvent）
+- [ ] 支付/退款金额不一致写 critical 事件
+- [ ] 孤儿回调写 critical 事件
+- [ ] 对账修复写 info 事件
+- [ ] 后台可查询业务事件（/admin/business-events/list）
+- [ ] critical 事件可选 Webhook 告警（ALERT_WEBHOOK_URL）
+- [ ] Webhook 失败不影响主交易流程
+
+### 2.5 CI 与测试
 - [ ] GitHub Actions CI 通过
 - [ ] API 单元测试通过（pnpm --filter @baby-mall/api test）
 - [ ] API 构建通过（pnpm build:api）
