@@ -26,7 +26,10 @@
     { "path": "pages/aftersale/detail", "style": { "navigationBarTitleText": "售后详情" } },
     { "path": "pages/content/list", "style": { "navigationBarTitleText": "育儿知识" } },
     { "path": "pages/content/detail", "style": { "navigationBarTitleText": "内容详情" } },
-    { "path": "pages/user/profile", "style": { "navigationBarTitleText": "个人资料" } }
+    { "path": "pages/user/profile", "style": { "navigationBarTitleText": "个人资料" } },
+    { "path": "pages/pickup-store/list", "style": { "navigationBarTitleText": "选择自提点", "enablePullDownRefresh": false } },
+    { "path": "pages/customer-service/index", "style": { "navigationBarTitleText": "客服与帮助" } },
+    { "path": "pages/share/invite", "style": { "navigationBarTitleText": "邀请好友" } }
   ],
   "tabBar": {
     "color": "#999999",

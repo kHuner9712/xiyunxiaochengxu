@@ -18,11 +18,13 @@ export class WeappOrderController {
   @Post('confirm')
   async confirm(
     @CurrentUser('id') userId: string,
-    @Body() body: { items: { skuId: string; quantity: number }[]; addressId?: string; couponId?: string; pointsDeduct?: number },
+    @Body() body: { items: { skuId: string; quantity: number }[]; addressId?: string; pickupStoreId?: string; fulfillmentType?: string; couponId?: string; pointsDeduct?: number },
   ) {
     return this.orderService.confirm(userId, {
       items: body.items,
       addressId: body.addressId || undefined,
+      pickupStoreId: body.pickupStoreId || undefined,
+      fulfillmentType: body.fulfillmentType || undefined,
       couponId: body.couponId || undefined,
       pointsDeduct: body.pointsDeduct,
     });
@@ -32,6 +34,8 @@ export class WeappOrderController {
   async create(@CurrentUser('id') userId: string, @Body() dto: CreateOrderDto) {
     return this.orderService.create(userId, {
       addressId: dto.addressId,
+      pickupStoreId: dto.pickupStoreId || undefined,
+      fulfillmentType: dto.fulfillmentType || undefined,
       couponId: dto.couponId || undefined,
       pointsDeduct: dto.pointsDeduct,
       remark: dto.remark,

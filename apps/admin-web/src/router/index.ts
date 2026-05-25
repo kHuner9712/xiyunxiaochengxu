@@ -219,6 +219,18 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/marketing/home-decor.vue'),
             meta: { title: '首页装修', permission: 'marketing:decor' },
           },
+          {
+            path: 'share-campaign',
+            name: 'ShareCampaign',
+            component: () => import('@/views/share/campaign.vue'),
+            meta: { title: '裂变活动', permission: 'share:campaign' },
+          },
+          {
+            path: 'share-records',
+            name: 'ShareRecords',
+            component: () => import('@/views/share/records.vue'),
+            meta: { title: '分享数据', permission: 'share:record' },
+          },
         ],
       },
       {
@@ -244,6 +256,26 @@ const routes: RouteRecordRaw[] = [
             name: 'ContentEditById',
             component: () => import('@/views/content/edit.vue'),
             meta: { title: '编辑内容', permission: 'content:edit', hidden: true },
+          },
+        ],
+      },
+      {
+        path: 'pickup-store',
+        name: 'PickupStore',
+        redirect: '/pickup-store/list',
+        meta: { title: '自提管理', icon: 'MapLocation', permission: 'pickup' },
+        children: [
+          {
+            path: 'list',
+            name: 'PickupStoreList',
+            component: () => import('@/views/pickup-store/list.vue'),
+            meta: { title: '自提点管理', permission: 'pickup:store' },
+          },
+          {
+            path: 'verify',
+            name: 'PickupStoreVerify',
+            component: () => import('@/views/pickup-store/verify.vue'),
+            meta: { title: '自提核销', permission: 'pickup:verify' },
           },
         ],
       },
@@ -298,6 +330,12 @@ const routes: RouteRecordRaw[] = [
             name: 'SystemConfig',
             component: () => import('@/views/system/config.vue'),
             meta: { title: '系统配置', permission: 'system:config' },
+          },
+          {
+            path: 'customer-service',
+            name: 'CustomerServiceConfig',
+            component: () => import('@/views/system/customer-service.vue'),
+            meta: { title: '客服配置', permission: 'system:customer-service' },
           },
           {
             path: 'log',

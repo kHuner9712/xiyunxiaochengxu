@@ -12,91 +12,118 @@
       </view>
     </view>
 
-    <view class="activity-list">
-      <view v-for="item in activities" :key="item.id" class="activity-card" @tap="goDetail(item.id)">
-        <image class="activity-image" :src="item.image" mode="aspectFill" />
-        <view class="activity-info">
-          <text class="activity-name">{{ item.name }}</text>
-          <view class="activity-meta">
-            <CountdownTimer :endTime="item.endTime" label="距结束" />
+    <view class="feed-list">
+      <view v-for="item in feedList" :key="item.type + item.id" class="feed-card" @tap="goDetail(item)">
+        <image class="feed-image" :src="item.image || '/static/default-cover.png'" mode="aspectFill" />
+        <view class="feed-info">
+          <view class="feed-type-tag">
+            <text class="type-text" :class="item.type">{{ typeLabel(item.type) }}</text>
+          </view>
+          <text class="feed-title">{{ item.title }}</text>
+          <text v-if="item.summary" class="feed-summary">{{ item.summary }}</text>
+          <view class="feed-meta">
+            <text v-if="item.type === 'activity'" class="meta-item">
+              <CountdownTimer :endTime="item.endTime" label="距结束" />
+            </text>
+            <text v-if="item.type === 'video' && item.videoDuration" class="meta-item">
+              {{ formatDuration(item.videoDuration) }}
+            </text>
+            <text v-if="item.viewCount !== undefined" class="meta-item">{{ item.viewCount }}阅读</text>
           </view>
         </view>
       </view>
     </view>
 
     <Loading v-if="loading" />
-    <Empty v-if="!loading && activities.length === 0" text="暂无活动" />
+    <Empty v-if="!loading && feedList.length === 0" text="暂无内容" />
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
-import { getActivityList, type ActivityDetail } from '@/api/activity'
+import { getActivityFeed, getActivityList, type FeedItem } from '@/api/activity'
+import { getContentList } from '@/api/content'
 import CountdownTimer from '@/components/CountdownTimer.vue'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
 const tabs = [
-  { label: '全部', value: 0 },
-  { label: '限时折扣', value: 1 },
-  { label: '满减', value: 2 },
-  { label: '满赠', value: 3 },
-  { label: '组合套餐', value: 4 }
+  { label: '推荐', value: 'recommend' },
+  { label: '优惠', value: 'discount' },
+  { label: '视频', value: 'video' },
+  { label: '文章', value: 'article' },
+  { label: '线下/活动', value: 'offline' }
 ]
 
-const currentTab = ref(0)
-const activities = ref<ActivityDetail[]>([])
+const currentTab = ref('recommend')
+const feedList = ref<FeedItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
 
-async function loadActivities(reset = false) {
+async function loadFeed(reset = false) {
   if (loading.value) return
   if (!reset && finished.value) return
   if (reset) {
     page.value = 1
     finished.value = false
-    activities.value = []
+    feedList.value = []
   }
   loading.value = true
   try {
-    const params: { type?: number; page: number; pageSize: number } = {
+    const data = await getActivityFeed({
+      tab: currentTab.value,
       page: page.value,
       pageSize: 10
-    }
-    if (currentTab.value) params.type = currentTab.value
-    const data = await getActivityList(params)
-    activities.value.push(...data.list)
-    finished.value = activities.value.length >= data.total
+    })
+    feedList.value.push(...data.list)
+    finished.value = feedList.value.length >= data.total
     page.value++
   } catch {
-    uni.showToast({ title: '活动加载失败', icon: 'none' })
+    uni.showToast({ title: '加载失败', icon: 'none' })
   } finally {
     loading.value = false
   }
 }
 
-function switchTab(value: number) {
+function switchTab(value: string) {
   currentTab.value = value
-  loadActivities(true)
+  loadFeed(true)
 }
 
-function goDetail(id: number) {
-  uni.navigateTo({ url: `/pages/activity/detail?id=${id}` })
+function goDetail(item: FeedItem) {
+  if (item.type === 'activity') {
+    uni.navigateTo({ url: `/pages/activity/detail?id=${item.id}` })
+  } else {
+    uni.navigateTo({ url: `/pages/content/detail?id=${item.id}` })
+  }
+}
+
+function typeLabel(type: string) {
+  if (type === 'activity') return '活动'
+  if (type === 'video') return '视频'
+  if (type === 'article') return '文章'
+  return type
+}
+
+function formatDuration(seconds: number) {
+  const min = Math.floor(seconds / 60)
+  const sec = seconds % 60
+  return `${min}:${sec.toString().padStart(2, '0')}`
 }
 
 onPullDownRefresh(async () => {
-  await loadActivities(true)
+  await loadFeed(true)
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadActivities()
+  loadFeed()
 })
 
 onMounted(() => {
-  loadActivities()
+  loadFeed()
 })
 </script>
 
@@ -134,7 +161,7 @@ onMounted(() => {
   color: $text-secondary;
 }
 
-.activity-card {
+.feed-card {
   background: $bg-white;
   border-radius: $radius-lg;
   overflow: hidden;
@@ -142,25 +169,66 @@ onMounted(() => {
   box-shadow: $shadow-sm;
 }
 
-.activity-image {
+.feed-image {
   width: 100%;
   height: 300rpx;
 }
 
-.activity-info {
+.feed-info {
   padding: $spacing-md;
 }
 
-.activity-name {
+.feed-type-tag {
+  margin-bottom: $spacing-xs;
+}
+
+.type-text {
+  font-size: $font-xs;
+  padding: 4rpx 12rpx;
+  border-radius: $radius-round;
+
+  &.activity {
+    background: rgba(255, 107, 107, 0.1);
+    color: #FF6B6B;
+  }
+
+  &.video {
+    background: rgba(78, 205, 196, 0.1);
+    color: #4ECDC4;
+  }
+
+  &.article {
+    background: rgba(69, 183, 209, 0.1);
+    color: #45B7D1;
+  }
+}
+
+.feed-title {
   font-size: $font-lg;
   font-weight: 600;
   color: $text-color;
   display: block;
-  margin-bottom: $spacing-sm;
+  margin-bottom: $spacing-xs;
+  @include text-ellipsis-2;
+  line-height: 1.4;
 }
 
-.activity-meta {
+.feed-summary {
+  font-size: $font-sm;
+  color: $text-hint;
+  display: block;
+  @include text-ellipsis;
+  margin-bottom: $spacing-xs;
+}
+
+.feed-meta {
   display: flex;
   align-items: center;
+  gap: $spacing-md;
+}
+
+.meta-item {
+  font-size: $font-xs;
+  color: $text-hint;
 }
 </style>

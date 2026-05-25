@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class BindPhoneDto {
   @IsString()
@@ -6,10 +6,10 @@ export class BindPhoneDto {
   code!: string;
 
   @IsString()
-  @IsNotEmpty()
-  encryptedData!: string;
+  @IsOptional()
+  encryptedData?: string;
 
   @IsString()
-  @IsNotEmpty()
-  iv!: string;
+  @IsOptional()
+  iv?: string;
 }

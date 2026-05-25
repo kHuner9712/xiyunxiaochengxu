@@ -2,6 +2,7 @@ export const OrderStatus = {
   pending_payment: 'pending_payment',
   paid: 'paid',
   pending_delivery: 'pending_delivery',
+  pending_pickup: 'pending_pickup',
   delivered: 'delivered',
   completed: 'completed',
   aftersale: 'aftersale',

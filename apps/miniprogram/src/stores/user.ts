@@ -61,10 +61,6 @@ export const useUserStore = defineStore('user', () => {
 
   async function bindPhone(code: string) {
     const data = await bindPhoneApi({ code })
-    if (data.token) {
-      token.value = data.token
-      setToken(data.token)
-    }
     await fetchUserInfo()
     return data
   }

@@ -29,6 +29,7 @@ export class UserService {
       phone: user.phone,
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
+      avatar: user.avatarUrl,
       gender: user.gender,
       memberLevelId: user.memberLevelId?.toString(),
       memberLevel: user.memberLevel
@@ -40,6 +41,8 @@ export class UserService {
             pointsRate: user.memberLevel.pointsRate,
           }
         : null,
+      memberLevelName: user.memberLevel?.name || '普通会员',
+      points: user.availablePoints,
       growthValue: user.growthValue,
       totalPoints: user.totalPoints,
       availablePoints: user.availablePoints,
@@ -152,7 +155,7 @@ export class UserService {
 
     const [orderStats, recentPoints] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { userId: BigInt(id), status: { in: ['paid', 'pending_delivery', 'delivered', 'completed'] } },
+        where: { userId: BigInt(id), status: { in: ['paid', 'pending_delivery', 'pending_pickup', 'delivered', 'completed'] } },
         _sum: { payAmount: true },
         _count: true,
       }),
@@ -252,6 +255,7 @@ export class UserService {
       phone: user.phone,
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
+      avatar: user.avatarUrl,
       gender: user.gender,
       memberLevelId: user.memberLevelId?.toString(),
       memberLevel: user.memberLevel
@@ -261,6 +265,8 @@ export class UserService {
             icon: user.memberLevel.icon,
           }
         : null,
+      memberLevelName: user.memberLevel?.name || '普通会员',
+      points: user.availablePoints,
       growthValue: user.growthValue,
       totalPoints: user.totalPoints,
       availablePoints: user.availablePoints,

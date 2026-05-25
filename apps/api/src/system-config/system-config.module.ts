@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { SystemConfigController } from './system-config.controller';
+import { SystemConfigController, WeappCustomerServiceController, AdminCustomerServiceController } from './system-config.controller';
 import { SystemConfigService } from './system-config.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { RedisModule } from '../common/redis/redis.module';
 
 @Module({
   imports: [PrismaModule, RedisModule],
-  controllers: [SystemConfigController],
+  controllers: [SystemConfigController, WeappCustomerServiceController, AdminCustomerServiceController],
   providers: [SystemConfigService],
   exports: [SystemConfigService],
 })

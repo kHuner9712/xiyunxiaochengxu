@@ -7,4 +7,10 @@ export const systemApi = {
   updateConfig(data: any) {
     return request.put('/admin/system-config/update', data)
   },
+  getCustomerServiceConfig() {
+    return request.get('/admin/customer-service/config')
+  },
+  updateCustomerServiceConfig(data: any) {
+    return request.put('/admin/customer-service/config', data)
+  },
 }

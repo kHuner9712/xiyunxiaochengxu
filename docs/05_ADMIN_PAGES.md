@@ -17,39 +17,44 @@
 
 ## 2. 页面总览
 
-| 序号 | 页面路径 | 页面名称 | 所属菜单 | 所需权限 |
-|------|----------|----------|----------|----------|
-| 1 | /login | 登录页 | - | 无 |
-| 2 | /dashboard | 工作台 | 首页 | dashboard:view |
-| 3 | /product/list | 商品列表 | 商品管理 | product:list |
-| 4 | /product/edit | 商品新增/编辑 | 商品管理 | product:create / product:update |
-| 5 | /product/category | 商品分类 | 商品管理 | product:category |
-| 6 | /product/brand | 品牌管理 | 商品管理 | product:brand |
-| 7 | /supplier/list | 供应商管理 | 商品管理 | supplier:list |
-| 8 | /product/stock | 库存管理 | 商品管理 | product:stock |
-| 9 | /order/list | 订单列表 | 订单管理 | order:list |
-| 10 | /order/detail/:id | 订单详情 | 订单管理 | order:detail |
-| 11 | /order/delivery | 发货处理 | 订单管理 | order:delivery |
-| 12 | /order/aftersale | 售后列表 | 订单管理 | order:aftersale |
-| 13 | /order/aftersale-detail/:id | 售后详情 | 订单管理 | order:aftersale-detail |
-| 14 | /user/list | 用户列表 | 用户管理 | user:list |
-| 15 | /user/detail/:id | 用户详情 | 用户管理 | user:detail |
-| 16 | /user/member-level | 会员等级 | 用户管理 | user:member-level |
-| 17 | /user/points-rule | 积分规则 | 用户管理 | user:points-rule |
-| 18 | /marketing/coupon-list | 优惠券列表 | 营销管理 | marketing:coupon |
-| 19 | /marketing/coupon-edit | 优惠券新增/编辑 | 营销管理 | marketing:coupon-create / marketing:coupon-update |
-| 20 | /marketing/activity-list | 活动列表 | 营销管理 | marketing:activity |
-| 21 | /marketing/activity-edit | 活动新增/编辑 | 营销管理 | marketing:activity-create / marketing:activity-update |
-| 22 | /marketing/home-decor | 首页装修 | 营销管理 | marketing:home-decor |
-| 23 | /marketing/banner | Banner 管理 | 营销管理 | marketing:banner |
-| 24 | /marketing/recommendation | 推荐位管理 | 营销管理 | marketing:recommendation |
-| 25 | /content/list | 内容列表 | 内容管理 | content:list |
-| 26 | /content/edit | 内容新增/编辑 | 内容管理 | content:create / content:update |
-| 27 | /statistics/index | 数据统计 | 数据统计 | statistics:view |
-| 28 | /system/admin | 管理员管理 | 系统管理 | system:admin |
-| 29 | /system/role | 角色权限 | 系统管理 | system:role |
-| 30 | /system/config | 系统配置 | 系统管理 | system:config |
-| 31 | /system/log | 操作日志 | 系统管理 | system:log |
+| 序号 | 页面路径 | 页面名称 | 所属菜单 | 所需权限 | 版本 |
+|------|----------|----------|----------|----------|------|
+| 1 | /login | 登录页 | - | 无 | |
+| 2 | /dashboard | 工作台 | 首页 | dashboard:view | |
+| 3 | /product/list | 商品列表 | 商品管理 | product:list | |
+| 4 | /product/edit | 商品新增/编辑 | 商品管理 | product:create / product:update | |
+| 5 | /product/category | 商品分类 | 商品管理 | product:category | |
+| 6 | /product/brand | 品牌管理 | 商品管理 | product:brand | |
+| 7 | /supplier/list | 供应商管理 | 商品管理 | supplier:list | |
+| 8 | /product/stock | 库存管理 | 商品管理 | product:stock | |
+| 9 | /order/list | 订单列表 | 订单管理 | order:list | |
+| 10 | /order/detail/:id | 订单详情 | 订单管理 | order:detail | |
+| 11 | /order/delivery | 发货处理 | 订单管理 | order:delivery | |
+| 12 | /order/aftersale | 售后列表 | 订单管理 | order:aftersale | |
+| 13 | /order/aftersale-detail/:id | 售后详情 | 订单管理 | order:aftersale-detail | |
+| 14 | /user/list | 用户列表 | 用户管理 | user:list | |
+| 15 | /user/detail/:id | 用户详情 | 用户管理 | user:detail | |
+| 16 | /user/member-level | 会员等级 | 用户管理 | user:member-level | |
+| 17 | /user/points-rule | 积分规则 | 用户管理 | user:points-rule | |
+| 18 | /marketing/coupon-list | 优惠券列表 | 营销管理 | marketing:coupon | |
+| 19 | /marketing/coupon-edit | 优惠券新增/编辑 | 营销管理 | marketing:coupon-create / marketing:coupon-update | |
+| 20 | /marketing/activity-list | 活动列表 | 营销管理 | marketing:activity | |
+| 21 | /marketing/activity-edit | 活动新增/编辑 | 营销管理 | marketing:activity-create / marketing:activity-update | |
+| 22 | /marketing/home-decor | 首页装修 | 营销管理 | marketing:home-decor | |
+| 23 | /marketing/banner | Banner 管理 | 营销管理 | marketing:banner | |
+| 24 | /marketing/recommendation | 推荐位管理 | 营销管理 | marketing:recommendation | |
+| 25 | /content/list | 内容列表 | 内容管理 | content:list | |
+| 26 | /content/edit | 内容新增/编辑 | 内容管理 | content:create / content:update | |
+| 27 | /statistics/index | 数据统计 | 数据统计 | statistics:view | |
+| 28 | /system/admin | 管理员管理 | 系统管理 | system:admin | |
+| 29 | /system/role | 角色权限 | 系统管理 | system:role | |
+| 30 | /system/config | 系统配置 | 系统管理 | system:config | |
+| 31 | /system/log | 操作日志 | 系统管理 | system:log | |
+| 32 | /pickup/store-list | 自提点管理 | 商品管理 | pickup:store | V1.0 必做 |
+| 33 | /pickup/verify | 自提核销 | 订单管理 | pickup:verify | V1.0 必做 |
+| 34 | /system/customer-service | 客服配置 | 系统管理 | system:customer-service | V1.0 必做 |
+| 35 | /marketing/fission-config | 裂变活动配置 | 营销管理 | marketing:fission | V1.0 必做 |
+| 36 | /marketing/share-stats | 邀请/分享统计 | 营销管理 | marketing:share-stats | V1.0 必做 |
 
 ---
 
@@ -1700,6 +1705,250 @@
 |------|------|
 | 无日志 | 显示空状态插画，提示「暂无日志」 |
 | 搜索无结果 | 提示「未找到匹配的日志记录」 |
+
+---
+
+### 3.32 自提点管理 【V1.0 必做】
+
+| 维度 | 说明 |
+|------|------|
+| 页面路径 | /pickup/store-list |
+| 页面用途 | 管理自提点信息，支持增删改查、启停用 |
+| 核心组件 | StoreTable、StoreForm、MapPicker |
+
+**核心组件说明：**
+
+- **StoreTable**：自提点列表表格，列包含：门店名称、地址、营业时间、联系电话、状态（启用/停用）、操作。
+- **StoreForm**：自提点编辑弹窗表单，包含门店名称、详细地址（省市区+详细地址）、经纬度（地图选点）、营业时间、联系电话、门店图片、状态。
+- **MapPicker**：地图选点组件，支持在地图上标记自提点位置，自动获取经纬度和地址信息。
+
+**用户操作：**
+
+1. 查看自提点列表
+2. 点击「新增自提点」打开弹窗
+3. 填写自提点信息，地图选点获取经纬度
+4. 点击「编辑」修改自提点信息
+5. 点击「启用/停用」切换自提点状态
+6. 点击「删除」删除自提点（需二次确认）
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 响应数据 |
+|------|------|------|----------|----------|
+| /api/admin/pickup/store-list | GET | 获取自提点列表 | { page, pageSize, keyword, status } | { total, list: [{ id, name, address, businessHours, phone, latitude, longitude, image, status }] } |
+| /api/admin/pickup/store-create | POST | 新增自提点 | { name, province, city, district, detailAddress, latitude, longitude, businessHours, phone, image, status } | { id } |
+| /api/admin/pickup/store-update | PUT | 更新自提点 | { id, name, province, city, district, detailAddress, latitude, longitude, businessHours, phone, image, status } | { success: boolean } |
+| /api/admin/pickup/store-delete | DELETE | 删除自提点 | { id } | { success: boolean } |
+
+**页面状态：**
+
+| 状态 | 说明 |
+|------|------|
+| 正常 | 列表数据正常展示 |
+| 加载中 | 表格显示 loading |
+
+**异常情况：**
+
+| 异常场景 | 处理方式 |
+|----------|----------|
+| 删除有未完成自提订单的自提点 | 提示「该自提点下存在未完成的自提订单，无法删除」 |
+| 自提点名称重复 | 提示「自提点名称已存在」 |
+
+**空状态：**
+
+| 场景 | 展示 |
+|------|------|
+| 无自提点数据 | 显示空状态插画，提示「暂无自提点」，提供「新增自提点」按钮 |
+
+---
+
+### 3.33 自提订单核销 【V1.0 必做】
+
+| 维度 | 说明 |
+|------|------|
+| 页面路径 | /pickup/verify |
+| 页面用途 | 核销自提订单，支持扫码核销和手动输入自提码 |
+| 核心组件 | VerifyInput、VerifyResult、ScanButton |
+
+**核心组件说明：**
+
+- **VerifyInput**：自提码输入框，支持6位数字输入，支持扫码枪输入。
+- **VerifyResult**：核销结果展示，展示订单信息（订单号、商品列表、自提点、用户信息）和核销状态。
+- **ScanButton**：扫码按钮，调用摄像头扫码获取自提码。
+
+**用户操作：**
+
+1. 输入自提码或扫码获取自提码
+2. 系统查询自提码对应的订单信息
+3. 确认订单信息后点击「确认核销」
+4. 核销成功，展示核销结果
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 响应数据 |
+|------|------|------|----------|----------|
+| /api/admin/pickup/verify-query | GET | 查询自提码对应的订单 | { pickupCode } | { orderId, orderNo, items, storeName, userName, userPhone, status } |
+| /api/admin/pickup/verify-confirm | POST | 确认核销 | { pickupCode } | { success: boolean, verifiedAt } |
+
+**页面状态：**
+
+| 状态 | 说明 |
+|------|------|
+| 待输入 | 页面初始状态，等待输入自提码 |
+| 查询结果 | 展示自提码对应的订单信息 |
+| 核销成功 | 展示核销成功提示 |
+| 核销失败 | 展示核销失败原因 |
+
+**异常情况：**
+
+| 异常场景 | 处理方式 |
+|----------|----------|
+| 自提码不存在 | 提示「自提码不存在，请确认后重试」 |
+| 订单已核销 | 提示「该订单已核销，请勿重复核销」 |
+| 订单已取消 | 提示「该订单已取消，无法核销」 |
+| 自提码过期 | 提示「自提码已过期，订单已自动取消」 |
+
+**空状态：** 不适用
+
+---
+
+### 3.34 客服配置 【V1.0 必做】
+
+| 维度 | 说明 |
+|------|------|
+| 页面路径 | /system/customer-service |
+| 页面用途 | 配置小程序端客服联系方式和展示信息 |
+| 核心组件 | ServiceConfigForm、ImageUpload |
+
+**核心组件说明：**
+
+- **ServiceConfigForm**：客服配置表单，包含在线客服开关、客服电话、客服微信号、客服二维码、工作时间、非工作时间自动回复语。
+- **ImageUpload**：客服二维码图片上传，单张图片，限制 2MB。
+
+**用户操作：**
+
+1. 修改在线客服开关（启用/禁用微信客服消息）
+2. 填写客服电话
+3. 填写客服微信号
+4. 上传客服二维码图片
+5. 设置工作时间（如"工作日 9:00-18:00"）
+6. 设置非工作时间自动回复语
+7. 点击「保存」保存配置
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 响应数据 |
+|------|------|------|----------|----------|
+| /api/admin/customer-service/config | GET | 获取客服配置 | 无 | { onlineEnabled, phone, wechat, qrcodeUrl, workTime, offlineMessage } |
+| /api/admin/customer-service/config-update | PUT | 更新客服配置 | { onlineEnabled, phone, wechat, qrcodeUrl, workTime, offlineMessage } | { success: boolean } |
+
+**页面状态：**
+
+| 状态 | 说明 |
+|------|------|
+| 正常 | 配置数据正常展示 |
+| 保存中 | 保存按钮 loading |
+
+**异常情况：**
+
+| 异常场景 | 处理方式 |
+|----------|----------|
+| 保存失败 | 提示「保存失败，请稍后重试」 |
+
+**空状态：** 不适用
+
+---
+
+### 3.35 内容管理扩展（视频/文章/投放）【V1.0 必做】
+
+> 本节为 3.25/3.26 内容管理的扩展说明，不新增独立页面，在现有内容编辑页中增加以下字段和功能。
+
+**内容编辑页新增字段：**
+
+| 字段 | 类型 | 说明 | 版本 |
+|------|------|------|------|
+| contentType | 单选 | 内容类型：article-文章 / video-视频，默认 article | V1.0 必做 |
+| videoUrl | 文本 | 视频 URL（contentType=video 时必填），支持 MP4 格式 | V1.0 必做 |
+| videoCover | 图片 | 视频封面图（contentType=video 时必填） | V1.0 必做 |
+| videoDuration | 数字 | 视频时长（秒），可选 | V1.1 可选 |
+| placement | 多选 | 投放位置：activity_tab-活动板块 / knowledge-育儿知识 / home_recommend-首页推荐，支持多选 | V1.0 必做 |
+| tags | 标签输入 | 内容标签，最多5个，从后台标签库选择或新建 | V1.0 必做 |
+| relatedProductIds | 关联商品 | 关联商品ID列表，最多10个 | V1.0 必做 |
+| relatedActivityId | 关联活动 | 关联活动ID，可选 | V1.1 可选 |
+
+**内容列表页新增筛选：**
+
+| 筛选项 | 说明 | 版本 |
+|--------|------|------|
+| 内容类型 | 按文章/视频筛选 | V1.0 必做 |
+| 投放位置 | 按投放位置筛选 | V1.0 必做 |
+| 标签 | 按标签筛选 | V1.0 必做 |
+
+---
+
+### 3.36 裂变分享活动配置 【V1.0 必做】
+
+| 维度 | 说明 |
+|------|------|
+| 页面路径 | /marketing/fission-config |
+| 页面用途 | 配置裂变分享活动的奖励规则和防刷策略 |
+| 核心组件 | FissionConfigForm、RewardRuleTable |
+
+**核心组件说明：**
+
+- **FissionConfigForm**：裂变活动配置表单，包含活动开关、邀请人奖励类型和数量、被邀请人奖励类型和数量、每日/每月邀请奖励上限、防刷策略配置。
+- **RewardRuleTable**：奖励规则表格，支持配置多级奖励（如邀请1人奖X积分，邀请3人额外奖Y积分）。
+
+**用户操作：**
+
+1. 开启/关闭裂变分享活动
+2. 配置邀请人奖励（积分/优惠券）
+3. 配置被邀请人奖励（新人优惠券）
+4. 设置每日/每月邀请奖励上限
+5. 配置防刷策略（同设备限制、异常邀请阈值）
+6. 点击「保存」保存配置
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 响应数据 |
+|------|------|------|----------|----------|
+| /api/admin/share/campaign-config | GET | 获取裂变活动配置 | 无 | { enabled, inviterReward, inviteeReward, dailyLimit, monthlyLimit, antiFraudConfig } |
+| /api/admin/share/campaign-config-update | PUT | 更新裂变活动配置 | { enabled, inviterReward, inviteeReward, dailyLimit, monthlyLimit, antiFraudConfig } | { success: boolean } |
+
+---
+
+### 3.37 邀请关系/分享数据统计 【V1.0 必做】
+
+| 维度 | 说明 |
+|------|------|
+| 页面路径 | /marketing/share-stats |
+| 页面用途 | 查看邀请关系数据、分享数据统计、奖励发放统计、异常邀请监控 |
+| 核心组件 | StatsCards、InviteRelationTable、RewardLogTable、AbnormalAlert |
+
+**核心组件说明：**
+
+- **StatsCards**：统计卡片，展示总邀请人数、今日新增邀请、已下单邀请人数、累计发放奖励。
+- **InviteRelationTable**：邀请关系表格，列包含：邀请人、被邀请人、绑定时间、被邀请人订单状态、奖励状态。
+- **RewardLogTable**：奖励发放记录表格，列包含：用户、奖励类型、奖励数量、来源（邀请谁）、发放时间、状态。
+- **AbnormalAlert**：异常邀请告警，展示触发风控规则的邀请记录。
+
+**用户操作：**
+
+1. 查看邀请统计概览
+2. 按时间范围筛选邀请数据
+3. 查看邀请关系明细
+4. 查看奖励发放记录
+5. 查看异常邀请告警
+6. 导出邀请数据
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 响应数据 |
+|------|------|------|----------|----------|
+| /api/admin/share/stats | GET | 获取分享统计概览 | { startDate, endDate } | { totalInvites, todayInvites, orderedInvites, totalReward } |
+| /api/admin/share/invite-relations | GET | 获取邀请关系列表 | { page, pageSize, inviterId, startDate, endDate } | { total, list: [{ id, inviterName, inviteeName, bindTime, orderStatus, rewardStatus }] } |
+| /api/admin/share/reward-logs | GET | 获取奖励发放记录 | { page, pageSize, userId, startDate, endDate } | { total, list: [{ id, userName, rewardType, rewardAmount, sourceName, createdAt, status }] } |
+| /api/admin/share/abnormal | GET | 获取异常邀请记录 | { page, pageSize } | { total, list: [{ id, inviterName, inviteCount, reason, detectedAt, status }] } |
 
 ---
 

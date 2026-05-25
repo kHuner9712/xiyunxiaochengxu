@@ -2,9 +2,10 @@ import { BadRequestException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  [OrderStatus.pending_payment]: [OrderStatus.cancelled, OrderStatus.paid, OrderStatus.pending_delivery],
-  [OrderStatus.paid]: [OrderStatus.pending_delivery],
+  [OrderStatus.pending_payment]: [OrderStatus.cancelled, OrderStatus.paid, OrderStatus.pending_delivery, OrderStatus.pending_pickup],
+  [OrderStatus.paid]: [OrderStatus.pending_delivery, OrderStatus.pending_pickup],
   [OrderStatus.pending_delivery]: [OrderStatus.delivered],
+  [OrderStatus.pending_pickup]: [OrderStatus.completed],
   [OrderStatus.delivered]: [OrderStatus.completed, OrderStatus.aftersale],
   [OrderStatus.completed]: [OrderStatus.aftersale],
   [OrderStatus.aftersale]: [OrderStatus.delivered, OrderStatus.completed],
@@ -16,13 +17,21 @@ export const TRANSITION_ACTIONS: Record<string, { from: OrderStatus[]; to: Order
     from: [OrderStatus.pending_payment],
     to: OrderStatus.cancelled,
   },
-  pay_success: {
+  pay_success_delivery: {
     from: [OrderStatus.pending_payment],
     to: OrderStatus.pending_delivery,
+  },
+  pay_success_pickup: {
+    from: [OrderStatus.pending_payment],
+    to: OrderStatus.pending_pickup,
   },
   deliver: {
     from: [OrderStatus.pending_delivery],
     to: OrderStatus.delivered,
+  },
+  pickup_verify: {
+    from: [OrderStatus.pending_pickup],
+    to: OrderStatus.completed,
   },
   confirm_receive: {
     from: [OrderStatus.delivered],

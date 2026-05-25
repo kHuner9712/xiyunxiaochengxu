@@ -33,17 +33,27 @@ export class OrderService {
   async getOrderCountByUser(userId: string) {
     const where = { userId: BigInt(userId) };
 
-    const [unpaid, unshipped, unreceived, aftersale] = await Promise.all([
+    const [unpaid, unshipped, pendingPickup, unreceived, aftersale] = await Promise.all([
       this.prisma.order.count({ where: { ...where, status: OrderStatus.pending_payment } }),
       this.prisma.order.count({ where: { ...where, status: OrderStatus.pending_delivery } }),
+      this.prisma.order.count({ where: { ...where, status: OrderStatus.pending_pickup } }),
       this.prisma.order.count({ where: { ...where, status: OrderStatus.delivered } }),
       this.prisma.order.count({ where: { ...where, status: OrderStatus.aftersale } }),
     ]);
 
-    return { unpaid, unshipped, unreceived, aftersale };
+    return { unpaid, unshipped, pendingPickup, unreceived, aftersale };
   }
 
-  async confirm(userId: string, data: { items: { skuId: string; quantity: number }[]; addressId?: string; couponId?: string; pointsDeduct?: number }) {
+  async confirm(userId: string, data: { items: { skuId: string; quantity: number }[]; addressId?: string; pickupStoreId?: string; fulfillmentType?: string; couponId?: string; pointsDeduct?: number }) {
+    const fulfillmentType = data.fulfillmentType || 'delivery';
+
+    if (fulfillmentType === 'delivery' && !data.addressId) {
+      throw new BadRequestException('快递配送必须选择收货地址');
+    }
+    if (fulfillmentType === 'pickup' && !data.pickupStoreId) {
+      throw new BadRequestException('到店自提必须选择自提点');
+    }
+
     let totalAmount = 0;
     let discountAmount = 0;
     let couponAmount = 0;
@@ -119,15 +129,17 @@ export class OrderService {
     }
 
     let freightAmount = 0;
-    if (data.addressId) {
-      const address = await this.prisma.userAddress.findFirst({
-        where: { id: BigInt(data.addressId), userId: BigInt(userId), deletedAt: null },
-      });
-      if (address) {
-        freightAmount = this.calculateFreight(totalAmount, address.province);
+    if (fulfillmentType === 'delivery') {
+      if (data.addressId) {
+        const address = await this.prisma.userAddress.findFirst({
+          where: { id: BigInt(data.addressId), userId: BigInt(userId), deletedAt: null },
+        });
+        if (address) {
+          freightAmount = this.calculateFreight(totalAmount, address.province);
+        }
+      } else {
+        freightAmount = this.calculateFreight(totalAmount);
       }
-    } else {
-      freightAmount = this.calculateFreight(totalAmount);
     }
 
     const payAmount = Math.max(0, totalAmount - discountAmount - couponAmount - activityDiscountAmount - pointsAmount + freightAmount);
@@ -143,20 +155,36 @@ export class OrderService {
       pointsAmount,
       freightAmount,
       payAmount,
+      fulfillmentType,
+      pickupStore: fulfillmentType === 'pickup' && data.pickupStoreId ? await this.getPickupStoreInfo(data.pickupStoreId) : null,
     };
   }
 
   async create(userId: string, data: {
-    addressId: string;
+    addressId?: string;
+    pickupStoreId?: string;
+    fulfillmentType?: string;
     couponId?: string;
     pointsDeduct?: number;
     remark?: string;
     items: { skuId: string; quantity: number }[];
   }) {
-    const address = await this.prisma.userAddress.findFirst({
-      where: { id: BigInt(data.addressId), userId: BigInt(userId), deletedAt: null },
-    });
-    if (!address) throw new NotFoundException('收货地址不存在');
+    const fulfillmentType = data.fulfillmentType || 'delivery';
+
+    if (fulfillmentType === 'delivery' && !data.addressId) {
+      throw new BadRequestException('快递配送必须选择收货地址');
+    }
+    if (fulfillmentType === 'pickup' && !data.pickupStoreId) {
+      throw new BadRequestException('到店自提必须选择自提点');
+    }
+
+    let address: any = null;
+    if (fulfillmentType === 'delivery') {
+      address = await this.prisma.userAddress.findFirst({
+        where: { id: BigInt(data.addressId!), userId: BigInt(userId), deletedAt: null },
+      });
+      if (!address) throw new NotFoundException('收货地址不存在');
+    }
 
     const orderItems: any[] = [];
     let totalAmount = 0;
@@ -236,7 +264,10 @@ export class OrderService {
     }
 
     const discountAmount = 0;
-    const freightAmount = this.calculateFreight(totalAmount, address.province);
+    let freightAmount = 0;
+    if (fulfillmentType === 'delivery') {
+      freightAmount = this.calculateFreight(totalAmount, address.province);
+    }
     const payAmount = Math.max(0, totalAmount - discountAmount - couponAmount - activityDiscountAmount - pointsAmount + freightAmount);
 
     const order = await this.prisma.$transaction(async (tx) => {
@@ -311,12 +342,18 @@ export class OrderService {
           couponId,
           couponAmount,
           activityDiscountAmount,
-          receiverName: address.receiverName,
-          receiverPhone: address.receiverPhone,
-          province: address.province,
-          city: address.city,
-          district: address.district,
-          detailAddress: address.detailAddress,
+          fulfillmentType,
+          ...(fulfillmentType === 'delivery' ? {
+            receiverName: address.receiverName,
+            receiverPhone: address.receiverPhone,
+            province: address.province,
+            city: address.city,
+            district: address.district,
+            detailAddress: address.detailAddress,
+          } : {
+            receiverName: '',
+            receiverPhone: '',
+          }),
           remark: data.remark,
           autoCloseAt: new Date(Date.now() + ORDER_AUTO_CLOSE_MINUTES * 60 * 1000),
           orderItems: {
@@ -361,6 +398,23 @@ export class OrderService {
         skuId: { in: data.items.map((i) => BigInt(i.skuId)) },
       },
     });
+
+    if (fulfillmentType === 'pickup' && data.pickupStoreId) {
+      const store = await this.prisma.pickupStore.findFirst({
+        where: { id: BigInt(data.pickupStoreId), status: 1, deletedAt: null },
+      });
+      if (store) {
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: {
+            pickupStoreId: store.id,
+            pickupStoreName: store.name,
+            pickupStoreAddress: `${store.province}${store.city}${store.district}${store.address}`,
+            pickupContactPhone: store.contactPhone,
+          },
+        });
+      }
+    }
 
     this.logger.log(`用户${userId}创建订单：${order.orderNo}，实付${payAmount}分`);
     return { orderId: order.id.toString(), orderNo: order.orderNo };
@@ -1028,12 +1082,43 @@ export class OrderService {
     return FREIGHT_DEFAULT_FEE;
   }
 
+  private async getPickupStoreInfo(pickupStoreId: string) {
+    const store = await this.prisma.pickupStore.findFirst({
+      where: { id: BigInt(pickupStoreId), status: 1, deletedAt: null },
+    });
+    if (!store) throw new NotFoundException('自提点不存在或已停用');
+    return {
+      id: store.id.toString(),
+      name: store.name,
+      address: `${store.province}${store.city}${store.district}${store.address}`,
+      contactPhone: store.contactPhone,
+      businessHours: store.businessHours,
+      pickupNotice: store.pickupNotice,
+    };
+  }
+
+  async generatePickupCode(): Promise<string> {
+    let code: string;
+    let exists = true;
+    while (exists) {
+      code = String(Math.floor(100000 + Math.random() * 900000));
+      const existing = await this.prisma.order.findFirst({
+        where: { pickupCode: code },
+      });
+      exists = !!existing;
+    }
+    return code!;
+  }
+
   private serializeOrder(order: any) {
     return {
       ...order,
       id: order.id.toString(),
       userId: order.userId?.toString(),
       couponId: order.couponId?.toString(),
+      pickupStoreId: order.pickupStoreId?.toString(),
+      pickupVerifiedBy: order.pickupVerifiedBy?.toString(),
+      fulfillmentType: order.fulfillmentType || 'delivery',
       orderItems: order.orderItems?.map((i: any) => ({
         ...i,
         id: i.id.toString(),
@@ -1113,6 +1198,13 @@ export class OrderService {
       finishTime: order.completedAt ? new Date(order.completedAt).toLocaleString('zh-CN') : undefined,
       receiveTime: order.completedAt ? new Date(order.completedAt).toLocaleString('zh-CN') : undefined,
       remark: order.remark || undefined,
+      fulfillmentType: base.fulfillmentType || 'delivery',
+      pickupStoreId: base.pickupStoreId,
+      pickupStoreName: order.pickupStoreName,
+      pickupStoreAddress: order.pickupStoreAddress,
+      pickupContactPhone: order.pickupContactPhone,
+      pickupCode: order.pickupCode,
+      pickedUpAt: order.pickedUpAt,
       operationLogs: (base.orderLogs || []).map((l: any) => ({
         ...l,
         operator: l.operatorType === 'admin' ? '管理员' : '用户',

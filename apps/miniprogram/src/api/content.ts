@@ -1,6 +1,6 @@
 import { get } from '@/utils/request'
 
-export function getContentList(params: { categoryId?: number; page: number; pageSize: number }) {
+export function getContentList(params: { categoryId?: number; contentType?: string; placement?: string; keyword?: string; page: number; pageSize: number }) {
   return get<{ list: ContentItem[]; total: number }>('/weapp/content/list', params)
 }
 
@@ -13,25 +13,36 @@ export function getContentCategories() {
 }
 
 export interface ContentItem {
-  id: number
+  id: string
   title: string
-  cover: string
+  coverImage: string
   summary: string
-  categoryId: number
-  categoryName: string
+  categoryId: string
+  contentType: string
+  videoUrl?: string
+  videoCover?: string
+  videoDuration?: number
+  tags?: string[]
   viewCount: number
-  createTime: string
+  publishedAt: string
 }
 
 export interface ContentDetail {
-  id: number
+  id: string
   title: string
-  cover: string
+  coverImage: string
   content: string
-  categoryId: number
-  categoryName: string
+  categoryId: string
+  contentType: string
+  summary: string
+  videoUrl?: string
+  videoCover?: string
+  videoDuration?: number
+  tags?: string[]
+  relatedProductIds?: number[]
+  relatedActivityId?: string
   viewCount: number
-  createTime: string
+  publishedAt: string
 }
 
 export interface ContentCategory {

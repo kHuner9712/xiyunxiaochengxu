@@ -3,14 +3,28 @@
     <view class="content-header">
       <text class="content-title">{{ content.title }}</text>
       <view class="content-meta">
-        <text class="meta-category">{{ content.categoryName }}</text>
+        <text v-if="content.contentType" class="meta-type">{{ content.contentType === 'video' ? '视频' : '文章' }}</text>
         <text class="meta-views">{{ content.viewCount }}阅读</text>
-        <text class="meta-time">{{ content.createTime }}</text>
+        <text v-if="content.publishedAt" class="meta-time">{{ content.publishedAt }}</text>
       </view>
+    </view>
+
+    <view v-if="content.contentType === 'video' && content.videoUrl" class="video-section card">
+      <video
+        class="content-video"
+        :src="content.videoUrl"
+        :poster="content.videoCover || content.coverImage"
+        controls
+        :autoplay="false"
+      />
     </view>
 
     <view class="content-body card">
       <rich-text class="content-rich" :nodes="content.content" />
+    </view>
+
+    <view v-if="content.tags && content.tags.length" class="content-tags card">
+      <text v-for="tag in content.tags" :key="tag" class="tag-item">{{ tag }}</text>
     </view>
   </view>
 </template>
@@ -21,13 +35,13 @@ import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { getContentDetail, type ContentDetail } from '@/api/content'
 
 const content = ref<ContentDetail>({
-  id: 0, title: '', cover: '', content: '', categoryId: 0,
-  categoryName: '', viewCount: 0, createTime: ''
+  id: '', title: '', coverImage: '', content: '', categoryId: '',
+  contentType: 'article', summary: '', viewCount: 0, publishedAt: ''
 })
 
-async function loadContent(id: number) {
+async function loadContent(id: string) {
   try {
-    content.value = await getContentDetail(id)
+    content.value = await getContentDetail(Number(id))
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
   }
@@ -39,7 +53,7 @@ onShareAppMessage(() => ({
 }))
 
 onLoad((options) => {
-  if (options?.id) loadContent(Number(options.id))
+  if (options?.id) loadContent(options.id)
 })
 </script>
 
@@ -68,11 +82,20 @@ onLoad((options) => {
   gap: $spacing-md;
 }
 
-.meta-category,
+.meta-type,
 .meta-views,
 .meta-time {
   font-size: $font-xs;
   color: $text-hint;
+}
+
+.video-section {
+  margin: $spacing-sm $spacing-md;
+}
+
+.content-video {
+  width: 100%;
+  border-radius: $radius-md;
 }
 
 .content-body {
@@ -83,5 +106,20 @@ onLoad((options) => {
   font-size: $font-md;
   line-height: 1.8;
   color: $text-color;
+}
+
+.content-tags {
+  margin: $spacing-sm $spacing-md;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.tag-item {
+  font-size: $font-xs;
+  color: $primary-color;
+  background: rgba($primary-color, 0.1);
+  padding: 4rpx 16rpx;
+  border-radius: $radius-round;
 }
 </style>

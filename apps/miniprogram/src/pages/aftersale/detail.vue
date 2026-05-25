@@ -55,6 +55,7 @@
     </view>
 
     <view v-if="detail.status === 10" class="bottom-bar">
+      <view class="cs-btn" @tap="goCustomerService">联系客服</view>
       <view class="cancel-btn" @tap="handleCancel">取消申请</view>
     </view>
   </view>
@@ -111,6 +112,10 @@ async function handleCancel() {
       }
     }
   })
+}
+
+function goCustomerService() {
+  uni.navigateTo({ url: '/pages/customer-service/index' })
 }
 
 onLoad((options) => {
@@ -300,5 +305,14 @@ onLoad((options) => {
   border-radius: $radius-round;
   font-size: $font-md;
   color: $text-secondary;
+}
+
+.cs-btn {
+  padding: 20rpx 80rpx;
+  background: linear-gradient(135deg, $primary-color, $primary-light);
+  border-radius: $radius-round;
+  font-size: $font-md;
+  color: #FFFFFF;
+  margin-right: $spacing-sm;
 }
 </style>

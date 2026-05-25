@@ -4017,3 +4017,502 @@ API 按调用端分为三大部分：
 | 175 | POST | /api/admin/file/upload | 文件上传 |
 | 176 | GET | /api/admin/refund/list | 退款记录列表 |
 | 177 | GET | /api/admin/refund/detail/:id | 退款记录详情 |
+
+---
+
+## 10. V1.0 新增 API
+
+### 10.1 自提点模块 【V1.0 必做】
+
+#### 10.1.1 自提点列表
+
+- **请求方法**：`GET`
+- **URL**：`/api/weapp/pickup/stores`
+- **权限要求**：需登录
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| keyword | string | 否 | 搜索关键词（门店名称/地址） |
+| page | number | 否 | 页码，默认 1 |
+| pageSize | number | 否 | 每页条数，默认 10 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| list | array | 自提点列表 |
+| list[].id | string | 自提点 ID |
+| list[].name | string | 门店名称 |
+| list[].address | string | 完整地址 |
+| list[].businessHours | string | 营业时间 |
+| list[].phone | string | 联系电话 |
+| list[].image | string | 门店图片 URL |
+| list[].latitude | number | 纬度 |
+| list[].longitude | number | 经度 |
+| pagination | object | 分页信息 |
+
+**错误码**：无
+
+---
+
+#### 10.1.2 自提点详情
+
+- **请求方法**：`GET`
+- **URL**：`/api/weapp/pickup/stores/:id`
+- **权限要求**：需登录
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| id | string | 是 | 自提点 ID（路径参数） |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| id | string | 自提点 ID |
+| name | string | 门店名称 |
+| province | string | 省份 |
+| city | string | 城市 |
+| district | string | 区/县 |
+| detailAddress | string | 详细地址 |
+| businessHours | string | 营业时间 |
+| phone | string | 联系电话 |
+| image | string | 门店图片 URL |
+| latitude | number | 纬度 |
+| longitude | number | 经度 |
+
+**错误码**：40401（自提点不存在）
+
+---
+
+### 10.2 订单模块扩展 【V1.0 必做】
+
+#### 10.2.1 订单试算扩展
+
+在现有 `/api/weapp/order/preview` 接口的请求参数中新增：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| fulfillmentType | string | 否 | 配送方式：delivery-快递配送，pickup-到店自提，默认 delivery |
+| pickupStoreId | string | 否 | 自提点 ID（fulfillmentType=pickup 时必填） |
+
+响应字段新增：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| fulfillmentType | string | 配送方式 |
+| pickupStore | object | 自提点信息（fulfillmentType=pickup 时返回） |
+| pickupStore.id | string | 自提点 ID |
+| pickupStore.name | string | 门店名称 |
+| pickupStore.address | string | 完整地址 |
+| shippingFee | number | 运费（fulfillmentType=pickup 时为 0） |
+
+---
+
+#### 10.2.2 创建订单扩展
+
+在现有 `/api/weapp/order/create` 接口的请求参数中新增：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| fulfillmentType | string | 否 | 配送方式：delivery-快递配送，pickup-到店自提，默认 delivery |
+| pickupStoreId | string | 否 | 自提点 ID（fulfillmentType=pickup 时必填） |
+
+响应字段新增：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| pickupCode | string | 自提码（fulfillmentType=pickup 且支付成功后返回） |
+
+---
+
+#### 10.2.3 订单详情扩展
+
+在现有 `/api/weapp/order/detail` 接口的响应字段中新增：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| fulfillmentType | string | 配送方式：delivery-快递配送，pickup-到店自提 |
+| pickupCode | string | 自提码（自提订单） |
+| pickupStore | object | 自提点信息（自提订单） |
+| pickupStore.id | string | 自提点 ID |
+| pickupStore.name | string | 门店名称 |
+| pickupStore.address | string | 完整地址 |
+| pickupStore.businessHours | string | 营业时间 |
+| pickupStore.phone | string | 联系电话 |
+| pickupStore.latitude | number | 纬度 |
+| pickupStore.longitude | number | 经度 |
+| pickedUpAt | string | 核销时间（已核销时返回） |
+
+---
+
+### 10.3 自提核销 API（管理后台）【V1.0 必做】
+
+#### 10.3.1 查询自提码对应订单
+
+- **请求方法**：`GET`
+- **URL**：`/api/admin/pickup/verify-query`
+- **权限要求**：需登录 + pickup:verify 权限
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| pickupCode | string | 是 | 自提码 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| orderId | string | 订单 ID |
+| orderNo | string | 订单号 |
+| items | array | 商品列表 |
+| storeName | string | 自提点名称 |
+| userName | string | 用户昵称 |
+| userPhone | string | 用户手机号 |
+| status | string | 订单状态 |
+
+**错误码**：40401（自提码不存在）、20002（订单状态不允许核销）
+
+---
+
+#### 10.3.2 确认核销
+
+- **请求方法**：`POST`
+- **URL**：`/api/admin/pickup/verify-confirm`
+- **权限要求**：需登录 + pickup:verify 权限
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| pickupCode | string | 是 | 自提码 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| success | boolean | 是否核销成功 |
+| verifiedAt | string | 核销时间 |
+
+**错误码**：40401（自提码不存在）、20002（订单状态不允许核销）、40901（重复核销）
+
+---
+
+### 10.4 客服配置 API 【V1.0 必做】
+
+#### 10.4.1 获取客服配置（小程序端）
+
+- **请求方法**：`GET`
+- **URL**：`/api/weapp/customer-service/config`
+- **权限要求**：无
+
+**请求参数**：无
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| onlineEnabled | boolean | 是否启用在线客服 |
+| phone | string | 客服电话 |
+| wechat | string | 客服微信号 |
+| qrcodeUrl | string | 客服二维码图片 URL |
+| workTime | string | 工作时间描述 |
+| offlineMessage | string | 非工作时间自动回复语 |
+
+**错误码**：无
+
+---
+
+#### 10.4.2 获取客服配置（管理后台）
+
+- **请求方法**：`GET`
+- **URL**：`/api/admin/customer-service/config`
+- **权限要求**：需登录 + system:customer-service 权限
+
+**请求参数**：无
+
+**响应字段**：同 10.4.1
+
+---
+
+#### 10.4.3 更新客服配置（管理后台）
+
+- **请求方法**：`PUT`
+- **URL**：`/api/admin/customer-service/config-update`
+- **权限要求**：需登录 + system:customer-service 权限
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| onlineEnabled | boolean | 否 | 是否启用在线客服 |
+| phone | string | 否 | 客服电话 |
+| wechat | string | 否 | 客服微信号 |
+| qrcodeUrl | string | 否 | 客服二维码图片 URL |
+| workTime | string | 否 | 工作时间描述 |
+| offlineMessage | string | 否 | 非工作时间自动回复语 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| success | boolean | 是否更新成功 |
+
+---
+
+### 10.5 活动内容流 API 【V1.0 必做】
+
+#### 10.5.1 活动首页内容流
+
+- **请求方法**：`GET`
+- **URL**：`/api/weapp/activity/feed`
+- **权限要求**：无
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| tab | string | 否 | 子Tab：recommend-推荐，discount-优惠，video-视频，article-文章，offline-线下·自提，默认 recommend |
+| page | number | 否 | 页码，默认 1 |
+| pageSize | number | 否 | 每页条数，默认 10 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| list | array | 内容列表（混合类型） |
+| list[].type | string | 内容类型：activity-活动，article-文章，video-视频 |
+| list[].id | string | 内容 ID |
+| list[].title | string | 标题 |
+| list[].coverImage | string | 封面图 URL |
+| list[].tag | string | 标签 |
+| list[].viewCount | number | 浏览量/播放量 |
+| list[].publishTime | string | 发布时间 |
+| list[].startTime | string | 活动开始时间（type=activity） |
+| list[].endTime | string | 活动结束时间（type=activity） |
+| list[].activityType | number | 活动类型（type=activity） |
+| list[].videoDuration | number | 视频时长秒数（type=video） |
+| pagination | object | 分页信息 |
+
+**错误码**：40001（参数错误）
+
+---
+
+#### 10.5.2 内容详情扩展
+
+在现有 `/api/weapp/content/detail` 接口的响应字段中新增：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| contentType | string | 内容类型：article-文章，video-视频 |
+| videoUrl | string | 视频 URL（contentType=video） |
+| videoCover | string | 视频封面图 URL |
+| videoDuration | number | 视频时长（秒） |
+| tags | array | 标签列表 |
+| relatedProducts | array | 关联商品列表（含 id/name/mainImage/price） |
+| relatedActivityId | string | 关联活动 ID |
+
+---
+
+### 10.6 分享与裂变 API 【V1.0 必做】
+
+#### 10.6.1 记录分享行为
+
+- **请求方法**：`POST`
+- **URL**：`/api/weapp/share/record`
+- **权限要求**：需登录
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| shareType | string | 是 | 分享类型：product-商品，activity-活动，content-内容，invite-邀请 |
+| shareId | string | 否 | 分享对象 ID（商品ID/活动ID/内容ID） |
+| channel | string | 否 | 分享渠道：friend-好友/群，moments-朋友圈海报，qrcode-二维码 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| success | boolean | 是否记录成功 |
+| reward | object | 奖励信息（如有） |
+| reward.type | string | 奖励类型：points |
+| reward.amount | number | 奖励数量 |
+
+---
+
+#### 10.6.2 获取分享海报数据
+
+- **请求方法**：`GET`
+- **URL**：`/api/weapp/share/poster`
+- **权限要求**：需登录
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| type | string | 是 | 海报类型：product-商品，activity-活动，invite-邀请 |
+| id | string | 否 | 对象 ID（type=product/activity 时必填） |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| posterData | object | 海报渲染数据（标题、价格、图片等） |
+| qrcodeUrl | string | 专属小程序码 URL（含邀请参数） |
+
+---
+
+#### 10.6.3 绑定邀请关系
+
+- **请求方法**：`POST`
+- **URL**：`/api/weapp/share/bind-invite`
+- **权限要求**：需登录
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| inviterId | string | 是 | 邀请人用户 ID（从分享链接参数获取） |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| success | boolean | 是否绑定成功 |
+| isNewBind | boolean | 是否新绑定（已绑定过返回 false） |
+
+**错误码**：40001（参数错误）、40901（已绑定其他邀请人）
+
+**业务说明**：用户通过分享链接进入小程序后，前端从启动参数中获取 inviterId，调用此接口绑定邀请关系。同一用户只能绑定一个邀请人。
+
+---
+
+#### 10.6.4 获取邀请统计
+
+- **请求方法**：`GET`
+- **URL**：`/api/weapp/share/invite-stats`
+- **权限要求**：需登录
+
+**请求参数**：无
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| totalInvites | number | 累计邀请人数 |
+| orderedInvites | number | 已下单邀请人数 |
+| totalReward | number | 已获奖励总额（积分） |
+
+---
+
+#### 10.6.5 获取邀请记录
+
+- **请求方法**：`GET`
+- **URL**：`/api/weapp/share/invite-records`
+- **权限要求**：需登录
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| page | number | 否 | 页码，默认 1 |
+| pageSize | number | 否 | 每页条数，默认 10 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| list | array | 邀请记录列表 |
+| list[].avatar | string | 被邀请人头像 |
+| list[].nickname | string | 被邀请人昵称（脱敏） |
+| list[].status | string | 状态：registered-已注册，ordered-已下单，rewarded-已发放奖励 |
+| list[].createTime | string | 绑定时间 |
+| pagination | object | 分页信息 |
+
+---
+
+#### 10.6.6 裂变奖励发放（内部接口）
+
+- **请求方法**：`POST`
+- **URL**：`/api/internal/share/reward`
+- **权限要求**：内部服务调用（不对外暴露）
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| inviterId | string | 是 | 邀请人用户 ID |
+| inviteeId | string | 是 | 被邀请人用户 ID |
+| campaignId | string | 是 | 裂变活动 ID |
+| triggerEvent | string | 是 | 触发事件：register-注册，first_order-首单完成 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| success | boolean | 是否发放成功 |
+| rewardType | string | 奖励类型 |
+| rewardAmount | number | 奖励数量 |
+
+**业务说明**：此接口由订单完成等事件触发内部调用，不对外暴露。发放前需校验防刷规则和奖励上限。
+
+---
+
+### 10.7 帮助中心 API 【V1.0 必做】
+
+#### 10.7.1 获取帮助中心内容
+
+- **请求方法**：`GET`
+- **URL**：`/api/weapp/help/list`
+- **权限要求**：无
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| category | string | 否 | 帮助分类：shopping-购物指南，aftersale-售后规则，delivery-配送说明，member-会员权益 |
+
+**响应字段**：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| list | array | 帮助内容列表 |
+| list[].id | string | 帮助 ID |
+| list[].question | string | 问题 |
+| list[].answer | string | 答案 |
+| list[].category | string | 分类 |
+
+---
+
+### 10.8 管理后台新增 API 【V1.0 必做】
+
+#### 10.8.1 自提点管理 API
+
+| 接口 | 方法 | URL | 说明 |
+|------|------|-----|------|
+| 自提点列表 | GET | /api/admin/pickup/store-list | 分页查询自提点列表 |
+| 新增自提点 | POST | /api/admin/pickup/store-create | 新增自提点 |
+| 更新自提点 | PUT | /api/admin/pickup/store-update | 更新自提点信息 |
+| 删除自提点 | DELETE | /api/admin/pickup/store-delete | 删除自提点（软删除） |
+
+#### 10.8.2 裂变活动配置 API
+
+| 接口 | 方法 | URL | 说明 |
+|------|------|-----|------|
+| 获取裂变配置 | GET | /api/admin/share/campaign-config | 获取当前裂变活动配置 |
+| 更新裂变配置 | PUT | /api/admin/share/campaign-config-update | 更新裂变活动配置 |
+
+#### 10.8.3 邀请/分享统计 API
+
+| 接口 | 方法 | URL | 说明 |
+|------|------|-----|------|
+| 分享统计概览 | GET | /api/admin/share/stats | 获取邀请统计概览数据 |
+| 邀请关系列表 | GET | /api/admin/share/invite-relations | 分页查询邀请关系列表 |
+| 奖励发放记录 | GET | /api/admin/share/reward-logs | 分页查询奖励发放记录 |
+| 异常邀请记录 | GET | /api/admin/share/abnormal | 分页查询异常邀请记录 |

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { calculateBabyMonthAge, getMemberLevelByGrowth, MEMBER_LEVELS, paginate } from '@baby-mall/shared';
+import { calculateBabyMonthAge, getMemberLevelByGrowth, MEMBER_LEVELS, paginate, serializeProductCard } from '@baby-mall/shared';
 
 @Injectable()
 export class HomeService {
@@ -20,11 +20,11 @@ export class HomeService {
 
     return {
       banners,
-      recommendations,
+      quickEntries: [],
+      monthRecommend: monthAgeRecommend,
       hotProducts,
       newProducts,
       activities,
-      monthAgeRecommend,
     };
   }
 
@@ -52,7 +52,7 @@ export class HomeService {
     ]);
 
     return paginate(
-      list.map((p) => ({ ...p, id: p.id.toString() })),
+      list.map((p) => serializeProductCard(p)),
       total,
       page,
       pageSize,
@@ -68,7 +68,7 @@ export class HomeService {
   }
 
   private async getRecommendations() {
-    return this.prisma.product.findMany({
+    const list = await this.prisma.product.findMany({
       where: {
         deletedAt: null,
         status: 1,
@@ -84,11 +84,12 @@ export class HomeService {
         totalSales: true,
         isRecommend: true,
       },
-    }).then((list) => list.map((p) => ({ ...p, id: p.id.toString() })));
+    });
+    return list.map((p) => serializeProductCard(p));
   }
 
   private async getHotProducts() {
-    return this.prisma.product.findMany({
+    const list = await this.prisma.product.findMany({
       where: {
         deletedAt: null,
         status: 1,
@@ -102,11 +103,12 @@ export class HomeService {
         minPrice: true,
         totalSales: true,
       },
-    }).then((list) => list.map((p) => ({ ...p, id: p.id.toString() })));
+    });
+    return list.map((p) => serializeProductCard(p));
   }
 
   private async getNewProducts() {
-    return this.prisma.product.findMany({
+    const list = await this.prisma.product.findMany({
       where: {
         deletedAt: null,
         status: 1,
@@ -120,12 +122,13 @@ export class HomeService {
         minPrice: true,
         totalSales: true,
       },
-    }).then((list) => list.map((p) => ({ ...p, id: p.id.toString() })));
+    });
+    return list.map((p) => serializeProductCard({ ...p, tag: '新品' }));
   }
 
   private async getActivities() {
     const now = new Date();
-    return this.prisma.activity.findMany({
+    const list = await this.prisma.activity.findMany({
       where: {
         status: 2,
         startTime: { lte: now },
@@ -141,7 +144,8 @@ export class HomeService {
         startTime: true,
         endTime: true,
       },
-    }).then((list) => list.map((a) => ({ ...a, id: a.id.toString() })));
+    });
+    return list.map((a) => ({ ...a, id: a.id.toString(), image: a.bannerImage }));
   }
 
   private async getMonthAgeRecommend(userId: string) {
@@ -156,7 +160,7 @@ export class HomeService {
     const minMonth = Math.max(0, monthAge - 1);
     const maxMonth = monthAge + 1;
 
-    return this.prisma.product.findMany({
+    const list = await this.prisma.product.findMany({
       where: {
         deletedAt: null,
         status: 1,
@@ -174,6 +178,7 @@ export class HomeService {
         recommendAgeMin: true,
         recommendAgeMax: true,
       },
-    }).then((list) => list.map((p) => ({ ...p, id: p.id.toString(), monthAge })));
+    });
+    return list.map((p) => serializeProductCard({ ...p, tag: `${monthAge}月龄` }));
   }
 }

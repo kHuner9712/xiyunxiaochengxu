@@ -5,17 +5,23 @@
         <el-form-item label="标题">
           <el-input v-model="searchForm.title" placeholder="请输入标题" clearable />
         </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="searchForm.type" placeholder="请选择" clearable>
-            <el-option label="文章" :value="1" />
-            <el-option label="视频" :value="2" />
-            <el-option label="图文" :value="3" />
+        <el-form-item label="内容类型">
+          <el-select v-model="searchForm.contentType" placeholder="请选择" clearable>
+            <el-option label="文章" value="article" />
+            <el-option label="视频" value="video" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="投放位置">
+          <el-select v-model="searchForm.placement" placeholder="请选择" clearable>
+            <el-option label="活动板块" value="activity" />
+            <el-option label="首页推荐" value="home" />
+            <el-option label="帮助中心" value="user_help" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="请选择" clearable>
             <el-option label="已发布" :value="1" />
-            <el-option label="草稿" :value="0" />
+            <el-option label="草稿" :value="2" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -40,12 +46,12 @@
         </el-table-column>
         <el-table-column prop="title" label="标题" show-overflow-tooltip min-width="200" />
         <el-table-column label="类型" width="80">
-          <template #default="{ row }">{{ CONTENT_TYPE_MAP[row.type] || '-' }}</template>
+          <template #default="{ row }">{{ CONTENT_TYPE_MAP[row.contentType] || '-' }}</template>
         </el-table-column>
         <el-table-column prop="viewCount" label="浏览量" width="80" />
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '已发布' : '草稿' }}</el-tag>
+            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '已发布' : row.status === 2 ? '草稿' : '-' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="发布时间" width="180">
@@ -84,14 +90,15 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { contentApi } from '@/api/content'
 import { formatDate } from '@/utils/format'
 
-const CONTENT_TYPE_MAP: Record<number, string> = { 1: '文章', 2: '视频', 3: '图文' }
+const CONTENT_TYPE_MAP: Record<string, string> = { article: '文章', video: '视频' }
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<any[]>([])
 
 const searchForm = reactive({
   title: '',
-  type: undefined as number | undefined,
+  contentType: undefined as string | undefined,
+  placement: undefined as string | undefined,
   status: undefined as number | undefined,
 })
 
@@ -115,14 +122,15 @@ function handleSearch() {
 
 function resetSearch() {
   searchForm.title = ''
-  searchForm.type = undefined
+  searchForm.contentType = undefined
+  searchForm.placement = undefined
   searchForm.status = undefined
   handleSearch()
 }
 
 async function handleToggleStatus(row: any) {
   try {
-    await contentApi.update({ id: row.id, status: row.status === 1 ? 0 : 1 })
+    await contentApi.update({ id: row.id, status: row.status === 1 ? 2 : 1 })
     ElMessage.success('操作成功')
     fetchList()
   } catch {}

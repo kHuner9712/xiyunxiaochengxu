@@ -17,7 +17,7 @@ export class DashboardService {
 
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const paidStatuses = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+    const paidStatuses = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed];
 
     const [
       todaySales,
@@ -59,7 +59,7 @@ export class DashboardService {
       this.prisma.order.count(),
       this.prisma.product.count({ where: { deletedAt: null } }),
       this.prisma.order.count({ where: { status: OrderStatus.pending_payment } }),
-      this.prisma.order.count({ where: { status: OrderStatus.pending_delivery } }),
+      this.prisma.order.count({ where: { status: { in: [OrderStatus.pending_delivery, OrderStatus.pending_pickup] } } }),
       this.prisma.aftersaleOrder.count({ where: { status: 'pending_review' } }),
     ]);
 
@@ -123,7 +123,7 @@ export class DashboardService {
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
 
-      const paidStatuses = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+      const paidStatuses = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed];
 
       const [orderCount, revenue] = await Promise.all([
         this.prisma.order.count({

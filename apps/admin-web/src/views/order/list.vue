@@ -10,6 +10,12 @@
             <el-option v-for="(label, key) in ORDER_STATUS_MAP" :key="key" :label="label" :value="key" />
           </el-select>
         </el-form-item>
+        <el-form-item label="配送方式">
+          <el-select v-model="searchForm.fulfillmentType" placeholder="全部" clearable>
+            <el-option label="快递配送" value="delivery" />
+            <el-option label="到店自提" value="pickup" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="下单时间">
           <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" />
         </el-form-item>
@@ -80,6 +86,7 @@ const dateRange = ref<string[]>([])
 const searchForm = reactive({
   orderNo: '',
   status: undefined as string | undefined,
+  fulfillmentType: undefined as string | undefined,
 })
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
@@ -114,6 +121,7 @@ function handleSearch() {
 function resetSearch() {
   searchForm.orderNo = ''
   searchForm.status = undefined
+  searchForm.fulfillmentType = undefined
   dateRange.value = []
   handleSearch()
 }

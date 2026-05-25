@@ -70,6 +70,12 @@
 | 25 | /pages/aftersale/detail | 售后详情 | 是 | - |
 | 26 | /pages/content/list | 内容列表 | 否 | - |
 | 27 | /pages/content/detail | 内容详情 | 否 | - |
+| 28 | /pages/activity/home | 活动首页 | 否 | 活动Tab | V1.0 必做 |
+| 29 | /pages/pickup/select | 自提点选择 | 是 | - | V1.0 必做 |
+| 30 | /pages/share/invite | 邀请分享 | 是 | - | V1.0 必做 |
+| 31 | /pages/share/poster | 分享海报 | 是 | - | V1.0 必做 |
+| 32 | /pages/help/index | 帮助中心 | 否 | - | V1.0 必做 |
+| 33 | /pages/service/index | 客服与帮助 | 否 | - | V1.0 必做 |
 
 ### 2.2 TabBar 配置
 
@@ -77,6 +83,7 @@
 |-----|----------|------|------|
 | 首页 | /pages/home/index | home | 首页 |
 | 分类 | /pages/category/index | category | 分类 |
+| 活动 | /pages/activity/home | activity | 活动 |
 | 购物车 | /pages/cart/index | cart | 购物车 |
 | 我的 | /pages/user/index | user | 我的 |
 
@@ -311,6 +318,7 @@
 | ReviewList | 商品评价列表摘要，展示最新3条评价 |
 | BottomActionBar | 底部操作栏（客服、收藏、加入购物车、立即购买） |
 | SharePopup | 分享弹窗（分享好友、生成海报） |
+| PickupTag | 自提标签，展示"支持到店自提" | V1.0 必做 |
 
 **用户操作：**
 
@@ -326,6 +334,8 @@
 | 分享 | tap | 弹出分享弹窗 |
 | 查看全部评价 | tap | 跳转评价列表（如有独立页面） |
 | 客服 | tap | 跳转客服会话 |
+| 分享裂变 | tap | 弹出分享弹窗，含"分享好友"和"生成邀请海报"选项 | V1.0 必做 |
+| 自提提示 | - | 商品详情页展示"支持到店自提"标签（如该商品支持自提） | V1.0 必做 |
 
 **调用接口：**
 
@@ -517,6 +527,8 @@
 | PriceSummary | 价格明细（商品总额、运费、优惠、积分抵扣、应付金额） |
 | OrderSubmit | 底部提交订单栏 |
 | RemarkInput | 订单备注输入框 |
+| DeliveryModeSelector | 配送方式选择（快递配送/到店自提），默认快递配送 | V1.0 必做 |
+| PickupStoreSelector | 自提点选择弹窗，选择自提方式后展示 | V1.0 必做 |
 
 **用户操作：**
 
@@ -527,6 +539,8 @@
 | 使用积分抵扣 | toggle/输入 | 开启积分抵扣，输入使用积分数，实时计算抵扣金额 |
 | 填写备注 | input | 输入订单备注（最多50字） |
 | 提交订单 | tap | 校验地址 → 校验库存 → 调用创建订单接口 → 跳转支付 |
+| 切换配送方式 | tap | 切换快递配送/到店自提，切换后重新计算运费 | V1.0 必做 |
+| 选择自提点 | tap | 弹出自提点列表选择 | V1.0 必做 |
 
 **调用接口：**
 
@@ -534,7 +548,7 @@
 |------|------|------|----------|----------|
 | /api/weapp/address/list | GET | 获取地址列表 | 无 | addresses[{...}] |
 | /api/weapp/coupon/available | GET | 获取可用优惠券 | productIds[], totalAmount | coupons[{...}] |
-| /api/weapp/order/create | POST | 创建订单 | addressId, items[{skuId, quantity}], couponId, usePoints, remark | orderId, payInfo |
+| /api/weapp/order/create | POST | 创建订单 | addressId, items[{skuId, quantity}], couponId, usePoints, remark, fulfillmentType, pickupStoreId | orderId, payInfo |
 
 **页面状态：**
 
@@ -707,6 +721,8 @@
 | PriceDetail | 价格明细（商品总额、运费、优惠、积分抵扣、实付金额） |
 | OrderActions | 底部操作按钮（根据订单状态展示不同按钮） |
 | OrderBaseInfo | 订单基本信息（订单号、下单时间、支付方式等） |
+| PickupInfo | 自提信息卡片（自提码、自提点名称、地址、营业时间、联系电话），仅自提订单展示 | V1.0 必做 |
+| CustomerServiceEntry | 联系客服入口按钮 | V1.0 必做 |
 
 **用户操作：**
 
@@ -719,6 +735,9 @@
 | 查看物流 | tap | 展示物流详情弹窗或跳转物流页 |
 | 复制订单号 | tap | 复制到剪贴板，提示"已复制" |
 | 再次购买 | tap | 将订单商品加入购物车 |
+| 复制自提码 | tap | 复制自提码到剪贴板 | V1.0 必做 |
+| 联系客服 | tap | 跳转客服与帮助页 | V1.0 必做 |
+| 导航到自提点 | tap | 调用微信地图导航到自提点 | V1.1 可选 |
 
 **调用接口：**
 
@@ -824,8 +843,9 @@
 | 宝宝档案 | /pages/baby/list | 是 |
 | 积分中心 | /pages/points/index | 是 |
 | 售后记录 | /pages/aftersale/list | 是 |
-| 育儿知识 | /pages/content/list | 否 |
-| 联系客服 | - | 否 |
+| 邀请有礼 | /pages/share/invite | 是 | V1.0 必做 |
+| 客服与帮助 | /pages/service/index | 否 | V1.0 必做 |
+| 帮助中心 | /pages/help/index | 否 | V1.0 必做 |
 
 ---
 
@@ -1381,21 +1401,24 @@
 
 ---
 
-### 3.21 活动列表 /pages/activity/index
+### 3.21 活动首页 /pages/activity/home
 
 | 属性 | 说明 |
 |------|------|
-| 页面路径 | /pages/activity/index |
-| 页面用途 | 展示所有进行中的活动 |
-| 所属Tab | 无 |
+| 页面路径 | /pages/activity/home |
+| 页面用途 | 活动综合运营入口，展示推荐内容流、优惠活动、视频、文章、线下/自提活动 |
+| 所属Tab | 活动Tab |
 
 **核心组件：**
 
 | 组件名 | 说明 |
 |--------|------|
-| ActivityTab | 活动类型Tab（全部/限时折扣/满减/满赠/组合套餐） |
+| ActivityHomeTab | 顶部子Tab（推荐/优惠/视频/文章/线下·自提） |
+| ContentFeed | 混合内容流（活动卡片+文章卡片+视频卡片），推荐Tab使用 |
 | ActivityCard | 活动卡片（活动图片、名称、时间、倒计时） |
-| Countdown | 倒计时组件（天:时:分:秒） |
+| ArticleCard | 文章卡片（封面图、标题、标签、阅读量） |
+| VideoCard | 视频卡片（视频封面含播放按钮、标题、时长、播放量） |
+| Countdown | 倒计时组件 |
 
 **用户操作：**
 
@@ -1787,6 +1810,166 @@
 | 场景 | 展示方式 |
 |------|----------|
 | 加载中 | 标题骨架屏 + 内容区域骨架屏 |
+
+---
+
+### 3.28 自提点选择 /pages/pickup/select 【V1.0 必做】
+
+| 属性 | 说明 |
+|------|------|
+| 页面路径 | /pages/pickup/select |
+| 页面用途 | 选择自提点，展示自提点列表 |
+| 所属Tab | 无 |
+
+**核心组件：**
+
+| 组件名 | 说明 |
+|--------|------|
+| PickupStoreCard | 自提点卡片（门店名称、地址、营业时间、联系电话、距离） |
+| PickupStoreSearch | 自提点搜索框 |
+
+**用户操作：**
+
+| 操作 | 触发方式 | 响应 |
+|------|----------|------|
+| 搜索自提点 | input | 按关键词搜索自提点 |
+| 选择自提点 | tap | 选中自提点，返回下单确认页 |
+| 查看自提点详情 | tap | 展示自提点详细信息 |
+| 拨打自提点电话 | tap | 调起电话拨打 |
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 返回数据 |
+|------|------|------|----------|----------|
+| /api/weapp/pickup/stores | GET | 获取自提点列表 | keyword, page, pageSize | stores[{id, name, address, businessHours, phone, distance, image}] |
+
+---
+
+### 3.29 邀请分享 /pages/share/invite 【V1.0 必做】
+
+| 属性 | 说明 |
+|------|------|
+| 页面路径 | /pages/share/invite |
+| 页面用途 | 邀请好友，展示邀请规则、邀请统计、分享入口 |
+| 所属Tab | 无 |
+
+**核心组件：**
+
+| 组件名 | 说明 |
+|--------|------|
+| InviteRule | 邀请规则说明（奖励规则、邀请流程） |
+| InviteStats | 邀请统计（累计邀请人数、已下单人数、已获奖励） |
+| ShareActions | 分享操作区（分享好友、生成海报） |
+
+**用户操作：**
+
+| 操作 | 触发方式 | 响应 |
+|------|----------|------|
+| 分享给好友 | tap | 调用微信分享，生成带邀请参数的小程序卡片 |
+| 生成海报 | tap | 跳转海报生成页 /pages/share/poster |
+| 查看邀请记录 | tap | 展示邀请记录列表 |
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 返回数据 |
+|------|------|------|----------|----------|
+| /api/weapp/share/invite-stats | GET | 获取邀请统计 | 无 | {totalInvites, orderedInvites, totalReward} |
+| /api/weapp/share/invite-records | GET | 获取邀请记录 | page, pageSize | records[{avatar, nickname, status, createTime}] |
+
+---
+
+### 3.30 分享海报 /pages/share/poster 【V1.0 必做】
+
+| 属性 | 说明 |
+|------|------|
+| 页面路径 | /pages/share/poster |
+| 页面用途 | 生成带邀请码的分享海报 |
+| 所属Tab | 无 |
+
+**核心组件：**
+
+| 组件名 | 说明 |
+|--------|------|
+| PosterCanvas | 海报画布，Canvas 绘制海报 |
+| PosterPreview | 海报预览 |
+| SaveButton | 保存到相册按钮 |
+
+**用户操作：**
+
+| 操作 | 触发方式 | 响应 |
+|------|----------|------|
+| 生成海报 | 页面加载 | Canvas 绘制海报（含邀请人专属小程序码） |
+| 保存到相册 | tap | 调用 wx.saveImageToPhotosAlbum 保存 |
+| 分享好友 | tap | 调用微信分享 |
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 返回数据 |
+|------|------|------|----------|----------|
+| /api/weapp/share/poster | GET | 获取海报数据（含邀请小程序码） | type: product/activity/invite, id | {posterData, qrcodeUrl} |
+
+---
+
+### 3.31 帮助中心 /pages/help/index 【V1.0 必做】
+
+| 属性 | 说明 |
+|------|------|
+| 页面路径 | /pages/help/index |
+| 页面用途 | 展示常见问题FAQ和平台规则 |
+| 所属Tab | 无 |
+
+**核心组件：**
+
+| 组件名 | 说明 |
+|--------|------|
+| HelpCategory | 帮助分类列表（购物指南/售后规则/配送说明/会员权益等） |
+| FaqList | FAQ 列表，支持展开/收起 |
+
+**用户操作：**
+
+| 操作 | 触发方式 | 响应 |
+|------|----------|------|
+| 点击分类 | tap | 展示该分类下的FAQ列表 |
+| 展开FAQ | tap | 展开答案内容 |
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 返回数据 |
+|------|------|------|----------|----------|
+| /api/weapp/help/list | GET | 获取帮助中心内容 | category | helps[{id, question, answer, category}] |
+
+---
+
+### 3.32 客服与帮助 /pages/service/index 【V1.0 必做】
+
+| 属性 | 说明 |
+|------|------|
+| 页面路径 | /pages/service/index |
+| 页面用途 | 客服联系方式和帮助中心入口 |
+| 所属Tab | 无 |
+
+**核心组件：**
+
+| 组件名 | 说明 |
+|--------|------|
+| CustomerServiceCard | 客服信息卡片（在线客服/电话/微信，根据后台配置展示） |
+| HelpEntry | 帮助中心快捷入口 |
+
+**用户操作：**
+
+| 操作 | 触发方式 | 响应 |
+|------|----------|------|
+| 在线客服 | tap | 跳转微信客服对话（如已启用） |
+| 拨打客服电话 | tap | 调起电话拨打 |
+| 复制微信号 | tap | 复制客服微信号到剪贴板 |
+| 查看客服二维码 | tap | 展示客服二维码大图，支持长按识别/保存 |
+| 进入帮助中心 | tap | 跳转帮助中心 /pages/help/index |
+
+**调用接口：**
+
+| 接口 | 方法 | 说明 | 请求参数 | 返回数据 |
+|------|------|------|----------|----------|
+| /api/weapp/customer-service/config | GET | 获取客服配置 | 无 | {onlineEnabled, phone, wechat, qrcodeUrl, workTime, offlineMessage} |
 
 ---
 
@@ -2217,6 +2400,49 @@
         "navigationBarTitleText": "文章详情",
         "enablePullDownRefresh": false
       }
+    },
+    {
+      "path": "pages/activity/home",
+      "style": {
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true,
+        "backgroundTextStyle": "dark"
+      }
+    },
+    {
+      "path": "pages/pickup/select",
+      "style": {
+        "navigationBarTitleText": "选择自提点",
+        "enablePullDownRefresh": false
+      }
+    },
+    {
+      "path": "pages/share/invite",
+      "style": {
+        "navigationBarTitleText": "邀请有礼",
+        "enablePullDownRefresh": false
+      }
+    },
+    {
+      "path": "pages/share/poster",
+      "style": {
+        "navigationBarTitleText": "分享海报",
+        "enablePullDownRefresh": false
+      }
+    },
+    {
+      "path": "pages/help/index",
+      "style": {
+        "navigationBarTitleText": "帮助中心",
+        "enablePullDownRefresh": false
+      }
+    },
+    {
+      "path": "pages/service/index",
+      "style": {
+        "navigationBarTitleText": "客服与帮助",
+        "enablePullDownRefresh": false
+      }
     }
   ],
   "globalStyle": {
@@ -2242,6 +2468,12 @@
         "text": "分类",
         "iconPath": "static/tab/category.png",
         "selectedIconPath": "static/tab/category-active.png"
+      },
+      {
+        "pagePath": "pages/activity/home",
+        "text": "活动",
+        "iconPath": "static/tab/activity.png",
+        "selectedIconPath": "static/tab/activity-active.png"
       },
       {
         "pagePath": "pages/cart/index",

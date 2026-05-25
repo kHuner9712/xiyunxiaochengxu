@@ -1,6 +1,17 @@
 <template>
   <view class="confirm-page">
-    <view class="address-section card" @tap="selectAddress">
+    <view class="delivery-mode-section card">
+      <view class="mode-tabs">
+        <view class="mode-tab" :class="{ active: fulfillmentType === 'delivery' }" @tap="switchFulfillmentType('delivery')">
+          <text class="mode-tab-text">快递配送</text>
+        </view>
+        <view class="mode-tab" :class="{ active: fulfillmentType === 'pickup' }" @tap="switchFulfillmentType('pickup')">
+          <text class="mode-tab-text">到店自提</text>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="fulfillmentType === 'delivery'" class="address-section card" @tap="selectAddress">
       <view v-if="address" class="address-info">
         <view class="address-top">
           <text class="address-name">{{ address.name }}</text>
@@ -10,6 +21,20 @@
       </view>
       <view v-else class="no-address">
         <text class="no-address-text">请选择收货地址</text>
+      </view>
+      <text class="address-arrow">›</text>
+    </view>
+
+    <view v-if="fulfillmentType === 'pickup'" class="pickup-section card" @tap="selectPickupStore">
+      <view v-if="selectedPickupStore" class="pickup-info">
+        <view class="pickup-top">
+          <text class="pickup-name">{{ selectedPickupStore.name }}</text>
+        </view>
+        <text class="pickup-address">{{ selectedPickupStore.fullAddress }}</text>
+        <text v-if="selectedPickupStore.businessHours" class="pickup-hours">营业时间：{{ selectedPickupStore.businessHours }}</text>
+      </view>
+      <view v-else class="no-address">
+        <text class="no-address-text">请选择自提点</text>
       </view>
       <text class="address-arrow">›</text>
     </view>
@@ -127,6 +152,7 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { createOrder, previewOrder, type OrderPreview, type OrderPreviewItem } from '@/api/order'
+import { getPickupStoreList, type PickupStoreItem } from '@/api/pickup-store'
 import { getAddressList, type AddressItem } from '@/api/address'
 import { getAvailableCoupons, type MyCouponItem } from '@/api/coupon'
 import { createPayment, wxPay } from '@/api/payment'
@@ -144,6 +170,8 @@ interface OrderItemInput {
 }
 
 const address = ref<AddressItem | null>(null)
+const fulfillmentType = ref<'delivery' | 'pickup'>('delivery')
+const selectedPickupStore = ref<PickupStoreItem | null>(null)
 const orderItems = ref<OrderItemInput[]>([])
 const selectedCoupon = ref<MyCouponItem | null>(null)
 const usePoints = ref(false)
@@ -189,7 +217,9 @@ async function loadPreview() {
         skuId: item.skuId,
         quantity: item.quantity
       })),
-      addressId: address.value?.id,
+      addressId: fulfillmentType.value === 'delivery' ? address.value?.id : undefined,
+      pickupStoreId: fulfillmentType.value === 'pickup' ? selectedPickupStore.value?.id : undefined,
+      fulfillmentType: fulfillmentType.value,
       couponId: selectedCoupon.value?.id,
       pointsDeduct: usePoints.value ? availablePoints.value : 0
     })
@@ -244,6 +274,23 @@ function selectAddress() {
   })
 }
 
+function switchFulfillmentType(type: 'delivery' | 'pickup') {
+  fulfillmentType.value = type
+  loadPreview()
+}
+
+function selectPickupStore() {
+  uni.navigateTo({
+    url: '/pages/pickup-store/list?select=true',
+    events: {
+      selectStore: (data: PickupStoreItem) => {
+        selectedPickupStore.value = data
+        loadPreview()
+      }
+    }
+  })
+}
+
 function openCouponPicker() {
   if (couponList.value.length === 0) return
   showCouponPicker.value = true
@@ -266,8 +313,12 @@ function togglePoints(e: any) {
 
 async function handleSubmit() {
   if (submitting.value) return
-  if (!address.value) {
+  if (fulfillmentType.value === 'delivery' && !address.value) {
     uni.showToast({ title: '请选择收货地址', icon: 'none' })
+    return
+  }
+  if (fulfillmentType.value === 'pickup' && !selectedPickupStore.value) {
+    uni.showToast({ title: '请选择自提点', icon: 'none' })
     return
   }
   if (orderItems.value.length === 0) {
@@ -281,7 +332,9 @@ async function handleSubmit() {
   try {
     submitting.value = true
     const orderData = {
-      addressId: address.value.id,
+      fulfillmentType: fulfillmentType.value,
+      addressId: fulfillmentType.value === 'delivery' ? address.value!.id : undefined,
+      pickupStoreId: fulfillmentType.value === 'pickup' ? selectedPickupStore.value!.id : undefined,
       items: orderItems.value.map(item => ({
         productId: item.productId,
         skuId: item.skuId,
@@ -350,6 +403,72 @@ onLoad(async (options) => {
   display: flex;
   align-items: center;
   margin: $spacing-sm $spacing-md;
+}
+
+.delivery-mode-section {
+  margin: $spacing-sm $spacing-md;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.mode-tab {
+  flex: 1;
+  @include flex-center;
+  padding: 20rpx 0;
+  border: 2rpx solid $border-color;
+  border-radius: $radius-round;
+  transition: all 0.3s;
+
+  &.active {
+    border-color: $primary-color;
+    background: rgba($primary-color, 0.05);
+  }
+}
+
+.mode-tab-text {
+  font-size: $font-md;
+  color: $text-secondary;
+
+  .active & {
+    color: $primary-color;
+    font-weight: 600;
+  }
+}
+
+.pickup-section {
+  display: flex;
+  align-items: center;
+  margin: $spacing-sm $spacing-md;
+}
+
+.pickup-info {
+  flex: 1;
+}
+
+.pickup-top {
+  margin-bottom: 8rpx;
+}
+
+.pickup-name {
+  font-size: $font-md;
+  font-weight: 600;
+  color: $text-color;
+}
+
+.pickup-address {
+  font-size: $font-sm;
+  color: $text-secondary;
+  display: block;
+}
+
+.pickup-hours {
+  font-size: $font-xs;
+  color: $text-hint;
+  display: block;
+  margin-top: 4rpx;
 }
 
 .address-info {

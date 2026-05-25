@@ -1,14 +1,22 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateAddressDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  receiverName!: string;
+  receiverName?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  receiverPhone!: string;
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  receiverPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -22,12 +30,15 @@ export class CreateAddressDto {
   @IsNotEmpty()
   district!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  detailAddress!: string;
+  detailAddress?: string;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
+  @IsString()
+  detail?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === true || value === 1 ? 1 : 0))
   isDefault?: number;
 }

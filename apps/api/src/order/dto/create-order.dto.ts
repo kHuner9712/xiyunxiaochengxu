@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Matches } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Matches, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class OrderItemDto {
@@ -13,9 +13,20 @@ class OrderItemDto {
 }
 
 export class CreateOrderDto {
+  @IsOptional()
   @IsString()
   @Matches(/^\d+$/)
-  addressId!: string;
+  addressId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+$/)
+  pickupStoreId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['delivery', 'pickup'])
+  fulfillmentType?: string;
 
   @IsOptional()
   @IsString()

@@ -29,6 +29,7 @@ import { SearchModule } from './search/search.module';
 import { ShareModule } from './share/share.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { HealthModule } from './health/health.module';
+import { PickupStoreModule } from './pickup-store/pickup-store.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
@@ -68,6 +69,7 @@ import { validateEnv } from './config/env.validation';
     ShareModule,
     ScheduleModule,
     HealthModule,
+    PickupStoreModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

@@ -1,0 +1,286 @@
+<template>
+  <view class="cs-page">
+    <view v-if="config.notice" class="notice-section card">
+      <text class="notice-text">{{ config.notice }}</text>
+    </view>
+
+    <view class="entry-section card">
+      <view v-if="config.type === 'wechat' || config.type === 'both'" class="entry-item" @tap="handleWechat">
+        <view class="entry-icon-wrap wechat">
+          <text class="entry-icon-text">💬</text>
+        </view>
+        <view class="entry-info">
+          <text class="entry-name">微信客服</text>
+          <text class="entry-desc">在线客服咨询</text>
+        </view>
+        <text class="entry-arrow">›</text>
+      </view>
+
+      <view v-if="config.type === 'phone' || config.type === 'both'" class="entry-item" @tap="handlePhone">
+        <view class="entry-icon-wrap phone">
+          <text class="entry-icon-text">📞</text>
+        </view>
+        <view class="entry-info">
+          <text class="entry-name">电话客服</text>
+          <text class="entry-desc">{{ config.phone || '暂无' }}</text>
+        </view>
+        <text class="entry-arrow">›</text>
+      </view>
+
+      <view v-if="config.serviceTime" class="entry-item">
+        <view class="entry-icon-wrap time">
+          <text class="entry-icon-text">🕐</text>
+        </view>
+        <view class="entry-info">
+          <text class="entry-name">服务时间</text>
+          <text class="entry-desc">{{ config.serviceTime }}</text>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="config.wechatQrCode" class="qrcode-section card">
+      <text class="section-title">微信客服二维码</text>
+      <image class="qrcode-image" :src="config.wechatQrCode" mode="widthFix" @tap="previewQrCode" />
+      <text class="qrcode-tip">长按识别或截图扫码添加客服</text>
+    </view>
+
+    <view v-if="faqList.length" class="faq-section card">
+      <text class="section-title">常见问题</text>
+      <view v-for="(item, index) in faqList" :key="index" class="faq-item">
+        <view class="faq-q" @tap="toggleFaq(index)">
+          <text class="faq-q-text">{{ item.question }}</text>
+          <text class="faq-arrow" :class="{ expanded: item.expanded }">›</text>
+        </view>
+        <view v-if="item.expanded" class="faq-a">
+          <text class="faq-a-text">{{ item.answer }}</text>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="config.autoReplyText" class="reply-section card">
+      <text class="section-title">温馨提示</text>
+      <text class="reply-text">{{ config.autoReplyText }}</text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { getCustomerServiceConfig, type CustomerServiceConfig } from '@/api/customer-service'
+
+const config = ref<CustomerServiceConfig>({
+  enabled: false,
+  type: 'phone',
+  phone: '',
+  wechatQrCode: '',
+  serviceTime: '',
+  autoReplyText: '',
+  faqContent: '',
+  notice: ''
+})
+
+interface FaqItem {
+  question: string
+  answer: string
+  expanded: boolean
+}
+
+const faqList = ref<FaqItem[]>([])
+
+async function loadConfig() {
+  try {
+    config.value = await getCustomerServiceConfig()
+    if (config.value.faqContent) {
+      try {
+        const list = JSON.parse(config.value.faqContent)
+        faqList.value = (Array.isArray(list) ? list : []).map((item: any) => ({
+          question: item.question || '',
+          answer: item.answer || '',
+          expanded: false
+        }))
+      } catch {
+        faqList.value = []
+      }
+    }
+  } catch {
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  }
+}
+
+function handleWechat() {
+  if (config.value.wechatQrCode) {
+    uni.previewImage({ urls: [config.value.wechatQrCode] })
+  } else {
+    uni.showToast({ title: '暂未配置微信客服', icon: 'none' })
+  }
+}
+
+function handlePhone() {
+  if (config.value.phone) {
+    uni.makePhoneCall({ phoneNumber: config.value.phone })
+  } else {
+    uni.showToast({ title: '暂无客服电话', icon: 'none' })
+  }
+}
+
+function previewQrCode() {
+  uni.previewImage({ urls: [config.value.wechatQrCode] })
+}
+
+function toggleFaq(index: number) {
+  faqList.value[index].expanded = !faqList.value[index].expanded
+}
+
+onMounted(() => {
+  loadConfig()
+})
+</script>
+
+<style lang="scss" scoped>
+.cs-page {
+  min-height: 100vh;
+  background: $bg-color;
+  padding: $spacing-md;
+}
+
+.notice-section {
+  background: rgba($warning-color, 0.1);
+  margin-bottom: $spacing-md;
+}
+
+.notice-text {
+  font-size: $font-sm;
+  color: $warning-color;
+  line-height: 1.6;
+}
+
+.entry-section {
+  margin-bottom: $spacing-md;
+}
+
+.entry-item {
+  @include flex-between;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $divider-color;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.entry-icon-wrap {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: $radius-lg;
+  @include flex-center;
+  margin-right: $spacing-md;
+
+  &.wechat { background: rgba(#07C160, 0.1); }
+  &.phone { background: rgba($primary-color, 0.1); }
+  &.time { background: rgba($info-color, 0.1); }
+}
+
+.entry-icon-text {
+  font-size: 36rpx;
+}
+
+.entry-info {
+  flex: 1;
+}
+
+.entry-name {
+  font-size: $font-md;
+  color: $text-color;
+  display: block;
+}
+
+.entry-desc {
+  font-size: $font-xs;
+  color: $text-hint;
+  margin-top: 4rpx;
+  display: block;
+}
+
+.entry-arrow {
+  font-size: $font-lg;
+  color: $text-hint;
+}
+
+.qrcode-section {
+  @include flex-center;
+  @include flex-column;
+  margin-bottom: $spacing-md;
+}
+
+.section-title {
+  font-size: $font-md;
+  font-weight: 600;
+  color: $text-color;
+  display: block;
+  margin-bottom: $spacing-md;
+}
+
+.qrcode-image {
+  width: 360rpx;
+  border-radius: $radius-md;
+}
+
+.qrcode-tip {
+  font-size: $font-xs;
+  color: $text-hint;
+  margin-top: $spacing-sm;
+}
+
+.faq-section {
+  margin-bottom: $spacing-md;
+}
+
+.faq-item {
+  border-bottom: 1rpx solid $divider-color;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.faq-q {
+  @include flex-between;
+  padding: $spacing-md 0;
+}
+
+.faq-q-text {
+  font-size: $font-md;
+  color: $text-color;
+  flex: 1;
+}
+
+.faq-arrow {
+  font-size: $font-lg;
+  color: $text-hint;
+  transition: transform 0.2s;
+
+  &.expanded {
+    transform: rotate(90deg);
+  }
+}
+
+.faq-a {
+  padding-bottom: $spacing-md;
+}
+
+.faq-a-text {
+  font-size: $font-sm;
+  color: $text-secondary;
+  line-height: 1.8;
+}
+
+.reply-section {
+  margin-bottom: $spacing-md;
+}
+
+.reply-text {
+  font-size: $font-sm;
+  color: $text-secondary;
+  line-height: 1.8;
+}
+</style>

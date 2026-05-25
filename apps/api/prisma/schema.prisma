@@ -12,6 +12,7 @@ enum OrderStatus {
   pending_payment
   paid
   pending_delivery
+  pending_pickup
   delivered
   completed
   cancelled
@@ -56,6 +57,9 @@ model User {
   orders           Order[]
   userCoupons      UserCoupon[]
   shareRecords     ShareRecord[]
+  invitedShares    ShareRecord[]          @relation("ShareInviter")
+  inviteRecords    UserInviteRelation[]   @relation("InviterRelations")
+  invitedByRecords UserInviteRelation[]   @relation("InviteeRelations")
   aftersaleOrders  AftersaleOrder[]
 
   @@unique([openid], name: "idx_openid")
@@ -377,6 +381,30 @@ model Cart {
   @@map("carts")
 }
 
+model PickupStore {
+  id              BigInt    @id @default(autoincrement()) @map("id")
+  name            String    @db.VarChar(100) @map("name")
+  contactPhone    String?   @db.VarChar(20) @map("contact_phone")
+  province        String    @db.VarChar(20) @map("province")
+  city            String    @db.VarChar(20) @map("city")
+  district        String    @db.VarChar(20) @map("district")
+  address         String    @db.VarChar(200) @map("address")
+  latitude        Decimal?  @db.Decimal(10, 7) @map("latitude")
+  longitude       Decimal?  @db.Decimal(10, 7) @map("longitude")
+  businessHours   String?   @db.VarChar(100) @map("business_hours")
+  pickupNotice    String?   @db.VarChar(500) @map("pickup_notice")
+  status          Int       @default(1) @map("status")
+  sortOrder       Int       @default(0) @map("sort_order")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  orders Order[]
+
+  @@index([status], name: "idx_pickup_store_status")
+  @@map("pickup_stores")
+}
+
 model Order {
   id                   BigInt      @id @default(autoincrement()) @map("id")
   orderNo              String      @db.VarChar(32) @map("order_no")
@@ -407,10 +435,19 @@ model Order {
   autoCloseAt          DateTime?   @map("auto_close_at")
   autoCompleteAt       DateTime?   @map("auto_complete_at")
   source               String?     @default("miniprogram") @db.VarChar(20) @map("source")
+  fulfillmentType      String      @default("delivery") @db.VarChar(20) @map("fulfillment_type")
+  pickupStoreId        BigInt?     @map("pickup_store_id")
+  pickupStoreName      String?     @db.VarChar(100) @map("pickup_store_name")
+  pickupStoreAddress   String?     @db.VarChar(300) @map("pickup_store_address")
+  pickupContactPhone   String?     @db.VarChar(20) @map("pickup_contact_phone")
+  pickupCode           String?     @db.VarChar(6) @map("pickup_code")
+  pickedUpAt           DateTime?   @map("picked_up_at")
+  pickupVerifiedBy     BigInt?     @map("pickup_verified_by")
   createdAt            DateTime    @default(now()) @map("created_at")
   updatedAt            DateTime    @updatedAt @map("updated_at")
 
   user           User           @relation(fields: [userId], references: [id])
+  pickupStore    PickupStore?   @relation(fields: [pickupStoreId], references: [id])
   orderItems     OrderItem[]
   payment        OrderPayment?
   delivery       OrderDelivery?
@@ -423,6 +460,8 @@ model Order {
   @@index([status], name: "idx_status")
   @@index([createdAt], name: "idx_created_at")
   @@index([paidAt], name: "idx_paid_at")
+  @@index([fulfillmentType], name: "idx_fulfillment_type")
+  @@index([pickupCode], name: "idx_pickup_code")
   @@map("orders")
 }
 
@@ -660,19 +699,77 @@ model HomeSection {
 }
 
 model ShareRecord {
-  id            BigInt   @id @default(autoincrement()) @map("id")
-  userId        BigInt   @map("user_id")
-  shareType     String   @db.VarChar(20) @map("share_type")
-  shareId       BigInt?  @map("share_id")
-  shareChannel  String?  @db.VarChar(20) @map("share_channel")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id              BigInt   @id @default(autoincrement()) @map("id")
+  userId          BigInt   @map("user_id")
+  shareType       String   @db.VarChar(20) @map("share_type")
+  shareId         BigInt?  @map("share_id")
+  shareChannel    String?  @db.VarChar(20) @map("share_channel")
+  campaignId      BigInt?  @map("campaign_id")
+  inviterUserId   BigInt?  @map("inviter_user_id")
+  shareScene      String?  @db.VarChar(30) @map("share_scene")
+  sharePath       String?  @db.VarChar(500) @map("share_path")
+  sceneCode       String?  @db.VarChar(32) @map("scene_code")
+  clickCount      Int      @default(0) @map("click_count")
+  registerCount   Int      @default(0) @map("register_count")
+  orderCount      Int      @default(0) @map("order_count")
+  paidOrderAmount Int      @default(0) @map("paid_order_amount")
+  createdAt       DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user       User           @relation(fields: [userId], references: [id])
+  campaign   ShareCampaign? @relation(fields: [campaignId], references: [id])
+  inviter    User?          @relation("ShareInviter", fields: [inviterUserId], references: [id])
 
   @@index([userId], name: "idx_user_id")
   @@index([shareType], name: "idx_share_type")
   @@index([shareId], name: "idx_share_id")
+  @@index([campaignId], name: "idx_campaign_id")
+  @@index([sceneCode], name: "idx_scene_code")
   @@map("share_records")
+}
+
+model ShareCampaign {
+  id                   BigInt   @id @default(autoincrement()) @map("id")
+  name                 String   @db.VarChar(100) @map("name")
+  type                 String   @db.VarChar(30) @map("type")
+  rewardType           String   @db.VarChar(20) @map("reward_type")
+  inviterRewardConfig  Json?    @map("inviter_reward_config")
+  inviteeRewardConfig  Json?    @map("invitee_reward_config")
+  startTime            DateTime @map("start_time")
+  endTime              DateTime @map("end_time")
+  status               Int      @default(1) @map("status")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  shareRecords    ShareRecord[]
+  inviteRelations UserInviteRelation[]
+
+  @@index([status], name: "idx_status")
+  @@index([type], name: "idx_type")
+  @@map("share_campaigns")
+}
+
+model UserInviteRelation {
+  id                   BigInt    @id @default(autoincrement()) @map("id")
+  inviterUserId        BigInt    @map("inviter_user_id")
+  inviteeUserId        BigInt    @map("invitee_user_id")
+  sourceShareRecordId  BigInt?   @map("source_share_record_id")
+  sourceCampaignId     BigInt?   @map("source_campaign_id")
+  firstVisitAt         DateTime? @map("first_visit_at")
+  registeredAt         DateTime? @map("registered_at")
+  firstPaidOrderId     BigInt?   @map("first_paid_order_id")
+  firstPaidAt          DateTime? @map("first_paid_at")
+  status               Int       @default(1) @map("status")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  inviter        User           @relation("InviterRelations", fields: [inviterUserId], references: [id])
+  invitee        User           @relation("InviteeRelations", fields: [inviteeUserId], references: [id])
+  sourceCampaign ShareCampaign? @relation(fields: [sourceCampaignId], references: [id])
+
+  @@unique([inviteeUserId], name: "uk_invitee_user_id")
+  @@index([inviterUserId], name: "idx_inviter_user_id")
+  @@index([sourceCampaignId], name: "idx_source_campaign_id")
+  @@map("user_invite_relations")
 }
 
 model AftersaleOrder {
@@ -786,25 +883,36 @@ model ContentCategory {
 }
 
 model Content {
-  id          BigInt    @id @default(autoincrement()) @map("id")
-  categoryId  BigInt?   @map("category_id")
-  title       String    @db.VarChar(200) @map("title")
-  coverImage  String?   @db.VarChar(500) @map("cover_image")
-  content     String    @db.Text @map("content")
-  summary     String?   @db.VarChar(500) @map("summary")
-  viewCount   Int       @default(0) @map("view_count")
-  sortOrder   Int       @default(0) @map("sort_order")
-  status      Int       @default(2) @map("status")
-  publishedAt DateTime? @map("published_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  id                 BigInt    @id @default(autoincrement()) @map("id")
+  categoryId         BigInt?   @map("category_id")
+  title              String    @db.VarChar(200) @map("title")
+  contentType        String    @default("article") @db.VarChar(20) @map("content_type")
+  coverImage         String?   @db.VarChar(500) @map("cover_image")
+  content            String    @db.Text @map("content")
+  summary            String?   @db.VarChar(500) @map("summary")
+  videoUrl           String?   @db.VarChar(500) @map("video_url")
+  videoCover         String?   @db.VarChar(500) @map("video_cover")
+  videoDuration      Int?      @map("video_duration")
+  placement          Json?     @map("placement")
+  tags               Json?     @map("tags")
+  relatedProductIds  Json?     @map("related_product_ids")
+  relatedActivityId  BigInt?   @map("related_activity_id")
+  isFeatured         Int       @default(0) @map("is_featured")
+  viewCount          Int       @default(0) @map("view_count")
+  sortOrder          Int       @default(0) @map("sort_order")
+  status             Int       @default(2) @map("status")
+  publishedAt        DateTime? @map("published_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
 
   category ContentCategory? @relation(fields: [categoryId], references: [id])
 
   @@index([categoryId], name: "idx_category_id")
+  @@index([contentType], name: "idx_content_type")
   @@index([status], name: "idx_status")
   @@index([publishedAt], name: "idx_published_at")
+  @@index([isFeatured], name: "idx_is_featured")
   @@map("contents")
 }
 

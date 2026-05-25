@@ -15,6 +15,13 @@
 
     <text class="result-text">{{ checking ? '查询支付结果中...' : paymentSuccess === true ? '支付成功' : paymentSuccess === false ? '支付失败' : '支付结果未知' }}</text>
 
+    <view v-if="paymentSuccess && orderInfo?.fulfillmentType === 'pickup'" class="pickup-tip card">
+      <text class="tip-text">请到店出示自提码取货</text>
+      <view v-if="orderInfo.pickupCode" class="tip-code">
+        <text class="tip-code-text">自提码：{{ orderInfo.pickupCode }}</text>
+      </view>
+    </view>
+
     <view v-if="orderInfo" class="order-info card">
       <view class="info-row">
         <text class="info-label">订单编号</text>
@@ -148,6 +155,31 @@ onLoad((options) => {
 
 .order-info {
   width: 100%;
+}
+
+.pickup-tip {
+  width: 100%;
+  text-align: center;
+  padding: $spacing-md;
+  background: rgba($primary-color, 0.05);
+  border: 2rpx solid rgba($primary-color, 0.2);
+  border-radius: $radius-md;
+  margin-bottom: $spacing-md;
+}
+
+.tip-text {
+  font-size: $font-md;
+  color: $primary-color;
+  font-weight: 600;
+  display: block;
+  margin-bottom: $spacing-sm;
+}
+
+.tip-code-text {
+  font-size: $font-xl;
+  font-weight: 700;
+  color: $primary-color;
+  letter-spacing: 4rpx;
 }
 
 .info-row {

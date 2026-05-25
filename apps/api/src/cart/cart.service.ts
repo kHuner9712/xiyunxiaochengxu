@@ -21,15 +21,7 @@ export class CartService {
     });
 
     this.logger.log(`用户${userId}查询购物车，共${carts.length}条`);
-    return carts.map((c) => ({
-      ...c,
-      id: c.id.toString(),
-      userId: c.userId.toString(),
-      productId: c.productId.toString(),
-      skuId: c.skuId.toString(),
-      product: c.product ? { ...c.product, id: c.product.id.toString() } : null,
-      sku: c.sku ? { ...c.sku, id: c.sku.id.toString() } : null,
-    }));
+    return carts.map((c) => this.serializeCartItem(c));
   }
 
   async addItem(userId: string, dto: AddCartDto) {
@@ -134,5 +126,27 @@ export class CartService {
     });
     this.logger.log(`用户${userId}删除已选购物车项，共${result.count}条`);
     return { deletedCount: result.count };
+  }
+
+  private serializeCartItem(cart: any) {
+    const productValid = cart.product && cart.product.status === 1;
+    const skuValid = cart.sku && cart.sku.status === 1;
+    return {
+      id: cart.id.toString(),
+      userId: cart.userId.toString(),
+      productId: cart.productId.toString(),
+      skuId: cart.skuId.toString(),
+      productName: cart.product?.name || '',
+      productImage: cart.sku?.image || cart.product?.mainImage || '',
+      skuName: cart.sku?.specs || '',
+      price: cart.sku?.price || 0,
+      originalPrice: cart.sku?.price || 0,
+      quantity: cart.quantity,
+      stock: cart.sku?.stock || 0,
+      isSelected: cart.isSelected === 1,
+      isValid: productValid && skuValid,
+      product: cart.product ? { ...cart.product, id: cart.product.id.toString() } : null,
+      sku: cart.sku ? { ...cart.sku, id: cart.sku.id.toString() } : null,
+    };
   }
 }

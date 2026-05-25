@@ -3,12 +3,14 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { assertOrderTransition } from '../order/order-state-machine';
+import { OrderService } from '../order/order.service';
 import { REFUND_STATUS, PAYMENT_STATUS, WECHAT_REFUND_STATUS, RefundStatus, COUPON_STATUS } from '../common/constants';
 import { BusinessEventService } from '../common/business-event.service';
 import { Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import axios from 'axios';
+import { ShareService } from '../share/share.service';
 
 @Injectable()
 export class PaymentService {
@@ -20,6 +22,8 @@ export class PaymentService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private businessEvent: BusinessEventService,
+    private orderService: OrderService,
+    private shareService: ShareService,
   ) {
     const keyPath = this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH', '');
     if (keyPath) {
@@ -338,7 +342,7 @@ export class PaymentService {
           throw new InternalServerErrorException('订单不存在');
         }
 
-        const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+        const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed];
         if (processedStatuses.includes(currentOrder.status)) {
           if (order.couponId) {
             const coupon = await tx.userCoupon.findFirst({ where: { id: order.couponId } });
@@ -358,9 +362,16 @@ export class PaymentService {
           this.logger.warn(`支付半成功状态补偿: 支付${paymentId}已SUCCESS，但订单${orderId}仍pending_payment，执行补偿修复`);
           this.businessEvent.emitInfo('payment_half_success_fix', 'reconcile', `支付半成功补偿: 支付已SUCCESS但订单仍pending_payment，已修复`, orderId.toString(), { paymentId: paymentId.toString(), transactionId });
 
+          const targetStatus = order.fulfillmentType === 'pickup' ? OrderStatus.pending_pickup : OrderStatus.pending_delivery;
+          const updateData: any = { status: targetStatus, paidAt: new Date() };
+          if (order.fulfillmentType === 'pickup') {
+            const pickupCode = await this.orderService.generatePickupCode();
+            updateData.pickupCode = pickupCode;
+          }
+
           const updateResult = await tx.order.updateMany({
             where: { id: orderId, status: OrderStatus.pending_payment },
-            data: { status: OrderStatus.pending_delivery, paidAt: new Date() },
+            data: updateData,
           });
 
           if (updateResult.count === 0) {
@@ -373,7 +384,7 @@ export class PaymentService {
               orderId,
               operatorType: 'system',
               action: 'payment_reconcile_fix',
-              content: `支付半成功补偿: 支付已SUCCESS但订单仍pending_payment，已修复为pending_delivery，交易号：${transactionId}`,
+              content: `支付半成功补偿: 支付已SUCCESS但订单仍pending_payment，已修复为${order.fulfillmentType === 'pickup' ? 'pending_pickup' : 'pending_delivery'}，交易号：${transactionId}`,
             },
           });
 
@@ -413,15 +424,22 @@ export class PaymentService {
         throw new BadRequestException('订单状态异常');
       }
 
+      const targetStatus = order.fulfillmentType === 'pickup' ? OrderStatus.pending_pickup : OrderStatus.pending_delivery;
+      const updateOrderData: any = {
+        status: targetStatus,
+        paidAt: new Date(),
+      };
+      if (order.fulfillmentType === 'pickup') {
+        const pickupCode = await this.orderService.generatePickupCode();
+        updateOrderData.pickupCode = pickupCode;
+      }
+
       const updateResult = await tx.order.updateMany({
-        where: { 
-          id: orderId, 
-          status: OrderStatus.pending_payment 
+        where: {
+          id: orderId,
+          status: OrderStatus.pending_payment
         },
-        data: {
-          status: OrderStatus.pending_delivery,
-          paidAt: new Date(),
-        },
+        data: updateOrderData,
       });
 
       if (updateResult.count === 0) {
@@ -431,7 +449,7 @@ export class PaymentService {
           throw new InternalServerErrorException('订单不存在');
         }
 
-        const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed];
+        const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed];
         if (processedStatuses.includes(currentOrder.status)) {
           this.logger.log(`支付成功幂等处理: 订单${orderId}已处于${currentOrder.status}状态`);
           return;
@@ -453,7 +471,7 @@ export class PaymentService {
         throw new BadRequestException('订单状态异常');
       }
 
-      assertOrderTransition(OrderStatus.pending_payment, OrderStatus.pending_delivery, '支付成功');
+      assertOrderTransition(OrderStatus.pending_payment, targetStatus, '支付成功');
 
       await tx.orderPayment.update({
         where: { id: paymentId },
@@ -491,6 +509,16 @@ export class PaymentService {
         }
       }
     });
+
+    try {
+      await this.shareService.processFirstPaidReward(
+        order.userId.toString(),
+        orderId.toString(),
+        order.payAmount || 0,
+      );
+    } catch (err) {
+      this.logger.error(`首单邀请奖励发放失败: orderId=${orderId}`, (err as Error).message);
+    }
   }
 
   async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {

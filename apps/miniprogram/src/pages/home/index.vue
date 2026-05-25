@@ -84,12 +84,21 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { onPullDownRefresh, onReachBottom, onShareAppMessage } from '@dcloudio/uni-app'
 import { getHomeData, getGuessProducts, type BannerItem, type QuickEntry, type ProductItem, type ActivityItem } from '@/api/home'
+import { useUserStore } from '@/stores/user'
 import ProductCard from '@/components/ProductCard.vue'
 import CountdownTimer from '@/components/CountdownTimer.vue'
+import CustomerServiceButton from '@/components/CustomerServiceButton.vue'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
+
+const userStore = useUserStore()
+
+onShareAppMessage(() => ({
+  title: '禧孕母婴 - 品质母婴好物',
+  path: `/pages/home/index?inviter=${userStore.userInfo?.id || ''}`
+}))
 
 const homeData = reactive<{
   banners: BannerItem[]
@@ -331,5 +340,17 @@ onMounted(() => {
   @include text-ellipsis;
   display: block;
   margin-bottom: 8rpx;
+}
+
+.floating-cs {
+  position: fixed;
+  right: 24rpx;
+  bottom: 200rpx;
+  z-index: 100;
+  background: $bg-white;
+  border-radius: 50%;
+  width: 96rpx;
+  height: 96rpx;
+  box-shadow: $shadow-md;
 }
 </style>

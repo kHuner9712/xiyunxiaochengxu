@@ -12,6 +12,38 @@
       <text class="address-detail">{{ order.addressDetail }}</text>
     </view>
 
+    <view v-if="order.fulfillmentType === 'pickup' && order.pickupStoreName" class="pickup-section card">
+      <view class="pickup-header">
+        <text class="pickup-label">自提信息</text>
+        <text v-if="order.pickupCode" class="pickup-code-badge">待自提</text>
+      </view>
+      <view class="pickup-detail">
+        <view class="pickup-row">
+          <text class="pickup-row-label">自提点</text>
+          <text class="pickup-row-value">{{ order.pickupStoreName }}</text>
+        </view>
+        <view class="pickup-row">
+          <text class="pickup-row-label">地址</text>
+          <text class="pickup-row-value">{{ order.pickupStoreAddress }}</text>
+        </view>
+        <view v-if="order.pickupContactPhone" class="pickup-row">
+          <text class="pickup-row-label">电话</text>
+          <text class="pickup-row-value phone" @tap="callPhone(order.pickupContactPhone!)">{{ order.pickupContactPhone }}</text>
+        </view>
+        <view v-if="order.pickupCode" class="pickup-code-section">
+          <text class="pickup-code-label">自提码</text>
+          <view class="pickup-code-box">
+            <text class="pickup-code-text">{{ order.pickupCode }}</text>
+          </view>
+          <text class="pickup-code-copy" @tap="copyPickupCode">复制</text>
+        </view>
+        <view v-if="order.pickedUpAt" class="pickup-row">
+          <text class="pickup-row-label">核销时间</text>
+          <text class="pickup-row-value">{{ order.pickedUpAt }}</text>
+        </view>
+      </view>
+    </view>
+
     <view v-if="order.logistics" class="logistics-section card" @tap="showLogistics = true">
       <text class="section-label">物流信息</text>
       <text class="logistics-company">{{ order.logistics.company }}</text>
@@ -84,6 +116,7 @@
       <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap="handlePay">去支付</view>
       <view v-if="order.status === 'delivered'" class="action-btn primary" @tap="handleConfirm">确认收货</view>
       <view v-if="order.status === 'completed'" class="action-hint">请选择要售后的商品</view>
+      <view class="action-btn" @tap="goCustomerService">联系商家</view>
     </view>
   </view>
 </template>
@@ -100,6 +133,7 @@ const order = ref<OrderDetail>({
   id: '', orderNo: '', status: '' as any, totalAmount: 0, payAmount: 0,
   freightAmount: 0, couponAmount: 0, pointsAmount: 0,
   addressName: '', addressPhone: '', addressDetail: '',
+  fulfillmentType: 'delivery',
   items: [], createTime: ''
 })
 
@@ -186,6 +220,22 @@ function goAftersale(orderItemId: string) {
   })
 }
 
+function goCustomerService() {
+  uni.navigateTo({ url: '/pages/customer-service/index' })
+}
+
+function copyPickupCode() {
+  if (!order.value.pickupCode) return
+  uni.setClipboardData({
+    data: order.value.pickupCode,
+    success: () => uni.showToast({ title: '已复制', icon: 'success' })
+  })
+}
+
+function callPhone(phone: string) {
+  uni.makePhoneCall({ phoneNumber: phone })
+}
+
 onLoad((options) => {
   if (options?.id) loadOrder(options.id)
 })
@@ -221,6 +271,84 @@ onLoad((options) => {
 .price-section,
 .info-section {
   margin: $spacing-sm $spacing-md;
+}
+
+.pickup-section {
+  margin: $spacing-sm $spacing-md;
+}
+
+.pickup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-sm;
+}
+
+.pickup-label {
+  font-size: $font-md;
+  font-weight: 600;
+  color: $text-color;
+}
+
+.pickup-code-badge {
+  font-size: $font-xs;
+  color: $primary-color;
+  background: rgba($primary-color, 0.1);
+  padding: 4rpx 16rpx;
+  border-radius: $radius-round;
+}
+
+.pickup-row {
+  @include flex-between;
+  padding: 8rpx 0;
+}
+
+.pickup-row-label {
+  font-size: $font-sm;
+  color: $text-hint;
+}
+
+.pickup-row-value {
+  font-size: $font-sm;
+  color: $text-color;
+
+  &.phone {
+    color: $primary-color;
+  }
+}
+
+.pickup-code-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-md 0;
+  margin-top: $spacing-sm;
+  border-top: 1rpx solid $divider-color;
+}
+
+.pickup-code-label {
+  font-size: $font-sm;
+  color: $text-hint;
+  margin-right: $spacing-sm;
+}
+
+.pickup-code-box {
+  background: rgba($primary-color, 0.1);
+  padding: 12rpx 32rpx;
+  border-radius: $radius-md;
+}
+
+.pickup-code-text {
+  font-size: $font-xl;
+  font-weight: 700;
+  color: $primary-color;
+  letter-spacing: 8rpx;
+}
+
+.pickup-code-copy {
+  font-size: $font-sm;
+  color: $primary-color;
+  margin-left: $spacing-md;
 }
 
 .address-top {

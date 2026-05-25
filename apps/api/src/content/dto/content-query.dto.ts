@@ -16,4 +16,16 @@ export class ContentQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   title?: string;
+
+  @IsOptional()
+  @IsString()
+  contentType?: string;
+
+  @IsOptional()
+  @IsString()
+  placement?: string;
+
+  @IsOptional()
+  @IsString()
+  keyword?: string;
 }

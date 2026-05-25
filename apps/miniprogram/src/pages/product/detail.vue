@@ -173,9 +173,13 @@ function goCart() {
   uni.switchTab({ url: '/pages/cart/index' })
 }
 
+function goCustomerService() {
+  uni.navigateTo({ url: '/pages/customer-service/index' })
+}
+
 onShareAppMessage(() => ({
   title: product.value.name,
-  path: `/pages/product/detail?id=${product.value.id}`
+  path: `/pages/product/detail?id=${product.value.id}&inviter=${userStore.userInfo?.id || ''}`
 }))
 
 onLoad((options) => {

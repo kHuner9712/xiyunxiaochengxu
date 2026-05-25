@@ -1,7 +1,9 @@
 import { get, post, put } from '@/utils/request'
 
 export function createOrder(data: {
-  addressId: string
+  addressId?: string
+  pickupStoreId?: string
+  fulfillmentType?: string
   items: OrderItemInput[]
   couponId?: string
   pointsDeduct?: number
@@ -73,6 +75,13 @@ export interface OrderDetail {
   addressName: string
   addressPhone: string
   addressDetail: string
+  fulfillmentType?: string
+  pickupStoreId?: string
+  pickupStoreName?: string
+  pickupStoreAddress?: string
+  pickupContactPhone?: string
+  pickupCode?: string
+  pickedUpAt?: string
   items: OrderProductItem[]
   logistics?: LogisticsInfo
   createTime: string
@@ -96,6 +105,8 @@ export interface LogisticsTrace {
 export function previewOrder(data: {
   items: { skuId: string; quantity: number }[]
   addressId?: string
+  pickupStoreId?: string
+  fulfillmentType?: string
   couponId?: string
   pointsDeduct?: number
 }) {
@@ -111,6 +122,17 @@ export interface OrderPreview {
   pointsAmount: number
   freightAmount: number
   payAmount: number
+  fulfillmentType?: string
+  pickupStore?: PickupStoreBrief
+}
+
+export interface PickupStoreBrief {
+  id: string
+  name: string
+  address: string
+  contactPhone: string
+  businessHours: string
+  pickupNotice: string
 }
 
 export interface OrderPreviewItem {

@@ -80,6 +80,34 @@ export class SystemConfigService {
     return results;
   }
 
+  async getCustomerServiceConfig() {
+    const group = await this.findByGroup('customer_service');
+    const configMap: Record<string, any> = {};
+    for (const item of group) {
+      configMap[item.configKey] = item.value;
+    }
+    return {
+      enabled: configMap.enabled ?? false,
+      type: configMap.type ?? 'phone',
+      phone: configMap.phone ?? '',
+      wechatQrCode: configMap.wechatQrCode ?? '',
+      serviceTime: configMap.serviceTime ?? '',
+      autoReplyText: configMap.autoReplyText ?? '',
+      faqContent: configMap.faqContent ?? '',
+      notice: configMap.notice ?? '',
+    };
+  }
+
+  async updateCustomerServiceConfig(dto: any) {
+    const keys = ['enabled', 'type', 'phone', 'wechatQrCode', 'serviceTime', 'autoReplyText', 'faqContent', 'notice'];
+    const configs = keys.map(key => ({
+      groupName: 'customer_service',
+      configKey: key,
+      configValue: String(dto[key] ?? ''),
+    }));
+    return this.batchUpdate(configs);
+  }
+
   private parseValue(value: string | null, type: string | null): any {
     if (value === null) return null;
     switch (type) {

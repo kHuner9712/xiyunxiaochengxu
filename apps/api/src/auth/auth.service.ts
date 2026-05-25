@@ -355,7 +355,46 @@ export class AuthService {
     return { token, isNewUser };
   }
 
-  async bindPhone(userId: string, code: string, encryptedData: string, iv: string) {
+  async bindPhone(userId: string, code: string, encryptedData?: string, iv?: string) {
+    if (encryptedData && iv) {
+      return this.bindPhoneLegacy(userId, code, encryptedData, iv);
+    }
+    return this.bindPhoneByCode(userId, code);
+  }
+
+  private async bindPhoneByCode(userId: string, code: string) {
+    const appId = this.configService.get('WECHAT_APP_ID');
+    const appSecret = this.configService.get('WECHAT_APP_SECRET');
+
+    const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
+    const tokenRes = await axios.get(url);
+    const { access_token, errcode, errmsg } = tokenRes.data;
+
+    if (errcode) {
+      throw new BadRequestException(`获取access_token失败: ${errmsg}`);
+    }
+
+    const phoneUrl = `https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${access_token}&code=${code}`;
+    const phoneRes = await axios.post(phoneUrl);
+    const { errcode: phoneErrcode, errmsg: phoneErrmsg, phone_info } = phoneRes.data;
+
+    if (phoneErrcode) {
+      throw new BadRequestException(`获取手机号失败: ${phoneErrmsg}`);
+    }
+
+    if (!phone_info || !phone_info.phoneNumber) {
+      throw new BadRequestException('获取手机号失败，请重试');
+    }
+
+    await this.prisma.user.update({
+      where: { id: BigInt(userId) },
+      data: { phone: phone_info.phoneNumber },
+    });
+
+    return { phone: phone_info.phoneNumber };
+  }
+
+  private async bindPhoneLegacy(userId: string, code: string, encryptedData: string, iv: string) {
     const sessionKey = await this.redisService.get(`wechat_session:${userId}`);
     if (!sessionKey) {
       throw new UnauthorizedException('会话已过期，请重新登录');

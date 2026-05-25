@@ -69,6 +69,14 @@
             <el-descriptions-item label="收货人">{{ order.consignee }}</el-descriptions-item>
             <el-descriptions-item label="联系电话">{{ order.phone }}</el-descriptions-item>
             <el-descriptions-item label="收货地址">{{ order.address }}</el-descriptions-item>
+            <el-descriptions-item v-if="order.fulfillmentType === 'pickup'" label="配送方式">到店自提</el-descriptions-item>
+            <el-descriptions-item v-if="order.fulfillmentType === 'pickup' && order.pickupStoreName" label="自提点">{{ order.pickupStoreName }}</el-descriptions-item>
+            <el-descriptions-item v-if="order.fulfillmentType === 'pickup' && order.pickupStoreAddress" label="自提地址">{{ order.pickupStoreAddress }}</el-descriptions-item>
+            <el-descriptions-item v-if="order.fulfillmentType === 'pickup' && order.pickupContactPhone" label="联系电话">{{ order.pickupContactPhone }}</el-descriptions-item>
+            <el-descriptions-item v-if="order.fulfillmentType === 'pickup' && order.pickupCode" label="自提码">
+              <el-tag type="warning" size="large">{{ order.pickupCode }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="order.fulfillmentType === 'pickup' && order.pickedUpAt" label="核销时间">{{ order.pickedUpAt }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
 

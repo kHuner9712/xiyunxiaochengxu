@@ -163,6 +163,10 @@ async function main() {
     { name: 'Banner 管理', code: 'marketing:banner', type: 1, parentCode: 'marketing', sortOrder: 3 },
     { name: '推荐位管理', code: 'marketing:recommendation', type: 1, parentCode: 'marketing', sortOrder: 4 },
     { name: '首页装修', code: 'marketing:decor', type: 1, parentCode: 'marketing', sortOrder: 5 },
+    { name: '分享管理', code: 'share', type: 1, parentCode: 'marketing', sortOrder: 6 },
+    { name: '裂变活动', code: 'share:campaign', type: 2, parentCode: 'marketing', sortOrder: 7 },
+    { name: '分享记录', code: 'share:record', type: 2, parentCode: 'marketing', sortOrder: 8 },
+    { name: '邀请关系', code: 'share:invite', type: 2, parentCode: 'marketing', sortOrder: 9 },
     { name: '内容列表', code: 'content:list', type: 1, parentCode: 'content', sortOrder: 1 },
     { name: '编辑内容', code: 'content:edit', type: 2, parentCode: 'content', sortOrder: 2 },
     { name: '供应商列表', code: 'supplier:list', type: 1, parentCode: 'supplier', sortOrder: 1 },
@@ -175,6 +179,7 @@ async function main() {
     { name: '角色权限', code: 'system:role', type: 1, parentCode: 'system', sortOrder: 3 },
     { name: '操作日志', code: 'system:log', type: 1, parentCode: 'system', sortOrder: 4 },
     { name: '文件管理', code: 'system:file', type: 1, parentCode: 'system', sortOrder: 5 },
+    { name: '客服配置', code: 'system:customer-service', type: 2, parentCode: 'system', sortOrder: 6 },
   ];
 
   const createdPermissions = [...Object.values(parentMap)];
@@ -291,6 +296,14 @@ async function main() {
     { groupName: 'points', configKey: 'profile_complete_points', configValue: '50', valueType: 'number', description: '完善资料奖励积分' },
     { groupName: 'points', configKey: 'points_deduct_rate', configValue: '100', valueType: 'number', description: '积分抵扣比率（100 积分 = 1 元）' },
     { groupName: 'points', configKey: 'points_deduct_max_percent', configValue: '30', valueType: 'number', description: '积分最多抵扣订单金额百分比' },
+    { groupName: 'customer_service', configKey: 'enabled', configValue: 'true', valueType: 'boolean', description: '客服功能启用' },
+    { groupName: 'customer_service', configKey: 'type', configValue: 'phone', valueType: 'string', description: '客服类型 wechat/phone/both' },
+    { groupName: 'customer_service', configKey: 'phone', configValue: '', valueType: 'string', description: '客服电话' },
+    { groupName: 'customer_service', configKey: 'wechatQrCode', configValue: '', valueType: 'string', description: '微信客服二维码' },
+    { groupName: 'customer_service', configKey: 'serviceTime', configValue: '周一至周五 9:00-18:00', valueType: 'string', description: '服务时间' },
+    { groupName: 'customer_service', configKey: 'autoReplyText', configValue: '您好，客服正在为您服务，请稍候...', valueType: 'string', description: '自动回复文本' },
+    { groupName: 'customer_service', configKey: 'faqContent', configValue: '[]', valueType: 'json', description: '常见问题内容' },
+    { groupName: 'customer_service', configKey: 'notice', configValue: '', valueType: 'string', description: '客服公告' },
   ];
 
   for (const config of configs) {
