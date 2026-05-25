@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Put, Body, Query, Param } from '@nestjs/common';
 import { ShareService } from './share.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { IsString, IsNotEmpty, IsOptional, IsInt } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -112,6 +113,7 @@ export class WeappShareController {
     return this.shareService.recordShare(userId, dto);
   }
 
+  @Public()
   @Post('visit')
   async visit(@Body() dto: ShareVisitDto) {
     return this.shareService.recordVisit(dto);

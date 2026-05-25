@@ -170,13 +170,13 @@ export class ShareService {
       });
     }
 
-    await this.processInviteeReward(userId, sourceCampaignId);
+    await this.processInviteeReward(userId, sourceCampaignId, relation.id);
 
     this.logger.log(`绑定邀请关系：inviter=${inviterUserId}, invitee=${userId}`);
     return { bound: true, relationId: relation.id.toString() };
   }
 
-  private async processInviteeReward(inviteeUserId: string, campaignId: bigint | null) {
+  private async processInviteeReward(inviteeUserId: string, campaignId: bigint | null, relationId: bigint) {
     if (!campaignId) return;
 
     const campaign = await this.prisma.shareCampaign.findFirst({
@@ -193,16 +193,15 @@ export class ShareService {
     if (campaign.rewardType === 'points' || campaign.rewardType === 'both') {
       const points = inviteeConfig.points || 0;
       if (points > 0) {
-        const sourceId = `invitee_register_${campaignId}`;
         const existing = await this.prisma.pointsRecord.findFirst({
-          where: { source: 'invitee_register', sourceId: BigInt(sourceId), userId: BigInt(inviteeUserId) },
+          where: { source: 'invitee_register', sourceId: relationId, userId: BigInt(inviteeUserId) },
         });
         if (!existing) {
           await this.pointsService.earnPoints(
             inviteeUserId,
             points,
             'invitee_register',
-            sourceId,
+            relationId.toString(),
             `被邀请注册奖励${points}积分`,
           );
         }

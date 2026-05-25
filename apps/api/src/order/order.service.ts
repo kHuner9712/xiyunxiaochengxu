@@ -179,11 +179,18 @@ export class OrderService {
     }
 
     let address: any = null;
+    let pickupStore: any = null;
     if (fulfillmentType === 'delivery') {
       address = await this.prisma.userAddress.findFirst({
         where: { id: BigInt(data.addressId!), userId: BigInt(userId), deletedAt: null },
       });
       if (!address) throw new NotFoundException('收货地址不存在');
+    }
+    if (fulfillmentType === 'pickup') {
+      pickupStore = await this.prisma.pickupStore.findFirst({
+        where: { id: BigInt(data.pickupStoreId!), status: 1, deletedAt: null },
+      });
+      if (!pickupStore) throw new NotFoundException('自提点不存在或已停用');
     }
 
     const orderItems: any[] = [];
@@ -353,6 +360,10 @@ export class OrderService {
           } : {
             receiverName: '',
             receiverPhone: '',
+            pickupStoreId: pickupStore.id,
+            pickupStoreName: pickupStore.name,
+            pickupStoreAddress: `${pickupStore.province}${pickupStore.city}${pickupStore.district}${pickupStore.address}`,
+            pickupContactPhone: pickupStore.contactPhone,
           }),
           remark: data.remark,
           autoCloseAt: new Date(Date.now() + ORDER_AUTO_CLOSE_MINUTES * 60 * 1000),

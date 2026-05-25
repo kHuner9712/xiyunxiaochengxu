@@ -6,7 +6,7 @@
 
 | 项目 | 状态 | 备注 |
 |------|------|------|
-| 代码层技术就绪 | [x] | test:ci 227 测试通过，release:check 41 PASS / 0 FAIL |
+| 代码层技术就绪 | [x] | test:ci 337 测试通过，release:check 43 PASS / 0 FAIL / 2 WARN |
 | 预生产部署 | [ ] | 需在部署环境执行 |
 | 小程序体验版 | [ ] | 需上传体验版 |
 | 真实支付验证 | [ ] | 需真机沙箱验证 |
@@ -47,13 +47,13 @@
 - [x] `pnpm install` 通过
 - [x] `pnpm --filter @baby-mall/api prisma:validate` 通过
 - [x] `pnpm --filter @baby-mall/api prisma:generate` 通过
-- [x] `pnpm --filter @baby-mall/api test:ci` 通过（227 tests, 10 unit + 5 e2e）
+- [x] `pnpm --filter @baby-mall/api test:ci` 通过（337 tests, 20 unit + 5 e2e）
 - [x] `pnpm build:api` 通过
 - [x] `pnpm build:admin` 通过
 - [x] `pnpm build:mini` 通过
-- [x] `pnpm release:check` 通过（41 PASS / 0 FAIL / 2 WARN）
+- [x] `pnpm release:check` 通过（43 PASS / 0 FAIL / 2 WARN）
 - [x] 无真实密钥、证书、.env 被提交
-- [x] Prisma migrations 完整（6 个迁移文件）
+- [x] Prisma migrations 完整（11 个迁移文件）
 - [x] schema.prisma 与 migrations 无漂移
 - [ ] CI workflow 通过（需推送到远程仓库后验证）
 - [ ] release-check workflow 可手动触发（需推送到远程仓库后验证）
@@ -342,7 +342,7 @@
 
 | 检查域 | 状态 | 负责人 | 备注 |
 |--------|------|--------|------|
-| 技术构建 | [ ] Go / [ ] No-Go | | P0/P1 已清零，227 测试通过 |
+| 技术构建 | [ ] Go / [ ] No-Go | | P0/P1 已清零，337 测试通过 |
 | 预生产部署 | [ ] Go / [ ] No-Go | | 需部署环境验证 |
 | 小程序真机 | [ ] Go / [ ] No-Go | | 需真机测试 |
 | 支付退款 | [ ] Go / [ ] No-Go | | 需真实支付/退款验证 |
@@ -462,3 +462,57 @@
 | 支付回调路径 | 配置为 /api/weapp/pay/callback | □ |
 | 退款回调路径 | 配置为 /api/weapp/pay/refund-callback | □ |
 | 微信商户平台配置 | 支付回调URL与代码实际路径一致 | □ |
+
+### 14.7 活动 Feed 路由验收
+
+- [ ] GET /api/weapp/activity/feed 不被 :id 路由捕获
+- [ ] feed 接口已迁移到 ActivityModule，路由安全
+
+### 14.8 视频/文章内容流验收
+
+- [ ] 活动 Tab 推荐/优惠/视频/文章切换正常
+- [ ] 视频内容详情页播放正常
+- [ ] 文章内容详情页展示正常
+
+### 14.9 自提点选择验收
+
+- [ ] 自提点列表加载正常
+- [ ] 选择自提点后返回确认订单页
+
+### 14.10 自提订单支付后自提码验收
+
+- [ ] 自提订单支付成功后展示自提码
+- [ ] 自提码6位数字唯一
+
+### 14.11 后台自提核销验收
+
+- [ ] 输入自提码核销成功
+- [ ] 重复核销返回明确错误
+- [ ] delivery 订单不能核销
+
+### 14.12 客服配置与小程序客服入口验收
+
+- [ ] 后台客服配置保存成功
+- [ ] 小程序首页/商品详情/订单详情/售后详情/我的页面客服入口可用
+- [ ] 客服页面微信/电话/FAQ展示正常
+
+### 14.13 裂变分享未登录访问记录验收
+
+- [ ] 未登录用户点击分享链接可记录访问
+- [ ] 登录后自动绑定邀请关系
+
+### 14.14 邀请绑定与首单奖励幂等验收
+
+- [ ] 新用户绑定邀请关系后注册奖励只发一次
+- [ ] 首单支付后邀请人奖励只发一次
+- [ ] campaign 过期不发奖励
+
+### 14.15 微信支付回调配送/自提状态分流验收
+
+- [ ] delivery 订单支付成功进入 pending_delivery
+- [ ] pickup 订单支付成功进入 pending_pickup 且生成 pickupCode
+
+### 14.16 新增 migration 与 schema 无漂移验收
+
+- [ ] prisma:validate 通过
+- [ ] 11 个迁移文件与 schema 一致

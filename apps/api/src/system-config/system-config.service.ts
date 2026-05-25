@@ -87,7 +87,7 @@ export class SystemConfigService {
       configMap[item.configKey] = item.value;
     }
     return {
-      enabled: configMap.enabled ?? false,
+      enabled: configMap.enabled === 'true' || configMap.enabled === true,
       type: configMap.type ?? 'phone',
       phone: configMap.phone ?? '',
       wechatQrCode: configMap.wechatQrCode ?? '',

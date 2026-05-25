@@ -28,21 +28,6 @@ export class WeappContentController {
   }
 }
 
-@Controller('weapp/activity')
-export class WeappActivityFeedController {
-  constructor(private readonly contentService: ContentService) {}
-
-  @Public()
-  @Get('feed')
-  async findActivityFeed(
-    @Query('tab') tab: string = 'recommend',
-    @Query('page') page: string = '1',
-    @Query('pageSize') pageSize: string = '10',
-  ) {
-    return this.contentService.findActivityFeed(tab, Number(page), Number(pageSize));
-  }
-}
-
 @Controller('admin/content')
 export class AdminContentController {
   constructor(private readonly contentService: ContentService) {}

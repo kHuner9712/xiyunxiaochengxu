@@ -1,0 +1,29 @@
+- [ ] P0-1: /weapp/activity/feed 路由不被 :id 捕获，e2e 测试通过
+- [ ] P0-2: POST /weapp/share/visit 有 @Public()，未登录可调用
+- [ ] P0-3: processInviteeReward 的 sourceId 为纯数字 BigInt，无字符串前缀转换
+- [ ] P0-4: 自提订单创建时自提点快照在事务内一次性写入，自提点不存在/禁用时创建失败
+- [ ] P0-5: PaymentService 无循环依赖错误，pnpm build:api 通过
+- [ ] P1-1: GO_LIVE.md 反映真实测试数量和验收状态
+- [ ] P1-2: 权限 seed 包含所有新增权限码，超级管理员拥有全部权限
+- [ ] P1-3: 小程序分享参数解析统一到 utils/share.ts
+- [ ] P1-4: 活动 FeedItem 后端返回字段与前端接口一致，id 为 string
+- [ ] P1-5: 客服配置 enabled 返回 boolean 类型
+- [ ] Activity Feed e2e: GET /api/weapp/activity/feed?tab=recommend 返回 200
+- [ ] Activity Feed e2e: feed 不触发 findById('feed')
+- [ ] Share 测试: 未登录 visit 成功，bind-invite 需登录
+- [ ] Share 测试: 注册奖励幂等，sourceId 无 BigInt 异常
+- [ ] Pickup 测试: pickupStoreId 不存在时创建失败
+- [ ] Pickup 测试: 自提点快照在订单创建时写入
+- [ ] Pickup 测试: pickupCode 核销成功，重复核销失败
+- [ ] Customer Service 测试: enabled 为 boolean
+- [ ] Payment 测试: delivery→pending_delivery, pickup→pending_pickup
+- [ ] pnpm install 通过
+- [ ] prisma:validate 通过
+- [ ] prisma:generate 通过
+- [ ] test:ci 全部通过
+- [ ] build:api 通过
+- [ ] build:admin 通过
+- [ ] build:mini 通过
+- [ ] release:check 通过
+- [ ] 无 .env/证书/密钥提交
+- [ ] 文档更新完成（GO_LIVE.md, API_SPEC, ACCEPTANCE_CHECKLIST）

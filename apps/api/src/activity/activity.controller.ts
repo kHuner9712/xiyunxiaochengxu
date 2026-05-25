@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ActivityService } from './activity.service';
+import { ContentService } from '../content/content.service';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateActivityDto } from './dto/create-activity.dto';
@@ -7,12 +8,25 @@ import { ActivityQueryDto } from './dto/activity-query.dto';
 
 @Controller('weapp/activity')
 export class WeappActivityController {
-  constructor(private readonly activityService: ActivityService) {}
+  constructor(
+    private readonly activityService: ActivityService,
+    private readonly contentService: ContentService,
+  ) {}
 
   @Public()
   @Get('active')
   async findActive() {
     return this.activityService.findActive();
+  }
+
+  @Public()
+  @Get('feed')
+  async findActivityFeed(
+    @Query('tab') tab: string = 'recommend',
+    @Query('page') page: string = '1',
+    @Query('pageSize') pageSize: string = '10',
+  ) {
+    return this.contentService.findActivityFeed(tab, Number(page), Number(pageSize));
   }
 
   @Public()
