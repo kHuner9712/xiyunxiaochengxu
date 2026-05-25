@@ -1714,6 +1714,7 @@ GET /v3/refund/domestic/refunds/{out_refund_no}
 | pending_payment | 待付款 |
 | paid | 已付款（过渡态） |
 | pending_delivery | 待发货 |
+| pending_pickup | 待自提 |
 | delivered | 已发货 |
 | completed | 已完成 |
 | cancelled | 已取消 |
@@ -1726,6 +1727,8 @@ GET /v3/refund/domestic/refunds/{out_refund_no}
 | pending_payment | cancelled | 取消订单 |
 | pending_payment | paid | 支付成功（过渡态） |
 | pending_payment | pending_delivery | 支付成功（直接） |
+| pending_payment | pending_pickup | 支付成功（自提订单）|
+| pending_pickup | completed | 自提核销 |
 | paid | pending_delivery | 支付确认 |
 | pending_delivery | delivered | 发货 |
 | delivered | completed | 确认收货 |

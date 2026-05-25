@@ -153,6 +153,8 @@ async function main() {
     { name: '审核售后', code: 'order:aftersale:review', type: 2, parentCode: 'order', sortOrder: 7 },
     { name: '退款', code: 'order:aftersale:refund', type: 2, parentCode: 'order', sortOrder: 8 },
     { name: '订单导出', code: 'order:export', type: 2, parentCode: 'order', sortOrder: 9 },
+    { name: '自提点管理', code: 'pickup:store', type: 2, parentCode: 'order', sortOrder: 10 },
+    { name: '自提核销', code: 'pickup:verify', type: 2, parentCode: 'order', sortOrder: 11 },
     { name: '用户列表', code: 'user:list', type: 1, parentCode: 'user', sortOrder: 1 },
     { name: '用户详情', code: 'user:detail', type: 2, parentCode: 'user', sortOrder: 2 },
     { name: '会员管理', code: 'user:member', type: 2, parentCode: 'user', sortOrder: 3 },

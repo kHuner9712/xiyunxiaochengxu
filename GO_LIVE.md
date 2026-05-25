@@ -6,7 +6,7 @@
 
 | 项目 | 状态 | 备注 |
 |------|------|------|
-| 代码层技术就绪 | [x] | test:ci 337 测试通过，release:check 43 PASS / 0 FAIL / 2 WARN |
+| 代码层技术就绪 | [x] | test:ci 337 测试通过，release:check 44 PASS / 0 FAIL / 2 WARN |
 | 预生产部署 | [ ] | 需在部署环境执行 |
 | 小程序体验版 | [ ] | 需上传体验版 |
 | 真实支付验证 | [ ] | 需真机沙箱验证 |
@@ -16,7 +16,7 @@
 
 | 字段 | 值 |
 |------|------|
-| 当前阶段 | 代码层技术就绪 → 待人工真机验收 |
+| 当前阶段 | 预生产部署准备完成 → 待预生产部署/小程序体验版/真机验收 |
 | 版本号 | 1.0.0 |
 | commit hash | _待填写（上线前最后一次通过 release:check 的 commit）_ |
 | 负责人 | _待填写_ |
@@ -71,7 +71,7 @@
 - [ ] 微信证书文件放置完成（apiclient_key.pem、apiclient_cert.pem 等）
 - [ ] `docker compose up -d --build` 成功
 - [ ] `prisma migrate deploy` 成功
-- [ ] API health check 成功（`GET /api/common/health`）
+- [ ] API health check 成功（`GET /api/health`）
 - [ ] Admin Web 可访问
 - [ ] uploads 静态资源可访问
 - [ ] Nginx API 代理正常
@@ -183,7 +183,22 @@
 - [ ] 会员中心正常
 - [ ] 积分中心正常
 - [ ] 宝宝档案正常
-- [ ] 内容/育儿知识正常
+- [ ] 活动板块文章/视频内容流正常
+- [ ] 我的页面不再展示育儿知识/内容推送入口
+- [ ] 我的页面客服与帮助入口正常
+
+### H. 活动与内容
+
+- [ ] 活动推荐流正常
+- [ ] 优惠活动列表正常
+- [ ] 视频内容列表正常
+- [ ] 文章内容列表正常
+- [ ] 内容详情页正常
+- [ ] 分享归因正常
+- [ ] 邀请好友页正常
+- [ ] 客服与帮助页正常
+- [ ] 到店自提点选择正常
+- [ ] 自提码展示正常
 
 ---
 
@@ -250,6 +265,17 @@
 - [ ] 上传资源可访问
 - [ ] 文件上传权限（system:file）生效
 
+### G. V1.0 新增功能
+
+- [ ] 自提点管理
+- [ ] 自提核销
+- [ ] 客服配置
+- [ ] 内容管理 article/video/placement
+- [ ] 裂变活动配置
+- [ ] 分享记录
+- [ ] 邀请关系
+- [ ] 分享统计
+
 ---
 
 ## 8. 支付与退款专项验收 checklist
@@ -258,7 +284,9 @@
 
 - [ ] 真实微信支付下单成功
 - [ ] 支付成功回调收到
-- [ ] 订单状态 `pending_payment` → `pending_delivery`
+- [ ] 快递订单：`pending_payment` → `pending_delivery`
+- [ ] 自提订单：`pending_payment` → `pending_pickup`，并生成 pickupCode
+- [ ] 自提核销：`pending_pickup` → `completed`
 - [ ] 支付记录 `status=SUCCESS`
 - [ ] 优惠券 `LOCKED` → `USED`
 - [ ] 支付金额校验正确（回调金额与订单金额一致）
@@ -279,6 +307,17 @@
 - [ ] orphan callback 可观测（写入 RefundCallbackLog + BusinessEvent critical）
 - [ ] refund sync 可补偿（微信已成功但本地未成功可修复）
 - [ ] 退款金额不一致不会产生副作用
+
+### 自提订单支付专项
+
+- [ ] 自提订单支付成功状态流转 pending_payment → pending_pickup
+- [ ] pickupCode 唯一生成
+- [ ] 自提核销幂等
+
+### 裂变奖励专项
+
+- [ ] 裂变首单奖励不会影响支付主流程
+- [ ] 裂变首单奖励幂等
 
 ---
 
@@ -301,6 +340,14 @@
 - [ ] 用户协议
 - [ ] 隐私协议
 - [ ] 客服信息
+- [ ] 自提点
+- [ ] 客服配置
+- [ ] 视频内容
+- [ ] 文章内容
+- [ ] 裂变活动
+- [ ] 审核用商品与测试库存
+- [ ] 微信审核测试账号
+- [ ] 隐私协议/用户协议页面或链接
 
 ---
 

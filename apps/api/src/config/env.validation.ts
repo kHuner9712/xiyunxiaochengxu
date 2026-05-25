@@ -81,6 +81,22 @@ class EnvValidation {
 
   @IsString()
   @IsOptional()
+  WECHAT_SKIP_VERIFY?: string;
+
+  @IsString()
+  @IsOptional()
+  REFRESH_TOKEN_SECRET?: string;
+
+  @IsString()
+  @IsOptional()
+  REFRESH_TOKEN_EXPIRES_IN?: string;
+
+  @IsString()
+  @IsOptional()
+  UPLOAD_PUBLIC_URL?: string;
+
+  @IsString()
+  @IsOptional()
   CORS_ORIGINS?: string;
 
   @IsString()
@@ -102,8 +118,10 @@ export function validateEnv(env: Record<string, any>) {
       'JWT_SECRET',
       'WECHAT_APP_ID',
       'WECHAT_APP_SECRET',
+      'WECHAT_MCH_ID',
+      'WECHAT_API_V3_KEY',
+      'WECHAT_NOTIFY_URL',
       'CORS_ORIGINS',
-      'WECHAT_REFUND_NOTIFY_URL',
     ];
 
     const missing = requiredVars.filter((key) => !env[key]);
@@ -156,6 +174,11 @@ export function validateEnv(env: Record<string, any>) {
 
     if (env.SMOKE_TEST_BYPASS_CAPTCHA === 'true') {
       logger.error('生产环境禁止启用 SMOKE_TEST_BYPASS_CAPTCHA，请设置为 false 或删除该变量');
+      process.exit(1);
+    }
+
+    if (env.WECHAT_SKIP_VERIFY === 'true') {
+      logger.error('生产环境禁止启用 WECHAT_SKIP_VERIFY，请设置为 false 或删除该变量');
       process.exit(1);
     }
   }
