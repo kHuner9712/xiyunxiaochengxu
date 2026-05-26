@@ -18,7 +18,7 @@
 |------|------|
 | 当前阶段 | 预生产部署准备完成 → 待预生产部署/小程序体验版/真机验收 |
 | 版本号 | 1.0.0 |
-| commit hash | _待填写（上线前最后一次通过 release:check 的 commit）_ |
+| commit hash | 75894e6（上次通过 release:check 的 commit，本次修改后需重新确认） |
 | 负责人 | _待填写_ |
 | 预计上线日期 | _待填写_ |
 | 是否代码冻结 | 否（待本任务单全部 Go 后冻结） |
@@ -51,7 +51,7 @@
 - [x] `pnpm build:api` 通过
 - [x] `pnpm build:admin` 通过
 - [x] `pnpm build:mini` 通过
-- [x] `pnpm release:check` 通过（43 PASS / 0 FAIL / 2 WARN）
+- [x] `pnpm release:check` 通过（44 PASS / 0 FAIL / 2 WARN）
 - [x] 无真实密钥、证书、.env 被提交
 - [x] Prisma migrations 完整（11 个迁移文件）
 - [x] schema.prisma 与 migrations 无漂移

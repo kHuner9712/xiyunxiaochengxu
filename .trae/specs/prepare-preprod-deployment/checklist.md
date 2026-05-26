@@ -1,22 +1,22 @@
-- [ ] GO_LIVE.md 个人中心验收项已修正（删除育儿知识，改为活动内容流+客服入口）
-- [ ] GO_LIVE.md 支付专项验收已拆分为快递/自提两种状态流转
-- [ ] GO_LIVE.md 小程序真机验收覆盖活动feed/视频/文章/分享/邀请/客服/自提
-- [ ] GO_LIVE.md 后台验收覆盖自提点/核销/客服/内容/裂变/分享/邀请
-- [ ] GO_LIVE.md 数据准备 checklist 包含自提点/客服/裂变/视频/文章/测试账号
-- [ ] docs/12_ACCEPTANCE_CHECKLIST.md 同步更新
-- [ ] docs/10_ORDER_PAYMENT_AFTERSALE.md 同步更新
-- [ ] .env.example 包含 UPLOAD_PUBLIC_URL / REFRESH_TOKEN_SECRET
-- [ ] env.validation.ts production 下禁止 WECHAT_SKIP_VERIFY=true
-- [ ] env.validation.ts production requiredVars 包含 WECHAT_NOTIFY_URL/WECHAT_MCH_ID/WECHAT_API_V3_KEY
-- [ ] smoke-preprod.sh 覆盖所有 V1.0 API 端点
-- [ ] smoke-preprod.sh 权限边界测试（public vs auth）
-- [ ] docs/13_MANUAL_ACCEPTANCE_GUIDE.md 真机验收手册完整
-- [ ] RELEASE_CANDIDATE.md 代码冻结材料完整
-- [ ] seed.ts 幂等且包含所有新增权限
-- [ ] 安全扫描无真实密钥提交
-- [ ] pnpm install 通过
-- [ ] prisma:validate 通过
-- [ ] test:ci 全部通过
-- [ ] build:api + build:admin + build:mini 通过
-- [ ] release:check 通过
-- [ ] 无 .env/证书/密钥提交
+- [x] GO_LIVE.md 个人中心验收项已修正（删除育儿知识，改为活动内容流+客服入口）
+- [x] GO_LIVE.md 支付专项验收已拆分为快递/自提两种状态流转
+- [x] GO_LIVE.md 小程序真机验收覆盖活动feed/视频/文章/分享/邀请/客服/自提
+- [x] GO_LIVE.md 后台验收覆盖自提点/核销/客服/内容/裂变/分享/邀请
+- [x] GO_LIVE.md 数据准备 checklist 包含自提点/客服/裂变/视频/文章/测试账号
+- [x] docs/12_ACCEPTANCE_CHECKLIST.md 同步更新
+- [x] docs/10_ORDER_PAYMENT_AFTERSALE.md 同步更新
+- [x] .env.example 包含 UPLOAD_PUBLIC_URL / REFRESH_TOKEN_SECRET
+- [x] env.validation.ts production 下禁止 WECHAT_SKIP_VERIFY=true
+- [x] env.validation.ts production requiredVars 包含 WECHAT_NOTIFY_URL/WECHAT_MCH_ID/WECHAT_API_V3_KEY
+- [x] smoke-preprod.sh 覆盖所有 V1.0 API 端点
+- [x] smoke-preprod.sh 权限边界测试（public vs auth）
+- [x] docs/13_MANUAL_ACCEPTANCE_GUIDE.md 真机验收手册完整
+- [x] RELEASE_CANDIDATE.md 代码冻结材料完整
+- [x] seed.ts 幂等且包含所有新增权限
+- [x] 安全扫描无真实密钥提交
+- [x] pnpm install 通过
+- [x] prisma:validate 通过
+- [x] test:ci 全部通过
+- [x] build:api + build:admin + build:mini 通过
+- [x] release:check 通过
+- [x] 无 .env/证书/密钥提交

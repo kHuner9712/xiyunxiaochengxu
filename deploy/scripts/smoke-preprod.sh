@@ -93,7 +93,7 @@ check_status "Refund callback route exists" "GET" "/api/weapp/pay/refund-callbac
 echo ""
 
 echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
-echo -e "  总计: ${COLOR_GREEN}${PASS_COUNT} PASS${COLOR_RESET} / ${COLOR_RED}${FAIL_COUNT} FAIL${COLOR_RESET}"
+echo -e "  总计: ${COLOR_GREEN}${PASS_COUNT} PASS${COLOR_RESET} / ${COLOR_RED}${FAIL_COUNT} FAIL${COLOR_RESET} / ${COLOR_YELLOW}${MANUAL_COUNT} MANUAL${COLOR_RESET}"
 echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
 
 if [ "$FAIL_COUNT" -gt 0 ]; then

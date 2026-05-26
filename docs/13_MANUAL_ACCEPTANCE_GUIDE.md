@@ -3,9 +3,9 @@
 ## 1. 验收前准备
 
 ### 1.1 环境准备
-- 预生产 API 域名：_待填写_
+- 预生产 API 域名：https://api.yunxixiaochengxu.com.cn
 - 小程序体验版：_待上传_
-- 管理后台地址：_待填写_
+- 管理后台地址：https://admin.yunxixiaochengxu.com.cn
 
 ### 1.2 测试用户
 - 微信测试用户 A（已注册，有历史订单）

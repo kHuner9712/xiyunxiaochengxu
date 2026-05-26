@@ -27,18 +27,18 @@ fi
 
 echo "[4/6] 停止旧容器..."
 cd "$DEPLOY_DIR"
-docker-compose down
+docker compose down
 
 echo "[5/6] 构建并启动容器..."
-docker-compose build --no-cache api
-docker-compose up -d
+docker compose build --no-cache api
+docker compose up -d
 
 echo "[6/6] 等待服务启动..."
 echo "等待 MySQL 启动..."
 sleep 15
 
 echo "运行数据库迁移..."
-docker-compose exec -T api npx prisma migrate deploy 2>/dev/null || echo "迁移跳过或失败，请手动检查"
+docker compose exec -T api npx prisma migrate deploy 2>/dev/null || echo "迁移跳过或失败，请手动检查"
 
 echo ""
 echo "========================================="
@@ -50,5 +50,5 @@ echo "  MySQL:   localhost:3306"
 echo "  Redis:   localhost:6379"
 echo "========================================="
 echo ""
-echo "查看日志: docker-compose logs -f"
-echo "查看状态: docker-compose ps"
+echo "查看日志: docker compose logs -f"
+echo "查看状态: docker compose ps"
