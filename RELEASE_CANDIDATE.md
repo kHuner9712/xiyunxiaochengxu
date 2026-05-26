@@ -70,7 +70,7 @@
 | WARN | 说明 | 影响 | 处理建议 |
 |------|------|------|----------|
 | Docker 未运行 | 本地 Docker 未启动，Docker 相关检查需手动确认 | 低 | 部署预生产时确认 |
-| 工作目录有未提交更改 | 预生产准备阶段的文档和配置修改 | 低 | 提交后消除 |
+| 工作目录有未提交更改 | RC2 阶段修改，提交后消除 | 低 | 提交后消除 |
 
 ## 不包含事项
 
@@ -155,11 +155,10 @@
    # 编辑 .env.production 填入真实值
 
    # 部署
-   cd deploy
-   docker compose up -d --build
+   ENV_FILE=../.env.production bash deploy/scripts/deploy-preprod.sh
 
    # 验证
-   bash scripts/smoke-preprod.sh
+   BASE_URL=https://api.yunxixiaochengxu.com.cn bash deploy/scripts/smoke-preprod.sh
    ```
 3. **小程序体验版**：上传代码到微信平台，生成体验版二维码
 4. **真机验收**：按照 docs/13_MANUAL_ACCEPTANCE_GUIDE.md 执行

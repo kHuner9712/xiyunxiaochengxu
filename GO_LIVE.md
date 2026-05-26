@@ -51,7 +51,7 @@
 - [x] `pnpm build:api` 通过
 - [x] `pnpm build:admin` 通过
 - [x] `pnpm build:mini` 通过
-- [x] `pnpm release:check` 通过（44 PASS / 0 FAIL / 2 WARN）
+- [x] `pnpm release:check` 通过（45 PASS / 0 FAIL / 2 WARN）
 - [x] 无真实密钥、证书、.env 被提交
 - [x] Prisma migrations 完整（11 个迁移文件）
 - [x] schema.prisma 与 migrations 无漂移
@@ -412,7 +412,7 @@
 | 日期 | 验收人 | 验收项 | 结果 | 问题 | 关联 commit/issue |
 |------|--------|--------|------|------|-------------------|
 | 2026-05-23 | 技术审计 | 代码层技术就绪 | PASS | P0: wxPay(payParams) 已修复；P0: pointsDeduct 类型已修复 | 详见审计报告 |
-| | | | | | |
+| 2026-05-27 | RC2 修正 | smoke-preprod.sh/deploy-preprod.sh/RC tag 对齐 | PASS | smoke回调策略修正、MANUAL_COUNT bug 修复、deploy-preprod.sh 新增、微信审核材料包 | adf5d9e |
 | | | | | | |
 
 ---

@@ -1,0 +1,19 @@
+- [ ] smoke-preprod.sh MANUAL_COUNT 已初始化为 0
+- [ ] smoke-preprod.sh 有 manual() 函数
+- [ ] smoke-preprod.sh 支付/退款回调不发送请求，改为环境变量检查+https 校验
+- [ ] smoke-preprod.sh 最终输出 PASS / FAIL / MANUAL 三项汇总
+- [ ] smoke-preprod.sh 仅 FAIL_COUNT > 0 时 exit 1
+- [ ] deploy-preprod.sh 支持 ENV_FILE 参数
+- [ ] deploy-preprod.sh ENV_FILE 不存在时 exit 1
+- [ ] deploy-preprod.sh 迁移失败 exit 1
+- [ ] deploy-preprod.sh 输出预生产域名
+- [ ] 质量门禁全部通过（pnpm install / prisma / test:ci / build / release:check）
+- [ ] RELEASE_CANDIDATE.md RC 版本号为 v1.0.0-rc.2
+- [ ] RELEASE_CANDIDATE.md commit hash 为完整 hash
+- [ ] RELEASE_CANDIDATE.md 构建时间为真实时间
+- [ ] GO_LIVE.md commit hash 为完整 hash
+- [ ] GO_LIVE.md 修改记录表新增本次记录
+- [ ] GO_LIVE.md 验收记录表新增记录
+- [ ] docs/14_WECHAT_REVIEW_PACKAGE.md 已创建且不包含真实密钥
+- [ ] v1.0.0-rc.2 tag 已创建并推送
+- [ ] 未实际完成的验收项未勾选

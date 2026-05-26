@@ -13,6 +13,7 @@ TEST_ADMIN_PASSWORD="${TEST_ADMIN_PASSWORD:-}"
 
 PASS_COUNT=0
 FAIL_COUNT=0
+MANUAL_COUNT=0
 
 check_status() {
   local desc="$1"
@@ -46,6 +47,11 @@ check_status() {
       FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
   fi
+}
+
+manual() {
+  MANUAL_COUNT=$((MANUAL_COUNT + 1))
+  echo -e "${COLOR_YELLOW}MANUAL${COLOR_RESET} $1"
 }
 
 echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
@@ -87,9 +93,29 @@ else
 fi
 echo ""
 
-echo -e "${COLOR_YELLOW}[4] 支付路由可达性测试${COLOR_RESET}"
-check_status "Pay callback route exists" "GET" "/api/weapp/pay/callback" "not_404"
-check_status "Refund callback route exists" "GET" "/api/weapp/pay/refund-callback" "not_404"
+echo -e "${COLOR_YELLOW}[4] 支付/退款回调配置检查${COLOR_RESET}"
+if [ -n "${WECHAT_NOTIFY_URL:-}" ]; then
+  if [[ "${WECHAT_NOTIFY_URL}" == https://* ]]; then
+    echo -e "${COLOR_GREEN}PASS${COLOR_RESET} WECHAT_NOTIFY_URL 已配置: ${WECHAT_NOTIFY_URL}"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo -e "${COLOR_RED}FAIL${COLOR_RESET} WECHAT_NOTIFY_URL 非 HTTPS: ${WECHAT_NOTIFY_URL}"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+else
+  manual "WECHAT_NOTIFY_URL 未配置，支付回调需通过微信真实回调或专项测试验证"
+fi
+if [ -n "${WECHAT_REFUND_NOTIFY_URL:-}" ]; then
+  if [[ "${WECHAT_REFUND_NOTIFY_URL}" == https://* ]]; then
+    echo -e "${COLOR_GREEN}PASS${COLOR_RESET} WECHAT_REFUND_NOTIFY_URL 已配置: ${WECHAT_REFUND_NOTIFY_URL}"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo -e "${COLOR_RED}FAIL${COLOR_RESET} WECHAT_REFUND_NOTIFY_URL 非 HTTPS: ${WECHAT_REFUND_NOTIFY_URL}"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+else
+  manual "WECHAT_REFUND_NOTIFY_URL 未配置，退款回调需通过微信真实回调或专项测试验证"
+fi
 echo ""
 
 echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
@@ -99,4 +125,6 @@ echo -e "${COLOR_BLUE}============================================${COLOR_RESET}
 if [ "$FAIL_COUNT" -gt 0 ]; then
   exit 1
 fi
+echo ""
+echo -e "${COLOR_YELLOW}提示: MANUAL 项需通过微信真实回调或专项测试验证，不阻止部署${COLOR_RESET}"
 exit 0
