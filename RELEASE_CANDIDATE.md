@@ -4,9 +4,9 @@
 
 | 项目 | 值 |
 |------|------|
-| RC 版本号 | v1.0.0-rc.1 |
-| commit hash | 1ff2fef |
-| 构建时间 | 2026-05-26 |
+| RC 版本号 | v1.0.0-rc.2 |
+| commit hash | 38bd5a0ac477d4350678a867c0f533ece8910e65 |
+| 构建时间 | 2026-05-27 |
 | 构建人 | _待填写_ |
 
 ## 功能范围
@@ -124,7 +124,7 @@
 
 ### 代码回滚
 1. 记录当前 commit hash
-2. 创建 release tag：`git tag v1.0.0-rc.1`
+2. 创建 release tag：`git tag v1.0.0-rc.2`
 3. 回滚命令：`git revert <commit-hash>` 或 `git reset --hard <commit-hash>`
 
 ### 数据库回滚

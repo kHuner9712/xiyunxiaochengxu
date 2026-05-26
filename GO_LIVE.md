@@ -6,7 +6,7 @@
 
 | 项目 | 状态 | 备注 |
 |------|------|------|
-| 代码层技术就绪 | [x] | test:ci 337 测试通过，release:check 44 PASS / 0 FAIL / 2 WARN |
+| 代码层技术就绪 | [x] | test:ci 337 测试通过，release:check 45 PASS / 0 FAIL / 2 WARN |
 | 预生产部署 | [ ] | 需在部署环境执行 |
 | 小程序体验版 | [ ] | 需上传体验版 |
 | 真实支付验证 | [ ] | 需真机沙箱验证 |
@@ -18,7 +18,7 @@
 |------|------|
 | 当前阶段 | 预生产部署准备完成 → 待预生产部署/小程序体验版/真机验收 |
 | 版本号 | 1.0.0 |
-| commit hash | 1ff2fef |
+| commit hash | 38bd5a0ac477d4350678a867c0f533ece8910e65 |
 | 负责人 | _待填写_ |
 | 预计上线日期 | _待填写_ |
 | 是否代码冻结 | 否（待本任务单全部 Go 后冻结） |
@@ -412,7 +412,7 @@
 | 日期 | 验收人 | 验收项 | 结果 | 问题 | 关联 commit/issue |
 |------|--------|--------|------|------|-------------------|
 | 2026-05-23 | 技术审计 | 代码层技术就绪 | PASS | P0: wxPay(payParams) 已修复；P0: pointsDeduct 类型已修复 | 详见审计报告 |
-| 2026-05-27 | RC2 修正 | smoke-preprod.sh/deploy-preprod.sh/RC tag 对齐 | PASS | smoke回调策略修正、MANUAL_COUNT bug 修复、deploy-preprod.sh 新增、微信审核材料包 | adf5d9e |
+| 2026-05-27 | RC2 修正 | smoke-preprod.sh/deploy-preprod.sh/RC tag 对齐 | PASS | smoke回调策略修正、MANUAL_COUNT bug 修复、deploy-preprod.sh 新增、微信审核材料包 | 38bd5a0 |
 | | | | | | |
 
 ---
