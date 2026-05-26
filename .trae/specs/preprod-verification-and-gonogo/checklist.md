@@ -1,0 +1,13 @@
+- [ ] main HEAD 与 v1.0.0-rc.2 tag 对齐确认
+- [ ] GitHub Actions CI workflow 状态已确认
+- [ ] GitHub Actions release-check workflow 状态已确认
+- [ ] 服务器部署命令清单已输出
+- [ ] 小程序体验版上传步骤已输出
+- [ ] 微信审核材料完整性已确认
+- [ ] 本地质量门禁全部通过
+- [ ] GO_LIVE.md 当前阶段反映真实状态
+- [ ] GO_LIVE.md 验收记录表已更新
+- [ ] GO_LIVE.md Go/No-Go 判定表已填写
+- [ ] RELEASE_CANDIDATE.md 状态已更新
+- [ ] 未实际完成的验收项未勾选
+- [ ] 所有修改已提交并推送到 GitHub
