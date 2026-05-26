@@ -55,7 +55,7 @@
 | build:api | PASS | NestJS build |
 | build:admin | PASS | Vite build, 1889 modules |
 | build:mini | PASS | uni-app build mp-weixin |
-| release:check | PASS | 44 PASS / 0 FAIL / 2 WARN |
+| release:check | PASS | 45 PASS / 0 FAIL / 2 WARN |
 
 ## 构建结果
 
