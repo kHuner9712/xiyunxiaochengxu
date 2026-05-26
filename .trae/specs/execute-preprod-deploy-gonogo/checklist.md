@@ -1,0 +1,10 @@
+- [ ] main HEAD 与 v1.0.0-rc.2 tag 对齐确认
+- [ ] GO_LIVE.md / RELEASE_CANDIDATE.md commit hash 一致
+- [ ] GO_LIVE.md / RELEASE_CANDIDATE.md release-check 结果一致
+- [ ] 本地质量门禁全部通过
+- [ ] 微信审核材料完整性确认
+- [ ] GO_LIVE.md Go/No-Go 判定表基于真实状态
+- [ ] GO_LIVE.md 验收记录表已更新
+- [ ] RELEASE_CANDIDATE.md 状态已更新
+- [ ] 未实际完成的验收项未勾选
+- [ ] 所有修改已提交并推送到 GitHub

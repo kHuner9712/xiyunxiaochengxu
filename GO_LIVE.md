@@ -21,7 +21,7 @@
 | commit hash | 65ed51d8dbaeed45a231917e61c078400df8831e |
 | 负责人 | _待填写_ |
 | 预计上线日期 | _待填写_ |
-| 是否代码冻结 | 是（v1.0.0-rc.2 tag 已创建，commit 65ed51d） |
+| 是否代码冻结 | 是（v1.0.0-rc.2 tag 已创建，commit 798eaec） |
 | 是否允许新增功能 | 否 |
 | 当前结论 | P0/P1 已清零，构建测试全部通过，可进入人工真机验收 |
 
@@ -389,19 +389,19 @@
 
 | 检查域 | 状态 | 负责人 | 备注 |
 |--------|------|--------|------|
-| 技术构建 | [x] Go / [ ] No-Go | | 337 tests PASS, 45 PASS / 0 FAIL / 2 WARN, v1.0.0-rc.2 tag 对齐 |
-| 预生产部署 | [ ] Go / [ ] No-Go | | 需部署环境验证 |
-| 小程序真机 | [ ] Go / [ ] No-Go | | 需真机测试 |
-| 支付退款 | [ ] Go / [ ] No-Go | | 需真实支付/退款验证 |
-| 后台运营 | [ ] Go / [ ] No-Go | | 需运营人员验收 |
-| 微信审核材料 | [ ] Go / [ ] No-Go | | 需准备隐私协议、资质 |
-| 数据准备 | [ ] Go / [ ] No-Go | | 需运营录入商品数据 |
-| 回滚方案 | [ ] Go / [ ] No-Go | | 需确认回滚流程 |
+| 技术构建 | [x] Go / [ ] No-Go | | 337 tests PASS, 45 PASS / 0 FAIL / 2 WARN, v1.0.0-rc.2 tag 对齐 commit 798eaec |
+| 预生产部署 | [ ] Go / [x] No-Go | | 当前环境为 Windows 开发机，非预生产服务器，未真实部署 |
+| 小程序真机 | [ ] Go / [x] No-Go | | 体验版未上传，真机未验收 |
+| 支付退款 | [ ] Go / [x] No-Go | | 未真实支付/退款验证 |
+| 后台运营 | [ ] Go / [x] No-Go | | 未在预生产环境验收 |
+| 微信审核材料 | [ ] Go / [x] No-Go | | 主体信息待填写，隐私/用户协议页面待配置 |
+| 数据准备 | [ ] Go / [x] No-Go | | 需运营录入商品数据 |
+| 回滚方案 | [ ] Go / [x] No-Go | | 需确认回滚流程 |
 
 ### 最终结论
 
 - [ ] **Go**：可以发布
-- [ ] **No-Go**：禁止发布
+- [x] **No-Go**：禁止发布
 
 > 所有检查域均为 Go 时，方可勾选"Go：可以发布"。
 
@@ -413,7 +413,8 @@
 |------|--------|--------|------|------|-------------------|
 | 2026-05-23 | 技术审计 | 代码层技术就绪 | PASS | P0: wxPay(payParams) 已修复；P0: pointsDeduct 类型已修复 | 详见审计报告 |
 | 2026-05-27 | RC2 修正 | smoke-preprod.sh/deploy-preprod.sh/RC tag 对齐 | PASS | smoke回调策略修正、MANUAL_COUNT bug 修复、deploy-preprod.sh 新增、微信审核材料包 | 38bd5a0 |
-| 2026-05-27 | Go/No-Go 评审 | 技术构建 Go/预生产 No-Go(待部署)/体验版 No-Go(待上传) | Conditional Go | 代码层全部通过，预生产未部署，体验版未上传，真机未验收 | 65ed51d |
+| 2026-05-27 | Go/No-Go 评审 | 技术构建 Go/预生产 No-Go(待部署)/体验版 No-Go(待上传) | Conditional Go | 代码层全部通过，预生产未部署，体验版未上传，真机未验收 | 798eaec |
+| 2026-05-27 | 文档校准 | commit hash 校准为 798eaec / release-check 45 PASS / Go/No-Go 真实状态更新 | PASS | commit hash 从 65ed51d 校准为 798eaec；RELEASE_CANDIDATE.md release-check 从 44 校准为 45 | 798eaec |
 | | | | | | |
 
 ---
