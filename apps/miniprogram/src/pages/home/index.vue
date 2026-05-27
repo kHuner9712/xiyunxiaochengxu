@@ -96,7 +96,7 @@ import Empty from '@/components/Empty.vue'
 const userStore = useUserStore()
 
 onShareAppMessage(() => ({
-  title: '禧孕母婴 - 品质母婴好物',
+  title: '禧孕优选 - 品质母婴好物',
   path: `/pages/home/index?inviter=${userStore.userInfo?.id || ''}`
 }))
 

@@ -281,7 +281,7 @@ async function main() {
   console.log(`创建超级管理员账号 ${adminUsername} (密码已隐藏)`);
 
   const configs = [
-    { groupName: 'basic', configKey: 'shop_name', configValue: '禧孕母婴商城', valueType: 'string', description: '商城名称' },
+    { groupName: 'basic', configKey: 'shop_name', configValue: '禧孕优选商城', valueType: 'string', description: '商城名称' },
     { groupName: 'basic', configKey: 'shop_logo', configValue: '', valueType: 'string', description: '商城 Logo' },
     { groupName: 'basic', configKey: 'customer_service_phone', configValue: '400-XXX-XXXX', valueType: 'string', description: '客服电话' },
     { groupName: 'basic', configKey: 'icp_number', configValue: '', valueType: 'string', description: 'ICP 备案号' },

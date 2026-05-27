@@ -387,7 +387,11 @@ async function handleSubmit() {
       },
     }
     if (isEdit.value) {
-      await productApi.update(data)
+      if (!form.id) {
+        ElMessage.error('商品ID缺失，无法更新')
+        return
+      }
+      await productApi.update(form.id, data)
     } else {
       await productApi.create(data)
     }

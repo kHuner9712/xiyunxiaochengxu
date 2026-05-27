@@ -68,7 +68,7 @@ function formatTime(dateStr: string): string {
 }
 
 onShareAppMessage(() => ({
-  title: '禧孕母婴好物推荐，快来看看吧！',
+  title: '禧孕优选好物推荐，快来看看吧！',
   path: `/pages/home/index?inviter=${userStore.userInfo?.id || ''}`
 }))
 

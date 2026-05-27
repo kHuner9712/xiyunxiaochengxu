@@ -1,6 +1,6 @@
 {
   "pages": [
-    { "path": "pages/home/index", "style": { "navigationBarTitleText": "禧孕母婴" } },
+    { "path": "pages/home/index", "style": { "navigationBarTitleText": "禧孕优选" } },
     { "path": "pages/category/index", "style": { "navigationBarTitleText": "分类" } },
     { "path": "pages/activity/index", "style": { "navigationBarTitleText": "活动" } },
     { "path": "pages/cart/index", "style": { "navigationBarTitleText": "购物车" } },

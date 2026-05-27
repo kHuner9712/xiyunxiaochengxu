@@ -1,4 +1,4 @@
-# 禧孕母婴用品私域商城小程序上线验收任务单
+# 禧孕优选母婴用品商城小程序上线验收任务单
 
 ---
 
@@ -87,6 +87,7 @@
 ## 5. 微信公众平台配置 checklist
 
 - [ ] 小程序 AppID 配置
+- [ ] 体验版上传前执行：NODE_ENV=production VITE_WX_APPID=真实AppID pnpm build:mini
 - [ ] AppSecret 配置
 - [ ] request 合法域名配置（`https://api.域名`）
 - [ ] uploadFile 合法域名配置（`https://api.域名`）

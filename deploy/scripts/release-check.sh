@@ -212,6 +212,22 @@ for compose_file in "${COMPOSE_FILES[@]}"; do
   fi
 done
 
+section "8.6. 小程序 AppID 检查"
+MANIFEST_FILE="apps/miniprogram/src/manifest.json"
+if [ -f "$MANIFEST_FILE" ]; then
+  if grep -q "wx0000000000000000" "$MANIFEST_FILE" 2>/dev/null; then
+    if [ "${REQUIRE_REAL_WX_APPID:-}" = "true" ]; then
+      fail "manifest.json 仍使用占位 AppID wx0000000000000000，体验版/正式版构建必须配置真实 AppID"
+    else
+      warn "manifest.json 仍使用占位 AppID wx0000000000000000，体验版/正式版构建前必须配置真实 AppID（设置 REQUIRE_REAL_WX_APPID=true 可升级为 FAIL）"
+    fi
+  else
+    pass "manifest.json AppID 已配置（非占位值）"
+  fi
+else
+  warn "manifest.json 不存在，跳过 AppID 检查"
+fi
+
 section "8.7. 协议页面正式化检查"
 AGREEMENT_FILES=(
   "apps/miniprogram/src/pages/privacy/index.vue"

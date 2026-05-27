@@ -95,7 +95,7 @@ async function seedCategories() {
 
 async function seedBrands() {
   const items = [
-    { name: '禧孕严选', logo: '/uploads/demo/brand-1.png', description: '禧孕母婴自有品牌', sortOrder: 1 },
+    { name: '禧孕严选', logo: '/uploads/demo/brand-1.png', description: '禧孕优选自有品牌', sortOrder: 1 },
     { name: 'Demo Baby', logo: '/uploads/demo/brand-2.png', description: 'Demo演示品牌', sortOrder: 2 },
     { name: '安心母婴', logo: '/uploads/demo/brand-3.png', description: '安心之选', sortOrder: 3 },
   ];

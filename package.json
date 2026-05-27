@@ -2,7 +2,7 @@
   "name": "baby-mall",
   "version": "1.0.0",
   "private": true,
-  "description": "禧孕母婴用品私域商城小程序",
+  "description": "禧孕优选母婴用品商城小程序",
   "scripts": {
     "dev:api": "pnpm --filter @baby-mall/api dev",
     "dev:admin": "pnpm --filter @baby-mall/admin-web dev",

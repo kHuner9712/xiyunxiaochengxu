@@ -10,8 +10,8 @@ export const productApi = {
   create(data: any) {
     return request.post('/admin/product/create', data)
   },
-  update(data: any) {
-    return request.put(`/admin/product/update/${data.id}`, data)
+  update(id: number, data: any) {
+    return request.put(`/admin/product/update/${id}`, data)
   },
   delete(id: number) {
     return request.delete(`/admin/product/delete/${id}`)
