@@ -123,6 +123,77 @@
           </el-table-column>
         </el-table>
 
+        <el-divider content-position="left">合规信息（食品/保健品/奶粉）</el-divider>
+
+        <el-form-item label="是否食品">
+          <el-switch v-model="form.compliance.isFood" />
+        </el-form-item>
+
+        <el-form-item label="是否保健食品">
+          <el-switch v-model="form.compliance.isHealthSupplement" />
+        </el-form-item>
+
+        <el-form-item label="是否奶粉/婴幼儿配方乳粉">
+          <el-switch v-model="form.compliance.isInfantFormula" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isFood || form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="生产许可证编号">
+          <el-input v-model="form.compliance.productionLicenseNo" placeholder="请输入生产许可证编号" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isFood || form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="食品经营/备案凭证编号">
+          <el-input v-model="form.compliance.foodBusinessCertNo" placeholder="请输入食品经营许可证或备案凭证编号" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isHealthSupplement" label="保健食品批准文号/备案号">
+          <el-input v-model="form.compliance.healthSupplementApprovalNo" placeholder="请输入蓝帽批准文号或备案号" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isInfantFormula" label="奶粉产品配方注册号">
+          <el-input v-model="form.compliance.infantFormulaRegNo" placeholder="请输入婴幼儿配方乳粉产品配方注册号" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isFood || form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="生产厂家">
+          <el-input v-model="form.compliance.manufacturer" placeholder="请输入生产厂家名称" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isFood || form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="供应商名称">
+          <el-input v-model="form.compliance.supplierName" placeholder="请输入供应商名称" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isFood || form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="保质期">
+          <el-input v-model="form.compliance.shelfLife" placeholder="如：12个月" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isFood || form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="贮存条件">
+          <el-input v-model="form.compliance.storageCondition" placeholder="如：常温避光保存" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="适用人群">
+          <el-input v-model="form.compliance.suitableFor" placeholder="请输入适用人群" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="不适宜人群">
+          <el-input v-model="form.compliance.notSuitableFor" placeholder="请输入不适宜人群" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="注意事项">
+          <el-input v-model="form.compliance.precautions" type="textarea" :rows="2" placeholder="请输入注意事项" />
+        </el-form-item>
+
+        <el-form-item v-if="form.compliance.isFood || form.compliance.isHealthSupplement || form.compliance.isInfantFormula" label="资质图片">
+          <el-upload
+            action=""
+            :http-request="handleUploadCertImage"
+            list-type="picture-card"
+            :file-list="certImageFileList"
+            :on-remove="handleRemoveCertImage"
+            accept="image/*"
+          >
+            <el-icon><Plus /></el-icon>
+          </el-upload>
+        </el-form-item>
+
         <el-divider content-position="left">商品详情</el-divider>
 
         <el-form-item label="商品描述">
@@ -161,6 +232,7 @@ const categoryTree = ref<any[]>([])
 const brandList = ref<any[]>([])
 const supplierList = ref<any[]>([])
 const imageFileList = ref<any[]>([])
+const certImageFileList = ref<any[]>([])
 
 const isEdit = computed(() => !!route.params.id)
 
@@ -180,6 +252,23 @@ const form = reactive({
   description: '',
   detailContent: '',
   skus: [] as { name: string; price: number; stock: number; image: string }[],
+  compliance: {
+    isFood: false,
+    isHealthSupplement: false,
+    isInfantFormula: false,
+    productionLicenseNo: '',
+    foodBusinessCertNo: '',
+    healthSupplementApprovalNo: '',
+    infantFormulaRegNo: '',
+    manufacturer: '',
+    supplierName: '',
+    shelfLife: '',
+    storageCondition: '',
+    suitableFor: '',
+    notSuitableFor: '',
+    precautions: '',
+    certImages: [] as string[],
+  },
 })
 
 const rules: FormRules = {
@@ -217,6 +306,19 @@ async function handleUploadSkuImage(options: any, row: any) {
   } catch {}
 }
 
+async function handleUploadCertImage(options: any) {
+  try {
+    const res = await uploadApi.uploadImage(options.file)
+    form.compliance.certImages.push(res.data.url)
+    certImageFileList.value.push({ url: res.data.url })
+  } catch {}
+}
+
+function handleRemoveCertImage(file: any) {
+  const idx = form.compliance.certImages.indexOf(file.url)
+  if (idx > -1) form.compliance.certImages.splice(idx, 1)
+}
+
 async function fetchDetail(id: number) {
   try {
     const res = await productApi.getDetail(id)
@@ -237,8 +339,26 @@ async function fetchDetail(id: number) {
       description: d.description,
       detailContent: d.detailContent,
       skus: (d.skus || []).map((s: any) => ({ ...s, price: s.price / 100 })),
+      compliance: d.attributes?.compliance || {
+        isFood: false,
+        isHealthSupplement: false,
+        isInfantFormula: false,
+        productionLicenseNo: '',
+        foodBusinessCertNo: '',
+        healthSupplementApprovalNo: '',
+        infantFormulaRegNo: '',
+        manufacturer: '',
+        supplierName: '',
+        shelfLife: '',
+        storageCondition: '',
+        suitableFor: '',
+        notSuitableFor: '',
+        precautions: '',
+        certImages: [],
+      },
     })
     imageFileList.value = (d.images || []).map((url: string) => ({ url }))
+    certImageFileList.value = (d.attributes?.compliance?.certImages || []).map((url: string) => ({ url }))
   } catch {}
 }
 
@@ -253,6 +373,9 @@ async function handleSubmit() {
       price: priceToFen(form.price),
       originalPrice: priceToFen(form.originalPrice),
       skus: form.skus.map((s) => ({ ...s, price: priceToFen(s.price) })),
+      attributes: {
+        compliance: form.compliance,
+      },
     }
     if (isEdit.value) {
       await productApi.update(data)

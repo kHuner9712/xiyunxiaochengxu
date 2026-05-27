@@ -24,6 +24,39 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 echo -e "${COLOR_GREEN}PASS${COLOR_RESET} 环境配置文件: $ENV_FILE"
+
+WEAK_SECRETS_FOUND=false
+
+check_weak_secret() {
+  local key="$1"
+  local value=$(grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+  if [ -z "$value" ]; then
+    echo -e "  ${COLOR_RED}FAIL${COLOR_RESET} ${key} 未设置"
+    WEAK_SECRETS_FOUND=true
+    return
+  fi
+  local lower_value=$(echo "$value" | tr '[:upper:]' '[:lower:]')
+  case "$lower_value" in
+    changeme|password|123456|admin|secret|test|your_*|change_this*)
+      echo -e "  ${COLOR_RED}FAIL${COLOR_RESET} ${key} 使用了默认或弱值，生产环境必须使用随机强值"
+      WEAK_SECRETS_FOUND=true
+      ;;
+    *)
+      echo -e "  ${COLOR_GREEN}PASS${COLOR_RESET} ${key} 已设置"
+      ;;
+  esac
+}
+
+check_weak_secret "DB_PASSWORD"
+check_weak_secret "JWT_SECRET"
+check_weak_secret "ADMIN_DEFAULT_PASSWORD"
+
+if [ "$WEAK_SECRETS_FOUND" = true ]; then
+  echo -e "${COLOR_RED}FAIL${COLOR_RESET} 生产环境存在弱密钥/密码，部署中止"
+  echo -e "${COLOR_RED}       请修改 .env.production 中的弱值后再试${COLOR_RESET}"
+  exit 1
+fi
+
 echo ""
 
 echo -e "${COLOR_YELLOW}[2/7] 拉取最新代码...${COLOR_RESET}"

@@ -5,6 +5,15 @@ import { paginate } from '@baby-mall/shared';
 import * as path from 'path';
 import * as fs from 'fs';
 
+const FILE_MAGIC_NUMBERS: Record<string, number[][]> = {
+  'image/jpeg': [[0xFF, 0xD8, 0xFF]],
+  'image/png': [[0x89, 0x50, 0x4E, 0x47]],
+  'image/gif': [[0x47, 0x49, 0x46]],
+  'image/webp': [[0x52, 0x49, 0x46, 0x46]],
+  'video/mp4': [[0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], [0x00, 0x00, 0x00, 0x1C, 0x66, 0x74, 0x79, 0x70], [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70]],
+  'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
+};
+
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
@@ -14,18 +23,12 @@ const ALLOWED_MIME_TYPES = [
   'video/mp4',
   'video/webm',
   'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
 
 const ALLOWED_EXTENSIONS = [
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
   '.mp4', '.webm',
   '.pdf',
-  '.doc', '.docx',
-  '.xls', '.xlsx',
 ];
 
 @Injectable()
@@ -38,13 +41,18 @@ export class UploadService {
     if (!file || !file.originalname) {
       throw new BadRequestException('请选择要上传的文件');
     }
+    const maxFileSize = parseInt(process.env.UPLOAD_MAX_SIZE || '10485760', 10);
+    if (file.size > maxFileSize) {
+      throw new BadRequestException(`文件大小超过限制（最大 ${Math.round(maxFileSize / 1024 / 1024)}MB）`);
+    }
     const ext = path.extname(file.originalname).toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      throw new BadRequestException(`不支持的文件类型: ${ext}，仅允许图片、视频、PDF和Office文档`);
+      throw new BadRequestException(`不支持的文件类型: ${ext}，仅允许图片、视频和PDF`);
     }
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       throw new BadRequestException(`不支持的MIME类型: ${file.mimetype}`);
     }
+    this.validateFileMagic(file);
 
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
     const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
@@ -120,6 +128,18 @@ export class UploadService {
     await this.prisma.fileAsset.delete({ where: { id: BigInt(id) } });
     this.logger.log(`删除文件：${file.fileName}`);
     return { success: true };
+  }
+
+  private validateFileMagic(file: Express.Multer.File): void {
+    const magicNumbers = FILE_MAGIC_NUMBERS[file.mimetype];
+    if (!magicNumbers || !file.buffer || file.buffer.length < 8) return;
+    const header = Array.from(file.buffer.slice(0, 8));
+    const isValid = magicNumbers.some(magic =>
+      magic.every((byte, index) => header[index] === byte)
+    );
+    if (!isValid) {
+      throw new BadRequestException(`文件内容与声明类型 ${file.mimetype} 不匹配`);
+    }
   }
 
   private serializeFileAsset(file: any) {

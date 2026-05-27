@@ -35,6 +35,63 @@
       <rich-text class="detail-content" :nodes="product.description" />
     </view>
 
+    <view v-if="product.compliance && (product.compliance.isFood || product.compliance.isHealthSupplement || product.compliance.isInfantFormula)" class="compliance-section card">
+      <text class="detail-title">商品合规信息</text>
+      <view v-if="product.compliance.isHealthSupplement" class="health-warning">
+        <text class="warning-text">保健食品不是药物，不能代替药物治疗疾病</text>
+      </view>
+      <view v-if="product.compliance.manufacturer" class="compliance-row">
+        <text class="compliance-label">生产厂家</text>
+        <text class="compliance-value">{{ product.compliance.manufacturer }}</text>
+      </view>
+      <view v-if="product.compliance.supplierName" class="compliance-row">
+        <text class="compliance-label">供应商</text>
+        <text class="compliance-value">{{ product.compliance.supplierName }}</text>
+      </view>
+      <view v-if="product.compliance.productionLicenseNo" class="compliance-row">
+        <text class="compliance-label">生产许可证编号</text>
+        <text class="compliance-value">{{ product.compliance.productionLicenseNo }}</text>
+      </view>
+      <view v-if="product.compliance.foodBusinessCertNo" class="compliance-row">
+        <text class="compliance-label">食品经营/备案凭证编号</text>
+        <text class="compliance-value">{{ product.compliance.foodBusinessCertNo }}</text>
+      </view>
+      <view v-if="product.compliance.healthSupplementApprovalNo" class="compliance-row">
+        <text class="compliance-label">保健食品批准文号/备案号</text>
+        <text class="compliance-value">{{ product.compliance.healthSupplementApprovalNo }}</text>
+      </view>
+      <view v-if="product.compliance.infantFormulaRegNo" class="compliance-row">
+        <text class="compliance-label">奶粉产品配方注册号</text>
+        <text class="compliance-value">{{ product.compliance.infantFormulaRegNo }}</text>
+      </view>
+      <view v-if="product.compliance.shelfLife" class="compliance-row">
+        <text class="compliance-label">保质期</text>
+        <text class="compliance-value">{{ product.compliance.shelfLife }}</text>
+      </view>
+      <view v-if="product.compliance.storageCondition" class="compliance-row">
+        <text class="compliance-label">贮存条件</text>
+        <text class="compliance-value">{{ product.compliance.storageCondition }}</text>
+      </view>
+      <view v-if="product.compliance.suitableFor" class="compliance-row">
+        <text class="compliance-label">适用人群</text>
+        <text class="compliance-value">{{ product.compliance.suitableFor }}</text>
+      </view>
+      <view v-if="product.compliance.notSuitableFor" class="compliance-row">
+        <text class="compliance-label">不适宜人群</text>
+        <text class="compliance-value">{{ product.compliance.notSuitableFor }}</text>
+      </view>
+      <view v-if="product.compliance.precautions" class="compliance-row">
+        <text class="compliance-label">注意事项</text>
+        <text class="compliance-value">{{ product.compliance.precautions }}</text>
+      </view>
+      <view v-if="product.compliance.certImages && product.compliance.certImages.length" class="cert-images">
+        <text class="compliance-label">资质图片</text>
+        <view class="cert-image-list">
+          <image v-for="(img, idx) in product.compliance.certImages" :key="idx" class="cert-image" :src="img" mode="widthFix" @tap="previewCertImage(idx)" />
+        </view>
+      </view>
+    </view>
+
     <view class="recommend-section" v-if="recommendProducts.length">
       <text class="section-title">为你推荐</text>
       <view class="product-grid">
@@ -122,6 +179,10 @@ async function loadRecommend(id: number) {
 
 function previewImage(index: number) {
   uni.previewImage({ urls: product.value.images, current: index })
+}
+
+function previewCertImage(index: number) {
+  uni.previewImage({ urls: product.value.compliance?.certImages || [], current: index })
 }
 
 function onSkuChange(skuId: number, quantity: number) {
@@ -404,5 +465,58 @@ onLoad((options) => {
   color: #FFFFFF;
   font-size: $font-lg;
   font-weight: 500;
+}
+
+.compliance-section {
+  margin: $spacing-sm $spacing-md;
+}
+
+.health-warning {
+  background: #FFF3E0;
+  border: 1rpx solid #FFB74D;
+  border-radius: $radius-md;
+  padding: $spacing-sm $spacing-md;
+  margin-bottom: $spacing-md;
+}
+
+.warning-text {
+  font-size: $font-sm;
+  color: #E65100;
+  font-weight: 500;
+}
+
+.compliance-row {
+  display: flex;
+  padding: $spacing-xs 0;
+  border-bottom: 1rpx solid $divider-color;
+}
+
+.compliance-label {
+  font-size: $font-sm;
+  color: $text-secondary;
+  width: 220rpx;
+  flex-shrink: 0;
+}
+
+.compliance-value {
+  font-size: $font-sm;
+  color: $text-color;
+  flex: 1;
+}
+
+.cert-images {
+  margin-top: $spacing-sm;
+}
+
+.cert-image-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  margin-top: $spacing-xs;
+}
+
+.cert-image {
+  width: 200rpx;
+  border-radius: $radius-md;
 }
 </style>

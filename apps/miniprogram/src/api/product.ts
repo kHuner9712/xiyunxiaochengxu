@@ -31,6 +31,25 @@ export interface ProductDetail {
   skus: SkuItem[]
   specs: SpecGroup[]
   tags: string[]
+  compliance?: ProductCompliance
+}
+
+export interface ProductCompliance {
+  isFood: boolean
+  isHealthSupplement: boolean
+  isInfantFormula: boolean
+  productionLicenseNo: string
+  foodBusinessCertNo: string
+  healthSupplementApprovalNo: string
+  infantFormulaRegNo: string
+  manufacturer: string
+  supplierName: string
+  shelfLife: string
+  storageCondition: string
+  suitableFor: string
+  notSuitableFor: string
+  precautions: string
+  certImages: string[]
 }
 
 export interface SkuItem {

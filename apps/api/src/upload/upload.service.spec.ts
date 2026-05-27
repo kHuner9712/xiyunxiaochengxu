@@ -25,8 +25,6 @@ const ALLOWED_EXTENSIONS = [
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
   '.mp4', '.webm',
   '.pdf',
-  '.doc', '.docx',
-  '.xls', '.xlsx',
 ];
 
 const ALLOWED_MIME_TYPES = [
@@ -38,10 +36,6 @@ const ALLOWED_MIME_TYPES = [
   'video/mp4',
   'video/webm',
   'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
 
 describe('UploadService 文件安全校验', () => {
@@ -113,5 +107,132 @@ describe('UploadService 空文件保护', () => {
     const file = { originalname: undefined, mimetype: 'image/png', buffer: Buffer.from(''), size: 0 } as any;
     await expect(service.uploadFile(file, '1', 'user'))
       .rejects.toThrow('请选择要上传的文件');
+  });
+});
+
+describe('UploadService 文件大小限制', () => {
+  let service: UploadService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('文件大小超过 UPLOAD_MAX_SIZE 时抛出 BadRequestException', async () => {
+    const originalEnv = process.env.UPLOAD_MAX_SIZE;
+    process.env.UPLOAD_MAX_SIZE = '100';
+    const file = {
+      originalname: 'test.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.alloc(200),
+      size: 200,
+    } as Express.Multer.File;
+    await expect(service.uploadFile(file, '1', 'user'))
+      .rejects.toThrow(BadRequestException);
+    process.env.UPLOAD_MAX_SIZE = originalEnv;
+  });
+
+  it('文件大小在限制内时正常上传', async () => {
+    const originalEnv = process.env.UPLOAD_MAX_SIZE;
+    process.env.UPLOAD_MAX_SIZE = '10485760';
+    const file = {
+      originalname: 'test.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]),
+      size: 4,
+    } as Express.Multer.File;
+    mockPrisma.fileAsset.create.mockResolvedValue({
+      id: BigInt(1), fileName: 'test.jpg', filePath: '/uploads/test.jpg',
+      fileSize: BigInt(4), fileType: 'image', mimeType: 'image/jpeg',
+      storageType: 1, url: '/uploads/test.jpg', groupName: null,
+      uploaderId: BigInt(1), uploaderType: 'user',
+    });
+    await expect(service.uploadFile(file, '1', 'user')).resolves.toBeDefined();
+    process.env.UPLOAD_MAX_SIZE = originalEnv;
+  });
+});
+
+describe('UploadService 文件魔数校验', () => {
+  let service: UploadService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('JPEG 文件魔数正确时不报错', () => {
+    const file = {
+      originalname: 'test.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46]),
+      size: 8,
+    } as Express.Multer.File;
+    expect(() => service['validateFileMagic'](file)).not.toThrow();
+  });
+
+  it('PNG 文件魔数正确时不报错', () => {
+    const file = {
+      originalname: 'test.png',
+      mimetype: 'image/png',
+      buffer: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+      size: 8,
+    } as Express.Multer.File;
+    expect(() => service['validateFileMagic'](file)).not.toThrow();
+  });
+
+  it('文件魔数与声明 MIME 不匹配时抛出 BadRequestException', () => {
+    const file = {
+      originalname: 'malicious.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]),
+      size: 8,
+    } as Express.Multer.File;
+    expect(() => service['validateFileMagic'](file)).toThrow(BadRequestException);
+  });
+
+  it('PDF 文件魔数正确时不报错', () => {
+    const file = {
+      originalname: 'test.pdf',
+      mimetype: 'application/pdf',
+      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]),
+      size: 8,
+    } as Express.Multer.File;
+    expect(() => service['validateFileMagic'](file)).not.toThrow();
+  });
+
+  it('无魔数映射的 MIME 类型跳过校验', () => {
+    const file = {
+      originalname: 'test.bmp',
+      mimetype: 'image/bmp',
+      buffer: Buffer.from([0x42, 0x4D]),
+      size: 2,
+    } as Express.Multer.File;
+    expect(() => service['validateFileMagic'](file)).not.toThrow();
+  });
+});
+
+describe('UploadService Office 文档默认禁用', () => {
+  it('不应允许 .doc 扩展名', () => {
+    expect(ALLOWED_EXTENSIONS).not.toContain('.doc');
+  });
+
+  it('不应允许 .docx 扩展名', () => {
+    expect(ALLOWED_EXTENSIONS).not.toContain('.docx');
+  });
+
+  it('不应允许 .xls 扩展名', () => {
+    expect(ALLOWED_EXTENSIONS).not.toContain('.xls');
+  });
+
+  it('不应允许 .xlsx 扩展名', () => {
+    expect(ALLOWED_EXTENSIONS).not.toContain('.xlsx');
+  });
+
+  it('不应允许 application/msword MIME', () => {
+    expect(ALLOWED_MIME_TYPES).not.toContain('application/msword');
+  });
+
+  it('不应允许 Office Open XML MIME', () => {
+    expect(ALLOWED_MIME_TYPES).not.toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   });
 });

@@ -274,6 +274,7 @@ export class ProductService {
       categoryId: product.categoryId?.toString(),
       brandId: product.brandId?.toString(),
       supplierId: product.supplierId?.toString(),
+      compliance: product.attributes?.compliance || null,
       skus: product.skus?.map((s: any) => ({
         ...s,
         id: s.id.toString(),

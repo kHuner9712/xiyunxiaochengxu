@@ -82,7 +82,7 @@ section "4.5 小程序构建"
 if run_pnpm build:mini; then
   pass "build:mini 通过"
 else
-  warn "build:mini 失败（CI 环境可能缺少微信开发者工具依赖，需在本地/微信开发者工具中验证）"
+  fail "build:mini 失败，商用上线前小程序构建必须通过"
 fi
 
 section "5. 敏感文件未提交检查"
@@ -114,6 +114,14 @@ for d in "${CERT_DIRS[@]}"; do
     else
       pass "证书目录 $d 无敏感文件被 git 追踪"
     fi
+  fi
+done
+
+section "5.5. 生产环境弱密钥检查"
+WEAK_DEFAULTS=("baby_mall_2024" "change_this_jwt_secret" "your_jwt_secret_key_change_this" "your_admin_password_change_this" "your_db_password")
+for weak in "${WEAK_DEFAULTS[@]}"; do
+  if grep -rq "$weak" deploy/docker-compose.yml .env.example 2>/dev/null; then
+    warn "发现弱默认值 '$weak' 在配置文件中（仅作为示例默认值，生产环境必须覆盖）"
   fi
 done
 

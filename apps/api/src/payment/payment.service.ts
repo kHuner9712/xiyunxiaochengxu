@@ -66,30 +66,36 @@ export class PaymentService {
 
       const missing = requiredConfigs.filter(c => !c.value);
       if (missing.length > 0) {
-        this.logger.warn(`生产环境缺少必要支付配置: ${missing.map(c => c.key).join(', ')}，支付功能将不可用`);
+        this.logger.error(`生产环境缺少必要支付配置: ${missing.map(c => c.key).join(', ')}，支付功能将不可用`);
+        process.exit(1);
       }
 
       const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
       if (apiV3Key && Buffer.byteLength(apiV3Key, 'utf8') !== 32) {
-        this.logger.warn('WECHAT_API_V3_KEY 必须为32字节，支付功能将不可用');
+        this.logger.error('WECHAT_API_V3_KEY 必须为32字节，支付功能将不可用');
+        process.exit(1);
       }
 
       const notifyUrl = this.configService.get<string>('WECHAT_NOTIFY_URL')!;
       if (notifyUrl && !notifyUrl.startsWith('https://')) {
-        this.logger.warn('WECHAT_NOTIFY_URL 必须以 https:// 开头，支付功能将不可用');
+        this.logger.error('WECHAT_NOTIFY_URL 必须以 https:// 开头，支付功能将不可用');
+        process.exit(1);
       }
 
       const refundNotifyUrl = this.configService.get<string>('WECHAT_REFUND_NOTIFY_URL')!;
       if (refundNotifyUrl && !refundNotifyUrl.startsWith('https://')) {
-        this.logger.warn('WECHAT_REFUND_NOTIFY_URL 必须以 https:// 开头，支付功能将不可用');
+        this.logger.error('WECHAT_REFUND_NOTIFY_URL 必须以 https:// 开头，支付功能将不可用');
+        process.exit(1);
       }
 
       if (!this.privateKey) {
-        this.logger.warn('生产环境商户私钥文件不可读(WECHAT_PRIVATE_KEY_PATH)，支付功能将不可用');
+        this.logger.error('生产环境商户私钥文件不可读(WECHAT_PRIVATE_KEY_PATH)，支付功能将不可用');
+        process.exit(1);
       }
 
       if (!this.wechatpayCertificate) {
-        this.logger.warn('生产环境必须配置微信支付平台证书(WECHAT_PLATFORM_CERT_PATH)，回调验签将不可用');
+        this.logger.error('生产环境必须配置微信支付平台证书(WECHAT_PLATFORM_CERT_PATH)，回调验签将不可用');
+        process.exit(1);
       }
     }
 

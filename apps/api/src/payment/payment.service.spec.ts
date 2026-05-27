@@ -1501,3 +1501,110 @@ describe('支付契约测试', () => {
     expect(result.paymentStatus).toBe(PAYMENT_STATUS.SUCCESS);
   });
 });
+
+describe('PaymentService 生产环境配置校验', () => {
+  it('生产环境缺少 WECHAT_APP_ID 应启动失败', () => {
+    const mockPrisma = createMockPrisma();
+    const config = createMockConfigService({ NODE_ENV: 'production', WECHAT_APP_ID: '' });
+    const mockBE = createMockBusinessEventService();
+    const processFirstPaidReward = jest.fn() as any;
+    processFirstPaidReward.mockResolvedValue(null);
+    const mockShareService = { processFirstPaidReward };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+
+    const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+
+    expect(mockExit).toHaveBeenCalledWith(1);
+    mockExit.mockRestore();
+  });
+
+  it('生产环境 WECHAT_API_V3_KEY 不为32字节应启动失败', () => {
+    const mockPrisma = createMockPrisma();
+    const config = createMockConfigService({
+      NODE_ENV: 'production',
+      WECHAT_API_V3_KEY: 'short_key',
+      WECHAT_APP_ID: 'wx123',
+      WECHAT_MCH_ID: '123',
+      WECHAT_MCH_SERIAL_NO: 'serial',
+      WECHAT_PRIVATE_KEY_PATH: '',
+      WECHAT_PLATFORM_CERT_PATH: '',
+      WECHAT_NOTIFY_URL: 'https://example.com/callback',
+      WECHAT_REFUND_NOTIFY_URL: 'https://example.com/refund',
+    });
+    const mockBE = createMockBusinessEventService();
+    const processFirstPaidReward = jest.fn() as any;
+    processFirstPaidReward.mockResolvedValue(null);
+    const mockShareService = { processFirstPaidReward };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+
+    const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+
+    expect(mockExit).toHaveBeenCalledWith(1);
+    mockExit.mockRestore();
+  });
+
+  it('生产环境 WECHAT_NOTIFY_URL 不是 https 应启动失败', () => {
+    const mockPrisma = createMockPrisma();
+    const config = createMockConfigService({
+      NODE_ENV: 'production',
+      WECHAT_NOTIFY_URL: 'http://example.com/callback',
+    });
+    const mockBE = createMockBusinessEventService();
+    const processFirstPaidReward = jest.fn() as any;
+    processFirstPaidReward.mockResolvedValue(null);
+    const mockShareService = { processFirstPaidReward };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+
+    const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+
+    expect(mockExit).toHaveBeenCalledWith(1);
+    mockExit.mockRestore();
+  });
+
+  it('生产环境 WECHAT_SKIP_VERIFY=true 应启动失败', () => {
+    const mockPrisma = createMockPrisma();
+    const config = createMockConfigService({
+      NODE_ENV: 'production',
+      WECHAT_SKIP_VERIFY: 'true',
+    });
+    const mockBE = createMockBusinessEventService();
+    const processFirstPaidReward = jest.fn() as any;
+    processFirstPaidReward.mockResolvedValue(null);
+    const mockShareService = { processFirstPaidReward };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+
+    const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+
+    expect(mockExit).toHaveBeenCalledWith(1);
+    mockExit.mockRestore();
+  });
+
+  it('非生产环境缺少支付配置应仅 warn 不退出', () => {
+    const mockPrisma = createMockPrisma();
+    const config = createMockConfigService({
+      NODE_ENV: 'development',
+      WECHAT_APP_ID: '',
+      WECHAT_MCH_ID: '',
+    });
+    const mockBE = createMockBusinessEventService();
+    const processFirstPaidReward = jest.fn() as any;
+    processFirstPaidReward.mockResolvedValue(null);
+    const mockShareService = { processFirstPaidReward };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+
+    const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+
+    expect(mockExit).not.toHaveBeenCalled();
+    mockExit.mockRestore();
+  });
+});

@@ -2,6 +2,10 @@ name: Release Gate Check
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   release-check:
@@ -23,10 +27,21 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     env:
       NODE_ENV: test
       DATABASE_URL: mysql://baby_mall:test_pw_123@127.0.0.1:3306/baby_mall_test
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
 
     steps:
       - name: Checkout
@@ -59,6 +74,9 @@ jobs:
 
       - name: Generate Prisma Client
         run: pnpm --filter @baby-mall/api prisma generate
+
+      - name: Build Mini Program
+        run: pnpm build:mini
 
       - name: Run Release Gate Check
         run: bash deploy/scripts/release-check.sh

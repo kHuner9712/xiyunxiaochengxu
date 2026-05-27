@@ -73,6 +73,18 @@
         <text class="menu-text">客服与帮助</text>
         <text class="menu-arrow">›</text>
       </view>
+      <view class="menu-item" @tap="navigateTo('/pages/agreement/index')">
+        <text class="menu-text">用户协议</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @tap="navigateTo('/pages/privacy/index')">
+        <text class="menu-text">隐私政策</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @tap="navigateTo('/pages/food-safety/index')">
+        <text class="menu-text">食品安全与售后</text>
+        <text class="menu-arrow">›</text>
+      </view>
     </view>
 
     <view v-if="userStore.isLoggedIn" class="logout-btn" @tap="handleLogout">
@@ -206,7 +218,7 @@ function showLoginRequired() {
 }
 
 function navigateTo(url: string) {
-  const demoPages = ['/pages/coupon/my', '/pages/coupon/center', '/pages/member/index', '/pages/points/index', '/pages/customer-service/index', '/pages/share/invite']
+  const demoPages = ['/pages/coupon/my', '/pages/coupon/center', '/pages/member/index', '/pages/points/index', '/pages/customer-service/index', '/pages/share/invite', '/pages/agreement/index', '/pages/privacy/index', '/pages/food-safety/index']
   const loginRequiredPages = ['/pages/baby/list', '/pages/address/list']
 
   if (demoPages.some(p => url.startsWith(p))) {

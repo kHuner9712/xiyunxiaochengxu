@@ -29,7 +29,10 @@
     { "path": "pages/user/profile", "style": { "navigationBarTitleText": "个人资料" } },
     { "path": "pages/pickup-store/list", "style": { "navigationBarTitleText": "选择自提点", "enablePullDownRefresh": false } },
     { "path": "pages/customer-service/index", "style": { "navigationBarTitleText": "客服与帮助" } },
-    { "path": "pages/share/invite", "style": { "navigationBarTitleText": "邀请好友" } }
+    { "path": "pages/share/invite", "style": { "navigationBarTitleText": "邀请好友" } },
+    { "path": "pages/agreement/index", "style": { "navigationBarTitleText": "用户协议" } },
+    { "path": "pages/privacy/index", "style": { "navigationBarTitleText": "隐私政策" } },
+    { "path": "pages/food-safety/index", "style": { "navigationBarTitleText": "食品安全与售后" } }
   ],
   "tabBar": {
     "color": "#999999",
