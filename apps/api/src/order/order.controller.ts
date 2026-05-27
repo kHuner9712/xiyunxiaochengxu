@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, Res } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { DeliverDto, BatchDeliverDto } from './dto/deliver.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { Response } from 'express';
 
 @Controller('weapp/order')
 export class WeappOrderController {
@@ -117,7 +119,75 @@ export class AdminOrderController {
 
   @Get('export')
   @RequirePermission('order:export')
-  async export(@Query() dto: OrderQueryDto) {
-    return this.orderService.exportOrders(dto);
+  @SkipTransform()
+  async export(@Query() dto: OrderQueryDto, @Res() res: Response) {
+    const rows = await this.orderService.exportOrders(dto);
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const filename = `orders-${y}${m}${d}.csv`;
+
+    const headers = [
+      '订单号',
+      '用户昵称',
+      '用户手机号',
+      '订单状态',
+      '配送方式',
+      '商品数量',
+      '商品明细',
+      '订单金额',
+      '优惠金额',
+      '运费',
+      '积分抵扣',
+      '实付金额',
+      '收货人',
+      '手机号',
+      '省市区地址',
+      '下单时间',
+      '支付时间',
+    ];
+
+    const toYuan = (amount: number) => (Number(amount || 0) / 100).toFixed(2);
+    const fmt = (value: any) => {
+      if (!value) return '';
+      const dt = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(dt.getTime())) return '';
+      return dt.toLocaleString('zh-CN', { hour12: false });
+    };
+    const esc = (value: string | number) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const typeLabel = (value: string) => (value === 'pickup' ? '到店自提' : '快递配送');
+
+    const lines = [
+      headers.map(esc).join(','),
+      ...rows.map((row: any) =>
+        [
+          row.orderNo,
+          row.userNickname,
+          row.userPhone,
+          row.status,
+          typeLabel(row.fulfillmentType),
+          row.itemCount,
+          row.itemDetails,
+          toYuan(row.totalAmount),
+          toYuan((row.discountAmount || 0) + (row.couponAmount || 0) + (row.activityDiscountAmount || 0)),
+          toYuan(row.freightAmount),
+          toYuan(row.pointsAmount),
+          toYuan(row.payAmount),
+          row.consignee,
+          row.consigneePhone,
+          row.address,
+          fmt(row.createdAt),
+          fmt(row.paidAt),
+        ]
+          .map(esc)
+          .join(','),
+      ),
+    ];
+
+    const csv = `\uFEFF${lines.join('\n')}`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.status(200).send(csv);
   }
 }

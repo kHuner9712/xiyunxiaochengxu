@@ -1115,3 +1115,112 @@ describe('接口契约：后台订单日期筛选', () => {
     );
   });
 });
+
+describe('接口契约：后台订单 fulfillmentType 筛选', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('findAllAdmin 支持 fulfillmentType 筛选', async () => {
+    mockPrisma.order.findMany.mockResolvedValue([]);
+    mockPrisma.order.count.mockResolvedValue(0);
+
+    await service.findAllAdmin({
+      skip: 0,
+      take: 10,
+      page: 1,
+      pageSize: 10,
+      fulfillmentType: 'pickup',
+    });
+
+    expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          fulfillmentType: 'pickup',
+        }),
+      }),
+    );
+  });
+
+  it('findDeliveryList 支持 fulfillmentType + 时间筛选', async () => {
+    mockPrisma.order.findMany.mockResolvedValue([]);
+    mockPrisma.order.count.mockResolvedValue(0);
+
+    await service.findDeliveryList({
+      skip: 0,
+      take: 10,
+      page: 1,
+      pageSize: 10,
+      fulfillmentType: 'delivery',
+      startDate: '2026-05-01',
+      endDate: '2026-05-31',
+    });
+
+    expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: OrderStatus.pending_delivery,
+          fulfillmentType: 'delivery',
+          createdAt: expect.objectContaining({
+            gte: expect.any(Date),
+            lte: expect.any(Date),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('exportOrders 支持 fulfillmentType 筛选并返回导出字段', async () => {
+    mockPrisma.order.findMany.mockResolvedValue([
+      {
+        orderNo: 'XY202605270001',
+        status: OrderStatus.pending_delivery,
+        fulfillmentType: 'delivery',
+        totalAmount: 1000,
+        discountAmount: 100,
+        freightAmount: 10,
+        pointsAmount: 5,
+        payAmount: 905,
+        receiverName: '张三',
+        receiverPhone: '13800138000',
+        province: '山东省',
+        city: '临沂市',
+        district: '兰山区',
+        detailAddress: '测试路1号',
+        createdAt: new Date('2026-05-27T10:00:00.000Z'),
+        paidAt: new Date('2026-05-27T10:05:00.000Z'),
+        orderItems: [
+          { productName: '奶粉', skuSpecs: '1段', quantity: 2 },
+        ],
+        user: { nickname: '测试用户', phone: '13800138000' },
+      },
+    ]);
+
+    const rows = await service.exportOrders({
+      skip: 0,
+      take: 10,
+      page: 1,
+      pageSize: 10,
+      fulfillmentType: 'delivery',
+    });
+
+    expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          fulfillmentType: 'delivery',
+        }),
+      }),
+    );
+    expect(rows[0]).toEqual(
+      expect.objectContaining({
+        orderNo: 'XY202605270001',
+        userNickname: '测试用户',
+        itemCount: 2,
+        itemDetails: expect.stringContaining('奶粉'),
+      }),
+    );
+  });
+});

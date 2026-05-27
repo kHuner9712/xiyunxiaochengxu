@@ -4,7 +4,7 @@ services:
     container_name: baby-mall-mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-baby_mall_2024}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
       MYSQL_DATABASE: ${DB_NAME:-baby_mall}
       MYSQL_CHARSET: utf8mb4
       TZ: Asia/Shanghai
@@ -30,7 +30,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD required}
     volumes:
       - redis_data:/data
       - ./redis/redis.conf:/etc/redis/redis.conf
@@ -55,37 +55,37 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: mysql://root:${DB_PASSWORD:-baby_mall_2024}@mysql:3306/${DB_NAME:-baby_mall}
+      DATABASE_URL: mysql://root:${DB_PASSWORD:?DB_PASSWORD required}@mysql:3306/${DB_NAME:-baby_mall}
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-baby_mall}
       DB_USER: root
-      DB_PASSWORD: ${DB_PASSWORD:-baby_mall_2024}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      JWT_SECRET: ${JWT_SECRET:-change_this_jwt_secret}
-      WECHAT_APP_ID: ${WECHAT_APP_ID}
-      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET}
-      WECHAT_MCH_ID: ${WECHAT_MCH_ID}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:?WECHAT_APP_ID required}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:?WECHAT_APP_SECRET required}
+      WECHAT_MCH_ID: ${WECHAT_MCH_ID:?WECHAT_MCH_ID required}
       WECHAT_MCH_SERIAL_NO: ${WECHAT_MCH_SERIAL_NO:-}
-      WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY}
+      WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY:?WECHAT_API_V3_KEY required}
       WECHAT_PRIVATE_KEY_PATH: ${WECHAT_PRIVATE_KEY_PATH:-/app/apps/api/certs/apiclient_key.pem}
       WECHAT_PLATFORM_CERT_PATH: ${WECHAT_PLATFORM_CERT_PATH:-/app/apps/api/certs/wechatpay_platform.pem}
       WECHAT_PLATFORM_CERT_SERIAL_NO: ${WECHAT_PLATFORM_CERT_SERIAL_NO:-}
       WECHAT_SKIP_VERIFY: ${WECHAT_SKIP_VERIFY:-false}
-      WECHAT_NOTIFY_URL: ${WECHAT_NOTIFY_URL}
-      WECHAT_REFUND_NOTIFY_URL: ${WECHAT_REFUND_NOTIFY_URL}
-      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      WECHAT_NOTIFY_URL: ${WECHAT_NOTIFY_URL:?WECHAT_NOTIFY_URL required}
+      WECHAT_REFUND_NOTIFY_URL: ${WECHAT_REFUND_NOTIFY_URL:?WECHAT_REFUND_NOTIFY_URL required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS required}
       UPLOAD_DIR: /app/apps/api/uploads
       RUN_SEED: ${RUN_SEED:-false}
       ADMIN_DEFAULT_USERNAME: ${ADMIN_DEFAULT_USERNAME:-admin}
-      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:?ADMIN_DEFAULT_PASSWORD required}
       SMOKE_TEST_BYPASS_CAPTCHA: ${SMOKE_TEST_BYPASS_CAPTCHA:-false}
       API_PREFIX: ${API_PREFIX:-api}
       UPLOAD_PUBLIC_URL: ${UPLOAD_PUBLIC_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET required}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-30d}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       JWT_ADMIN_EXPIRES_IN: ${JWT_ADMIN_EXPIRES_IN:-2h}

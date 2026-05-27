@@ -274,6 +274,44 @@ for compose_file in "${COMPOSE_FILES[@]}"; do
   done
 done
 
+section "8.56. 订单导出接口与权限一致性检查"
+ORDER_CONTROLLER_FILE="apps/api/src/order/order.controller.ts"
+ORDER_ADMIN_LIST_FILE="apps/admin-web/src/views/order/list.vue"
+if [ -f "$ORDER_CONTROLLER_FILE" ]; then
+  if grep -q "@Get('export')" "$ORDER_CONTROLLER_FILE" 2>/dev/null; then
+    pass "后端存在 /admin/order/export 接口"
+  else
+    fail "后端缺少 /admin/order/export 接口"
+  fi
+  if grep -q "@RequirePermission('order:export')" "$ORDER_CONTROLLER_FILE" 2>/dev/null; then
+    pass "后端导出接口权限为 order:export"
+  else
+    fail "后端导出接口权限不是 order:export"
+  fi
+  if grep -q "text/csv; charset=utf-8" "$ORDER_CONTROLLER_FILE" 2>/dev/null; then
+    pass "后端导出接口返回 CSV Content-Type"
+  else
+    fail "后端导出接口未设置 CSV Content-Type"
+  fi
+  if grep -q "orders-.*\\.csv" "$ORDER_CONTROLLER_FILE" 2>/dev/null || grep -q "orders-" "$ORDER_CONTROLLER_FILE" 2>/dev/null; then
+    pass "后端导出文件名使用 .csv"
+  else
+    fail "后端导出文件名未使用 .csv"
+  fi
+else
+  fail "找不到后端订单控制器文件: $ORDER_CONTROLLER_FILE"
+fi
+
+if [ -f "$ORDER_ADMIN_LIST_FILE" ]; then
+  if grep -q "v-permission=\"'order:export'\"" "$ORDER_ADMIN_LIST_FILE" 2>/dev/null; then
+    pass "前端导出按钮权限为 order:export"
+  else
+    fail "前端导出按钮权限不是 order:export"
+  fi
+else
+  fail "找不到后台订单列表页面: $ORDER_ADMIN_LIST_FILE"
+fi
+
 section "8.6. 小程序 AppID 检查"
 MANIFEST_FILE="apps/miniprogram/src/manifest.json"
 if [ -f "$MANIFEST_FILE" ]; then
@@ -313,6 +351,32 @@ for file in "${AGREEMENT_FILES[@]}"; do
     warn "协议页面 $file 不存在"
   fi
 done
+
+section "8.75. 协议联系方式配置门禁检查"
+LEGAL_CONFIG_FILE="apps/miniprogram/src/config/legal.ts"
+LEGAL_PLACEHOLDERS=(
+  "以「客服与帮助」页面电话为准"
+  "以「客服与帮助」页面微信客服信息为准"
+  "以售后审核结果中的退货地址为准"
+)
+STRICT_LEGAL_GATE=false
+if [ "$STRICT_PROD_GATE" = "true" ] || [ "$REQUIRE_REAL_WX_APPID_CHECK" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+  STRICT_LEGAL_GATE=true
+fi
+if [ -f "$LEGAL_CONFIG_FILE" ]; then
+  for pattern in "${LEGAL_PLACEHOLDERS[@]}"; do
+    if grep -q "$pattern" "$LEGAL_CONFIG_FILE" 2>/dev/null; then
+      if [ "$STRICT_LEGAL_GATE" = "true" ]; then
+        fail "legal.ts 仍包含待确认联系方式占位：$pattern（生产严格门禁下不可发布）"
+      else
+        warn "legal.ts 仍包含待确认联系方式占位：$pattern（默认环境允许继续，生产门禁将失败）"
+      fi
+    fi
+  done
+  pass "legal.ts 联系方式门禁检查已执行"
+else
+  warn "legal.ts 不存在，跳过联系方式门禁检查"
+fi
 
 section "8.8. GO_LIVE 结论一致性检查"
 GO_LIVE_FILE="GO_LIVE.md"

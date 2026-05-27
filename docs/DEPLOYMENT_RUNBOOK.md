@@ -10,10 +10,12 @@
 
 ## 2. 环境变量填写
 
-1. 在项目根目录创建 `.env.production`（仅服务器本地保留）。
-2. 按 `.env.example` 填写生产值，不得使用默认弱口令。
+1. 复制模板：`cp .env.production.example .env.production`（仅服务器本地保留）。
+2. 按 `.env.production.example` 填写生产值，不得使用默认弱口令。
 3. 关键项必须填写：数据库、Redis、JWT、刷新令牌、微信支付、CORS、后台默认密码。
 4. 运营/资质项参考 `docs/OPERATOR_REQUIRED.md`。
+5. `deploy-prod-check.sh` 使用安全解析器读取 `.env.production`（仅识别 `KEY=VALUE`，不会执行 shell 代码）。
+6. 如值包含空格、`#`、`$`、`&` 等特殊字符，建议使用双引号包裹。
 
 ## 3. 证书放置
 
@@ -24,6 +26,7 @@
 - `deploy/nginx/ssl/fullchain.pem`
 - `deploy/nginx/ssl/privkey.pem`
 3. 确认证书文件具备可读权限。
+4. 推荐路径与模板保持一致：`/.env.production.example` 中的证书路径字段。
 
 ## 4. Docker 启动前检查
 
@@ -39,6 +42,12 @@ docker compose --env-file ../.env.production config
 ```bash
 ENV_FILE=../.env.production bash deploy/scripts/deploy-prod-check.sh
 ```
+
+密码/密钥强度门禁（deploy-prod-check）：
+1. `DB_PASSWORD` / `REDIS_PASSWORD` / `JWT_SECRET` / `REFRESH_TOKEN_SECRET` / `ADMIN_DEFAULT_PASSWORD`
+2. 至少 16 字符
+3. 必须包含大小写字母、数字、特殊字符
+4. 默认弱值将直接失败
 
 ## 5. 数据库迁移
 

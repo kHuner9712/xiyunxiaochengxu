@@ -646,14 +646,7 @@ export class OrderService {
   }
 
   async findAllAdmin(dto: OrderQueryDto) {
-    const where: any = {};
-    if (dto.status) where.status = dto.status;
-    if (dto.orderNo) where.orderNo = { contains: dto.orderNo };
-    if (dto.startDate || dto.endDate) {
-      where.createdAt = {};
-      if (dto.startDate) where.createdAt.gte = new Date(dto.startDate);
-      if (dto.endDate) where.createdAt.lte = new Date(dto.endDate);
-    }
+    const where = this.buildAdminOrderWhere(dto);
 
     const [list, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -787,6 +780,12 @@ export class OrderService {
   async findDeliveryList(dto: OrderQueryDto) {
     const where: any = { status: OrderStatus.pending_delivery };
     if (dto.orderNo) where.orderNo = { contains: dto.orderNo };
+    if (dto.fulfillmentType) where.fulfillmentType = dto.fulfillmentType;
+    if (dto.startDate || dto.endDate) {
+      where.createdAt = {};
+      if (dto.startDate) where.createdAt.gte = new Date(dto.startDate);
+      if (dto.endDate) where.createdAt.lte = new Date(dto.endDate);
+    }
 
     const [list, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -1061,14 +1060,7 @@ export class OrderService {
   }
 
   async exportOrders(dto: OrderQueryDto) {
-    const where: any = {};
-    if (dto.status) where.status = dto.status;
-    if (dto.orderNo) where.orderNo = { contains: dto.orderNo };
-    if (dto.startDate || dto.endDate) {
-      where.createdAt = {};
-      if (dto.startDate) where.createdAt.gte = new Date(dto.startDate);
-      if (dto.endDate) where.createdAt.lte = new Date(dto.endDate);
-    }
+    const where = this.buildAdminOrderWhere(dto);
 
     const orders = await this.prisma.order.findMany({
       where,
@@ -1080,7 +1072,20 @@ export class OrderService {
     });
 
     this.logger.log(`导出订单，共${orders.length}条`);
-    return orders.map((o) => this.serializeOrderView(o));
+    return orders.map((o) => this.toOrderExportRow(o));
+  }
+
+  private buildAdminOrderWhere(dto: OrderQueryDto) {
+    const where: any = {};
+    if (dto.status) where.status = dto.status;
+    if (dto.orderNo) where.orderNo = { contains: dto.orderNo };
+    if (dto.fulfillmentType) where.fulfillmentType = dto.fulfillmentType;
+    if (dto.startDate || dto.endDate) {
+      where.createdAt = {};
+      if (dto.startDate) where.createdAt.gte = new Date(dto.startDate);
+      if (dto.endDate) where.createdAt.lte = new Date(dto.endDate);
+    }
+    return where;
   }
 
   private calculateFreight(totalAmount: number, province?: string): number {
@@ -1224,6 +1229,40 @@ export class OrderService {
       })),
       user: base.user || undefined,
       couponId: base.couponId,
+    };
+  }
+
+  private toOrderExportRow(order: any) {
+    const items = Array.isArray(order.orderItems) ? order.orderItems : [];
+    const itemCount = items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0);
+    const itemDetails = items
+      .map((item: any) => {
+        const skuText = item.skuSpecs ? `（${item.skuSpecs}）` : '';
+        return `${item.productName}${skuText} x${item.quantity}`;
+      })
+      .join('；');
+    const address = [order.province, order.city, order.district, order.detailAddress].filter(Boolean).join('');
+
+    return {
+      orderNo: order.orderNo || '',
+      userNickname: order.user?.nickname || '',
+      userPhone: order.user?.phone || '',
+      status: order.status || '',
+      fulfillmentType: order.fulfillmentType || 'delivery',
+      itemCount,
+      itemDetails,
+      totalAmount: order.totalAmount || 0,
+      discountAmount: order.discountAmount || 0,
+      couponAmount: order.couponAmount || 0,
+      activityDiscountAmount: order.activityDiscountAmount || 0,
+      freightAmount: order.freightAmount || 0,
+      pointsAmount: order.pointsAmount || 0,
+      payAmount: order.payAmount || 0,
+      consignee: order.receiverName || '',
+      consigneePhone: order.receiverPhone || '',
+      address,
+      createdAt: order.createdAt || null,
+      paidAt: order.paidAt || null,
     };
   }
 }

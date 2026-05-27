@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 export const orderApi = {
-  getList(params: { page: number; pageSize: number; orderNo?: string; status?: string; startDate?: string; endDate?: string }) {
+  getList(params: { page: number; pageSize: number; orderNo?: string; status?: string; startDate?: string; endDate?: string; fulfillmentType?: string }) {
     return request.get('/admin/order/list', { params })
   },
   getDetail(id: string | number) {
@@ -19,7 +19,7 @@ export const orderApi = {
   batchDeliver(data: { orders: { orderId: string | number; logisticsCompany: string; logisticsNo: string }[] }) {
     return request.post('/admin/order/batch-deliver', data)
   },
-  export(params: any) {
+  export(params: { orderNo?: string; status?: string; startDate?: string; endDate?: string; fulfillmentType?: string }) {
     return request.get('/admin/order/export', { params, responseType: 'blob' })
   },
 }

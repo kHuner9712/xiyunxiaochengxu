@@ -13,6 +13,8 @@ export const LEGAL_PROFILE = {
     updatedAt: '2026年05月27日',
     effectiveAt: '2026年05月27日',
   },
+  // 说明：以下联系方式允许在运营确认后直接改为最终值（建议在提审前完成）。
+  // 若仍保留“以...为准”占位描述，release-check:prod 会失败。
   contact: {
     customerPhone: '以「客服与帮助」页面电话为准',
     customerWechat: '以「客服与帮助」页面微信客服信息为准',
@@ -20,4 +22,3 @@ export const LEGAL_PROFILE = {
     serviceNotice: '如需人工协助，请在小程序「客服与帮助」页面联系在线客服。',
   },
 } as const
-

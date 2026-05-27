@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class OrderQueryDto extends PaginationDto {
@@ -17,4 +17,9 @@ export class OrderQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['delivery', 'pickup'])
+  fulfillmentType?: string;
 }

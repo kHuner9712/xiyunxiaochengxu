@@ -85,6 +85,10 @@ async function retryRequest(config: AxiosRequestConfig, newToken: string) {
 
 request.interceptors.response.use(
   async (response: AxiosResponse<ApiResponse>) => {
+    const responseType = response.config?.responseType
+    if (responseType === 'blob' || responseType === 'arraybuffer') {
+      return response as any
+    }
     const res = response.data
     if (res.code !== 0) {
       if (res.code === 40101 || res.code === 40102 || res.code === 40103) {

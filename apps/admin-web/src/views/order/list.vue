@@ -22,7 +22,7 @@
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="resetSearch">重置</el-button>
-          <el-button v-permission="'order:list'" @click="handleExport">导出</el-button>
+          <el-button v-permission="'order:export'" @click="handleExport">导出</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -94,15 +94,9 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 async function fetchList() {
   loading.value = true
   try {
-    const params: any = {
-      page: pagination.page,
-      pageSize: pagination.pageSize,
-      ...searchForm,
-    }
-    if (dateRange.value?.length === 2) {
-      params.startDate = dateRange.value[0]
-      params.endDate = dateRange.value[1]
-    }
+    const params = buildQueryParams()
+    params.page = pagination.page
+    params.pageSize = pagination.pageSize
     const res = await orderApi.getList(params)
     tableData.value = res.data.list || []
     pagination.total = res.data.total || 0
@@ -150,17 +144,36 @@ async function handleCancel(row: any) {
 
 async function handleExport() {
   try {
-    const res = await orderApi.export(searchForm)
-    const blob = new Blob([res as any], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const res = await orderApi.export(buildQueryParams())
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = '订单列表.xlsx'
+    a.download = getFileNameFromDisposition(res.headers['content-disposition']) || `orders-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
     a.click()
     window.URL.revokeObjectURL(url)
   } catch (e: any) {
     ElMessage.error(e?.message || '导出失败')
   }
+}
+
+function buildQueryParams() {
+  const params: any = {
+    orderNo: searchForm.orderNo || undefined,
+    status: searchForm.status,
+    fulfillmentType: searchForm.fulfillmentType,
+  }
+  if (dateRange.value?.length === 2) {
+    params.startDate = dateRange.value[0]
+    params.endDate = dateRange.value[1]
+  }
+  return params
+}
+
+function getFileNameFromDisposition(disposition?: string) {
+  if (!disposition) return ''
+  const match = disposition.match(/filename="?([^\";]+)"?/i)
+  return match?.[1] || ''
 }
 
 fetchList()

@@ -30,14 +30,63 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 pass "检测到环境文件：$ENV_FILE"
 
-set -a
-# shellcheck disable=SC1090
-source "$ENV_FILE"
-set +a
+declare -A ENV_VALUES
+
+trim_space() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
+}
+
+parse_env_file() {
+  while IFS= read -r raw_line || [ -n "$raw_line" ]; do
+    local line="$raw_line"
+    line="${line%$'\r'}"
+    line="$(trim_space "$line")"
+    if [ -z "$line" ] || [[ "$line" == \#* ]]; then
+      continue
+    fi
+
+    if [[ "$line" == export\ * ]]; then
+      line="${line#export }"
+      line="$(trim_space "$line")"
+    fi
+
+    if [[ ! "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+      warn "忽略无法解析的 .env 行（非 KEY=VALUE 格式）"
+      continue
+    fi
+
+    local key="${line%%=*}"
+    local value="${line#*=}"
+    value="$(trim_space "$value")"
+
+    if [[ "$value" =~ ^\".*\"$ ]]; then
+      value="${value:1:-1}"
+    elif [[ "$value" =~ ^\'.*\'$ ]]; then
+      value="${value:1:-1}"
+    fi
+
+    ENV_VALUES["$key"]="$value"
+  done < "$ENV_FILE"
+}
+
+get_env_value() {
+  local key="$1"
+  if [[ -n "${ENV_VALUES[$key]+x}" ]]; then
+    printf '%s' "${ENV_VALUES[$key]}"
+  else
+    printf '%s' "${!key:-}"
+  fi
+}
+
+parse_env_file
 
 required_vars=(
   DATABASE_URL
   REDIS_HOST
+  REDIS_PASSWORD
   JWT_SECRET
   REFRESH_TOKEN_SECRET
   WECHAT_APP_ID
@@ -56,7 +105,7 @@ required_vars=(
 )
 
 for var in "${required_vars[@]}"; do
-  value="${!var:-}"
+  value="$(get_env_value "$var")"
   if [ -z "$value" ]; then
     fail "缺少必填变量：$var"
   fi
@@ -67,20 +116,23 @@ is_weak_secret() {
   local value
   value="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
   case "$value" in
-    ""|changeme|change_this*|password|123456|12345678|admin|secret|test|your_*|default*)
+    ""|changeme|change_this*|password|123456|12345678|admin|secret|test|your_*|default*|baby_mall_2024|change_this_jwt_secret)
       return 0
       ;;
   esac
-  if [ "${#1}" -lt 12 ]; then
+  if [ "${#1}" -lt 16 ]; then
+    return 0
+  fi
+  if [[ ! "$1" =~ [A-Z] ]] || [[ ! "$1" =~ [a-z] ]] || [[ ! "$1" =~ [0-9] ]] || [[ ! "$1" =~ [^A-Za-z0-9] ]]; then
     return 0
   fi
   return 1
 }
 
 for key in DB_PASSWORD REDIS_PASSWORD JWT_SECRET REFRESH_TOKEN_SECRET ADMIN_DEFAULT_PASSWORD; do
-  value="${!key:-}"
+  value="$(get_env_value "$key")"
   if is_weak_secret "$value"; then
-    fail "$key 使用了弱口令/默认值，请更换强密码"
+    fail "$key 强度不合规：要求至少16位，并包含大小写字母、数字、特殊字符，且不得使用默认值"
   fi
 done
 pass "弱口令检查通过"
@@ -94,10 +146,12 @@ to_abs_path() {
   fi
 }
 
-wechat_private_key_path="$(to_abs_path "$WECHAT_PRIVATE_KEY_PATH")"
-wechat_platform_cert_path="$(to_abs_path "$WECHAT_PLATFORM_CERT_PATH")"
-ssl_fullchain_path="${SSL_FULLCHAIN_PATH:-$DEPLOY_DIR/nginx/ssl/fullchain.pem}"
-ssl_privkey_path="${SSL_PRIVKEY_PATH:-$DEPLOY_DIR/nginx/ssl/privkey.pem}"
+wechat_private_key_path="$(to_abs_path "$(get_env_value WECHAT_PRIVATE_KEY_PATH)")"
+wechat_platform_cert_path="$(to_abs_path "$(get_env_value WECHAT_PLATFORM_CERT_PATH)")"
+ssl_fullchain_env="$(get_env_value SSL_FULLCHAIN_PATH)"
+ssl_privkey_env="$(get_env_value SSL_PRIVKEY_PATH)"
+ssl_fullchain_path="${ssl_fullchain_env:-$DEPLOY_DIR/nginx/ssl/fullchain.pem}"
+ssl_privkey_path="${ssl_privkey_env:-$DEPLOY_DIR/nginx/ssl/privkey.pem}"
 
 for cert_file in "$wechat_private_key_path" "$wechat_platform_cert_path" "$ssl_fullchain_path" "$ssl_privkey_path"; do
   if [ ! -r "$cert_file" ]; then
@@ -170,4 +224,3 @@ echo "4. 售后申请、退款发起、退款回调状态核对"
 echo "5. 食品/保健品/奶粉合规字段与提示语真机检查"
 echo "6. 客服入口（商品详情、订单详情、我的）逐页点击验证"
 echo "7. release:check 与 release:check:prod 在 CI 再跑一遍并留档"
-

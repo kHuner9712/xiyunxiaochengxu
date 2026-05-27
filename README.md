@@ -62,6 +62,9 @@ pnpm release:check:prod
 ## 预生产部署命令
 
 ```bash
+# 先生成私有生产配置（不要提交）
+cp .env.production.example .env.production
+
 # 仅配置校验（不启动）
 cd deploy
 docker compose --env-file ../.env.production config
@@ -69,6 +72,8 @@ docker compose --env-file ../.env.production config
 # 完整预生产检查 + 启动
 ENV_FILE=../.env.production bash deploy/scripts/deploy-prod-check.sh
 ```
+
+生产环境变量模板：`/.env.production.example`
 
 ## 安全红线（必须遵守）
 
@@ -86,3 +91,4 @@ ENV_FILE=../.env.production bash deploy/scripts/deploy-prod-check.sh
 - [docs/FUNCTION_COMPLETENESS.md](docs/FUNCTION_COMPLETENESS.md)
 - [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md)
 - [docs/MANUAL_ACCEPTANCE_CHECKLIST.md](docs/MANUAL_ACCEPTANCE_CHECKLIST.md)
+- [docs/LEGAL_CONTENT_GUIDE.md](docs/LEGAL_CONTENT_GUIDE.md)
