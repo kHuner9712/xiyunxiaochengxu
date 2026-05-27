@@ -15,6 +15,20 @@ WARN=0
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+REQUIRE_REAL_WX_APPID_CHECK="${REQUIRE_REAL_WX_APPID:-}"
+STRICT_PROD_GATE=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --require-real-wx-appid)
+      REQUIRE_REAL_WX_APPID_CHECK="true"
+      ;;
+    --strict-prod-gate)
+      STRICT_PROD_GATE=true
+      ;;
+  esac
+  shift
+done
+
 IS_WINDOWS=false
 if [ -n "${WINDIR:-}" ] || [ -n "${MSYSTEM:-}" ] || uname -r 2>/dev/null | grep -qi microsoft; then
   IS_WINDOWS=true
@@ -184,14 +198,30 @@ fi
 
 section "8. .env.example 必要变量检查"
 ENV_EXAMPLE=".env.example"
-REQUIRED_VARS=("DATABASE_URL" "REDIS_HOST" "JWT_SECRET" "CORS_ORIGINS" "WECHAT_NOTIFY_URL" "WECHAT_REFUND_NOTIFY_URL" "ALERT_WEBHOOK_URL")
+REQUIRED_VARS=(
+  "DATABASE_URL"
+  "REDIS_HOST"
+  "JWT_SECRET"
+  "REFRESH_TOKEN_SECRET"
+  "WECHAT_APP_ID"
+  "WECHAT_APP_SECRET"
+  "WECHAT_MCH_ID"
+  "WECHAT_MCH_SERIAL_NO"
+  "WECHAT_API_V3_KEY"
+  "WECHAT_PRIVATE_KEY_PATH"
+  "WECHAT_PLATFORM_CERT_PATH"
+  "WECHAT_PLATFORM_CERT_SERIAL_NO"
+  "WECHAT_NOTIFY_URL"
+  "WECHAT_REFUND_NOTIFY_URL"
+  "CORS_ORIGINS"
+)
 
 if [ -f "$ENV_EXAMPLE" ]; then
   for var in "${REQUIRED_VARS[@]}"; do
     if grep -q "$var" "$ENV_EXAMPLE" 2>/dev/null; then
       pass ".env.example 包含 $var"
     else
-      warn ".env.example 缺少 $var（可能需要添加）"
+      fail ".env.example 缺少 $var（生产部署必需）"
     fi
   done
 else
@@ -212,11 +242,47 @@ for compose_file in "${COMPOSE_FILES[@]}"; do
   fi
 done
 
+section "8.55. Docker Compose 必要变量检查"
+REQUIRED_COMPOSE_VARS=(
+  "DATABASE_URL"
+  "REDIS_HOST"
+  "JWT_SECRET"
+  "REFRESH_TOKEN_SECRET"
+  "WECHAT_APP_ID"
+  "WECHAT_APP_SECRET"
+  "WECHAT_MCH_ID"
+  "WECHAT_MCH_SERIAL_NO"
+  "WECHAT_API_V3_KEY"
+  "WECHAT_PRIVATE_KEY_PATH"
+  "WECHAT_PLATFORM_CERT_PATH"
+  "WECHAT_PLATFORM_CERT_SERIAL_NO"
+  "WECHAT_NOTIFY_URL"
+  "WECHAT_REFUND_NOTIFY_URL"
+  "CORS_ORIGINS"
+)
+for compose_file in "${COMPOSE_FILES[@]}"; do
+  if [ ! -f "$compose_file" ]; then
+    fail "$compose_file 不存在，无法校验 Compose 变量完整性"
+    continue
+  fi
+  for var in "${REQUIRED_COMPOSE_VARS[@]}"; do
+    if grep -q "$var" "$compose_file" 2>/dev/null; then
+      pass "$compose_file 包含 $var"
+    else
+      fail "$compose_file 缺少 $var（部署时将导致运行失败或能力缺失）"
+    fi
+  done
+done
+
 section "8.6. 小程序 AppID 检查"
 MANIFEST_FILE="apps/miniprogram/src/manifest.json"
 if [ -f "$MANIFEST_FILE" ]; then
+  ENFORCE_REAL_APPID=false
+  if [ "$REQUIRE_REAL_WX_APPID_CHECK" = "true" ] || [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+    ENFORCE_REAL_APPID=true
+  fi
   if grep -q "wx0000000000000000" "$MANIFEST_FILE" 2>/dev/null; then
-    if [ "${REQUIRE_REAL_WX_APPID:-}" = "true" ]; then
+    if [ "$ENFORCE_REAL_APPID" = "true" ]; then
       fail "manifest.json 仍使用占位 AppID wx0000000000000000，体验版/正式版构建必须配置真实 AppID"
     else
       warn "manifest.json 仍使用占位 AppID wx0000000000000000，体验版/正式版构建前必须配置真实 AppID（设置 REQUIRE_REAL_WX_APPID=true 可升级为 FAIL）"
@@ -234,7 +300,7 @@ AGREEMENT_FILES=(
   "apps/miniprogram/src/pages/agreement/index.vue"
   "apps/miniprogram/src/pages/food-safety/index.vue"
 )
-TODO_PATTERNS=("TODO" "暂定" "2026年__月__日")
+TODO_PATTERNS=("TODO" "暂定" "2026年__月__日" "__月__日")
 for file in "${AGREEMENT_FILES[@]}"; do
   if [ -f "$file" ]; then
     for pattern in "${TODO_PATTERNS[@]}"; do
@@ -247,6 +313,18 @@ for file in "${AGREEMENT_FILES[@]}"; do
     warn "协议页面 $file 不存在"
   fi
 done
+
+section "8.8. GO_LIVE 结论一致性检查"
+GO_LIVE_FILE="GO_LIVE.md"
+if [ -f "$GO_LIVE_FILE" ]; then
+  if grep -q "可正式上线" "$GO_LIVE_FILE" 2>/dev/null; then
+    fail "GO_LIVE.md 包含“可正式上线”表述，请以真实 release-check 结果更新结论"
+  else
+    pass "GO_LIVE.md 未出现“可正式上线”误导性结论"
+  fi
+else
+  warn "GO_LIVE.md 不存在，跳过结论一致性检查"
+fi
 
 section "9. 部署脚本可执行权限检查"
 SCRIPT_DIR="deploy/scripts"

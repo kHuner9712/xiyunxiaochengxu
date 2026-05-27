@@ -13,6 +13,12 @@
       <view v-if="!userStore.isLoggedIn" class="login-btn" @tap="handleLogin">
         <text class="login-text">点击登录</text>
       </view>
+      <view v-if="!userStore.isLoggedIn" class="login-agreement">
+        <text class="agreement-prefix">登录即视为同意</text>
+        <text class="agreement-link" @tap.stop="openPolicy('/pages/agreement/index')">《用户协议》</text>
+        <text class="agreement-prefix">与</text>
+        <text class="agreement-link" @tap.stop="openPolicy('/pages/privacy/index')">《隐私政策》</text>
+      </view>
     </view>
 
     <view class="order-section card">
@@ -69,7 +75,7 @@
         <text class="menu-text">邀请好友</text>
         <text class="menu-arrow">›</text>
       </view>
-      <view class="menu-item" @tap="navigateTo('/pages/service/index')">
+      <view class="menu-item" @tap="navigateTo('/pages/customer-service/index')">
         <text class="menu-text">客服与帮助</text>
         <text class="menu-arrow">›</text>
       </view>
@@ -230,6 +236,10 @@ function navigateTo(url: string) {
   }
 }
 
+function openPolicy(url: string) {
+  uni.navigateTo({ url })
+}
+
 onShow(() => {
   loadOrderCount()
 })
@@ -293,6 +303,22 @@ onShow(() => {
 .login-text {
   color: #FFFFFF;
   font-size: $font-md;
+}
+
+.login-agreement {
+  margin-top: $spacing-sm;
+}
+
+.agreement-prefix {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: $font-xs;
+}
+
+.agreement-link {
+  color: #FFFFFF;
+  font-size: $font-xs;
+  text-decoration: underline;
+  margin: 0 6rpx;
 }
 
 .order-section {

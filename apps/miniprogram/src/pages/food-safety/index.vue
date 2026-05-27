@@ -2,6 +2,8 @@
   <view class="food-safety-page">
     <view class="content-section">
       <text class="section-title">食品安全与售后说明</text>
+      <text class="update-date">更新日期：{{ legal.foodSafety.updatedAt }}</text>
+      <text class="update-date">生效日期：{{ legal.foodSafety.effectiveAt }}</text>
 
       <text class="section-subtitle">一、食品安全承诺</text>
       <text class="paragraph">1.1 禧孕优选承诺所有食品类商品均通过合法渠道采购，符合国家食品安全标准。</text>
@@ -32,20 +34,18 @@
       <text class="paragraph">5.4 非质量问题的食品类商品，如已拆封，可能不支持退换货，具体以售后审核为准。</text>
 
       <text class="section-subtitle">六、退货地址</text>
-      <text class="paragraph">山东省临沂市罗庄区妇幼保健院（暂定，上线前需确认）</text>
+      <text class="paragraph">{{ legal.contact.returnAddress }}</text>
 
       <text class="section-subtitle">七、联系方式</text>
-      <text class="paragraph">客服电话：15864850841（暂定，上线前需确认）</text>
-      <text class="paragraph">客服微信：shengxin9712（暂定，上线前需确认）</text>
-
-      <view class="todo-notice">
-        <text class="todo-text">【TODO】以上内容为模板，需由运营/法务审核确认后替换为正式内容。退换货规则需根据实际售后政策确认。</text>
-      </view>
+      <text class="paragraph">客服电话：{{ legal.contact.customerPhone }}</text>
+      <text class="paragraph">客服微信：{{ legal.contact.customerWechat }}</text>
+      <text class="paragraph">{{ legal.contact.serviceNotice }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { LEGAL_PROFILE as legal } from '@/config/legal'
 </script>
 
 <style lang="scss" scoped>
@@ -65,6 +65,13 @@
   color: $text-color;
   display: block;
   margin-bottom: $spacing-md;
+}
+
+.update-date {
+  font-size: $font-xs;
+  color: $text-hint;
+  display: block;
+  margin-bottom: 4rpx;
 }
 
 .section-subtitle {
@@ -98,15 +105,4 @@
   font-weight: 600;
 }
 
-.todo-notice {
-  margin-top: $spacing-xl;
-  padding: $spacing-md;
-  background: #FFF3E0;
-  border-radius: $radius-md;
-}
-
-.todo-text {
-  font-size: $font-sm;
-  color: #E65100;
-}
 </style>

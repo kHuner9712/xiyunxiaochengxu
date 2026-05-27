@@ -236,6 +236,17 @@ const certImageFileList = ref<any[]>([])
 
 const isEdit = computed(() => !!route.params.id)
 
+function sanitizeUrl(url: unknown): string {
+  return typeof url === 'string' && url.trim() && url.trim() !== 'undefined' ? url.trim() : ''
+}
+
+function sanitizeUrlList(values: unknown): string[] {
+  if (!Array.isArray(values)) return []
+  return values
+    .map((item) => sanitizeUrl(item))
+    .filter((item) => !!item)
+}
+
 const form = reactive({
   id: undefined as number | undefined,
   name: '',
@@ -285,11 +296,13 @@ function addSku() {
 async function handleUploadImage(options: any) {
   try {
     const res = await uploadApi.uploadImage(options.file)
+    const uploadedUrl = sanitizeUrl(res?.data?.url)
+    if (!uploadedUrl) return
     if (!form.mainImage) {
-      form.mainImage = res.data.url
+      form.mainImage = uploadedUrl
     } else {
-      form.images.push(res.data.url)
-      imageFileList.value.push({ url: res.data.url })
+      form.images.push(uploadedUrl)
+      imageFileList.value.push({ url: uploadedUrl })
     }
   } catch {}
 }
@@ -302,15 +315,17 @@ function handleRemoveImage(file: any) {
 async function handleUploadSkuImage(options: any, row: any) {
   try {
     const res = await uploadApi.uploadImage(options.file)
-    row.image = res.data.url
+    row.image = sanitizeUrl(res?.data?.url)
   } catch {}
 }
 
 async function handleUploadCertImage(options: any) {
   try {
     const res = await uploadApi.uploadImage(options.file)
-    form.compliance.certImages.push(res.data.url)
-    certImageFileList.value.push({ url: res.data.url })
+    const uploadedUrl = sanitizeUrl(res?.data?.url)
+    if (!uploadedUrl) return
+    form.compliance.certImages.push(uploadedUrl)
+    certImageFileList.value.push({ url: uploadedUrl })
   } catch {}
 }
 
@@ -329,8 +344,8 @@ async function fetchDetail(id: number) {
       categoryId: d.categoryId,
       brandId: d.brandId,
       supplierId: d.supplierId,
-      mainImage: d.mainImage,
-      images: d.images || [],
+      mainImage: sanitizeUrl(d.mainImage),
+      images: sanitizeUrlList(d.images),
       price: d.price / 100,
       originalPrice: (d.originalPrice || 0) / 100,
       stock: d.stock,
@@ -338,7 +353,7 @@ async function fetchDetail(id: number) {
       status: d.status,
       description: d.description,
       detailContent: d.detailContent,
-      skus: (d.skus || []).map((s: any) => ({ ...s, price: s.price / 100 })),
+      skus: (d.skus || []).map((s: any) => ({ ...s, price: s.price / 100, image: sanitizeUrl(s.image) })),
       compliance: d.attributes?.compliance || {
         isFood: false,
         isHealthSupplement: false,
@@ -357,8 +372,9 @@ async function fetchDetail(id: number) {
         certImages: [],
       },
     })
-    imageFileList.value = (d.images || []).map((url: string) => ({ url }))
-    certImageFileList.value = (d.attributes?.compliance?.certImages || []).map((url: string) => ({ url }))
+    form.compliance.certImages = sanitizeUrlList(form.compliance.certImages)
+    imageFileList.value = form.images.map((url: string) => ({ url }))
+    certImageFileList.value = form.compliance.certImages.map((url: string) => ({ url }))
   } catch {}
 }
 
@@ -373,17 +389,20 @@ async function handleSubmit() {
       categoryId: form.categoryId,
       brandId: form.brandId,
       supplierId: form.supplierId,
-      mainImage: form.mainImage,
-      images: form.images,
+      mainImage: sanitizeUrl(form.mainImage),
+      images: sanitizeUrlList(form.images),
       description: form.description,
       skus: form.skus.map((s) => ({
         specs: { name: s.name },
         price: priceToFen(s.price),
         stock: s.stock,
-        image: s.image || '',
+        image: sanitizeUrl(s.image),
       })),
       attributes: {
-        compliance: form.compliance,
+        compliance: {
+          ...form.compliance,
+          certImages: sanitizeUrlList(form.compliance.certImages),
+        },
       },
     }
     if (isEdit.value) {

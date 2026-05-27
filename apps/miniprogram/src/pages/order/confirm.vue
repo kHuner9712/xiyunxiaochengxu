@@ -95,6 +95,15 @@
       <input class="remark-input" v-model="remark" placeholder="选填，请先和商家协商一致" />
     </view>
 
+    <view class="legal-section card">
+      <text class="legal-text">提交订单前，请阅读并确认：</text>
+      <text class="legal-link" @tap="openLegalPage('/pages/agreement/index')">《用户协议》</text>
+      <text class="legal-text">、</text>
+      <text class="legal-link" @tap="openLegalPage('/pages/privacy/index')">《隐私政策》</text>
+      <text class="legal-text">、</text>
+      <text class="legal-link" @tap="openLegalPage('/pages/food-safety/index')">《食品安全与售后说明》</text>
+    </view>
+
     <view class="bottom-bar">
       <view class="total-row">
         <text class="total-label">合计：</text>
@@ -309,6 +318,10 @@ async function selectCoupon(coupon: MyCouponItem | null) {
 function togglePoints(e: any) {
   usePoints.value = e.detail.value
   loadPreview()
+}
+
+function openLegalPage(url: string) {
+  uni.navigateTo({ url })
 }
 
 async function handleSubmit() {
@@ -561,7 +574,8 @@ onLoad(async (options) => {
 
 .coupon-section,
 .points-section,
-.remark-section {
+.remark-section,
+.legal-section {
   display: flex;
   align-items: center;
   margin: $spacing-sm $spacing-md;
@@ -606,6 +620,23 @@ onLoad(async (options) => {
   flex: 1;
   font-size: $font-sm;
   text-align: right;
+}
+
+.legal-section {
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.legal-text {
+  font-size: $font-xs;
+  color: $text-hint;
+  line-height: 1.8;
+}
+
+.legal-link {
+  font-size: $font-xs;
+  color: $primary-color;
+  line-height: 1.8;
 }
 
 .price-section {

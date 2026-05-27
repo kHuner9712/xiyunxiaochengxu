@@ -2,10 +2,10 @@
   <view class="privacy-page">
     <view class="content-section">
       <text class="section-title">隐私政策</text>
-      <text class="update-date">更新日期：2026年__月__日</text>
-      <text class="update-date">生效日期：2026年__月__日</text>
+      <text class="update-date">更新日期：{{ legal.privacyPolicy.updatedAt }}</text>
+      <text class="update-date">生效日期：{{ legal.privacyPolicy.effectiveAt }}</text>
 
-      <text class="paragraph">临沂禧孕文化传媒有限公司（以下简称"我们"）深知个人信息对您的重要性，我们将按照法律法规的规定，保护您的个人信息及隐私安全。</text>
+      <text class="paragraph">{{ legal.companyName }}（以下简称“我们”）深知个人信息对您的重要性，我们将按照法律法规的规定，保护您的个人信息及隐私安全。</text>
 
       <text class="section-subtitle">一、我们收集的信息</text>
       <text class="paragraph">1.1 微信登录信息：我们通过微信授权获取您的 OpenID 和 UnionID，用于身份识别和登录。</text>
@@ -48,18 +48,15 @@
       <text class="paragraph">8.2 若您是未成年人的监护人，请您指导未成年人使用本服务。</text>
 
       <text class="section-subtitle">九、联系方式</text>
-      <text class="paragraph">客服电话：15864850841（暂定，上线前需确认）</text>
-      <text class="paragraph">客服微信：shengxin9712（暂定，上线前需确认）</text>
-      <text class="paragraph">如您对本隐私政策有任何疑问，请通过上述方式联系我们。</text>
-
-      <view class="todo-notice">
-        <text class="todo-text">【TODO】以上内容为模板，需由运营/法务审核确认后替换为正式内容。</text>
-      </view>
+      <text class="paragraph">客服电话：{{ legal.contact.customerPhone }}</text>
+      <text class="paragraph">客服微信：{{ legal.contact.customerWechat }}</text>
+      <text class="paragraph">{{ legal.contact.serviceNotice }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { LEGAL_PROFILE as legal } from '@/config/legal'
 </script>
 
 <style lang="scss" scoped>
@@ -105,15 +102,4 @@
   margin-bottom: $spacing-xs;
 }
 
-.todo-notice {
-  margin-top: $spacing-xl;
-  padding: $spacing-md;
-  background: #FFF3E0;
-  border-radius: $radius-md;
-}
-
-.todo-text {
-  font-size: $font-sm;
-  color: #E65100;
-}
 </style>

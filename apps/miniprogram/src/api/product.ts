@@ -20,6 +20,7 @@ export function getProductRecommend(params: { productId: number; page: number; p
 
 export interface ProductDetail {
   id: number
+  status?: number
   name: string
   subtitle: string
   images: string[]

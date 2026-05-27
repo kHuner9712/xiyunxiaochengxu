@@ -10,6 +10,7 @@
     "build:api": "pnpm --filter @baby-mall/api build",
     "build:admin": "pnpm --filter @baby-mall/admin-web build",
     "build:mini": "pnpm --filter @baby-mall/miniprogram build:mp-weixin",
+    "build:mini:prod": "cross-env NODE_ENV=production pnpm --filter @baby-mall/miniprogram build:mp-weixin",
     "build": "pnpm build:api && pnpm build:admin",
     "typecheck": "pnpm --filter @baby-mall/api build && pnpm --filter @baby-mall/admin-web build",
     "lint": "pnpm -r lint",
@@ -20,7 +21,8 @@
     "smoke:login": "cd deploy && bash scripts/smoke-admin-login.sh",
     "smoke:all": "cd deploy && bash scripts/smoke-all.sh",
     "validate:api": "pnpm --filter @baby-mall/api prisma:validate && pnpm --filter @baby-mall/api test:ci && pnpm build:api",
-    "release:check": "bash deploy/scripts/release-check.sh"
+    "release:check": "bash deploy/scripts/release-check.sh",
+    "release:check:prod": "cross-env NODE_ENV=production bash deploy/scripts/release-check.sh --require-real-wx-appid --strict-prod-gate"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -42,6 +44,7 @@
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
+    "cross-env": "^7.0.3",
     "jest": "^29.7.0",
     "ts-jest": "^29.4.11"
   }

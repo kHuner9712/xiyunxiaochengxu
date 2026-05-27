@@ -2,14 +2,14 @@
   <view class="agreement-page">
     <view class="content-section">
       <text class="section-title">用户协议</text>
-      <text class="update-date">更新日期：2026年__月__日</text>
-      <text class="update-date">生效日期：2026年__月__日</text>
+      <text class="update-date">更新日期：{{ legal.userAgreement.updatedAt }}</text>
+      <text class="update-date">生效日期：{{ legal.userAgreement.effectiveAt }}</text>
 
       <text class="paragraph">欢迎您使用禧孕优选小程序。请您在使用前仔细阅读以下用户协议。</text>
 
       <text class="section-subtitle">一、服务说明</text>
-      <text class="paragraph">1.1 禧孕优选是由临沂禧孕文化传媒有限公司运营的自营母婴用品商城微信小程序，提供母婴用品、食品、奶粉、保健品等商品的在线购买服务。</text>
-      <text class="paragraph">1.2 本协议是您与临沂禧孕文化传媒有限公司之间关于使用禧孕优选小程序服务所订立的协议。</text>
+      <text class="paragraph">1.1 {{ legal.appName }}是由{{ legal.companyName }}运营的自营母婴用品商城微信小程序，提供母婴用品、食品、奶粉、保健品等商品的在线购买服务。</text>
+      <text class="paragraph">1.2 本协议是您与{{ legal.companyName }}之间关于使用{{ legal.appName }}小程序服务所订立的协议。</text>
 
       <text class="section-subtitle">二、用户注册与登录</text>
       <text class="paragraph">2.1 您通过微信授权登录使用本小程序服务。</text>
@@ -36,17 +36,15 @@
       <text class="paragraph">7.2 本公司有权在提前通知的情况下修改本协议。</text>
 
       <text class="section-subtitle">八、联系方式</text>
-      <text class="paragraph">客服电话：15864850841（暂定，上线前需确认）</text>
-      <text class="paragraph">客服微信：shengxin9712（暂定，上线前需确认）</text>
-
-      <view class="todo-notice">
-        <text class="todo-text">【TODO】以上内容为模板，需由运营/法务审核确认后替换为正式内容。</text>
-      </view>
+      <text class="paragraph">客服电话：{{ legal.contact.customerPhone }}</text>
+      <text class="paragraph">客服微信：{{ legal.contact.customerWechat }}</text>
+      <text class="paragraph">{{ legal.contact.serviceNotice }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { LEGAL_PROFILE as legal } from '@/config/legal'
 </script>
 
 <style lang="scss" scoped>
@@ -92,15 +90,4 @@
   margin-bottom: $spacing-xs;
 }
 
-.todo-notice {
-  margin-top: $spacing-xl;
-  padding: $spacing-md;
-  background: #FFF3E0;
-  border-radius: $radius-md;
-}
-
-.todo-text {
-  font-size: $font-sm;
-  color: #E65100;
-}
 </style>

@@ -7,6 +7,7 @@ const logger = new Logger('EnvValidator');
 
 const WEAK_JWT_SECRETS = [
   'your_jwt_secret_key_change_this',
+  'your_refresh_token_secret_change_this',
   'change_this_jwt_secret',
   'your-secret-key',
   'jwt-secret',
@@ -121,6 +122,7 @@ export function validateEnv(env: Record<string, any>) {
       'DATABASE_URL',
       'REDIS_HOST',
       'JWT_SECRET',
+      'REFRESH_TOKEN_SECRET',
       'WECHAT_APP_ID',
       'WECHAT_APP_SECRET',
       'WECHAT_MCH_ID',
@@ -129,6 +131,7 @@ export function validateEnv(env: Record<string, any>) {
       'WECHAT_MCH_SERIAL_NO',
       'WECHAT_PRIVATE_KEY_PATH',
       'WECHAT_PLATFORM_CERT_PATH',
+      'WECHAT_PLATFORM_CERT_SERIAL_NO',
       'WECHAT_REFUND_NOTIFY_URL',
       'CORS_ORIGINS',
     ];
@@ -195,15 +198,39 @@ export function validateEnv(env: Record<string, any>) {
       }
     }
 
+    const refreshTokenSecret = env.REFRESH_TOKEN_SECRET;
+    if (refreshTokenSecret) {
+      const lowerRefreshSecret = refreshTokenSecret.toLowerCase();
+      for (const weak of WEAK_JWT_SECRETS) {
+        if (lowerRefreshSecret.includes(weak.toLowerCase())) {
+          logger.error(
+            `生产环境不允许使用默认或弱 REFRESH_TOKEN_SECRET，请使用随机生成的强密钥（至少32字符）`
+          );
+          process.exit(1);
+        }
+      }
+
+      if (refreshTokenSecret.length < 32) {
+        logger.error(`生产环境 REFRESH_TOKEN_SECRET 长度必须至少为 32 字符`);
+        process.exit(1);
+      }
+    }
+
     const adminDefaultPassword = env.ADMIN_DEFAULT_PASSWORD;
     if (adminDefaultPassword) {
       const lowerPassword = adminDefaultPassword.toLowerCase();
       for (const weak of WEAK_JWT_SECRETS) {
         if (lowerPassword.includes(weak.toLowerCase())) {
-          logger.warn(
-            `警告: 生产环境 ADMIN_DEFAULT_PASSWORD 包含默认或弱值，建议使用随机生成的强密码`
+          logger.error(
+            `生产环境不允许使用默认或弱 ADMIN_DEFAULT_PASSWORD，请改为强密码并启用首次登录改密`
           );
+          process.exit(1);
         }
+      }
+
+      if (adminDefaultPassword.length < 12) {
+        logger.error(`生产环境 ADMIN_DEFAULT_PASSWORD 长度必须至少为 12 字符`);
+        process.exit(1);
       }
     }
 

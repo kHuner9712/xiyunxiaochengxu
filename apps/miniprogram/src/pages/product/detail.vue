@@ -19,6 +19,8 @@
     <view class="info-section card">
       <text class="product-name">{{ product.name }}</text>
       <text v-if="product.subtitle" class="product-subtitle">{{ product.subtitle }}</text>
+      <text v-if="product.status !== undefined && product.status !== 1" class="sale-warning">该商品已下架，暂不可购买</text>
+      <text v-else-if="product.stock <= 0" class="sale-warning">该商品库存不足，暂不可购买</text>
       <view v-if="product.tags?.length" class="tag-row">
         <text v-for="tag in product.tags" :key="tag" class="product-tag">{{ tag }}</text>
       </view>
@@ -108,10 +110,14 @@
         <text class="icon-text">🛒</text>
         <text class="icon-label">购物车</text>
       </view>
-      <view class="add-cart-btn" @tap="handleAddCart">
+      <view class="bar-icon" @tap="goCustomerService">
+        <text class="icon-text">💬</text>
+        <text class="icon-label">客服</text>
+      </view>
+      <view class="add-cart-btn" :class="{ disabled: !canPurchase }" @tap="handleAddCart">
         <text class="btn-text">加入购物车</text>
       </view>
-      <view class="buy-now-btn" @tap="handleBuyNow">
+      <view class="buy-now-btn" :class="{ disabled: !canPurchase }" @tap="handleBuyNow">
         <text class="btn-text">立即购买</text>
       </view>
     </view>
@@ -135,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { getProductDetail, getProductRecommend, type ProductDetail, type SkuItem } from '@/api/product'
 import { useCartStore } from '@/stores/cart'
@@ -158,6 +164,11 @@ const skuAction = ref<'cart' | 'buy'>('cart')
 
 const cartStore = useCartStore()
 const userStore = useUserStore()
+
+const canPurchase = computed(() => {
+  const inSale = product.value.status === undefined || product.value.status === 1
+  return inSale && product.value.stock > 0
+})
 
 async function loadProduct(id: number) {
   try {
@@ -192,11 +203,19 @@ function onSkuChange(skuId: number, quantity: number) {
 }
 
 function handleAddCart() {
+  if (!canPurchase.value) {
+    uni.showToast({ title: product.value.status !== undefined && product.value.status !== 1 ? '商品已下架' : '库存不足', icon: 'none' })
+    return
+  }
   skuAction.value = 'cart'
   showSkuPopup.value = true
 }
 
 function handleBuyNow() {
+  if (!canPurchase.value) {
+    uni.showToast({ title: product.value.status !== undefined && product.value.status !== 1 ? '商品已下架' : '库存不足', icon: 'none' })
+    return
+  }
   skuAction.value = 'buy'
   showSkuPopup.value = true
 }
@@ -204,6 +223,10 @@ function handleBuyNow() {
 async function confirmSku() {
   if (!selectedSkuId.value) {
     uni.showToast({ title: '请选择规格', icon: 'none' })
+    return
+  }
+  if (!currentSku.value || currentSku.value.stock < selectedQuantity.value) {
+    uni.showToast({ title: '库存不足，请重新选择', icon: 'none' })
     return
   }
   showSkuPopup.value = false
@@ -309,6 +332,13 @@ onLoad((options) => {
   display: block;
 }
 
+.sale-warning {
+  font-size: $font-sm;
+  color: $danger-color;
+  margin-top: 8rpx;
+  display: block;
+}
+
 .tag-row {
   display: flex;
   gap: 8rpx;
@@ -405,6 +435,10 @@ onLoad((options) => {
   padding: 20rpx 0;
   text-align: center;
   margin-left: $spacing-sm;
+
+  &.disabled {
+    opacity: 0.55;
+  }
 }
 
 .buy-now-btn {
@@ -414,6 +448,10 @@ onLoad((options) => {
   padding: 20rpx 0;
   text-align: center;
   margin-left: $spacing-sm;
+
+  &.disabled {
+    opacity: 0.55;
+  }
 }
 
 .btn-text {

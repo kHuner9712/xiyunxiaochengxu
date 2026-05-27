@@ -14,5 +14,6 @@ module.exports = {
     '^svg-captcha$': '<rootDir>/test/helpers/__mocks__/svg-captcha.ts',
     '^ioredis$': '<rootDir>/test/helpers/__mocks__/ioredis.ts',
   },
+  setupFiles: ['<rootDir>/test/jest-env.setup.js'],
   testTimeout: 30000,
 };
