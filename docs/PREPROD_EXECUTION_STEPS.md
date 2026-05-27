@@ -40,6 +40,13 @@ cp .env.production.example .env.production
 3. `deploy/nginx/ssl/fullchain.pem`
 4. `deploy/nginx/ssl/privkey.pem`
 
+路径说明：
+1. 上述为宿主机路径（运维上传位置）。
+2. API 容器内读取路径固定为：
+- `/app/apps/api/certs/apiclient_key.pem`
+- `/app/apps/api/certs/wechatpay_platform.pem`
+3. `.env.production` 中 `WECHAT_PRIVATE_KEY_PATH` / `WECHAT_PLATFORM_CERT_PATH` 必须填写容器内路径，不要写宿主机路径。
+
 ## 5. DNS 检查
 
 1. `api.yunxixiaochengxu.com.cn -> 62.234.69.19`

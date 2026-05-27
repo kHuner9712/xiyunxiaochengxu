@@ -48,6 +48,13 @@ chmod 700 deploy/certs deploy/nginx/ssl
 3. `deploy/nginx/ssl/fullchain.pem`
 4. `deploy/nginx/ssl/privkey.pem`
 
+说明：
+1. 上述是宿主机放置路径。
+2. API 容器内读取路径固定为：
+- `/app/apps/api/certs/apiclient_key.pem`
+- `/app/apps/api/certs/wechatpay_platform.pem`
+3. `.env.production` 中 `WECHAT_PRIVATE_KEY_PATH` 与 `WECHAT_PLATFORM_CERT_PATH` 必须填写容器内路径，不要填宿主机路径。
+
 私钥类文件权限：
 
 ```bash

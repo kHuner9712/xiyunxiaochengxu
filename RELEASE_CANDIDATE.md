@@ -3,8 +3,23 @@
 ## 1. 版本结论
 
 - 项目：禧孕优选（微信小程序 + Admin + API）
-- 阶段：预生产部署前最终校准
+- 阶段：预生产部署脚本最终修复
 - 结论：**可进入预生产部署，不可正式发布（No-Go for Production）**
+
+## 1.1 本轮修复项
+
+1. `deploy-prod-check.sh` 增加 `ENV_FILE` 绝对路径规范化，兼容三种调用方式：
+- `bash deploy/scripts/deploy-prod-check.sh`
+- `ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh`
+- `cd deploy && ENV_FILE=../.env.production bash scripts/deploy-prod-check.sh`
+2. 微信支付证书路径校验拆分为：
+- `.env.production` 中校验容器内路径（`/app/apps/api/certs/...`）
+- 宿主机固定路径文件可读性校验（`deploy/certs/...` 与 `deploy/nginx/ssl/...`）
+3. 文档同步：
+- `docs/ENV_PRODUCTION_FILL_GUIDE.md`
+- `docs/SERVER_DEPLOY_COMMANDS.md`
+- `docs/PREPROD_EXECUTION_STEPS.md`
+- `docs/PREPROD_SCRIPT_SELFTEST.md`
 
 ## 2. 本轮实际执行命令结果
 
@@ -20,6 +35,7 @@
 | `pnpm build:admin` | PASS | Admin 构建通过 |
 | `pnpm build:mini` | PASS | 小程序默认构建通过 |
 | `pnpm release:check` | PASS | `PASS 94 / FAIL 0 / WARN 9`（默认门禁通过） |
+| `bash -n deploy/scripts/deploy-prod-check.sh` | PASS | 脚本语法检查通过 |
 | `pnpm release:check:prod` | FAIL（预期） | `PASS 93 / FAIL 5 / WARN 5`（严格门禁阻断） |
 
 ## 3. release:check:prod 失败明细（预期人工/环境阻塞）

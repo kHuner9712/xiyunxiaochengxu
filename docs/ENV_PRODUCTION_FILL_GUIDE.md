@@ -6,7 +6,7 @@
 
 1. `WECHAT_API_V3_KEY` 必须为 **32 字节**。
 2. `JWT_SECRET` / `REFRESH_TOKEN_SECRET` / `DB_PASSWORD` / `REDIS_PASSWORD` / `ADMIN_DEFAULT_PASSWORD` 至少 16 位，且包含大小写字母、数字、特殊字符。
-3. `WECHAT_PRIVATE_KEY_PATH`、`WECHAT_PLATFORM_CERT_PATH` 必须指向容器内可读路径，或与模板约定路径一致。
+3. `WECHAT_PRIVATE_KEY_PATH`、`WECHAT_PLATFORM_CERT_PATH` 必须使用模板约定的容器内路径：`/app/apps/api/certs/apiclient_key.pem`、`/app/apps/api/certs/wechatpay_platform.pem`。
 4. `.env.production` 仅在服务器本地保存，权限建议 `chmod 600 .env.production`。
 
 ## 2. 生产必填字段（部署门禁）
@@ -26,8 +26,8 @@
 | `WECHAT_MCH_ID` | 微信支付商户号 | 微信商户平台 | `16位数字` | 中 | 否 |
 | `WECHAT_MCH_SERIAL_NO` | 商户证书序列号 | 微信商户平台证书信息 | `十六进制串` | 中 | 否 |
 | `WECHAT_API_V3_KEY` | 微信支付 APIv3 密钥 | 微信商户平台 | `32字节字符串` | 是 | 否 |
-| `WECHAT_PRIVATE_KEY_PATH` | 商户私钥路径 | 运维放置证书后确认 | `deploy/certs/apiclient_key.pem` | 是（路径本身可公开，文件敏感） | 否 |
-| `WECHAT_PLATFORM_CERT_PATH` | 微信支付平台证书路径 | 运维放置证书后确认 | `deploy/certs/wechatpay_platform.pem` | 中 | 否 |
+| `WECHAT_PRIVATE_KEY_PATH` | 商户私钥容器内读取路径 | 模板固定（不要改） | `/app/apps/api/certs/apiclient_key.pem` | 是（路径本身可公开，文件敏感） | 否 |
+| `WECHAT_PLATFORM_CERT_PATH` | 微信支付平台证书容器内读取路径 | 模板固定（不要改） | `/app/apps/api/certs/wechatpay_platform.pem` | 中 | 否 |
 | `WECHAT_PLATFORM_CERT_SERIAL_NO` | 平台证书序列号 | 微信商户平台/证书内容 | `十六进制串` | 中 | 否 |
 | `WECHAT_NOTIFY_URL` | 支付回调地址 | 运维/后端约定 | `https://api.xxx.com/api/weapp/pay/callback` | 否 | 否 |
 | `WECHAT_REFUND_NOTIFY_URL` | 退款回调地址 | 运维/后端约定 | `https://api.xxx.com/api/weapp/pay/refund-callback` | 否 | 否 |
@@ -66,6 +66,13 @@
 | `POINTS_DEDUCT_MAX_PERCENT` | 积分抵扣上限百分比 | 运营规则 | `30` | 否 | 否 |
 
 ## 4. 填写完成后的检查
+
+证书路径说明（务必区分）：
+1. `.env.production` 中的 `WECHAT_PRIVATE_KEY_PATH` / `WECHAT_PLATFORM_CERT_PATH` 是**容器内路径**。
+2. 真实证书文件由运维放在宿主机：
+- `deploy/certs/apiclient_key.pem`
+- `deploy/certs/wechatpay_platform.pem`
+3. Docker Compose 会把宿主机 `deploy/certs` 目录挂载到容器 `/app/apps/api/certs`。
 
 1. 运行：`pnpm release:check`
 2. 严格门禁：`pnpm release:check:prod`

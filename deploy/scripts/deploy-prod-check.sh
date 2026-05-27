@@ -10,7 +10,41 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEPLOY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_DIR="$(cd "$DEPLOY_DIR/.." && pwd)"
-ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env.production}"
+CALLER_DIR="$(pwd)"
+
+to_abs_path_from() {
+  local base_dir="$1"
+  local target_path="$2"
+  if [[ "$target_path" = /* ]]; then
+    printf '%s' "$target_path"
+  else
+    printf '%s/%s' "$base_dir" "$target_path"
+  fi
+}
+
+normalize_existing_or_parent_path() {
+  local raw_path="$1"
+  if [ -e "$raw_path" ]; then
+    local parent_dir
+    parent_dir="$(cd "$(dirname "$raw_path")" && pwd -P)"
+    printf '%s/%s' "$parent_dir" "$(basename "$raw_path")"
+  else
+    local parent_dir
+    parent_dir="$(dirname "$raw_path")"
+    if [ -d "$parent_dir" ]; then
+      printf '%s/%s' "$(cd "$parent_dir" && pwd -P)" "$(basename "$raw_path")"
+    else
+      printf '%s' "$raw_path"
+    fi
+  fi
+}
+
+RAW_ENV_FILE="${ENV_FILE:-}"
+if [ -z "$RAW_ENV_FILE" ]; then
+  RAW_ENV_FILE="$PROJECT_DIR/.env.production"
+fi
+ENV_FILE="$(to_abs_path_from "$CALLER_DIR" "$RAW_ENV_FILE")"
+ENV_FILE="$(normalize_existing_or_parent_path "$ENV_FILE")"
 
 REQUIRED_IP="62.234.69.19"
 API_DOMAIN="api.yunxixiaochengxu.com.cn"
@@ -137,28 +171,30 @@ for key in DB_PASSWORD REDIS_PASSWORD JWT_SECRET REFRESH_TOKEN_SECRET ADMIN_DEFA
 done
 pass "弱口令检查通过"
 
-to_abs_path() {
-  local p="$1"
-  if [[ "$p" = /* ]]; then
-    echo "$p"
-  else
-    echo "$PROJECT_DIR/$p"
-  fi
-}
+wechat_private_key_path="$(get_env_value WECHAT_PRIVATE_KEY_PATH)"
+wechat_platform_cert_path="$(get_env_value WECHAT_PLATFORM_CERT_PATH)"
+expected_wechat_private_key_path="/app/apps/api/certs/apiclient_key.pem"
+expected_wechat_platform_cert_path="/app/apps/api/certs/wechatpay_platform.pem"
 
-wechat_private_key_path="$(to_abs_path "$(get_env_value WECHAT_PRIVATE_KEY_PATH)")"
-wechat_platform_cert_path="$(to_abs_path "$(get_env_value WECHAT_PLATFORM_CERT_PATH)")"
-ssl_fullchain_env="$(get_env_value SSL_FULLCHAIN_PATH)"
-ssl_privkey_env="$(get_env_value SSL_PRIVKEY_PATH)"
-ssl_fullchain_path="${ssl_fullchain_env:-$DEPLOY_DIR/nginx/ssl/fullchain.pem}"
-ssl_privkey_path="${ssl_privkey_env:-$DEPLOY_DIR/nginx/ssl/privkey.pem}"
+if [ "$wechat_private_key_path" != "$expected_wechat_private_key_path" ]; then
+  fail "WECHAT_PRIVATE_KEY_PATH 配置错误，必须为容器内路径：$expected_wechat_private_key_path"
+fi
+if [ "$wechat_platform_cert_path" != "$expected_wechat_platform_cert_path" ]; then
+  fail "WECHAT_PLATFORM_CERT_PATH 配置错误，必须为容器内路径：$expected_wechat_platform_cert_path"
+fi
+pass "微信支付证书容器内路径配置正确"
 
-for cert_file in "$wechat_private_key_path" "$wechat_platform_cert_path" "$ssl_fullchain_path" "$ssl_privkey_path"; do
+host_wechat_private_key_path="$DEPLOY_DIR/certs/apiclient_key.pem"
+host_wechat_platform_cert_path="$DEPLOY_DIR/certs/wechatpay_platform.pem"
+host_ssl_fullchain_path="$DEPLOY_DIR/nginx/ssl/fullchain.pem"
+host_ssl_privkey_path="$DEPLOY_DIR/nginx/ssl/privkey.pem"
+
+for cert_file in "$host_wechat_private_key_path" "$host_wechat_platform_cert_path" "$host_ssl_fullchain_path" "$host_ssl_privkey_path"; do
   if [ ! -r "$cert_file" ]; then
     fail "证书文件不可读：$cert_file"
   fi
 done
-pass "证书文件可读性检查通过"
+pass "宿主机证书文件可读性检查通过"
 
 resolve_domain_ip() {
   local domain="$1"
