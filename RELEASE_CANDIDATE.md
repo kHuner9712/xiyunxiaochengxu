@@ -1,57 +1,46 @@
-# RELEASE_CANDIDATE（2026-05-27）
+# RELEASE_CANDIDATE（2026-05-28）
 
-## 1. 版本与结论
+## 1. 版本结论
 
-- 项目：禧孕优选
-- 阶段：上线前最终完善（可进入预生产与真机验收）
-- 结论：**RC 可用于预生产验收，不可直接正式上线（No-Go）**
+- 项目：禧孕优选（微信小程序 + Admin + API）
+- 阶段：预生产部署前最终校准
+- 结论：**可进入预生产部署，不可正式发布（No-Go for Production）**
 
-## 2. 本次实际执行命令记录
-
-### 2.1 基线命令（全部执行）
+## 2. 本轮实际执行命令结果
 
 | 命令 | 结果 | 说明 |
 |---|---|---|
 | `pnpm install` | PASS | 依赖已就绪 |
-| `pnpm --filter @baby-mall/api prisma:validate` | PASS | Schema 有效 |
-| `pnpm --filter @baby-mall/api prisma:generate` | PASS | Client 生成成功 |
-| `pnpm --filter @baby-mall/api test:ci` | PASS | 单测+e2e 全通过 |
+| `pnpm --filter @baby-mall/api prisma:validate` | PASS | Prisma Schema 有效 |
+| `pnpm --filter @baby-mall/api prisma:generate` | PASS | Prisma Client 生成成功 |
+| `pnpm --filter @baby-mall/api test:ci` | PASS | 单测+e2e 通过（24+5 套件） |
 | `pnpm build:api` | PASS | API 构建通过 |
 | `pnpm build:admin` | PASS | Admin 构建通过 |
 | `pnpm build:mini` | PASS | 小程序默认构建通过 |
-| `pnpm release:check` | PASS | `PASS 88 / FAIL 0 / WARN 8` |
+| `pnpm release:check` | PASS | `PASS 94 / FAIL 0 / WARN 9` |
+| `pnpm release:check:prod` | FAIL（预期） | 严格门禁触发：缺真实 AppID、协议联系方式仍占位 |
 
-### 2.2 生产门禁命令（按要求尝试）
+## 3. release:check:prod 失败明细（预期人工/环境阻塞）
 
-| 命令 | 结果 | 失败原因 |
-|---|---|---|
-| `REQUIRE_REAL_WX_APPID=true NODE_ENV=production pnpm release:check` | FAIL | 当前 Windows + bash 环境下直接 POSIX 写法不可执行（`node: not found`） |
-| `cmd /c "set REQUIRE_REAL_WX_APPID=true&& set NODE_ENV=production&& pnpm release:check"` | FAIL | 缺真实 AppID 导致 `build:mini` 失败（符合人工/环境阻塞预期） |
-| `pnpm release:check:prod` | FAIL | 缺真实 AppID，生产门禁触发失败（符合预期） |
+1. 严格模式下小程序生产构建失败（未提供真实 `VITE_WX_APPID`）。
+2. AppID 门禁失败（`manifest.json` 仍为占位 AppID）。
+3. `legal.ts` 中客服电话/客服微信/退货地址仍为占位文案，严格门禁 FAIL。
 
-### 2.3 Docker 配置命令
+## 4. 当前可发布性判断
 
-| 命令 | 结果 | 失败原因 |
-|---|---|---|
-| `cd deploy && docker compose --env-file ../.env.production config` | FAIL | 缺少 `.env.production` 文件 |
+1. 代码质量门禁（默认）已通过，可进入预生产部署与真机验收。
+2. 正式发布门禁（prod strict）未通过，禁止正式发布。
 
-## 3. 阻塞项归类
+## 5. 人工阻塞项（P0）
 
-### 3.1 人工阻塞（P0）
+1. 微信小程序真实 AppID（体验版/正式版构建必需）。
+2. 协议最终联系方式：客服电话、客服微信、退货地址（法务/运营确认后写入 `legal.ts`）。
+3. 私有生产环境文件 `.env.production`（真实变量，不提交）。
+4. 微信支付生产参数与证书（商户号、APIv3 Key、商户私钥、平台证书等）。
+5. HTTPS 证书文件（`fullchain.pem`、`privkey.pem`）。
 
-1. 真实 AppID。
-2. 微信支付密钥与证书。
-3. 备案号与高合规资质编号/证明材料。
-4. 客服与售后最终口径。
+## 6. 下一步建议
 
-### 3.2 环境阻塞（P0）
-
-1. `.env.production` 未提供。
-2. 服务器证书未提供。
-3. 本机 Docker 未启动，未执行容器健康验收。
-
-## 4. 发布建议
-
-- 当前 RC 允许进入：预生产部署 + 体验版 + 真机验收。
-- 当前 RC 不允许进入：正式发布。
-- 待 `docs/OPERATOR_REQUIRED.md` 全项完成并通过真机支付退款闭环后，再发起下一次 Go/No-Go。
+1. 运营/法务补齐 `docs/OPERATOR_REQUIRED.md` 与 `docs/LEGAL_CONTENT_GUIDE.md` 列项。
+2. 运维按 `docs/PREPROD_EXECUTION_STEPS.md` 执行服务器预生产部署检查。
+3. 提供真实 AppID 后执行：`VITE_WX_APPID=真实AppID pnpm build:mini:prod` 并上传体验版真机验收。

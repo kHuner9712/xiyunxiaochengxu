@@ -1223,4 +1223,41 @@ describe('接口契约：后台订单 fulfillmentType 筛选', () => {
       }),
     );
   });
+
+  it('exportOrders 当 skuSpecs 为对象时，商品明细可读', async () => {
+    mockPrisma.order.findMany.mockResolvedValue([
+      {
+        orderNo: 'XY202605280001',
+        status: OrderStatus.pending_delivery,
+        fulfillmentType: 'delivery',
+        totalAmount: 1000,
+        discountAmount: 0,
+        freightAmount: 10,
+        pointsAmount: 0,
+        payAmount: 1010,
+        receiverName: '李四',
+        receiverPhone: '13900139000',
+        province: '山东省',
+        city: '临沂市',
+        district: '兰山区',
+        detailAddress: '测试路2号',
+        createdAt: new Date('2026-05-28T10:00:00.000Z'),
+        paidAt: null,
+        orderItems: [
+          { productName: '营养米粉', skuSpecs: { 规格: '500g', 阶段: '6个月+' }, quantity: 2 },
+        ],
+        user: { nickname: '测试用户2', phone: '13900139000' },
+      },
+    ]);
+
+    const rows = await service.exportOrders({
+      skip: 0,
+      take: 10,
+      page: 1,
+      pageSize: 10,
+      fulfillmentType: 'delivery',
+    });
+
+    expect(rows[0].itemDetails).toContain('营养米粉（规格:500g / 阶段:6个月+）x2');
+  });
 });

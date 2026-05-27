@@ -155,7 +155,13 @@ export class AdminOrderController {
       if (Number.isNaN(dt.getTime())) return '';
       return dt.toLocaleString('zh-CN', { hour12: false });
     };
-    const esc = (value: string | number) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const esc = (value: unknown) => {
+      const rawText = String(value ?? '');
+      const trimmed = rawText.trimStart();
+      const shouldEscapeFormula = ['=', '+', '-', '@'].some((prefix) => trimmed.startsWith(prefix));
+      const safeText = shouldEscapeFormula ? `'${rawText}` : rawText;
+      return `"${safeText.replace(/"/g, '""')}"`;
+    };
     const typeLabel = (value: string) => (value === 'pickup' ? '到店自提' : '快递配送');
 
     const lines = [
@@ -187,7 +193,7 @@ export class AdminOrderController {
 
     const csv = `\uFEFF${lines.join('\n')}`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
     return res.status(200).send(csv);
   }
 }

@@ -145,7 +145,18 @@ async function handleCancel(row: any) {
 async function handleExport() {
   try {
     const res = await orderApi.export(buildQueryParams())
-    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' })
+    const contentType = String(res.headers?.['content-type'] || '').toLowerCase()
+    const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type: contentType || 'text/csv;charset=utf-8;' })
+    if (contentType.includes('application/json')) {
+      const text = await blob.text()
+      let message = '导出失败'
+      try {
+        const parsed = JSON.parse(text)
+        message = parsed?.message || message
+      } catch {}
+      throw new Error(message)
+    }
+
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -172,6 +183,15 @@ function buildQueryParams() {
 
 function getFileNameFromDisposition(disposition?: string) {
   if (!disposition) return ''
+  const utf8Match = disposition.match(/filename\*\s*=\s*([^;]+)/i)
+  if (utf8Match?.[1]) {
+    const encodedValue = utf8Match[1].trim().replace(/^UTF-8''/i, '').replace(/^"(.*)"$/, '$1')
+    try {
+      return decodeURIComponent(encodedValue)
+    } catch {
+      return encodedValue
+    }
+  }
   const match = disposition.match(/filename="?([^\";]+)"?/i)
   return match?.[1] || ''
 }

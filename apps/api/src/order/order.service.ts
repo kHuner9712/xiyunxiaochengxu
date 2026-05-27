@@ -1237,8 +1237,9 @@ export class OrderService {
     const itemCount = items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0);
     const itemDetails = items
       .map((item: any) => {
-        const skuText = item.skuSpecs ? `（${item.skuSpecs}）` : '';
-        return `${item.productName}${skuText} x${item.quantity}`;
+        const specsText = this.formatSkuSpecs(item.skuSpecs);
+        const skuText = specsText ? `（${specsText}）` : '';
+        return `${item.productName}${skuText}x${item.quantity}`;
       })
       .join('；');
     const address = [order.province, order.city, order.district, order.detailAddress].filter(Boolean).join('');
@@ -1264,5 +1265,76 @@ export class OrderService {
       createdAt: order.createdAt || null,
       paidAt: order.paidAt || null,
     };
+  }
+
+  private formatSkuSpecs(skuSpecs: unknown): string {
+    if (skuSpecs === null || skuSpecs === undefined || skuSpecs === '') {
+      return '';
+    }
+
+    if (typeof skuSpecs === 'string') {
+      return skuSpecs;
+    }
+
+    if (typeof skuSpecs === 'object') {
+      try {
+        if (Array.isArray(skuSpecs)) {
+          const segments = skuSpecs
+            .map((item, index) => {
+              if (item === null || item === undefined) {
+                return '';
+              }
+              if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+                return String(item);
+              }
+              if (typeof item === 'object') {
+                const objectItem = item as Record<string, unknown>;
+                if (objectItem.key !== undefined && objectItem.value !== undefined) {
+                  return `${this.formatSkuSpecValue(objectItem.key)}:${this.formatSkuSpecValue(objectItem.value)}`;
+                }
+                const objectEntries = Object.entries(objectItem);
+                if (objectEntries.length > 0) {
+                  return objectEntries
+                    .map(([key, itemValue]) => `${key}:${this.formatSkuSpecValue(itemValue)}`)
+                    .join(' / ');
+                }
+              }
+              return `${index}:${this.formatSkuSpecValue(item)}`;
+            })
+            .filter(Boolean);
+          if (segments.length > 0) {
+            return segments.join(' / ');
+          }
+          return JSON.stringify(skuSpecs);
+        }
+
+        const value = skuSpecs as Record<string, unknown>;
+        const entries = Object.entries(value);
+        if (entries.length > 0) {
+          return entries
+            .map(([key, itemValue]) => `${key}:${this.formatSkuSpecValue(itemValue)}`)
+            .join(' / ');
+        }
+        return JSON.stringify(skuSpecs);
+      } catch {
+        return String(skuSpecs);
+      }
+    }
+
+    return String(skuSpecs);
+  }
+
+  private formatSkuSpecValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
   }
 }
