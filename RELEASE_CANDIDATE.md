@@ -8,6 +8,8 @@
 
 ## 2. 本轮实际执行命令结果
 
+默认约定：命令在仓库根目录执行（`package.json` 所在目录）。
+
 | 命令 | 结果 | 说明 |
 |---|---|---|
 | `pnpm install` | PASS | 依赖已就绪 |
@@ -17,14 +19,16 @@
 | `pnpm build:api` | PASS | API 构建通过 |
 | `pnpm build:admin` | PASS | Admin 构建通过 |
 | `pnpm build:mini` | PASS | 小程序默认构建通过 |
-| `pnpm release:check` | PASS | `PASS 94 / FAIL 0 / WARN 9` |
-| `pnpm release:check:prod` | FAIL（预期） | 严格门禁触发：缺真实 AppID、协议联系方式仍占位 |
+| `pnpm release:check` | PASS | `PASS 94 / FAIL 0 / WARN 9`（默认门禁通过） |
+| `pnpm release:check:prod` | FAIL（预期） | `PASS 93 / FAIL 5 / WARN 5`（严格门禁阻断） |
 
 ## 3. release:check:prod 失败明细（预期人工/环境阻塞）
 
 1. 严格模式下小程序生产构建失败（未提供真实 `VITE_WX_APPID`）。
 2. AppID 门禁失败（`manifest.json` 仍为占位 AppID）。
-3. `legal.ts` 中客服电话/客服微信/退货地址仍为占位文案，严格门禁 FAIL。
+3. `legal.ts` 中客服电话占位文案未替换，严格门禁 FAIL。
+4. `legal.ts` 中客服微信占位文案未替换，严格门禁 FAIL。
+5. `legal.ts` 中退货地址占位文案未替换，严格门禁 FAIL。
 
 ## 4. 当前可发布性判断
 

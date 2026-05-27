@@ -1,65 +1,44 @@
-# 禧孕优选 GO_LIVE 状态（2026-05-27）
+# 禧孕优选 GO_LIVE 状态（2026-05-28）
 
 ## 1. 当前结论
 
-- 结论：**No-Go（不可直接正式上线）**
-- 说明：代码层已达到“可部署到预生产并进行真机验收”状态，但仍存在人工/环境阻塞项，未满足正式发布条件。
+- 结论：**可进入预生产部署，不可正式发布（No-Go for Production）**
+- 说明：默认门禁可通过，生产严格门禁在缺真实 AppID 与最终联系方式前应保持失败（正确阻断）。
 
 ## 2. 代码完成项（已完成）
 
-1. 全仓库关键命令已执行：`pnpm install`、`prisma:validate`、`prisma:generate`、`test:ci`、`build:api`、`build:admin`、`build:mini`、`release:check`。
-2. `release:check` 通过：`PASS 88 / FAIL 0 / WARN 8`。
-3. 小程序生产门禁已补齐：
-   - `build:mini:prod`
-   - `release:check:prod`
-   - 生产构建强制真实 `VITE_WX_APPID`（禁止占位 AppID）
-4. 协议页面正式化机制完成：隐私政策、用户协议、食品安全与售后说明页面已去除 `TODO/暂定/日期占位`。
-5. 后端生产配置门禁补强：新增 `REFRESH_TOKEN_SECRET`、`WECHAT_PLATFORM_CERT_SERIAL_NO` 必填与弱密钥拦截。
-6. 后台商品编辑 URL 兜底修复：避免 `undefined` URL 入库。
-7. 部署硬化脚本已新增：`deploy/scripts/deploy-prod-check.sh`。
-8. 上线文档已补齐：
-   - `docs/OPERATOR_REQUIRED.md`
-   - `docs/FUNCTION_COMPLETENESS.md`
-   - `docs/DEPLOYMENT_RUNBOOK.md`
-   - `docs/MANUAL_ACCEPTANCE_CHECKLIST.md`
+1. 订单导出已切换为 CSV，包含 UTF-8 BOM、文件名规范与 CSV 注入防护。
+2. `fulfillmentType` 在前后端筛选与导出链路保持一致。
+3. 部署脚本 `deploy-prod-check.sh` 已具备 `.env` 安全解析、强口令检查、证书可读检查。
+4. Docker Compose 生产关键变量已改为 required 形式，防止弱默认值误部署。
+5. 上线文档与预生产执行文档已补齐，可直接指导运维执行。
 
-## 3. 人工阻塞项（P0）
+## 3. 当前门禁状态
 
-1. 真实小程序 AppID（用于体验版/正式版构建）。
-2. 微信支付商户敏感配置与证书：商户号、APIv3 Key、商户私钥、平台证书、证书序列号。
-3. 备案与资质：
-   - ICP/小程序备案号
-   - 营业执照统一社会信用代码
-   - 食品经营许可证或仅销售预包装食品备案
-   - 保健食品批准文号/备案号
-   - 奶粉产品配方注册号或合规证明
-4. 客服电话/客服微信/退货地址最终值与售后规则最终口径。
-5. 隐私政策/用户协议最终确认人（法务/运营责任人）。
+1. `pnpm release:check`：通过（用于预生产准备）。
+2. `pnpm release:check:prod`：未通过（预期）。
+3. 严格失败原因：
+- 未提供真实小程序 AppID。
+- `legal.ts` 中客服电话/客服微信/退货地址仍为占位口径，未替换为最终值。
 
-> 明细见 `docs/OPERATOR_REQUIRED.md`。
+## 4. 人工阻塞项（P0）
 
-## 4. 部署阻塞项（P0）
+1. 真实小程序 AppID（体验版/正式版构建）。
+2. 法务/运营确认后的最终联系方式（客服电话、客服微信、退货地址）。
+3. 私有 `.env.production` 真实值（仅服务器本地）。
+4. 微信支付生产参数与证书（商户号、APIv3 Key、商户私钥、平台证书、序列号）。
+5. HTTPS 证书（`fullchain.pem`、`privkey.pem`）。
 
-1. 本机缺失 `.env.production`，无法执行生产 Compose 配置校验与部署。
-2. 真实证书文件未提供（微信支付证书、SSL fullchain/privkey）。
-3. Docker Desktop 当前未运行，无法在本机继续容器化健康检查。
+## 5. 部署执行口径
 
-## 5. 微信审核阻塞项（P0）
+1. 所有部署命令默认在仓库根目录执行（`package.json` 所在目录）。
+2. 敏感值仅允许在服务器本地填写，不得提交 Git。
+3. 真机验收记录使用：
+- `docs/PREPROD_ACCEPTANCE_RECORD.md`
+- `docs/MANUAL_ACCEPTANCE_CHECKLIST.md`
 
-1. 高合规品类审核材料未提交完毕（食品/保健品/奶粉相关）。
-2. 审核账号与审核备注最终稿未锁定。
-3. 体验版未基于真实 AppID 构建上传，无法完成微信侧真机验收闭环。
+## 6. 下一步
 
-## 6. 与 release-check 一致性
-
-1. `release:check`（默认）通过，允许占位 AppID 以 WARN 形式提示。
-2. 生产门禁命令已验证会失败（缺真实 AppID）：
-   - `pnpm release:check:prod` -> FAIL（符合预期）
-3. 因此当前结论维持 **No-Go**，与门禁结果一致。
-
-## 7. 下一步（进入可发布前）
-
-1. 运营/老板补齐 `docs/OPERATOR_REQUIRED.md` 全部 P0 字段。
-2. 在预生产服务器放置 `.env.production` 与真实证书，执行 `deploy/scripts/deploy-prod-check.sh`。
-3. 用真实 AppID 构建并上传体验版，完成真机支付/退款/售后/自提全链路验收。
-4. 微信审核材料提交完成后，再进行 Go/No-Go 复核。
+1. 运维按 `docs/SERVER_DEPLOY_COMMANDS.md` 执行服务器预生产部署。
+2. 运营/法务按 `docs/ENV_PRODUCTION_FILL_GUIDE.md` 与 `docs/LEGAL_CONTENT_GUIDE.md` 补齐真实信息。
+3. 完成体验版构建与真机闭环后，再发起正式发布 Go/No-Go 评审。

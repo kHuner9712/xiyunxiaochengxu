@@ -1,5 +1,8 @@
 # 预生产部署 Runbook（禧孕优选）
 
+当前结论：**可进入预生产部署，不可正式发布**。  
+默认约定：以下部署命令默认在仓库根目录执行（`package.json` 所在目录）。
+
 ## 1. 服务器准备
 
 1. 准备 Linux 服务器（推荐 Ubuntu 22.04+），开放 80/443。
@@ -33,14 +36,15 @@
 ```bash
 pnpm release:check
 pnpm release:check:prod
-cd deploy
-docker compose --env-file ../.env.production config
+(cd deploy && docker compose --env-file ../.env.production config)
 ```
+
+说明：在未提供真实 AppID 与 `legal.ts` 最终联系方式前，`pnpm release:check:prod` 失败是预期阻断，不应绕过。
 
 如需一键执行部署前检查与启动：
 
 ```bash
-ENV_FILE=../.env.production bash deploy/scripts/deploy-prod-check.sh
+ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 ```
 
 密码/密钥强度门禁（deploy-prod-check）：
@@ -52,15 +56,13 @@ ENV_FILE=../.env.production bash deploy/scripts/deploy-prod-check.sh
 ## 5. 数据库迁移
 
 ```bash
-cd deploy
-docker compose --env-file ../.env.production run --rm api pnpm --filter @baby-mall/api prisma:migrate:deploy
+(cd deploy && docker compose --env-file ../.env.production run --rm api pnpm --filter @baby-mall/api prisma:migrate:deploy)
 ```
 
 ## 6. 启动服务
 
 ```bash
-cd deploy
-docker compose --env-file ../.env.production up -d
+(cd deploy && docker compose --env-file ../.env.production up -d)
 ```
 
 ## 7. 健康检查
@@ -75,8 +77,7 @@ docker compose --env-file ../.env.production up -d
 1. 代码回滚到上一稳定 commit/tag。
 2. 停止并重启旧版本镜像：
 ```bash
-docker compose down
-docker compose up -d
+(cd deploy && docker compose down && docker compose up -d)
 ```
 3. 数据库回滚前必须先备份；优先使用前向修复，谨慎执行迁移回滚。
 

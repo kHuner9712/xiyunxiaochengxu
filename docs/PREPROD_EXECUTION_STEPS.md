@@ -1,5 +1,7 @@
 # 禧孕优选 预生产执行清单（PREPROD_EXECUTION_STEPS）
 
+默认约定：以下命令**默认在仓库根目录执行**（即包含 `package.json` 的目录）。
+
 ## 1. 服务器准备
 
 1. 操作系统：Ubuntu（建议 22.04 LTS）。
@@ -12,7 +14,8 @@
 ```bash
 # 首次部署
 git clone https://github.com/kHuner9712/xiyunxiaochengxu.git
-cd xiyunxiaochengxu/baby-mall
+cd xiyunxiaochengxu
+test -f package.json || { echo "未找到 package.json，请确认仓库目录"; exit 1; }
 
 # 已部署机器更新
 git pull --ff-only
@@ -24,8 +27,9 @@ git pull --ff-only
 cp .env.production.example .env.production
 ```
 
-1. 在 `.env.production` 中填写真实值（不得提交到 Git）。
+1. 在 `.env.production` 中填写真实值（仅服务器本地保留）。
 2. 不得保留默认占位值。
+3. `.env.production` 严禁提交到 Git。
 
 ## 4. 放置证书
 
@@ -51,8 +55,7 @@ nslookup admin.yunxixiaochengxu.com.cn
 ## 6. 执行部署前检查
 
 ```bash
-cd deploy
-ENV_FILE=../.env.production bash scripts/deploy-prod-check.sh
+ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 ```
 
 若失败，先修复变量/证书/域名问题，不要强行上线。
@@ -60,8 +63,8 @@ ENV_FILE=../.env.production bash scripts/deploy-prod-check.sh
 ## 7. 启动与健康检查
 
 ```bash
-docker compose --env-file ../.env.production up -d --build
-docker compose --env-file ../.env.production ps
+(cd deploy && docker compose --env-file ../.env.production up -d --build)
+(cd deploy && docker compose --env-file ../.env.production ps)
 ```
 
 健康检查最少覆盖：
@@ -99,5 +102,5 @@ VITE_WX_APPID=真实AppID pnpm build:mini:prod
 ## 10. 回滚策略
 
 1. 回滚代码：`git checkout <上一稳定tag>`
-2. 重启容器：`docker compose --env-file ../.env.production down && docker compose --env-file ../.env.production up -d --build`
+2. 重启容器：`(cd deploy && docker compose --env-file ../.env.production down && docker compose --env-file ../.env.production up -d --build)`
 3. 数据库先备份，**不要随意回滚 migration**，需按变更评审制定数据回退方案。

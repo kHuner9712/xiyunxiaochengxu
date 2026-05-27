@@ -2,6 +2,8 @@
 
 临沂禧孕文化传媒有限公司自营母婴用品商城微信小程序项目。
 
+当前发布状态：**可进入预生产部署，不可正式发布**。
+
 ## 项目结构
 
 - `apps/miniprogram`：uni-app + Vue3 + TypeScript 微信小程序端
@@ -61,19 +63,22 @@ pnpm release:check:prod
 
 ## 预生产部署命令
 
+默认约定：以下部署命令默认在仓库根目录执行（`package.json` 所在目录）。
+
 ```bash
 # 先生成私有生产配置（不要提交）
 cp .env.production.example .env.production
 
 # 仅配置校验（不启动）
-cd deploy
-docker compose --env-file ../.env.production config
+(cd deploy && docker compose --env-file ../.env.production config)
 
 # 完整预生产检查 + 启动
-ENV_FILE=../.env.production bash deploy/scripts/deploy-prod-check.sh
+ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 ```
 
 生产环境变量模板：`/.env.production.example`
+
+说明：在未提供真实 AppID 与 `legal.ts` 最终联系方式前，`pnpm release:check:prod` 失败是预期阻断。
 
 ## 安全红线（必须遵守）
 
@@ -91,5 +96,8 @@ ENV_FILE=../.env.production bash deploy/scripts/deploy-prod-check.sh
 - [docs/FUNCTION_COMPLETENESS.md](docs/FUNCTION_COMPLETENESS.md)
 - [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md)
 - [docs/PREPROD_EXECUTION_STEPS.md](docs/PREPROD_EXECUTION_STEPS.md)
+- [docs/SERVER_DEPLOY_COMMANDS.md](docs/SERVER_DEPLOY_COMMANDS.md)
+- [docs/ENV_PRODUCTION_FILL_GUIDE.md](docs/ENV_PRODUCTION_FILL_GUIDE.md)
 - [docs/MANUAL_ACCEPTANCE_CHECKLIST.md](docs/MANUAL_ACCEPTANCE_CHECKLIST.md)
+- [docs/PREPROD_ACCEPTANCE_RECORD.md](docs/PREPROD_ACCEPTANCE_RECORD.md)
 - [docs/LEGAL_CONTENT_GUIDE.md](docs/LEGAL_CONTENT_GUIDE.md)
