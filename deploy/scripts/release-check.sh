@@ -212,6 +212,26 @@ for compose_file in "${COMPOSE_FILES[@]}"; do
   fi
 done
 
+section "8.7. 协议页面正式化检查"
+AGREEMENT_FILES=(
+  "apps/miniprogram/src/pages/privacy/index.vue"
+  "apps/miniprogram/src/pages/agreement/index.vue"
+  "apps/miniprogram/src/pages/food-safety/index.vue"
+)
+TODO_PATTERNS=("TODO" "暂定" "2026年__月__日")
+for file in "${AGREEMENT_FILES[@]}"; do
+  if [ -f "$file" ]; then
+    for pattern in "${TODO_PATTERNS[@]}"; do
+      if grep -q "$pattern" "$file" 2>/dev/null; then
+        fail "协议页面 $file 包含未确认内容: '$pattern'（需运营/法务确认后移除）"
+      fi
+    done
+    pass "协议页面 $file 已检查"
+  else
+    warn "协议页面 $file 不存在"
+  fi
+done
+
 section "9. 部署脚本可执行权限检查"
 SCRIPT_DIR="deploy/scripts"
 if [ -d "$SCRIPT_DIR" ]; then

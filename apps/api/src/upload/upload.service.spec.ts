@@ -23,7 +23,7 @@ function createService(mockPrisma?: any) {
 
 const ALLOWED_EXTENSIONS = [
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
-  '.mp4', '.webm',
+  '.mp4',
   '.pdf',
 ];
 
@@ -34,7 +34,6 @@ const ALLOWED_MIME_TYPES = [
   'image/webp',
   'image/bmp',
   'video/mp4',
-  'video/webm',
   'application/pdf',
 ];
 
@@ -138,12 +137,12 @@ describe('UploadService 文件大小限制', () => {
     const file = {
       originalname: 'test.jpg',
       mimetype: 'image/jpeg',
-      buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]),
-      size: 4,
+      buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01]),
+      size: 12,
     } as Express.Multer.File;
     mockPrisma.fileAsset.create.mockResolvedValue({
       id: BigInt(1), fileName: 'test.jpg', filePath: '/uploads/test.jpg',
-      fileSize: BigInt(4), fileType: 'image', mimeType: 'image/jpeg',
+      fileSize: BigInt(12), fileType: 'image', mimeType: 'image/jpeg',
       storageType: 1, url: '/uploads/test.jpg', groupName: null,
       uploaderId: BigInt(1), uploaderType: 'user',
     });
@@ -164,8 +163,8 @@ describe('UploadService 文件魔数校验', () => {
     const file = {
       originalname: 'test.jpg',
       mimetype: 'image/jpeg',
-      buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46]),
-      size: 8,
+      buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01]),
+      size: 12,
     } as Express.Multer.File;
     expect(() => service['validateFileMagic'](file)).not.toThrow();
   });
@@ -174,8 +173,8 @@ describe('UploadService 文件魔数校验', () => {
     const file = {
       originalname: 'test.png',
       mimetype: 'image/png',
-      buffer: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
-      size: 8,
+      buffer: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D]),
+      size: 12,
     } as Express.Multer.File;
     expect(() => service['validateFileMagic'](file)).not.toThrow();
   });
@@ -184,8 +183,8 @@ describe('UploadService 文件魔数校验', () => {
     const file = {
       originalname: 'malicious.jpg',
       mimetype: 'image/jpeg',
-      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]),
-      size: 8,
+      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x00, 0x00, 0x00, 0x00]),
+      size: 12,
     } as Express.Multer.File;
     expect(() => service['validateFileMagic'](file)).toThrow(BadRequestException);
   });
@@ -194,18 +193,18 @@ describe('UploadService 文件魔数校验', () => {
     const file = {
       originalname: 'test.pdf',
       mimetype: 'application/pdf',
-      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]),
-      size: 8,
+      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A, 0x25, 0xE2, 0xE3]),
+      size: 12,
     } as Express.Multer.File;
     expect(() => service['validateFileMagic'](file)).not.toThrow();
   });
 
   it('无魔数映射的 MIME 类型跳过校验', () => {
     const file = {
-      originalname: 'test.bmp',
-      mimetype: 'image/bmp',
-      buffer: Buffer.from([0x42, 0x4D]),
-      size: 2,
+      originalname: 'test.txt',
+      mimetype: 'text/plain',
+      buffer: Buffer.from([0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+      size: 12,
     } as Express.Multer.File;
     expect(() => service['validateFileMagic'](file)).not.toThrow();
   });
@@ -234,5 +233,63 @@ describe('UploadService Office 文档默认禁用', () => {
 
   it('不应允许 Office Open XML MIME', () => {
     expect(ALLOWED_MIME_TYPES).not.toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  });
+});
+
+describe('UploadService webp RIFF+WEBP magic', () => {
+  let service: UploadService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('webp 文件 RIFF+WEBP magic 正确时不报错', () => {
+    const file = {
+      originalname: 'test.webp',
+      mimetype: 'image/webp',
+      buffer: Buffer.from([0x52, 0x49, 0x46, 0x46, 0x0A, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]),
+      size: 12,
+    } as Express.Multer.File;
+    expect(() => service['validateFileMagic'](file)).not.toThrow();
+  });
+
+  it('webp 文件缺少 WEBP 标识时抛出 BadRequestException', () => {
+    const file = {
+      originalname: 'fake.webp',
+      mimetype: 'image/webp',
+      buffer: Buffer.from([0x52, 0x49, 0x46, 0x46, 0x0A, 0x00, 0x00, 0x00, 0x4E, 0x4F, 0x54, 0x50]),
+      size: 12,
+    } as Express.Multer.File;
+    expect(() => service['validateFileMagic'](file)).toThrow(BadRequestException);
+  });
+});
+
+describe('UploadService bmp magic', () => {
+  let service: UploadService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('bmp 文件 BM magic 正确时不报错', () => {
+    const file = {
+      originalname: 'test.bmp',
+      mimetype: 'image/bmp',
+      buffer: Buffer.from([0x42, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+      size: 12,
+    } as Express.Multer.File;
+    expect(() => service['validateFileMagic'](file)).not.toThrow();
+  });
+});
+
+describe('UploadService webm removed', () => {
+  it('不应允许 video/webm MIME', () => {
+    expect(ALLOWED_MIME_TYPES).not.toContain('video/webm');
+  });
+
+  it('不应允许 .webm 扩展名', () => {
+    expect(ALLOWED_EXTENSIONS).not.toContain('.webm');
   });
 });

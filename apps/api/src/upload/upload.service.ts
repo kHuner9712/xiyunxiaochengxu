@@ -9,7 +9,8 @@ const FILE_MAGIC_NUMBERS: Record<string, number[][]> = {
   'image/jpeg': [[0xFF, 0xD8, 0xFF]],
   'image/png': [[0x89, 0x50, 0x4E, 0x47]],
   'image/gif': [[0x47, 0x49, 0x46]],
-  'image/webp': [[0x52, 0x49, 0x46, 0x46]],
+  'image/webp': [[0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]],
+  'image/bmp': [[0x42, 0x4D]],
   'video/mp4': [[0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], [0x00, 0x00, 0x00, 0x1C, 0x66, 0x74, 0x79, 0x70], [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70]],
   'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
 };
@@ -21,13 +22,12 @@ const ALLOWED_MIME_TYPES = [
   'image/webp',
   'image/bmp',
   'video/mp4',
-  'video/webm',
   'application/pdf',
 ];
 
 const ALLOWED_EXTENSIONS = [
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
-  '.mp4', '.webm',
+  '.mp4',
   '.pdf',
 ];
 
@@ -132,10 +132,13 @@ export class UploadService {
 
   private validateFileMagic(file: Express.Multer.File): void {
     const magicNumbers = FILE_MAGIC_NUMBERS[file.mimetype];
-    if (!magicNumbers || !file.buffer || file.buffer.length < 8) return;
-    const header = Array.from(file.buffer.slice(0, 8));
+    if (!magicNumbers || !file.buffer || file.buffer.length < 12) return;
+    const header = Array.from(file.buffer.slice(0, 12));
     const isValid = magicNumbers.some(magic =>
-      magic.every((byte, index) => header[index] === byte)
+      magic.every((byte, index) => {
+        if (byte === 0x00) return true;
+        return header[index] === byte;
+      })
     );
     if (!isValid) {
       throw new BadRequestException(`文件内容与声明类型 ${file.mimetype} 不匹配`);

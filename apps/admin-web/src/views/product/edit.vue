@@ -369,10 +369,19 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const data = {
-      ...form,
-      price: priceToFen(form.price),
-      originalPrice: priceToFen(form.originalPrice),
-      skus: form.skus.map((s) => ({ ...s, price: priceToFen(s.price) })),
+      name: form.name,
+      categoryId: form.categoryId,
+      brandId: form.brandId,
+      supplierId: form.supplierId,
+      mainImage: form.mainImage,
+      images: form.images,
+      description: form.description,
+      skus: form.skus.map((s) => ({
+        specs: { name: s.name },
+        price: priceToFen(s.price),
+        stock: s.stock,
+        image: s.image || '',
+      })),
       attributes: {
         compliance: form.compliance,
       },

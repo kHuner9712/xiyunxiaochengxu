@@ -239,6 +239,10 @@ export class ProductService {
       throw new BadRequestException('商品无有效SKU，无法上架');
     }
 
+    if (status === 1) {
+      this.validateProductComplianceBeforePublish(product);
+    }
+
     const result = await this.prisma.product.update({
       where: { id: BigInt(id) },
       data: { status },
@@ -246,6 +250,41 @@ export class ProductService {
 
     this.logger.log(`更新商品状态：${id} -> ${status}`);
     return this.serializeProduct(result);
+  }
+
+  private validateProductComplianceBeforePublish(product: any): void {
+    const compliance = product.attributes?.compliance;
+    if (!compliance) return;
+
+    const missingFields: string[] = [];
+
+    if (compliance.isFood === true) {
+      if (!compliance.productionLicenseNo) missingFields.push('生产许可证编号');
+      if (!compliance.foodBusinessCertNo) missingFields.push('食品经营/备案凭证编号');
+      if (!compliance.manufacturer) missingFields.push('生产厂家');
+      if (!compliance.shelfLife) missingFields.push('保质期');
+      if (!compliance.storageCondition) missingFields.push('贮存条件');
+    }
+
+    if (compliance.isHealthSupplement === true) {
+      if (!compliance.healthSupplementApprovalNo) missingFields.push('保健食品批准文号/备案号');
+      if (!compliance.suitableFor) missingFields.push('适用人群');
+      if (!compliance.notSuitableFor) missingFields.push('不适宜人群');
+      if (!compliance.precautions) missingFields.push('注意事项');
+      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.push('资质图片（至少1张）');
+    }
+
+    if (compliance.isInfantFormula === true) {
+      if (!compliance.infantFormulaRegNo) missingFields.push('奶粉产品配方注册号');
+      if (!compliance.manufacturer) missingFields.push('生产厂家');
+      if (!compliance.shelfLife) missingFields.push('保质期');
+      if (!compliance.storageCondition) missingFields.push('贮存条件');
+      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.push('资质图片（至少1张）');
+    }
+
+    if (missingFields.length > 0) {
+      throw new BadRequestException(`商品合规信息不完整，缺少：${missingFields.join('、')}`);
+    }
   }
 
   async delete(id: string) {
