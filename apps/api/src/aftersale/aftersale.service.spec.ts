@@ -236,3 +236,30 @@ describe('AftersaleService.refund 退款发起幂等与状态一致性', () => {
       .rejects.toThrow('退货退款类型需用户填写退货物流后才能退款');
   });
 });
+
+describe('AftersaleService.approve 退款金额校验', () => {
+  let service: AftersaleService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('退款金额<=0时拒绝', async () => {
+    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue({
+      ...APPROVED_AFTERSALE,
+      status: AftersaleStatus.pending_review,
+      orderItem: { ...ORDER_ITEM_WITH_DELIVERED_ORDER, subtotal: 1000 },
+    });
+    await expect(service.approve('50', '1', 0)).rejects.toThrow('退款金额必须大于0分');
+  });
+
+  it('退款金额超过可退金额时拒绝', async () => {
+    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue({
+      ...APPROVED_AFTERSALE,
+      status: AftersaleStatus.pending_review,
+      orderItem: { ...ORDER_ITEM_WITH_DELIVERED_ORDER, subtotal: 1000 },
+    });
+    await expect(service.approve('50', '1', 1001)).rejects.toThrow('退款金额不能超过可退金额');
+  });
+});

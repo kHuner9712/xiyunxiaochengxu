@@ -232,6 +232,7 @@ export class ProductService {
   async updateStatus(id: string, status: number) {
     const product = await this.prisma.product.findFirst({
       where: { id: BigInt(id), deletedAt: null },
+      include: { category: true },
     });
     if (!product) throw new NotFoundException('商品不存在');
 
@@ -254,19 +255,40 @@ export class ProductService {
 
   private validateProductComplianceBeforePublish(product: any): void {
     const compliance = product.attributes?.compliance;
-    if (!compliance) return;
+    if (!compliance || typeof compliance !== 'object') {
+      throw new BadRequestException(
+        '商品缺少合规声明：上架前必须填写 attributes.compliance，普通非高合规商品请显式设置 compliance.isRegulated=false',
+      );
+    }
+
+    if (compliance.isRegulated === false) {
+      return;
+    }
 
     const missingFields: string[] = [];
+    const categoryName = String(product.category?.name || '').trim();
+    const inferred = this.inferComplianceFlagsByCategory(categoryName);
+    const isFood = compliance.isFood === true || inferred.isFood;
+    const isHealthSupplement = compliance.isHealthSupplement === true || inferred.isHealthSupplement;
+    const isInfantFormula = compliance.isInfantFormula === true || inferred.isInfantFormula;
 
-    if (compliance.isFood === true) {
+    const hasAnyClassification = [isFood, isHealthSupplement, isInfantFormula].some(Boolean);
+    if (!hasAnyClassification && compliance.isRegulated !== false) {
+      throw new BadRequestException(
+        '商品合规分类不明确：请在 compliance 中明确是否食品/保健食品/婴幼儿配方奶粉，或设置 isRegulated=false',
+      );
+    }
+
+    if (isFood) {
       if (!compliance.productionLicenseNo) missingFields.push('生产许可证编号');
       if (!compliance.foodBusinessCertNo) missingFields.push('食品经营/备案凭证编号');
       if (!compliance.manufacturer) missingFields.push('生产厂家');
       if (!compliance.shelfLife) missingFields.push('保质期');
       if (!compliance.storageCondition) missingFields.push('贮存条件');
+      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.push('资质图片（至少1张）');
     }
 
-    if (compliance.isHealthSupplement === true) {
+    if (isHealthSupplement) {
       if (!compliance.healthSupplementApprovalNo) missingFields.push('保健食品批准文号/备案号');
       if (!compliance.suitableFor) missingFields.push('适用人群');
       if (!compliance.notSuitableFor) missingFields.push('不适宜人群');
@@ -274,7 +296,7 @@ export class ProductService {
       if (!compliance.certImages || compliance.certImages.length === 0) missingFields.push('资质图片（至少1张）');
     }
 
-    if (compliance.isInfantFormula === true) {
+    if (isInfantFormula) {
       if (!compliance.infantFormulaRegNo) missingFields.push('奶粉产品配方注册号');
       if (!compliance.manufacturer) missingFields.push('生产厂家');
       if (!compliance.shelfLife) missingFields.push('保质期');
@@ -285,6 +307,18 @@ export class ProductService {
     if (missingFields.length > 0) {
       throw new BadRequestException(`商品合规信息不完整，缺少：${missingFields.join('、')}`);
     }
+  }
+
+  private inferComplianceFlagsByCategory(categoryName: string) {
+    // 说明：当前采用保守关键词识别，后续可迁移到类目配置字段进行精确判定。
+    const text = categoryName.toLowerCase();
+    const includesAny = (keywords: string[]) => keywords.some((k) => text.includes(k));
+
+    const isInfantFormula = includesAny(['奶粉', '配方粉', '婴幼儿配方']);
+    const isHealthSupplement = includesAny(['保健', '营养', '营养品', '营养补充']);
+    const isFood = includesAny(['食品', '辅食', '零食', '奶粉', '营养', '保健']);
+
+    return { isFood, isHealthSupplement, isInfantFormula };
   }
 
   async delete(id: string) {

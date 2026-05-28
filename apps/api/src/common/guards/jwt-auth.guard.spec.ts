@@ -23,15 +23,16 @@ describe('JwtAuthGuard', () => {
     getHandler?: () => any;
     getClass?: () => any;
   }): ExecutionContext => {
+    const request = {
+      url: options.url || '/api/admin/test',
+      headers: {
+        authorization: options.authorization,
+      },
+      user: null,
+    };
     return {
       switchToHttp: () => ({
-        getRequest: () => ({
-          url: options.url || '/api/admin/test',
-          headers: {
-            authorization: options.authorization,
-          },
-          user: null,
-        }),
+        getRequest: () => request,
       }),
       getHandler: () => options.getHandler || jest.fn(),
       getClass: () => options.getClass || jest.fn(),
@@ -41,7 +42,7 @@ describe('JwtAuthGuard', () => {
   describe('公共接口 (有 @Public 装饰器)', () => {
     it('有 @Public 装饰器的接口应该直接通过', async () => {
       const mockContext = createMockExecutionContext({ url: '/api/admin/auth/login' });
-      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(true);
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValueOnce(true).mockReturnValueOnce(false);
 
       const result = await guard.canActivate(mockContext);
       expect(result).toBe(true);
@@ -230,6 +231,35 @@ describe('JwtAuthGuard', () => {
 
       const result = await guard.canActivate(mockContext);
       expect(result).toBe(true);
+    });
+  });
+
+  describe('OptionalAuth', () => {
+    it('无 token 时放行', async () => {
+      const mockContext = createMockExecutionContext({
+        url: '/api/weapp/home/data',
+        authorization: undefined,
+      });
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValueOnce(false).mockReturnValueOnce(true);
+      const result = await guard.canActivate(mockContext);
+      expect(result).toBe(true);
+    });
+
+    it('有合法 token 时注入 user', async () => {
+      const token = await jwtService.signAsync({
+        id: '1',
+        roleType: 'user',
+        tokenType: 'access',
+      });
+      const mockContext = createMockExecutionContext({
+        url: '/api/weapp/home/data',
+        authorization: `Bearer ${token}`,
+      });
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValueOnce(false).mockReturnValueOnce(true);
+      const result = await guard.canActivate(mockContext);
+      const request = mockContext.switchToHttp().getRequest();
+      expect(result).toBe(true);
+      expect(request.user?.id).toBe('1');
     });
   });
 });

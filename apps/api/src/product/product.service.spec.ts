@@ -91,6 +91,7 @@ describe('ProductService', () => {
 
     it('合规信息完整的食品商品应允许上架', () => {
       const product = {
+        category: { name: '食品' },
         attributes: {
           compliance: {
             isFood: true,
@@ -99,6 +100,7 @@ describe('ProductService', () => {
             manufacturer: '厂家A',
             shelfLife: '12个月',
             storageCondition: '常温',
+            certImages: ['https://example.com/cert.jpg'],
           },
         },
       };
@@ -137,22 +139,35 @@ describe('ProductService', () => {
       expect(() => service['validateProductComplianceBeforePublish'](product)).not.toThrow();
     });
 
-    it('无合规信息的商品应允许上架', () => {
+    it('无合规信息的商品应拒绝上架', () => {
       const product = { attributes: null };
-      expect(() => service['validateProductComplianceBeforePublish'](product)).not.toThrow();
+      expect(() => service['validateProductComplianceBeforePublish'](product)).toThrow(BadRequestException);
     });
 
-    it('非食品/保健品/奶粉商品应允许上架', () => {
+    it('普通非高合规商品显式标记 isRegulated=false 时允许上架', () => {
       const product = {
         attributes: {
           compliance: {
-            isFood: false,
-            isHealthSupplement: false,
-            isInfantFormula: false,
+            isRegulated: false,
           },
         },
       };
       expect(() => service['validateProductComplianceBeforePublish'](product)).not.toThrow();
+    });
+
+    it('类目命中奶粉关键词时即使未显式声明也要校验奶粉字段', () => {
+      const product = {
+        category: { name: '婴幼儿奶粉' },
+        attributes: {
+          compliance: {
+            certImages: ['https://example.com/cert.jpg'],
+            manufacturer: '厂家',
+            shelfLife: '12个月',
+            storageCondition: '阴凉干燥',
+          },
+        },
+      };
+      expect(() => service['validateProductComplianceBeforePublish'](product)).toThrow(BadRequestException);
     });
   });
 });

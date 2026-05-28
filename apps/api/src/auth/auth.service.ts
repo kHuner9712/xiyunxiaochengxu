@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -10,12 +10,30 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private readonly refreshTokenSecret: string;
+  private readonly refreshTokenExpiresIn: string;
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
-  ) {}
+  ) {
+    const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
+    const jwtSecret = this.configService.get<string>('JWT_SECRET', 'baby-mall-secret-key');
+    const configuredRefreshSecret = this.configService.get<string>('REFRESH_TOKEN_SECRET');
+
+    if (!configuredRefreshSecret) {
+      if (nodeEnv === 'production') {
+        throw new Error('生产环境必须配置 REFRESH_TOKEN_SECRET');
+      }
+      this.logger.warn('REFRESH_TOKEN_SECRET 未配置，development 环境将回退使用 JWT_SECRET（仅用于本地开发）');
+    }
+
+    this.refreshTokenSecret = configuredRefreshSecret || jwtSecret;
+    this.refreshTokenExpiresIn = this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN', '30d');
+  }
 
   async getCaptcha() {
     const captcha = svgCaptcha.create({
@@ -103,7 +121,10 @@ export class AuthService {
         tokenType: 'refresh',
         tokenId,
       },
-      { expiresIn: '30d' },
+      {
+        expiresIn: this.refreshTokenExpiresIn,
+        secret: this.refreshTokenSecret,
+      },
     );
 
     const refreshKey = `admin_refresh_token:${admin.id.toString()}:${tokenId}`;
@@ -127,7 +148,7 @@ export class AuthService {
   async refreshToken(refreshToken: string) {
     let payload: any;
     try {
-      payload = await this.jwtService.verifyAsync(refreshToken);
+      payload = await this.jwtService.verifyAsync(refreshToken, { secret: this.refreshTokenSecret });
     } catch {
       throw new UnauthorizedException('Refresh token 无效或已过期');
     }
@@ -192,7 +213,10 @@ export class AuthService {
         tokenType: 'refresh',
         tokenId: newTokenId,
       },
-      { expiresIn: '30d' },
+      {
+        expiresIn: this.refreshTokenExpiresIn,
+        secret: this.refreshTokenSecret,
+      },
     );
 
     await this.redisService.del(refreshKey);

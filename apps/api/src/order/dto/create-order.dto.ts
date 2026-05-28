@@ -1,7 +1,7 @@
-import { IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Matches, IsIn } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Matches, IsIn, ArrayMinSize, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
-class OrderItemDto {
+export class OrderItemDto {
   @IsString()
   @Matches(/^\d+$/)
   skuId!: string;
@@ -36,13 +36,16 @@ export class CreateOrderDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   pointsDeduct?: number;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   remark?: string;
 
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
   items!: OrderItemDto[];

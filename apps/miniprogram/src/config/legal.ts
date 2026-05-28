@@ -15,6 +15,7 @@ export const LEGAL_PROFILE = {
   },
   // 说明：以下联系方式允许在运营确认后直接改为最终值（建议在提审前完成）。
   // 若仍保留“以...为准”占位描述，release-check:prod 会失败。
+  // 注意：请勿提交虚构电话号码/地址，必须由运营与法务线下确认后再填入。
   contact: {
     customerPhone: '以「客服与帮助」页面电话为准',
     customerWechat: '以「客服与帮助」页面微信客服信息为准',

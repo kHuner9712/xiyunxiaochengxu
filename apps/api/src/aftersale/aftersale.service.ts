@@ -236,8 +236,14 @@ export class AftersaleService {
       throw new BadRequestException('当前状态不允许审核');
     }
 
+    if (!Number.isInteger(refundAmount)) {
+      throw new BadRequestException('退款金额必须是整数分');
+    }
+    if (refundAmount <= 0) {
+      throw new BadRequestException('退款金额必须大于0分');
+    }
     if (refundAmount > aftersale.orderItem.subtotal) {
-      throw new BadRequestException('退款金额不能超过商品实付金额');
+      throw new BadRequestException('退款金额不能超过可退金额');
     }
 
     const result = await this.prisma.aftersaleOrder.update({

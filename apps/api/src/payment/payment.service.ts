@@ -801,6 +801,12 @@ export class PaymentService {
     if (!order.payment || order.payment.status !== PAYMENT_STATUS.SUCCESS) {
       throw new BadRequestException('订单未支付成功');
     }
+    if (!Number.isInteger(params.refundAmount)) {
+      throw new BadRequestException('退款金额必须是整数分');
+    }
+    if (params.refundAmount <= 0) {
+      throw new BadRequestException('退款金额必须大于0分');
+    }
     if (params.refundAmount > order.payAmount!) {
       throw new BadRequestException('退款金额不能超过订单实付金额');
     }

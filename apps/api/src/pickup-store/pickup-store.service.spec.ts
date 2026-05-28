@@ -13,11 +13,12 @@ function createMockPrisma() {
     },
     order: {
       findFirst: jest.fn() as any,
-      update: jest.fn() as any,
+      updateMany: jest.fn() as any,
     },
     orderLog: {
       create: jest.fn() as any,
     },
+    $transaction: jest.fn() as any,
   };
 }
 
@@ -29,6 +30,10 @@ describe('PickupStoreService', () => {
     prisma = createMockPrisma();
     service = new PickupStoreService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
+    prisma.$transaction.mockImplementation(async (fn: any) => fn({
+      order: prisma.order,
+      orderLog: prisma.orderLog,
+    }));
   });
 
   describe('findPublished', () => {
@@ -110,8 +115,13 @@ describe('PickupStoreService', () => {
         id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
         status: 'pending_pickup', pickupCode: '654321', pickedUpAt: null,
       });
-      prisma.order.update.mockResolvedValue({
-        id: 1n, status: 'completed', pickedUpAt: new Date(),
+      prisma.order.updateMany.mockResolvedValue({ count: 1 });
+      prisma.order.findFirst.mockResolvedValueOnce({
+        id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
+        status: 'pending_pickup', pickupCode: '654321', pickedUpAt: null,
+      }).mockResolvedValueOnce({
+        id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
+        status: 'completed', pickupCode: '654321', pickedUpAt: new Date(),
       });
       prisma.orderLog.create.mockResolvedValue({});
 
@@ -119,7 +129,7 @@ describe('PickupStoreService', () => {
 
       expect(result.success).toBe(true);
       expect(result.orderNo).toBe('ORD202605260001');
-      expect(prisma.order.update).toHaveBeenCalledWith(
+      expect(prisma.order.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             status: 'completed',
@@ -129,6 +139,21 @@ describe('PickupStoreService', () => {
         })
       );
       expect(prisma.orderLog.create).toHaveBeenCalled();
+    });
+
+    it('should reject repeated verify when updateMany count is 0', async () => {
+      prisma.order.findFirst
+        .mockResolvedValueOnce({
+          id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
+          status: 'pending_pickup', pickupCode: '654321', pickedUpAt: null,
+        })
+        .mockResolvedValueOnce({
+          id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
+          status: 'completed', pickupCode: '654321', pickedUpAt: new Date(),
+        });
+      prisma.order.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.verifyPickupCode('654321', '1')).rejects.toThrow('该订单已核销或订单状态已变化');
     });
   });
 });

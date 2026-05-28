@@ -4,6 +4,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { DeliverDto, BatchDeliverDto } from './dto/deliver.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { Response } from 'express';
@@ -20,7 +21,7 @@ export class WeappOrderController {
   @Post('confirm')
   async confirm(
     @CurrentUser('id') userId: string,
-    @Body() body: { items: { skuId: string; quantity: number }[]; addressId?: string; pickupStoreId?: string; fulfillmentType?: string; couponId?: string; pointsDeduct?: number },
+    @Body() body: ConfirmOrderDto,
   ) {
     return this.orderService.confirm(userId, {
       items: body.items,

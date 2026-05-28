@@ -429,6 +429,18 @@ describe('PaymentService.createRefund', () => {
       .rejects.toThrow('订单未支付成功');
   });
 
+  it('退款金额<=0时抛出 BadRequestException', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER_RECORD);
+    await expect(service.createRefund({ orderId: '1', refundAmount: 0 }))
+      .rejects.toThrow('退款金额必须大于0分');
+  });
+
+  it('退款金额非整数分时抛出 BadRequestException', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER_RECORD);
+    await expect(service.createRefund({ orderId: '1', refundAmount: 1.5 as any }))
+      .rejects.toThrow('退款金额必须是整数分');
+  });
+
   it('累计退款超过 payAmount 时抛出 BadRequestException', async () => {
     mockPrisma.order.findFirst.mockResolvedValue(ORDER_RECORD);
     mockPrisma.orderRefund.findFirst.mockResolvedValue(null);

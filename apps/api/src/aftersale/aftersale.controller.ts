@@ -6,6 +6,7 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 import { CreateAftersaleDto } from './dto/create-aftersale.dto';
 import { RejectDto } from './dto/reject.dto';
 import { ReturnLogisticsDto } from './dto/return-logistics.dto';
+import { ApproveAftersaleDto } from './dto/approve-aftersale.dto';
 import { IsOptional, IsString } from 'class-validator';
 
 class AdminAftersaleQueryDto extends PaginationDto {
@@ -69,9 +70,9 @@ export class AdminAftersaleController {
   async approve(
     @Param('id') id: string,
     @CurrentUser('id') adminId: string,
-    @Body() body: { refundAmount: number },
+    @Body() dto: ApproveAftersaleDto,
   ) {
-    return this.aftersaleService.approve(id, adminId, body.refundAmount);
+    return this.aftersaleService.approve(id, adminId, dto.refundAmount);
   }
 
   @Put(':id/reject')

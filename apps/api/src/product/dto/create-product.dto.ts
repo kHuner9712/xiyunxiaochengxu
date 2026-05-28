@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, IsArray, ValidateNested, Min, ArrayMinSize, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SkuDto {
@@ -11,21 +11,25 @@ export class SkuDto {
 
   @Type(() => Number)
   @IsInt()
+  @Min(1)
   price!: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   originalPrice?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   costPrice?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   stock?: number;
 
   @IsOptional()
@@ -35,6 +39,7 @@ export class SkuDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   weight?: number;
 
   @IsOptional()
@@ -45,10 +50,12 @@ export class SkuDto {
 export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(120)
   name!: string;
 
   @Type(() => Number)
   @IsInt()
+  @Min(1)
   categoryId!: number;
 
   @IsOptional()
@@ -79,6 +86,7 @@ export class CreateProductDto {
   servicePromise?: any;
 
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => SkuDto)
   skus!: SkuDto[];

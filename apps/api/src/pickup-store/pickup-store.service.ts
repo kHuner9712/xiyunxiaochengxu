@@ -116,23 +116,40 @@ export class PickupStoreService {
     const { assertOrderTransition } = await import('./../order/order-state-machine');
     assertOrderTransition(order.status as any, 'completed' as any, 'pickup_verify');
 
-    const result = await this.prisma.order.update({
-      where: { id: order.id },
-      data: {
-        status: 'completed',
-        pickedUpAt: new Date(),
-        pickupVerifiedBy: BigInt(verifiedBy),
-      },
-    });
+    const pickedUpAt = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          status: 'pending_pickup',
+          pickedUpAt: null,
+        },
+        data: {
+          status: 'completed',
+          pickedUpAt,
+          pickupVerifiedBy: BigInt(verifiedBy),
+        },
+      });
 
-    await this.prisma.orderLog.create({
-      data: {
-        orderId: order.id,
-        action: 'pickup_verify',
-        operatorType: 'admin',
-        operatorId: BigInt(verifiedBy),
-        content: `自提核销，自提码：${pickupCode}`,
-      },
+      if (updated.count === 0) {
+        const latest = await tx.order.findFirst({ where: { id: order.id } });
+        if (!latest) {
+          throw new NotFoundException('订单不存在');
+        }
+        throw new BadRequestException('该订单已核销或订单状态已变化');
+      }
+
+      await tx.orderLog.create({
+        data: {
+          orderId: order.id,
+          action: 'pickup_verify',
+          operatorType: 'admin',
+          operatorId: BigInt(verifiedBy),
+          content: `自提核销，自提码：${pickupCode}`,
+        },
+      });
+
+      return tx.order.findFirst({ where: { id: order.id } });
     });
 
     this.logger.log(`自提核销成功：订单${order.id}，自提码${pickupCode}`);
@@ -140,7 +157,7 @@ export class PickupStoreService {
       success: true,
       orderId: order.id.toString(),
       orderNo: order.orderNo,
-      pickedUpAt: result.pickedUpAt,
+      pickedUpAt: result?.pickedUpAt ?? pickedUpAt,
     };
   }
 

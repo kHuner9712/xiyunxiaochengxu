@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { OPTIONAL_AUTH_KEY } from '../decorators/optional-auth.decorator';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -21,14 +22,22 @@ export class JwtAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const isOptionalAuth = this.reflector.getAllAndOverride<boolean>(OPTIONAL_AUTH_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
-    if (isPublic) {
+    if (isPublic && !isOptionalAuth) {
       return true;
     }
 
     const request = context.switchToHttp().getRequest();
     const url: string = request.url || '';
     const authHeader = request.headers.authorization;
+
+    if (!authHeader && isOptionalAuth) {
+      return true;
+    }
 
     if (!authHeader) {
       throw new UnauthorizedException('未登录');
