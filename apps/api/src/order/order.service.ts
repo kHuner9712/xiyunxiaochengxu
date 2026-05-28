@@ -16,10 +16,12 @@ import {
   POINTS_DEDUCT_MAX_PERCENT,
   ORDER_AUTO_CLOSE_MINUTES,
   ORDER_AUTO_COMPLETE_DAYS,
+  formatSkuSpecs,
 } from '@baby-mall/shared';
 import { assertOrderTransition } from './order-state-machine';
 import { COUPON_STATUS } from '../common/constants/payment';
 import { BusinessEventService } from '../common/business-event.service';
+import { normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
 export class OrderService {
@@ -80,7 +82,8 @@ export class OrderService {
         skuId: sku.id.toString(),
         productName: sku.product.name,
         skuSpecs: sku.specs,
-        productImage: sku.image || sku.product.mainImage,
+        skuSpecText: formatSkuSpecs(sku.specs),
+        productImage: normalizeAssetUrl(sku.image || sku.product.mainImage),
         price: sku.price,
         originalPrice: sku.originalPrice,
         quantity: item.quantity,
@@ -1195,8 +1198,8 @@ export class OrderService {
         productId: i.productId,
         skuId: i.skuId,
         productName: i.productName,
-        skuName: i.skuSpecs || '',
-        productImage: i.productImage || '',
+        skuName: formatSkuSpecs(i.skuSpecs),
+        productImage: normalizeAssetUrl(i.productImage || ''),
         price: i.price,
         originalPrice: i.originalPrice,
         quantity: i.quantity,
@@ -1237,7 +1240,7 @@ export class OrderService {
     const itemCount = items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0);
     const itemDetails = items
       .map((item: any) => {
-        const specsText = this.formatSkuSpecs(item.skuSpecs);
+        const specsText = formatSkuSpecs(item.skuSpecs);
         const skuText = specsText ? `（${specsText}）` : '';
         return `${item.productName}${skuText}x${item.quantity}`;
       })
@@ -1267,74 +1270,4 @@ export class OrderService {
     };
   }
 
-  private formatSkuSpecs(skuSpecs: unknown): string {
-    if (skuSpecs === null || skuSpecs === undefined || skuSpecs === '') {
-      return '';
-    }
-
-    if (typeof skuSpecs === 'string') {
-      return skuSpecs;
-    }
-
-    if (typeof skuSpecs === 'object') {
-      try {
-        if (Array.isArray(skuSpecs)) {
-          const segments = skuSpecs
-            .map((item, index) => {
-              if (item === null || item === undefined) {
-                return '';
-              }
-              if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
-                return String(item);
-              }
-              if (typeof item === 'object') {
-                const objectItem = item as Record<string, unknown>;
-                if (objectItem.key !== undefined && objectItem.value !== undefined) {
-                  return `${this.formatSkuSpecValue(objectItem.key)}:${this.formatSkuSpecValue(objectItem.value)}`;
-                }
-                const objectEntries = Object.entries(objectItem);
-                if (objectEntries.length > 0) {
-                  return objectEntries
-                    .map(([key, itemValue]) => `${key}:${this.formatSkuSpecValue(itemValue)}`)
-                    .join(' / ');
-                }
-              }
-              return `${index}:${this.formatSkuSpecValue(item)}`;
-            })
-            .filter(Boolean);
-          if (segments.length > 0) {
-            return segments.join(' / ');
-          }
-          return JSON.stringify(skuSpecs);
-        }
-
-        const value = skuSpecs as Record<string, unknown>;
-        const entries = Object.entries(value);
-        if (entries.length > 0) {
-          return entries
-            .map(([key, itemValue]) => `${key}:${this.formatSkuSpecValue(itemValue)}`)
-            .join(' / ');
-        }
-        return JSON.stringify(skuSpecs);
-      } catch {
-        return String(skuSpecs);
-      }
-    }
-
-    return String(skuSpecs);
-  }
-
-  private formatSkuSpecValue(value: unknown): string {
-    if (value === null || value === undefined) {
-      return '';
-    }
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
-    }
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  }
 }

@@ -2,10 +2,12 @@ import { Injectable, NotFoundException, Logger, BadRequestException } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ContentQueryDto } from './dto/content-query.dto';
 import { paginate } from '@baby-mall/shared';
+import { getAssetBaseUrl, normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
 export class ContentService {
   private readonly logger = new Logger(ContentService.name);
+  private readonly assetBaseUrl = getAssetBaseUrl();
 
   constructor(private prisma: PrismaService) {}
 
@@ -237,7 +239,7 @@ export class ContentService {
         type: 'activity' as const,
         id: a.id.toString(),
         title: a.name,
-        image: a.bannerImage,
+        image: normalizeAssetUrl(a.bannerImage, this.assetBaseUrl),
         startTime: a.startTime,
         endTime: a.endTime,
         activityType: a.type,
@@ -247,11 +249,11 @@ export class ContentService {
         type: c.contentType === 'video' ? 'video' as const : 'article' as const,
         id: c.id.toString(),
         title: c.title,
-        image: c.coverImage,
+        image: normalizeAssetUrl(c.coverImage, this.assetBaseUrl),
         summary: c.summary,
         contentType: c.contentType,
         videoUrl: c.videoUrl,
-        videoCover: c.videoCover,
+        videoCover: normalizeAssetUrl(c.videoCover, this.assetBaseUrl),
         videoDuration: c.videoDuration,
         tags: c.tags,
         viewCount: c.viewCount,
@@ -288,7 +290,7 @@ export class ContentService {
         type: 'activity' as const,
         id: a.id.toString(),
         title: a.name,
-        image: a.bannerImage,
+        image: normalizeAssetUrl(a.bannerImage, this.assetBaseUrl),
         startTime: a.startTime,
         endTime: a.endTime,
         activityType: a.type,
@@ -322,11 +324,11 @@ export class ContentService {
         type: c.contentType === 'video' ? 'video' as const : 'article' as const,
         id: c.id.toString(),
         title: c.title,
-        image: c.coverImage,
+        image: normalizeAssetUrl(c.coverImage, this.assetBaseUrl),
         summary: c.summary,
         contentType: c.contentType,
         videoUrl: c.videoUrl,
-        videoCover: c.videoCover,
+        videoCover: normalizeAssetUrl(c.videoCover, this.assetBaseUrl),
         videoDuration: c.videoDuration,
         tags: c.tags,
         viewCount: c.viewCount,
@@ -355,7 +357,7 @@ export class ContentService {
         type: 'activity' as const,
         id: a.id.toString(),
         title: a.name,
-        image: a.bannerImage,
+        image: normalizeAssetUrl(a.bannerImage, this.assetBaseUrl),
         startTime: a.startTime,
         endTime: a.endTime,
         activityType: a.type,
@@ -370,11 +372,11 @@ export class ContentService {
       categoryId: c.categoryId?.toString(),
       title: c.title,
       contentType: c.contentType || 'article',
-      coverImage: c.coverImage,
+      coverImage: normalizeAssetUrl(c.coverImage, this.assetBaseUrl),
       content: c.content,
       summary: c.summary,
       videoUrl: c.videoUrl,
-      videoCover: c.videoCover,
+      videoCover: normalizeAssetUrl(c.videoCover, this.assetBaseUrl),
       videoDuration: c.videoDuration,
       placement: c.placement,
       tags: c.tags,

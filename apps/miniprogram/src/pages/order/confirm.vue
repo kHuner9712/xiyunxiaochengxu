@@ -240,7 +240,7 @@ async function loadPreview() {
         quantity: item.quantity,
         productName: item.productName,
         productImage: item.productImage,
-        skuName: item.skuSpecs,
+        skuName: item.skuSpecText || (typeof item.skuSpecs === 'string' ? item.skuSpecs : Object.entries(item.skuSpecs || {}).map(([k, v]) => `${k}：${v}`).join(' / ')),
         price: item.price
       }))
     }

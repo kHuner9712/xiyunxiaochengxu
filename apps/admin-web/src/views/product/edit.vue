@@ -204,7 +204,7 @@ const form = reactive({
   isRecommend: 0,
   description: '',
   skuMode: 'single' as 'single' | 'multi',
-  skus: [] as { name: string; price: number; originalPrice: number; stock: number; image: string }[],
+  skus: [] as { id?: number; skuCode?: string; name: string; price: number; originalPrice: number; stock: number; image: string }[],
   complianceType: 'normal' as 'normal' | 'food' | 'health' | 'infant' | 'advanced',
   compliance: {
     isRegulated: false,
@@ -269,6 +269,14 @@ function normalizeSpecs(name: string) {
   const specs: Record<string, string> = {}
   parts.forEach((value, idx) => { specs[`规格${idx + 1}`] = value })
   return specs
+}
+
+function generateSkuCode(productId?: number) {
+  const randomPart =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '')
+      : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+  return `SKU-${productId || 'NEW'}-${randomPart.slice(0, 18).toUpperCase()}`
 }
 
 function ensureSkus() {
@@ -426,6 +434,8 @@ async function fetchDetail(id: number) {
     isRecommend: Number(d.isRecommend ?? 0),
     description: d.description || '',
     skus: skus.map((s: any) => ({
+      id: s.id ? Number(s.id) : undefined,
+      skuCode: s.skuCode || undefined,
       name: Object.values(s.specs || {}).join('/'),
       price: Number((s.price / 100).toFixed(2)),
       originalPrice: Number((((s.originalPrice ?? s.price) as number) / 100).toFixed(2)),
@@ -472,7 +482,7 @@ async function handleSubmit() {
       isRecommend: form.isRecommend,
       servicePromise,
       skus: form.skus.map((s, index) => ({
-        skuCode: `${Date.now()}-${index}`,
+        skuCode: s.skuCode || generateSkuCode(form.id),
         specs: normalizeSpecs(s.name),
         price: priceToFen(s.price),
         originalPrice: priceToFen(s.originalPrice || s.price),

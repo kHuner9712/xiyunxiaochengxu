@@ -133,6 +133,7 @@ export function validateEnv(env: Record<string, any>) {
       'WECHAT_PLATFORM_CERT_PATH',
       'WECHAT_PLATFORM_CERT_SERIAL_NO',
       'WECHAT_REFUND_NOTIFY_URL',
+      'UPLOAD_PUBLIC_URL',
       'CORS_ORIGINS',
     ];
 
@@ -157,6 +158,12 @@ export function validateEnv(env: Record<string, any>) {
     const notifyUrl = env.WECHAT_NOTIFY_URL;
     if (notifyUrl && !notifyUrl.startsWith('https://')) {
       logger.error('WECHAT_NOTIFY_URL 必须以 https:// 开头');
+      process.exit(1);
+    }
+
+    const uploadPublicUrl = env.UPLOAD_PUBLIC_URL;
+    if (uploadPublicUrl && !uploadPublicUrl.startsWith('https://')) {
+      logger.error('UPLOAD_PUBLIC_URL 必须以 https:// 开头');
       process.exit(1);
     }
 

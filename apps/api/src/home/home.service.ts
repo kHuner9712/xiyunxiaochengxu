@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { calculateBabyMonthAge, getMemberLevelByGrowth, MEMBER_LEVELS, paginate, serializeProductCard } from '@baby-mall/shared';
+import { getAssetBaseUrl, normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
 export class HomeService {
   private readonly logger = new Logger(HomeService.name);
+  private readonly assetBaseUrl = getAssetBaseUrl();
 
   constructor(private prisma: PrismaService) {}
 
@@ -60,11 +62,16 @@ export class HomeService {
   }
 
   private async getBanners() {
-    return this.prisma.banner.findMany({
+    const list = await this.prisma.banner.findMany({
       where: { status: 1 },
       orderBy: { sortOrder: 'asc' },
       take: 10,
     });
+    return list.map((b) => ({
+      ...b,
+      id: b.id.toString(),
+      image: normalizeAssetUrl(b.image, this.assetBaseUrl),
+    }));
   }
 
   private async getRecommendations() {
@@ -85,7 +92,7 @@ export class HomeService {
         isRecommend: true,
       },
     });
-    return list.map((p) => serializeProductCard(p));
+    return list.map((p) => ({ ...serializeProductCard(p), image: normalizeAssetUrl(p.mainImage, this.assetBaseUrl) }));
   }
 
   private async getHotProducts() {
@@ -104,7 +111,7 @@ export class HomeService {
         totalSales: true,
       },
     });
-    return list.map((p) => serializeProductCard(p));
+    return list.map((p) => ({ ...serializeProductCard(p), image: normalizeAssetUrl(p.mainImage, this.assetBaseUrl) }));
   }
 
   private async getNewProducts() {
@@ -123,7 +130,10 @@ export class HomeService {
         totalSales: true,
       },
     });
-    return list.map((p) => serializeProductCard({ ...p, tag: '新品' }));
+    return list.map((p) => ({
+      ...serializeProductCard({ ...p, tag: '新品' }),
+      image: normalizeAssetUrl(p.mainImage, this.assetBaseUrl),
+    }));
   }
 
   private async getActivities() {
@@ -145,7 +155,11 @@ export class HomeService {
         endTime: true,
       },
     });
-    return list.map((a) => ({ ...a, id: a.id.toString(), image: a.bannerImage }));
+    return list.map((a) => ({
+      ...a,
+      id: a.id.toString(),
+      image: normalizeAssetUrl(a.bannerImage, this.assetBaseUrl),
+    }));
   }
 
   private async getMonthAgeRecommend(userId: string) {
@@ -179,6 +193,9 @@ export class HomeService {
         recommendAgeMax: true,
       },
     });
-    return list.map((p) => serializeProductCard({ ...p, tag: `${monthAge}月龄` }));
+    return list.map((p) => ({
+      ...serializeProductCard({ ...p, tag: `${monthAge}月龄` }),
+      image: normalizeAssetUrl(p.mainImage, this.assetBaseUrl),
+    }));
   }
 }

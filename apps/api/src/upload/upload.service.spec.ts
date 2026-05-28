@@ -133,7 +133,9 @@ describe('UploadService 文件大小限制', () => {
 
   it('文件大小在限制内时正常上传', async () => {
     const originalEnv = process.env.UPLOAD_MAX_SIZE;
+    const originalAssetBase = process.env.UPLOAD_PUBLIC_URL;
     process.env.UPLOAD_MAX_SIZE = '10485760';
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     const file = {
       originalname: 'test.jpg',
       mimetype: 'image/jpeg',
@@ -146,8 +148,11 @@ describe('UploadService 文件大小限制', () => {
       storageType: 1, url: '/uploads/test.jpg', groupName: null,
       uploaderId: BigInt(1), uploaderType: 'user',
     });
-    await expect(service.uploadFile(file, '1', 'user')).resolves.toBeDefined();
+    const result = await service.uploadFile(file, '1', 'user');
+    expect(result.url).toBe('https://api.example.com/uploads/test.jpg');
+    expect(result.filePath).toBe('/uploads/test.jpg');
     process.env.UPLOAD_MAX_SIZE = originalEnv;
+    process.env.UPLOAD_PUBLIC_URL = originalAssetBase;
   });
 });
 

@@ -2,10 +2,12 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ActivityQueryDto } from './dto/activity-query.dto';
 import { paginate } from '@baby-mall/shared';
+import { getAssetBaseUrl, normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
 export class ActivityService {
   private readonly logger = new Logger(ActivityService.name);
+  private readonly assetBaseUrl = getAssetBaseUrl();
 
   constructor(private prisma: PrismaService) {}
 
@@ -189,14 +191,19 @@ export class ActivityService {
     return {
       ...activity,
       id: activity.id.toString(),
+      bannerImage: normalizeAssetUrl(activity.bannerImage, this.assetBaseUrl),
       activityProducts: activity.activityProducts?.map((ap: any) => ({
         ...ap,
         id: ap.id.toString(),
         activityId: ap.activityId.toString(),
         productId: ap.productId.toString(),
         skuId: ap.skuId?.toString(),
-        product: ap.product ? { ...ap.product, id: ap.product.id.toString() } : undefined,
-        sku: ap.sku ? { ...ap.sku, id: ap.sku.id.toString() } : undefined,
+        product: ap.product
+          ? { ...ap.product, id: ap.product.id.toString(), mainImage: normalizeAssetUrl(ap.product.mainImage, this.assetBaseUrl) }
+          : undefined,
+        sku: ap.sku
+          ? { ...ap.sku, id: ap.sku.id.toString(), image: normalizeAssetUrl(ap.sku.image, this.assetBaseUrl) }
+          : undefined,
       })),
     };
   }

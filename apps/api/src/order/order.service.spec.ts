@@ -1258,6 +1258,6 @@ describe('接口契约：后台订单 fulfillmentType 筛选', () => {
       fulfillmentType: 'delivery',
     });
 
-    expect(rows[0].itemDetails).toContain('营养米粉（规格:500g / 阶段:6个月+）x2');
+    expect(rows[0].itemDetails).toContain('营养米粉（规格：500g / 阶段：6个月+）x2');
   });
 });

@@ -3,7 +3,13 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { paginate } from '@baby-mall/shared';
+import { formatSkuSpecs, paginate } from '@baby-mall/shared';
+import {
+  getAssetBaseUrl,
+  normalizeAssetUrl,
+  normalizeAssetUrlList,
+  normalizeProductImages,
+} from '../common/utils/asset-url';
 
 @Injectable()
 export class ProductService {
@@ -133,7 +139,7 @@ export class ProductService {
           status: 3,
           skus: {
             create: dto.skus.map((sku) => ({
-              skuCode: sku.skuCode,
+              skuCode: sku.skuCode || this.generateSkuCode(),
               specs: sku.specs,
               price: sku.price,
               originalPrice: sku.originalPrice,
@@ -199,7 +205,7 @@ export class ProductService {
           await tx.productSku.create({
             data: {
               productId: BigInt(id),
-              skuCode: sku.skuCode,
+              skuCode: sku.skuCode || this.generateSkuCode(),
               specs: sku.specs,
               price: sku.price,
               originalPrice: sku.originalPrice,
@@ -355,6 +361,7 @@ export class ProductService {
   }
 
   private serializeProduct(product: any) {
+    const assetBaseUrl = getAssetBaseUrl();
     const allSkus = Array.isArray(product.skus) ? product.skus : [];
     const activeSkus = allSkus.filter((s: any) => s.status === undefined || s.status === 1);
     const pricedSkus = activeSkus.filter((s: any) => Number.isInteger(s.price));
@@ -367,7 +374,13 @@ export class ProductService {
       activeSkus[0] ||
       null;
     const sales = (product.totalSales ?? 0) + (product.virtualSales ?? 0);
-    const image = product.mainImage || (Array.isArray(product.images) ? product.images[0] : '') || defaultSku?.image || '';
+    const normalizedMainImage = normalizeAssetUrl(product.mainImage, assetBaseUrl);
+    const normalizedImages = normalizeProductImages(product.images, normalizedMainImage, assetBaseUrl);
+    const image =
+      normalizedMainImage ||
+      normalizedImages[0] ||
+      normalizeAssetUrl(defaultSku?.image, assetBaseUrl) ||
+      '';
     const specMap = new Map<string, Set<string>>();
     for (const sku of activeSkus) {
       const specs = sku.specs && typeof sku.specs === 'object' ? sku.specs : {};
@@ -396,6 +409,8 @@ export class ProductService {
       sort: product.sortOrder ?? 0,
       sortOrder: product.sortOrder ?? 0,
       image,
+      mainImage: normalizedMainImage,
+      images: normalizedImages,
       originalPrice: defaultSku?.originalPrice ?? minPrice,
       sales,
       subtitle: '',
@@ -405,16 +420,24 @@ export class ProductService {
         values: Array.from(values.values()),
       })),
       detailContent: product.attributes?.detailContent ?? '',
-      compliance: product.attributes?.compliance || null,
+      compliance: product.attributes?.compliance
+        ? {
+            ...product.attributes.compliance,
+            certImages: normalizeAssetUrlList(product.attributes.compliance.certImages, assetBaseUrl),
+          }
+        : null,
       skus: product.skus?.map((s: any) => ({
         ...s,
         id: s.id.toString(),
         productId: s.productId.toString(),
+        image: normalizeAssetUrl(s.image, assetBaseUrl),
+        specText: formatSkuSpecs(s.specs),
       })),
       productImages: product.productImages?.map((img: any) => ({
         ...img,
         id: img.id.toString(),
         productId: img.productId.toString(),
+        imageUrl: normalizeAssetUrl(img.imageUrl, assetBaseUrl),
       })),
       category: product.category
         ? { ...product.category, id: product.category.id.toString() }
@@ -426,5 +449,10 @@ export class ProductService {
         ? { ...product.supplier, id: product.supplier.id.toString() }
         : null,
     };
+  }
+
+  private generateSkuCode() {
+    const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+    return `SKU${Date.now().toString(36).toUpperCase()}${random}`;
   }
 }

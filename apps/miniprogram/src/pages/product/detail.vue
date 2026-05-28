@@ -125,7 +125,7 @@
     <uni-popup ref="skuPopup" type="bottom">
       <view class="sku-popup">
         <view class="sku-header">
-          <image class="sku-image" :src="currentSku?.image || product.images[0]" mode="aspectFill" />
+          <image class="sku-image" :src="currentSku?.image || primaryImage" mode="aspectFill" />
           <view class="sku-price">
             <PriceDisplay :price="currentSku?.price || product.price" />
           </view>
@@ -169,11 +169,21 @@ const canPurchase = computed(() => {
   const inSale = product.value.status === undefined || product.value.status === 1
   return inSale && product.value.stock > 0
 })
+const primaryImage = computed(() => product.value.images?.[0] || '')
 
 async function loadProduct(id: number) {
   try {
     const data = await getProductDetail(id)
-    product.value = data
+    product.value = {
+      ...data,
+      images: Array.isArray(data.images) ? data.images : [],
+    }
+    const defaultSku = product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
+    if (defaultSku) {
+      currentSku.value = defaultSku
+      selectedSkuId.value = defaultSku.id
+      selectedQuantity.value = 1
+    }
   } catch {
     uni.showToast({ title: '商品加载失败', icon: 'none' })
   }
@@ -209,6 +219,10 @@ function handleAddCart() {
   }
   skuAction.value = 'cart'
   showSkuPopup.value = true
+  if (!selectedSkuId.value) {
+    const defaultSku = product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
+    if (defaultSku) onSkuChange(defaultSku.id, 1)
+  }
 }
 
 function handleBuyNow() {
@@ -218,12 +232,21 @@ function handleBuyNow() {
   }
   skuAction.value = 'buy'
   showSkuPopup.value = true
+  if (!selectedSkuId.value) {
+    const defaultSku = product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
+    if (defaultSku) onSkuChange(defaultSku.id, 1)
+  }
 }
 
 async function confirmSku() {
   if (!selectedSkuId.value) {
-    uni.showToast({ title: '请选择规格', icon: 'none' })
-    return
+    const defaultSku = product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
+    if (defaultSku) {
+      onSkuChange(defaultSku.id, 1)
+    } else {
+      uni.showToast({ title: '请选择规格', icon: 'none' })
+      return
+    }
   }
   if (!currentSku.value || currentSku.value.stock < selectedQuantity.value) {
     uni.showToast({ title: '库存不足，请重新选择', icon: 'none' })

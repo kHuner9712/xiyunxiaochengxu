@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { IsString, IsNumber, IsOptional, IsInt } from 'class-validator';
 import { Type } from 'class-transformer';
+import { normalizeAssetUrl } from '../common/utils/asset-url';
 
 class CreateBannerDto {
   @IsString()
@@ -70,7 +71,7 @@ export class AdminBannerController {
     const banners = await this.prisma.banner.findMany({
       orderBy: { sortOrder: 'asc' },
     });
-    return banners.map((b) => ({ ...b, id: b.id.toString() }));
+    return banners.map((b) => ({ ...b, id: b.id.toString(), image: normalizeAssetUrl(b.image) }));
   }
 
   @Post()
@@ -86,7 +87,7 @@ export class AdminBannerController {
         status: dto.status ?? 1,
       },
     });
-    return { ...banner, id: banner.id.toString() };
+    return { ...banner, id: banner.id.toString(), image: normalizeAssetUrl(banner.image) };
   }
 
   @Put(':id')
@@ -96,7 +97,7 @@ export class AdminBannerController {
       where: { id: BigInt(id) },
       data: dto,
     });
-    return { ...banner, id: banner.id.toString() };
+    return { ...banner, id: banner.id.toString(), image: normalizeAssetUrl(banner.image) };
   }
 
   @Delete(':id')

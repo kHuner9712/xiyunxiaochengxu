@@ -38,6 +38,7 @@ describe('ProductService', () => {
     prisma = createMockPrisma();
     service = new ProductService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
   });
 
   describe('ProductService validateProductComplianceBeforePublish', () => {
@@ -226,6 +227,48 @@ describe('ProductService', () => {
       expect(data.price).toBe(1990);
       expect(data.stock).toBe(5);
       expect(data.sort).toBe(5);
+      expect(data.skus[0].specText).toBe('规格1：L');
+    });
+
+    it('应规范化相对图片路径并保证 images 为数组', () => {
+      const raw = {
+        id: BigInt(2),
+        name: '测试商品2',
+        categoryId: BigInt(10),
+        sortOrder: 0,
+        minPrice: 990,
+        mainImage: '/uploads/main.png',
+        images: null,
+        attributes: { compliance: { isRegulated: false, certImages: ['/uploads/cert.png'] } },
+        skus: [
+          { id: BigInt(200), productId: BigInt(2), price: 990, stock: 1, specs: { 规格1: '默认规格' }, image: '/uploads/sku.png', status: 1 },
+        ],
+      };
+
+      const data = service['serializeProduct'](raw);
+      expect(Array.isArray(data.images)).toBe(true);
+      expect(data.images[0]).toBe('https://api.example.com/uploads/main.png');
+      expect(data.mainImage).toBe('https://api.example.com/uploads/main.png');
+      expect(data.skus[0].image).toBe('https://api.example.com/uploads/sku.png');
+      expect(data.compliance.certImages[0]).toBe('https://api.example.com/uploads/cert.png');
+    });
+
+    it('绝对 https 图片地址不应重复拼接', () => {
+      const raw = {
+        id: BigInt(3),
+        name: '测试商品3',
+        categoryId: BigInt(10),
+        minPrice: 990,
+        mainImage: 'https://cdn.example.com/main.png',
+        images: ['https://cdn.example.com/main.png'],
+        attributes: { compliance: { isRegulated: false } },
+        skus: [{ id: BigInt(300), productId: BigInt(3), price: 990, stock: 1, specs: { 规格1: '默认' }, image: 'https://cdn.example.com/sku.png', status: 1 }],
+      };
+
+      const data = service['serializeProduct'](raw);
+      expect(data.mainImage).toBe('https://cdn.example.com/main.png');
+      expect(data.images[0]).toBe('https://cdn.example.com/main.png');
+      expect(data.skus[0].image).toBe('https://cdn.example.com/sku.png');
     });
   });
 });

@@ -4,6 +4,7 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 import { paginate } from '@baby-mall/shared';
 import * as path from 'path';
 import * as fs from 'fs';
+import { normalizeAssetUrl } from '../common/utils/asset-url';
 
 const FILE_MAGIC_NUMBERS: Record<string, number[][]> = {
   'image/jpeg': [[0xFF, 0xD8, 0xFF]],
@@ -151,6 +152,8 @@ export class UploadService {
       id: file.id.toString(),
       fileSize: file.fileSize?.toString(),
       uploaderId: file.uploaderId?.toString(),
+      url: normalizeAssetUrl(file.url || file.filePath),
+      filePath: file.filePath || '',
     };
   }
 }

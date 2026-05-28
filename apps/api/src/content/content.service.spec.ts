@@ -29,6 +29,7 @@ describe('ContentService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
 
   beforeEach(() => {
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     prisma = createMockPrisma();
     service = new ContentService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
@@ -149,6 +150,7 @@ describe('ContentService', () => {
       const types = result.list.map((item: any) => item.type);
       expect(types).toContain('activity');
       expect(types).toContain('video');
+      expect(result.list[0].image).toMatch(/^https:\/\/api\.example\.com\//);
     });
 
     it('should return only videos for video tab', async () => {

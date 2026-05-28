@@ -27,6 +27,7 @@ describe('CartService', () => {
     prisma = createMockPrisma();
     service = new CartService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
   });
 
   describe('findAll', () => {
@@ -51,7 +52,7 @@ describe('CartService', () => {
           price: 9900,
           stock: 50,
           status: 1,
-          image: 'sku.jpg',
+          image: '/uploads/sku.jpg',
         },
       }]);
 
@@ -59,7 +60,7 @@ describe('CartService', () => {
       const item = result[0];
 
       expect(item.productName).toBe('婴儿连体衣');
-      expect(item.productImage).toBe('sku.jpg');
+      expect(item.productImage).toBe('https://api.example.com/uploads/sku.jpg');
       expect(item.skuName).toBe('红色 80cm');
       expect(item.price).toBe(9900);
       expect(item.quantity).toBe(2);
@@ -85,7 +86,7 @@ describe('CartService', () => {
         },
         sku: {
           id: 20n,
-          specs: '蓝色 90cm',
+          specs: { 颜色: '蓝色', 尺码: '90cm' },
           price: 5900,
           stock: 10,
           status: 1,
@@ -95,7 +96,8 @@ describe('CartService', () => {
 
       const result = await service.findAll('100');
       expect(result[0].isValid).toBe(false);
-      expect(result[0].productImage).toBe('product.jpg');
+      expect(result[0].productImage).toBe('https://api.example.com/product.jpg');
+      expect(result[0].skuName).toBe('颜色：蓝色 / 尺码：90cm');
     });
   });
 });

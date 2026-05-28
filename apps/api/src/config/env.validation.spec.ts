@@ -29,6 +29,7 @@ function createProductionEnv(overrides: Record<string, any> = {}) {
       WECHAT_PLATFORM_CERT_SERIAL_NO: 'platform-serial-123',
       WECHAT_NOTIFY_URL: 'https://api.example.com/api/weapp/pay/callback',
       WECHAT_REFUND_NOTIFY_URL: 'https://api.example.com/api/weapp/pay/refund-callback',
+      UPLOAD_PUBLIC_URL: 'https://api.example.com',
       CORS_ORIGINS: 'https://admin.example.com',
       ADMIN_DEFAULT_PASSWORD: 'R9$KlmnoPQrsTuv1!',
       ...overrides,
@@ -99,5 +100,16 @@ describe('validateEnv 生产环境强校验', () => {
     const result = validateEnv(env);
     expect(result.NODE_ENV).toBe('production');
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it('UPLOAD_PUBLIC_URL 非 https 时应启动失败', () => {
+    const { tmpDir, env } = createProductionEnv({ UPLOAD_PUBLIC_URL: 'http://api.example.com' });
+    createdDirs.push(tmpDir);
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    expect(() => validateEnv(env)).toThrow('process.exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });

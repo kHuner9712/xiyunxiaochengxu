@@ -24,6 +24,7 @@ describe('HomeService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
 
   beforeEach(() => {
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     prisma = createMockPrisma();
     service = new HomeService(prisma as any);
   });
@@ -75,7 +76,7 @@ describe('HomeService', () => {
 
       expect(product).toHaveProperty('id', '1');
       expect(product).toHaveProperty('name', '测试商品');
-      expect(product).toHaveProperty('image', 'img.jpg');
+      expect(product).toHaveProperty('image', 'https://api.example.com/img.jpg');
       expect(product).toHaveProperty('price', 9900);
       expect(product).toHaveProperty('originalPrice');
       expect(product).toHaveProperty('sales', 50);
@@ -97,7 +98,7 @@ describe('HomeService', () => {
       const result = await service.getHomeData();
       const activity = result.activities[0];
 
-      expect(activity).toHaveProperty('image', 'activity.jpg');
+      expect(activity).toHaveProperty('image', 'https://api.example.com/activity.jpg');
       expect(activity).toHaveProperty('id', '1');
     });
   });

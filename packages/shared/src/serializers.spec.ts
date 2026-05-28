@@ -1,5 +1,10 @@
 import { describe, it, expect } from '@jest/globals';
-import { serializeProductCard, ProductCardVO } from './serializers';
+import {
+  serializeProductCard,
+  formatSkuSpecs,
+  toPublicAssetUrl,
+  normalizeImageList,
+} from './serializers';
 
 describe('serializeProductCard', () => {
   const baseProduct = {
@@ -70,5 +75,38 @@ describe('serializeProductCard', () => {
     expect(Object.keys(result).sort()).toEqual(
       ['id', 'name', 'image', 'price', 'originalPrice', 'sales', 'tag'].sort()
     );
+  });
+});
+
+describe('formatSkuSpecs', () => {
+  it('formats object specs to readable text', () => {
+    expect(formatSkuSpecs({ 颜色: '红色', 尺码: 'L' })).toBe('颜色：红色 / 尺码：L');
+  });
+
+  it('keeps string specs as-is', () => {
+    expect(formatSkuSpecs('默认规格')).toBe('默认规格');
+  });
+});
+
+describe('toPublicAssetUrl', () => {
+  it('keeps absolute https url unchanged', () => {
+    const url = 'https://cdn.example.com/uploads/a.png';
+    expect(toPublicAssetUrl(url, 'https://api.example.com')).toBe(url);
+  });
+
+  it('joins relative uploads path with base url', () => {
+    expect(toPublicAssetUrl('/uploads/a.png', 'https://api.example.com/')).toBe(
+      'https://api.example.com/uploads/a.png',
+    );
+  });
+});
+
+describe('normalizeImageList', () => {
+  it('returns array values when provided', () => {
+    expect(normalizeImageList(['a', 'b'], 'c')).toEqual(['a', 'b']);
+  });
+
+  it('falls back to main image when list is empty', () => {
+    expect(normalizeImageList([], '/uploads/main.png')).toEqual(['/uploads/main.png']);
   });
 });

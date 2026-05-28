@@ -139,7 +139,8 @@ export interface OrderPreviewItem {
   productId: string
   skuId: string
   productName: string
-  skuSpecs: string
+  skuSpecs: Record<string, string> | string
+  skuSpecText?: string
   productImage: string
   price: number
   originalPrice: number

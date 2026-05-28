@@ -24,6 +24,7 @@
           <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
             <el-option label="上架" :value="1" />
             <el-option label="下架" :value="0" />
+            <el-option label="草稿/待完善" :value="3" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -59,8 +60,8 @@
         </el-table-column>
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-              {{ row.status === 1 ? '上架' : '下架' }}
+            <el-tag :type="getStatusTagType(row.status)" size="small">
+              {{ getStatusText(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -172,6 +173,19 @@ function handleAdd() {
 
 function handleEdit(row: any) {
   router.push(`/product/edit/${row.id}`)
+}
+
+function getStatusText(status: number) {
+  if (status === 1) return '上架'
+  if (status === 0) return '下架'
+  if (status === 3) return '草稿/待完善'
+  return `状态${status}`
+}
+
+function getStatusTagType(status: number) {
+  if (status === 1) return 'success'
+  if (status === 3) return 'warning'
+  return 'info'
 }
 
 async function handleToggleStatus(row: any) {

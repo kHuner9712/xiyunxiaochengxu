@@ -55,7 +55,8 @@ export interface ProductCompliance {
 
 export interface SkuItem {
   id: number
-  specs: string
+  specs: Record<string, string> | string
+  specText: string
   price: number
   originalPrice: number
   stock: number

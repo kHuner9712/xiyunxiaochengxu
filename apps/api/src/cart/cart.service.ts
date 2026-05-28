@@ -3,6 +3,8 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AddCartDto } from './dto/add-cart.dto';
 import { UpdateCartDto } from './dto/update-cart.dto';
 import { CART_MAX_QUANTITY, CART_MAX_ITEMS } from '@baby-mall/shared';
+import { formatSkuSpecs } from '@baby-mall/shared';
+import { normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
 export class CartService {
@@ -137,8 +139,8 @@ export class CartService {
       productId: cart.productId.toString(),
       skuId: cart.skuId.toString(),
       productName: cart.product?.name || '',
-      productImage: cart.sku?.image || cart.product?.mainImage || '',
-      skuName: cart.sku?.specs || '',
+      productImage: normalizeAssetUrl(cart.sku?.image || cart.product?.mainImage || ''),
+      skuName: formatSkuSpecs(cart.sku?.specs),
       price: cart.sku?.price || 0,
       originalPrice: cart.sku?.price || 0,
       quantity: cart.quantity,

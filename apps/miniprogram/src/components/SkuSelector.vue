@@ -38,7 +38,8 @@ interface SpecGroup {
 
 interface SkuItem {
   id: number
-  specs: string
+  specs: Record<string, string> | string
+  specText: string
   price: number
   originalPrice: number
   stock: number
@@ -59,9 +60,12 @@ const quantity = ref(1)
 
 const currentSku = ref<SkuItem | null>(null)
 
-props.specs.forEach((_, index) => {
-  selectedSpecs[index] = 0
-})
+function buildSpecTextByIndexes(indexMap: Record<number, number>): string {
+  if (!props.specs.length) return ''
+  return props.specs
+    .map((spec, i) => `${spec.name}：${spec.values[indexMap[i]] || ''}`)
+    .join(' / ')
+}
 
 function selectSpec(specIndex: number, valueIndex: number) {
   if (isSpecDisabled(specIndex, valueIndex)) return
@@ -71,18 +75,48 @@ function selectSpec(specIndex: number, valueIndex: number) {
 }
 
 function isSpecDisabled(specIndex: number, valueIndex: number): boolean {
+  if (!props.specs.length) {
+    return !props.skus.some((sku) => sku.stock > 0)
+  }
   const tempSpecs = { ...selectedSpecs, [specIndex]: valueIndex }
-  const specCombination = props.specs.map((spec, i) => spec.values[tempSpecs[i]]).join(',')
-  return !props.skus.some(sku => sku.specs === specCombination && sku.stock > 0)
+  const specText = buildSpecTextByIndexes(tempSpecs)
+  return !props.skus.some((sku) => sku.specText === specText && sku.stock > 0)
 }
 
 function matchSku() {
-  const specCombination = props.specs.map((spec, i) => spec.values[selectedSpecs[i]]).join(',')
-  const matched = props.skus.find(sku => sku.specs === specCombination)
+  const matched =
+    !props.specs.length
+      ? props.skus.find((sku) => sku.stock > 0) || props.skus[0]
+      : props.skus.find((sku) => sku.specText === buildSpecTextByIndexes(selectedSpecs))
   currentSku.value = matched || null
   if (matched) {
     emit('change', matched.id, quantity.value)
   }
+}
+
+function initSelection() {
+  Object.keys(selectedSpecs).forEach((key) => {
+    delete selectedSpecs[Number(key)]
+  })
+  props.specs.forEach((_, index) => {
+    selectedSpecs[index] = 0
+  })
+
+  if (!props.specs.length) {
+    quantity.value = 1
+    matchSku()
+    return
+  }
+
+  const firstAvailable = props.skus.find((sku) => sku.stock > 0) || props.skus[0]
+  if (firstAvailable?.specText) {
+    props.specs.forEach((spec, specIndex) => {
+      const hit = spec.values.findIndex((value) => firstAvailable.specText.includes(`${spec.name}：${value}`))
+      selectedSpecs[specIndex] = hit >= 0 ? hit : 0
+    })
+  }
+  quantity.value = 1
+  matchSku()
 }
 
 function changeQuantity(delta: number) {
@@ -98,12 +132,9 @@ function changeQuantity(delta: number) {
   }
 }
 
-watch(() => props.specs, () => {
-  props.specs.forEach((_, index) => {
-    selectedSpecs[index] = 0
-  })
-  matchSku()
-}, { immediate: true })
+watch(() => [props.specs, props.skus], () => {
+  initSelection()
+}, { immediate: true, deep: true })
 </script>
 
 <style lang="scss" scoped>
