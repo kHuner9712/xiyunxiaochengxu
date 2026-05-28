@@ -25,6 +25,11 @@ export interface PaymentStatus {
   amount: number
   paidAt: string | null
   transactionId: string | null
+  confirming?: boolean
+  tradeState?: string
+  displayStatus?: 'success' | 'pending' | 'confirming' | 'closed' | 'failed' | 'cancelled'
+  canRetryPay?: boolean
+  message?: string
 }
 
 export function wxPay(params: PaymentResult): Promise<void> {

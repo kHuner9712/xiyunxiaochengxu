@@ -1,21 +1,21 @@
 <template>
   <view class="pay-result-page">
-    <view v-if="checking" class="result-icon">
+    <view v-if="checking || paymentState === 'confirming'" class="result-icon">
       <text class="icon-checking">...</text>
     </view>
-    <view class="result-icon" v-else-if="paymentSuccess === true">
+    <view class="result-icon" v-else-if="paymentState === 'success'">
       <text class="icon-success">✓</text>
     </view>
-    <view class="result-icon" v-else-if="paymentSuccess === false">
+    <view class="result-icon" v-else-if="paymentState === 'failed'">
       <text class="icon-fail">✕</text>
     </view>
     <view class="result-icon" v-else>
       <text class="icon-fail">?</text>
     </view>
 
-    <text class="result-text">{{ checking ? '查询支付结果中...' : paymentSuccess === true ? '支付成功' : paymentSuccess === false ? '支付失败' : '支付结果未知' }}</text>
+    <text class="result-text">{{ resultText }}</text>
 
-    <view v-if="paymentSuccess && orderInfo?.fulfillmentType === 'pickup'" class="pickup-tip card">
+    <view v-if="paymentState === 'success' && orderInfo?.fulfillmentType === 'pickup'" class="pickup-tip card">
       <text class="tip-text">请到店出示自提码取货</text>
       <view v-if="orderInfo.pickupCode" class="tip-code">
         <text class="tip-code-text">自提码：{{ orderInfo.pickupCode }}</text>
@@ -49,32 +49,65 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { computed, ref } from 'vue'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { getOrderDetail, type OrderDetail } from '@/api/order'
 import { getPaymentStatus } from '@/api/payment'
 import { formatPrice } from '@/utils/format'
 
-const paymentSuccess = ref<boolean | null>(null)
+type PaymentState = 'confirming' | 'success' | 'failed' | 'pending' | 'unknown'
+
 const orderId = ref('')
 const orderInfo = ref<OrderDetail | null>(null)
 const checking = ref(true)
+const paymentState = ref<PaymentState>('confirming')
+const pollAttempt = ref(0)
+const maxPollCount = 6
+const pollIntervalMs = 2000
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+const payIntent = ref('')
 
-async function checkPaymentStatus() {
-  checking.value = true
+const resultText = computed(() => {
+  if (checking.value || paymentState.value === 'confirming') return '正在确认支付结果...'
+  if (paymentState.value === 'success') return '支付成功'
+  if (paymentState.value === 'pending') return '支付结果确认中，请稍后在订单详情查看'
+  if (paymentState.value === 'failed') return '支付失败'
+  return '支付结果未知，请稍后在订单详情查看'
+})
+
+function stopPolling() {
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+}
+
+function mapStatusToState(status: any): PaymentState {
+  if (status.displayStatus === 'success') return 'success'
+  if (status.displayStatus === 'closed' || status.displayStatus === 'failed' || status.displayStatus === 'cancelled') return 'failed'
+  if (status.displayStatus === 'pending' || status.displayStatus === 'confirming' || status.confirming) return 'confirming'
+  if (
+    status.orderStatus === 'pending_delivery' ||
+    status.orderStatus === 'pending_pickup' ||
+    status.orderStatus === 'delivered' ||
+    status.orderStatus === 'completed' ||
+    status.paymentStatus === 2
+  ) {
+    return 'success'
+  }
+  if (status.orderStatus === 'pending_payment') return 'confirming'
+  return 'unknown'
+}
+
+async function checkPaymentStatusOnce() {
   try {
     const status = await getPaymentStatus(orderId.value)
-    if (status.paymentStatus === 2 || status.orderStatus === 'pending_delivery' || status.orderStatus === 'delivered' || status.orderStatus === 'completed') {
-      paymentSuccess.value = true
-    } else {
-      paymentSuccess.value = false
-    }
+    paymentState.value = mapStatusToState(status)
+    return status
   } catch {
-    paymentSuccess.value = null
-  } finally {
-    checking.value = false
+    paymentState.value = 'unknown'
+    return null
   }
-  loadOrder()
 }
 
 async function loadOrder() {
@@ -83,6 +116,42 @@ async function loadOrder() {
   } catch (e: any) {
     uni.showToast({ title: e.message || '订单信息加载失败', icon: 'none' })
   }
+}
+
+async function startPollingStatus() {
+  checking.value = true
+  stopPolling()
+  pollAttempt.value = 0
+
+  while (pollAttempt.value < maxPollCount) {
+    pollAttempt.value++
+    const status = await checkPaymentStatusOnce()
+    if (paymentState.value === 'success') {
+      checking.value = false
+      await loadOrder()
+      return
+    }
+    if (paymentState.value === 'failed') {
+      checking.value = false
+      await loadOrder()
+      return
+    }
+    if (status?.displayStatus === 'pending' || status?.displayStatus === 'confirming' || status?.confirming || paymentState.value === 'confirming') {
+      await new Promise<void>((resolve) => {
+        pollTimer = setTimeout(() => resolve(), pollIntervalMs)
+      })
+      continue
+    }
+    await new Promise<void>((resolve) => {
+      pollTimer = setTimeout(() => resolve(), pollIntervalMs)
+    })
+  }
+
+  checking.value = false
+  if (paymentState.value !== 'success' && paymentState.value !== 'failed') {
+    paymentState.value = 'pending'
+  }
+  await loadOrder()
 }
 
 function goOrderDetail() {
@@ -95,7 +164,15 @@ function goHome() {
 
 onLoad((options) => {
   if (options?.orderId) orderId.value = options.orderId
-  checkPaymentStatus()
+  if (options?.payIntent) payIntent.value = options.payIntent
+  if (payIntent.value === 'cancel') {
+    uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
+  }
+  startPollingStatus()
+})
+
+onUnload(() => {
+  stopPolling()
 })
 </script>
 

@@ -8,6 +8,7 @@ import { OrderStatus } from '@prisma/client';
 @Injectable()
 export class PaymentReconcileService {
   private readonly logger = new Logger(PaymentReconcileService.name);
+  private readonly closeDelayMs = 5 * 60 * 1000;
 
   constructor(
     private prisma: PrismaService,
@@ -101,6 +102,91 @@ export class PaymentReconcileService {
     const summary = { total, fixed, failed, skipped };
     this.logger.log(`支付对账完成: ${JSON.stringify(summary)}`);
     return summary;
+  }
+
+  async confirmTimeoutOrdersBeforeClose() {
+    const timeoutOrders = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.pending_payment,
+        autoCloseAt: { lte: new Date() },
+      },
+      include: { payment: true },
+    });
+
+    if (timeoutOrders.length === 0) {
+      return { total: 0, fixed: 0, delayed: 0, closable: 0, failed: 0 };
+    }
+
+    if (!this.paymentService.isPaymentStatusSyncAvailable()) {
+      return { total: timeoutOrders.length, fixed: 0, delayed: 0, closable: timeoutOrders.length, failed: 0 };
+    }
+
+    let fixed = 0;
+    let delayed = 0;
+    let closable = 0;
+    let failed = 0;
+
+    for (const order of timeoutOrders) {
+      const payment = order.payment;
+      if (!payment || payment.status !== PAYMENT_STATUS.CREATED) {
+        closable++;
+        continue;
+      }
+
+      try {
+        const wechatResult = await this.paymentService.queryWechatOrder(order.orderNo);
+        const tradeState = wechatResult?.trade_state;
+
+        if (tradeState === 'SUCCESS') {
+          await this.paymentService.processPaymentSuccess(
+            payment.id,
+            order.id,
+            wechatResult.transaction_id,
+            wechatResult.amount?.total,
+            order,
+          );
+          fixed++;
+          continue;
+        }
+
+        if (tradeState === 'NOTPAY' || tradeState === 'CLOSED' || tradeState === 'REVOKED' || tradeState === 'PAYERROR') {
+          closable++;
+          continue;
+        }
+
+        await this.delayAutoClose(order.id, `trade_state=${tradeState || 'unknown'}`);
+        delayed++;
+      } catch (error) {
+        failed++;
+        await this.delayAutoClose(order.id, `query_error=${(error as Error).message}`);
+        delayed++;
+      }
+    }
+
+    return { total: timeoutOrders.length, fixed, delayed, closable, failed };
+  }
+
+  private async delayAutoClose(orderId: bigint, reason: string) {
+    const nextCloseAt = new Date(Date.now() + this.closeDelayMs);
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { autoCloseAt: nextCloseAt },
+    });
+    await this.prisma.orderLog.create({
+      data: {
+        orderId,
+        operatorType: 'system',
+        action: 'auto_close_delay',
+        content: `关单前支付确认未完成，延迟关闭。原因：${reason}`,
+      },
+    });
+    this.businessEvent.emitWarn(
+      'order_auto_close_delayed_for_payment_confirm',
+      'payment',
+      `订单${orderId.toString()} 关单前支付确认未完成，已延迟关闭`,
+      orderId.toString(),
+      { reason, nextCloseAt: nextCloseAt.toISOString() },
+    );
   }
 
   async reconcilePendingRefunds() {

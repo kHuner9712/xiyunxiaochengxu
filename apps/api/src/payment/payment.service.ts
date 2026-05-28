@@ -123,6 +123,10 @@ export class PaymentService {
     }
   }
 
+  isPaymentStatusSyncAvailable(): boolean {
+    return this.isWechatPaymentConfigured();
+  }
+
   async createPayment(orderId: string, userId: string) {
     this.ensureWechatPaymentAvailable();
     const order = await this.prisma.order.findFirst({
@@ -305,18 +309,27 @@ export class PaymentService {
   }
 
   async getPaymentStatus(orderId: string, userId: string) {
-    const order = await this.prisma.order.findFirst({
-      where: { id: BigInt(orderId), userId: BigInt(userId) },
-    });
-    if (!order) throw new NotFoundException('订单不存在');
+    const getCurrentStatus = async () => {
+      const order = await this.prisma.order.findFirst({
+        where: { id: BigInt(orderId), userId: BigInt(userId) },
+      });
+      if (!order) throw new NotFoundException('订单不存在');
 
-    const payment = await this.prisma.orderPayment.findFirst({
-      where: { orderId: BigInt(orderId) },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (!payment) throw new NotFoundException('支付记录不存在');
+      const payment = await this.prisma.orderPayment.findFirst({
+        where: { orderId: BigInt(orderId) },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!payment) throw new NotFoundException('支付记录不存在');
+      return { order, payment };
+    };
 
-    return {
+    const buildResult = (order: any, payment: any, extras?: {
+      confirming?: boolean;
+      tradeState?: string;
+      displayStatus?: 'success' | 'pending' | 'confirming' | 'closed' | 'failed' | 'cancelled';
+      canRetryPay?: boolean;
+      message?: string;
+    }) => ({
       orderId: order.id.toString(),
       orderNo: order.orderNo,
       orderStatus: order.status,
@@ -325,7 +338,106 @@ export class PaymentService {
       amount: payment.amount,
       paidAt: payment.paidAt?.toISOString() || null,
       transactionId: payment.transactionId || null,
-    };
+      confirming: extras?.confirming ?? false,
+      tradeState: extras?.tradeState,
+      displayStatus: extras?.displayStatus,
+      canRetryPay: extras?.canRetryPay ?? false,
+      message: extras?.message,
+    });
+
+    const { order, payment } = await getCurrentStatus();
+
+    const paidStatuses: OrderStatus[] = [
+      OrderStatus.pending_delivery,
+      OrderStatus.pending_pickup,
+      OrderStatus.delivered,
+      OrderStatus.completed,
+    ];
+
+    if (paidStatuses.includes(order.status)) {
+      return buildResult(order, payment, {
+        confirming: false,
+        displayStatus: 'success',
+        canRetryPay: false,
+      });
+    }
+
+    if (order.status === OrderStatus.cancelled) {
+      return buildResult(order, payment, {
+        confirming: false,
+        displayStatus: 'cancelled',
+        canRetryPay: false,
+      });
+    }
+
+    if (
+      order.status === OrderStatus.pending_payment &&
+      payment.status === PAYMENT_STATUS.CREATED &&
+      this.isPaymentStatusSyncAvailable()
+    ) {
+      try {
+        const wechatResult = await this.queryWechatOrder(order.orderNo);
+        const tradeState = wechatResult?.trade_state;
+
+        if (tradeState === 'SUCCESS') {
+          await this.processPaymentSuccess(
+            payment.id,
+            order.id,
+            wechatResult.transaction_id,
+            wechatResult.amount?.total,
+            order,
+          );
+          const refreshed = await getCurrentStatus();
+          return buildResult(refreshed.order, refreshed.payment, {
+            confirming: false,
+            tradeState,
+            displayStatus: 'success',
+            canRetryPay: false,
+          });
+        }
+
+        if (tradeState === 'NOTPAY' || tradeState === 'USERPAYING') {
+          return buildResult(order, payment, {
+            confirming: true,
+            tradeState,
+            displayStatus: 'pending',
+            canRetryPay: true,
+            message: '支付结果确认中',
+          });
+        }
+
+        if (tradeState === 'CLOSED' || tradeState === 'REVOKED' || tradeState === 'PAYERROR') {
+          return buildResult(order, payment, {
+            confirming: false,
+            tradeState,
+            displayStatus: tradeState === 'CLOSED' ? 'closed' : 'failed',
+            canRetryPay: true,
+          });
+        }
+
+        return buildResult(order, payment, {
+          confirming: true,
+          tradeState,
+          displayStatus: 'confirming',
+          canRetryPay: true,
+          message: '支付结果确认中',
+        });
+      } catch (error) {
+        this.logger.warn(`主动查询微信支付状态失败，订单${order.orderNo}: ${(error as Error).message}`);
+        return buildResult(order, payment, {
+          confirming: true,
+          displayStatus: 'confirming',
+          canRetryPay: true,
+          message: '支付结果确认中',
+        });
+      }
+    }
+
+    return buildResult(order, payment, {
+      confirming: order.status === OrderStatus.pending_payment,
+      displayStatus: order.status === OrderStatus.pending_payment ? 'pending' : undefined,
+      canRetryPay: order.status === OrderStatus.pending_payment,
+    });
   }
 
   async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {

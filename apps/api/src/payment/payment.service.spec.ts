@@ -23,7 +23,7 @@ function encryptCallbackData(data: any) {
 
 function createMockPrisma() {
   return {
-    order: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+    order: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     orderRefund: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     orderPayment: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
     aftersaleOrder: { findFirst: jest.fn(), update: jest.fn() },
@@ -280,6 +280,49 @@ describe('PaymentReconcileService.reconcilePendingPayments', () => {
     expect(mockPrisma.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'pending_delivery' }) }),
     );
+  });
+
+  it('超时关单前确认：微信 SUCCESS 时修复订单并不进入 closable', async () => {
+    const timeoutOrder = {
+      id: BigInt(3),
+      orderNo: 'ORDER789',
+      status: 'pending_payment',
+      payAmount: 10000,
+      payment: { id: BigInt(3), status: PAYMENT_STATUS.CREATED },
+    };
+    mockPrisma.order.findMany.mockResolvedValue([timeoutOrder]);
+    jest.spyOn(paymentService, 'queryWechatOrder').mockResolvedValue({
+      trade_state: 'SUCCESS',
+      transaction_id: 'TXN999',
+      amount: { total: 10000 },
+    });
+    const processSpy = jest.spyOn(paymentService, 'processPaymentSuccess').mockResolvedValue(undefined as never);
+
+    const result = await service.confirmTimeoutOrdersBeforeClose();
+
+    expect(processSpy).toHaveBeenCalled();
+    expect(result.fixed).toBe(1);
+    expect(result.closable).toBe(0);
+  });
+
+  it('超时关单前确认：微信查询异常时延迟关闭一次', async () => {
+    const timeoutOrder = {
+      id: BigInt(4),
+      orderNo: 'ORDER790',
+      status: 'pending_payment',
+      payAmount: 10000,
+      payment: { id: BigInt(4), status: PAYMENT_STATUS.CREATED },
+    };
+    mockPrisma.order.findMany.mockResolvedValue([timeoutOrder]);
+    jest.spyOn(paymentService, 'queryWechatOrder').mockRejectedValue(new Error('timeout'));
+    mockPrisma.order.update.mockResolvedValue({});
+    mockPrisma.orderLog.create.mockResolvedValue({});
+
+    const result = await service.confirmTimeoutOrdersBeforeClose();
+
+    expect(result.delayed).toBe(1);
+    expect(mockPrisma.order.update).toHaveBeenCalled();
+    expect(mockPrisma.orderLog.create).toHaveBeenCalled();
   });
 });
 
@@ -1511,6 +1554,79 @@ describe('支付契约测试', () => {
     expect(result.orderNo).toBe('ORDER123');
     expect(result.orderStatus).toBe('pending_delivery');
     expect(result.paymentStatus).toBe(PAYMENT_STATUS.SUCCESS);
+    expect(result.displayStatus).toBe('success');
+  });
+
+  it('getPaymentStatus 本地pending且微信SUCCESS时触发修复并返回success', async () => {
+    const ORDER = { id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment' };
+    const PAYMENT = {
+      id: BigInt(11),
+      orderId: BigInt(1),
+      status: PAYMENT_STATUS.CREATED,
+      paymentMethod: 'wechat',
+      amount: 10000,
+      paidAt: null,
+      transactionId: null,
+    };
+    const ORDER_AFTER = { id: BigInt(1), orderNo: 'ORDER123', status: 'pending_delivery' };
+    const PAYMENT_AFTER = { ...PAYMENT, status: PAYMENT_STATUS.SUCCESS, paidAt: new Date(), transactionId: 'TXN123' };
+
+    mockPrisma.order.findFirst.mockResolvedValueOnce(ORDER).mockResolvedValueOnce(ORDER_AFTER);
+    mockPrisma.orderPayment.findFirst.mockResolvedValueOnce(PAYMENT).mockResolvedValueOnce(PAYMENT_AFTER);
+    jest.spyOn(service, 'queryWechatOrder').mockResolvedValue({
+      trade_state: 'SUCCESS',
+      transaction_id: 'TXN123',
+      amount: { total: 10000 },
+    });
+    const processSpy = jest.spyOn(service, 'processPaymentSuccess').mockResolvedValue(undefined as never);
+
+    const result = await service.getPaymentStatus('1', '100');
+
+    expect(processSpy).toHaveBeenCalled();
+    expect(result.displayStatus).toBe('success');
+    expect(result.orderStatus).toBe('pending_delivery');
+  });
+
+  it('getPaymentStatus 微信NOTPAY/USERPAYING返回confirming而非失败', async () => {
+    const ORDER = { id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment' };
+    const PAYMENT = {
+      id: BigInt(12),
+      orderId: BigInt(1),
+      status: PAYMENT_STATUS.CREATED,
+      paymentMethod: 'wechat',
+      amount: 10000,
+      paidAt: null,
+      transactionId: null,
+    };
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+    mockPrisma.orderPayment.findFirst.mockResolvedValue(PAYMENT);
+    jest.spyOn(service, 'queryWechatOrder').mockResolvedValue({ trade_state: 'NOTPAY' });
+
+    const result = await service.getPaymentStatus('1', '100');
+
+    expect(result.confirming).toBe(true);
+    expect(result.displayStatus).toBe('pending');
+  });
+
+  it('getPaymentStatus 微信查询异常返回本地状态+confirming', async () => {
+    const ORDER = { id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment' };
+    const PAYMENT = {
+      id: BigInt(13),
+      orderId: BigInt(1),
+      status: PAYMENT_STATUS.CREATED,
+      paymentMethod: 'wechat',
+      amount: 10000,
+      paidAt: null,
+      transactionId: null,
+    };
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+    mockPrisma.orderPayment.findFirst.mockResolvedValue(PAYMENT);
+    jest.spyOn(service, 'queryWechatOrder').mockRejectedValue(new Error('network'));
+
+    const result = await service.getPaymentStatus('1', '100');
+
+    expect(result.confirming).toBe(true);
+    expect(result.displayStatus).toBe('confirming');
   });
 });
 

@@ -340,6 +340,11 @@ function openLegalPage(url: string) {
   uni.navigateTo({ url })
 }
 
+function isUserCancelPayError(err: any): boolean {
+  const msg = String(err?.errMsg || err?.message || '').toLowerCase()
+  return msg.includes('cancel')
+}
+
 async function handleSubmit() {
   if (submitting.value) return
   if (fulfillmentType.value === 'delivery' && !address.value) {
@@ -378,9 +383,21 @@ async function handleSubmit() {
       const payment = await createPayment({ orderId: order.orderId })
       try {
         await wxPay(payment)
-        uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
-      } catch {
-        uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}` })
+        uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}&payScene=confirm&payIntent=success` })
+      } catch (payClientErr: any) {
+        if (isUserCancelPayError(payClientErr)) {
+          uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}&payScene=confirm&payIntent=cancel` })
+          return
+        }
+        uni.showModal({
+          title: '支付未完成',
+          content: '支付发起异常，请在订单详情页继续支付',
+          showCancel: false,
+          confirmText: '查看订单',
+          success: () => {
+            uni.redirectTo({ url: `/pages/order/detail?id=${order.orderId}` })
+          }
+        })
       }
     } catch (payErr: any) {
       const payMsg = payErr?.message || '支付发起失败'

@@ -160,6 +160,11 @@ function getStatusClass(status: string): string {
   return map[status] || ''
 }
 
+function isUserCancelPayError(err: any): boolean {
+  const msg = String(err?.errMsg || err?.message || '').toLowerCase()
+  return msg.includes('cancel')
+}
+
 async function handleCancel() {
   uni.showModal({
     title: '提示',
@@ -182,9 +187,18 @@ async function handlePay() {
     const payment = await createPayment({ orderId: order.value.id })
     try {
       await wxPay(payment)
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}` })
-    } catch {
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}` })
+      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}&payScene=detail&payIntent=success` })
+    } catch (payClientErr: any) {
+      if (isUserCancelPayError(payClientErr)) {
+        uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
+        return
+      }
+      uni.showModal({
+        title: '支付未完成',
+        content: '支付发起异常，请稍后重试或联系客服',
+        showCancel: false,
+        confirmText: '我知道了'
+      })
     }
   } catch (e: any) {
     const msg = e?.message || '支付发起失败'
