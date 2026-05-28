@@ -219,6 +219,8 @@ const payAmount = computed(() => {
 
 async function loadPreview() {
   if (orderItems.value.length === 0) return
+  if (fulfillmentType.value === 'delivery' && !address.value) return
+  if (fulfillmentType.value === 'pickup' && !selectedPickupStore.value) return
   try {
     loading.value = true
     const data = await previewOrder({
@@ -285,7 +287,21 @@ function selectAddress() {
 
 function switchFulfillmentType(type: 'delivery' | 'pickup') {
   fulfillmentType.value = type
-  loadPreview()
+  if (type === 'pickup') {
+    if (!selectedPickupStore.value) {
+      preview.value = null
+      uni.showToast({ title: '请选择自提点', icon: 'none' })
+      return
+    }
+    loadPreview()
+    return
+  }
+
+  if (address.value) {
+    loadPreview()
+  } else {
+    preview.value = null
+  }
 }
 
 function selectPickupStore() {
@@ -400,7 +416,9 @@ onLoad(async (options) => {
     }]
   }
   await loadDefaultAddress()
-  await loadPreview()
+  if (fulfillmentType.value === 'delivery' ? !!address.value : !!selectedPickupStore.value) {
+    await loadPreview()
+  }
   loadCoupons()
 })
 </script>

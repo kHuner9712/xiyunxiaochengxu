@@ -26,7 +26,7 @@
       </view>
     </view>
 
-    <view class="sku-section card" @tap="showSkuPopup = true">
+    <view class="sku-section card" @tap="openSkuPopup('cart')">
       <text class="section-label">规格</text>
       <text class="section-value">请选择规格</text>
       <text class="section-arrow">›</text>
@@ -122,7 +122,7 @@
       </view>
     </view>
 
-    <uni-popup ref="skuPopup" type="bottom">
+    <uni-popup ref="skuPopup" type="bottom" @change="onSkuPopupChange">
       <view class="sku-popup">
         <view class="sku-header">
           <image class="sku-image" :src="currentSku?.image || primaryImage" mode="aspectFill" />
@@ -150,6 +150,7 @@ import { formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 import ProductCard from '@/components/ProductCard.vue'
 import SkuSelector from '@/components/SkuSelector.vue'
+import { ensureSellableSkuSelection } from './sku-popup.logic'
 
 const product = ref<ProductDetail>({
   id: 0, name: '', subtitle: '', images: [], price: 0, originalPrice: 0,
@@ -157,6 +158,7 @@ const product = ref<ProductDetail>({
 })
 const recommendProducts = ref<any[]>([])
 const showSkuPopup = ref(false)
+const skuPopup = ref<any>(null)
 const currentSku = ref<SkuItem | null>(null)
 const selectedSkuId = ref(0)
 const selectedQuantity = ref(1)
@@ -212,46 +214,58 @@ function onSkuChange(skuId: number, quantity: number) {
   currentSku.value = product.value.skus.find(s => s.id === skuId) || null
 }
 
-function handleAddCart() {
+function getDefaultSellableSku() {
+  return product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
+}
+
+function onSkuPopupChange(e: { show?: boolean }) {
+  showSkuPopup.value = !!e?.show
+}
+
+function openSkuPopup(action: 'cart' | 'buy') {
   if (!canPurchase.value) {
     uni.showToast({ title: product.value.status !== undefined && product.value.status !== 1 ? '商品已下架' : '库存不足', icon: 'none' })
     return
   }
-  skuAction.value = 'cart'
-  showSkuPopup.value = true
-  if (!selectedSkuId.value) {
-    const defaultSku = product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
-    if (defaultSku) onSkuChange(defaultSku.id, 1)
+  skuAction.value = action
+  const result = ensureSellableSkuSelection(product.value.skus, selectedSkuId.value)
+  if (!result.sku) {
+    uni.showToast({ title: '商品暂无可售规格', icon: 'none' })
+    return
   }
+  onSkuChange(result.sku.id, 1)
+  showSkuPopup.value = true
+  if (typeof skuPopup.value?.open === 'function') {
+    skuPopup.value.open('bottom')
+  }
+}
+
+function handleAddCart() {
+  openSkuPopup('cart')
 }
 
 function handleBuyNow() {
-  if (!canPurchase.value) {
-    uni.showToast({ title: product.value.status !== undefined && product.value.status !== 1 ? '商品已下架' : '库存不足', icon: 'none' })
-    return
-  }
-  skuAction.value = 'buy'
-  showSkuPopup.value = true
-  if (!selectedSkuId.value) {
-    const defaultSku = product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
-    if (defaultSku) onSkuChange(defaultSku.id, 1)
-  }
+  openSkuPopup('buy')
 }
 
 async function confirmSku() {
-  if (!selectedSkuId.value) {
-    const defaultSku = product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
-    if (defaultSku) {
-      onSkuChange(defaultSku.id, 1)
-    } else {
-      uni.showToast({ title: '请选择规格', icon: 'none' })
+  if (!selectedSkuId.value || !currentSku.value) {
+    const defaultSku = getDefaultSellableSku()
+    if (!defaultSku) {
+      uni.showToast({ title: '商品暂无可售规格', icon: 'none' })
       return
     }
+    onSkuChange(defaultSku.id, 1)
   }
   if (!currentSku.value || currentSku.value.stock < selectedQuantity.value) {
     uni.showToast({ title: '库存不足，请重新选择', icon: 'none' })
     return
   }
+  if (currentSku.value.stock <= 0) {
+    uni.showToast({ title: '商品暂无可售规格', icon: 'none' })
+    return
+  }
+  skuPopup.value?.close?.()
   showSkuPopup.value = false
 
   if (skuAction.value === 'cart') {

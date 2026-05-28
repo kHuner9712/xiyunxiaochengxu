@@ -54,7 +54,10 @@ export class HomeService {
     ]);
 
     return paginate(
-      list.map((p) => serializeProductCard(p)),
+      list.map((p) => ({
+        ...serializeProductCard(p),
+        image: normalizeAssetUrl(p.mainImage, this.assetBaseUrl),
+      })),
       total,
       page,
       pageSize,

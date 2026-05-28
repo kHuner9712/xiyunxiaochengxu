@@ -102,4 +102,22 @@ describe('HomeService', () => {
       expect(activity).toHaveProperty('id', '1');
     });
   });
+
+  describe('getGuessProducts', () => {
+    it('should normalize image url for guess product cards', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        { id: 2n, name: '猜你喜欢商品', mainImage: '/uploads/guess.jpg', minPrice: 10900, totalSales: 8 },
+      ]);
+      prisma.product.count.mockResolvedValue(1);
+
+      const result = await service.getGuessProducts(1, 10);
+
+      expect(result.list[0]).toMatchObject({
+        id: '2',
+        name: '猜你喜欢商品',
+        image: 'https://api.example.com/uploads/guess.jpg',
+        price: 10900,
+      });
+    });
+  });
 });
