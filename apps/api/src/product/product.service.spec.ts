@@ -146,6 +146,7 @@ describe('ProductService', () => {
 
     it('普通非高合规商品显式标记 isRegulated=false 时允许上架', () => {
       const product = {
+        category: { name: '纸尿裤' },
         attributes: {
           compliance: {
             isRegulated: false,
@@ -153,6 +154,28 @@ describe('ProductService', () => {
         },
       };
       expect(() => service['validateProductComplianceBeforePublish'](product)).not.toThrow();
+    });
+
+    it('普通商品未设置 isRegulated=false 且无分类声明时应拒绝上架', () => {
+      const product = {
+        category: { name: '纸尿裤' },
+        attributes: {
+          compliance: {},
+        },
+      };
+      expect(() => service['validateProductComplianceBeforePublish'](product)).toThrow(BadRequestException);
+    });
+
+    it('类目命中高合规关键词时不允许强制标记普通商品', () => {
+      const product = {
+        category: { name: '婴幼儿奶粉' },
+        attributes: {
+          compliance: {
+            isRegulated: false,
+          },
+        },
+      };
+      expect(() => service['validateProductComplianceBeforePublish'](product)).toThrow(BadRequestException);
     });
 
     it('类目命中奶粉关键词时即使未显式声明也要校验奶粉字段', () => {
@@ -168,6 +191,41 @@ describe('ProductService', () => {
         },
       };
       expect(() => service['validateProductComplianceBeforePublish'](product)).toThrow(BadRequestException);
+    });
+  });
+
+  describe('serializeProduct contract', () => {
+    it('应返回后台兼容展示字段', () => {
+      const raw = {
+        id: BigInt(1),
+        name: '测试商品',
+        categoryId: BigInt(10),
+        brandId: BigInt(20),
+        supplierId: BigInt(30),
+        sortOrder: 5,
+        minPrice: 1990,
+        maxPrice: 2990,
+        totalSales: 12,
+        virtualSales: 8,
+        mainImage: 'https://img.example.com/main.png',
+        images: ['https://img.example.com/main.png'],
+        status: 3,
+        attributes: { compliance: { isRegulated: false } },
+        skus: [
+          { id: BigInt(100), productId: BigInt(1), price: 1990, stock: 3, specs: { 规格1: 'L' }, status: 1 },
+          { id: BigInt(101), productId: BigInt(1), price: 2990, stock: 2, specs: { 规格1: 'XL' }, status: 1 },
+        ],
+        category: { id: BigInt(10), name: '纸尿裤' },
+        brand: { id: BigInt(20), name: '品牌A' },
+        supplier: { id: BigInt(30), name: '供应商A' },
+      };
+      const data = service['serializeProduct'](raw);
+      expect(data.categoryName).toBe('纸尿裤');
+      expect(data.brandName).toBe('品牌A');
+      expect(data.supplierName).toBe('供应商A');
+      expect(data.price).toBe(1990);
+      expect(data.stock).toBe(5);
+      expect(data.sort).toBe(5);
     });
   });
 });

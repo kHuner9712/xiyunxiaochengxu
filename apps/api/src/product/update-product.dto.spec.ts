@@ -13,6 +13,13 @@ describe('UpdateProductDto 白名单校验', () => {
     const payload = {
       name: '测试商品',
       categoryId: 1,
+      brandId: 2,
+      supplierId: 3,
+      recommendAgeMin: 0,
+      recommendAgeMax: 36,
+      isPeriodPurchase: 1,
+      sortOrder: 10,
+      isRecommend: 1,
       skus: [{ price: 1000, stock: 10, specs: { color: 'red' } }],
     };
 
@@ -22,6 +29,21 @@ describe('UpdateProductDto 白名单校验', () => {
     });
 
     expect(result).toBeDefined();
+  });
+
+  it('推荐年龄最小值大于最大值时应拒绝', async () => {
+    const payload = {
+      recommendAgeMin: 12,
+      recommendAgeMax: 6,
+      skus: [{ price: 1000, stock: 10 }],
+    };
+
+    await expect(
+      pipe.transform(payload, {
+        type: 'body',
+        metatype: UpdateProductDto,
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('包含未声明字段时应拒绝', async () => {
@@ -39,4 +61,3 @@ describe('UpdateProductDto 白名单校验', () => {
     ).rejects.toThrow(BadRequestException);
   });
 });
-

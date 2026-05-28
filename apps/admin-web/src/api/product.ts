@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 export const productApi = {
-  getList(params: { page: number; pageSize: number; name?: string; categoryId?: number; status?: number; brandId?: number }) {
+  getList(params: { page: number; pageSize: number; keyword?: string; categoryId?: number; status?: number; brandId?: number }) {
     return request.get('/admin/product/list', { params })
   },
   getDetail(id: number) {

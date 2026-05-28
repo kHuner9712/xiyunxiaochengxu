@@ -128,6 +128,8 @@ export class ProductService {
           recommendAgeMin: dto.recommendAgeMin,
           recommendAgeMax: dto.recommendAgeMax,
           isPeriodPurchase: dto.isPeriodPurchase ?? 0,
+          sortOrder: dto.sortOrder ?? 0,
+          isRecommend: dto.isRecommend ?? 0,
           status: 3,
           skus: {
             create: dto.skus.map((sku) => ({
@@ -184,6 +186,8 @@ export class ProductService {
       if (dto.recommendAgeMin !== undefined) updateData.recommendAgeMin = dto.recommendAgeMin;
       if (dto.recommendAgeMax !== undefined) updateData.recommendAgeMax = dto.recommendAgeMax;
       if (dto.isPeriodPurchase !== undefined) updateData.isPeriodPurchase = dto.isPeriodPurchase;
+      if (dto.sortOrder !== undefined) updateData.sortOrder = dto.sortOrder;
+      if (dto.isRecommend !== undefined) updateData.isRecommend = dto.isRecommend;
 
       if (dto.skus && dto.skus.length > 0) {
         await tx.productSku.updateMany({
@@ -261,7 +265,7 @@ export class ProductService {
       );
     }
 
-    if (compliance.isRegulated === false) {
+    if (compliance.isRegulated === false && !product.category) {
       return;
     }
 
@@ -271,6 +275,16 @@ export class ProductService {
     const isFood = compliance.isFood === true || inferred.isFood;
     const isHealthSupplement = compliance.isHealthSupplement === true || inferred.isHealthSupplement;
     const isInfantFormula = compliance.isInfantFormula === true || inferred.isInfantFormula;
+
+    if (compliance.isRegulated === false && [isFood, isHealthSupplement, isInfantFormula].some(Boolean)) {
+      throw new BadRequestException(
+        '类目疑似食品/保健食品/婴幼儿配方奶粉，不允许标记为普通非高合规商品，请按实际商品类型完善合规信息',
+      );
+    }
+
+    if (compliance.isRegulated === false) {
+      return;
+    }
 
     const hasAnyClassification = [isFood, isHealthSupplement, isInfantFormula].some(Boolean);
     if (!hasAnyClassification && compliance.isRegulated !== false) {
@@ -341,12 +355,56 @@ export class ProductService {
   }
 
   private serializeProduct(product: any) {
+    const allSkus = Array.isArray(product.skus) ? product.skus : [];
+    const activeSkus = allSkus.filter((s: any) => s.status === undefined || s.status === 1);
+    const pricedSkus = activeSkus.filter((s: any) => Number.isInteger(s.price));
+    const skuPrices = pricedSkus.map((s: any) => s.price);
+    const minPrice = product.minPrice ?? (skuPrices.length ? Math.min(...skuPrices) : 0);
+    const maxPrice = product.maxPrice ?? (skuPrices.length ? Math.max(...skuPrices) : minPrice);
+    const stock = activeSkus.reduce((sum: number, sku: any) => sum + (sku.stock ?? 0), 0);
+    const defaultSku =
+      pricedSkus.find((sku: any) => sku.price === minPrice) ||
+      activeSkus[0] ||
+      null;
+    const sales = (product.totalSales ?? 0) + (product.virtualSales ?? 0);
+    const image = product.mainImage || (Array.isArray(product.images) ? product.images[0] : '') || defaultSku?.image || '';
+    const specMap = new Map<string, Set<string>>();
+    for (const sku of activeSkus) {
+      const specs = sku.specs && typeof sku.specs === 'object' ? sku.specs : {};
+      for (const [key, value] of Object.entries(specs)) {
+        const name = String(key || '').trim();
+        const val = String(value ?? '').trim();
+        if (!name || !val) continue;
+        if (!specMap.has(name)) specMap.set(name, new Set<string>());
+        specMap.get(name)!.add(val);
+      }
+    }
+
     return {
       ...product,
       id: product.id.toString(),
       categoryId: product.categoryId?.toString(),
       brandId: product.brandId?.toString(),
       supplierId: product.supplierId?.toString(),
+      categoryName: product.category?.name ?? '',
+      brandName: product.brand?.name ?? '',
+      supplierName: product.supplier?.name ?? '',
+      price: minPrice,
+      minPrice,
+      maxPrice,
+      stock,
+      sort: product.sortOrder ?? 0,
+      sortOrder: product.sortOrder ?? 0,
+      image,
+      originalPrice: defaultSku?.originalPrice ?? minPrice,
+      sales,
+      subtitle: '',
+      tags: [],
+      specs: Array.from(specMap.entries()).map(([name, values]) => ({
+        name,
+        values: Array.from(values.values()),
+      })),
+      detailContent: product.attributes?.detailContent ?? '',
       compliance: product.attributes?.compliance || null,
       skus: product.skus?.map((s: any) => ({
         ...s,

@@ -3,7 +3,7 @@
     <div class="search-bar">
       <el-form :model="searchForm" inline>
         <el-form-item label="商品名称">
-          <el-input v-model="searchForm.name" placeholder="请输入商品名称" clearable />
+          <el-input v-model="searchForm.keyword" placeholder="请输入商品名称" clearable />
         </el-form-item>
         <el-form-item label="分类">
           <el-tree-select
@@ -64,7 +64,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="排序" width="80" prop="sort" />
+        <el-table-column label="排序" width="80" prop="sortOrder" />
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'product:edit'" type="primary" link @click="handleEdit(row)">编辑</el-button>
@@ -112,7 +112,7 @@ const categoryTree = ref<any[]>([])
 const brandList = ref<any[]>([])
 
 const searchForm = reactive({
-  name: '',
+  keyword: '',
   categoryId: undefined as number | undefined,
   brandId: undefined as number | undefined,
   status: undefined as number | undefined,
@@ -159,7 +159,7 @@ function handleSearch() {
 }
 
 function resetSearch() {
-  searchForm.name = ''
+  searchForm.keyword = ''
   searchForm.categoryId = undefined
   searchForm.brandId = undefined
   searchForm.status = undefined
