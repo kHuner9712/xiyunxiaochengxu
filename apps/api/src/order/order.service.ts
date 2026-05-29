@@ -1129,18 +1129,7 @@ export class OrderService {
       where: { id: item.skuId },
       data: { stock: { increment: item.quantity } },
     });
-    if (typeof tx.$executeRaw === 'function') {
-      await tx.$executeRaw`
-        UPDATE product_skus
-        SET sales = GREATEST(sales - ${item.quantity}, 0)
-        WHERE id = ${item.skuId}
-      `;
-    } else {
-      await tx.productSku.update({
-        where: { id: item.skuId },
-        data: { sales: { decrement: item.quantity } },
-      });
-    }
+    await this.safeDecrementSkuSales(tx, item.skuId, item.quantity);
     await tx.productStockLog.create({
       data: {
         productId: item.productId,
@@ -1151,6 +1140,25 @@ export class OrderService {
         afterStock: sku.stock + item.quantity,
         reason,
       },
+    });
+  }
+
+  private async safeDecrementSkuSales(tx: any, skuId: bigint, quantity: number) {
+    if (typeof tx.$executeRaw === 'function') {
+      await tx.$executeRaw`
+        UPDATE product_skus
+        SET sales = GREATEST(sales - ${quantity}, 0)
+        WHERE id = ${skuId}
+      `;
+      return;
+    }
+
+    const sku = await tx.productSku.findFirst({ where: { id: skuId } });
+    if (!sku) return;
+    const nextSales = Math.max((sku.sales || 0) - quantity, 0);
+    await tx.productSku.update({
+      where: { id: skuId },
+      data: { sales: nextSales },
     });
   }
 

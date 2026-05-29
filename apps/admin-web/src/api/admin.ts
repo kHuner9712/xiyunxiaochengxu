@@ -10,8 +10,11 @@ export const adminApi = {
   create(data: any) {
     return request.post('/admin/admin-user', data)
   },
-  update(data: any) {
-    return request.put(`/admin/admin-user/${data.id}`, data)
+  update(idOrData: number | any, data?: any) {
+    const id = typeof idOrData === 'number' ? idOrData : idOrData.id
+    const payload = typeof idOrData === 'number' ? (data || {}) : { ...(idOrData || {}) }
+    delete payload.id
+    return request.put(`/admin/admin-user/${id}`, payload)
   },
   delete(id: number) {
     return request.delete(`/admin/admin-user/${id}`)

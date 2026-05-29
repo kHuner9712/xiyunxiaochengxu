@@ -64,3 +64,11 @@
 4. 支付/退款回调支持多平台证书序列号验签（静态多证书模式）。
 5. 类目新增 `complianceConfig`，商品上架由类目配置 + 商品合规字段共同判定。
 6. 小程序生产构建新增 `VITE_API_BASE_URL` 强门禁校验。
+# 2026-05-29 第二轮上线前修复状态
+
+- 已完成：`PickupStoreModule` 引入 `OrderModule`，`PickupStoreService` 注入链路可通过 Nest TestingModule 实例化测试。
+- 已完成：支付补偿任务 `PaymentCompensationTask` 已在 Prisma schema 和 migration 中落地，并补充查询/处理测试。
+- 已完成：后台分类更新与多个 admin `update` API 已避免将 `id` 放入 body，降低生产环境 `forbidNonWhitelisted` 400 风险。
+- 已完成：订单取消/超时关闭/退款回滚路径销量扣减统一为不低于 `0` 的安全实现。
+- 已完成：本地上传删除逻辑改为基于 `UPLOAD_DIR` 的真实路径解析，并增加路径穿越防护与自定义目录测试。
+- 结论：当前为“可进入真实预生产部署与正式商用上线验收”的代码候选状态，不等于“已可正式上线”。

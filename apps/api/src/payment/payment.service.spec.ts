@@ -1631,6 +1631,45 @@ describe('支付契约测试', () => {
   });
 });
 
+describe('PaymentService 补偿任务管理', () => {
+  let service: PaymentService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    service = createPaymentService(mockPrisma = createMockPrisma());
+  });
+
+  it('getCompensationTaskList 返回分页数据', async () => {
+    mockPrisma.paymentCompensationTask.findMany.mockResolvedValue([
+      { id: BigInt(1), orderNo: 'ORD001', status: 'pending', createdAt: new Date() },
+    ]);
+    mockPrisma.paymentCompensationTask.count.mockResolvedValue(1);
+
+    const result = await service.getCompensationTaskList({ page: 1, pageSize: 20 });
+    expect(result.pagination.total).toBe(1);
+    expect(result.list[0].id).toBe('1');
+  });
+
+  it('resolveCompensationTask 更新处理结果', async () => {
+    mockPrisma.paymentCompensationTask.findFirst.mockResolvedValue({ id: BigInt(1) });
+    mockPrisma.paymentCompensationTask.update.mockResolvedValue({
+      id: BigInt(1),
+      status: 'resolved',
+      handledBy: '100',
+      resolution: 'manual refund created',
+    });
+
+    const result = await service.resolveCompensationTask('1', '100', 'manual refund created', 'resolved');
+    expect(result.id).toBe('1');
+    expect(mockPrisma.paymentCompensationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BigInt(1) },
+        data: expect.objectContaining({ status: 'resolved', handledBy: '100' }),
+      }),
+    );
+  });
+});
+
 describe('PaymentService 生产环境配置校验', () => {
   it('生产环境缺少 WECHAT_APP_ID 应启动失败', () => {
     const mockPrisma = createMockPrisma();

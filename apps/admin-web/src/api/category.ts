@@ -10,8 +10,8 @@ export const categoryApi = {
   create(data: any) {
     return request.post('/admin/category/create', data)
   },
-  update(data: any) {
-    return request.put(`/admin/category/update/${data.id}`, data)
+  update(id: number, data: any) {
+    return request.put(`/admin/category/update/${id}`, data)
   },
   delete(id: number) {
     return request.delete(`/admin/category/delete/${id}`)

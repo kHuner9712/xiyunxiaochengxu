@@ -885,6 +885,7 @@ model PaymentCompensationTask {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@index([orderNo], name: "idx_order_no")
+  @@index([transactionId], name: "idx_transaction_id")
   @@index([status], name: "idx_status")
   @@index([createdAt], name: "idx_created_at")
   @@map("payment_compensation_tasks")

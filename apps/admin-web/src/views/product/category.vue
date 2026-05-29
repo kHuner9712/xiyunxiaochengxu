@@ -217,10 +217,24 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
+    const payload = {
+      name: form.name,
+      parentId: form.parentId,
+      sortOrder: form.sortOrder,
+      icon: form.icon,
+      isShow: form.isShow,
+      complianceConfig: {
+        isFood: form.complianceConfig.isFood,
+        isHealthSupplement: form.complianceConfig.isHealthSupplement,
+        isInfantFormula: form.complianceConfig.isInfantFormula,
+        requiresCertImages: form.complianceConfig.requiresCertImages,
+        requiredComplianceFields: form.complianceConfig.requiredComplianceFields,
+      },
+    }
     if (form.id) {
-      await categoryApi.update({ ...form })
+      await categoryApi.update(form.id, payload)
     } else {
-      await categoryApi.create({ ...form })
+      await categoryApi.create(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false

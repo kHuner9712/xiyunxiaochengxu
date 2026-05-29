@@ -10,8 +10,11 @@ export const roleApi = {
   create(data: any) {
     return request.post('/admin/role', data)
   },
-  update(data: any) {
-    return request.put(`/admin/role/${data.id}`, data)
+  update(idOrData: number | any, data?: any) {
+    const id = typeof idOrData === 'number' ? idOrData : idOrData.id
+    const payload = typeof idOrData === 'number' ? (data || {}) : { ...(idOrData || {}) }
+    delete payload.id
+    return request.put(`/admin/role/${id}`, payload)
   },
   delete(id: number) {
     return request.delete(`/admin/role/${id}`)

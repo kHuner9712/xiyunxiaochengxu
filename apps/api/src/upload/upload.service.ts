@@ -57,7 +57,14 @@ class LocalStorageProvider implements StorageProvider {
   }
 
   async remove(filePath: string) {
-    const fullPath = path.join(process.cwd(), filePath);
+    const normalizedUploadDir = path.resolve(this.uploadDir);
+    const storedPath = (filePath || '').replace(/\\/g, '/');
+    const uploadPrefix = '/uploads/';
+    const relativePath = storedPath.startsWith(uploadPrefix) ? storedPath.slice(uploadPrefix.length) : path.basename(storedPath);
+    const fullPath = path.resolve(normalizedUploadDir, relativePath);
+    if (!fullPath.startsWith(`${normalizedUploadDir}${path.sep}`) && fullPath !== normalizedUploadDir) {
+      throw new BadRequestException('非法文件路径');
+    }
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
     }

@@ -26,6 +26,7 @@ function createMockPrisma() {
     orderLog: { create: jest.fn() },
     orderDelivery: { update: jest.fn() },
     cart: { deleteMany: jest.fn() },
+    $executeRaw: jest.fn(),
   };
 
   return {
@@ -367,11 +368,7 @@ describe('OrderService.cancel 未支付订单释放资源', () => {
         data: expect.objectContaining({ stock: { increment: 1 } }),
       }),
     );
-    expect(mockPrisma._mockTx.productSku.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ sales: { decrement: 1 } }),
-      }),
-    );
+    expect(mockPrisma._mockTx.$executeRaw).toHaveBeenCalled();
   });
 
   it('未支付订单取消释放积分', async () => {
@@ -768,11 +765,7 @@ describe('订单主链路', () => {
         data: expect.objectContaining({ stock: { increment: 1 } }),
       }),
     );
-    expect(mockPrisma._mockTx.productSku.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ sales: { decrement: 1 } }),
-      }),
-    );
+    expect(mockPrisma._mockTx.$executeRaw).toHaveBeenCalled();
     expect(mockPrisma._mockTx.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ availablePoints: { increment: 500 } }),

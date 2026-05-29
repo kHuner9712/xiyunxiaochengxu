@@ -733,18 +733,7 @@ export class PaymentService {
                 where: { id: aftersaleWithRelations.orderItem.skuId },
                 data: { stock: { increment: aftersaleWithRelations.orderItem.quantity } },
               });
-              if (typeof tx.$executeRaw === 'function') {
-                await tx.$executeRaw`
-                  UPDATE product_skus
-                  SET sales = GREATEST(sales - ${aftersaleWithRelations.orderItem.quantity}, 0)
-                  WHERE id = ${aftersaleWithRelations.orderItem.skuId}
-                `;
-              } else {
-                await tx.productSku.update({
-                  where: { id: aftersaleWithRelations.orderItem.skuId },
-                  data: { sales: { decrement: aftersaleWithRelations.orderItem.quantity } },
-                });
-              }
+              await this.safeDecrementSkuSales(tx, aftersaleWithRelations.orderItem.skuId, aftersaleWithRelations.orderItem.quantity);
               await tx.productStockLog.create({
                 data: {
                   productId: aftersaleWithRelations.orderItem.productId,
@@ -1534,6 +1523,25 @@ export class PaymentService {
       },
     });
     return response.data;
+  }
+
+  private async safeDecrementSkuSales(tx: any, skuId: bigint, quantity: number) {
+    if (typeof tx.$executeRaw === 'function') {
+      await tx.$executeRaw`
+        UPDATE product_skus
+        SET sales = GREATEST(sales - ${quantity}, 0)
+        WHERE id = ${skuId}
+      `;
+      return;
+    }
+
+    const sku = await tx.productSku.findFirst({ where: { id: skuId } });
+    if (!sku) return;
+    const nextSales = Math.max((sku.sales || 0) - quantity, 0);
+    await tx.productSku.update({
+      where: { id: skuId },
+      data: { sales: nextSales },
+    });
   }
 
   async getCompensationTaskList(params: { page: number; pageSize: number; status?: string; orderNo?: string }) {

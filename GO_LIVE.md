@@ -43,3 +43,16 @@
 1. 运维按 `docs/SERVER_DEPLOY_COMMANDS.md` 执行服务器预生产部署。
 2. 运营/法务按 `docs/ENV_PRODUCTION_FILL_GUIDE.md` 与 `docs/LEGAL_CONTENT_GUIDE.md` 补齐真实信息。
 3. 完成体验版构建与真机闭环后，再发起正式发布 Go/No-Go 评审。
+## 2026-05-29 补偿任务与迁移补充
+
+1. 数据库迁移新增：
+   - `payment_compensation_tasks`（支付成功回调打到已取消订单时的补偿任务）
+   - `payment_compensation_tasks.transaction_id` 索引
+2. 部署后必须执行：
+   - `pnpm --filter @baby-mall/api prisma migrate deploy`
+   - `pnpm --filter @baby-mall/api prisma:validate`
+3. 运营处理流程（真实支付异常）：
+   - 在后台“支付补偿任务”列表筛选 `pending`；
+   - 核对订单、微信交易号、金额与回调快照；
+   - 按实际结果标记 `resolved` 或 `ignored`，填写处理结论；
+   - 涉及退款时走真实微信退款流程并保留操作记录。

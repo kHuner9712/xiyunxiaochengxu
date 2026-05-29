@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { WeappPickupStoreController, AdminPickupStoreController } from './pickup-store.controller';
 import { PickupStoreService } from './pickup-store.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
+import { OrderModule } from '../order/order.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, OrderModule],
   controllers: [WeappPickupStoreController, AdminPickupStoreController],
   providers: [PickupStoreService],
   exports: [PickupStoreService],

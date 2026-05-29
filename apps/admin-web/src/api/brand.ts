@@ -10,8 +10,11 @@ export const brandApi = {
   create(data: any) {
     return request.post('/admin/brand/create', data)
   },
-  update(data: any) {
-    return request.put(`/admin/brand/update/${data.id}`, data)
+  update(idOrData: number | any, data?: any) {
+    const id = typeof idOrData === 'number' ? idOrData : idOrData.id
+    const payload = typeof idOrData === 'number' ? (data || {}) : { ...(idOrData || {}) }
+    delete payload.id
+    return request.put(`/admin/brand/update/${id}`, payload)
   },
   delete(id: number) {
     return request.delete(`/admin/brand/delete/${id}`)

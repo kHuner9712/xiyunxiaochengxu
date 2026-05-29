@@ -1,6 +1,9 @@
 import { describe, it, expect } from '@jest/globals';
 import { BadRequestException } from '@nestjs/common';
 import { UploadService } from './upload.service';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 function createMockPrisma() {
   return {
@@ -296,5 +299,31 @@ describe('UploadService webm removed', () => {
 
   it('不应允许 .webm 扩展名', () => {
     expect(ALLOWED_EXTENSIONS).not.toContain('.webm');
+  });
+});
+
+describe('UploadService 本地存储删除路径', () => {
+  it('UPLOAD_DIR 为自定义目录时应删除真实文件', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-test-'));
+    const previousUploadDir = process.env.UPLOAD_DIR;
+    process.env.UPLOAD_DIR = tmpDir;
+
+    const prisma = createMockPrisma();
+    prisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(1),
+      fileName: 'test.jpg',
+      filePath: '/uploads/test.jpg',
+    });
+    prisma.fileAsset.delete.mockResolvedValue({});
+
+    const { service } = createService(prisma);
+    const targetFile = path.join(tmpDir, 'test.jpg');
+    fs.writeFileSync(targetFile, Buffer.from('abc'));
+
+    await service.delete('1');
+    expect(fs.existsSync(targetFile)).toBe(false);
+
+    process.env.UPLOAD_DIR = previousUploadDir;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });

@@ -188,12 +188,23 @@ if [ -f "$SCHEMA_FILE" ]; then
   check_model_in_schema "OrderRefund"
   check_model_in_schema "RefundCallbackLog"
   check_model_in_schema "BusinessEvent"
+  check_model_in_schema "PaymentCompensationTask"
   check_field_in_schema "OrderRefund" "outRefundNo" "OrderRefund.outRefundNo 字段"
   check_field_in_schema "OrderRefund" "initiating" "OrderRefund.status 包含 initiating 默认值"
   check_field_in_schema "RefundCallbackLog" "orphan" "RefundCallbackLog.status 包含 orphan"
+  check_field_in_schema "ProductCategory" "complianceConfig" "ProductCategory.complianceConfig 字段"
+  check_field_in_schema "PaymentCompensationTask" "transactionId" "PaymentCompensationTask.transactionId 字段"
+  check_field_in_schema "PaymentCompensationTask" "callbackPayload" "PaymentCompensationTask.callbackPayload 字段"
+  check_field_in_schema "PaymentCompensationTask" "status" "PaymentCompensationTask.status 字段"
   check_enum_in_schema "AftersaleStatus" "pending_refund" "AftersaleStatus 包含 pending_refund"
 else
   fail "schema.prisma 不存在: $SCHEMA_FILE"
+fi
+
+if grep -R "payment_compensation_tasks" apps/api/prisma/migrations/*/migration.sql > /dev/null 2>&1; then
+  pass "迁移文件包含 payment_compensation_tasks"
+else
+  fail "迁移文件缺少 payment_compensation_tasks"
 fi
 
 section "8. .env.example 必要变量检查"
