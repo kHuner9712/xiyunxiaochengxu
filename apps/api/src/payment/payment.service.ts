@@ -763,11 +763,25 @@ export class PaymentService {
                     type: 2,
                     points: deductedPoints,
                     balance: user.availablePoints - deductedPoints,
-                    source: 'aftersale_refund',
-                    sourceId: aftersaleWithRelations.orderId,
+                    source: 'aftersale_refund_deduct_reward',
+                    sourceId: aftersaleWithRelations.id,
                     description: `售后退款扣回${deductedPoints}积分`,
                   },
                 });
+              } else {
+                this.businessEvent.emitWarn(
+                  'aftersale_refund_deduct_points_insufficient',
+                  'refund',
+                  `售后退款扣回奖励积分失败：用户可用积分不足`,
+                  (aftersaleWithRelations.id || '').toString(),
+                  {
+                    userId: aftersaleWithRelations.userId?.toString?.() || aftersaleWithRelations.userId,
+                    aftersaleId: aftersaleWithRelations.id?.toString?.() || aftersaleWithRelations.id,
+                    refundId: refund.id.toString(),
+                    requiredDeductedPoints: deductedPoints,
+                    availablePoints: user?.availablePoints ?? null,
+                  },
+                );
               }
             }
           }
@@ -787,8 +801,8 @@ export class PaymentService {
                     type: 1,
                     points: restorePoints,
                     balance: user.availablePoints + restorePoints,
-                    source: 'aftersale_refund_restore',
-                    sourceId: aftersaleWithRelations.orderId,
+                    source: 'aftersale_refund_restore_deducted',
+                    sourceId: aftersaleWithRelations.id,
                     description: `售后退款归还抵扣积分${restorePoints}`,
                   },
                 });
@@ -927,16 +941,44 @@ export class PaymentService {
     reason: string;
     callbackPayload?: any;
   }) {
-    await this.prisma.paymentCompensationTask.create({
-      data: {
+    const transactionId = params.transactionId || null;
+    const existingTask = await this.prisma.paymentCompensationTask.findFirst({
+      where: {
         orderNo: params.orderNo,
-        transactionId: params.transactionId || null,
-        amount: params.amount ?? null,
         reason: params.reason,
-        status: 'pending',
-        callbackPayload: params.callbackPayload ?? Prisma.DbNull,
+        transactionId,
       },
     });
+    if (existingTask) {
+      return existingTask;
+    }
+
+    try {
+      return await this.prisma.paymentCompensationTask.create({
+        data: {
+          orderNo: params.orderNo,
+          transactionId,
+          amount: params.amount ?? null,
+          reason: params.reason,
+          status: 'pending',
+          callbackPayload: params.callbackPayload ?? Prisma.DbNull,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        const duplicatedTask = await this.prisma.paymentCompensationTask.findFirst({
+          where: {
+            orderNo: params.orderNo,
+            reason: params.reason,
+            transactionId,
+          },
+        });
+        if (duplicatedTask) {
+          return duplicatedTask;
+        }
+      }
+      throw error;
+    }
   }
 
   private signRequest(message: string): string {

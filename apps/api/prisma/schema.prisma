@@ -871,8 +871,8 @@ model RefundCallbackLog {
 
 model PaymentCompensationTask {
   id             BigInt   @id @default(autoincrement()) @map("id")
-  orderNo        String   @db.VarChar(32) @map("order_no")
-  transactionId  String?  @db.VarChar(64) @map("transaction_id")
+  orderNo        String   @db.VarChar(64) @map("order_no")
+  transactionId  String?  @db.VarChar(128) @map("transaction_id")
   amount         Int?     @map("amount")
   status         String   @db.VarChar(20) @default("pending") @map("status")
   reason         String   @db.VarChar(100) @map("reason")
@@ -880,10 +880,11 @@ model PaymentCompensationTask {
   retryCount     Int      @default(0) @map("retry_count")
   handledBy      String?  @db.VarChar(64) @map("handled_by")
   handledAt      DateTime? @map("handled_at")
-  resolution     String?  @db.VarChar(500) @map("resolution")
+  resolution     String?  @db.Text @map("resolution")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
+  @@unique([orderNo, reason, transactionId], name: "uk_compensation_order_reason_tx")
   @@index([orderNo], name: "idx_order_no")
   @@index([transactionId], name: "idx_transaction_id")
   @@index([status], name: "idx_status")

@@ -196,6 +196,8 @@ if [ -f "$SCHEMA_FILE" ]; then
   check_field_in_schema "PaymentCompensationTask" "transactionId" "PaymentCompensationTask.transactionId 字段"
   check_field_in_schema "PaymentCompensationTask" "callbackPayload" "PaymentCompensationTask.callbackPayload 字段"
   check_field_in_schema "PaymentCompensationTask" "status" "PaymentCompensationTask.status 字段"
+  check_field_in_schema "PaymentCompensationTask" "@db.Text @map(\"resolution\")" "PaymentCompensationTask.resolution 为 Text"
+  check_field_in_schema "PaymentCompensationTask" "uk_compensation_order_reason_tx" "PaymentCompensationTask 复合唯一约束"
   check_enum_in_schema "AftersaleStatus" "pending_refund" "AftersaleStatus 包含 pending_refund"
 else
   fail "schema.prisma 不存在: $SCHEMA_FILE"

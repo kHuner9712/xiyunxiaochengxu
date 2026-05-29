@@ -670,8 +670,110 @@ describe('PaymentService.handleRefundCallback', () => {
     );
     expect(mockPrisma.aftersaleOrder.update).toHaveBeenCalled();
     expect(mockPrisma.productSku.update).toHaveBeenCalled();
+    expect(mockPrisma.pointsRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: 'aftersale_refund_deduct_reward',
+          sourceId: AFTERSALE_RECORD.id,
+        }),
+      }),
+    );
+    expect(mockPrisma.pointsRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: 'aftersale_refund_restore_deducted',
+          sourceId: AFTERSALE_RECORD.id,
+        }),
+      }),
+    );
     expect(mockPrisma.orderRefund.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: REFUND_STATUS.SUCCESS }) }),
+    );
+  });
+
+  it('积分不足扣回奖励积分时不阻断退款，并记录 business event', async () => {
+    mockPrisma = createMockPrisma();
+    const mockBE = createMockBusinessEventService();
+    service = createPaymentService(mockPrisma, createMockConfigService(), mockBE);
+    setupTransaction(mockPrisma);
+
+    mockPrisma.orderRefund.findFirst.mockResolvedValue(REFUND_RECORD);
+    mockPrisma.orderRefund.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.aftersaleOrder.findFirst
+      .mockResolvedValueOnce(AFTERSALE_RECORD)
+      .mockResolvedValueOnce(null);
+    mockPrisma.aftersaleOrder.update.mockResolvedValue({});
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_RECORD);
+    mockPrisma.productSku.update.mockResolvedValue({});
+    mockPrisma.productStockLog.create.mockResolvedValue({});
+    mockPrisma.user.findFirst.mockResolvedValue({ ...USER_RECORD, availablePoints: 1 });
+    mockPrisma.user.update.mockResolvedValue({});
+    mockPrisma.pointsRecord.create.mockResolvedValue({});
+    mockPrisma.order.update.mockResolvedValue({});
+    mockPrisma.orderRefund.update.mockResolvedValue({ status: REFUND_STATUS.SUCCESS });
+
+    const result = await service.handleRefundCallback(
+      buildRefundCallbackBody(DECRYPTED_REFUND_SUCCESS), CALLBACK_HEADERS, RAW_BODY,
+    );
+
+    expect(result.code).toBe('SUCCESS');
+    expect(mockBE.emitWarn).toHaveBeenCalledWith(
+      expect.stringContaining('aftersale_refund_deduct_points_insufficient'),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ requiredDeductedPoints: 10 }),
+    );
+  });
+
+  it('同一订单两次不同售后退款可分别写入积分流水', async () => {
+    setupTransaction(mockPrisma);
+    const refundA = { ...REFUND_RECORD, id: BigInt(1), outRefundNo: 'REFUND_A', aftersaleId: BigInt(10) };
+    const refundB = { ...REFUND_RECORD, id: BigInt(2), outRefundNo: 'REFUND_B', aftersaleId: BigInt(11) };
+    const aftersaleA = { ...AFTERSALE_RECORD, id: BigInt(10), orderId: BigInt(100) };
+    const aftersaleB = { ...AFTERSALE_RECORD, id: BigInt(11), orderId: BigInt(100) };
+
+    mockPrisma.orderRefund.findFirst.mockResolvedValueOnce(refundA).mockResolvedValueOnce(refundB);
+    mockPrisma.orderRefund.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.aftersaleOrder.findFirst
+      .mockResolvedValueOnce(aftersaleA).mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(aftersaleB).mockResolvedValueOnce(null);
+    mockPrisma.aftersaleOrder.update.mockResolvedValue({});
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_RECORD);
+    mockPrisma.productSku.update.mockResolvedValue({});
+    mockPrisma.productStockLog.create.mockResolvedValue({});
+    mockPrisma.user.findFirst.mockResolvedValue(USER_RECORD);
+    mockPrisma.user.update.mockResolvedValue({});
+    mockPrisma.pointsRecord.create.mockResolvedValue({});
+    mockPrisma.order.update.mockResolvedValue({});
+    mockPrisma.orderRefund.update.mockResolvedValue({ status: REFUND_STATUS.SUCCESS });
+
+    await service.handleRefundCallback(
+      buildRefundCallbackBody({ ...DECRYPTED_REFUND_SUCCESS, out_refund_no: 'REFUND_A' }),
+      CALLBACK_HEADERS,
+      RAW_BODY,
+    );
+    await service.handleRefundCallback(
+      buildRefundCallbackBody({ ...DECRYPTED_REFUND_SUCCESS, out_refund_no: 'REFUND_B' }),
+      CALLBACK_HEADERS,
+      RAW_BODY,
+    );
+
+    expect(mockPrisma.pointsRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: 'aftersale_refund_deduct_reward',
+          sourceId: BigInt(10),
+        }),
+      }),
+    );
+    expect(mockPrisma.pointsRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: 'aftersale_refund_deduct_reward',
+          sourceId: BigInt(11),
+        }),
+      }),
     );
   });
 
@@ -1667,6 +1769,34 @@ describe('PaymentService 补偿任务管理', () => {
         data: expect.objectContaining({ status: 'resolved', handledBy: '100' }),
       }),
     );
+  });
+
+  it('createPaymentCompensationTask 重复相同 transactionId 不重复创建', async () => {
+    const createTask = (service as any).createPaymentCompensationTask.bind(service);
+    const created = { id: BigInt(1), orderNo: 'ORD001', reason: 'cancelled_order_paid_callback', transactionId: 'TXN001' };
+    mockPrisma.paymentCompensationTask.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(created);
+    mockPrisma.paymentCompensationTask.create.mockResolvedValue(created);
+
+    await createTask({ orderNo: 'ORD001', transactionId: 'TXN001', reason: 'cancelled_order_paid_callback' });
+    await createTask({ orderNo: 'ORD001', transactionId: 'TXN001', reason: 'cancelled_order_paid_callback' });
+
+    expect(mockPrisma.paymentCompensationTask.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('createPaymentCompensationTask transactionId 为空时按 orderNo+reason 幂等', async () => {
+    const createTask = (service as any).createPaymentCompensationTask.bind(service);
+    const created = { id: BigInt(2), orderNo: 'ORD002', reason: 'cancelled_order_paid_callback', transactionId: null };
+    mockPrisma.paymentCompensationTask.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(created);
+    mockPrisma.paymentCompensationTask.create.mockResolvedValue(created);
+
+    await createTask({ orderNo: 'ORD002', reason: 'cancelled_order_paid_callback' });
+    await createTask({ orderNo: 'ORD002', reason: 'cancelled_order_paid_callback' });
+
+    expect(mockPrisma.paymentCompensationTask.create).toHaveBeenCalledTimes(1);
   });
 });
 

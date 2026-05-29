@@ -17,10 +17,20 @@
 ## 3. 当前门禁状态
 
 1. `pnpm release:check`：通过（用于预生产准备）。
-2. `pnpm release:check:prod`：未通过（预期）。
+2. `pnpm release:check:prod`：未执行/待执行（本次未在本地触发）。
 3. 严格失败原因：
 - 未提供真实小程序 AppID。
 - `legal.ts` 中客服电话/客服微信/退货地址仍为占位口径，未替换为最终值。
+
+## 3.1 本次真实执行留痕（2026-05-29 16:04:21 +08:00）
+
+1. `pnpm install`：PASS
+2. `pnpm --filter @baby-mall/api prisma:validate`：PASS
+3. `pnpm --filter @baby-mall/api test:ci`：PASS
+4. `pnpm build:api`：PASS
+5. `pnpm build:admin`：PASS
+6. `VITE_API_BASE_URL= pnpm build:mini`：PASS
+7. `pnpm release:check`：PASS
 
 ## 4. 人工阻塞项（P0）
 
