@@ -6,11 +6,7 @@
 
 ## 项目结构
 
-- `apps/miniprogram`：uni-app + Vue3 + TypeScript 微信小程序端
-- `apps/admin-web`：Vue3 + Vite + Element Plus 管理后台
-- `apps/api`：NestJS + Prisma + MySQL + Redis 后端 API
-- `packages/shared`：共享类型/常量/工具
-- `deploy`：Docker Compose + Nginx + HTTPS 部署脚本
+- 见 `docs/PROJECT_STRUCTURE.md`
 
 ## 环境要求
 
@@ -89,15 +85,19 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 
 必填人工信息见：[docs/OPERATOR_REQUIRED.md](docs/OPERATOR_REQUIRED.md)
 
-## 上线文档
+## 上线文档入口（当前有效）
 
 - [GO_LIVE.md](GO_LIVE.md)
 - [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md)
-- [docs/FUNCTION_COMPLETENESS.md](docs/FUNCTION_COMPLETENESS.md)
 - [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md)
-- [docs/PREPROD_EXECUTION_STEPS.md](docs/PREPROD_EXECUTION_STEPS.md)
 - [docs/SERVER_DEPLOY_COMMANDS.md](docs/SERVER_DEPLOY_COMMANDS.md)
+- [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md)
+- [docs/PREPROD_EXECUTION_STEPS.md](docs/PREPROD_EXECUTION_STEPS.md)
 - [docs/ENV_PRODUCTION_FILL_GUIDE.md](docs/ENV_PRODUCTION_FILL_GUIDE.md)
 - [docs/MANUAL_ACCEPTANCE_CHECKLIST.md](docs/MANUAL_ACCEPTANCE_CHECKLIST.md)
 - [docs/PREPROD_ACCEPTANCE_RECORD.md](docs/PREPROD_ACCEPTANCE_RECORD.md)
 - [docs/LEGAL_CONTENT_GUIDE.md](docs/LEGAL_CONTENT_GUIDE.md)
+- [docs/OPERATOR_REQUIRED.md](docs/OPERATOR_REQUIRED.md)
+- [docs/FUNCTION_COMPLETENESS.md](docs/FUNCTION_COMPLETENESS.md)
+
+历史阶段报告与旧版指引已归档到 `docs/archive/`，不再作为主入口。

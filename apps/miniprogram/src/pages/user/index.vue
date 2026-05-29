@@ -160,7 +160,6 @@ function goOrderList(status?: number) {
     return
   }
   const url = status ? `/pages/order/list?status=${status}` : '/pages/order/list'
-  console.log('[baby-mall] navigateTo:', url)
   uni.navigateTo({
     url,
     fail: (err) => {
@@ -177,7 +176,6 @@ interface NavOptions {
 
 function smartNavigate(url: string, options: NavOptions = {}) {
   const { requireLogin = false, allowDemo = false } = options
-  console.log('[baby-mall] smartNavigate:', url, options)
 
   if (!userStore.isLoggedIn) {
     if (allowDemo) {

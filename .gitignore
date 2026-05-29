@@ -64,6 +64,18 @@ secrets/
 tmp/
 temp/
 *.tmp
+*.old
+*.bak
+*test-output*
+*debug*
+*scratch*
+*临时*
+
+# WeChat / uni-app local outputs
+apps/miniprogram/unpackage/
+apps/miniprogram/.hbuilderx/
+apps/miniprogram/project.private.config.json
+apps/miniprogram/project.local.config.json
 
 # Coverage
 coverage/
