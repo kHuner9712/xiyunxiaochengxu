@@ -1785,6 +1785,18 @@ describe('PaymentService 补偿任务管理', () => {
     expect(mockPrisma.paymentCompensationTask.create).toHaveBeenCalledTimes(1);
   });
 
+  it('createPaymentCompensationTask 首次调用创建成功', async () => {
+    const createTask = (service as any).createPaymentCompensationTask.bind(service);
+    const created = { id: BigInt(3), orderNo: 'ORD003', reason: 'cancelled_order_paid_callback', transactionId: 'TXN003' };
+    mockPrisma.paymentCompensationTask.findFirst.mockResolvedValueOnce(null);
+    mockPrisma.paymentCompensationTask.create.mockResolvedValue(created);
+
+    const result = await createTask({ orderNo: 'ORD003', transactionId: 'TXN003', reason: 'cancelled_order_paid_callback' });
+
+    expect(mockPrisma.paymentCompensationTask.create).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(created);
+  });
+
   it('createPaymentCompensationTask transactionId 为空时按 orderNo+reason 幂等', async () => {
     const createTask = (service as any).createPaymentCompensationTask.bind(service);
     const created = { id: BigInt(2), orderNo: 'ORD002', reason: 'cancelled_order_paid_callback', transactionId: null };
@@ -1797,6 +1809,44 @@ describe('PaymentService 补偿任务管理', () => {
     await createTask({ orderNo: 'ORD002', reason: 'cancelled_order_paid_callback' });
 
     expect(mockPrisma.paymentCompensationTask.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('createPaymentCompensationTask 命中 P2002 时回查并返回已有任务', async () => {
+    const createTask = (service as any).createPaymentCompensationTask.bind(service);
+    const existing = { id: BigInt(4), orderNo: 'ORD004', reason: 'cancelled_order_paid_callback', transactionId: 'TXN004' };
+    mockPrisma.paymentCompensationTask.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(existing);
+    mockPrisma.paymentCompensationTask.create.mockRejectedValue({ code: 'P2002' });
+
+    const result = await createTask({ orderNo: 'ORD004', transactionId: 'TXN004', reason: 'cancelled_order_paid_callback' });
+
+    expect(result).toEqual(existing);
+    expect(mockPrisma.paymentCompensationTask.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it('resolveCompensationTask 支持 ignored 并写入处理信息', async () => {
+    mockPrisma.paymentCompensationTask.findFirst.mockResolvedValue({ id: BigInt(9) });
+    mockPrisma.paymentCompensationTask.update.mockResolvedValue({
+      id: BigInt(9),
+      status: 'ignored',
+      handledBy: 'admin',
+      resolution: 'false alarm',
+    });
+
+    const result = await service.resolveCompensationTask('9', 'admin', 'false alarm', 'ignored');
+
+    expect(result.status).toBe('ignored');
+    expect(mockPrisma.paymentCompensationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'ignored',
+          handledBy: 'admin',
+          resolution: 'false alarm',
+          handledAt: expect.any(Date),
+        }),
+      }),
+    );
   });
 });
 
