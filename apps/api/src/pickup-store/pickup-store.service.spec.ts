@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { PickupStoreService } from './pickup-store.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 
 function createMockPrisma() {
   return {
@@ -11,29 +11,21 @@ function createMockPrisma() {
       update: jest.fn() as any,
       count: jest.fn() as any,
     },
-    order: {
-      findFirst: jest.fn() as any,
-      updateMany: jest.fn() as any,
-    },
-    orderLog: {
-      create: jest.fn() as any,
-    },
-    $transaction: jest.fn() as any,
   };
 }
 
 describe('PickupStoreService', () => {
   let service: PickupStoreService;
   let prisma: ReturnType<typeof createMockPrisma>;
+  let orderService: { completePickupOrderByCode: any };
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new PickupStoreService(prisma as any);
+    orderService = {
+      completePickupOrderByCode: jest.fn(),
+    };
+    service = new PickupStoreService(prisma as any, orderService as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
-    prisma.$transaction.mockImplementation(async (fn: any) => fn({
-      order: prisma.order,
-      orderLog: prisma.orderLog,
-    }));
   });
 
   describe('findPublished', () => {
@@ -83,76 +75,27 @@ describe('PickupStoreService', () => {
 
   describe('verifyPickupCode', () => {
     it('should throw NotFoundException for non-existent code', async () => {
-      prisma.order.findFirst.mockResolvedValue(null);
+      orderService.completePickupOrderByCode.mockRejectedValue(new NotFoundException('自提码不存在'));
       await expect(service.verifyPickupCode('000000', '1')).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException for non-pickup order', async () => {
-      prisma.order.findFirst.mockResolvedValue({
-        id: 1n, fulfillmentType: 'delivery', status: 'pending_delivery', pickupCode: '123456',
-      });
-      await expect(service.verifyPickupCode('123456', '1')).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw BadRequestException for already verified order', async () => {
-      prisma.order.findFirst.mockResolvedValue({
-        id: 1n, fulfillmentType: 'pickup', status: 'completed',
-        pickupCode: '123456', pickedUpAt: new Date(),
-      });
-      await expect(service.verifyPickupCode('123456', '1')).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw BadRequestException for wrong status order', async () => {
-      prisma.order.findFirst.mockResolvedValue({
-        id: 1n, fulfillmentType: 'pickup', status: 'pending_payment',
-        pickupCode: '123456', pickedUpAt: null,
-      });
-      await expect(service.verifyPickupCode('123456', '1')).rejects.toThrow(BadRequestException);
-    });
-
     it('should successfully verify a pending_pickup order', async () => {
-      prisma.order.findFirst.mockResolvedValue({
-        id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
-        status: 'pending_pickup', pickupCode: '654321', pickedUpAt: null,
+      orderService.completePickupOrderByCode.mockResolvedValue({
+        success: true,
+        orderId: '1',
+        orderNo: 'ORD202605260001',
+        pickedUpAt: new Date(),
       });
-      prisma.order.updateMany.mockResolvedValue({ count: 1 });
-      prisma.order.findFirst.mockResolvedValueOnce({
-        id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
-        status: 'pending_pickup', pickupCode: '654321', pickedUpAt: null,
-      }).mockResolvedValueOnce({
-        id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
-        status: 'completed', pickupCode: '654321', pickedUpAt: new Date(),
-      });
-      prisma.orderLog.create.mockResolvedValue({});
 
       const result = await service.verifyPickupCode('654321', '1');
 
       expect(result.success).toBe(true);
       expect(result.orderNo).toBe('ORD202605260001');
-      expect(prisma.order.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            status: 'completed',
-            pickedUpAt: expect.any(Date),
-            pickupVerifiedBy: 1n,
-          }),
-        })
-      );
-      expect(prisma.orderLog.create).toHaveBeenCalled();
+      expect(orderService.completePickupOrderByCode).toHaveBeenCalledWith('654321', '1');
     });
 
-    it('should reject repeated verify when updateMany count is 0', async () => {
-      prisma.order.findFirst
-        .mockResolvedValueOnce({
-          id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
-          status: 'pending_pickup', pickupCode: '654321', pickedUpAt: null,
-        })
-        .mockResolvedValueOnce({
-          id: 1n, orderNo: 'ORD202605260001', fulfillmentType: 'pickup',
-          status: 'completed', pickupCode: '654321', pickedUpAt: new Date(),
-        });
-      prisma.order.updateMany.mockResolvedValue({ count: 0 });
-
+    it('should forward duplicate verify error from order service', async () => {
+      orderService.completePickupOrderByCode.mockRejectedValue(new Error('该订单已核销或订单状态已变化'));
       await expect(service.verifyPickupCode('654321', '1')).rejects.toThrow('该订单已核销或订单状态已变化');
     });
   });

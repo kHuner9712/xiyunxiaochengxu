@@ -364,7 +364,12 @@ describe('OrderService.cancel 未支付订单释放资源', () => {
     );
     expect(mockPrisma._mockTx.productSku.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ stock: { increment: 1 }, sales: { decrement: 1 } }),
+        data: expect.objectContaining({ stock: { increment: 1 } }),
+      }),
+    );
+    expect(mockPrisma._mockTx.productSku.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ sales: { decrement: 1 } }),
       }),
     );
   });
@@ -760,7 +765,12 @@ describe('订单主链路', () => {
 
     expect(mockPrisma._mockTx.productSku.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ stock: { increment: 1 }, sales: { decrement: 1 } }),
+        data: expect.objectContaining({ stock: { increment: 1 } }),
+      }),
+    );
+    expect(mockPrisma._mockTx.productSku.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ sales: { decrement: 1 } }),
       }),
     );
     expect(mockPrisma._mockTx.user.update).toHaveBeenCalledWith(

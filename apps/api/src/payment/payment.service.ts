@@ -17,6 +17,7 @@ export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
   private privateKey: string;
   private wechatpayCertificate: string;
+  private platformCertificates = new Map<string, string>();
 
   constructor(
     private prisma: PrismaService,
@@ -38,15 +39,33 @@ export class PaymentService {
     }
 
     const certPath = this.configService.get<string>('WECHAT_PLATFORM_CERT_PATH', '');
+    const certSerialNo = this.configService.get<string>('WECHAT_PLATFORM_CERT_SERIAL_NO', '');
     if (certPath) {
       try {
         this.wechatpayCertificate = fs.readFileSync(certPath, 'utf8');
+        if (certSerialNo) {
+          this.platformCertificates.set(certSerialNo, this.wechatpayCertificate);
+        }
       } catch {
         this.logger.warn(`微信平台证书文件读取失败: ${certPath}，回调验签将不可用`);
         this.wechatpayCertificate = '';
       }
     } else {
       this.wechatpayCertificate = '';
+    }
+
+    const certMapRaw = this.configService.get<string>('WECHAT_PLATFORM_CERT_MAP', '');
+    if (certMapRaw) {
+      try {
+        const certMap = JSON.parse(certMapRaw) as Record<string, string>;
+        Object.entries(certMap).forEach(([serial, filePath]) => {
+          if (!serial || !filePath) return;
+          if (!fs.existsSync(filePath)) return;
+          this.platformCertificates.set(serial, fs.readFileSync(filePath, 'utf8'));
+        });
+      } catch (error) {
+        this.logger.warn(`WECHAT_PLATFORM_CERT_MAP 解析失败: ${(error as Error).message}`);
+      }
     }
 
     const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
@@ -216,14 +235,13 @@ export class PaymentService {
     }
     const message = `${timestamp}\n${nonce}\n${rawBody}\n`;
 
-    if (!this.verifyWechatSignature(message, signature)) {
+    if (!this.verifyWechatSignature(message, signature, serialNo)) {
       this.logger.warn('微信回调签名验证失败');
       return { code: 'FAIL', message: '签名验证失败' };
     }
 
-    const configuredSerialNo = this.configService.get<string>('WECHAT_PLATFORM_CERT_SERIAL_NO', '');
-    if (configuredSerialNo && serialNo !== configuredSerialNo) {
-      this.logger.warn(`微信回调证书序列号不匹配: ${serialNo} vs ${configuredSerialNo}`);
+    if (serialNo && this.platformCertificates.size > 0 && !this.platformCertificates.has(serialNo)) {
+      this.logger.warn(`微信回调证书序列号不匹配: ${serialNo}`);
       return { code: 'FAIL', message: '证书序列号不匹配' };
     }
 
@@ -278,11 +296,22 @@ export class PaymentService {
         this.businessEvent.emitCritical(
           'payment_callback_on_cancelled_order',
           'payment',
-          `支付回调到达但订单已取消: ${outTradeNo}，微信交易号: ${transactionId}，需人工补偿`,
+          `支付回调到达但订单已取消: ${outTradeNo}，微信交易号: ${transactionId}，已创建补偿任务`,
           outTradeNo,
           { outTradeNo, transactionId, totalAmount, orderStatus: order.status },
         );
-        return { code: 'FAIL', message: '订单已取消，支付回调需人工补偿' };
+        await this.createPaymentCompensationTask({
+          orderNo: outTradeNo,
+          transactionId,
+          amount: totalAmount,
+          reason: 'cancelled_order_paid_callback',
+          callbackPayload: {
+            headers: { signature, timestamp, nonce, serialNo },
+            body,
+            decryptedData,
+          },
+        });
+        return { code: 'SUCCESS', message: '' };
       }
       this.logger.log(`微信回调订单已处理: ${outTradeNo}，状态: ${order.status}`);
       return { code: 'SUCCESS', message: '' };
@@ -702,8 +731,20 @@ export class PaymentService {
             if (sku) {
               await tx.productSku.update({
                 where: { id: aftersaleWithRelations.orderItem.skuId },
-                data: { stock: { increment: aftersaleWithRelations.orderItem.quantity }, sales: { decrement: aftersaleWithRelations.orderItem.quantity } },
+                data: { stock: { increment: aftersaleWithRelations.orderItem.quantity } },
               });
+              if (typeof tx.$executeRaw === 'function') {
+                await tx.$executeRaw`
+                  UPDATE product_skus
+                  SET sales = GREATEST(sales - ${aftersaleWithRelations.orderItem.quantity}, 0)
+                  WHERE id = ${aftersaleWithRelations.orderItem.skuId}
+                `;
+              } else {
+                await tx.productSku.update({
+                  where: { id: aftersaleWithRelations.orderItem.skuId },
+                  data: { sales: { decrement: aftersaleWithRelations.orderItem.quantity } },
+                });
+              }
               await tx.productStockLog.create({
                 data: {
                   productId: aftersaleWithRelations.orderItem.productId,
@@ -865,8 +906,11 @@ export class PaymentService {
     }
   }
 
-  private verifyWechatSignature(message: string, signature: string): boolean {
-    if (!this.wechatpayCertificate) {
+  private verifyWechatSignature(message: string, signature: string, serialNo?: string): boolean {
+    const certificate = serialNo && this.platformCertificates.has(serialNo)
+      ? this.platformCertificates.get(serialNo)!
+      : this.wechatpayCertificate;
+    if (!certificate) {
       const skipVerify = this.configService.get<string>('WECHAT_SKIP_VERIFY', 'false');
       const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
       if (nodeEnv !== 'production' && skipVerify === 'true') {
@@ -880,11 +924,30 @@ export class PaymentService {
       const verify = crypto.createVerify('SHA256');
       verify.update(message);
       verify.end();
-      return verify.verify(this.wechatpayCertificate, signature, 'base64');
+      return verify.verify(certificate, signature, 'base64');
     } catch (e) {
       this.logger.error(`微信回调签名验证异常: ${(e as Error).message}`);
       return false;
     }
+  }
+
+  private async createPaymentCompensationTask(params: {
+    orderNo: string;
+    transactionId?: string;
+    amount?: number;
+    reason: string;
+    callbackPayload?: any;
+  }) {
+    await this.prisma.paymentCompensationTask.create({
+      data: {
+        orderNo: params.orderNo,
+        transactionId: params.transactionId || null,
+        amount: params.amount ?? null,
+        reason: params.reason,
+        status: 'pending',
+        callbackPayload: params.callbackPayload ?? Prisma.DbNull,
+      },
+    });
   }
 
   private signRequest(message: string): string {
@@ -1131,14 +1194,13 @@ export class PaymentService {
     }
     const message = `${timestamp}\n${nonce}\n${rawBody}\n`;
 
-    if (!this.verifyWechatSignature(message, signature)) {
+    if (!this.verifyWechatSignature(message, signature, serialNo)) {
       this.logger.warn('微信退款回调签名验证失败');
       return { code: 'FAIL', message: '签名验证失败' };
     }
 
-    const configuredSerialNo = this.configService.get<string>('WECHAT_PLATFORM_CERT_SERIAL_NO', '');
-    if (configuredSerialNo && serialNo !== configuredSerialNo) {
-      this.logger.warn(`微信退款回调证书序列号不匹配: ${serialNo} vs ${configuredSerialNo}`);
+    if (serialNo && this.platformCertificates.size > 0 && !this.platformCertificates.has(serialNo)) {
+      this.logger.warn(`微信退款回调证书序列号不匹配: ${serialNo}`);
       return { code: 'FAIL', message: '证书序列号不匹配' };
     }
 
@@ -1197,7 +1259,7 @@ export class PaymentService {
         this.logger.error(`写入孤儿回调日志失败: ${outRefundNo}`, (logErr as Error).message);
       }
 
-      return { code: 'FAIL', message: '退款记录不存在' };
+      return { code: 'SUCCESS', message: '' };
     }
 
     // 1. 基本校验
@@ -1472,6 +1534,46 @@ export class PaymentService {
       },
     });
     return response.data;
+  }
+
+  async getCompensationTaskList(params: { page: number; pageSize: number; status?: string; orderNo?: string }) {
+    const where: any = {};
+    if (params.status) where.status = params.status;
+    if (params.orderNo) where.orderNo = { contains: params.orderNo };
+    const skip = (params.page - 1) * params.pageSize;
+    const [list, total] = await Promise.all([
+      this.prisma.paymentCompensationTask.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: params.pageSize,
+      }),
+      this.prisma.paymentCompensationTask.count({ where }),
+    ]);
+    return {
+      list: list.map((item: any) => ({ ...item, id: item.id.toString() })),
+      pagination: {
+        page: params.page,
+        pageSize: params.pageSize,
+        total,
+        totalPages: Math.ceil(total / params.pageSize),
+      },
+    };
+  }
+
+  async resolveCompensationTask(id: string, handledBy: string, resolution: string, status: 'resolved' | 'ignored') {
+    const task = await this.prisma.paymentCompensationTask.findFirst({ where: { id: BigInt(id) } });
+    if (!task) throw new NotFoundException('补偿任务不存在');
+    const updated = await this.prisma.paymentCompensationTask.update({
+      where: { id: BigInt(id) },
+      data: {
+        status,
+        handledBy,
+        handledAt: new Date(),
+        resolution,
+      },
+    });
+    return { ...updated, id: updated.id.toString() };
   }
 
   // 管理后台退款查询方法

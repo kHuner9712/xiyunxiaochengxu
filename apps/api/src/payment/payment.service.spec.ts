@@ -34,6 +34,7 @@ function createMockPrisma() {
     userCoupon: { findFirst: jest.fn(), update: jest.fn() },
     user: { findFirst: jest.fn(), update: jest.fn() },
     pointsRecord: { create: jest.fn() },
+    paymentCompensationTask: { create: jest.fn(), findMany: jest.fn(), count: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     $transaction: jest.fn(),
   };
 }
@@ -614,7 +615,7 @@ describe('PaymentService.handleRefundCallback', () => {
     expect(result.message).toContain('商户号');
   });
 
-  it('outRefundNo 找不到时返回 FAIL 并写入 RefundCallbackLog', async () => {
+  it('outRefundNo 找不到时返回 SUCCESS 并写入 RefundCallbackLog', async () => {
     mockPrisma.orderRefund.findFirst.mockResolvedValue(null);
     mockPrisma.refundCallbackLog.create.mockResolvedValue({ id: BigInt(1) });
 
@@ -622,7 +623,7 @@ describe('PaymentService.handleRefundCallback', () => {
       buildRefundCallbackBody(DECRYPTED_REFUND_SUCCESS), CALLBACK_HEADERS, RAW_BODY,
     );
 
-    expect(result.code).toBe('FAIL');
+    expect(result.code).toBe('SUCCESS');
     expect(mockPrisma.refundCallbackLog.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ outRefundNo: 'REFUND123', status: 'orphan' }) }),
     );
@@ -868,7 +869,7 @@ describe('PaymentService.processPaymentSuccess (via handleCallback)', () => {
     expect(result.code).toBe('FAIL');
   });
 
-  it('订单已取消时返回 FAIL 并记录 critical event', async () => {
+  it('订单已取消时返回 SUCCESS 并创建补偿任务', async () => {
     const cancelledOrder = { ...PAYMENT_ORDER, status: 'cancelled' };
     mockPrisma.order.findFirst.mockResolvedValue(cancelledOrder);
 
@@ -876,8 +877,8 @@ describe('PaymentService.processPaymentSuccess (via handleCallback)', () => {
       buildPaymentCallbackBody(DECRYPTED_PAYMENT_SUCCESS), CALLBACK_HEADERS, RAW_BODY,
     );
 
-    expect(result.code).toBe('FAIL');
-    expect(result.message).toContain('已取消');
+    expect(result.code).toBe('SUCCESS');
+    expect(mockPrisma.paymentCompensationTask.create).toHaveBeenCalled();
   });
 });
 

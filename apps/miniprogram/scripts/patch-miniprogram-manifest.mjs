@@ -1,11 +1,13 @@
-import { readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const manifestPath = resolve(__dirname, '../src/manifest.json')
+const backupPath = resolve(__dirname, '../src/manifest.json.bak')
 
 const appId = (process.env.VITE_WX_APPID || '').trim()
+const apiBaseUrl = (process.env.VITE_API_BASE_URL || '').trim()
 const appNameFromEnv = (process.env.VITE_APP_NAME || '').trim()
 const appName = appNameFromEnv || '禧孕优选'
 const isProduction = (process.env.NODE_ENV || '').toLowerCase() === 'production'
@@ -15,8 +17,16 @@ if (isProduction && (!appId || appId === PLACEHOLDER_APPID)) {
   console.error('ERROR: 生产构建必须配置真实的 VITE_WX_APPID，当前值为空或占位值')
   process.exit(1)
 }
+if (isProduction && !apiBaseUrl) {
+  console.error('ERROR: 生产构建必须配置 VITE_API_BASE_URL，禁止空 API 地址打包')
+  process.exit(1)
+}
 
-const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+const originalManifestText = readFileSync(manifestPath, 'utf-8')
+if (!existsSync(backupPath)) {
+  writeFileSync(backupPath, originalManifestText)
+}
+const manifest = JSON.parse(originalManifestText)
 
 manifest.name = isProduction ? (appName || '禧孕优选') : appName
 manifest.description = `${appName}商城小程序`

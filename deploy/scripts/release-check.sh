@@ -334,6 +334,21 @@ else
   warn "manifest.json 不存在，跳过 AppID 检查"
 fi
 
+section "8.65. 小程序生产 API 地址检查"
+if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+  if [ -z "${VITE_API_BASE_URL:-}" ]; then
+    fail "生产严格门禁下必须提供 VITE_API_BASE_URL"
+  else
+    pass "VITE_API_BASE_URL 已提供"
+  fi
+else
+  if [ -z "${VITE_API_BASE_URL:-}" ]; then
+    warn "未提供 VITE_API_BASE_URL（默认门禁允许，生产门禁将失败）"
+  else
+    pass "VITE_API_BASE_URL 已提供"
+  fi
+fi
+
 section "8.7. 协议页面正式化检查"
 AGREEMENT_FILES=(
   "apps/miniprogram/src/pages/privacy/index.vue"

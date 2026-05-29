@@ -32,11 +32,46 @@ const ALLOWED_EXTENSIONS = [
   '.pdf',
 ];
 
+interface StorageProvider {
+  save(file: Express.Multer.File, targetFileName: string): Promise<{ filePath: string; url: string }>;
+  remove(filePath: string): Promise<void>;
+}
+
+class LocalStorageProvider implements StorageProvider {
+  private readonly uploadDir: string;
+
+  constructor() {
+    this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+  }
+
+  async save(file: Express.Multer.File, targetFileName: string) {
+    if (!fs.existsSync(this.uploadDir)) {
+      fs.mkdirSync(this.uploadDir, { recursive: true });
+    }
+    const filePath = path.join(this.uploadDir, targetFileName);
+    fs.writeFileSync(filePath, file.buffer);
+    return {
+      filePath: `/uploads/${targetFileName}`,
+      url: `/uploads/${targetFileName}`,
+    };
+  }
+
+  async remove(filePath: string) {
+    const fullPath = path.join(process.cwd(), filePath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  }
+}
+
 @Injectable()
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
+  private readonly storageProvider: StorageProvider;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {
+    this.storageProvider = new LocalStorageProvider();
+  }
 
   async uploadFile(file: Express.Multer.File, uploaderId: string, uploaderType: string, groupName?: string) {
     if (!file || !file.originalname) {
@@ -56,14 +91,7 @@ export class UploadService {
     this.validateFileMagic(file);
 
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
-    const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const filePath = path.join(uploadDir, fileName);
-    fs.writeFileSync(filePath, file.buffer);
+    const stored = await this.storageProvider.save(file, fileName);
 
     const fileType = file.mimetype.startsWith('image/')
       ? 'image'
@@ -75,12 +103,12 @@ export class UploadService {
       data: {
         fileName,
         originalName: file.originalname,
-        filePath: `/uploads/${fileName}`,
+        filePath: stored.filePath,
         fileSize: BigInt(file.size),
         fileType,
         mimeType: file.mimetype,
         storageType: 1,
-        url: `/uploads/${fileName}`,
+        url: stored.url,
         groupName: groupName || null,
         uploaderId: BigInt(uploaderId),
         uploaderType,
@@ -121,10 +149,7 @@ export class UploadService {
     const file = await this.prisma.fileAsset.findFirst({ where: { id: BigInt(id) } });
     if (!file) throw new NotFoundException('文件不存在');
 
-    const fullPath = path.join(process.cwd(), file.filePath);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
-    }
+    await this.storageProvider.remove(file.filePath);
 
     await this.prisma.fileAsset.delete({ where: { id: BigInt(id) } });
     this.logger.log(`删除文件：${file.fileName}`);

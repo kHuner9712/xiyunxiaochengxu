@@ -253,6 +253,18 @@ function inferCategoryNameById(id?: number): string {
   return ''
 }
 
+function inferCategoryById(id?: number): any | null {
+  if (!id) return null
+  const stack = [...categoryTree.value]
+  while (stack.length) {
+    const current = stack.shift()
+    if (!current) continue
+    if (Number(current.id) === Number(id)) return current
+    if (Array.isArray(current.children)) stack.push(...current.children)
+  }
+  return null
+}
+
 function onCategoryChange() {
   currentCategoryName.value = inferCategoryNameById(form.categoryId)
 }
@@ -327,7 +339,11 @@ function applyComplianceTypeFromDetail(compliance: any) {
 }
 
 function validateComplianceBeforeSave(): boolean {
-  const hitRiskCategory = /食品|辅食|零食|奶粉|营养|保健/i.test(currentCategoryName.value)
+  const category = inferCategoryById(form.categoryId)
+  const categoryConfig = category?.complianceConfig || {}
+  const hitRiskCategoryByConfig = categoryConfig.isFood || categoryConfig.isHealthSupplement || categoryConfig.isInfantFormula
+  const hitRiskCategoryByKeyword = /食品|辅食|零食|奶粉|营养|保健/i.test(currentCategoryName.value)
+  const hitRiskCategory = hitRiskCategoryByConfig || hitRiskCategoryByKeyword
   if (form.complianceType === 'normal' && hitRiskCategory) {
     ElMessage.error('当前类目疑似高合规商品，不能选择“普通商品”，请改为食品/保健/奶粉或高级模式')
     return false
@@ -353,6 +369,9 @@ function validateComplianceBeforeSave(): boolean {
   const isFood = compliance.isFood === true
   const isHealth = compliance.isHealthSupplement === true
   const isInfant = compliance.isInfantFormula === true
+  const requiredComplianceFields: string[] = Array.isArray(categoryConfig.requiredComplianceFields)
+    ? categoryConfig.requiredComplianceFields
+    : []
 
   if (isFood) {
     if (!compliance.productionLicenseNo) missing.push('生产许可证编号')
@@ -367,14 +386,27 @@ function validateComplianceBeforeSave(): boolean {
     if (!compliance.suitableFor) missing.push('适用人群')
     if (!compliance.notSuitableFor) missing.push('不适宜人群')
     if (!compliance.precautions) missing.push('注意事项')
+    if (!Array.isArray(compliance.certImages) || compliance.certImages.length === 0) missing.push('资质图片')
   }
   if (isInfant) {
     if (!compliance.infantFormulaRegNo) missing.push('奶粉产品配方注册号')
+    if (!compliance.manufacturer) missing.push('生产厂家')
+    if (!compliance.shelfLife) missing.push('保质期')
+    if (!compliance.storageCondition) missing.push('贮存条件')
+    if (!Array.isArray(compliance.certImages) || compliance.certImages.length === 0) missing.push('资质图片')
   }
 
   if (missing.length > 0) {
     ElMessage.error(`合规信息不完整：${missing.join('、')}`)
     return false
+  }
+
+  for (const requiredField of requiredComplianceFields) {
+    const value = (compliance as any)[requiredField]
+    if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+      ElMessage.error(`当前类目要求必填字段：${requiredField}`)
+      return false
+    }
   }
   return true
 }

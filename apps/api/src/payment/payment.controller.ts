@@ -38,6 +38,37 @@ class GetRefundListDto {
   refundNo?: string;
 }
 
+class GetCompensationTaskListDto {
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  page?: number = 1;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Max(100)
+  pageSize?: number = 20;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @IsString()
+  @IsOptional()
+  orderNo?: string;
+}
+
+class ResolveCompensationTaskDto {
+  @IsString()
+  @IsNotEmpty()
+  resolution!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  status!: 'resolved' | 'ignored';
+}
+
 @Controller('weapp/pay')
 export class PaymentController {
   private readonly logger = new Logger(PaymentController.name);
@@ -127,5 +158,30 @@ export class RefundReconcileController {
   @Post('reconcile')
   async reconcileRefunds() {
     return this.reconcileService.reconcilePendingRefunds();
+  }
+}
+
+@Controller('admin/payment')
+@RequirePermission('system:config', 'order:aftersale:refund')
+export class PaymentCompensationController {
+  constructor(private readonly paymentService: PaymentService) {}
+
+  @Get('compensation-tasks')
+  async listCompensationTasks(@Query() query: GetCompensationTaskListDto) {
+    return this.paymentService.getCompensationTaskList({
+      page: query.page || 1,
+      pageSize: query.pageSize || 20,
+      status: query.status,
+      orderNo: query.orderNo,
+    });
+  }
+
+  @Post('compensation-tasks/:id/resolve')
+  async resolveCompensationTask(
+    @Param('id') id: string,
+    @CurrentUser('id') adminId: string,
+    @Body() dto: ResolveCompensationTaskDto,
+  ) {
+    return this.paymentService.resolveCompensationTask(id, adminId, dto.resolution, dto.status);
   }
 }

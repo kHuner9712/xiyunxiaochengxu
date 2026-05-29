@@ -1,12 +1,13 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { paginate } from '@baby-mall/shared';
+import { OrderService } from '../order/order.service';
 
 @Injectable()
 export class PickupStoreService {
   private readonly logger = new Logger(PickupStoreService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private orderService: OrderService) {}
 
   async findPublished(page: number, pageSize: number) {
     const where = { status: 1, deletedAt: null };
@@ -99,66 +100,9 @@ export class PickupStoreService {
   }
 
   async verifyPickupCode(pickupCode: string, verifiedBy: string) {
-    const order = await this.prisma.order.findFirst({
-      where: { pickupCode },
-    });
-    if (!order) throw new NotFoundException('自提码不存在');
-    if (order.fulfillmentType !== 'pickup') {
-      throw new BadRequestException('该订单不是自提订单');
-    }
-    if (order.status !== 'pending_pickup') {
-      throw new BadRequestException(`订单状态不允许核销，当前状态：${order.status}`);
-    }
-    if (order.pickedUpAt) {
-      throw new BadRequestException('该订单已核销，请勿重复核销');
-    }
-
-    const { assertOrderTransition } = await import('./../order/order-state-machine');
-    assertOrderTransition(order.status as any, 'completed' as any, 'pickup_verify');
-
-    const pickedUpAt = new Date();
-    const result = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.order.updateMany({
-        where: {
-          id: order.id,
-          status: 'pending_pickup',
-          pickedUpAt: null,
-        },
-        data: {
-          status: 'completed',
-          pickedUpAt,
-          pickupVerifiedBy: BigInt(verifiedBy),
-        },
-      });
-
-      if (updated.count === 0) {
-        const latest = await tx.order.findFirst({ where: { id: order.id } });
-        if (!latest) {
-          throw new NotFoundException('订单不存在');
-        }
-        throw new BadRequestException('该订单已核销或订单状态已变化');
-      }
-
-      await tx.orderLog.create({
-        data: {
-          orderId: order.id,
-          action: 'pickup_verify',
-          operatorType: 'admin',
-          operatorId: BigInt(verifiedBy),
-          content: `自提核销，自提码：${pickupCode}`,
-        },
-      });
-
-      return tx.order.findFirst({ where: { id: order.id } });
-    });
-
-    this.logger.log(`自提核销成功：订单${order.id}，自提码${pickupCode}`);
-    return {
-      success: true,
-      orderId: order.id.toString(),
-      orderNo: order.orderNo,
-      pickedUpAt: result?.pickedUpAt ?? pickedUpAt,
-    };
+    const result = await this.orderService.completePickupOrderByCode(pickupCode, verifiedBy);
+    this.logger.log(`自提核销成功：订单${result.orderId}，自提码${pickupCode}`);
+    return result;
   }
 
   private serialize(store: any) {

@@ -11,7 +11,18 @@
       <el-table :data="categoryTree" row-key="id" border default-expand-all v-loading="loading" :tree-props="{ children: 'children' }">
         <el-table-column prop="name" label="分类名称" min-width="200" />
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="sort" label="排序" width="80" />
+        <el-table-column prop="sortOrder" label="排序" width="80" />
+        <el-table-column label="合规标签" min-width="220">
+          <template #default="{ row }">
+            <el-space wrap>
+              <el-tag v-if="row.complianceConfig?.isFood" size="small">食品</el-tag>
+              <el-tag v-if="row.complianceConfig?.isHealthSupplement" size="small" type="warning">保健</el-tag>
+              <el-tag v-if="row.complianceConfig?.isInfantFormula" size="small" type="danger">奶粉</el-tag>
+              <el-tag v-if="row.complianceConfig?.requiresCertImages" size="small" type="info">需资质图</el-tag>
+              <span v-if="!row.complianceConfig || Object.keys(row.complianceConfig).length === 0">-</span>
+            </el-space>
+          </template>
+        </el-table-column>
         <el-table-column label="图标" width="80">
           <template #default="{ row }">
             <el-image v-if="row.icon" :src="row.icon" style="width: 30px; height: 30px" fit="cover" />
@@ -20,8 +31,8 @@
         </el-table-column>
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-              {{ row.status === 1 ? '启用' : '禁用' }}
+            <el-tag :type="row.isShow === 1 ? 'success' : 'info'" size="small">
+              {{ row.isShow === 1 ? '启用' : '禁用' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -43,8 +54,8 @@
         <el-form-item label="上级分类">
           <el-input :value="parentName" disabled />
         </el-form-item>
-        <el-form-item label="排序" prop="sort">
-          <el-input-number v-model="form.sort" :min="0" />
+        <el-form-item label="排序" prop="sortOrder">
+          <el-input-number v-model="form.sortOrder" :min="0" />
         </el-form-item>
         <el-form-item label="分类图标">
           <el-upload
@@ -58,10 +69,37 @@
           </el-upload>
         </el-form-item>
         <el-form-item label="状态">
-          <el-radio-group v-model="form.status">
+          <el-radio-group v-model="form.isShow">
             <el-radio :label="1">启用</el-radio>
             <el-radio :label="0">禁用</el-radio>
           </el-radio-group>
+        </el-form-item>
+        <el-divider content-position="left">类目合规配置</el-divider>
+        <el-form-item label="食品类目">
+          <el-switch v-model="form.complianceConfig.isFood" />
+        </el-form-item>
+        <el-form-item label="保健类目">
+          <el-switch v-model="form.complianceConfig.isHealthSupplement" />
+        </el-form-item>
+        <el-form-item label="奶粉类目">
+          <el-switch v-model="form.complianceConfig.isInfantFormula" />
+        </el-form-item>
+        <el-form-item label="需资质图片">
+          <el-switch v-model="form.complianceConfig.requiresCertImages" />
+        </el-form-item>
+        <el-form-item label="附加必填字段">
+          <el-select v-model="form.complianceConfig.requiredComplianceFields" multiple filterable clearable>
+            <el-option label="生产许可证编号" value="productionLicenseNo" />
+            <el-option label="食品经营/备案凭证编号" value="foodBusinessCertNo" />
+            <el-option label="保健食品批准文号/备案号" value="healthSupplementApprovalNo" />
+            <el-option label="奶粉产品配方注册号" value="infantFormulaRegNo" />
+            <el-option label="生产厂家" value="manufacturer" />
+            <el-option label="保质期" value="shelfLife" />
+            <el-option label="贮存条件" value="storageCondition" />
+            <el-option label="适用人群" value="suitableFor" />
+            <el-option label="不适宜人群" value="notSuitableFor" />
+            <el-option label="注意事项" value="precautions" />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -89,9 +127,16 @@ const form = reactive({
   id: undefined as number | undefined,
   name: '',
   parentId: 0,
-  sort: 0,
+  sortOrder: 0,
   icon: '',
-  status: 1,
+  isShow: 1,
+  complianceConfig: {
+    isFood: false,
+    isHealthSupplement: false,
+    isInfantFormula: false,
+    requiresCertImages: false,
+    requiredComplianceFields: [] as string[],
+  },
 })
 
 const rules: FormRules = {
@@ -114,9 +159,16 @@ function handleAdd(row: any) {
   form.id = undefined
   form.name = ''
   form.parentId = row ? row.id : 0
-  form.sort = 0
+  form.sortOrder = 0
   form.icon = ''
-  form.status = 1
+  form.isShow = 1
+  form.complianceConfig = {
+    isFood: false,
+    isHealthSupplement: false,
+    isInfantFormula: false,
+    requiresCertImages: false,
+    requiredComplianceFields: [],
+  }
   parentName.value = row ? row.name : '无（一级分类）'
   dialogVisible.value = true
 }
@@ -125,9 +177,16 @@ function handleEdit(row: any) {
   form.id = row.id
   form.name = row.name
   form.parentId = row.parentId || 0
-  form.sort = row.sort
+  form.sortOrder = row.sortOrder
   form.icon = row.icon || ''
-  form.status = row.status
+  form.isShow = row.isShow
+  form.complianceConfig = {
+    isFood: row.complianceConfig?.isFood === true,
+    isHealthSupplement: row.complianceConfig?.isHealthSupplement === true,
+    isInfantFormula: row.complianceConfig?.isInfantFormula === true,
+    requiresCertImages: row.complianceConfig?.requiresCertImages === true,
+    requiredComplianceFields: Array.isArray(row.complianceConfig?.requiredComplianceFields) ? row.complianceConfig.requiredComplianceFields : [],
+  }
   parentName.value = row.parentName || '无（一级分类）'
   dialogVisible.value = true
 }

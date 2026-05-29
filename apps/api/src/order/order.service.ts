@@ -465,24 +465,7 @@ export class OrderService {
       }
 
       for (const item of order.orderItems) {
-        const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
-        if (sku) {
-          await tx.productSku.update({
-            where: { id: item.skuId },
-            data: { stock: { increment: item.quantity }, sales: { decrement: item.quantity } },
-          });
-          await tx.productStockLog.create({
-            data: {
-              productId: item.productId,
-              skuId: item.skuId,
-              type: 2,
-              quantity: item.quantity,
-              beforeStock: sku.stock,
-              afterStock: sku.stock + item.quantity,
-              reason: '取消订单归还库存',
-            },
-          });
-        }
+        await this.restoreSkuStockAndSales(tx, item, '取消订单归还库存', 2);
       }
 
       if (order.pointsDeducted > 0) {
@@ -537,76 +520,61 @@ export class OrderService {
       include: { orderItems: true, delivery: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
-
-    const result = await this.prisma.$transaction(async (tx) => {
-      const claimResult = await tx.order.updateMany({
-        where: { id: BigInt(id), userId: BigInt(userId), status: OrderStatus.delivered },
-        data: { status: OrderStatus.completed, completedAt: new Date() },
-      });
-
-      if (claimResult.count === 0) {
-        const currentOrder = await tx.order.findFirst({ where: { id: BigInt(id) } });
-        if (!currentOrder) throw new NotFoundException('订单不存在');
-        if (currentOrder.status === OrderStatus.completed) {
-          return currentOrder;
-        }
-        throw new BadRequestException(`订单状态不允许确认收货: ${currentOrder.status}`);
-      }
-
-      const earnedPoints = Math.floor(order.payAmount! / 100);
-
-      if (earnedPoints > 0) {
-        const existingRecord = await tx.pointsRecord.findFirst({
-          where: { source: 'order_complete', sourceId: order.id },
-        });
-        if (!existingRecord) {
-          const user = await tx.user.findFirst({ where: { id: BigInt(userId) } });
-          if (user) {
-            await tx.user.update({
-              where: { id: BigInt(userId) },
-              data: {
-                availablePoints: { increment: earnedPoints },
-                totalPoints: { increment: earnedPoints },
-                growthValue: { increment: Math.floor(order.payAmount! / 100) },
-              },
-            });
-            await tx.pointsRecord.create({
-              data: {
-                userId: BigInt(userId),
-                type: 1,
-                points: earnedPoints,
-                balance: user.availablePoints + earnedPoints,
-                source: 'order_complete',
-                sourceId: order.id,
-                description: `完成订单奖励${earnedPoints}积分`,
-              },
-            });
-          }
-        }
-      }
-
-      if (order.delivery) {
-        await tx.orderDelivery.update({
-          where: { orderId: order.id },
-          data: { receivedAt: new Date() },
-        });
-      }
-
-      await tx.orderLog.create({
-        data: {
-          orderId: BigInt(id),
-          operatorType: 'user',
-          operatorId: BigInt(userId),
-          action: 'confirm_receive',
-          content: '用户确认收货，发放积分' + earnedPoints,
-        },
-      });
-
-      return tx.order.findFirst({ where: { id: BigInt(id) } });
+    const result = await this.completeOrderAndReward({
+      order,
+      claimWhere: { id: BigInt(id), userId: BigInt(userId), status: OrderStatus.delivered },
+      orderUpdateData: { status: OrderStatus.completed, completedAt: new Date() },
+      operatorType: 'user',
+      operatorId: BigInt(userId),
+      action: 'confirm_receive',
+      logContent: '用户确认收货',
+      completeReason: '确认收货',
+      rewardSource: 'order_complete',
+      markDeliveryReceivedAt: true,
     });
 
     this.logger.log(`用户${userId}确认收货：${id}`);
     return this.serializeOrderView(result);
+  }
+
+  async completePickupOrderByCode(pickupCode: string, verifiedBy: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { pickupCode },
+      include: { orderItems: true },
+    });
+    if (!order) throw new NotFoundException('自提码不存在');
+    if (order.fulfillmentType !== 'pickup') {
+      throw new BadRequestException('该订单不是自提订单');
+    }
+    assertOrderTransition(order.status, OrderStatus.completed, 'pickup_verify');
+
+    const pickedUpAt = new Date();
+    const updated = await this.completeOrderAndReward({
+      order,
+      claimWhere: { id: order.id, status: OrderStatus.pending_pickup, pickedUpAt: null },
+      orderUpdateData: {
+        status: OrderStatus.completed,
+        completedAt: pickedUpAt,
+        pickedUpAt,
+        pickupVerifiedBy: BigInt(verifiedBy),
+      },
+      operatorType: 'admin',
+      operatorId: BigInt(verifiedBy),
+      action: 'pickup_verify',
+      logContent: `自提核销，自提码：${pickupCode}`,
+      completeReason: '自提核销',
+      rewardSource: 'order_complete',
+    });
+    if (!updated) {
+      throw new NotFoundException('订单不存在');
+    }
+
+    return {
+      success: true,
+      orderId: updated.id.toString(),
+      orderNo: updated.orderNo,
+      pickedUpAt: updated.pickedUpAt ?? pickedUpAt,
+    };
   }
 
   async findByUser(userId: string, dto: OrderQueryDto) {
@@ -715,24 +683,7 @@ export class OrderService {
       }
 
       for (const item of order.orderItems) {
-        const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
-        if (sku) {
-          await tx.productSku.update({
-            where: { id: item.skuId },
-            data: { stock: { increment: item.quantity }, sales: { decrement: item.quantity } },
-          });
-          await tx.productStockLog.create({
-            data: {
-              productId: item.productId,
-              skuId: item.skuId,
-              type: 2,
-              quantity: item.quantity,
-              beforeStock: sku.stock,
-              afterStock: sku.stock + item.quantity,
-              reason: '管理员取消订单归还库存',
-            },
-          });
-        }
+        await this.restoreSkuStockAndSales(tx, item, '管理员取消订单归还库存', 2);
       }
 
       if (order.pointsDeducted > 0) {
@@ -911,24 +862,7 @@ export class OrderService {
           }
 
           for (const item of order.orderItems) {
-            const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
-            if (sku) {
-              await tx.productSku.update({
-                where: { id: item.skuId },
-                data: { stock: { increment: item.quantity }, sales: { decrement: item.quantity } },
-              });
-              await tx.productStockLog.create({
-                data: {
-                  productId: item.productId,
-                  skuId: item.skuId,
-                  type: 3,
-                  quantity: item.quantity,
-                  beforeStock: sku.stock,
-                  afterStock: sku.stock + item.quantity,
-                  reason: '超时自动关闭归还库存',
-                },
-              });
-            }
+            await this.restoreSkuStockAndSales(tx, item, '超时自动关闭归还库存', 3);
           }
 
           if (order.pointsDeducted > 0) {
@@ -996,59 +930,17 @@ export class OrderService {
     let completedCount = 0;
     for (const order of orders) {
       try {
-        const completed = await this.prisma.$transaction(async (tx) => {
-          const claimResult = await tx.order.updateMany({
-            where: { id: order.id, status: OrderStatus.delivered, autoCompleteAt: { lte: new Date() } },
-            data: { status: OrderStatus.completed, completedAt: new Date() },
-          });
-
-          if (claimResult.count === 0) {
-            return false;
-          }
-
-          const earnedPoints = Math.floor(order.payAmount! / 100);
-
-          if (earnedPoints > 0) {
-            const existingRecord = await tx.pointsRecord.findFirst({
-              where: { source: 'order_auto_complete', sourceId: order.id },
-            });
-            if (!existingRecord) {
-              const user = await tx.user.findFirst({ where: { id: order.userId } });
-              if (user) {
-                await tx.user.update({
-                  where: { id: order.userId },
-                  data: {
-                    availablePoints: { increment: earnedPoints },
-                    totalPoints: { increment: earnedPoints },
-                    growthValue: { increment: Math.floor(order.payAmount! / 100) },
-                  },
-                });
-                await tx.pointsRecord.create({
-                  data: {
-                    userId: order.userId,
-                    type: 1,
-                    points: earnedPoints,
-                    balance: user.availablePoints + earnedPoints,
-                    source: 'order_auto_complete',
-                    sourceId: order.id,
-                    description: `自动完成订单奖励${earnedPoints}积分`,
-                  },
-                });
-              }
-            }
-          }
-
-          await tx.orderLog.create({
-            data: {
-              orderId: order.id,
-              operatorType: 'system',
-              action: 'auto_complete',
-              content: '超时未确认收货，系统自动完成' + (earnedPoints > 0 ? `，发放积分${earnedPoints}` : ''),
-            },
-          });
-
-          return true;
-        });
+        const completed = await this.completeOrderAndReward({
+          order,
+          claimWhere: { id: order.id, status: OrderStatus.delivered, autoCompleteAt: { lte: new Date() } },
+          orderUpdateData: { status: OrderStatus.completed, completedAt: new Date() },
+          operatorType: 'system',
+          action: 'auto_complete',
+          logContent: '超时未确认收货，系统自动完成',
+          completeReason: '自动完成',
+          rewardSource: 'order_auto_complete',
+          swallowClaimFailure: true,
+        }).then(() => true).catch(() => false);
 
         if (completed) {
           completedCount++;
@@ -1127,6 +1019,139 @@ export class OrderService {
       exists = !!existing;
     }
     return code!;
+  }
+
+  private async completeOrderAndReward(params: {
+    order: any;
+    claimWhere: any;
+    orderUpdateData: any;
+    operatorType: 'user' | 'admin' | 'system';
+    operatorId?: bigint;
+    action: string;
+    logContent: string;
+    completeReason: string;
+    rewardSource?: string;
+    markDeliveryReceivedAt?: boolean;
+    swallowClaimFailure?: boolean;
+  }) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claimResult = await tx.order.updateMany({
+        where: params.claimWhere,
+        data: params.orderUpdateData,
+      });
+
+      if (claimResult.count === 0) {
+        const currentOrder = await tx.order.findFirst({ where: { id: params.order.id } });
+        if (!currentOrder) throw new NotFoundException('订单不存在');
+        if (currentOrder.status === OrderStatus.completed) {
+          return currentOrder;
+        }
+        if (params.swallowClaimFailure) {
+          throw new BadRequestException('订单抢占失败');
+        }
+        throw new BadRequestException(`订单状态不允许${params.completeReason}: ${currentOrder.status}`);
+      }
+
+      const earnedPoints = await this.rewardCompletedOrder(tx, params.order, params.rewardSource || 'order_complete');
+
+      if (params.markDeliveryReceivedAt && params.order.delivery) {
+        await tx.orderDelivery.update({
+          where: { orderId: params.order.id },
+          data: { receivedAt: new Date() },
+        });
+      }
+
+      await tx.orderLog.create({
+        data: {
+          orderId: params.order.id,
+          operatorType: params.operatorType,
+          operatorId: params.operatorId,
+          action: params.action,
+          content: `${params.logContent}${earnedPoints > 0 ? `，发放积分${earnedPoints}` : ''}`,
+        },
+      });
+
+      return tx.order.findFirst({ where: { id: params.order.id } });
+    });
+
+    return result;
+  }
+
+  private async rewardCompletedOrder(tx: any, order: any, rewardSource: string) {
+    const earnedPoints = Math.floor((order.payAmount || 0) / 100);
+    if (earnedPoints <= 0) {
+      return 0;
+    }
+
+    const existingRecord = await tx.pointsRecord.findFirst({
+      where: { source: rewardSource, sourceId: order.id },
+    });
+    if (existingRecord) {
+      return 0;
+    }
+
+    const user = await tx.user.findFirst({ where: { id: order.userId } });
+    if (!user) {
+      return 0;
+    }
+
+    await tx.user.update({
+      where: { id: order.userId },
+      data: {
+        availablePoints: { increment: earnedPoints },
+        totalPoints: { increment: earnedPoints },
+        growthValue: { increment: earnedPoints },
+      },
+    });
+
+    await tx.pointsRecord.create({
+      data: {
+        userId: order.userId,
+        type: 1,
+        points: earnedPoints,
+        balance: user.availablePoints + earnedPoints,
+        source: rewardSource,
+        sourceId: order.id,
+        description: `完成订单奖励${earnedPoints}积分`,
+      },
+    });
+
+    return earnedPoints;
+  }
+
+  private async restoreSkuStockAndSales(tx: any, item: any, reason: string, type: number) {
+    const sku = await tx.productSku.findFirst({ where: { id: item.skuId } });
+    if (!sku) {
+      return;
+    }
+
+    await tx.productSku.update({
+      where: { id: item.skuId },
+      data: { stock: { increment: item.quantity } },
+    });
+    if (typeof tx.$executeRaw === 'function') {
+      await tx.$executeRaw`
+        UPDATE product_skus
+        SET sales = GREATEST(sales - ${item.quantity}, 0)
+        WHERE id = ${item.skuId}
+      `;
+    } else {
+      await tx.productSku.update({
+        where: { id: item.skuId },
+        data: { sales: { decrement: item.quantity } },
+      });
+    }
+    await tx.productStockLog.create({
+      data: {
+        productId: item.productId,
+        skuId: item.skuId,
+        type,
+        quantity: item.quantity,
+        beforeStock: sku.stock,
+        afterStock: sku.stock + item.quantity,
+        reason,
+      },
+    });
   }
 
   private serializeOrder(order: any) {

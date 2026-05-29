@@ -275,12 +275,15 @@ export class ProductService {
       return;
     }
 
-    const missingFields: string[] = [];
+    const missingFields = new Set<string>();
     const categoryName = String(product.category?.name || '').trim();
+    const categoryConfig = this.normalizeCategoryComplianceConfig(product.category?.complianceConfig);
     const inferred = this.inferComplianceFlagsByCategory(categoryName);
-    const isFood = compliance.isFood === true || inferred.isFood;
-    const isHealthSupplement = compliance.isHealthSupplement === true || inferred.isHealthSupplement;
-    const isInfantFormula = compliance.isInfantFormula === true || inferred.isInfantFormula;
+    const isFood = compliance.isFood === true || categoryConfig.isFood === true || inferred.isFood;
+    const isHealthSupplement =
+      compliance.isHealthSupplement === true || categoryConfig.isHealthSupplement === true || inferred.isHealthSupplement;
+    const isInfantFormula =
+      compliance.isInfantFormula === true || categoryConfig.isInfantFormula === true || inferred.isInfantFormula;
 
     if (compliance.isRegulated === false && [isFood, isHealthSupplement, isInfantFormula].some(Boolean)) {
       throw new BadRequestException(
@@ -300,33 +303,70 @@ export class ProductService {
     }
 
     if (isFood) {
-      if (!compliance.productionLicenseNo) missingFields.push('生产许可证编号');
-      if (!compliance.foodBusinessCertNo) missingFields.push('食品经营/备案凭证编号');
-      if (!compliance.manufacturer) missingFields.push('生产厂家');
-      if (!compliance.shelfLife) missingFields.push('保质期');
-      if (!compliance.storageCondition) missingFields.push('贮存条件');
-      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.push('资质图片（至少1张）');
+      if (!compliance.productionLicenseNo) missingFields.add('生产许可证编号');
+      if (!compliance.foodBusinessCertNo) missingFields.add('食品经营/备案凭证编号');
+      if (!compliance.manufacturer) missingFields.add('生产厂家');
+      if (!compliance.shelfLife) missingFields.add('保质期');
+      if (!compliance.storageCondition) missingFields.add('贮存条件');
+      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.add('资质图片（至少1张）');
     }
 
     if (isHealthSupplement) {
-      if (!compliance.healthSupplementApprovalNo) missingFields.push('保健食品批准文号/备案号');
-      if (!compliance.suitableFor) missingFields.push('适用人群');
-      if (!compliance.notSuitableFor) missingFields.push('不适宜人群');
-      if (!compliance.precautions) missingFields.push('注意事项');
-      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.push('资质图片（至少1张）');
+      if (!compliance.healthSupplementApprovalNo) missingFields.add('保健食品批准文号/备案号');
+      if (!compliance.suitableFor) missingFields.add('适用人群');
+      if (!compliance.notSuitableFor) missingFields.add('不适宜人群');
+      if (!compliance.precautions) missingFields.add('注意事项');
+      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.add('资质图片（至少1张）');
     }
 
     if (isInfantFormula) {
-      if (!compliance.infantFormulaRegNo) missingFields.push('奶粉产品配方注册号');
-      if (!compliance.manufacturer) missingFields.push('生产厂家');
-      if (!compliance.shelfLife) missingFields.push('保质期');
-      if (!compliance.storageCondition) missingFields.push('贮存条件');
-      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.push('资质图片（至少1张）');
+      if (!compliance.infantFormulaRegNo) missingFields.add('奶粉产品配方注册号');
+      if (!compliance.manufacturer) missingFields.add('生产厂家');
+      if (!compliance.shelfLife) missingFields.add('保质期');
+      if (!compliance.storageCondition) missingFields.add('贮存条件');
+      if (!compliance.certImages || compliance.certImages.length === 0) missingFields.add('资质图片（至少1张）');
     }
 
-    if (missingFields.length > 0) {
-      throw new BadRequestException(`商品合规信息不完整，缺少：${missingFields.join('、')}`);
+    if (categoryConfig.requiresCertImages === true && (!compliance.certImages || compliance.certImages.length === 0)) {
+      missingFields.add('资质图片（至少1张）');
     }
+    for (const field of categoryConfig.requiredComplianceFields) {
+      const value = compliance?.[field];
+      if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+        missingFields.add(`类目要求字段:${field}`);
+      }
+    }
+
+    if (missingFields.size > 0) {
+      throw new BadRequestException(`商品合规信息不完整，缺少：${Array.from(missingFields).join('、')}`);
+    }
+  }
+
+  private normalizeCategoryComplianceConfig(raw: any): {
+    isFood: boolean;
+    isHealthSupplement: boolean;
+    isInfantFormula: boolean;
+    requiresCertImages: boolean;
+    requiredComplianceFields: string[];
+  } {
+    if (!raw || typeof raw !== 'object') {
+      return {
+        isFood: false,
+        isHealthSupplement: false,
+        isInfantFormula: false,
+        requiresCertImages: false,
+        requiredComplianceFields: [],
+      };
+    }
+    return {
+      isFood: raw.isFood === true,
+      isHealthSupplement: raw.isHealthSupplement === true,
+      isInfantFormula: raw.isInfantFormula === true,
+      requiresCertImages: raw.requiresCertImages === true,
+      requiredComplianceFields: Array.isArray(raw.requiredComplianceFields)
+        ? raw.requiredComplianceFields.filter((item: unknown) => typeof item === 'string' && item.trim())
+        : [],
+    };
   }
 
   private inferComplianceFlagsByCategory(categoryName: string) {

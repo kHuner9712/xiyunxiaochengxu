@@ -41,6 +41,7 @@ export class CategoryService {
         parentId: dto.parentId ? BigInt(dto.parentId) : 0n,
         name: dto.name,
         icon: dto.icon,
+        complianceConfig: dto.complianceConfig as any,
         sortOrder: dto.sortOrder ?? 0,
         isShow: dto.isShow ?? 1,
       },
@@ -63,6 +64,7 @@ export class CategoryService {
     if (dto.parentId !== undefined) updateData.parentId = BigInt(dto.parentId);
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.icon !== undefined) updateData.icon = dto.icon;
+    if (dto.complianceConfig !== undefined) updateData.complianceConfig = dto.complianceConfig as any;
     if (dto.sortOrder !== undefined) updateData.sortOrder = dto.sortOrder;
     if (dto.isShow !== undefined) updateData.isShow = dto.isShow;
 
