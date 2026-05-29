@@ -18,6 +18,7 @@
     "docker:up": "cd deploy && docker compose up -d --build",
     "docker:down": "cd deploy && docker compose down",
     "smoke": "cd deploy && bash scripts/smoke-test.sh",
+    "smoke:public": "cd deploy && bash scripts/smoke-public.sh",
     "smoke:login": "cd deploy && bash scripts/smoke-admin-login.sh",
     "smoke:all": "cd deploy && bash scripts/smoke-all.sh",
     "validate:api": "pnpm --filter @baby-mall/api prisma:validate && pnpm --filter @baby-mall/api test:ci && pnpm build:api",

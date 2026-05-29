@@ -112,6 +112,21 @@ docker compose up -d --build
 pnpm smoke:all
 ```
 
+### 4.1.1 公网部署冒烟测试（生产推荐）
+
+```bash
+API_BASE_URL=https://api.yourdomain.com \
+ADMIN_BASE_URL=https://admin.yourdomain.com \
+PAY_NOTIFY_URL=https://api.yourdomain.com/api/weapp/pay/callback \
+REFUND_NOTIFY_URL=https://api.yourdomain.com/api/weapp/pay/refund-callback \
+pnpm smoke:public
+```
+
+说明：
+- 仅校验连通性与健康状态，不依赖真实支付成功。
+- 会检查 API/后台/uploads/HTTPS/回调 URL 可达性。
+- 如执行机可访问 Docker，还会检查最近定时任务日志关键词。
+
 ### 4.2 基础冒烟测试
 
 ```bash

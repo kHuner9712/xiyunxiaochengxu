@@ -3,6 +3,12 @@
 当前结论：**可进入预生产部署，不可正式发布**。  
 默认约定：以下部署命令默认在仓库根目录执行（`package.json` 所在目录）。
 
+上线前请同时执行：
+
+1. [部署前收口清单](./DEPLOYMENT_CHECKLIST.md)
+2. `pnpm release:check:prod`
+3. `pnpm smoke:public`（需设置公网 URL 环境变量）
+
 ## 1. 服务器准备
 
 1. 准备 Linux 服务器（推荐 Ubuntu 22.04+），开放 80/443。

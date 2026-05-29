@@ -18,3 +18,24 @@ dig admin.yunxixiaochengxu.com.cn
 nslookup api.yunxixiaochengxu.com.cn
 nslookup admin.yunxixiaochengxu.com.cn
 ```
+
+## Nginx 配置模板（可选）
+
+当前可直接使用 `conf.d/default.conf`。  
+若希望按环境变量生成配置，请使用 `conf.d/default.conf.template`：
+
+```bash
+export API_DOMAIN=api.yourdomain.com
+export ADMIN_DOMAIN=admin.yourdomain.com
+export UPLOAD_PUBLIC_URL=https://api.yourdomain.com/uploads
+envsubst '${API_DOMAIN} ${ADMIN_DOMAIN} ${UPLOAD_PUBLIC_URL}' \
+  < deploy/nginx/conf.d/default.conf.template \
+  > deploy/nginx/conf.d/default.conf
+```
+
+生成后请执行：
+
+```bash
+docker compose -f deploy/docker-compose.yml config
+docker compose -f deploy/docker-compose.yml restart nginx
+```
