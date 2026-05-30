@@ -145,7 +145,7 @@ function buildRefundCallbackBody(decryptedData: any) {
 }
 
 const CALLBACK_HEADERS = {
-  'wechatpay-signature': 'sig', 'wechatpay-timestamp': '1234567890',
+  'wechatpay-signature': 'sig', 'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(),
   'wechatpay-nonce': 'nonce', 'wechatpay-serial': '',
 };
 
@@ -1635,6 +1635,19 @@ describe('支付契约测试', () => {
     expect(result.package).toBe('prepay_id=wx_prepay_id_123');
   });
 
+  it('0元订单已自动支付后调用 createPayment 抛出订单已支付', async () => {
+    const ORDER = {
+      id: BigInt(1), orderNo: 'ORDER123', status: 'pending_delivery',
+      payAmount: 0, userId: BigInt(100),
+      user: { id: BigInt(100), openid: 'test_openid' },
+    };
+
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+
+    await expect(service.createPayment('1', '100'))
+      .rejects.toThrow('订单已支付');
+  });
+
   it('getPaymentStatus 应返回正确的支付状态', async () => {
     const ORDER = {
       id: BigInt(1), orderNo: 'ORDER123', status: 'pending_delivery',
@@ -1954,5 +1967,74 @@ describe('PaymentService 生产环境配置校验', () => {
 
     expect(mockExit).not.toHaveBeenCalled();
     mockExit.mockRestore();
+  });
+});
+
+describe('PaymentService callback timestamp replay guard', () => {
+  let service: PaymentService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    service = createPaymentService(mockPrisma = createMockPrisma());
+  });
+
+  it('handleCallback — 正常时间戳通过', async () => {
+    const validHeaders = {
+      'wechatpay-signature': 'sig',
+      'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(),
+      'wechatpay-nonce': 'nonce',
+      'wechatpay-serial': '',
+    };
+    const result = await service.handleCallback({ resource: { ciphertext: '', nonce: '', associated_data: '' } }, validHeaders, '{}');
+    expect(result.message).not.toBe('回调时间戳过期');
+    expect(result.message).not.toBe('回调时间戳无效');
+  });
+
+  it('handleCallback — 超过 5 分钟的旧时间戳返回 FAIL', async () => {
+    const expiredHeaders = {
+      'wechatpay-signature': 'sig',
+      'wechatpay-timestamp': '1234567890',
+      'wechatpay-nonce': 'nonce',
+      'wechatpay-serial': '',
+    };
+    const result = await service.handleCallback({}, expiredHeaders, '{}');
+    expect(result.code).toBe('FAIL');
+    expect(result.message).toBe('回调时间戳过期');
+  });
+
+  it('handleCallback — 非数字 timestamp 返回 FAIL', async () => {
+    const invalidHeaders = {
+      'wechatpay-signature': 'sig',
+      'wechatpay-timestamp': 'abc',
+      'wechatpay-nonce': 'nonce',
+      'wechatpay-serial': '',
+    };
+    const result = await service.handleCallback({}, invalidHeaders, '{}');
+    expect(result.code).toBe('FAIL');
+    expect(result.message).toBe('回调时间戳无效');
+  });
+
+  it('handleRefundCallback — 超过 5 分钟的旧时间戳返回 FAIL', async () => {
+    const expiredHeaders = {
+      'wechatpay-signature': 'sig',
+      'wechatpay-timestamp': '1234567890',
+      'wechatpay-nonce': 'nonce',
+      'wechatpay-serial': '',
+    };
+    const result = await service.handleRefundCallback({}, expiredHeaders, '{}');
+    expect(result.code).toBe('FAIL');
+    expect(result.message).toBe('回调时间戳过期');
+  });
+
+  it('handleRefundCallback — 非数字 timestamp 返回 FAIL', async () => {
+    const invalidHeaders = {
+      'wechatpay-signature': 'sig',
+      'wechatpay-timestamp': 'not-a-number',
+      'wechatpay-nonce': 'nonce',
+      'wechatpay-serial': '',
+    };
+    const result = await service.handleRefundCallback({}, invalidHeaders, '{}');
+    expect(result.code).toBe('FAIL');
+    expect(result.message).toBe('回调时间戳无效');
   });
 });

@@ -19,7 +19,7 @@ import {
   formatSkuSpecs,
 } from '@baby-mall/shared';
 import { assertOrderTransition } from './order-state-machine';
-import { COUPON_STATUS } from '../common/constants/payment';
+import { COUPON_STATUS, PAYMENT_STATUS } from '../common/constants/payment';
 import { BusinessEventService } from '../common/business-event.service';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 
@@ -159,6 +159,7 @@ export class OrderService {
       freightAmount,
       payAmount,
       fulfillmentType,
+      isZeroPay: payAmount === 0,
       pickupStore: fulfillmentType === 'pickup' && data.pickupStoreId ? await this.getPickupStoreInfo(data.pickupStoreId) : null,
     };
   }
@@ -280,6 +281,12 @@ export class OrderService {
     }
     const payAmount = Math.max(0, totalAmount - discountAmount - couponAmount - activityDiscountAmount - pointsAmount + freightAmount);
 
+    const isZeroPay = payAmount === 0;
+    let zeroPayPickupCode: string | undefined;
+    if (isZeroPay && fulfillmentType === 'pickup') {
+      zeroPayPickupCode = await this.generatePickupCode();
+    }
+
     const order = await this.prisma.$transaction(async (tx) => {
       for (const check of skuStockChecks) {
         const updated = await tx.productSku.updateMany({
@@ -350,7 +357,9 @@ export class OrderService {
         data: {
           orderNo: generateOrderNo(),
           userId: BigInt(userId),
-          status: OrderStatus.pending_payment,
+          status: isZeroPay
+            ? (fulfillmentType === 'pickup' ? OrderStatus.pending_pickup : OrderStatus.pending_delivery)
+            : OrderStatus.pending_payment,
           totalAmount,
           discountAmount,
           freightAmount,
@@ -377,7 +386,8 @@ export class OrderService {
             pickupContactPhone: pickupStore.contactPhone,
           }),
           remark: data.remark,
-          autoCloseAt: new Date(Date.now() + ORDER_AUTO_CLOSE_MINUTES * 60 * 1000),
+          ...(isZeroPay ? { paidAt: new Date() } : { autoCloseAt: new Date(Date.now() + ORDER_AUTO_CLOSE_MINUTES * 60 * 1000) }),
+          ...(isZeroPay && fulfillmentType === 'pickup' ? { pickupCode: zeroPayPickupCode } : {}),
           orderItems: {
             create: orderItems,
           },
@@ -406,10 +416,29 @@ export class OrderService {
           orderId: createdOrder.id,
           paymentNo,
           amount: payAmount,
-          paymentMethod: 'wechat',
-          status: 1,
+          paymentMethod: isZeroPay ? 'zero_pay' : 'wechat',
+          status: isZeroPay ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.CREATED,
+          ...(isZeroPay ? { paidAt: new Date() } : {}),
         },
       });
+
+      if (isZeroPay) {
+        await tx.orderLog.create({
+          data: {
+            orderId: createdOrder.id,
+            operatorType: 'system',
+            action: 'pay_zero_amount',
+            content: '0元订单自动支付成功',
+          },
+        });
+
+        if (couponId) {
+          await tx.userCoupon.update({
+            where: { id: couponId },
+            data: { status: COUPON_STATUS.USED, usedAt: new Date() },
+          });
+        }
+      }
 
       return createdOrder;
     });

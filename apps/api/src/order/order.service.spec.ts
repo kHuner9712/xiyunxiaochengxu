@@ -2,7 +2,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { OrderService } from './order.service';
-import { COUPON_STATUS } from '../common/constants/payment';
+import { COUPON_STATUS, PAYMENT_STATUS } from '../common/constants/payment';
 
 function createMockBusinessEventService() {
   return {
@@ -1363,5 +1363,316 @@ describe('接口契约：后台订单 fulfillmentType 筛选', () => {
     });
 
     expect(rows[0].itemDetails).toContain('营养米粉（规格：500g / 阶段：6个月+）x2');
+  });
+});
+
+describe('OrderService.create 0元订单', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  const PICKUP_STORE = {
+    id: BigInt(500), name: '测试自提点', province: '北京', city: '北京', district: '朝阳区',
+    address: 'xxx路2号', contactPhone: '010-12345678', status: 1, deletedAt: null,
+  };
+
+  const ZERO_PAY_COUPON = {
+    id: BigInt(50), userId: BigInt(100), couponId: BigInt(10), status: COUPON_STATUS.FREE,
+    expireAt: new Date(Date.now() + 86400000),
+    coupon: { id: BigInt(10), type: 1, value: 9900, minAmount: 0, discountLimit: null },
+  };
+
+  const SKU_CHEAP = (stock = 10) => ({
+    id: BigInt(201), productId: BigInt(300), specs: '蓝色/M', image: null, price: 9900, originalPrice: 12900,
+    product: { id: BigInt(300), name: '便宜商品', status: 1, supplierId: null },
+    stock,
+  });
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('0元快递订单：状态为 pending_delivery，paidAt 已写入，autoCloseAt 为 null', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_CHEAP(10));
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(ZERO_PAY_COUPON);
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523001', orderItems: [],
+    });
+    mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.create('100', {
+      addressId: '1',
+      couponId: '50',
+      items: [{ skuId: '201', quantity: 1 }],
+    });
+
+    const createCall = mockPrisma._mockTx.order.create.mock.calls[0][0];
+    expect(createCall.data.status).toBe(OrderStatus.pending_delivery);
+    expect(createCall.data.paidAt).toBeInstanceOf(Date);
+    expect(createCall.data.autoCloseAt).toBeUndefined();
+  });
+
+  it('0元自提订单：状态为 pending_pickup 且有 pickupCode', async () => {
+    mockPrisma.pickupStore = { findFirst: jest.fn() };
+    mockPrisma.pickupStore.findFirst.mockResolvedValue(PICKUP_STORE);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_CHEAP(10));
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(ZERO_PAY_COUPON);
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523002', orderItems: [],
+    });
+    mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    jest.spyOn(service, 'generatePickupCode' as any).mockResolvedValue('123456');
+
+    const result = await service.create('100', {
+      fulfillmentType: 'pickup',
+      pickupStoreId: '500',
+      couponId: '50',
+      items: [{ skuId: '201', quantity: 1 }],
+    });
+
+    const createCall = mockPrisma._mockTx.order.create.mock.calls[0][0];
+    expect(createCall.data.status).toBe(OrderStatus.pending_pickup);
+    expect(createCall.data.pickupCode).toBe('123456');
+    expect(createCall.data.paidAt).toBeInstanceOf(Date);
+    expect(createCall.data.autoCloseAt).toBeUndefined();
+  });
+
+  it('0元订单 OrderPayment 为 SUCCESS 状态，paymentMethod=zero_pay，amount=0', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_CHEAP(10));
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(ZERO_PAY_COUPON);
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523003', orderItems: [],
+    });
+    mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    await service.create('100', {
+      addressId: '1',
+      couponId: '50',
+      items: [{ skuId: '201', quantity: 1 }],
+    });
+
+    expect(mockPrisma._mockTx.orderPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          paymentMethod: 'zero_pay',
+          status: PAYMENT_STATUS.SUCCESS,
+          amount: 0,
+          paidAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+
+  it('0元订单日志 action=pay_zero_amount', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_CHEAP(10));
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(ZERO_PAY_COUPON);
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523004', orderItems: [],
+    });
+    mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    await service.create('100', {
+      addressId: '1',
+      couponId: '50',
+      items: [{ skuId: '201', quantity: 1 }],
+    });
+
+    expect(mockPrisma._mockTx.orderLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'pay_zero_amount',
+          content: '0元订单自动支付成功',
+        }),
+      }),
+    );
+  });
+
+  it('0元订单优惠券从 LOCKED 变为 USED', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_CHEAP(10));
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(ZERO_PAY_COUPON);
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523005', orderItems: [],
+    });
+    mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    await service.create('100', {
+      addressId: '1',
+      couponId: '50',
+      items: [{ skuId: '201', quantity: 1 }],
+    });
+
+    const couponUpdateCalls = mockPrisma._mockTx.userCoupon.update.mock.calls;
+    const usedCall = couponUpdateCalls.find((call: any) =>
+      call[0].data.status === COUPON_STATUS.USED
+    );
+    expect(usedCall).toBeDefined();
+    expect(usedCall[0].data.usedAt).toBeInstanceOf(Date);
+  });
+
+  it('0元订单积分抵扣记录正确', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_CHEAP(10));
+    mockPrisma.user.findFirst.mockResolvedValue(USER);
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(ZERO_PAY_COUPON);
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.user.findFirst.mockResolvedValue(USER);
+    mockPrisma._mockTx.user.update.mockResolvedValue({});
+    mockPrisma._mockTx.pointsRecord.create.mockResolvedValue({});
+    mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523006', orderItems: [],
+    });
+    mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    await service.create('100', {
+      addressId: '1',
+      couponId: '50',
+      pointsDeduct: 100,
+      items: [{ skuId: '201', quantity: 1 }],
+    });
+
+    expect(mockPrisma._mockTx.pointsRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: 'order_deduct',
+          type: 2,
+        }),
+      }),
+    );
+  });
+
+  it('非0元订单仍为 pending_payment 且有 autoCloseAt', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU(10));
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523007', orderItems: [],
+    });
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    await service.create('100', {
+      addressId: '1',
+      items: [{ skuId: '200', quantity: 1 }],
+    });
+
+    const createCall = mockPrisma._mockTx.order.create.mock.calls[0][0];
+    expect(createCall.data.status).toBe(OrderStatus.pending_payment);
+    expect(createCall.data.autoCloseAt).toBeInstanceOf(Date);
+    expect(createCall.data.paidAt).toBeUndefined();
+
+    expect(mockPrisma._mockTx.orderPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          paymentMethod: 'wechat',
+          status: PAYMENT_STATUS.CREATED,
+        }),
+      }),
+    );
+  });
+});
+
+describe('OrderService.confirm isZeroPay', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('confirm 返回 isZeroPay: true 当 payAmount === 0', async () => {
+    const SKU_CHEAP = {
+      id: BigInt(201), productId: BigInt(300), specs: '蓝色/M', image: null, price: 9900, originalPrice: 12900,
+      product: { id: BigInt(300), name: '便宜商品', status: 1, supplierId: null },
+      stock: 10,
+    };
+    const ZERO_PAY_COUPON = {
+      id: BigInt(50), userId: BigInt(100), couponId: BigInt(10), status: COUPON_STATUS.FREE,
+      expireAt: new Date(Date.now() + 86400000),
+      coupon: { id: BigInt(10), type: 1, value: 9900, minAmount: 0, discountLimit: null },
+    };
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_CHEAP);
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(ZERO_PAY_COUPON);
+
+    const result = await service.confirm('100', {
+      items: [{ skuId: '201', quantity: 1 }],
+      couponId: '50',
+      addressId: '1',
+    });
+
+    expect(result.isZeroPay).toBe(true);
+    expect(result.payAmount).toBe(0);
+  });
+
+  it('confirm 返回 isZeroPay: false 当 payAmount > 0', async () => {
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU(10));
+
+    const result = await service.confirm('100', {
+      items: [{ skuId: '200', quantity: 1 }],
+      addressId: '1',
+    });
+
+    expect(result.isZeroPay).toBe(false);
+    expect(result.payAmount).toBeGreaterThan(0);
   });
 });

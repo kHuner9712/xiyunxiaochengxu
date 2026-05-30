@@ -32,6 +32,7 @@ import { HealthModule } from './health/health.module';
 import { PickupStoreModule } from './pickup-store/pickup-store.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { AdminMustChangePasswordGuard } from './common/guards/admin-must-change-password.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env.validation';
@@ -73,6 +74,7 @@ import { validateEnv } from './config/env.validation';
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: AdminMustChangePasswordGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
   ],
 })

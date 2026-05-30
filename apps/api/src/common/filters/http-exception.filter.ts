@@ -58,7 +58,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     response.setHeader('X-Request-Id', requestId);
-    if (code >= ERROR_CODE.INTERNAL_ERROR) {
+    if (code >= 50001 && code <= 50099) {
       this.logger.error(
         `requestId=${requestId} ${request.method} ${request.originalUrl || request.url} code=${code} message=${message}`,
         exception instanceof Error ? exception.stack : undefined,

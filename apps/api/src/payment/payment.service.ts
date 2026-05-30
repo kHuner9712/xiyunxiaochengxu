@@ -154,7 +154,7 @@ export class PaymentService {
     });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status !== OrderStatus.pending_payment) {
-      throw new BadRequestException('订单状态不允许支付');
+      throw new BadRequestException('订单已支付');
     }
     if (order.payAmount === null || order.payAmount <= 0) {
       throw new BadRequestException('支付金额异常');
@@ -215,6 +215,20 @@ export class PaymentService {
     };
   }
 
+  private validateCallbackTimestamp(timestamp: string): { code: string; message: string } | null {
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || ts <= 0) {
+      this.logger.warn(`微信回调时间戳无效: ${timestamp}`);
+      return { code: 'FAIL', message: '回调时间戳无效' };
+    }
+    const now = Math.floor(Date.now() / 1000);
+    if (Math.abs(now - ts) > 300) {
+      this.logger.warn(`微信回调时间戳过期: ${timestamp}, 当前: ${now}`);
+      return { code: 'FAIL', message: '回调时间戳过期' };
+    }
+    return null;
+  }
+
   async handleCallback(body: any, headers: any, rawBody?: string) {
     const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
@@ -228,6 +242,9 @@ export class PaymentService {
       this.logger.warn('微信回调缺少必要头部信息');
       return { code: 'FAIL', message: '缺少签名信息' };
     }
+
+    const timestampError = this.validateCallbackTimestamp(timestamp);
+    if (timestampError) return timestampError;
 
     if (!rawBody) {
       this.logger.warn('微信回调缺少rawBody，无法验签');
@@ -1218,6 +1235,9 @@ export class PaymentService {
       this.logger.warn('微信退款回调缺少必要头部信息');
       return { code: 'FAIL', message: '缺少签名信息' };
     }
+
+    const timestampError = this.validateCallbackTimestamp(timestamp);
+    if (timestampError) return timestampError;
 
     if (!rawBody) {
       this.logger.warn('微信退款回调缺少rawBody，无法验签');

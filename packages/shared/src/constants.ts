@@ -43,4 +43,4 @@ export const UNAUTHORIZED_CODE = 40101;
 export const FORBIDDEN_CODE = 40301;
 export const NOT_FOUND_CODE = 40401;
 export const PARAM_ERROR_CODE = 40001;
-export const BUSINESS_ERROR_CODE = 50001;
+export const BUSINESS_ERROR_CODE = 11001;

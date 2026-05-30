@@ -2,6 +2,7 @@ import { Controller, Post, Get, Put, Body } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { SkipMustChangePassword } from '../common/decorators/skip-must-change-password.decorator';
 import { AdminLoginDto, ChangePasswordDto } from './dto/admin-login.dto';
 import { WeappLoginDto } from './dto/weapp-login.dto';
 import { BindPhoneDto } from './dto/bind-phone.dto';
@@ -34,17 +35,20 @@ export class AdminAuthController {
     return this.authService.refreshToken(dto.refreshToken);
   }
 
+  @SkipMustChangePassword()
   @Post('logout')
   async logout(@CurrentUser('id') adminId: string, @CurrentUser('tokenId') tokenId: string) {
     await this.authService.adminLogout(adminId, tokenId);
     return null;
   }
 
+  @SkipMustChangePassword()
   @Get('info')
   async getInfo(@CurrentUser('id') adminId: string) {
     return this.authService.getAdminInfo(adminId);
   }
 
+  @SkipMustChangePassword()
   @Put('password')
   async changePassword(
     @CurrentUser('id') adminId: string,

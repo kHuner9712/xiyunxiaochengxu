@@ -142,4 +142,12 @@ describe('ErrorCodeMapping', () => {
       expect(successResponse.code).toBe(0);
     });
   });
+
+  describe('ERROR_CODE 唯一性', () => {
+    it('所有错误码值不应重复', () => {
+      const values = Object.values(ERROR_CODE);
+      const uniqueValues = new Set(values);
+      expect(uniqueValues.size).toBe(values.length);
+    });
+  });
 });
