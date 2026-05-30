@@ -21,6 +21,7 @@ async function bootstrap() {
   const uploadDir = configService.get<string>('UPLOAD_DIR') || path.join(process.cwd(), 'uploads');
   app.useStaticAssets(uploadDir, { prefix: '/uploads/' });
 
+  // API 前缀固定为 /api，Nginx 代理和前端 baseURL 均依赖此路径，不可更改
   app.setGlobalPrefix('api');
 
   const corsOrigins = configService.get<string>('CORS_ORIGINS', '');

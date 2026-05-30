@@ -1,4 +1,8 @@
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+
 FROM node:18-alpine AS builder
+
+ARG NPM_REGISTRY
 
 RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
   && apk add --no-cache make gcc g++ python3 openssl
@@ -10,10 +14,9 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/admin-web/package.json ./apps/admin-web/
 COPY packages/shared/package.json ./packages/shared/
 
-RUN npm config set registry https://registry.npmmirror.com \
-  && npm install -g pnpm \
-  && pnpm config set registry https://registry.npmmirror.com \
-  && pnpm install --no-frozen-lockfile
+RUN corepack enable && corepack prepare pnpm@11.2.2 --activate \
+  && pnpm config set registry ${NPM_REGISTRY} \
+  && pnpm install --frozen-lockfile
 
 COPY packages/shared/ ./packages/shared/
 RUN cd packages/shared && pnpm build
@@ -23,6 +26,8 @@ RUN cd apps/api && npx prisma generate && pnpm build
 
 FROM node:18-alpine AS admin-builder
 
+ARG NPM_REGISTRY
+
 RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories
 
 WORKDIR /app
@@ -31,10 +36,9 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY apps/admin-web/package.json ./apps/admin-web/
 COPY packages/shared/package.json ./packages/shared/
 
-RUN npm config set registry https://registry.npmmirror.com \
-  && npm install -g pnpm \
-  && pnpm config set registry https://registry.npmmirror.com \
-  && pnpm install --no-frozen-lockfile
+RUN corepack enable && corepack prepare pnpm@11.2.2 --activate \
+  && pnpm config set registry ${NPM_REGISTRY} \
+  && pnpm install --frozen-lockfile
 
 COPY packages/shared/ ./packages/shared/
 RUN cd packages/shared && pnpm build

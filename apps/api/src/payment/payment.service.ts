@@ -11,6 +11,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import axios from 'axios';
 import { ShareService } from '../share/share.service';
+import { generatePaymentNo, generateRefundNo } from '@baby-mall/shared';
 
 @Injectable()
 export class PaymentService {
@@ -186,16 +187,33 @@ export class PaymentService {
         prepayId = await this.createWechatOrder(order, appId, mchId, existingPayment.paymentNo!);
       }
     } else {
-      const paymentNo = `PAY${Date.now()}${Math.random().toString(36).substring(2, 8)}`;
-      await this.prisma.orderPayment.create({
-        data: {
-          orderId: BigInt(orderId),
-          paymentNo,
-          amount: order.payAmount!,
-          paymentMethod: 'wechat',
-          status: 1,
-        },
-      });
+      let paymentNo = '';
+      let paymentCreated = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        paymentNo = generatePaymentNo();
+        try {
+          await this.prisma.orderPayment.create({
+            data: {
+              orderId: BigInt(orderId),
+              paymentNo,
+              amount: order.payAmount!,
+              paymentMethod: 'wechat',
+              status: 1,
+            },
+          });
+          paymentCreated = true;
+          break;
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            this.logger.warn(`支付单号 ${paymentNo} 冲突，第 ${attempt + 1} 次重试`);
+            continue;
+          }
+          throw error;
+        }
+      }
+      if (!paymentCreated) {
+        throw new InternalServerErrorException('支付单号生成失败，请重试');
+      }
       prepayId = await this.createWechatOrder(order, appId, mchId, paymentNo);
     }
 
@@ -1076,8 +1094,8 @@ export class PaymentService {
     const appId = this.configService.get<string>('WECHAT_APP_ID')!;
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
     const refundNotifyUrl = this.configService.get<string>('WECHAT_REFUND_NOTIFY_URL')!;
-    const outRefundNo = `REFUND${Date.now()}${Math.random().toString(36).substring(2, 8)}`;
-    const refundNo = outRefundNo;
+    let outRefundNo = generateRefundNo();
+    let refundNo = outRefundNo;
 
     const requestBody = {
       out_trade_no: order.orderNo,
@@ -1098,30 +1116,49 @@ export class PaymentService {
     };
 
     // A. 先创建 initiating 记录，确保微信受理后本地必有追踪
-    let initiatingRefund;
-    try {
-      initiatingRefund = await this.prisma.orderRefund.create({
-        data: {
-          refundNo,
-          orderId: BigInt(params.orderId),
-          aftersaleId: params.aftersaleId ? BigInt(params.aftersaleId) : null,
-          paymentId: order.payment.id,
-          outTradeNo: order.orderNo,
-          transactionId: order.payment.transactionId,
-          outRefundNo,
-          refundId: null,
-          refundAmount: params.refundAmount,
-          totalAmount: order.payAmount!,
-          status: REFUND_STATUS.INITIATING,
-          reason: params.reason,
-          rawRequest: request,
-          rawResponse: Prisma.DbNull,
-        },
-      });
-    } catch (error) {
-      this.logger.error(`创建退款意图记录失败: ${outRefundNo}`, (error as Error).message);
-      throw new InternalServerErrorException('退款处理失败，请稍后重试');
+    let initiatingRefund: Awaited<ReturnType<typeof this.prisma.orderRefund.create>> | null = null;
+    let refundCreated = false;
+    for (let refundAttempt = 0; refundAttempt < 3; refundAttempt++) {
+      if (refundAttempt > 0) {
+        outRefundNo = generateRefundNo();
+        refundNo = outRefundNo;
+      }
+      try {
+        initiatingRefund = await this.prisma.orderRefund.create({
+          data: {
+            refundNo,
+            orderId: BigInt(params.orderId),
+            aftersaleId: params.aftersaleId ? BigInt(params.aftersaleId) : null,
+            paymentId: order.payment.id,
+            outTradeNo: order.orderNo,
+            transactionId: order.payment.transactionId,
+            outRefundNo,
+            refundId: null,
+            refundAmount: params.refundAmount,
+            totalAmount: order.payAmount!,
+            status: REFUND_STATUS.INITIATING,
+            reason: params.reason,
+            rawRequest: request,
+            rawResponse: Prisma.DbNull,
+          },
+        });
+        refundCreated = true;
+        break;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          this.logger.warn(`退款单号 ${outRefundNo} 冲突，第 ${refundAttempt + 1} 次重试`);
+          continue;
+        }
+        this.logger.error(`创建退款意图记录失败: ${outRefundNo}`, (error as Error).message);
+        throw new InternalServerErrorException('退款处理失败，请稍后重试');
+      }
     }
+    if (!refundCreated || !initiatingRefund) {
+      throw new InternalServerErrorException('退款单号生成失败，请重试');
+    }
+
+    requestBody.out_refund_no = outRefundNo;
+    request.out_refund_no = outRefundNo;
 
     // B. 调用微信退款接口
     let response: any;

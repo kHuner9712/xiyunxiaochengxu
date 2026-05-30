@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { OrderService } from './order.service';
 import { COUPON_STATUS, PAYMENT_STATUS } from '../common/constants/payment';
@@ -1440,7 +1440,7 @@ describe('OrderService.create 0元订单', () => {
     mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
     mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
 
-    jest.spyOn(service, 'generatePickupCode' as any).mockResolvedValue('123456');
+    jest.spyOn(service, 'generatePickupCode' as any).mockResolvedValue('12345678');
 
     const result = await service.create('100', {
       fulfillmentType: 'pickup',
@@ -1451,7 +1451,7 @@ describe('OrderService.create 0元订单', () => {
 
     const createCall = mockPrisma._mockTx.order.create.mock.calls[0][0];
     expect(createCall.data.status).toBe(OrderStatus.pending_pickup);
-    expect(createCall.data.pickupCode).toBe('123456');
+    expect(createCall.data.pickupCode).toBe('12345678');
     expect(createCall.data.paidAt).toBeInstanceOf(Date);
     expect(createCall.data.autoCloseAt).toBeUndefined();
   });
@@ -1674,5 +1674,130 @@ describe('OrderService.confirm isZeroPay', () => {
 
     expect(result.isZeroPay).toBe(false);
     expect(result.payAmount).toBeGreaterThan(0);
+  });
+});
+
+describe('generatePickupCode', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    const { service: s, mockPrisma: p } = createService();
+    service = s;
+    mockPrisma = p;
+  });
+
+  it('生成 8 位数字自提码', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+    const code = await service.generatePickupCode();
+    expect(code).toMatch(/^\d{8}$/);
+  });
+
+  it('findFirst 返回 null 时直接返回码', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+    const code = await service.generatePickupCode();
+    expect(code).toBeDefined();
+    expect(mockPrisma.order.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('碰撞时重试直到成功', async () => {
+    mockPrisma.order.findFirst
+      .mockResolvedValueOnce({ id: BigInt(1) })
+      .mockResolvedValueOnce({ id: BigInt(2) })
+      .mockResolvedValueOnce(null);
+    const code = await service.generatePickupCode();
+    expect(code).toMatch(/^\d{8}$/);
+    expect(mockPrisma.order.findFirst).toHaveBeenCalledTimes(3);
+  });
+
+  it('超过最大重试次数抛出 InternalServerErrorException', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue({ id: BigInt(1) });
+    await expect(service.generatePickupCode(3)).rejects.toThrow(InternalServerErrorException);
+    await expect(service.generatePickupCode(3)).rejects.toThrow('自提码生成失败，请重试');
+    expect(mockPrisma.order.findFirst).toHaveBeenCalledTimes(6);
+  });
+
+  it('默认最大重试次数为 5', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue({ id: BigInt(1) });
+    await expect(service.generatePickupCode()).rejects.toThrow(InternalServerErrorException);
+    expect(mockPrisma.order.findFirst).toHaveBeenCalledTimes(5);
+  });
+
+  it('0 元自提订单路径正常生成自提码', async () => {
+    const PICKUP_STORE = {
+      id: BigInt(500), name: '测试自提点', province: '北京', city: '北京', district: '朝阳区',
+      address: 'xxx路2号', contactPhone: '010-12345678', status: 1, deletedAt: null,
+    };
+    const ZERO_PAY_COUPON = {
+      id: BigInt(50), userId: BigInt(100), couponId: BigInt(10), status: COUPON_STATUS.FREE,
+      expireAt: new Date(Date.now() + 86400000),
+      coupon: { id: BigInt(10), type: 1, value: 9900, minAmount: 0, discountLimit: null },
+    };
+    const SKU_CHEAP = (stock = 10) => ({
+      id: BigInt(201), productId: BigInt(300), specs: '蓝色/M', image: null, price: 9900, originalPrice: 12900,
+      product: { id: BigInt(300), name: '便宜商品', status: 1, supplierId: null },
+      stock,
+    });
+
+    mockPrisma.pickupStore = { findFirst: jest.fn() };
+    mockPrisma.pickupStore.findFirst.mockResolvedValue(PICKUP_STORE);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_CHEAP(10));
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(ZERO_PAY_COUPON);
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523002', orderItems: [],
+    });
+    mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+
+    const result = await service.create('100', {
+      fulfillmentType: 'pickup',
+      pickupStoreId: '500',
+      couponId: '50',
+      items: [{ skuId: '201', quantity: 1 }],
+    });
+
+    const createCall = mockPrisma._mockTx.order.create.mock.calls[0][0];
+    expect(createCall.data.status).toBe(OrderStatus.pending_pickup);
+    expect(createCall.data.pickupCode).toMatch(/^\d{8}$/);
+    expect(createCall.data.paidAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('单号生成函数', () => {
+  it('generatePaymentNo 格式为 PAY + 时间 + hex', async () => {
+    const { generatePaymentNo } = await import('@baby-mall/shared');
+    const no = generatePaymentNo();
+    expect(no).toMatch(/^PAY\d{14}[0-9a-f]{6}$/);
+  });
+
+  it('generateRefundNo 格式为 REFUND + 时间 + hex', async () => {
+    const { generateRefundNo } = await import('@baby-mall/shared');
+    const no = generateRefundNo();
+    expect(no).toMatch(/^REFUND\d{14}[0-9a-f]{6}$/);
+  });
+
+  it('generateOrderNo 格式为 XY + 时间 + hex', async () => {
+    const { generateOrderNo } = await import('@baby-mall/shared');
+    const no = generateOrderNo();
+    expect(no).toMatch(/^XY\d{14}[0-9a-f]{6}$/);
+  });
+
+  it('generatePaymentNo 连续生成不重复', async () => {
+    const { generatePaymentNo } = await import('@baby-mall/shared');
+    const set = new Set<string>();
+    for (let i = 0; i < 50; i++) {
+      set.add(generatePaymentNo());
+    }
+    expect(set.size).toBe(50);
   });
 });

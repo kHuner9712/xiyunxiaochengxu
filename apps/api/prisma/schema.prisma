@@ -441,7 +441,7 @@ model Order {
   pickupStoreName      String?     @db.VarChar(100) @map("pickup_store_name")
   pickupStoreAddress   String?     @db.VarChar(300) @map("pickup_store_address")
   pickupContactPhone   String?     @db.VarChar(20) @map("pickup_contact_phone")
-  pickupCode           String?     @db.VarChar(6) @map("pickup_code")
+  pickupCode           String?     @db.VarChar(8) @map("pickup_code")
   pickedUpAt           DateTime?   @map("picked_up_at")
   pickupVerifiedBy     BigInt?     @map("pickup_verified_by")
   createdAt            DateTime    @default(now()) @map("created_at")
@@ -462,7 +462,7 @@ model Order {
   @@index([createdAt], name: "idx_created_at")
   @@index([paidAt], name: "idx_paid_at")
   @@index([fulfillmentType], name: "idx_fulfillment_type")
-  @@index([pickupCode], name: "idx_pickup_code")
+  @@unique([pickupCode], name: "uk_pickup_code")
   @@map("orders")
 }
 

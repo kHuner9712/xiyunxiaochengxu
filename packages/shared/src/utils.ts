@@ -1,9 +1,27 @@
+import * as crypto from 'crypto';
+
+function formatTimestamp(): string {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0'),
+  ].join('');
+}
+
+function secureRandomHex(bytes: number): string {
+  return crypto.randomBytes(bytes).toString('hex');
+}
+
 export function toFen(yuan: number): number {
   return Math.round(yuan * 100);
 }
 
-export function toYuan(fen: number): number {
-  return fen / 100;
+export function toYuan(fen: number): string {
+  return (fen / 100).toFixed(2);
 }
 
 export function formatPrice(fen: number): string {
@@ -11,31 +29,19 @@ export function formatPrice(fen: number): string {
 }
 
 export function generateOrderNo(): string {
-  const now = new Date();
-  const ts = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-    String(now.getHours()).padStart(2, '0'),
-    String(now.getMinutes()).padStart(2, '0'),
-    String(now.getSeconds()).padStart(2, '0'),
-  ].join('');
-  const rand = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-  return `XY${ts}${rand}`;
+  return `XY${formatTimestamp()}${secureRandomHex(3)}`;
 }
 
 export function generateAftersaleNo(): string {
-  const now = new Date();
-  const ts = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-    String(now.getHours()).padStart(2, '0'),
-    String(now.getMinutes()).padStart(2, '0'),
-    String(now.getSeconds()).padStart(2, '0'),
-  ].join('');
-  const rand = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-  return `AS${ts}${rand}`;
+  return `AS${formatTimestamp()}${secureRandomHex(3)}`;
+}
+
+export function generatePaymentNo(): string {
+  return `PAY${formatTimestamp()}${secureRandomHex(3)}`;
+}
+
+export function generateRefundNo(): string {
+  return `REFUND${formatTimestamp()}${secureRandomHex(3)}`;
 }
 
 export function calculateBabyMonthAge(birthday: string | Date): number {

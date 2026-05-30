@@ -242,6 +242,18 @@ else
   fail ".env.example 不存在"
 fi
 
+section "8.45. API 路径一致性检查"
+MAIN_TS_FILE="apps/api/src/main.ts"
+if [ -f "$MAIN_TS_FILE" ]; then
+  if grep -q "setGlobalPrefix('api')" "$MAIN_TS_FILE" 2>/dev/null; then
+    pass "main.ts setGlobalPrefix 为 'api'，与 Nginx 和前端配置一致"
+  else
+    fail "main.ts setGlobalPrefix 不是 'api'，Nginx 代理和前端 baseURL 将无法正确路由"
+  fi
+else
+  fail "main.ts 不存在: $MAIN_TS_FILE"
+fi
+
 section "8.5. Docker Compose 退款回调 URL 检查"
 COMPOSE_FILES=("deploy/docker-compose.yml" "deploy/docker-compose.bt.yml")
 for compose_file in "${COMPOSE_FILES[@]}"; do

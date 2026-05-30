@@ -40,7 +40,6 @@
 
 | 字段 | 含义 | 从哪里获取 | 示例格式 | 是否敏感 | 是否可提交 Git |
 |---|---|---|---|---|---|
-| `API_PREFIX` | API 路由前缀 | 后端约定 | `api` | 否 | 否 |
 | `LOG_LEVEL` | 日志级别 | 运维约定 | `info` | 否 | 否 |
 | `DB_HOST` | 数据库主机 | 运维部署信息 | `mysql` | 否 | 否 |
 | `DB_PORT` | 数据库端口 | 运维部署信息 | `3306` | 否 | 否 |
@@ -84,3 +83,5 @@
 1. 运行：`pnpm release:check`
 2. 严格门禁：`pnpm release:check:prod`
 3. 部署前检查：`ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh`
+
+> **注意**：生产环境 API 路径固定为 `/api`，Nginx 代理、小程序和管理后台 baseURL 均依赖此路径，不可更改。

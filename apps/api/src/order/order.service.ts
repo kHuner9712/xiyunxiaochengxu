@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { DeliverDto, BatchDeliverDto } from './dto/deliver.dto';
-import { generateOrderNo, paginate } from '@baby-mall/shared';
+import { generateOrderNo, generatePaymentNo, paginate } from '@baby-mall/shared';
 import {
   OrderStatus,
   AftersaleStatus,
@@ -410,17 +411,34 @@ export class OrderService {
         });
       }
 
-      const paymentNo = `PAY${Date.now()}${Math.random().toString(36).substring(2, 8)}`;
-      await tx.orderPayment.create({
-        data: {
-          orderId: createdOrder.id,
-          paymentNo,
-          amount: payAmount,
-          paymentMethod: isZeroPay ? 'zero_pay' : 'wechat',
-          status: isZeroPay ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.CREATED,
-          ...(isZeroPay ? { paidAt: new Date() } : {}),
-        },
-      });
+      const { Prisma } = await import('@prisma/client');
+      let paymentCreated = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const paymentNo = generatePaymentNo();
+        try {
+          await tx.orderPayment.create({
+            data: {
+              orderId: createdOrder.id,
+              paymentNo,
+              amount: payAmount,
+              paymentMethod: isZeroPay ? 'zero_pay' : 'wechat',
+              status: isZeroPay ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.CREATED,
+              ...(isZeroPay ? { paidAt: new Date() } : {}),
+            },
+          });
+          paymentCreated = true;
+          break;
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            this.logger.warn(`支付单号 ${paymentNo} 冲突，第 ${attempt + 1} 次重试`);
+            continue;
+          }
+          throw error;
+        }
+      }
+      if (!paymentCreated) {
+        throw new InternalServerErrorException('支付单号生成失败，请重试');
+      }
 
       if (isZeroPay) {
         await tx.orderLog.create({
@@ -1045,17 +1063,18 @@ export class OrderService {
     };
   }
 
-  async generatePickupCode(): Promise<string> {
-    let code: string;
-    let exists = true;
-    while (exists) {
-      code = String(Math.floor(100000 + Math.random() * 900000));
+  async generatePickupCode(maxRetries = 5): Promise<string> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const code = String(crypto.randomInt(10000000, 100000000));
       const existing = await this.prisma.order.findFirst({
         where: { pickupCode: code },
       });
-      exists = !!existing;
+      if (!existing) {
+        return code;
+      }
+      this.logger.warn(`自提码 ${code} 已存在，第 ${attempt + 1} 次重试`);
     }
-    return code!;
+    throw new InternalServerErrorException('自提码生成失败，请重试');
   }
 
   private async completeOrderAndReward(params: {

@@ -164,3 +164,270 @@ describe('AuthService bindPhone access_token cache', () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });
+
+describe('parseDurationToSeconds', () => {
+  let authService: AuthService;
+
+  beforeEach(() => {
+    const prisma = createMockPrisma();
+    const redis = createMockRedis();
+    const jwtService = new JwtService({ secret: 'test' });
+    const config = {
+      get: jest.fn((key: string, defaultValue?: string) => {
+        const map: Record<string, string> = {
+          NODE_ENV: 'development',
+          JWT_SECRET: 'jwt-secret-for-access-token-32-chars',
+          REFRESH_TOKEN_SECRET: 'refresh-secret-for-refresh-token-32c',
+          REFRESH_TOKEN_EXPIRES_IN: '30d',
+        };
+        return map[key] ?? defaultValue;
+      }),
+    };
+    authService = new AuthService(prisma as any, jwtService, config as any, redis as any);
+  });
+
+  it("'2h' → 7200", () => {
+    expect((authService as any).parseDurationToSeconds('2h')).toBe(7200);
+  });
+
+  it("'30d' → 2592000", () => {
+    expect((authService as any).parseDurationToSeconds('30d')).toBe(2592000);
+  });
+
+  it("'7d' → 604800", () => {
+    expect((authService as any).parseDurationToSeconds('7d')).toBe(604800);
+  });
+
+  it("'15m' → 900", () => {
+    expect((authService as any).parseDurationToSeconds('15m')).toBe(900);
+  });
+
+  it("'3600' (纯数字) → 3600", () => {
+    expect((authService as any).parseDurationToSeconds('3600')).toBe(3600);
+  });
+
+  it("'1w' → 604800", () => {
+    expect((authService as any).parseDurationToSeconds('1w')).toBe(604800);
+  });
+
+  it("'90s' → 90", () => {
+    expect((authService as any).parseDurationToSeconds('90s')).toBe(90);
+  });
+
+  it('无效字符串回退到 2592000', () => {
+    expect((authService as any).parseDurationToSeconds('invalid')).toBe(2592000);
+  });
+});
+
+describe('adminLogin 使用 JWT_ADMIN_EXPIRES_IN 配置', () => {
+  let prisma: any;
+  let redis: ReturnType<typeof createMockRedis>;
+  let jwtService: JwtService;
+  let authService: AuthService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = {
+      adminUser: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    redis = createMockRedis();
+    jwtService = new JwtService({ secret: 'jwt-secret-for-access-token-32-chars' });
+    const config = {
+      get: jest.fn((key: string, defaultValue?: string) => {
+        const map: Record<string, string> = {
+          NODE_ENV: 'development',
+          JWT_SECRET: 'jwt-secret-for-access-token-32-chars',
+          REFRESH_TOKEN_SECRET: 'refresh-secret-for-refresh-token-32c',
+          REFRESH_TOKEN_EXPIRES_IN: '30d',
+          JWT_ADMIN_EXPIRES_IN: '4h',
+          SMOKE_TEST_BYPASS_CAPTCHA: 'true',
+        };
+        return map[key] ?? defaultValue;
+      }),
+    };
+    authService = new AuthService(prisma, jwtService, config as any, redis as any);
+    (prisma.adminUser.findFirst as any).mockResolvedValue({
+      id: 1n,
+      username: 'admin',
+      password: 'hashed-password',
+      avatar: null,
+      realName: '管理员',
+      mustChangePassword: false,
+      adminUserRoles: [],
+    });
+    (prisma.adminUser.update as any).mockResolvedValue({});
+    const bcrypt = require('bcrypt');
+    (bcrypt.compare as any).mockResolvedValue(true);
+  });
+
+  it('accessToken expiresIn 使用 JWT_ADMIN_EXPIRES_IN 配置的 4h', async () => {
+    const signSpy = jest.spyOn(jwtService, 'signAsync');
+    await authService.adminLogin('admin', 'password', 'smoke-test', 'bypass');
+    expect(signSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenType: 'access' }),
+      expect.objectContaining({ expiresIn: '4h' }),
+    );
+  });
+});
+
+describe('adminLogin 默认 JWT_ADMIN_EXPIRES_IN 为 2h', () => {
+  let prisma: any;
+  let redis: ReturnType<typeof createMockRedis>;
+  let jwtService: JwtService;
+  let authService: AuthService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = {
+      adminUser: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    redis = createMockRedis();
+    jwtService = new JwtService({ secret: 'jwt-secret-for-access-token-32-chars' });
+    const config = {
+      get: jest.fn((key: string, defaultValue?: string) => {
+        const map: Record<string, string> = {
+          NODE_ENV: 'development',
+          JWT_SECRET: 'jwt-secret-for-access-token-32-chars',
+          REFRESH_TOKEN_SECRET: 'refresh-secret-for-refresh-token-32c',
+          REFRESH_TOKEN_EXPIRES_IN: '30d',
+          SMOKE_TEST_BYPASS_CAPTCHA: 'true',
+        };
+        return map[key] ?? defaultValue;
+      }),
+    };
+    authService = new AuthService(prisma, jwtService, config as any, redis as any);
+    (prisma.adminUser.findFirst as any).mockResolvedValue({
+      id: 1n,
+      username: 'admin',
+      password: 'hashed-password',
+      avatar: null,
+      realName: '管理员',
+      mustChangePassword: false,
+      adminUserRoles: [],
+    });
+    (prisma.adminUser.update as any).mockResolvedValue({});
+    const bcrypt = require('bcrypt');
+    (bcrypt.compare as any).mockResolvedValue(true);
+  });
+
+  it('未配置 JWT_ADMIN_EXPIRES_IN 时 accessToken expiresIn 默认为 2h', async () => {
+    const signSpy = jest.spyOn(jwtService, 'signAsync');
+    await authService.adminLogin('admin', 'password', 'smoke-test', 'bypass');
+    expect(signSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenType: 'access' }),
+      expect.objectContaining({ expiresIn: '2h' }),
+    );
+  });
+});
+
+describe('adminLogin Redis TTL 与 REFRESH_TOKEN_EXPIRES_IN 同步', () => {
+  let prisma: any;
+  let redis: ReturnType<typeof createMockRedis>;
+  let jwtService: JwtService;
+  let authService: AuthService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = {
+      adminUser: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    redis = createMockRedis();
+    jwtService = new JwtService({ secret: 'jwt-secret-for-access-token-32-chars' });
+    const config = {
+      get: jest.fn((key: string, defaultValue?: string) => {
+        const map: Record<string, string> = {
+          NODE_ENV: 'development',
+          JWT_SECRET: 'jwt-secret-for-access-token-32-chars',
+          REFRESH_TOKEN_SECRET: 'refresh-secret-for-refresh-token-32c',
+          REFRESH_TOKEN_EXPIRES_IN: '7d',
+          SMOKE_TEST_BYPASS_CAPTCHA: 'true',
+        };
+        return map[key] ?? defaultValue;
+      }),
+    };
+    authService = new AuthService(prisma, jwtService, config as any, redis as any);
+    (prisma.adminUser.findFirst as any).mockResolvedValue({
+      id: 1n,
+      username: 'admin',
+      password: 'hashed-password',
+      avatar: null,
+      realName: '管理员',
+      mustChangePassword: false,
+      adminUserRoles: [],
+    });
+    (prisma.adminUser.update as any).mockResolvedValue({});
+    const bcrypt = require('bcrypt');
+    (bcrypt.compare as any).mockResolvedValue(true);
+  });
+
+  it('redis.set 的 TTL 为 7d 对应的 604800 秒', async () => {
+    await authService.adminLogin('admin', 'password', 'smoke-test', 'bypass');
+    expect(redis.set).toHaveBeenCalledWith(
+      expect.stringContaining('admin_refresh_token:'),
+      expect.any(String),
+      604800,
+    );
+  });
+});
+
+describe('refreshToken 旋转时使用同一 TTL', () => {
+  let prisma: any;
+  let redis: ReturnType<typeof createMockRedis>;
+  let jwtService: JwtService;
+  let authService: AuthService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = {
+      adminUser: {
+        findFirst: jest.fn(),
+      },
+    };
+    redis = createMockRedis();
+    jwtService = new JwtService({ secret: 'jwt-secret-for-access-token-32-chars' });
+    const config = {
+      get: jest.fn((key: string, defaultValue?: string) => {
+        const map: Record<string, string> = {
+          NODE_ENV: 'development',
+          JWT_SECRET: 'jwt-secret-for-access-token-32-chars',
+          REFRESH_TOKEN_SECRET: 'refresh-secret-for-refresh-token-32c',
+          REFRESH_TOKEN_EXPIRES_IN: '7d',
+        };
+        return map[key] ?? defaultValue;
+      }),
+    };
+    authService = new AuthService(prisma, jwtService, config as any, redis as any);
+    (prisma.adminUser.findFirst as any).mockResolvedValue({
+      id: 1n,
+      username: 'admin',
+      avatar: null,
+      realName: '管理员',
+      mustChangePassword: false,
+      adminUserRoles: [],
+    });
+  });
+
+  it('refreshToken 旋转后 redis.set 的 TTL 为 7d 对应的 604800 秒', async () => {
+    const tokenId = 'test-token-id';
+    const refreshToken = await jwtService.signAsync(
+      { id: '1', username: 'admin', roleType: 'admin', tokenType: 'refresh', tokenId },
+      { secret: 'refresh-secret-for-refresh-token-32c', expiresIn: '7d' },
+    );
+    await redis.set(`admin_refresh_token:1:${tokenId}`, refreshToken);
+    await authService.refreshToken(refreshToken);
+    expect(redis.set).toHaveBeenCalledWith(
+      expect.stringContaining('admin_refresh_token:'),
+      expect.any(String),
+      604800,
+    );
+  });
+});

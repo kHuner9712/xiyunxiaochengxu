@@ -8,8 +8,8 @@
       <div class="verify-section">
         <el-input
           v-model="pickupCode"
-          placeholder="请输入6位自提码"
-          maxlength="6"
+          placeholder="请输入8位自提码"
+          maxlength="8"
           size="large"
           style="max-width: 300px"
           @keyup.enter="handleVerify"
@@ -43,8 +43,8 @@ const verifying = ref(false)
 const verifyResult = ref<any>(null)
 
 async function handleVerify() {
-  if (!pickupCode.value || pickupCode.value.length !== 6) {
-    ElMessage.warning('请输入6位自提码')
+  if (!pickupCode.value || pickupCode.value.length !== 8) {
+    ElMessage.warning('请输入8位自提码')
     return
   }
   verifying.value = true

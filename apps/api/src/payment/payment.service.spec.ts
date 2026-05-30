@@ -77,7 +77,7 @@ function createPaymentService(mockPrisma?: any, mockConfigService?: any, mockBus
   const processFirstPaidReward = jest.fn() as any;
   processFirstPaidReward.mockResolvedValue(null);
   const mockShareService = { processFirstPaidReward };
-  const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+  const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
   const service = new PaymentService(prisma as any, configService as any, businessEvent as any, mockOrderService as any, mockShareService as any);
   jest.spyOn(service as any, 'verifyWechatSignature').mockReturnValue(true);
   jest.spyOn(service as any, 'isWechatPaymentConfigured').mockReturnValue(true);
@@ -527,7 +527,7 @@ describe('PaymentService.createRefund', () => {
     const processFirstPaidReward = jest.fn() as any;
     processFirstPaidReward.mockResolvedValue(null);
     const mockShareService = { processFirstPaidReward };
-    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
     const svc = new PaymentService(mockPrisma as any, configNoMock as any, mockBE as any, mockOrderService as any, mockShareService as any);
     jest.spyOn(svc as any, 'isWechatPaymentConfigured').mockReturnValue(true);
     jest.spyOn(svc['logger'], 'log').mockImplementation(() => {});
@@ -1871,7 +1871,7 @@ describe('PaymentService 生产环境配置校验', () => {
     const processFirstPaidReward = jest.fn() as any;
     processFirstPaidReward.mockResolvedValue(null);
     const mockShareService = { processFirstPaidReward };
-    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
@@ -1898,7 +1898,7 @@ describe('PaymentService 生产环境配置校验', () => {
     const processFirstPaidReward = jest.fn() as any;
     processFirstPaidReward.mockResolvedValue(null);
     const mockShareService = { processFirstPaidReward };
-    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
@@ -1918,7 +1918,7 @@ describe('PaymentService 生产环境配置校验', () => {
     const processFirstPaidReward = jest.fn() as any;
     processFirstPaidReward.mockResolvedValue(null);
     const mockShareService = { processFirstPaidReward };
-    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
@@ -1938,7 +1938,7 @@ describe('PaymentService 生产环境配置校验', () => {
     const processFirstPaidReward = jest.fn() as any;
     processFirstPaidReward.mockResolvedValue(null);
     const mockShareService = { processFirstPaidReward };
-    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
@@ -1959,7 +1959,7 @@ describe('PaymentService 生产环境配置校验', () => {
     const processFirstPaidReward = jest.fn() as any;
     processFirstPaidReward.mockResolvedValue(null);
     const mockShareService = { processFirstPaidReward };
-    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('123456')) };
+    const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 

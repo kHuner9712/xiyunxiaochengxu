@@ -13,6 +13,8 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly refreshTokenSecret: string;
   private readonly refreshTokenExpiresIn: string;
+  private readonly adminAccessTokenExpiresIn: string;
+  private readonly refreshTokenTtlSeconds: number;
 
   constructor(
     private prisma: PrismaService,
@@ -33,6 +35,8 @@ export class AuthService {
 
     this.refreshTokenSecret = configuredRefreshSecret || jwtSecret;
     this.refreshTokenExpiresIn = this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN', '30d');
+    this.adminAccessTokenExpiresIn = this.configService.get<string>('JWT_ADMIN_EXPIRES_IN', '2h');
+    this.refreshTokenTtlSeconds = this.parseDurationToSeconds(this.refreshTokenExpiresIn);
   }
 
   async getCaptcha() {
@@ -108,7 +112,7 @@ export class AuthService {
         tokenType: 'access',
         tokenId,
       },
-      { expiresIn: '2h' },
+      { expiresIn: this.adminAccessTokenExpiresIn },
     );
 
     const refreshToken = await this.jwtService.signAsync(
@@ -128,7 +132,7 @@ export class AuthService {
     );
 
     const refreshKey = `admin_refresh_token:${admin.id.toString()}:${tokenId}`;
-    await this.redisService.set(refreshKey, refreshToken, 30 * 24 * 60 * 60);
+    await this.redisService.set(refreshKey, refreshToken, this.refreshTokenTtlSeconds);
 
     return {
       accessToken,
@@ -200,7 +204,7 @@ export class AuthService {
         tokenType: 'access',
         tokenId: newTokenId,
       },
-      { expiresIn: '2h' },
+      { expiresIn: this.adminAccessTokenExpiresIn },
     );
 
     const newRefreshToken = await this.jwtService.signAsync(
@@ -220,7 +224,7 @@ export class AuthService {
     );
 
     await this.redisService.del(refreshKey);
-    await this.redisService.set(`admin_refresh_token:${admin.id.toString()}:${newTokenId}`, newRefreshToken, 30 * 24 * 60 * 60);
+    await this.redisService.set(`admin_refresh_token:${admin.id.toString()}:${newTokenId}`, newRefreshToken, this.refreshTokenTtlSeconds);
 
     return {
       accessToken: newAccessToken,
@@ -481,5 +485,27 @@ export class AuthService {
     decrypted += decipher.final('utf8');
 
     return decrypted;
+  }
+
+  private parseDurationToSeconds(duration: string): number {
+    if (/^\d+$/.test(duration)) {
+      return parseInt(duration, 10);
+    }
+    const match = duration.match(/^(\d+(?:\.\d+)?)(ms|s|m|h|d|w)$/);
+    if (!match) {
+      this.logger.warn(`无法解析时长字符串 "${duration}"，回退到 30 天`);
+      return 30 * 24 * 60 * 60;
+    }
+    const value = parseFloat(match[1]);
+    const unit = match[2];
+    const multipliers: Record<string, number> = {
+      ms: 0.001,
+      s: 1,
+      m: 60,
+      h: 3600,
+      d: 86400,
+      w: 604800,
+    };
+    return Math.floor(value * (multipliers[unit] || 1));
   }
 }
