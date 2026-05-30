@@ -117,7 +117,7 @@ describe('OrderService.create 库存扣减', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.order.create.mockResolvedValue({
       id: BigInt(1), orderNo: 'XY20260523001', orderItems: [],
@@ -133,6 +133,53 @@ describe('OrderService.create 库存扣减', () => {
       expect.objectContaining({
         where: expect.objectContaining({ stock: { gte: 1 } }),
         data: expect.objectContaining({ stock: { decrement: 1 } }),
+      }),
+    );
+    expect(mockPrisma._mockTx.productStockLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          beforeStock: 10,
+          afterStock: 9,
+          quantity: 1,
+        }),
+      }),
+    );
+  });
+
+  it('库存流水使用扣减后真实库存反推 beforeStock，保证并发日志自洽', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU(10));
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst
+      .mockResolvedValueOnce({ productId: BigInt(300), stock: 8 })
+      .mockResolvedValueOnce({ productId: BigInt(300), stock: 6 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.order.create.mockResolvedValue({
+      id: BigInt(1), orderNo: 'XY20260523001', orderItems: [],
+    });
+    mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
+    mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+    await service.create('100', {
+      addressId: '1',
+      items: [
+        { skuId: '200', quantity: 2 },
+        { skuId: '200', quantity: 2 },
+      ],
+    });
+
+    expect(mockPrisma._mockTx.productStockLog.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({ beforeStock: 10, afterStock: 8, quantity: 2 }),
+      }),
+    );
+    expect(mockPrisma._mockTx.productStockLog.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({ beforeStock: 8, afterStock: 6, quantity: 2 }),
       }),
     );
   });
@@ -153,7 +200,7 @@ describe('OrderService.create 优惠券锁定', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma._mockTx.order.create.mockResolvedValue({
@@ -181,7 +228,7 @@ describe('OrderService.create 优惠券锁定', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma._mockTx.order.create.mockResolvedValue({
@@ -230,7 +277,7 @@ describe('OrderService.create 优惠券并发竞态', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma._mockTx.order.create.mockResolvedValue({
@@ -257,7 +304,7 @@ describe('OrderService.create 优惠券并发竞态', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.user.findFirst.mockResolvedValue(USER);
     mockPrisma._mockTx.user.update.mockResolvedValue({});
@@ -299,7 +346,7 @@ describe('OrderService.create 积分抵扣', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.user.findFirst.mockResolvedValue(USER);
     mockPrisma._mockTx.user.update.mockResolvedValue({});
@@ -632,7 +679,7 @@ describe('订单主链路', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.order.create.mockResolvedValue({
       id: BigInt(1), orderNo: 'XY20260523001', orderItems: [],
@@ -661,7 +708,7 @@ describe('订单主链路', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma._mockTx.order.create.mockResolvedValue({
@@ -697,7 +744,7 @@ describe('订单主链路', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.user.findFirst.mockResolvedValue(USER);
     mockPrisma._mockTx.user.update.mockResolvedValue({});
@@ -983,7 +1030,7 @@ describe('接口契约：createOrder 返回 orderId/orderNo', () => {
 
     setupTransaction(mockPrisma);
     mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300) });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.order.create.mockResolvedValue({
       id: BigInt(42), orderNo: 'XY20260523001', orderItems: [],

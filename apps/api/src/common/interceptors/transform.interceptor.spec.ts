@@ -15,8 +15,8 @@ describe('TransformInterceptor', () => {
 
   const createMockContext = (skipTransform = false) => ({
     switchToHttp: () => ({
-      getRequest: () => ({}),
-      getResponse: () => ({}),
+      getRequest: () => ({ headers: { 'x-request-id': 'test-request-id' } }),
+      getResponse: () => ({ setHeader: jest.fn() }),
     }),
     getHandler: () => jest.fn(),
     getClass: () => jest.fn(),
@@ -33,6 +33,7 @@ describe('TransformInterceptor', () => {
       expect(result.code).toBe(0);
       expect(result.message).toBe('success');
       expect(result.data).toEqual({ name: 'test' });
+      expect(result.requestId).toBe('test-request-id');
       done();
     });
   });

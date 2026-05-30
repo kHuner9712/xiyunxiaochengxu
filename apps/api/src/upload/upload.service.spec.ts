@@ -139,6 +139,10 @@ describe('UploadService 文件大小限制', () => {
     const originalAssetBase = process.env.UPLOAD_PUBLIC_URL;
     process.env.UPLOAD_MAX_SIZE = '10485760';
     process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
+    (service as any).storageProvider = {
+      save: jest.fn().mockResolvedValue({ filePath: '/uploads/test.jpg', url: '/uploads/test.jpg' }),
+      remove: jest.fn(),
+    };
     const file = {
       originalname: 'test.jpg',
       mimetype: 'image/jpeg',

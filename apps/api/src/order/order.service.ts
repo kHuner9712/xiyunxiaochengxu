@@ -291,14 +291,22 @@ export class OrderService {
           throw new BadRequestException('库存不足，下单失败');
         }
 
-        const afterStock = check.beforeStock - check.quantity;
+        const skuAfterDeduct = await tx.productSku.findFirst({
+          where: { id: check.skuId },
+          select: { productId: true, stock: true },
+        });
+        if (!skuAfterDeduct) {
+          throw new BadRequestException('SKU不存在，下单失败');
+        }
+        const afterStock = skuAfterDeduct.stock;
+        const beforeStock = afterStock + check.quantity;
         await tx.productStockLog.create({
           data: {
-            productId: (await tx.productSku.findFirst({ where: { id: check.skuId } }))!.productId,
+            productId: skuAfterDeduct.productId,
             skuId: check.skuId,
             type: 1,
             quantity: check.quantity,
-            beforeStock: check.beforeStock,
+            beforeStock,
             afterStock,
             reason: '订单预扣库存',
           },
@@ -382,7 +390,7 @@ export class OrderService {
             },
           },
         },
-        include: { orderItems: true },
+        include: { orderItems: { include: { aftersaleOrders: true } } },
       });
 
       if (couponId) {
@@ -457,7 +465,7 @@ export class OrderService {
         if (currentOrder.status === OrderStatus.cancelled) {
           return currentOrder;
         }
-        const paidStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed, OrderStatus.aftersale];
+        const paidStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed, OrderStatus.aftersale];
         if (paidStatuses.includes(currentOrder.status)) {
           throw new BadRequestException('订单已支付或状态已变化，不能取消');
         }
@@ -593,7 +601,7 @@ export class OrderService {
         skip: dto.skip,
         take: dto.take,
         orderBy: { createdAt: 'desc' },
-        include: { orderItems: true },
+        include: { orderItems: { include: { aftersaleOrders: true } } },
       }),
       this.prisma.order.count({ where }),
     ]);
@@ -606,7 +614,7 @@ export class OrderService {
     const order = await this.prisma.order.findFirst({
       where: { id: BigInt(id), userId: BigInt(userId) },
       include: {
-        orderItems: true,
+        orderItems: { include: { aftersaleOrders: true } },
         payment: true,
         delivery: true,
         orderLogs: { orderBy: { createdAt: 'desc' } },
@@ -626,7 +634,7 @@ export class OrderService {
         take: dto.take,
         orderBy: { createdAt: 'desc' },
         include: {
-          orderItems: true,
+          orderItems: { include: { aftersaleOrders: true } },
           user: { select: { id: true, nickname: true, phone: true } },
         },
       }),
@@ -641,7 +649,7 @@ export class OrderService {
     const order = await this.prisma.order.findFirst({
       where: { id: BigInt(id) },
       include: {
-        orderItems: true,
+        orderItems: { include: { aftersaleOrders: true } },
         payment: true,
         delivery: true,
         orderLogs: { orderBy: { createdAt: 'desc' } },
@@ -675,7 +683,7 @@ export class OrderService {
         if (currentOrder.status === OrderStatus.cancelled) {
           return currentOrder;
         }
-        const paidStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.delivered, OrderStatus.completed, OrderStatus.aftersale];
+        const paidStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed, OrderStatus.aftersale];
         if (paidStatuses.includes(currentOrder.status)) {
           throw new BadRequestException('订单已支付，不能取消');
         }
@@ -748,7 +756,7 @@ export class OrderService {
         take: dto.take,
         orderBy: { createdAt: 'desc' },
         include: {
-          orderItems: true,
+          orderItems: { include: { aftersaleOrders: true } },
           user: { select: { id: true, nickname: true, phone: true } },
         },
       }),
@@ -1162,6 +1170,16 @@ export class OrderService {
     });
   }
 
+  private findActiveAftersale(orderItem: any) {
+    const activeStatuses = [
+      AftersaleStatus.pending_review,
+      AftersaleStatus.approved,
+      AftersaleStatus.returned,
+      AftersaleStatus.pending_refund,
+    ];
+    return orderItem.aftersaleOrders?.find((a: any) => activeStatuses.includes(a.status));
+  }
+
   private serializeOrder(order: any) {
     return {
       ...order,
@@ -1179,6 +1197,14 @@ export class OrderService {
         skuId: i.skuId.toString(),
         activityId: i.activityId?.toString(),
         supplierId: i.supplierId?.toString(),
+        aftersaleOrders: i.aftersaleOrders?.map((a: any) => ({
+          ...a,
+          id: a.id.toString(),
+          orderId: a.orderId?.toString(),
+          orderItemId: a.orderItemId?.toString(),
+          userId: a.userId?.toString(),
+          activeOrderItemId: a.activeOrderItemId?.toString(),
+        })),
       })),
       payment: order.payment
         ? {
@@ -1226,18 +1252,29 @@ export class OrderService {
       consignee: order.receiverName || '',
       phone: order.receiverPhone || '',
       address: addressDetail,
-      items: (base.orderItems || []).map((i: any) => ({
-        id: i.id,
-        productId: i.productId,
-        skuId: i.skuId,
-        productName: i.productName,
-        skuName: formatSkuSpecs(i.skuSpecs),
-        productImage: normalizeAssetUrl(i.productImage || ''),
-        price: i.price,
-        originalPrice: i.originalPrice,
-        quantity: i.quantity,
-        subtotal: i.subtotal,
-      })),
+      items: (base.orderItems || []).map((i: any) => {
+        const activeAftersale = this.findActiveAftersale(i);
+        const canApplyByOrderStatus = [OrderStatus.delivered, OrderStatus.completed, OrderStatus.aftersale].includes(order.status);
+        return {
+          id: i.id,
+          productId: i.productId,
+          skuId: i.skuId,
+          productName: i.productName,
+          skuName: formatSkuSpecs(i.skuSpecs),
+          productImage: normalizeAssetUrl(i.productImage || ''),
+          price: i.price,
+          originalPrice: i.originalPrice,
+          quantity: i.quantity,
+          subtotal: i.subtotal,
+          canApplyAftersale: canApplyByOrderStatus && !activeAftersale,
+          aftersaleStatus: activeAftersale?.status,
+          aftersaleDisabledReason: activeAftersale
+            ? '该商品已申请售后'
+            : canApplyByOrderStatus
+              ? undefined
+              : '当前订单状态不允许申请售后',
+        };
+      }),
       logistics: base.delivery ? {
         company: base.delivery.logisticsCompany || '',
         trackingNo: base.delivery.logisticsNo || '',

@@ -35,6 +35,7 @@ export function formatOrderStatus(status: string): string {
     pending_payment: '待付款',
     paid: '已付款',
     pending_delivery: '待发货',
+    pending_pickup: '待自提',
     delivered: '待收货',
     completed: '已完成',
     cancelled: '已取消',

@@ -1,5 +1,41 @@
 import { get, post, put } from '@/utils/request'
 
+export type OrderStatus =
+  | 'pending_payment'
+  | 'pending_delivery'
+  | 'pending_pickup'
+  | 'delivered'
+  | 'completed'
+  | 'cancelled'
+  | 'aftersale'
+
+export const ORDER_STATUS_VALUES: OrderStatus[] = [
+  'pending_payment',
+  'pending_delivery',
+  'pending_pickup',
+  'delivered',
+  'completed',
+  'cancelled',
+  'aftersale',
+]
+
+const LEGACY_ORDER_STATUS_MAP: Record<string, OrderStatus> = {
+  '10': 'pending_payment',
+  '20': 'pending_delivery',
+  '25': 'pending_pickup',
+  '30': 'delivered',
+  '40': 'completed',
+  '50': 'cancelled',
+  '60': 'aftersale',
+}
+
+export function normalizeOrderStatus(status?: string | number | null): OrderStatus | undefined {
+  if (status === undefined || status === null || status === '') return undefined
+  const value = String(status)
+  if ((ORDER_STATUS_VALUES as string[]).includes(value)) return value as OrderStatus
+  return LEGACY_ORDER_STATUS_MAP[value]
+}
+
 export function createOrder(data: {
   addressId?: string
   pickupStoreId?: string
@@ -13,7 +49,7 @@ export function createOrder(data: {
 }
 
 export function getOrderList(params: {
-  status?: string
+  status?: OrderStatus
   page: number
   pageSize: number
 }) {
@@ -33,7 +69,15 @@ export function confirmReceive(id: string | number) {
 }
 
 export function getOrderCount() {
-  return get<{ unpaid: number; unshipped: number; unreceived: number; aftersale: number }>('/weapp/order/count')
+  return get<OrderCount>('/weapp/order/count')
+}
+
+export interface OrderCount {
+  unpaid: number
+  unshipped: number
+  pendingPickup: number
+  unreceived: number
+  aftersale: number
 }
 
 export interface OrderItemInput {
@@ -45,7 +89,7 @@ export interface OrderItemInput {
 export interface OrderItem {
   id: string
   orderNo: string
-  status: string
+  status: OrderStatus
   totalAmount: number
   payAmount: number
   items: OrderProductItem[]
@@ -61,12 +105,15 @@ export interface OrderProductItem {
   skuName: string
   price: number
   quantity: number
+  canApplyAftersale?: boolean
+  aftersaleStatus?: number | string
+  aftersaleDisabledReason?: string
 }
 
 export interface OrderDetail {
   id: string
   orderNo: string
-  status: string
+  status: OrderStatus
   totalAmount: number
   payAmount: number
   freightAmount: number

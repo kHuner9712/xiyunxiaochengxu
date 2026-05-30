@@ -57,6 +57,8 @@
 | `UPLOAD_MAX_SIZE` | 上传大小上限（字节） | 后端约定 | `10485760` | 否 | 否 |
 | `UPLOAD_ALLOWED_TYPES` | 允许上传 MIME 列表 | 后端约定 | `image/jpeg,image/png,...` | 否 | 否 |
 | `UPLOAD_PUBLIC_URL` | 上传资源公网地址 | 运维域名配置 | `https://api.xxx.com/uploads` | 否 | 否 |
+| `STORAGE_PROVIDER` | 上传存储提供方预留配置 | 运维约定 | `local` / `oss` / `cos` / `s3` | 否 | 否 |
+| `STORAGE_PRIVATE_ASSET_POLICY` | 敏感资质图片访问策略 | 运维/法务约定 | `private` | 否 | 否 |
 | `ORDER_AUTO_CLOSE_MINUTES` | 未支付自动关闭分钟数 | 业务运营约定 | `30` | 否 | 否 |
 | `ORDER_AUTO_COMPLETE_DAYS` | 自动确认收货天数 | 业务运营约定 | `15` | 否 | 否 |
 | `FREIGHT_FREE_AMOUNT` | 包邮门槛 | 运营定价规则 | `99` | 否 | 否 |
@@ -73,6 +75,11 @@
 - `deploy/certs/apiclient_key.pem`
 - `deploy/certs/wechatpay_platform.pem`
 3. Docker Compose 会把宿主机 `deploy/certs` 目录挂载到容器 `/app/apps/api/certs`。
+
+上传存储说明：
+1. 生产建议接入对象存储/CDN；当前本地 `uploads` 仅作为可持久化部署方案，不等同于高可用长期存储。
+2. 暂用本地 `uploads` 时，必须配置持久化卷、备份策略、只读静态访问、目录权限和文件大小上限。
+3. 营业执照、食品资质等敏感资质图片不建议直接公开在 `/uploads/`；需要公开展示前必须由运营/法务确认。
 
 1. 运行：`pnpm release:check`
 2. 严格门禁：`pnpm release:check:prod`

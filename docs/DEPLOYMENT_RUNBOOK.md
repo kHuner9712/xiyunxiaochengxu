@@ -78,7 +78,23 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 3. 上传静态资源路由：`https://api.yunxixiaochengxu.com.cn/uploads/`
 4. 容器日志：`docker compose logs -f api nginx`
 
-## 8. 回滚
+## 8. 上传文件生产存储
+
+1. 正式商用推荐使用对象存储 + CDN 承载上传文件，本地 `uploads` 不应作为唯一长期存储。
+2. 暂未接入 OSS/COS/S3 时，必须把 `UPLOAD_DIR` 挂载到宿主机持久化卷，并纳入每日备份与恢复演练。
+3. `uploads` 目录权限建议仅 API 进程可写，Nginx 只读访问；禁止在该目录放置脚本、密钥、证书。
+4. 保持 `UPLOAD_MAX_SIZE` 与 API 上传校验一致，Nginx `client_max_body_size` 不得低于业务上限。
+5. `/uploads/` 公开访问仅适合商品图、内容图等公开资源。营业执照、食品资质等敏感资质图片如需上传，应优先走私有对象存储或后台鉴权访问；如暂时公开，运营必须知晓可被 URL 访问的风险。
+6. 对象存储接入时只在私有环境变量中配置访问密钥，不得提交任何云厂商密钥到仓库。
+
+## 9. 错误响应与可观测性
+
+1. API 继续采用 HTTP 200 + 业务 `code` 响应模式，前端按业务 `code` 判断成功、登录过期、参数错误等。
+2. 响应头与响应体会带 `requestId`，也支持客户端传入 `X-Request-Id` 或 `X-Correlation-Id`。
+3. 排查线上问题时，先用 `requestId` 关联网关日志、API 日志与 BusinessEvent。
+4. 支付、退款、库存、补偿任务异常应优先查看后台业务事件表，再查看容器日志。
+
+## 10. 回滚
 
 1. 代码回滚到上一稳定 commit/tag。
 2. 停止并重启旧版本镜像：
@@ -87,7 +103,7 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 ```
 3. 数据库回滚前必须先备份；优先使用前向修复，谨慎执行迁移回滚。
 
-## 9. 常见问题
+## 11. 常见问题
 
 1. `release:check:prod` 因 AppID 失败：未提供真实 `VITE_WX_APPID`。
 2. API 启动失败：检查 `.env.production` 是否缺必填变量或存在弱密钥。

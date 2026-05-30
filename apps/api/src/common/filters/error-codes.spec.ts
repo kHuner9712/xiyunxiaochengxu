@@ -24,13 +24,14 @@ describe('ErrorCodeMapping', () => {
       json: jest.fn().mockImplementation((data) => {
         mockResponseJson = data;
       }),
+      setHeader: jest.fn(),
       end: jest.fn(),
     };
 
     mockHost = {
       switchToHttp: () => ({
         getResponse: () => mockResponse,
-        getRequest: () => ({ url: '/api/test', method: 'GET' }),
+        getRequest: () => ({ url: '/api/test', method: 'GET', headers: { 'x-request-id': 'test-request-id' } }),
       }),
     };
   });
@@ -122,6 +123,8 @@ describe('ErrorCodeMapping', () => {
       expect(result).toHaveProperty('code');
       expect(result).toHaveProperty('message');
       expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('requestId', 'test-request-id');
+      expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Request-Id', 'test-request-id');
     });
 
     it('错误响应 code 不为 0', () => {

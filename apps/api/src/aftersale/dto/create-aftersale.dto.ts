@@ -4,6 +4,11 @@ export class CreateAftersaleDto {
   @IsString()
   @Matches(/^\d+$/)
   @IsNotEmpty()
+  orderId!: string;
+
+  @IsString()
+  @Matches(/^\d+$/)
+  @IsNotEmpty()
   orderItemId!: string;
 
   @IsIn([1, 2])

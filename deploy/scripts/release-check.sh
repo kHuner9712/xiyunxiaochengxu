@@ -329,6 +329,7 @@ fi
 
 section "8.6. 小程序 AppID 检查"
 MANIFEST_FILE="apps/miniprogram/src/manifest.json"
+WX_APPID_PATTERN='^wx[a-zA-Z0-9]{16}$'
 if [ -f "$MANIFEST_FILE" ]; then
   ENFORCE_REAL_APPID=false
   if [ "$REQUIRE_REAL_WX_APPID_CHECK" = "true" ] || [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
@@ -342,6 +343,28 @@ if [ -f "$MANIFEST_FILE" ]; then
     fi
   else
     pass "manifest.json AppID 已配置（非占位值）"
+  fi
+  if [ "$ENFORCE_REAL_APPID" = "true" ]; then
+    if [ -z "${VITE_WX_APPID:-}" ]; then
+      fail "生产严格门禁下必须通过环境变量提供真实 VITE_WX_APPID（人工上线配置项）"
+    elif [ "$VITE_WX_APPID" = "wx0000000000000000" ] || ! printf '%s' "$VITE_WX_APPID" | grep -Eq "$WX_APPID_PATTERN"; then
+      fail "VITE_WX_APPID 格式非法或仍为占位值，必须为 wx + 16 位字母数字"
+    else
+      pass "VITE_WX_APPID 格式检查通过"
+    fi
+  fi
+  if grep -q '"urlCheck"[[:space:]]*:[[:space:]]*false' "$MANIFEST_FILE" 2>/dev/null; then
+    if [ "$ENFORCE_REAL_APPID" = "true" ]; then
+      if grep -q "setting.urlCheck = !isProduction ? false : true" apps/miniprogram/scripts/patch-miniprogram-manifest.mjs 2>/dev/null; then
+        pass "开发 manifest 可为 urlCheck=false，生产构建脚本会强制改为 true"
+      else
+        fail "manifest.json 包含 urlCheck=false，且生产构建脚本未强制开启"
+      fi
+    else
+      warn "manifest.json 当前 urlCheck=false（默认门禁允许开发占位，生产门禁将失败）"
+    fi
+  else
+    pass "manifest.json 未配置 urlCheck=false"
   fi
 else
   warn "manifest.json 不存在，跳过 AppID 检查"
@@ -360,6 +383,20 @@ else
   else
     pass "VITE_API_BASE_URL 已提供"
   fi
+fi
+
+section "8.66. 小程序生产演示口径检查"
+DEMO_HITS=$(grep -RInE "演示版|公开演示内容|demo=1|allowDemo|VITE_ENABLE_DEMO_MODE[[:space:]]*=[[:space:]]*true" apps/miniprogram/src apps/miniprogram/.env.example apps/miniprogram/.env.production.example 2>/dev/null || true)
+if [ -n "$DEMO_HITS" ]; then
+  if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+    fail "小程序源码或环境示例包含生产禁止的 demo/演示口径"
+    echo "$DEMO_HITS" | head -20 | sed 's/^/    /'
+  else
+    warn "发现小程序 demo/演示口径，生产门禁将失败"
+    echo "$DEMO_HITS" | head -10 | sed 's/^/    /'
+  fi
+else
+  pass "小程序源码未发现生产禁止的 demo/演示口径"
 fi
 
 section "8.7. 协议页面正式化检查"

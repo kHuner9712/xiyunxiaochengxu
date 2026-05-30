@@ -4,21 +4,28 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { ThrottlerException } from '@nestjs/throttler';
 import {
   ERROR_CODE,
 } from '../constants';
+import { randomUUID } from 'crypto';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
 
     let code: number = ERROR_CODE.INTERNAL_ERROR;
     let message = '服务器内部错误';
+    const requestIdHeader = request.headers['x-request-id'] || request.headers['x-correlation-id'];
+    const requestId = Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader || randomUUID();
 
     if (exception instanceof HttpException) {
       const exceptionResponse = exception.getResponse();
@@ -50,10 +57,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
+    response.setHeader('X-Request-Id', requestId);
+    if (code >= ERROR_CODE.INTERNAL_ERROR) {
+      this.logger.error(
+        `requestId=${requestId} ${request.method} ${request.originalUrl || request.url} code=${code} message=${message}`,
+        exception instanceof Error ? exception.stack : undefined,
+      );
+    } else {
+      this.logger.warn(`requestId=${requestId} ${request.method} ${request.originalUrl || request.url} code=${code} message=${message}`);
+    }
+
     response.status(HttpStatus.OK).json({
       code,
       message,
       data: null,
+      requestId,
     });
   }
 

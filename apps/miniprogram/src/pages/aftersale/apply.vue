@@ -86,6 +86,10 @@ function removeImage(index: number) {
 }
 
 async function handleSubmit() {
+  if (!orderId.value) {
+    uni.showToast({ title: '缺少订单信息，请从订单详情页申请售后', icon: 'none' })
+    return
+  }
   if (!orderItemId.value) {
     uni.showToast({ title: '缺少商品信息，请从订单详情页申请售后', icon: 'none' })
     return
@@ -120,6 +124,24 @@ onLoad(async (options) => {
         uni.showModal({
           title: '提示',
           content: '当前订单状态不允许申请售后',
+          showCancel: false,
+          success: () => uni.navigateBack()
+        })
+      }
+      const selectedItem = order.items.find((item) => item.id === orderItemId.value)
+      if (!selectedItem) {
+        uni.showModal({
+          title: '提示',
+          content: '请选择要申请售后的商品',
+          showCancel: false,
+          success: () => uni.navigateBack()
+        })
+        return
+      }
+      if (selectedItem.canApplyAftersale === false) {
+        uni.showModal({
+          title: '提示',
+          content: selectedItem.aftersaleDisabledReason || '当前商品不允许申请售后',
           showCancel: false,
           success: () => uni.navigateBack()
         })

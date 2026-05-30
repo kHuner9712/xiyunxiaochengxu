@@ -37,19 +37,6 @@ import { useUserStore } from '@/stores/user'
 import { getMemberInfo, getMemberRights, type MemberInfo, type MemberRight } from '@/api/member'
 
 const userStore = useUserStore()
-const isDemo = ref(false)
-
-const demoMemberInfo: MemberInfo = {
-  level: 1, levelName: '普通会员', growthValue: 50,
-  nextLevelGrowth: 100, currentLevelGrowth: 50, rights: []
-}
-
-const demoRights: MemberRight[] = [
-  { id: '1', name: '专属折扣', description: '享受9.8折优惠', icon: '/static/member-discount.png' },
-  { id: '2', name: '积分加速', description: '购物积分1.2倍', icon: '/static/member-points.png' },
-  { id: '3', name: '生日礼包', description: '生日当月专享', icon: '/static/member-birthday.png' },
-  { id: '4', name: '优先发货', description: '订单优先处理', icon: '/static/member-priority.png' },
-]
 
 const memberInfo = ref<MemberInfo>({
   level: 0, levelName: '普通用户', growthValue: 0,
@@ -63,10 +50,6 @@ const growthPercent = computed(() => {
 })
 
 async function loadMemberInfo() {
-  if (isDemo.value) {
-    memberInfo.value = demoMemberInfo
-    return
-  }
   try {
     memberInfo.value = await getMemberInfo()
   } catch {
@@ -75,10 +58,6 @@ async function loadMemberInfo() {
 }
 
 async function loadRights() {
-  if (isDemo.value) {
-    rights.value = demoRights
-    return
-  }
   try {
     rights.value = await getMemberRights()
   } catch {
@@ -87,9 +66,15 @@ async function loadRights() {
 }
 
 onMounted(() => {
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1]
-  isDemo.value = (currentPage as any)?.$page?.options?.demo === '1' || (currentPage as any)?.options?.demo === '1'
+  if (!userStore.isLoggedIn) {
+    uni.showModal({
+      title: '需要登录',
+      content: '请先登录后使用',
+      showCancel: false,
+      success: () => uni.navigateBack()
+    })
+    return
+  }
   loadMemberInfo()
   loadRights()
 })

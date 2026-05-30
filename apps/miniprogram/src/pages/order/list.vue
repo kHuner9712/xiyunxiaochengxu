@@ -36,7 +36,7 @@
           <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
           <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap.stop="handlePay(order)">去支付</view>
           <view v-if="order.status === 'delivered'" class="action-btn primary" @tap.stop="handleConfirm(order.id)">确认收货</view>
-          <view v-if="order.status === 'completed' || order.status === 'delivered'" class="action-btn" @tap.stop="goAftersaleWithItem(order.id, order.items?.[0]?.id || '')">申请售后</view>
+          <view v-if="order.status === 'completed' || order.status === 'delivered'" class="action-btn" @tap.stop="handleAftersale(order)">申请售后</view>
         </view>
       </view>
     </view>
@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { onLoad, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
-import { getOrderList, cancelOrder, confirmReceive, type OrderItem } from '@/api/order'
+import { getOrderList, cancelOrder, confirmReceive, normalizeOrderStatus, type OrderItem, type OrderStatus } from '@/api/order'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatOrderStatus, formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
@@ -60,13 +60,16 @@ const tabs = [
   { label: '全部', value: '' },
   { label: '待付款', value: 'pending_payment' },
   { label: '待发货', value: 'pending_delivery' },
+  { label: '待自提', value: 'pending_pickup' },
   { label: '待收货', value: 'delivered' },
   { label: '已完成', value: 'completed' },
   { label: '已取消', value: 'cancelled' },
   { label: '售后', value: 'aftersale' },
-]
+] as const
 
-const currentTab = ref('')
+type OrderTabValue = '' | OrderStatus
+
+const currentTab = ref<OrderTabValue>('')
 const orders = ref<OrderItem[]>([])
 const loading = ref(false)
 const page = ref(1)
@@ -82,7 +85,7 @@ async function loadOrders(reset = false) {
   }
   loading.value = true
   try {
-    const params: any = { page: page.value, pageSize: 10 }
+    const params: { page: number; pageSize: number; status?: OrderStatus } = { page: page.value, pageSize: 10 }
     if (currentTab.value) params.status = currentTab.value
     const data = await getOrderList(params)
     orders.value.push(...data.list)
@@ -95,7 +98,7 @@ async function loadOrders(reset = false) {
   }
 }
 
-function switchTab(value: string) {
+function switchTab(value: OrderTabValue) {
   currentTab.value = value
   loadOrders(true)
 }
@@ -104,18 +107,29 @@ function goDetail(id: string) {
   uni.navigateTo({ url: `/pages/order/detail?id=${id}` })
 }
 
-function goAftersale(orderId: string) {
-  uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${orderId}` })
-}
-
 function goAftersaleWithItem(orderId: string, orderItemId: string) {
   uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${orderId}&orderItemId=${orderItemId}` })
+}
+
+function handleAftersale(order: OrderItem) {
+  const canApplyItems = (order.items || []).filter((item) => item.canApplyAftersale !== false)
+  if (canApplyItems.length === 0) {
+    const reason = order.items?.find((item) => item.aftersaleDisabledReason)?.aftersaleDisabledReason || '当前订单暂无可申请售后的商品'
+    uni.showToast({ title: reason, icon: 'none' })
+    return
+  }
+  if (canApplyItems.length === 1) {
+    goAftersaleWithItem(order.id, canApplyItems[0].id)
+    return
+  }
+  uni.navigateTo({ url: `/pages/order/detail?id=${order.id}&selectAftersale=1` })
 }
 
 function getStatusClass(status: string): string {
   const map: Record<string, string> = {
     pending_payment: 'status-unpaid',
     pending_delivery: 'status-shipping',
+    pending_pickup: 'status-pickup',
     delivered: 'status-receiving',
     completed: 'status-done',
     cancelled: 'status-cancelled',
@@ -173,7 +187,8 @@ async function handleConfirm(id: string) {
 }
 
 onLoad((options) => {
-  if (options?.status) currentTab.value = options.status
+  const status = normalizeOrderStatus(options?.status as string | undefined)
+  if (status) currentTab.value = status
   loadOrders()
 })
 
@@ -252,6 +267,7 @@ onReachBottom(() => {
 
   &.status-unpaid { color: $warning-color; }
   &.status-shipping { color: $info-color; }
+  &.status-pickup { color: $primary-color; }
   &.status-receiving { color: $secondary-color; }
   &.status-done { color: $success-color; }
   &.status-cancelled { color: $text-hint; }

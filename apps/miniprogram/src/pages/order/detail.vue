@@ -61,10 +61,11 @@
           <PriceDisplay :price="item.price" />
           <text class="product-qty">x{{ item.quantity }}</text>
           <view
-            v-if="order.status === 'completed'"
+            v-if="order.status === 'completed' || order.status === 'delivered' || order.status === 'aftersale'"
             class="item-aftersale-btn"
-            @tap="goAftersale(item.id)"
-          >申请售后</view>
+            :class="{ disabled: item.canApplyAftersale === false }"
+            @tap="goAftersale(item)"
+          >{{ item.canApplyAftersale === false ? (item.aftersaleDisabledReason || '不可申请') : '申请售后' }}</view>
         </view>
       </view>
     </view>
@@ -115,7 +116,7 @@
       <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap="handleCancel">取消订单</view>
       <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap="handlePay">去支付</view>
       <view v-if="order.status === 'delivered'" class="action-btn primary" @tap="handleConfirm">确认收货</view>
-      <view v-if="order.status === 'completed'" class="action-hint">请选择要售后的商品</view>
+      <view v-if="order.status === 'completed' || order.status === 'delivered' || order.status === 'aftersale'" class="action-hint">请选择要售后的商品</view>
       <view class="action-btn" @tap="goCustomerService">联系商家</view>
     </view>
   </view>
@@ -124,7 +125,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getOrderDetail, cancelOrder, confirmReceive, type OrderDetail } from '@/api/order'
+import { getOrderDetail, cancelOrder, confirmReceive, type OrderDetail, type OrderProductItem } from '@/api/order'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatOrderStatus, formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
@@ -152,6 +153,7 @@ function getStatusClass(status: string): string {
     pending_payment: 'status-unpaid',
     paid: 'status-shipping',
     pending_delivery: 'status-shipping',
+    pending_pickup: 'status-pickup',
     delivered: 'status-receiving',
     completed: 'status-done',
     cancelled: 'status-cancelled',
@@ -228,9 +230,17 @@ async function handleConfirm() {
   })
 }
 
-function goAftersale(orderItemId: string) {
+function goAftersale(item: OrderProductItem) {
+  if (item.canApplyAftersale === false) {
+    uni.showToast({ title: item.aftersaleDisabledReason || '当前商品不可申请售后', icon: 'none' })
+    return
+  }
+  if (!item.id) {
+    uni.showToast({ title: '缺少商品信息，请刷新后重试', icon: 'none' })
+    return
+  }
   uni.navigateTo({
-    url: `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${orderItemId}`
+    url: `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${item.id}`
   })
 }
 
@@ -268,6 +278,7 @@ onLoad((options) => {
 
   &.status-unpaid { background: $warning-color; }
   &.status-shipping { background: $info-color; }
+  &.status-pickup { background: $primary-color; }
   &.status-receiving { background: $secondary-color; }
   &.status-done { background: $success-color; }
   &.status-cancelled { background: $text-hint; }
@@ -464,6 +475,11 @@ onLoad((options) => {
   border-radius: $radius-round;
   padding: 4rpx 16rpx;
   display: inline-block;
+
+  &.disabled {
+    color: $text-hint;
+    border-color: $border-color;
+  }
 }
 
 .price-row {

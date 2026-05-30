@@ -16,6 +16,7 @@ interface UserInfo {
 export const useUserStore = defineStore('user', () => {
   const token = ref('')
   const userInfo = ref<UserInfo | null>(null)
+  let loginPromise: Promise<any> | null = null
 
   const isLoggedIn = computed(() => !!token.value)
   const nickname = computed(() => userInfo.value?.nickname || '未登录')
@@ -37,26 +38,38 @@ export const useUserStore = defineStore('user', () => {
       const data = await get<UserInfo>('/weapp/user/info')
       userInfo.value = data
     } catch {
+      token.value = ''
       userInfo.value = null
+      removeToken()
     }
   }
 
   async function wxLogin() {
-    const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
-      uni.login({
-        provider: 'weixin',
-        success: resolve,
-        fail: reject
-      })
-    })
+    if (loginPromise) return loginPromise
 
-    const data = await wxLoginApi({ code: loginRes.code })
-    if (data.token) {
-      token.value = data.token
-      setToken(data.token)
-      await fetchUserInfo()
+    loginPromise = (async () => {
+      const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
+        uni.login({
+          provider: 'weixin',
+          success: resolve,
+          fail: reject
+        })
+      })
+
+      const data = await wxLoginApi({ code: loginRes.code })
+      if (data.token) {
+        token.value = data.token
+        setToken(data.token)
+        await fetchUserInfo()
+      }
+      return data
+    })()
+
+    try {
+      return await loginPromise
+    } finally {
+      loginPromise = null
     }
-    return data
   }
 
   async function bindPhone(code: string) {

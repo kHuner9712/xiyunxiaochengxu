@@ -27,22 +27,27 @@
         <text class="section-more" @tap="goOrderList()">全部订单 ›</text>
       </view>
       <view class="order-shortcuts">
-        <view class="shortcut-item" @tap="goOrderList(10)">
+        <view class="shortcut-item" @tap="goOrderList('pending_payment')">
           <view class="shortcut-icon">💰</view>
           <text class="shortcut-text">待付款</text>
           <view v-if="orderCount.unpaid" class="shortcut-badge">{{ orderCount.unpaid }}</view>
         </view>
-        <view class="shortcut-item" @tap="goOrderList(20)">
+        <view class="shortcut-item" @tap="goOrderList('pending_delivery')">
           <view class="shortcut-icon">📦</view>
           <text class="shortcut-text">待发货</text>
           <view v-if="orderCount.unshipped" class="shortcut-badge">{{ orderCount.unshipped }}</view>
         </view>
-        <view class="shortcut-item" @tap="goOrderList(30)">
+        <view class="shortcut-item" @tap="goOrderList('pending_pickup')">
+          <view class="shortcut-icon">🏬</view>
+          <text class="shortcut-text">待自提</text>
+          <view v-if="orderCount.pendingPickup" class="shortcut-badge">{{ orderCount.pendingPickup }}</view>
+        </view>
+        <view class="shortcut-item" @tap="goOrderList('delivered')">
           <view class="shortcut-icon">🚚</view>
           <text class="shortcut-text">待收货</text>
           <view v-if="orderCount.unreceived" class="shortcut-badge">{{ orderCount.unreceived }}</view>
         </view>
-        <view class="shortcut-item" @tap="goOrderList(60)">
+        <view class="shortcut-item" @tap="goOrderList('aftersale')">
           <view class="shortcut-icon">🔄</view>
           <text class="shortcut-text">售后</text>
           <view v-if="orderCount.aftersale" class="shortcut-badge">{{ orderCount.aftersale }}</view>
@@ -100,15 +105,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
-import { getOrderCount } from '@/api/order'
+import { getOrderCount, normalizeOrderStatus, type OrderCount, type OrderStatus } from '@/api/order'
 
 const userStore = useUserStore()
-const orderCount = ref({
+const orderCount = ref<OrderCount>({
   unpaid: 0,
   unshipped: 0,
+  pendingPickup: 0,
   unreceived: 0,
   aftersale: 0
 })
@@ -128,7 +134,7 @@ function handleLogin() {
     console.error('[baby-mall] wxLogin failed:', err)
     uni.showModal({
       title: '登录失败',
-      content: '登录失败，请稍后重试。当前为演示版，你可以先浏览公开演示内容。',
+      content: '登录失败，请稍后重试。',
       showCancel: false,
       confirmText: '我知道了'
     })
@@ -151,15 +157,16 @@ function goProfile() {
 }
 
 function goMember() {
-  smartNavigate('/pages/member/index', { allowDemo: true })
+  smartNavigate('/pages/member/index', { requireLogin: true })
 }
 
-function goOrderList(status?: number) {
+function goOrderList(status?: OrderStatus | number) {
   if (!userStore.isLoggedIn) {
     showLoginRequired()
     return
   }
-  const url = status ? `/pages/order/list?status=${status}` : '/pages/order/list'
+  const normalizedStatus = normalizeOrderStatus(status)
+  const url = normalizedStatus ? `/pages/order/list?status=${normalizedStatus}` : '/pages/order/list'
   uni.navigateTo({
     url,
     fail: (err) => {
@@ -171,25 +178,12 @@ function goOrderList(status?: number) {
 
 interface NavOptions {
   requireLogin?: boolean
-  allowDemo?: boolean
 }
 
 function smartNavigate(url: string, options: NavOptions = {}) {
-  const { requireLogin = false, allowDemo = false } = options
+  const { requireLogin = false } = options
 
   if (!userStore.isLoggedIn) {
-    if (allowDemo) {
-      const separator = url.includes('?') ? '&' : '?'
-      const fullUrl = `${url}${separator}demo=1`
-      uni.navigateTo({
-        url: fullUrl,
-        fail: (err) => {
-          console.error('[baby-mall] navigateTo failed:', fullUrl, err)
-          uni.showToast({ title: '页面跳转失败', icon: 'none' })
-        }
-      })
-      return
-    }
     if (requireLogin) {
       showLoginRequired()
       return
@@ -210,7 +204,7 @@ function smartNavigate(url: string, options: NavOptions = {}) {
 function showLoginRequired() {
   uni.showModal({
     title: '需要登录',
-    content: '该功能需要登录后使用。当前为演示版，你也可以先浏览公开演示内容。',
+    content: '请先登录后使用',
     cancelText: '取消',
     confirmText: '去登录',
     success: (res) => {
@@ -222,11 +216,11 @@ function showLoginRequired() {
 }
 
 function navigateTo(url: string) {
-  const demoPages = ['/pages/coupon/my', '/pages/coupon/center', '/pages/member/index', '/pages/points/index', '/pages/customer-service/index', '/pages/share/invite', '/pages/agreement/index', '/pages/privacy/index', '/pages/food-safety/index']
-  const loginRequiredPages = ['/pages/baby/list', '/pages/address/list']
+  const publicPages = ['/pages/customer-service/index', '/pages/agreement/index', '/pages/privacy/index', '/pages/food-safety/index']
+  const loginRequiredPages = ['/pages/baby/list', '/pages/address/list', '/pages/coupon/my', '/pages/coupon/center', '/pages/member/index', '/pages/points/index', '/pages/share/invite']
 
-  if (demoPages.some(p => url.startsWith(p))) {
-    smartNavigate(url, { allowDemo: true })
+  if (publicPages.some(p => url.startsWith(p))) {
+    uni.navigateTo({ url })
   } else if (loginRequiredPages.some(p => url.startsWith(p))) {
     smartNavigate(url, { requireLogin: true })
   } else {

@@ -17,7 +17,9 @@ ADMIN_BASE_URL="${ADMIN_BASE_URL:-}"
 PAY_NOTIFY_URL="${PAY_NOTIFY_URL:-}"
 REFUND_NOTIFY_URL="${REFUND_NOTIFY_URL:-}"
 CHECK_SCHEDULER_LOGS="${CHECK_SCHEDULER_LOGS:-true}"
+SMOKE_FORBIDDEN_TOKEN="${SMOKE_FORBIDDEN_TOKEN:-}"
 DEPLOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+TMP_BASE="${TMPDIR:-/tmp}"
 
 if [ -z "$API_BASE_URL" ] || [ -z "$ADMIN_BASE_URL" ]; then
   fail "请先设置 API_BASE_URL 和 ADMIN_BASE_URL，例如：API_BASE_URL=https://api.example.com ADMIN_BASE_URL=https://admin.example.com"
@@ -60,6 +62,20 @@ assert_http() {
   pass "$name 通过：$url -> HTTP $code"
 }
 
+assert_business_code() {
+  local name="$1"
+  local method="$2"
+  local url="$3"
+  local expected="$4"
+  local body
+  body="$(curl -k -s -X "$method" "$url" -H 'Content-Type: application/json' -d "${5:-}" || true)"
+  if echo "$body" | grep -q "\"code\":$expected"; then
+    pass "$name 通过：业务 code=$expected"
+  else
+    fail "$name 失败：期望业务 code=$expected，响应=$body"
+  fi
+}
+
 info "1) API 健康检查"
 assert_http "GET /api/health" "GET" "${API_BASE_URL}/api/health" '^(200)$'
 
@@ -68,6 +84,26 @@ if echo "$health_body" | grep -q '"database":"ok"'; then
   pass "数据库连接状态正常（health 中 database=ok）"
 else
   warn "health 未明确返回 database=ok，请检查 API 日志"
+fi
+
+info "1.5) API 错误响应与 requestId 检查"
+unauth_body="$(curl -k -s -D "$TMP_BASE/smoke-headers-$$.txt" "${API_BASE_URL}/api/weapp/order/count" || true)"
+if echo "$unauth_body" | grep -Eq '"code":4010[123]' && grep -qi '^X-Request-Id:' "$TMP_BASE/smoke-headers-$$.txt"; then
+  pass "未登录接口返回 401 业务码并带 X-Request-Id"
+else
+  fail "未登录接口未返回 401 业务码或缺少 X-Request-Id：$unauth_body"
+fi
+rm -f "$TMP_BASE/smoke-headers-$$.txt"
+assert_business_code "参数错误响应" "POST" "${API_BASE_URL}/api/weapp/auth/login" "40001" '{}'
+if [ -n "$SMOKE_FORBIDDEN_TOKEN" ]; then
+  forbidden_body="$(curl -k -s -H "Authorization: Bearer $SMOKE_FORBIDDEN_TOKEN" "${API_BASE_URL}/api/admin/order/list" || true)"
+  if echo "$forbidden_body" | grep -q '"code":40301'; then
+    pass "403 权限错误响应通过"
+  else
+    fail "403 权限错误响应失败：$forbidden_body"
+  fi
+else
+  warn "未提供 SMOKE_FORBIDDEN_TOKEN，跳过 403 权限错误 smoke（建议提供低权限 token）"
 fi
 if echo "$health_body" | grep -q '"redis":"ok"'; then
   pass "Redis 连接状态正常（health 中 redis=ok）"

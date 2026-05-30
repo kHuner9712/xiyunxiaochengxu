@@ -12,9 +12,10 @@ const appNameFromEnv = (process.env.VITE_APP_NAME || '').trim()
 const appName = appNameFromEnv || '禧孕优选'
 const isProduction = (process.env.NODE_ENV || '').toLowerCase() === 'production'
 const PLACEHOLDER_APPID = 'wx0000000000000000'
+const APPID_PATTERN = /^wx[a-zA-Z0-9]{16}$/
 
-if (isProduction && (!appId || appId === PLACEHOLDER_APPID)) {
-  console.error('ERROR: 生产构建必须配置真实的 VITE_WX_APPID，当前值为空或占位值')
+if (isProduction && (!appId || appId === PLACEHOLDER_APPID || !APPID_PATTERN.test(appId))) {
+  console.error('ERROR: 生产构建必须配置真实且格式合法的 VITE_WX_APPID，格式应为 wx + 16 位字母数字，且不能为占位值')
   process.exit(1)
 }
 if (isProduction && !apiBaseUrl) {
@@ -38,6 +39,10 @@ if (appId && appId !== PLACEHOLDER_APPID) {
   }
 }
 
+manifest['mp-weixin'] = manifest['mp-weixin'] || {}
+manifest['mp-weixin'].setting = manifest['mp-weixin'].setting || {}
+manifest['mp-weixin'].setting.urlCheck = !isProduction ? false : true
+
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
 
 const patchedManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
@@ -45,6 +50,10 @@ if (isProduction) {
   const patchedAppId = patchedManifest?.['mp-weixin']?.appid
   if (patchedAppId !== appId) {
     console.error(`ERROR: manifest patch 校验失败，mp-weixin.appid=${patchedAppId || '(empty)'}，预期=${appId}`)
+    process.exit(1)
+  }
+  if (patchedManifest?.['mp-weixin']?.setting?.urlCheck === false) {
+    console.error('ERROR: 生产构建禁止 mp-weixin.setting.urlCheck=false')
     process.exit(1)
   }
 }

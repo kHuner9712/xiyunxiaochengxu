@@ -8,11 +8,13 @@ import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { TRANSFORM_SKIP_KEY } from '../decorators/skip-transform.decorator';
+import { randomUUID } from 'crypto';
 
 export interface ApiResponse<T> {
   code: number;
   message: string;
   data: T;
+  requestId?: string;
 }
 
 function serializeBigInt(obj: any): any {
@@ -40,11 +42,20 @@ export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponse<T
     }
 
     return next.handle().pipe(
-      map((data) => ({
-        code: 0,
-        message: 'success',
-        data: serializeBigInt(data),
-      })),
+      map((data) => {
+        const ctx = context.switchToHttp();
+        const request = ctx.getRequest();
+        const response = ctx.getResponse();
+        const requestIdHeader = request.headers?.['x-request-id'] || request.headers?.['x-correlation-id'];
+        const requestId = Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader || randomUUID();
+        response.setHeader('X-Request-Id', requestId);
+        return {
+          code: 0,
+          message: 'success',
+          data: serializeBigInt(data),
+          requestId,
+        };
+      }),
     );
   }
 }

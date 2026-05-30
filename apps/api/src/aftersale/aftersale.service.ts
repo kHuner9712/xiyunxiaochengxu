@@ -19,8 +19,10 @@ export class AftersaleService {
     });
     if (!orderItem) throw new NotFoundException('订单商品不存在');
     if (orderItem.order.userId !== BigInt(userId)) throw new BadRequestException('无权操作');
+    if (orderItem.orderId !== BigInt(dto.orderId)) throw new BadRequestException('订单商品不属于当前订单');
 
-    if (orderItem.order.status !== OrderStatus.delivered && orderItem.order.status !== OrderStatus.completed) {
+    const aftersaleAllowedStatuses: OrderStatus[] = [OrderStatus.delivered, OrderStatus.completed, OrderStatus.aftersale];
+    if (!aftersaleAllowedStatuses.includes(orderItem.order.status)) {
       throw new BadRequestException('订单状态不允许申请售后');
     }
 

@@ -2,6 +2,7 @@ interface ApiResponse<T = any> {
   code: number
   message: string
   data: T
+  requestId?: string
 }
 
 interface RequestConfig {
@@ -15,6 +16,8 @@ interface RequestConfig {
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const TOKEN_KEY = 'baby_mall_token'
+const AUTH_ERROR_CODES = [40101, 40102, 40103]
+let isHandlingAuthError = false
 
 if (!BASE_URL) {
   console.error('[baby-mall] VITE_API_BASE_URL 未配置，所有 API 请求将失败')
@@ -35,9 +38,15 @@ export function removeToken() {
 function navigateToLogin() {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1]
-  if (currentPage && currentPage.route !== 'pages/user/index') {
+  if (currentPage && currentPage.route !== 'pages/user/index' && !isHandlingAuthError) {
+    isHandlingAuthError = true
     uni.navigateTo({
-      url: '/pages/user/index?needLogin=true'
+      url: '/pages/user/index?needLogin=true',
+      complete: () => {
+        setTimeout(() => {
+          isHandlingAuthError = false
+        }, 1000)
+      }
     })
   }
 }
@@ -86,15 +95,17 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
 
         const response = res.data as ApiResponse<T>
 
+        const requestId = response.requestId || (res.header as any)?.['X-Request-Id'] || (res.header as any)?.['x-request-id']
+
         if (response.code === 0) {
           resolve(response.data)
-        } else if (response.code === 40101 || response.code === 40102 || response.code === 40103) {
+        } else if (AUTH_ERROR_CODES.includes(response.code)) {
           removeToken()
           navigateToLogin()
           reject(new Error('登录已过期，请重新登录'))
         } else {
           const errMsg = response.message || '请求失败'
-          console.error(`[baby-mall] API error: ${method} ${fullUrl} code=${response.code} message=${errMsg}`)
+          console.error(`[baby-mall] API error: ${method} ${fullUrl} code=${response.code} requestId=${requestId || '-'} message=${errMsg}`)
           if (showError) {
             uni.showToast({
               title: errMsg,
