@@ -1,5 +1,5 @@
 <template>
-  <view class="search-page">
+  <view class="search-page page-shell">
     <view class="search-header">
       <view class="search-input-wrap">
         <input
@@ -134,21 +134,22 @@ onMounted(() => {
 <style lang="scss" scoped>
 .search-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
 .search-header {
   display: flex;
   align-items: center;
   padding: $spacing-sm $spacing-md;
-  background: $bg-white;
+  background: transparent;
 }
 
 .search-input-wrap {
   flex: 1;
-  background: $bg-gray;
+  background: $bg-white;
   border-radius: $radius-round;
-  padding: 12rpx 24rpx;
+  padding: 16rpx 24rpx;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-sm;
 }
 
 .search-input {
@@ -197,6 +198,7 @@ onMounted(() => {
   background: $bg-white;
   border-radius: $radius-round;
   padding: 12rpx 24rpx;
+  border: 1rpx solid rgba($border-color, 0.72);
 }
 
 .keyword-text {
@@ -211,6 +213,6 @@ onMounted(() => {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-sm;
+  gap: $spacing-md;
 }
 </style>

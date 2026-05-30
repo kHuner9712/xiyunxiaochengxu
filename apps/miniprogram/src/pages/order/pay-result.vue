@@ -1,24 +1,28 @@
 <template>
-  <view class="pay-result-page">
-    <view v-if="checking || paymentState === 'confirming'" class="result-icon">
-      <text class="icon-checking">...</text>
-    </view>
-    <view class="result-icon" v-else-if="paymentState === 'success'">
-      <text class="icon-success">✓</text>
-    </view>
-    <view class="result-icon" v-else-if="paymentState === 'failed'">
-      <text class="icon-fail">✕</text>
-    </view>
-    <view class="result-icon" v-else>
-      <text class="icon-fail">?</text>
-    </view>
+  <view class="pay-result-page page-shell">
+    <view class="result-card">
+      <view v-if="checking || paymentState === 'confirming'" class="result-icon state-checking">
+        <text class="icon-checking">...</text>
+      </view>
+      <view class="result-icon state-success" v-else-if="paymentState === 'success'">
+        <text class="icon-success">✓</text>
+      </view>
+      <view class="result-icon state-fail" v-else-if="paymentState === 'failed'">
+        <text class="icon-fail">✕</text>
+      </view>
+      <view class="result-icon state-unknown" v-else>
+        <text class="icon-fail">?</text>
+      </view>
 
-    <text class="result-text">{{ resultText }}</text>
+      <text class="result-text">{{ resultText }}</text>
+      <text class="result-subtext">订单状态可能有短暂延迟，请以订单详情为准</text>
+    </view>
 
     <view v-if="paymentState === 'success' && orderInfo?.fulfillmentType === 'pickup'" class="pickup-tip card">
       <text class="tip-text">请到店出示自提码取货</text>
       <view v-if="orderInfo.pickupCode" class="tip-code">
-        <text class="tip-code-text">自提码：{{ orderInfo.pickupCode }}</text>
+        <text class="tip-code-label">自提码</text>
+        <text class="tip-code-text">{{ orderInfo.pickupCode }}</text>
       </view>
     </view>
 
@@ -181,24 +185,37 @@ onUnload(() => {
   @include flex-center;
   @include flex-column;
   min-height: 100vh;
-  background: $bg-color;
-  padding: 120rpx $spacing-md 0;
+  padding: 96rpx $spacing-md 0;
+}
+
+.result-card {
+  width: 100%;
+  @include flex-center;
+  @include flex-column;
+  padding: $spacing-xl $spacing-md;
+  margin-bottom: $spacing-md;
+  border-radius: $radius-xxl;
+  background: linear-gradient(180deg, #FFFFFF 0%, $bg-soft 100%);
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
 }
 
 .result-icon {
-  width: 120rpx;
-  height: 120rpx;
+  width: 148rpx;
+  height: 148rpx;
   border-radius: 50%;
   @include flex-center;
   margin-bottom: $spacing-lg;
+  background: $bg-white;
+  box-shadow: $shadow-md;
 }
 
 .icon-checking {
-  font-size: 60rpx;
+  font-size: 44rpx;
   color: #FFFFFF;
   background: $warning-color;
-  width: 120rpx;
-  height: 120rpx;
+  width: 104rpx;
+  height: 104rpx;
   border-radius: 50%;
   @include flex-center;
 }
@@ -207,8 +224,8 @@ onUnload(() => {
   font-size: 60rpx;
   color: #FFFFFF;
   background: $success-color;
-  width: 120rpx;
-  height: 120rpx;
+  width: 104rpx;
+  height: 104rpx;
   border-radius: 50%;
   @include flex-center;
 }
@@ -217,17 +234,23 @@ onUnload(() => {
   font-size: 60rpx;
   color: #FFFFFF;
   background: $danger-color;
-  width: 120rpx;
-  height: 120rpx;
+  width: 104rpx;
+  height: 104rpx;
   border-radius: 50%;
   @include flex-center;
 }
 
 .result-text {
   font-size: $font-xl;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
-  margin-bottom: $spacing-xl;
+}
+
+.result-subtext {
+  font-size: $font-xs;
+  color: $text-hint;
+  margin-top: $spacing-sm;
+  text-align: center;
 }
 
 .order-info {
@@ -237,10 +260,10 @@ onUnload(() => {
 .pickup-tip {
   width: 100%;
   text-align: center;
-  padding: $spacing-md;
-  background: rgba($primary-color, 0.05);
-  border: 2rpx solid rgba($primary-color, 0.2);
-  border-radius: $radius-md;
+  padding: $spacing-lg $spacing-md;
+  background: linear-gradient(135deg, $primary-soft, #FFFFFF);
+  border: 2rpx solid rgba($primary-color, 0.18);
+  border-radius: $radius-xl;
   margin-bottom: $spacing-md;
 }
 
@@ -252,11 +275,27 @@ onUnload(() => {
   margin-bottom: $spacing-sm;
 }
 
+.tip-code {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-sm;
+  min-height: 92rpx;
+  padding: 0 $spacing-lg;
+  border-radius: $radius-xl;
+  background: $bg-white;
+  box-shadow: $shadow-sm;
+}
+
+.tip-code-label {
+  font-size: $font-xs;
+  color: $text-hint;
+}
+
 .tip-code-text {
-  font-size: $font-xl;
-  font-weight: 700;
-  color: $primary-color;
-  letter-spacing: 4rpx;
+  font-size: $font-xxl;
+  font-weight: 800;
+  color: $primary-dark;
+  letter-spacing: 8rpx;
 }
 
 .info-row {
@@ -288,10 +327,7 @@ onUnload(() => {
 
 .btn-outline {
   flex: 1;
-  padding: 24rpx 0;
-  text-align: center;
-  border: 2rpx solid $primary-color;
-  border-radius: $radius-round;
+  @extend .ghost-pill-btn;
 }
 
 .btn-text {
@@ -301,10 +337,7 @@ onUnload(() => {
 
 .btn-primary {
   flex: 1;
-  padding: 24rpx 0;
-  text-align: center;
-  background: linear-gradient(135deg, $primary-color, $primary-light);
-  border-radius: $radius-round;
+  @extend .primary-pill-btn;
 }
 
 .btn-text-white {

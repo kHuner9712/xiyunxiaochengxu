@@ -1,5 +1,5 @@
 <template>
-  <view class="price-display">
+  <view class="price-display" :class="size">
     <text v-if="showSymbol" class="price-symbol">¥</text>
     <text class="price-integer">{{ integerPart }}</text>
     <text v-if="showDecimal && decimalPart" class="price-decimal">.{{ decimalPart }}</text>
@@ -15,16 +15,18 @@ const props = withDefaults(defineProps<{
   showSymbol?: boolean
   showDecimal?: boolean
   color?: string
+  size?: 'small' | 'normal' | 'large'
 }>(), {
   showSymbol: true,
   showDecimal: true,
-  color: ''
+  color: '',
+  size: 'normal'
 })
 
 const priceStr = computed(() => formatPrice(props.price))
 const integerPart = computed(() => priceStr.value.split('.')[0])
 const decimalPart = computed(() => priceStr.value.split('.')[1])
-const priceColor = computed(() => props.color || '#ff4d4f')
+const priceColor = computed(() => props.color || '#F47C7C')
 </script>
 
 <style lang="scss" scoped>
@@ -32,11 +34,13 @@ const priceColor = computed(() => props.color || '#ff4d4f')
   display: inline-flex;
   align-items: baseline;
   color: v-bind(priceColor);
-  font-weight: 700;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .price-symbol {
-  font-size: $font-sm;
+  font-size: $font-xs;
+  margin-right: 2rpx;
 }
 
 .price-integer {
@@ -45,5 +49,27 @@ const priceColor = computed(() => props.color || '#ff4d4f')
 
 .price-decimal {
   font-size: $font-sm;
+}
+
+.price-display.small {
+  .price-symbol,
+  .price-decimal {
+    font-size: 18rpx;
+  }
+
+  .price-integer {
+    font-size: $font-md;
+  }
+}
+
+.price-display.large {
+  .price-symbol,
+  .price-decimal {
+    font-size: $font-md;
+  }
+
+  .price-integer {
+    font-size: $font-xxl;
+  }
 }
 </style>

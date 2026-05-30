@@ -1,10 +1,10 @@
 <template>
-  <view class="activity-page">
-    <view class="tab-bar">
+  <view class="activity-page page-shell">
+    <view class="tab-bar pill-tab-bar">
       <view
         v-for="tab in tabs"
         :key="tab.value"
-        class="tab-item"
+        class="tab-item pill-tab-item"
         :class="{ active: currentTab === tab.value }"
         @tap="switchTab(tab.value)"
       >
@@ -133,25 +133,18 @@ onMounted(() => {
 }
 
 .tab-bar {
-  display: flex;
-  background: $bg-white;
-  border-radius: $radius-round;
-  padding: 6rpx;
   margin-bottom: $spacing-md;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .tab-item {
   flex: 1;
-  @include flex-center;
-  padding: 16rpx 0;
-  border-radius: $radius-round;
-  transition: all 0.3s;
 
   &.active {
-    background: $primary-color;
-
     .tab-text {
-      color: #FFFFFF;
+      color: $primary-dark;
     }
   }
 }
@@ -163,15 +156,17 @@ onMounted(() => {
 
 .feed-card {
   background: $bg-white;
-  border-radius: $radius-lg;
+  border-radius: $radius-xxl;
   overflow: hidden;
   margin-bottom: $spacing-md;
+  border: 1rpx solid rgba($border-color, 0.72);
   box-shadow: $shadow-sm;
 }
 
 .feed-image {
   width: 100%;
-  height: 300rpx;
+  height: 320rpx;
+  background: $bg-gray;
 }
 
 .feed-info {
@@ -184,28 +179,29 @@ onMounted(() => {
 
 .type-text {
   font-size: $font-xs;
-  padding: 4rpx 12rpx;
+  padding: 6rpx 16rpx;
   border-radius: $radius-round;
+  font-weight: 700;
 
   &.activity {
-    background: rgba(255, 107, 107, 0.1);
-    color: #FF6B6B;
+    background: $primary-soft;
+    color: $primary-dark;
   }
 
   &.video {
-    background: rgba(78, 205, 196, 0.1);
-    color: #4ECDC4;
+    background: $success-soft;
+    color: $success-color;
   }
 
   &.article {
-    background: rgba(69, 183, 209, 0.1);
-    color: #45B7D1;
+    background: $info-soft;
+    color: $info-color;
   }
 }
 
 .feed-title {
   font-size: $font-lg;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-xs;
@@ -217,7 +213,8 @@ onMounted(() => {
   font-size: $font-sm;
   color: $text-hint;
   display: block;
-  @include text-ellipsis;
+  @include text-ellipsis-2;
+  line-height: 1.45;
   margin-bottom: $spacing-xs;
 }
 

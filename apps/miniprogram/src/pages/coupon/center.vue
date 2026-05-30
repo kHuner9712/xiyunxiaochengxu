@@ -1,5 +1,5 @@
 <template>
-  <view class="coupon-center-page">
+  <view class="coupon-center-page page-shell">
     <view class="coupon-list">
       <view v-for="item in coupons" :key="item.id" class="coupon-card">
         <view class="coupon-left">
@@ -87,16 +87,16 @@ onMounted(() => {
 <style lang="scss" scoped>
 .coupon-center-page {
   min-height: 100vh;
-  background: $bg-color;
   padding: $spacing-md;
 }
 
 .coupon-card {
   display: flex;
-  background: $bg-white;
-  border-radius: $radius-lg;
+  background: linear-gradient(135deg, #FFFFFF 0%, $primary-soft 100%);
+  border-radius: $radius-xxl;
   overflow: hidden;
   margin-bottom: $spacing-md;
+  border: 1rpx solid rgba($border-color, 0.72);
   box-shadow: $shadow-sm;
 }
 
@@ -140,7 +140,7 @@ onMounted(() => {
 
 .coupon-name {
   font-size: $font-md;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: 8rpx;
@@ -155,18 +155,23 @@ onMounted(() => {
 
 .coupon-action {
   align-self: flex-start;
-  padding: 8rpx 24rpx;
-  border: 2rpx solid $primary-color;
+  min-height: 56rpx;
+  padding: 0 28rpx;
+  border: 2rpx solid rgba($primary-color, 0.36);
   border-radius: $radius-round;
+  @include flex-center;
+  background: $bg-white;
 
   &.disabled {
     border-color: $border-color;
+    background: $bg-gray;
   }
 }
 
 .action-text {
   font-size: $font-xs;
-  color: $primary-color;
+  color: $primary-dark;
+  font-weight: 700;
 
   .disabled & { color: $text-hint; }
 }

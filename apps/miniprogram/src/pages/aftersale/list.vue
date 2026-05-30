@@ -1,5 +1,5 @@
 <template>
-  <view class="aftersale-list-page">
+  <view class="aftersale-list-page page-shell">
     <view class="aftersale-list">
       <view v-for="item in list" :key="item.id" class="aftersale-card card" @tap="goDetail(item.id)">
         <view class="card-header">
@@ -91,11 +91,12 @@ onMounted(() => {
 <style lang="scss" scoped>
 .aftersale-list-page {
   min-height: 100vh;
-  background: $bg-color;
+  padding-top: $spacing-sm;
 }
 
 .aftersale-card {
-  margin: $spacing-sm $spacing-md;
+  margin: $spacing-sm $spacing-md $spacing-md;
+  border-radius: $radius-xxl;
 }
 
 .card-header {
@@ -112,25 +113,27 @@ onMounted(() => {
 .status-text {
   font-size: $font-sm;
   font-weight: 500;
+  @extend .status-badge;
 
-  &.pending { color: $warning-color; }
-  &.processing { color: $info-color; }
-  &.completed { color: $success-color; }
-  &.rejected { color: $danger-color; }
-  &.cancelled { color: $text-hint; }
+  &.pending { @extend .status-warning; }
+  &.processing { @extend .status-info; }
+  &.completed { @extend .status-success; }
+  &.rejected { @extend .status-danger; }
+  &.cancelled { background: $bg-gray; color: $text-hint; }
 }
 
 .card-content {
   display: flex;
-  align-items: center;
-  padding-top: $spacing-sm;
+  align-items: flex-start;
+  padding-top: $spacing-md;
 }
 
 .product-image {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: $radius-md;
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: $radius-lg;
   flex-shrink: 0;
+  background: $bg-gray;
 }
 
 .product-info {
@@ -142,8 +145,10 @@ onMounted(() => {
 .product-name {
   font-size: $font-sm;
   color: $text-color;
-  @include text-ellipsis;
+  font-weight: 600;
+  @include text-ellipsis-2;
   display: block;
+  line-height: 1.4;
 }
 
 .aftersale-reason {
@@ -167,6 +172,6 @@ onMounted(() => {
 .amount-value {
   font-size: $font-md;
   color: $primary-color;
-  font-weight: 600;
+  font-weight: 800;
 }
 </style>

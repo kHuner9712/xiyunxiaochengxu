@@ -1,5 +1,9 @@
 <template>
-  <view class="aftersale-apply-page">
+  <view class="aftersale-apply-page page-shell">
+    <view class="apply-guide card">
+      <text class="guide-title">申请售后</text>
+      <text class="guide-desc">请准确选择原因并补充凭证，平台将依据订单与商品信息处理。</text>
+    </view>
     <view class="form-section card">
       <view class="form-item">
         <text class="form-label">售后类型</text>
@@ -156,12 +160,31 @@ onLoad(async (options) => {
 <style lang="scss" scoped>
 .aftersale-apply-page {
   min-height: 100vh;
-  background: $bg-color;
   padding: $spacing-md;
+}
+
+.apply-guide {
+  background: linear-gradient(135deg, #FFFFFF, $info-soft);
+}
+
+.guide-title {
+  display: block;
+  font-size: $font-xl;
+  font-weight: 800;
+  color: $text-color;
+}
+
+.guide-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-hint;
+  line-height: 1.55;
 }
 
 .form-section {
   margin-bottom: $spacing-lg;
+  border-radius: $radius-xxl;
 }
 
 .form-item {
@@ -179,7 +202,7 @@ onLoad(async (options) => {
 .form-label {
   font-size: $font-md;
   color: $text-color;
-  font-weight: 500;
+  font-weight: 700;
   display: block;
   margin-bottom: $spacing-sm;
 }
@@ -190,15 +213,17 @@ onLoad(async (options) => {
 }
 
 .type-option {
-  padding: 12rpx 32rpx;
+  min-height: 64rpx;
+  padding: 0 32rpx;
   border-radius: $radius-round;
   border: 2rpx solid $border-color;
+  @include flex-center;
 
   &.active {
-    background: rgba($primary-color, 0.1);
-    border-color: $primary-color;
+    background: $primary-soft;
+    border-color: rgba($primary-color, 0.32);
 
-    .type-text { color: $primary-color; }
+    .type-text { color: $primary-dark; font-weight: 700; }
   }
 }
 
@@ -219,8 +244,9 @@ onLoad(async (options) => {
   min-height: 160rpx;
   font-size: $font-md;
   background: $bg-gray;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
   padding: $spacing-sm;
+  line-height: 1.6;
 }
 
 .image-list {
@@ -238,7 +264,7 @@ onLoad(async (options) => {
 .upload-image {
   width: 100%;
   height: 100%;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
 }
 
 .image-delete {
@@ -258,9 +284,9 @@ onLoad(async (options) => {
   width: 160rpx;
   height: 160rpx;
   background: $bg-gray;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
   @include flex-center;
-  border: 2rpx dashed $border-color;
+  border: 2rpx dashed rgba($primary-color, 0.28);
 }
 
 .add-icon {
@@ -273,6 +299,7 @@ onLoad(async (options) => {
   border-radius: $radius-round;
   padding: 24rpx 0;
   text-align: center;
+  box-shadow: 0 10rpx 22rpx rgba(244, 124, 124, 0.2);
 }
 
 .submit-text {

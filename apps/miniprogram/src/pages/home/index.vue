@@ -1,8 +1,8 @@
 <template>
-  <view class="home-page">
+  <view class="home-page page-shell">
     <view class="search-bar" @tap="goSearch">
       <view class="search-input">
-        <text class="search-icon">🔍</text>
+        <text class="search-icon">⌕</text>
         <text class="search-placeholder">搜索商品</text>
       </view>
     </view>
@@ -202,24 +202,28 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .home-page {
-  padding-bottom: 20rpx;
+  padding-bottom: 32rpx;
 }
 
 .search-bar {
-  padding: $spacing-sm $spacing-md;
-  background: $bg-white;
+  padding: $spacing-md $spacing-md $spacing-sm;
+  background: transparent;
 }
 
 .search-input {
-  @include flex-center;
-  background: $bg-gray;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.88);
   border-radius: $radius-round;
-  padding: 16rpx 24rpx;
+  padding: 18rpx 26rpx;
+  border: 1rpx solid rgba($border-color, 0.86);
+  box-shadow: $shadow-sm;
 }
 
 .search-icon {
-  margin-right: 8rpx;
-  font-size: $font-sm;
+  margin-right: 10rpx;
+  font-size: $font-lg;
+  color: $primary-color;
 }
 
 .search-placeholder {
@@ -228,10 +232,11 @@ onMounted(() => {
 }
 
 .banner-swiper {
-  height: 320rpx;
+  height: 340rpx;
   margin: $spacing-sm $spacing-md;
-  border-radius: $radius-lg;
+  border-radius: $radius-xxl;
   overflow: hidden;
+  box-shadow: $shadow-md;
 }
 
 .banner-image {
@@ -242,10 +247,12 @@ onMounted(() => {
 .quick-entries {
   display: flex;
   justify-content: space-around;
-  padding: $spacing-md;
+  padding: $spacing-md $spacing-sm;
   background: $bg-white;
   margin: $spacing-sm $spacing-md;
-  border-radius: $radius-lg;
+  border-radius: $radius-xl;
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
 }
 
 .entry-item {
@@ -254,9 +261,11 @@ onMounted(() => {
 }
 
 .entry-icon {
-  width: 80rpx;
-  height: 80rpx;
+  width: 88rpx;
+  height: 88rpx;
   margin-bottom: 8rpx;
+  border-radius: 30rpx;
+  background: $primary-soft;
 }
 
 .entry-name {
@@ -265,24 +274,24 @@ onMounted(() => {
 }
 
 .section {
-  margin-top: $spacing-md;
+  margin-top: $spacing-lg;
 }
 
 .section-header {
   @include flex-between;
   padding: 0 $spacing-md;
-  margin-bottom: $spacing-sm;
+  margin-bottom: $spacing-md;
 }
 
 .section-title {
   font-size: $font-lg;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
 }
 
 .section-more {
   font-size: $font-sm;
-  color: $text-hint;
+  color: $primary-dark;
 }
 
 .month-scroll {
@@ -303,7 +312,7 @@ onMounted(() => {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-sm;
+  gap: $spacing-md;
   padding: 0 $spacing-md;
 }
 
@@ -321,13 +330,15 @@ onMounted(() => {
   width: 500rpx;
   flex-shrink: 0;
   background: $bg-white;
-  border-radius: $radius-lg;
+  border-radius: $radius-xl;
   overflow: hidden;
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
 }
 
 .activity-image {
   width: 100%;
-  height: 240rpx;
+  height: 250rpx;
 }
 
 .activity-info {

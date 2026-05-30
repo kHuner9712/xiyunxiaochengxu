@@ -1235,6 +1235,25 @@ export class OrderService {
   private serializeOrderView(order: any) {
     const base = this.serializeOrder(order);
     const addressDetail = [order.province, order.city, order.district, order.detailAddress].filter(Boolean).join(' ');
+    const normalizeLogisticsTraces = (logisticsInfo: any) => {
+      if (!logisticsInfo) return [];
+      if (Array.isArray(logisticsInfo)) return logisticsInfo;
+
+      if (typeof logisticsInfo === 'string') {
+        try {
+          const parsed = JSON.parse(logisticsInfo);
+          if (Array.isArray(parsed)) return parsed;
+          if (Array.isArray(parsed?.traces)) return parsed.traces;
+          return [];
+        } catch {
+          return [];
+        }
+      }
+
+      if (Array.isArray(logisticsInfo.traces)) return logisticsInfo.traces;
+      return [];
+    };
+
     return {
       id: base.id,
       orderNo: base.orderNo,
@@ -1278,12 +1297,12 @@ export class OrderService {
       logistics: base.delivery ? {
         company: base.delivery.logisticsCompany || '',
         trackingNo: base.delivery.logisticsNo || '',
-        traces: base.delivery.logisticsTraces ? (typeof base.delivery.logisticsTraces === 'string' ? JSON.parse(base.delivery.logisticsTraces) : base.delivery.logisticsTraces) : [],
+        traces: normalizeLogisticsTraces(base.delivery.logisticsInfo),
       } : null,
       createTime: order.createdAt ? new Date(order.createdAt).toLocaleString('zh-CN') : '',
       payTime: order.paidAt ? new Date(order.paidAt).toLocaleString('zh-CN') : undefined,
-      deliveryTime: order.shippedAt ? new Date(order.shippedAt).toLocaleString('zh-CN') : undefined,
-      shipTime: order.shippedAt ? new Date(order.shippedAt).toLocaleString('zh-CN') : undefined,
+      deliveryTime: order.deliveredAt ? new Date(order.deliveredAt).toLocaleString('zh-CN') : undefined,
+      shipTime: order.deliveredAt ? new Date(order.deliveredAt).toLocaleString('zh-CN') : undefined,
       finishTime: order.completedAt ? new Date(order.completedAt).toLocaleString('zh-CN') : undefined,
       receiveTime: order.completedAt ? new Date(order.completedAt).toLocaleString('zh-CN') : undefined,
       remark: order.remark || undefined,

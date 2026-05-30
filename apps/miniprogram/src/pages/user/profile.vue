@@ -1,5 +1,5 @@
 <template>
-  <view class="profile-page">
+  <view class="profile-page page-shell">
     <view class="profile-header card">
       <view class="avatar-section" @tap="changeAvatar">
         <image class="user-avatar" :src="userStore.avatar || '/static/default-avatar.png'" mode="aspectFill" />
@@ -87,7 +87,6 @@ function goBaby() {
 <style lang="scss" scoped>
 .profile-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
 .profile-header {

@@ -23,7 +23,7 @@ withDefaults(defineProps<{
 .loading-wrap {
   @include flex-center;
   @include flex-column;
-  padding: $spacing-xl 0;
+  padding: 56rpx 0;
 
   &.fullscreen {
     position: fixed;
@@ -31,7 +31,7 @@ withDefaults(defineProps<{
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 253, 251, 0.86);
     z-index: 9999;
   }
 }
@@ -43,19 +43,21 @@ withDefaults(defineProps<{
 }
 
 .spinner-dot {
-  width: 12rpx;
-  height: 12rpx;
+  width: 10rpx;
+  height: 10rpx;
   border-radius: 50%;
   background: $primary-color;
-  margin: 0 8rpx;
-  animation: dot-bounce 1.4s infinite ease-in-out both;
+  margin: 0 7rpx;
+  animation: dot-breathe 1.4s infinite ease-in-out both;
 }
 
-@keyframes dot-bounce {
+@keyframes dot-breathe {
   0%, 80%, 100% {
-    transform: scale(0);
+    opacity: 0.28;
+    transform: scale(0.72);
   }
   40% {
+    opacity: 1;
     transform: scale(1);
   }
 }
@@ -63,6 +65,6 @@ withDefaults(defineProps<{
 .loading-text {
   font-size: $font-sm;
   color: $text-hint;
-  margin-top: $spacing-sm;
+  margin-top: 18rpx;
 }
 </style>

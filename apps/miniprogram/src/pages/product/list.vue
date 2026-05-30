@@ -1,14 +1,16 @@
 <template>
-  <view class="product-list-page">
-    <view class="filter-bar">
+  <view class="product-list-page page-shell">
+    <view class="filter-wrap">
+      <view class="filter-bar pill-tab-bar">
       <view
         v-for="filter in filters"
         :key="filter.value"
-        class="filter-item"
+        class="filter-item pill-tab-item"
         :class="{ active: currentSort === filter.value }"
         @tap="switchSort(filter.value)"
       >
         <text class="filter-text">{{ filter.label }}</text>
+      </view>
       </view>
     </view>
 
@@ -98,27 +100,23 @@ onReachBottom(() => {
 <style lang="scss" scoped>
 .product-list-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
-.filter-bar {
-  display: flex;
-  background: $bg-white;
-  padding: $spacing-sm 0;
+.filter-wrap {
+  padding: $spacing-sm $spacing-md;
   position: sticky;
   top: 0;
   z-index: 10;
+  background: rgba($bg-color, 0.92);
 }
 
 .filter-item {
   flex: 1;
-  @include flex-center;
-  padding: 16rpx 0;
 
   &.active {
     .filter-text {
-      color: $primary-color;
-      font-weight: 600;
+      color: $primary-dark;
+      font-weight: 700;
     }
   }
 }
@@ -131,7 +129,7 @@ onReachBottom(() => {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-sm;
-  padding: $spacing-sm $spacing-md;
+  gap: $spacing-md;
+  padding: $spacing-sm $spacing-md $spacing-lg;
 }
 </style>

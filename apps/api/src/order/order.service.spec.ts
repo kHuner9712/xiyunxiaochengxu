@@ -1060,7 +1060,7 @@ describe('接口契约：订单列表/详情字段映射', () => {
     receiverName: '张三', receiverPhone: '13800138000',
     province: '北京', city: '北京', district: '朝阳区', detailAddress: 'xxx路1号',
     remark: null, couponId: null,
-    createdAt: new Date('2026-05-23T10:00:00Z'), paidAt: null, shippedAt: null, completedAt: null,
+    createdAt: new Date('2026-05-23T10:00:00Z'), paidAt: null, shippedAt: null, deliveredAt: null, completedAt: null,
     orderItems: [{
       id: BigInt(10), orderId: BigInt(1), productId: BigInt(300), skuId: BigInt(200),
       productName: '测试商品', skuSpecs: '红色/L', productImage: 'img.jpg',
@@ -1098,6 +1098,60 @@ describe('接口契约：订单列表/详情字段映射', () => {
     expect(result).toHaveProperty('createTime');
     expect(result).not.toHaveProperty('orderItems');
     expect(result).not.toHaveProperty('receiverName');
+  });
+
+  it('findById 使用 deliveredAt 输出 deliveryTime/shipTime，并读取 logisticsInfo 数组', async () => {
+    const deliveredAt = new Date('2026-05-23T11:00:00Z');
+    mockPrisma.order.findFirst.mockResolvedValue({
+      ...ORDER_WITH_ITEMS,
+      status: OrderStatus.delivered,
+      deliveredAt,
+      delivery: {
+        id: BigInt(20),
+        orderId: BigInt(1),
+        logisticsCompany: '顺丰速运',
+        logisticsNo: 'SF123',
+        logisticsInfo: [{ time: '2026-05-23 18:00:00', content: '已签收' }],
+      },
+    });
+
+    const result = await service.findById('100', '1');
+
+    expect(result.deliveryTime).toBe(new Date(deliveredAt).toLocaleString('zh-CN'));
+    expect(result.shipTime).toBe(new Date(deliveredAt).toLocaleString('zh-CN'));
+    expect(result.logistics).toEqual(expect.objectContaining({
+      company: '顺丰速运',
+      trackingNo: 'SF123',
+      traces: [{ time: '2026-05-23 18:00:00', content: '已签收' }],
+    }));
+  });
+
+  it('findById 安全兼容 logisticsInfo JSON 字符串、空值和非法字符串', async () => {
+    const logisticsInfoCases = [
+      { input: JSON.stringify({ traces: [{ time: 't1', content: '运输中' }] }), expected: [{ time: 't1', content: '运输中' }] },
+      { input: JSON.stringify([{ time: 't2', content: '派送中' }]), expected: [{ time: 't2', content: '派送中' }] },
+      { input: null, expected: [] },
+      { input: '{bad-json', expected: [] },
+    ];
+
+    for (const item of logisticsInfoCases) {
+      mockPrisma.order.findFirst.mockResolvedValue({
+        ...ORDER_WITH_ITEMS,
+        delivery: {
+          id: BigInt(20),
+          orderId: BigInt(1),
+          logisticsCompany: '顺丰速运',
+          logisticsNo: 'SF123',
+          logisticsInfo: item.input,
+        },
+      });
+
+      await expect(service.findById('100', '1')).resolves.toEqual(
+        expect.objectContaining({
+          logistics: expect.objectContaining({ traces: item.expected }),
+        }),
+      );
+    }
   });
 
   it('findAllAdmin 也返回 items 而非 orderItems', async () => {

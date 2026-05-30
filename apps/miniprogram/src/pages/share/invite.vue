@@ -1,5 +1,5 @@
 <template>
-  <view class="invite-page">
+  <view class="invite-page page-shell">
     <view class="header-section">
       <text class="header-title">邀请好友 有礼相送</text>
       <text class="header-desc">分享给好友，好友首单支付后你将获得奖励</text>
@@ -80,11 +80,10 @@ onMounted(() => {
 <style lang="scss" scoped>
 .invite-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
 .header-section {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: linear-gradient(135deg, $primary-color, $secondary-color);
   padding: 60rpx $spacing-md 40rpx;
   text-align: center;
 }

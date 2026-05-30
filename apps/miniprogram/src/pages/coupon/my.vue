@@ -1,14 +1,16 @@
 <template>
-  <view class="my-coupon-page">
-    <view class="tab-bar">
+  <view class="my-coupon-page page-shell">
+    <view class="tab-wrap">
+      <view class="tab-bar pill-tab-bar">
       <view
         v-for="tab in tabs"
         :key="tab.value"
-        class="tab-item"
+        class="tab-item pill-tab-item"
         :class="{ active: currentTab === tab.value }"
         @tap="switchTab(tab.value)"
       >
         <text class="tab-text">{{ tab.label }}</text>
+      </view>
       </view>
     </view>
 
@@ -106,35 +108,20 @@ onMounted(() => {
 <style lang="scss" scoped>
 .my-coupon-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
-.tab-bar {
-  display: flex;
-  background: $bg-white;
-  padding: $spacing-sm 0;
+.tab-wrap {
+  padding: $spacing-sm $spacing-md;
 }
 
 .tab-item {
   flex: 1;
-  @include flex-center;
-  padding: 16rpx 0;
   position: relative;
 
   &.active {
     .tab-text {
-      color: $primary-color;
-      font-weight: 600;
-    }
-
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      width: 40rpx;
-      height: 4rpx;
-      background: $primary-color;
-      border-radius: 2rpx;
+      color: $primary-dark;
+      font-weight: 700;
     }
   }
 }
@@ -150,10 +137,11 @@ onMounted(() => {
 
 .coupon-card {
   display: flex;
-  background: $bg-white;
-  border-radius: $radius-lg;
+  background: linear-gradient(135deg, #FFFFFF 0%, $primary-soft 100%);
+  border-radius: $radius-xxl;
   overflow: hidden;
   margin-bottom: $spacing-md;
+  border: 1rpx solid rgba($border-color, 0.72);
   box-shadow: $shadow-sm;
 
   &.used, &.expired {
@@ -201,7 +189,7 @@ onMounted(() => {
 
 .coupon-name {
   font-size: $font-md;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: 8rpx;
@@ -216,20 +204,25 @@ onMounted(() => {
 
 .coupon-status {
   font-size: $font-xs;
+  @extend .status-badge;
 
-  &.used { color: $text-hint; }
-  &.expired { color: $text-hint; }
+  &.used { background: $bg-gray; color: $text-hint; }
+  &.expired { background: $danger-soft; color: $danger-color; }
 }
 
 .coupon-use-btn {
   align-self: flex-start;
-  padding: 8rpx 24rpx;
-  border: 2rpx solid $primary-color;
+  min-height: 56rpx;
+  padding: 0 28rpx;
+  border: 2rpx solid rgba($primary-color, 0.36);
   border-radius: $radius-round;
+  @include flex-center;
+  background: $bg-white;
 }
 
 .use-text {
   font-size: $font-xs;
-  color: $primary-color;
+  color: $primary-dark;
+  font-weight: 700;
 }
 </style>

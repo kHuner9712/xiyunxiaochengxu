@@ -1,5 +1,5 @@
 <template>
-  <view class="agreement-page">
+  <view class="agreement-page page-shell">
     <view class="content-section">
       <text class="section-title">用户协议</text>
       <text class="update-date">更新日期：{{ legal.userAgreement.updatedAt }}</text>
@@ -50,17 +50,21 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
 <style lang="scss" scoped>
 .agreement-page {
   min-height: 100vh;
-  background: $bg-white;
   padding: $spacing-md;
 }
 
 .content-section {
+  background: $bg-white;
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
+  padding: $spacing-lg;
   padding-bottom: 60rpx;
 }
 
 .section-title {
   font-size: $font-xl;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-md;
@@ -75,7 +79,7 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
 
 .section-subtitle {
   font-size: $font-lg;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-top: $spacing-lg;
@@ -85,7 +89,7 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
 .paragraph {
   font-size: $font-md;
   color: $text-secondary;
-  line-height: 1.8;
+  line-height: 1.95;
   display: block;
   margin-bottom: $spacing-xs;
 }

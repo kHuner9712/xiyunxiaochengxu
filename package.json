@@ -11,6 +11,7 @@
     "build:admin": "pnpm --filter @baby-mall/admin-web build",
     "build:mini": "pnpm --filter @baby-mall/miniprogram build:mp-weixin",
     "build:mini:prod": "cross-env NODE_ENV=production pnpm --filter @baby-mall/miniprogram build:mp-weixin",
+    "build:all": "pnpm build:api && pnpm build:admin && pnpm build:mini",
     "build": "pnpm build:api && pnpm build:admin",
     "typecheck": "pnpm --filter @baby-mall/api build && pnpm --filter @baby-mall/admin-web build",
     "lint": "pnpm -r lint",

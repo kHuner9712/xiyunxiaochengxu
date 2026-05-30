@@ -1,5 +1,5 @@
 <template>
-  <view class="content-list-page">
+  <view class="content-list-page page-shell">
     <view class="tab-bar">
       <view
         v-for="cat in categories"
@@ -105,15 +105,15 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .content-list-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
 .tab-bar {
   display: flex;
-  background: $bg-white;
+  background: rgba(255, 255, 255, 0.86);
   padding: $spacing-sm $spacing-md;
   overflow-x: auto;
   white-space: nowrap;
+  border-bottom: 1rpx solid rgba($border-color, 0.72);
 }
 
 .tab-item {
@@ -123,9 +123,9 @@ onMounted(async () => {
   flex-shrink: 0;
 
   &.active {
-    background: rgba($primary-color, 0.1);
+    background: $primary-soft;
 
-    .tab-text { color: $primary-color; font-weight: 600; }
+    .tab-text { color: $primary-dark; font-weight: 700; }
   }
 }
 
@@ -141,13 +141,15 @@ onMounted(async () => {
 .content-card {
   display: flex;
   margin-bottom: $spacing-md;
+  border-radius: $radius-xxl;
 }
 
 .content-cover {
   width: 200rpx;
   height: 150rpx;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
   flex-shrink: 0;
+  background: $bg-gray;
 }
 
 .content-info {
@@ -160,7 +162,7 @@ onMounted(async () => {
 
 .content-title {
   font-size: $font-md;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   @include text-ellipsis-2;
   display: block;
@@ -170,8 +172,9 @@ onMounted(async () => {
 .content-summary {
   font-size: $font-xs;
   color: $text-hint;
-  @include text-ellipsis;
+  @include text-ellipsis-2;
   display: block;
+  line-height: 1.4;
 }
 
 .content-meta {

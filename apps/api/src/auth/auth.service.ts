@@ -390,12 +390,23 @@ export class AuthService {
     const appId = this.configService.get('WECHAT_APP_ID');
     const appSecret = this.configService.get('WECHAT_APP_SECRET');
 
-    const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
-    const tokenRes = await axios.get(url);
-    const { access_token, errcode, errmsg } = tokenRes.data;
+    const accessTokenCacheKey = 'wechat_access_token';
+    let access_token = await this.redisService.get(accessTokenCacheKey);
 
-    if (errcode) {
-      throw new BadRequestException(`获取access_token失败: ${errmsg}`);
+    if (!access_token) {
+      const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
+      const tokenRes = await axios.get(url);
+      const { access_token: fetchedAccessToken, expires_in, errcode, errmsg } = tokenRes.data;
+
+      if (errcode) {
+        throw new BadRequestException(`获取access_token失败: ${errmsg}`);
+      }
+
+      access_token = fetchedAccessToken;
+      if (access_token) {
+        const ttlSeconds = Math.max(60, Number(expires_in || 0) - 300);
+        await this.redisService.set(accessTokenCacheKey, access_token, ttlSeconds);
+      }
     }
 
     const phoneUrl = `https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${access_token}&code=${code}`;

@@ -1,6 +1,13 @@
 <template>
-  <view class="cart-page">
+  <view class="cart-page page-shell">
     <view v-if="cartStore.items.length" class="cart-content">
+      <view class="cart-summary card">
+        <view>
+          <text class="summary-title">购物车</text>
+          <text class="summary-subtitle">已选 {{ cartStore.checkedCount }} 件</text>
+        </view>
+        <text class="summary-hint">满减和优惠以确认订单为准</text>
+      </view>
       <view v-for="(item, index) in cartStore.items" :key="item.id" class="cart-item">
         <view class="item-check" @tap="cartStore.toggleCheck(index)">
           <view class="check-box" :class="{ checked: item.checked }">
@@ -25,7 +32,7 @@
 
     <Empty v-else text="购物车空空如也" actionText="去逛逛" @action="goHome" />
 
-    <view v-if="cartStore.items.length" class="cart-footer">
+    <view v-if="cartStore.items.length" class="cart-footer bottom-action-bar">
       <view class="footer-left" @tap="cartStore.toggleCheckAll">
         <view class="check-box" :class="{ checked: cartStore.allChecked }">
           <text v-if="cartStore.allChecked" class="check-icon">✓</text>
@@ -118,20 +125,53 @@ onShow(() => {
 <style lang="scss" scoped>
 .cart-page {
   min-height: 100vh;
-  background: $bg-color;
-  padding-bottom: 120rpx;
+  padding-bottom: 148rpx;
+}
+
+.cart-content {
+  padding-top: $spacing-sm;
+}
+
+.cart-summary {
+  @include flex-between;
+  align-items: flex-start;
+  margin: $spacing-sm $spacing-md $spacing-md;
+  background: linear-gradient(135deg, #FFFFFF 0%, $primary-soft 100%);
+}
+
+.summary-title {
+  display: block;
+  font-size: $font-xl;
+  font-weight: 800;
+  color: $text-color;
+}
+
+.summary-subtitle,
+.summary-hint {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-xs;
+  color: $text-hint;
+}
+
+.summary-hint {
+  max-width: 300rpx;
+  text-align: right;
 }
 
 .cart-item {
   display: flex;
-  align-items: center;
-  padding: $spacing-md;
+  align-items: flex-start;
+  padding: $spacing-sm;
   background: $bg-white;
-  margin-bottom: 2rpx;
+  margin: $spacing-sm $spacing-md $spacing-md;
+  border-radius: $radius-xl;
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
 }
 
 .item-check {
-  padding: 8rpx;
+  padding: 58rpx 8rpx 0 0;
   margin-right: $spacing-sm;
 }
 
@@ -140,6 +180,7 @@ onShow(() => {
   height: 40rpx;
   border-radius: 50%;
   border: 2rpx solid $border-color;
+  background: $bg-white;
   @include flex-center;
 
   &.checked {
@@ -154,10 +195,11 @@ onShow(() => {
 }
 
 .item-image {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: $radius-md;
+  width: 164rpx;
+  height: 164rpx;
+  border-radius: $radius-lg;
   flex-shrink: 0;
+  background: $bg-gray;
 }
 
 .item-info {
@@ -169,8 +211,10 @@ onShow(() => {
 .item-name {
   font-size: $font-md;
   color: $text-color;
+  font-weight: 600;
   @include text-ellipsis-2;
   display: block;
+  line-height: 1.42;
 }
 
 .item-sku {
@@ -188,16 +232,20 @@ onShow(() => {
 .quantity-control {
   display: flex;
   align-items: center;
+  background: $bg-gray;
+  border-radius: $radius-round;
+  padding: 4rpx;
 }
 
 .qty-btn {
   @include flex-center;
   width: 48rpx;
   height: 48rpx;
-  background: $bg-gray;
-  border-radius: $radius-sm;
-  font-size: $font-lg;
-  color: $text-color;
+  background: $bg-white;
+  border-radius: $radius-round;
+  font-size: $font-md;
+  color: $primary-dark;
+  font-weight: 700;
 }
 
 .qty-value {
@@ -207,17 +255,8 @@ onShow(() => {
 }
 
 .cart-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  background: $bg-white;
-  padding: $spacing-sm $spacing-md;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
-  @include safe-bottom;
+  min-height: 128rpx;
 }
 
 .footer-left {
@@ -250,7 +289,10 @@ onShow(() => {
 .checkout-btn {
   background: linear-gradient(135deg, $primary-color, $primary-light);
   border-radius: $radius-round;
-  padding: 16rpx 40rpx;
+  min-height: 82rpx;
+  padding: 0 44rpx;
+  @include flex-center;
+  box-shadow: 0 10rpx 22rpx rgba(244, 124, 124, 0.2);
 }
 
 .checkout-text {

@@ -1,6 +1,6 @@
 <template>
   <view class="cs-btn" @tap="handleTap">
-    <text class="cs-icon">💬</text>
+    <text class="cs-icon">讯</text>
     <text v-if="showText" class="cs-text">{{ text || '客服' }}</text>
   </view>
 </template>
@@ -47,10 +47,18 @@ onMounted(() => {
 .cs-btn {
   @include flex-center;
   @include flex-column;
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 50%;
+  background: $bg-white;
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-md;
 }
 
 .cs-icon {
-  font-size: 40rpx;
+  font-size: $font-md;
+  font-weight: 800;
+  color: $primary-dark;
 }
 
 .cs-text {

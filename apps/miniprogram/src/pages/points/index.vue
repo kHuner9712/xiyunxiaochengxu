@@ -1,5 +1,5 @@
 <template>
-  <view class="points-page">
+  <view class="points-page page-shell">
     <view class="points-header">
       <view class="points-balance">
         <text class="balance-label">可用积分</text>
@@ -146,12 +146,12 @@ onMounted(() => {
 <style lang="scss" scoped>
 .points-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
 .points-header {
-  background: linear-gradient(135deg, $primary-color, $primary-dark);
+  background: linear-gradient(135deg, #FFE5DF 0%, #FFF4E4 62%, #F2FBF7 100%);
   padding: $spacing-xl $spacing-md;
+  border-radius: 0 0 $radius-xxl $radius-xxl;
 }
 
 .points-balance {
@@ -161,14 +161,14 @@ onMounted(() => {
 
 .balance-label {
   font-size: $font-sm;
-  color: rgba(255, 255, 255, 0.8);
+  color: $text-secondary;
   display: block;
 }
 
 .balance-value {
   font-size: 72rpx;
-  color: #FFFFFF;
-  font-weight: 700;
+  color: $primary-dark;
+  font-weight: 800;
 }
 
 .points-stats {
@@ -183,14 +183,14 @@ onMounted(() => {
 
 .stat-value {
   font-size: $font-lg;
-  color: #FFFFFF;
-  font-weight: 600;
+  color: $text-color;
+  font-weight: 800;
   display: block;
 }
 
 .stat-label {
   font-size: $font-xs;
-  color: rgba(255, 255, 255, 0.7);
+  color: $text-hint;
 }
 
 .checkin-section {
@@ -225,6 +225,7 @@ onMounted(() => {
 
   &.checked {
     background: $bg-gray;
+    box-shadow: none;
   }
 }
 
@@ -242,7 +243,7 @@ onMounted(() => {
 
 .section-title {
   font-size: $font-lg;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-sm;
@@ -253,6 +254,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: $spacing-sm;
+  border-radius: $radius-xl;
 }
 
 .detail-info {

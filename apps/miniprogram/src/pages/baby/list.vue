@@ -1,5 +1,9 @@
 <template>
-  <view class="baby-list-page">
+  <view class="baby-list-page page-shell">
+    <view class="privacy-card card">
+      <text class="privacy-title">宝宝档案</text>
+      <text class="privacy-desc">资料仅用于月龄推荐与购物辅助，请按需维护。</text>
+    </view>
     <view class="baby-list">
       <view v-for="item in babies" :key="item.id" class="baby-card card">
         <image class="baby-avatar" :src="item.avatar || '/static/default-baby.png'" mode="aspectFill" />
@@ -20,7 +24,7 @@
 
     <Empty v-if="babies.length === 0" text="暂无宝宝档案" actionText="添加宝宝" @action="addBaby" />
 
-    <view class="add-btn-wrap">
+    <view class="add-btn-wrap bottom-action-bar">
       <view class="add-btn" @tap="addBaby">
         <text class="add-text">+ 添加宝宝</text>
       </view>
@@ -78,14 +82,33 @@ onShow(() => {
 <style lang="scss" scoped>
 .baby-list-page {
   min-height: 100vh;
-  background: $bg-color;
   padding: $spacing-md;
-  padding-bottom: 120rpx;
+  padding-bottom: 148rpx;
+}
+
+.privacy-card {
+  background: linear-gradient(135deg, #FFFFFF, $primary-soft);
+}
+
+.privacy-title {
+  display: block;
+  font-size: $font-xl;
+  font-weight: 800;
+  color: $text-color;
+}
+
+.privacy-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-hint;
+  line-height: 1.5;
 }
 
 .baby-card {
   display: flex;
   align-items: center;
+  border-radius: $radius-xxl;
 }
 
 .baby-avatar {
@@ -93,6 +116,9 @@ onShow(() => {
   height: 100rpx;
   border-radius: 50%;
   flex-shrink: 0;
+  background: $primary-soft;
+  border: 4rpx solid #FFFFFF;
+  box-shadow: $shadow-sm;
 }
 
 .baby-info {
@@ -120,9 +146,11 @@ onShow(() => {
 }
 
 .action-btn {
-  padding: 8rpx 20rpx;
+  min-height: 54rpx;
+  padding: 0 22rpx;
   border: 2rpx solid $border-color;
   border-radius: $radius-round;
+  @include flex-center;
 
   &.delete {
     border-color: $danger-color;
@@ -136,19 +164,15 @@ onShow(() => {
 }
 
 .add-btn-wrap {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: $spacing-sm $spacing-md;
-  background: $bg-white;
-  @include safe-bottom;
+  justify-content: center;
 }
 
 .add-btn {
   background: linear-gradient(135deg, $primary-color, $primary-light);
   border-radius: $radius-round;
-  padding: 24rpx 0;
+  min-height: 84rpx;
+  padding: 0 120rpx;
+  @include flex-center;
   text-align: center;
 }
 

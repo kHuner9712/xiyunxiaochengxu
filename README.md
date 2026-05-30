@@ -44,8 +44,11 @@ pnpm dev:mini
 pnpm build:api
 pnpm build:admin
 pnpm build:mini
+pnpm build:all
 pnpm build:mini:prod
 ```
+
+冻结前推荐使用 `pnpm build:all` 覆盖 API、Admin 与小程序默认构建；上线门禁以 `pnpm release:check` 为准。
 
 小程序体验版/正式版构建（必须真实 AppID）：
 
@@ -64,6 +67,10 @@ pnpm release:check:prod
 
 - `release:check`：默认环境，允许占位 AppID（WARN）
 - `release:check:prod`：强制生产门禁，缺少真实 AppID 或协议占位将直接 FAIL
+
+## 前端构建依赖冻结说明
+
+当前小程序 `@dcloudio/*` 依赖随 `pnpm-lock.yaml` 锁定在已验证的 alpha 版本。上线冻结期不要自动升级或切换稳定版；如需升级 UniApp 编译链，应单独开升级任务，并重新完成小程序构建、微信开发者工具预览与真机验收。
 
 ## 预生产部署命令
 

@@ -1,5 +1,5 @@
 <template>
-  <view class="category-page">
+  <view class="category-page page-shell">
     <scroll-view scroll-y class="category-left">
       <view
         v-for="item in categories"
@@ -66,32 +66,39 @@ onMounted(() => {
 .category-page {
   display: flex;
   height: 100vh;
+  padding-top: $spacing-sm;
 }
 
 .category-left {
-  width: 180rpx;
-  background: $bg-gray;
+  width: 188rpx;
+  background: transparent;
   height: 100%;
+  padding: 0 0 $spacing-md $spacing-sm;
 }
 
 .category-item {
   @include flex-center;
-  padding: 32rpx 16rpx;
+  min-height: 84rpx;
+  padding: 0 14rpx;
+  margin-bottom: 10rpx;
   position: relative;
+  border-radius: $radius-round;
 
   &.active {
     background: $bg-white;
+    box-shadow: $shadow-sm;
+    border: 1rpx solid rgba($border-color, 0.72);
 
     &::before {
       content: '';
       position: absolute;
-      left: 0;
+      left: 10rpx;
       top: 50%;
       transform: translateY(-50%);
-      width: 6rpx;
-      height: 40rpx;
+      width: 8rpx;
+      height: 32rpx;
       background: $primary-color;
-      border-radius: 0 3rpx 3rpx 0;
+      border-radius: $radius-round;
     }
 
     .category-name {
@@ -105,11 +112,12 @@ onMounted(() => {
   font-size: $font-sm;
   color: $text-secondary;
   text-align: center;
+  @include text-ellipsis;
 }
 
 .category-right {
   flex: 1;
-  padding: $spacing-md;
+  padding: 0 $spacing-md $spacing-md $spacing-sm;
   height: 100%;
 }
 
@@ -122,12 +130,20 @@ onMounted(() => {
 .sub-category {
   @include flex-center;
   @include flex-column;
+  min-height: 204rpx;
+  background: $bg-white;
+  border-radius: $radius-xl;
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
+  padding: $spacing-sm;
 }
 
 .sub-icon {
-  width: 100rpx;
-  height: 100rpx;
-  margin-bottom: 8rpx;
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 34rpx;
+  background: linear-gradient(135deg, $primary-soft, $secondary-soft);
+  margin-bottom: 12rpx;
 }
 
 .sub-name {

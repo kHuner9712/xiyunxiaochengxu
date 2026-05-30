@@ -1,10 +1,14 @@
 <template>
-  <view class="order-detail-page">
+  <view class="order-detail-page page-shell">
     <view class="status-section" :class="getStatusClass(order.status)">
       <text class="status-text">{{ formatOrderStatus(order.status) }}</text>
+      <text class="status-subtext">订单编号 {{ order.orderNo || '-' }}</text>
     </view>
 
     <view v-if="order.addressName" class="address-section card">
+      <view class="section-title-row">
+        <text class="section-title">收货信息</text>
+      </view>
       <view class="address-top">
         <text class="address-name">{{ order.addressName }}</text>
         <text class="address-phone">{{ order.addressPhone }}</text>
@@ -51,6 +55,10 @@
     </view>
 
     <view class="products-section card">
+      <view class="section-title-row">
+        <text class="section-title">商品信息</text>
+        <text class="section-count">共 {{ order.items.length }} 件</text>
+      </view>
       <view v-for="item in order.items" :key="item.id" class="product-item">
         <image class="product-image" :src="item.productImage" mode="aspectFill" />
         <view class="product-info">
@@ -71,6 +79,9 @@
     </view>
 
     <view class="price-section card">
+      <view class="section-title-row">
+        <text class="section-title">金额明细</text>
+      </view>
       <view class="price-row">
         <text class="price-label">商品金额</text>
         <text class="price-value">¥{{ formatPrice(order.totalAmount) }}</text>
@@ -94,6 +105,9 @@
     </view>
 
     <view class="info-section card">
+      <view class="section-title-row">
+        <text class="section-title">订单信息</text>
+      </view>
       <view class="info-row">
         <text class="info-label">订单编号</text>
         <text class="info-value">{{ order.orderNo }}</text>
@@ -112,7 +126,7 @@
       </view>
     </view>
 
-    <view class="bottom-bar" v-if="order.status">
+    <view class="bottom-bar bottom-action-bar" v-if="order.status">
       <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap="handleCancel">取消订单</view>
       <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap="handlePay">去支付</view>
       <view v-if="order.status === 'delivered'" class="action-btn primary" @tap="handleConfirm">确认收货</view>
@@ -268,26 +282,38 @@ onLoad((options) => {
 <style lang="scss" scoped>
 .order-detail-page {
   min-height: 100vh;
-  background: $bg-color;
-  padding-bottom: 120rpx;
+  padding-bottom: 148rpx;
 }
 
 .status-section {
-  padding: $spacing-lg $spacing-md;
-  color: #FFFFFF;
+  margin: $spacing-md;
+  padding: $spacing-lg;
+  border-radius: $radius-xxl;
+  background: linear-gradient(135deg, $primary-soft, $secondary-soft);
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
 
-  &.status-unpaid { background: $warning-color; }
-  &.status-shipping { background: $info-color; }
-  &.status-pickup { background: $primary-color; }
-  &.status-receiving { background: $secondary-color; }
-  &.status-done { background: $success-color; }
-  &.status-cancelled { background: $text-hint; }
-  &.status-aftersale { background: $danger-color; }
+  &.status-unpaid { background: $warning-soft; }
+  &.status-shipping { background: $info-soft; }
+  &.status-pickup { background: $primary-soft; }
+  &.status-receiving { background: $secondary-soft; }
+  &.status-done { background: $success-soft; }
+  &.status-cancelled { background: $bg-gray; }
+  &.status-aftersale { background: $danger-soft; }
 }
 
 .status-text {
   font-size: $font-xl;
-  font-weight: 600;
+  font-weight: 800;
+  color: $text-color;
+  display: block;
+}
+
+.status-subtext {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-xs;
+  color: $text-hint;
 }
 
 .address-section,
@@ -311,7 +337,7 @@ onLoad((options) => {
 
 .pickup-label {
   font-size: $font-md;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
 }
 
@@ -358,9 +384,10 @@ onLoad((options) => {
 }
 
 .pickup-code-box {
-  background: rgba($primary-color, 0.1);
-  padding: 12rpx 32rpx;
-  border-radius: $radius-md;
+  background: $primary-soft;
+  padding: 16rpx 36rpx;
+  border-radius: $radius-xl;
+  box-shadow: inset 0 0 0 1rpx rgba($primary-color, 0.12);
 }
 
 .pickup-code-text {
@@ -380,6 +407,22 @@ onLoad((options) => {
   display: flex;
   align-items: center;
   margin-bottom: 8rpx;
+}
+
+.section-title-row {
+  @include flex-between;
+  margin-bottom: $spacing-sm;
+}
+
+.section-title {
+  font-size: $font-md;
+  color: $text-color;
+  font-weight: 800;
+}
+
+.section-count {
+  font-size: $font-xs;
+  color: $text-hint;
 }
 
 .address-name {
@@ -422,18 +465,19 @@ onLoad((options) => {
 
 .product-item {
   display: flex;
-  align-items: center;
-  padding: $spacing-sm 0;
+  align-items: flex-start;
+  padding: 18rpx 0;
   border-bottom: 1rpx solid $divider-color;
 
   &:last-child { border-bottom: none; }
 }
 
 .product-image {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: $radius-md;
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: $radius-lg;
   flex-shrink: 0;
+  background: $bg-gray;
 }
 
 .product-info {
@@ -445,8 +489,10 @@ onLoad((options) => {
 .product-name {
   font-size: $font-sm;
   color: $text-color;
-  @include text-ellipsis;
+  font-weight: 600;
+  @include text-ellipsis-2;
   display: block;
+  line-height: 1.4;
 }
 
 .product-sku {
@@ -470,10 +516,11 @@ onLoad((options) => {
 .item-aftersale-btn {
   margin-top: 8rpx;
   font-size: $font-xs;
-  color: $primary-color;
-  border: 1rpx solid $primary-color;
+  color: $primary-dark;
+  border: 1rpx solid rgba($primary-color, 0.36);
+  background: $primary-soft;
   border-radius: $radius-round;
-  padding: 4rpx 16rpx;
+  padding: 6rpx 16rpx;
   display: inline-block;
 
   &.disabled {
@@ -522,27 +569,26 @@ onLoad((options) => {
 }
 
 .bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
   justify-content: flex-end;
-  gap: $spacing-sm;
-  background: $bg-white;
-  padding: $spacing-sm $spacing-md;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
-  @include safe-bottom;
+  min-height: 128rpx;
 }
 
 .action-btn {
-  padding: 16rpx 32rpx;
+  min-height: 64rpx;
+  padding: 0 32rpx;
   border-radius: $radius-round;
   font-size: $font-sm;
   color: $text-secondary;
   border: 2rpx solid $border-color;
+  @include flex-center;
+  background: $bg-white;
 
-  &.primary { color: $primary-color; border-color: $primary-color; }
+  &.primary {
+    color: #FFFFFF;
+    border-color: transparent;
+    background: linear-gradient(135deg, $primary-color, $primary-light);
+    font-weight: 700;
+  }
   &.cancel { color: $text-hint; }
 }
 

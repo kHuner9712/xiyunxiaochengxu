@@ -1,16 +1,18 @@
 <template>
-  <view class="order-list-page">
-    <view class="tab-bar">
+  <view class="order-list-page page-shell">
+    <scroll-view scroll-x class="tab-scroll">
+      <view class="tab-bar pill-tab-bar">
       <view
         v-for="tab in tabs"
         :key="tab.value"
-        class="tab-item"
+        class="tab-item pill-tab-item"
         :class="{ active: currentTab === tab.value }"
         @tap="switchTab(tab.value)"
       >
         <text class="tab-text">{{ tab.label }}</text>
       </view>
-    </view>
+      </view>
+    </scroll-view>
 
     <view class="order-list">
       <view v-for="order in orders" :key="order.id" class="order-card card" @tap="goDetail(order.id)">
@@ -30,7 +32,11 @@
           </view>
         </view>
         <view class="order-footer">
-          <text class="order-total">共{{ order.items.length }}件商品 合计：<text class="total-price">¥{{ formatPrice(order.payAmount) }}</text></text>
+          <text class="order-count">共{{ order.items.length }}件商品</text>
+          <view class="order-total">
+            <text class="total-label">合计</text>
+            <text class="total-price">¥{{ formatPrice(order.payAmount) }}</text>
+          </view>
         </view>
         <view class="order-actions">
           <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
@@ -205,38 +211,32 @@ onReachBottom(() => {
 <style lang="scss" scoped>
 .order-list-page {
   min-height: 100vh;
-  background: $bg-color;
+  padding-bottom: $spacing-md;
 }
 
-.tab-bar {
-  display: flex;
-  background: $bg-white;
-  padding: $spacing-sm 0;
+.tab-scroll {
   position: sticky;
   top: 0;
   z-index: 10;
+  white-space: nowrap;
+  background: rgba($bg-color, 0.94);
+  padding: $spacing-sm $spacing-md;
+}
+
+.tab-bar {
+  display: inline-flex;
+  min-width: 100%;
 }
 
 .tab-item {
-  flex: 1;
-  @include flex-center;
-  padding: 16rpx 0;
+  flex: 0 0 auto;
   position: relative;
+  min-width: 112rpx;
 
   &.active {
     .tab-text {
-      color: $primary-color;
-      font-weight: 600;
-    }
-
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      width: 40rpx;
-      height: 4rpx;
-      background: $primary-color;
-      border-radius: 2rpx;
+      color: $primary-dark;
+      font-weight: 700;
     }
   }
 }
@@ -247,7 +247,8 @@ onReachBottom(() => {
 }
 
 .order-card {
-  margin: $spacing-sm $spacing-md;
+  margin: $spacing-sm $spacing-md $spacing-md;
+  padding: $spacing-md;
 }
 
 .order-header {
@@ -265,26 +266,28 @@ onReachBottom(() => {
   font-size: $font-sm;
   font-weight: 500;
 
-  &.status-unpaid { color: $warning-color; }
-  &.status-shipping { color: $info-color; }
-  &.status-pickup { color: $primary-color; }
-  &.status-receiving { color: $secondary-color; }
-  &.status-done { color: $success-color; }
-  &.status-cancelled { color: $text-hint; }
-  &.status-aftersale { color: $danger-color; }
+  @extend .status-badge;
+  &.status-unpaid { @extend .status-warning; }
+  &.status-shipping { @extend .status-info; }
+  &.status-pickup { @extend .status-primary; }
+  &.status-receiving { background: $secondary-soft; color: $secondary-color; }
+  &.status-done { @extend .status-success; }
+  &.status-cancelled { background: $bg-gray; color: $text-hint; }
+  &.status-aftersale { @extend .status-danger; }
 }
 
 .order-product {
   display: flex;
   align-items: center;
-  padding: $spacing-sm 0;
+  padding: 18rpx 0;
 }
 
 .product-image {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: $radius-md;
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: $radius-lg;
   flex-shrink: 0;
+  background: $bg-gray;
 }
 
 .product-info {
@@ -296,8 +299,10 @@ onReachBottom(() => {
 .product-name {
   font-size: $font-sm;
   color: $text-color;
-  @include text-ellipsis;
+  font-weight: 600;
+  @include text-ellipsis-2;
   display: block;
+  line-height: 1.4;
 }
 
 .product-sku {
@@ -319,19 +324,27 @@ onReachBottom(() => {
 }
 
 .order-footer {
-  text-align: right;
+  @include flex-between;
   padding: $spacing-sm 0;
   border-top: 1rpx solid $divider-color;
 }
 
-.order-total {
+.order-count,
+.total-label {
   font-size: $font-sm;
   color: $text-secondary;
 }
 
+.order-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+}
+
 .total-price {
   color: $primary-color;
-  font-weight: 600;
+  font-weight: 800;
+  font-size: $font-lg;
 }
 
 .order-actions {
@@ -342,15 +355,20 @@ onReachBottom(() => {
 }
 
 .action-btn {
-  padding: 12rpx 28rpx;
+  min-height: 60rpx;
+  padding: 0 28rpx;
   border-radius: $radius-round;
   font-size: $font-xs;
   color: $text-secondary;
   border: 2rpx solid $border-color;
+  @include flex-center;
+  background: $bg-white;
 
   &.primary {
-    color: $primary-color;
-    border-color: $primary-color;
+    color: $primary-dark;
+    border-color: rgba($primary-color, 0.36);
+    background: $primary-soft;
+    font-weight: 700;
   }
 
   &.cancel {

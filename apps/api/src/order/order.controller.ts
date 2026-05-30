@@ -48,6 +48,7 @@ export class WeappOrderController {
 
   @Post('pay/:id')
   async pay(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    // Deprecated: legacy compatibility endpoint. New clients must use /weapp/pay/create.
     return { orderId: id, message: '请通过支付模块发起支付' };
   }
 

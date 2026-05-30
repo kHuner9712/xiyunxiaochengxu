@@ -1,5 +1,5 @@
 <template>
-  <view class="address-edit-page">
+  <view class="address-edit-page page-shell">
     <view class="form-section card">
       <view class="form-item">
         <text class="form-label">收货人</text>
@@ -22,7 +22,7 @@
       </view>
       <view class="form-item switch-item">
         <text class="form-label">设为默认地址</text>
-        <switch :checked="form.isDefault" @change="form.isDefault = $event.detail.value" color="#FF6B9D" />
+        <switch :checked="form.isDefault" @change="form.isDefault = $event.detail.value" color="#F47C7C" />
       </view>
     </view>
 
@@ -144,7 +144,6 @@ onLoad((options) => {
 <style lang="scss" scoped>
 .address-edit-page {
   min-height: 100vh;
-  background: $bg-color;
   padding: $spacing-md;
 }
 

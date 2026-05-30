@@ -1,5 +1,5 @@
 <template>
-  <view class="member-page">
+  <view class="member-page page-shell">
     <view class="member-header">
       <view class="member-card">
         <view class="card-top">
@@ -83,18 +83,20 @@ onMounted(() => {
 <style lang="scss" scoped>
 .member-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
 .member-header {
-  background: linear-gradient(135deg, $primary-color, $primary-dark);
-  padding: $spacing-xl $spacing-md;
+  background: linear-gradient(135deg, #FFE5DF 0%, #FFF4E4 60%, #F2FBF7 100%);
+  padding: $spacing-xl $spacing-md $spacing-lg;
+  border-radius: 0 0 $radius-xxl $radius-xxl;
 }
 
 .member-card {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: $radius-xl;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: $radius-xxl;
   padding: $spacing-lg;
+  border: 1rpx solid rgba(255, 255, 255, 0.82);
+  box-shadow: $shadow-md;
 }
 
 .card-top {
@@ -116,14 +118,14 @@ onMounted(() => {
 
 .member-name {
   font-size: $font-lg;
-  color: #FFFFFF;
-  font-weight: 600;
+  color: $text-color;
+  font-weight: 800;
   display: block;
 }
 
 .level-badge {
   display: inline-flex;
-  background: rgba(255, 255, 255, 0.2);
+  background: $primary-soft;
   border-radius: $radius-round;
   padding: 4rpx 16rpx;
   margin-top: 8rpx;
@@ -131,26 +133,26 @@ onMounted(() => {
 
 .level-text {
   font-size: $font-xs;
-  color: #FFFFFF;
+  color: $primary-dark;
 }
 
 .growth-bar {
   height: 12rpx;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba($primary-color, 0.14);
   border-radius: 6rpx;
   overflow: hidden;
 }
 
 .growth-progress {
   height: 100%;
-  background: #FFFFFF;
+  background: linear-gradient(90deg, $primary-color, $secondary-color);
   border-radius: 6rpx;
   transition: width 0.3s;
 }
 
 .growth-text {
   font-size: $font-xs;
-  color: rgba(255, 255, 255, 0.8);
+  color: $text-secondary;
   margin-top: 8rpx;
   display: block;
 }
@@ -161,7 +163,7 @@ onMounted(() => {
 
 .section-title {
   font-size: $font-lg;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-md;
@@ -169,18 +171,24 @@ onMounted(() => {
 
 .rights-list {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: $spacing-md;
 }
 
 .right-item {
   @include flex-center;
   @include flex-column;
+  min-height: 168rpx;
+  border-radius: $radius-xl;
+  background: $bg-soft;
+  padding: $spacing-sm;
 }
 
 .right-icon {
-  width: 64rpx;
-  height: 64rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 28rpx;
+  background: $primary-soft;
   margin-bottom: 8rpx;
 }
 
@@ -194,5 +202,6 @@ onMounted(() => {
   font-size: 20rpx;
   color: $text-hint;
   margin-top: 4rpx;
+  text-align: center;
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <view class="confirm-page">
+  <view class="confirm-page page-shell">
     <view class="delivery-mode-section card">
       <view class="mode-tabs">
         <view class="mode-tab" :class="{ active: fulfillmentType === 'delivery' }" @tap="switchFulfillmentType('delivery')">
@@ -12,6 +12,7 @@
     </view>
 
     <view v-if="fulfillmentType === 'delivery'" class="address-section card" @tap="selectAddress">
+      <view class="address-badge">收</view>
       <view v-if="address" class="address-info">
         <view class="address-top">
           <text class="address-name">{{ address.name }}</text>
@@ -26,6 +27,7 @@
     </view>
 
     <view v-if="fulfillmentType === 'pickup'" class="pickup-section card" @tap="selectPickupStore">
+      <view class="address-badge pickup">提</view>
       <view v-if="selectedPickupStore" class="pickup-info">
         <view class="pickup-top">
           <text class="pickup-name">{{ selectedPickupStore.name }}</text>
@@ -40,6 +42,10 @@
     </view>
 
     <view class="products-section card">
+      <view class="card-title-row">
+        <text class="card-title">商品清单</text>
+        <text class="card-subtitle">共 {{ orderItems.length }} 件</text>
+      </view>
       <view v-for="item in orderItems" :key="item.skuId" class="product-item">
         <image class="product-image" :src="item.productImage" mode="aspectFill" />
         <view class="product-info">
@@ -68,10 +74,13 @@
         <text class="section-label">积分抵扣</text>
         <text class="points-info">可用{{ availablePoints }}积分，抵扣¥{{ formatPrice(pointsDeduct) }}</text>
       </view>
-      <switch :checked="usePoints" @change="togglePoints" color="#FF6B9D" />
+      <switch :checked="usePoints" @change="togglePoints" color="#F47C7C" />
     </view>
 
     <view class="price-section card">
+      <view class="card-title-row">
+        <text class="card-title">金额明细</text>
+      </view>
       <view class="price-row">
         <text class="price-label">商品金额</text>
         <text class="price-value">¥{{ formatPrice(totalProductPrice) }}</text>
@@ -88,6 +97,10 @@
         <text class="price-label">积分抵扣</text>
         <text class="price-value discount">-¥{{ formatPrice(pointsDeduct) }}</text>
       </view>
+      <view class="price-row total">
+        <text class="price-label">应付金额</text>
+        <PriceDisplay :price="payAmount" />
+      </view>
     </view>
 
     <view class="remark-section card">
@@ -96,15 +109,22 @@
     </view>
 
     <view class="legal-section card">
-      <text class="legal-text">提交订单前，请阅读并确认：</text>
-      <text class="legal-link" @tap="openLegalPage('/pages/agreement/index')">《用户协议》</text>
-      <text class="legal-text">、</text>
-      <text class="legal-link" @tap="openLegalPage('/pages/privacy/index')">《隐私政策》</text>
-      <text class="legal-text">、</text>
-      <text class="legal-link" @tap="openLegalPage('/pages/food-safety/index')">《食品安全与售后说明》</text>
+      <checkbox-group class="legal-check-group" @change="toggleLegalAgreement">
+        <label class="legal-check-label">
+          <checkbox class="legal-checkbox" value="agree" :checked="agreedToLegal" color="#F47C7C" />
+          <view class="legal-copy">
+            <text class="legal-text">我已阅读并同意</text>
+            <text class="legal-link" @tap.stop="openLegalPage('/pages/agreement/index')">《用户协议》</text>
+            <text class="legal-text">、</text>
+            <text class="legal-link" @tap.stop="openLegalPage('/pages/privacy/index')">《隐私政策》</text>
+            <text class="legal-text">、</text>
+            <text class="legal-link" @tap.stop="openLegalPage('/pages/food-safety/index')">《食品安全与售后说明》</text>
+          </view>
+        </label>
+      </checkbox-group>
     </view>
 
-    <view class="bottom-bar">
+    <view class="bottom-bar bottom-action-bar">
       <view class="total-row">
         <text class="total-label">合计：</text>
         <PriceDisplay :price="payAmount" />
@@ -191,6 +211,7 @@ const submitting = ref(false)
 const loading = ref(false)
 const preview = ref<OrderPreview | null>(null)
 const couponList = ref<MyCouponItem[]>([])
+const agreedToLegal = ref(false)
 
 const totalProductPrice = computed(() => {
   if (preview.value) return preview.value.totalAmount
@@ -340,6 +361,10 @@ function openLegalPage(url: string) {
   uni.navigateTo({ url })
 }
 
+function toggleLegalAgreement(e: any) {
+  agreedToLegal.value = e.detail.value.includes('agree')
+}
+
 function isUserCancelPayError(err: any): boolean {
   const msg = String(err?.errMsg || err?.message || '').toLowerCase()
   return msg.includes('cancel')
@@ -347,6 +372,10 @@ function isUserCancelPayError(err: any): boolean {
 
 async function handleSubmit() {
   if (submitting.value) return
+  if (!agreedToLegal.value) {
+    uni.showToast({ title: '请先阅读并同意相关协议', icon: 'none' })
+    return
+  }
   if (fulfillmentType.value === 'delivery' && !address.value) {
     uni.showToast({ title: '请选择收货地址', icon: 'none' })
     return
@@ -443,14 +472,14 @@ onLoad(async (options) => {
 <style lang="scss" scoped>
 .confirm-page {
   min-height: 100vh;
-  background: $bg-color;
-  padding-bottom: 120rpx;
+  padding-bottom: 148rpx;
 }
 
 .address-section {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   margin: $spacing-sm $spacing-md;
+  background: linear-gradient(135deg, #FFFFFF 0%, $primary-soft 120%);
 }
 
 .delivery-mode-section {
@@ -466,13 +495,13 @@ onLoad(async (options) => {
   flex: 1;
   @include flex-center;
   padding: 20rpx 0;
-  border: 2rpx solid $border-color;
+  border: 2rpx solid rgba($border-color, 0.9);
   border-radius: $radius-round;
   transition: all 0.3s;
 
   &.active {
-    border-color: $primary-color;
-    background: rgba($primary-color, 0.05);
+    border-color: rgba($primary-color, 0.28);
+    background: $primary-soft;
   }
 }
 
@@ -488,8 +517,27 @@ onLoad(async (options) => {
 
 .pickup-section {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   margin: $spacing-sm $spacing-md;
+  background: linear-gradient(135deg, #FFFFFF 0%, $secondary-soft 120%);
+}
+
+.address-badge {
+  @include flex-center;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 22rpx;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: $font-sm;
+  font-weight: 800;
+  margin-right: $spacing-sm;
+  flex-shrink: 0;
+
+  &.pickup {
+    background: $secondary-soft;
+    color: $secondary-color;
+  }
 }
 
 .pickup-info {
@@ -561,9 +609,25 @@ onLoad(async (options) => {
   margin: $spacing-sm $spacing-md;
 }
 
+.card-title-row {
+  @include flex-between;
+  margin-bottom: $spacing-sm;
+}
+
+.card-title {
+  font-size: $font-md;
+  color: $text-color;
+  font-weight: 800;
+}
+
+.card-subtitle {
+  font-size: $font-xs;
+  color: $text-hint;
+}
+
 .product-item {
   display: flex;
-  padding: $spacing-sm 0;
+  padding: 18rpx 0;
   border-bottom: 1rpx solid $divider-color;
 
   &:last-child {
@@ -572,10 +636,11 @@ onLoad(async (options) => {
 }
 
 .product-image {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: $radius-md;
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: $radius-lg;
   flex-shrink: 0;
+  background: $bg-gray;
 }
 
 .product-info {
@@ -586,6 +651,7 @@ onLoad(async (options) => {
 .product-name {
   font-size: $font-md;
   color: $text-color;
+  font-weight: 600;
   @include text-ellipsis-2;
   display: block;
 }
@@ -658,8 +724,27 @@ onLoad(async (options) => {
 }
 
 .legal-section {
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-start;
+}
+
+.legal-check-group {
+  width: 100%;
+}
+
+.legal-check-label {
+  display: flex;
+  align-items: flex-start;
+}
+
+.legal-checkbox {
+  transform: scale(0.8);
+  margin-right: 8rpx;
+  flex-shrink: 0;
+}
+
+.legal-copy {
+  flex: 1;
+  line-height: 1.8;
 }
 
 .legal-text {
@@ -680,7 +765,13 @@ onLoad(async (options) => {
 
 .price-row {
   @include flex-between;
-  padding: 8rpx 0;
+  padding: 10rpx 0;
+
+  &.total {
+    margin-top: $spacing-xs;
+    padding-top: $spacing-sm;
+    border-top: 1rpx solid $divider-color;
+  }
 }
 
 .price-label {
@@ -698,17 +789,8 @@ onLoad(async (options) => {
 }
 
 .bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  background: $bg-white;
-  padding: $spacing-sm $spacing-md;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
-  @include safe-bottom;
+  justify-content: space-between;
+  min-height: 128rpx;
 }
 
 .total-row {
@@ -725,7 +807,10 @@ onLoad(async (options) => {
 .submit-btn {
   background: linear-gradient(135deg, $primary-color, $primary-light);
   border-radius: $radius-round;
-  padding: 20rpx 48rpx;
+  min-height: 82rpx;
+  padding: 0 56rpx;
+  @include flex-center;
+  box-shadow: 0 10rpx 22rpx rgba(244, 124, 124, 0.2);
 
   &.disabled {
     opacity: 0.6;

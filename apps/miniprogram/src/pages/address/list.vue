@@ -1,5 +1,5 @@
 <template>
-  <view class="address-list-page">
+  <view class="address-list-page page-shell">
     <view class="address-list">
       <view v-for="item in addresses" :key="item.id" class="address-card card" @tap="handleSelect(item)">
         <view class="address-info">
@@ -26,7 +26,7 @@
 
     <Empty v-if="!loading && addresses.length === 0" text="暂无收货地址" actionText="新增地址" @action="addAddress" />
 
-    <view class="bottom-bar">
+    <view class="bottom-bar bottom-action-bar">
       <view class="add-btn" @tap="addAddress">
         <text class="add-text">新增收货地址</text>
       </view>
@@ -111,7 +111,6 @@ onShow(() => {
 <style lang="scss" scoped>
 .address-list-page {
   min-height: 100vh;
-  background: $bg-color;
   padding-bottom: 120rpx;
 }
 
@@ -175,19 +174,15 @@ onShow(() => {
 }
 
 .bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: $spacing-sm $spacing-md;
-  background: $bg-white;
-  @include safe-bottom;
+  justify-content: center;
 }
 
 .add-btn {
   background: linear-gradient(135deg, $primary-color, $primary-light);
   border-radius: $radius-round;
-  padding: 24rpx 0;
+  min-height: 78rpx;
+  padding: 0 120rpx;
+  @include flex-center;
   text-align: center;
 }
 

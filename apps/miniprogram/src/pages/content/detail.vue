@@ -1,5 +1,5 @@
 <template>
-  <view class="content-detail-page">
+  <view class="content-detail-page page-shell">
     <view class="content-header">
       <text class="content-title">{{ content.title }}</text>
       <view class="content-meta">
@@ -60,17 +60,16 @@ onLoad((options) => {
 <style lang="scss" scoped>
 .content-detail-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
 .content-header {
-  background: $bg-white;
   padding: $spacing-lg $spacing-md;
+  background: linear-gradient(180deg, $bg-page, transparent);
 }
 
 .content-title {
   font-size: $font-xl;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   line-height: 1.5;
   display: block;
@@ -79,6 +78,7 @@ onLoad((options) => {
 
 .content-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: $spacing-md;
 }
 
@@ -95,16 +95,17 @@ onLoad((options) => {
 
 .content-video {
   width: 100%;
-  border-radius: $radius-md;
+  border-radius: $radius-xl;
 }
 
 .content-body {
   margin: $spacing-sm $spacing-md;
+  border-radius: $radius-xxl;
 }
 
 .content-rich {
   font-size: $font-md;
-  line-height: 1.8;
+  line-height: 1.95;
   color: $text-color;
 }
 
@@ -117,9 +118,9 @@ onLoad((options) => {
 
 .tag-item {
   font-size: $font-xs;
-  color: $primary-color;
-  background: rgba($primary-color, 0.1);
-  padding: 4rpx 16rpx;
+  color: $primary-dark;
+  background: $primary-soft;
+  padding: 6rpx 16rpx;
   border-radius: $radius-round;
 }
 </style>

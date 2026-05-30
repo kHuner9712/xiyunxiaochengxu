@@ -1,5 +1,5 @@
 <template>
-  <view class="food-safety-page">
+  <view class="food-safety-page page-shell">
     <view class="content-section">
       <text class="section-title">食品安全与售后说明</text>
       <text class="update-date">更新日期：{{ legal.foodSafety.updatedAt }}</text>
@@ -51,17 +51,21 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
 <style lang="scss" scoped>
 .food-safety-page {
   min-height: 100vh;
-  background: $bg-white;
   padding: $spacing-md;
 }
 
 .content-section {
+  background: $bg-white;
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
+  padding: $spacing-lg;
   padding-bottom: 60rpx;
 }
 
 .section-title {
   font-size: $font-xl;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-md;
@@ -76,7 +80,7 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
 
 .section-subtitle {
   font-size: $font-lg;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-top: $spacing-lg;
@@ -86,23 +90,23 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
 .paragraph {
   font-size: $font-md;
   color: $text-secondary;
-  line-height: 1.8;
+  line-height: 1.95;
   display: block;
   margin-bottom: $spacing-xs;
 }
 
 .health-warning {
-  background: #FFF3E0;
-  border: 1rpx solid #FFB74D;
-  border-radius: $radius-md;
+  background: $warning-soft;
+  border: 1rpx solid rgba($warning-color, 0.24);
+  border-radius: $radius-xl;
   padding: $spacing-sm $spacing-md;
   margin: $spacing-sm 0;
 }
 
 .warning-text {
   font-size: $font-md;
-  color: #E65100;
-  font-weight: 600;
+  color: $warning-color;
+  font-weight: 700;
 }
 
 </style>

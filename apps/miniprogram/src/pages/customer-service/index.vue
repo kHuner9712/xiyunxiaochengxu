@@ -1,5 +1,5 @@
 <template>
-  <view class="cs-page">
+  <view class="cs-page page-shell">
     <view v-if="config.notice" class="notice-section card">
       <text class="notice-text">{{ config.notice }}</text>
     </view>
@@ -7,7 +7,7 @@
     <view class="entry-section card">
       <view v-if="config.type === 'wechat' || config.type === 'both'" class="entry-item" @tap="handleWechat">
         <view class="entry-icon-wrap wechat">
-          <text class="entry-icon-text">💬</text>
+          <text class="entry-icon-text">微</text>
         </view>
         <view class="entry-info">
           <text class="entry-name">微信客服</text>
@@ -18,7 +18,7 @@
 
       <view v-if="config.type === 'phone' || config.type === 'both'" class="entry-item" @tap="handlePhone">
         <view class="entry-icon-wrap phone">
-          <text class="entry-icon-text">📞</text>
+          <text class="entry-icon-text">电</text>
         </view>
         <view class="entry-info">
           <text class="entry-name">电话客服</text>
@@ -29,7 +29,7 @@
 
       <view v-if="config.serviceTime" class="entry-item">
         <view class="entry-icon-wrap time">
-          <text class="entry-icon-text">🕐</text>
+          <text class="entry-icon-text">时</text>
         </view>
         <view class="entry-info">
           <text class="entry-name">服务时间</text>
@@ -139,12 +139,12 @@ onMounted(() => {
 <style lang="scss" scoped>
 .cs-page {
   min-height: 100vh;
-  background: $bg-color;
   padding: $spacing-md;
 }
 
 .notice-section {
-  background: rgba($warning-color, 0.1);
+  background: $warning-soft;
+  border: 1rpx solid rgba($warning-color, 0.18);
   margin-bottom: $spacing-md;
 }
 
@@ -156,6 +156,7 @@ onMounted(() => {
 
 .entry-section {
   margin-bottom: $spacing-md;
+  border-radius: $radius-xxl;
 }
 
 .entry-item {
@@ -169,9 +170,9 @@ onMounted(() => {
 }
 
 .entry-icon-wrap {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: $radius-lg;
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 28rpx;
   @include flex-center;
   margin-right: $spacing-md;
 
@@ -181,7 +182,9 @@ onMounted(() => {
 }
 
 .entry-icon-text {
-  font-size: 36rpx;
+  font-size: $font-md;
+  font-weight: 800;
+  color: $text-secondary;
 }
 
 .entry-info {
@@ -191,6 +194,7 @@ onMounted(() => {
 .entry-name {
   font-size: $font-md;
   color: $text-color;
+  font-weight: 700;
   display: block;
 }
 
@@ -214,7 +218,7 @@ onMounted(() => {
 
 .section-title {
   font-size: $font-md;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-md;
@@ -222,7 +226,8 @@ onMounted(() => {
 
 .qrcode-image {
   width: 360rpx;
-  border-radius: $radius-md;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-sm;
 }
 
 .qrcode-tip {
@@ -251,6 +256,7 @@ onMounted(() => {
 .faq-q-text {
   font-size: $font-md;
   color: $text-color;
+  font-weight: 600;
   flex: 1;
 }
 

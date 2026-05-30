@@ -1,6 +1,8 @@
 <template>
-  <view class="activity-detail-page">
-    <image class="activity-banner" :src="activity.image" mode="aspectFill" />
+  <view class="activity-detail-page page-shell">
+    <view class="banner-wrap">
+      <image class="activity-banner" :src="activity.image" mode="aspectFill" />
+    </view>
 
     <view class="activity-info card">
       <text class="activity-name">{{ activity.name }}</text>
@@ -52,22 +54,29 @@ onLoad((options) => {
 <style lang="scss" scoped>
 .activity-detail-page {
   min-height: 100vh;
-  background: $bg-color;
   padding-bottom: 40rpx;
+}
+
+.banner-wrap {
+  padding: $spacing-md $spacing-md 0;
 }
 
 .activity-banner {
   width: 100%;
-  height: 400rpx;
+  height: 420rpx;
+  border-radius: $radius-xxl;
+  background: $bg-gray;
+  box-shadow: $shadow-sm;
 }
 
 .activity-info {
-  margin: $spacing-sm $spacing-md;
+  margin: $spacing-md $spacing-md $spacing-sm;
+  border-radius: $radius-xxl;
 }
 
 .activity-name {
   font-size: $font-xl;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-sm;
@@ -80,7 +89,7 @@ onLoad((options) => {
 .activity-desc {
   font-size: $font-sm;
   color: $text-secondary;
-  line-height: 1.6;
+  line-height: 1.8;
 }
 
 .rules-section {
@@ -89,7 +98,7 @@ onLoad((options) => {
 
 .section-title {
   font-size: $font-lg;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-sm;
@@ -98,6 +107,6 @@ onLoad((options) => {
 .rules-content {
   font-size: $font-sm;
   color: $text-secondary;
-  line-height: 1.6;
+  line-height: 1.8;
 }
 </style>

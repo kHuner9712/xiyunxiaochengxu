@@ -1,5 +1,5 @@
 <template>
-  <view class="pickup-store-page">
+  <view class="pickup-store-page page-shell">
     <view v-for="store in storeList" :key="store.id" class="store-card card" @tap="selectStore(store)">
       <view class="store-name">{{ store.name }}</view>
       <view class="store-address">{{ store.fullAddress }}</view>
@@ -72,7 +72,6 @@ onReachBottom(() => loadStores())
 <style lang="scss" scoped>
 .pickup-store-page {
   min-height: 100vh;
-  background: $bg-color;
   padding: $spacing-sm $spacing-md;
 }
 

@@ -7,21 +7,21 @@
     <view class="product-info">
       <text class="product-name">{{ product.name }}</text>
       <view class="product-price-row">
-        <view class="product-price">
-          <text class="price-symbol">¥</text>
-          <text class="price-value">{{ formatPrice(product.price) }}</text>
-        </view>
+        <PriceDisplay :price="product.price" size="small" />
         <text v-if="product.originalPrice > product.price" class="product-original-price">
           ¥{{ formatPrice(product.originalPrice) }}
         </text>
       </view>
-      <text class="product-sales">已售{{ product.sales || 0 }}件</text>
+      <view class="product-meta">
+        <text class="product-sales">已售{{ product.sales || 0 }}件</text>
+      </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { formatPrice } from '@/utils/format'
+import PriceDisplay from '@/components/PriceDisplay.vue'
 
 interface ProductCardItem {
   id: number
@@ -45,9 +45,16 @@ function handleTap() {
 <style lang="scss" scoped>
 .product-card {
   background: $bg-white;
-  border-radius: $radius-lg;
+  border-radius: $radius-xl;
   overflow: hidden;
+  border: 1rpx solid rgba($border-color, 0.72);
   box-shadow: $shadow-sm;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+
+  &:active {
+    transform: scale(0.985);
+    box-shadow: none;
+  }
 }
 
 .product-image-wrap {
@@ -61,49 +68,39 @@ function handleTap() {
     left: 0;
     width: 100%;
     height: 100%;
+    background: $bg-gray;
   }
 
   .product-tag {
     position: absolute;
     top: 8rpx;
     left: 8rpx;
-    background: $primary-color;
-    color: #fff;
+    background: rgba(255, 255, 255, 0.92);
+    color: $primary-dark;
     font-size: $font-xs;
-    padding: 4rpx 12rpx;
-    border-radius: $radius-sm;
+    padding: 6rpx 14rpx;
+    border-radius: $radius-round;
+    box-shadow: $shadow-sm;
   }
 }
 
 .product-info {
-  padding: $spacing-sm;
+  padding: 18rpx 18rpx 20rpx;
 }
 
 .product-name {
   font-size: $font-md;
   color: $text-color;
+  font-weight: 600;
   @include text-ellipsis-2;
   line-height: 1.4;
-  height: 78rpx;
+  min-height: 78rpx;
 }
 
 .product-price-row {
   display: flex;
   align-items: baseline;
-  margin-top: $spacing-xs;
-}
-
-.product-price {
-  color: $primary-color;
-  font-weight: 700;
-
-  .price-symbol {
-    font-size: $font-xs;
-  }
-
-  .price-value {
-    font-size: $font-lg;
-  }
+  margin-top: 12rpx;
 }
 
 .product-original-price {
@@ -116,6 +113,9 @@ function handleTap() {
 .product-sales {
   font-size: $font-xs;
   color: $text-hint;
-  margin-top: 4rpx;
+}
+
+.product-meta {
+  margin-top: 8rpx;
 }
 </style>

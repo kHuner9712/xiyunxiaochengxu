@@ -1,5 +1,9 @@
 <template>
-  <view class="baby-edit-page">
+  <view class="baby-edit-page page-shell">
+    <view class="intro-card card">
+      <text class="intro-title">{{ isEdit ? '编辑宝宝档案' : '添加宝宝档案' }}</text>
+      <text class="intro-desc">用于更准确的月龄推荐，信息仅在小程序服务内使用。</text>
+    </view>
     <view class="form-section card">
       <view class="form-item">
         <text class="form-label">昵称</text>
@@ -112,12 +116,31 @@ onLoad((options) => {
 <style lang="scss" scoped>
 .baby-edit-page {
   min-height: 100vh;
-  background: $bg-color;
   padding: $spacing-md;
+}
+
+.intro-card {
+  background: linear-gradient(135deg, #FFFFFF, $primary-soft);
+}
+
+.intro-title {
+  display: block;
+  font-size: $font-xl;
+  font-weight: 800;
+  color: $text-color;
+}
+
+.intro-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-hint;
+  line-height: 1.5;
 }
 
 .form-section {
   margin-bottom: $spacing-lg;
+  border-radius: $radius-xxl;
 }
 
 .form-item {
@@ -134,11 +157,15 @@ onLoad((options) => {
   color: $text-color;
   width: 120rpx;
   flex-shrink: 0;
+  font-weight: 700;
 }
 
 .form-input {
   flex: 1;
   font-size: $font-md;
+  background: $bg-gray;
+  border-radius: $radius-lg;
+  padding: 16rpx 20rpx;
 }
 
 .form-value {
@@ -155,15 +182,17 @@ onLoad((options) => {
 }
 
 .gender-option {
-  padding: 12rpx 32rpx;
+  min-height: 60rpx;
+  padding: 0 32rpx;
   border-radius: $radius-round;
   border: 2rpx solid $border-color;
+  @include flex-center;
 
   &.active {
-    background: rgba($primary-color, 0.1);
-    border-color: $primary-color;
+    background: $primary-soft;
+    border-color: rgba($primary-color, 0.34);
 
-    .gender-text { color: $primary-color; }
+    .gender-text { color: $primary-dark; font-weight: 700; }
   }
 }
 
@@ -176,9 +205,11 @@ onLoad((options) => {
   width: 120rpx;
   height: 120rpx;
   border-radius: 50%;
-  background: $bg-gray;
+  background: $primary-soft;
   @include flex-center;
   overflow: hidden;
+  border: 4rpx solid #FFFFFF;
+  box-shadow: $shadow-sm;
 }
 
 .avatar-preview {

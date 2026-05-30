@@ -1,5 +1,5 @@
 <template>
-  <view class="user-page">
+  <view class="user-page page-shell">
     <view class="user-header">
       <view class="user-info" @tap="goProfile">
         <image class="user-avatar" :src="userStore.avatar || '/static/default-avatar.png'" mode="aspectFill" />
@@ -28,27 +28,27 @@
       </view>
       <view class="order-shortcuts">
         <view class="shortcut-item" @tap="goOrderList('pending_payment')">
-          <view class="shortcut-icon">💰</view>
+          <view class="shortcut-icon">付</view>
           <text class="shortcut-text">待付款</text>
           <view v-if="orderCount.unpaid" class="shortcut-badge">{{ orderCount.unpaid }}</view>
         </view>
         <view class="shortcut-item" @tap="goOrderList('pending_delivery')">
-          <view class="shortcut-icon">📦</view>
+          <view class="shortcut-icon">发</view>
           <text class="shortcut-text">待发货</text>
           <view v-if="orderCount.unshipped" class="shortcut-badge">{{ orderCount.unshipped }}</view>
         </view>
         <view class="shortcut-item" @tap="goOrderList('pending_pickup')">
-          <view class="shortcut-icon">🏬</view>
+          <view class="shortcut-icon">提</view>
           <text class="shortcut-text">待自提</text>
           <view v-if="orderCount.pendingPickup" class="shortcut-badge">{{ orderCount.pendingPickup }}</view>
         </view>
         <view class="shortcut-item" @tap="goOrderList('delivered')">
-          <view class="shortcut-icon">🚚</view>
+          <view class="shortcut-icon">收</view>
           <text class="shortcut-text">待收货</text>
           <view v-if="orderCount.unreceived" class="shortcut-badge">{{ orderCount.unreceived }}</view>
         </view>
         <view class="shortcut-item" @tap="goOrderList('aftersale')">
-          <view class="shortcut-icon">🔄</view>
+          <view class="shortcut-icon">售</view>
           <text class="shortcut-text">售后</text>
           <view v-if="orderCount.aftersale" class="shortcut-badge">{{ orderCount.aftersale }}</view>
         </view>
@@ -240,12 +240,12 @@ onShow(() => {
 <style lang="scss" scoped>
 .user-page {
   min-height: 100vh;
-  background: $bg-color;
 }
 
 .user-header {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
-  padding: 60rpx $spacing-md 40rpx;
+  background: linear-gradient(135deg, #FFE5DF 0%, #FFF7EF 52%, #F2FBF7 100%);
+  padding: 68rpx $spacing-md 58rpx;
+  border-radius: 0 0 $radius-xxl $radius-xxl;
 }
 
 .user-info {
@@ -257,7 +257,8 @@ onShow(() => {
   width: 120rpx;
   height: 120rpx;
   border-radius: 50%;
-  border: 4rpx solid rgba(255, 255, 255, 0.5);
+  border: 4rpx solid rgba(255, 255, 255, 0.9);
+  box-shadow: $shadow-sm;
 }
 
 .user-detail {
@@ -266,14 +267,14 @@ onShow(() => {
 
 .user-name {
   font-size: $font-xl;
-  color: #FFFFFF;
-  font-weight: 600;
+  color: $text-color;
+  font-weight: 800;
   display: block;
 }
 
 .member-badge {
   display: inline-flex;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba($primary-color, 0.12);
   border-radius: $radius-round;
   padding: 4rpx 16rpx;
   margin-top: 8rpx;
@@ -281,19 +282,19 @@ onShow(() => {
 
 .member-text {
   font-size: $font-xs;
-  color: #FFFFFF;
+  color: $primary-dark;
 }
 
 .login-btn {
   margin-top: $spacing-md;
-  background: rgba(255, 255, 255, 0.2);
+  background: $bg-white;
   border-radius: $radius-round;
   padding: 16rpx 48rpx;
   display: inline-flex;
 }
 
 .login-text {
-  color: #FFFFFF;
+  color: $primary-dark;
   font-size: $font-md;
 }
 
@@ -302,12 +303,12 @@ onShow(() => {
 }
 
 .agreement-prefix {
-  color: rgba(255, 255, 255, 0.9);
+  color: $text-secondary;
   font-size: $font-xs;
 }
 
 .agreement-link {
-  color: #FFFFFF;
+  color: $primary-dark;
   font-size: $font-xs;
   text-decoration: underline;
   margin: 0 6rpx;
@@ -346,7 +347,14 @@ onShow(() => {
 }
 
 .shortcut-icon {
-  font-size: 48rpx;
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 26rpx;
+  @include flex-center;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: $font-md;
+  font-weight: 800;
   margin-bottom: 8rpx;
 }
 

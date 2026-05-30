@@ -139,17 +139,17 @@ watch(() => [props.specs, props.skus], () => {
 
 <style lang="scss" scoped>
 .sku-selector {
-  padding: $spacing-md;
+  padding: $spacing-sm 0;
 }
 
 .spec-group {
-  margin-bottom: $spacing-md;
+  margin-bottom: $spacing-lg;
 }
 
 .spec-name {
   font-size: $font-md;
   color: $text-color;
-  font-weight: 500;
+  font-weight: 700;
   margin-bottom: $spacing-sm;
   display: block;
 }
@@ -161,44 +161,58 @@ watch(() => [props.specs, props.skus], () => {
 }
 
 .spec-value {
-  padding: 12rpx 28rpx;
+  min-height: 64rpx;
+  padding: 0 30rpx;
   font-size: $font-sm;
   color: $text-secondary;
   background: $bg-gray;
-  border-radius: $radius-md;
-  border: 2rpx solid transparent;
+  border-radius: $radius-round;
+  border: 2rpx solid rgba($border-color, 0.86);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
   &.active {
-    color: $primary-color;
-    background: rgba($primary-color, 0.08);
-    border-color: $primary-color;
+    color: $primary-dark;
+    background: $primary-soft;
+    border-color: rgba($primary-color, 0.34);
+    font-weight: 700;
   }
 
   &.disabled {
     color: $text-disabled;
-    background: $bg-gray;
+    background: rgba($bg-gray, 0.62);
+    border-color: rgba($border-color, 0.5);
     text-decoration: line-through;
   }
 }
 
 .sku-quantity {
   @include flex-between;
-  margin-top: $spacing-md;
+  min-height: 88rpx;
+  margin-top: $spacing-sm;
+  padding-top: $spacing-md;
+  border-top: 1rpx solid $divider-color;
 }
 
 .quantity-control {
   display: flex;
   align-items: center;
+  min-height: 64rpx;
+  background: $bg-gray;
+  border-radius: $radius-round;
+  padding: 6rpx;
 }
 
 .quantity-btn {
   @include flex-center;
   width: 56rpx;
   height: 56rpx;
-  background: $bg-gray;
-  border-radius: $radius-sm;
+  background: $bg-white;
+  border-radius: $radius-round;
   font-size: $font-lg;
-  color: $text-color;
+  color: $primary-dark;
+  font-weight: 700;
 }
 
 .quantity-value {

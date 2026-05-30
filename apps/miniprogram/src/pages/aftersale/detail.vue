@@ -1,5 +1,5 @@
 <template>
-  <view class="aftersale-detail-page">
+  <view class="aftersale-detail-page page-shell">
     <view class="status-section" :class="getStatusClass(detail.status)">
       <text class="status-text">{{ formatAftersaleStatus(detail.status) }}</text>
     </view>
@@ -54,7 +54,7 @@
       </view>
     </view>
 
-    <view v-if="detail.status === 10" class="bottom-bar">
+    <view v-if="detail.status === 10" class="bottom-bar bottom-action-bar">
       <view class="cs-btn" @tap="goCustomerService">联系客服</view>
       <view class="cancel-btn" @tap="handleCancel">取消申请</view>
     </view>
@@ -126,24 +126,27 @@ onLoad((options) => {
 <style lang="scss" scoped>
 .aftersale-detail-page {
   min-height: 100vh;
-  background: $bg-color;
-  padding-bottom: 120rpx;
+  padding-bottom: 148rpx;
 }
 
 .status-section {
-  padding: $spacing-lg $spacing-md;
-  color: #FFFFFF;
+  margin: $spacing-md;
+  padding: $spacing-lg;
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: $shadow-sm;
 
-  &.pending { background: $warning-color; }
-  &.processing { background: $info-color; }
-  &.completed { background: $success-color; }
-  &.rejected { background: $danger-color; }
-  &.cancelled { background: $text-hint; }
+  &.pending { background: $warning-soft; }
+  &.processing { background: $info-soft; }
+  &.completed { background: $success-soft; }
+  &.rejected { background: $danger-soft; }
+  &.cancelled { background: $bg-gray; }
 }
 
 .status-text {
   font-size: $font-xl;
-  font-weight: 600;
+  font-weight: 800;
+  color: $text-color;
 }
 
 .progress-section,
@@ -154,7 +157,7 @@ onLoad((options) => {
 
 .section-title {
   font-size: $font-md;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
   display: block;
   margin-bottom: $spacing-md;
@@ -189,7 +192,7 @@ onLoad((options) => {
   border-radius: 50%;
   background: $border-color;
 
-  &.active { background: $primary-color; }
+  &.active { background: $primary-color; box-shadow: 0 0 0 8rpx rgba($primary-color, 0.12); }
 }
 
 .progress-info {
@@ -200,6 +203,7 @@ onLoad((options) => {
   font-size: $font-sm;
   color: $text-color;
   display: block;
+  line-height: 1.5;
 }
 
 .progress-time {
@@ -211,13 +215,15 @@ onLoad((options) => {
 
 .product-row {
   display: flex;
+  align-items: flex-start;
 }
 
 .product-image {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: $radius-md;
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: $radius-lg;
   flex-shrink: 0;
+  background: $bg-gray;
 }
 
 .product-info {
@@ -228,8 +234,10 @@ onLoad((options) => {
 .product-name {
   font-size: $font-sm;
   color: $text-color;
-  @include text-ellipsis;
+  font-weight: 600;
+  @include text-ellipsis-2;
   display: block;
+  line-height: 1.4;
 }
 
 .product-sku {
@@ -270,8 +278,10 @@ onLoad((options) => {
 .info-value {
   font-size: $font-sm;
   color: $text-color;
+  text-align: right;
+  max-width: 460rpx;
 
-  &.price { color: $primary-color; font-weight: 600; }
+  &.price { color: $primary-color; font-weight: 800; }
 }
 
 .image-list {
@@ -284,35 +294,31 @@ onLoad((options) => {
 .evidence-image {
   width: 160rpx;
   height: 160rpx;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
 }
 
 .bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
   justify-content: center;
-  padding: $spacing-sm $spacing-md;
-  background: $bg-white;
-  @include safe-bottom;
 }
 
 .cancel-btn {
-  padding: 20rpx 80rpx;
+  min-height: 76rpx;
+  padding: 0 80rpx;
   border: 2rpx solid $border-color;
   border-radius: $radius-round;
   font-size: $font-md;
   color: $text-secondary;
+  @include flex-center;
 }
 
 .cs-btn {
-  padding: 20rpx 80rpx;
+  min-height: 76rpx;
+  padding: 0 80rpx;
   background: linear-gradient(135deg, $primary-color, $primary-light);
   border-radius: $radius-round;
   font-size: $font-md;
   color: #FFFFFF;
   margin-right: $spacing-sm;
+  @include flex-center;
 }
 </style>
