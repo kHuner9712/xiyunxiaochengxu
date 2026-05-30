@@ -111,14 +111,14 @@ onMounted(() => {
 }
 
 .status-text {
+  @include status-badge;
   font-size: $font-sm;
   font-weight: 500;
-  @extend .status-badge;
 
-  &.pending { @extend .status-warning; }
-  &.processing { @extend .status-info; }
-  &.completed { @extend .status-success; }
-  &.rejected { @extend .status-danger; }
+  &.pending { @include status-warning; }
+  &.processing { @include status-info; }
+  &.completed { @include status-success; }
+  &.rejected { @include status-danger; }
   &.cancelled { background: $bg-gray; color: $text-hint; }
 }
 

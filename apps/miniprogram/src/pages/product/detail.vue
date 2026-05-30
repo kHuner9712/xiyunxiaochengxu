@@ -40,7 +40,7 @@
       </view>
     </view>
 
-    <view class="sku-section card" @tap="openSkuPopup('cart')">
+    <view class="sku-section card" @tap="openSkuPopup('select')">
       <text class="section-label">规格</text>
       <text class="section-value">{{ currentSku?.specText || '请选择规格' }}</text>
       <text class="section-arrow">›</text>
@@ -139,7 +139,7 @@
       </view>
     </view>
 
-    <uni-popup ref="skuPopup" type="bottom" @change="onSkuPopupChange">
+    <BottomSheet v-model:show="showSkuPopup">
       <view class="sku-popup">
         <view class="sku-header">
           <image class="sku-image" :src="currentSku?.image || primaryImage" mode="aspectFill" />
@@ -153,7 +153,7 @@
           <text class="confirm-text">确定</text>
         </view>
       </view>
-    </uni-popup>
+    </BottomSheet>
   </view>
 </template>
 
@@ -167,7 +167,10 @@ import { formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 import ProductCard from '@/components/ProductCard.vue'
 import SkuSelector from '@/components/SkuSelector.vue'
+import BottomSheet from '@/components/BottomSheet.vue'
 import { ensureSellableSkuSelection } from './sku-popup.logic'
+
+type SkuAction = 'select' | 'cart' | 'buy'
 
 const product = ref<ProductDetail>({
   id: 0, name: '', subtitle: '', images: [], price: 0, originalPrice: 0,
@@ -175,11 +178,10 @@ const product = ref<ProductDetail>({
 })
 const recommendProducts = ref<any[]>([])
 const showSkuPopup = ref(false)
-const skuPopup = ref<any>(null)
 const currentSku = ref<SkuItem | null>(null)
 const selectedSkuId = ref(0)
 const selectedQuantity = ref(1)
-const skuAction = ref<'cart' | 'buy'>('cart')
+const skuAction = ref<SkuAction>('select')
 
 const cartStore = useCartStore()
 const userStore = useUserStore()
@@ -235,11 +237,7 @@ function getDefaultSellableSku() {
   return product.value.skus.find((sku) => sku.stock > 0) || product.value.skus[0] || null
 }
 
-function onSkuPopupChange(e: { show?: boolean }) {
-  showSkuPopup.value = !!e?.show
-}
-
-function openSkuPopup(action: 'cart' | 'buy') {
+function openSkuPopup(action: SkuAction) {
   if (!canPurchase.value) {
     uni.showToast({ title: product.value.status !== undefined && product.value.status !== 1 ? '商品已下架' : '库存不足', icon: 'none' })
     return
@@ -252,9 +250,6 @@ function openSkuPopup(action: 'cart' | 'buy') {
   }
   onSkuChange(result.sku.id, 1)
   showSkuPopup.value = true
-  if (typeof skuPopup.value?.open === 'function') {
-    skuPopup.value.open('bottom')
-  }
 }
 
 function handleAddCart() {
@@ -282,8 +277,11 @@ async function confirmSku() {
     uni.showToast({ title: '商品暂无可售规格', icon: 'none' })
     return
   }
-  skuPopup.value?.close?.()
   showSkuPopup.value = false
+
+  if (skuAction.value === 'select') {
+    return
+  }
 
   if (skuAction.value === 'cart') {
     userStore.requireLogin(async () => {
@@ -411,8 +409,8 @@ onLoad((options) => {
 }
 
 .product-tag {
-  @extend .tag;
-  @extend .tag-primary;
+  @include tag-base;
+  @include status-primary;
 }
 
 .service-section {
@@ -511,7 +509,7 @@ onLoad((options) => {
 }
 
 .bottom-bar {
-  @extend .bottom-action-bar;
+  @include bottom-action-bar;
   display: flex;
   align-items: center;
   min-height: 128rpx;

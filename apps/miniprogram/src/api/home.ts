@@ -32,7 +32,7 @@ export interface QuickEntry {
 }
 
 export interface ProductItem {
-  id: number
+  id: string | number
   name: string
   image: string
   price: number

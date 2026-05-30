@@ -1,5 +1,12 @@
 # 预生产真机验收记录表（PREPROD_ACCEPTANCE_RECORD）
 
+当前状态（2026-05-31 +08:00）：
+
+- 本文件仍为待填写的预生产/真机验收记录，未实际执行的项目不得填写通过。
+- 本地 `pnpm release:check` 已真实执行通过，可在执行记录中填写实际结果。
+- `pnpm release:check:prod`、GitHub Actions、真实数据库 `prisma migrate deploy`、微信开发者工具上传体验版、真机支付/退款/售后/自提链路仍待预生产阶段核验。
+- 真实 AppID、密钥、证书、资质、客服电话、客服微信、退货地址属于人工部署/运营配置，不在本表中伪造结果。
+
 使用说明：每次预生产验收按行填写“实际结果 / 是否通过 / 截图链接 / 备注”，保留完整留痕。
 
 | 验收模块 | 验收项 | 操作步骤 | 预期结果 | 实际结果 | 是否通过 | 截图/录屏链接 | 备注 |
@@ -26,3 +33,5 @@
 | 协议 | 隐私政策/用户协议/食品安全说明 | 从小程序入口访问协议页 | 页面可访问、无 TODO/暂定占位 |  |  |  |  |
 | 发布门禁 | `release-check` 结果 | 执行 `pnpm release:check` | 默认门禁通过 |  |  |  |  |
 | 发布门禁 | `release:check:prod` 结果 | 执行 `pnpm release:check:prod` | 若缺真实 AppID/最终联系方式则失败（正确阻断） |  |  |  |  |
+| 发布门禁 | GitHub Actions 结果 | 查看本次冻结 commit 对应 Actions run | run 完成且所有必需检查通过 |  |  |  | 未取得可核验 run 前填写“待核验” |
+| 数据库 | 真实数据库迁移 | 在预生产/生产数据库执行 `pnpm --filter @baby-mall/api prisma migrate deploy` | 迁移成功，schema 与 migration 一致 |  |  |  | 未连接真实数据库前填写“待核验” |

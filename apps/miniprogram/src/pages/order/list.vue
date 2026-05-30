@@ -263,17 +263,17 @@ onReachBottom(() => {
 }
 
 .order-status {
+  @include status-badge;
   font-size: $font-sm;
   font-weight: 500;
 
-  @extend .status-badge;
-  &.status-unpaid { @extend .status-warning; }
-  &.status-shipping { @extend .status-info; }
-  &.status-pickup { @extend .status-primary; }
+  &.status-unpaid { @include status-warning; }
+  &.status-shipping { @include status-info; }
+  &.status-pickup { @include status-primary; }
   &.status-receiving { background: $secondary-soft; color: $secondary-color; }
-  &.status-done { @extend .status-success; }
+  &.status-done { @include status-success; }
   &.status-cancelled { background: $bg-gray; color: $text-hint; }
-  &.status-aftersale { @extend .status-danger; }
+  &.status-aftersale { @include status-danger; }
 }
 
 .order-product {

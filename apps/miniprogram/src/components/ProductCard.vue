@@ -24,7 +24,7 @@ import { formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
 interface ProductCardItem {
-  id: number
+  id: string | number
   name: string
   image: string
   price: number

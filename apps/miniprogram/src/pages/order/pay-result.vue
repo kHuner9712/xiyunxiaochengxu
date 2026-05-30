@@ -327,7 +327,7 @@ onUnload(() => {
 
 .btn-outline {
   flex: 1;
-  @extend .ghost-pill-btn;
+  @include ghost-pill-btn;
 }
 
 .btn-text {
@@ -337,7 +337,7 @@ onUnload(() => {
 
 .btn-primary {
   flex: 1;
-  @extend .primary-pill-btn;
+  @include primary-pill-btn;
 }
 
 .btn-text-white {

@@ -203,8 +203,8 @@ onMounted(() => {
 }
 
 .coupon-status {
+  @include status-badge;
   font-size: $font-xs;
-  @extend .status-badge;
 
   &.used { background: $bg-gray; color: $text-hint; }
   &.expired { background: $danger-soft; color: $danger-color; }

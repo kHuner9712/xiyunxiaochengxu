@@ -89,7 +89,6 @@ import { getHomeData, getGuessProducts, type BannerItem, type QuickEntry, type P
 import { useUserStore } from '@/stores/user'
 import ProductCard from '@/components/ProductCard.vue'
 import CountdownTimer from '@/components/CountdownTimer.vue'
-import CustomerServiceButton from '@/components/CustomerServiceButton.vue'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 

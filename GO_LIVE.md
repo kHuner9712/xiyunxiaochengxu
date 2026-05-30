@@ -1,75 +1,110 @@
-# 禧孕小程序 GO_LIVE 状态（2026-05-30 19:00:00 +08:00）
+# 禧孕小程序 GO_LIVE 状态（2026-05-31 +08:00）
 
 ## 1. 当前结论
 
-- 结论：**可进入预生产部署，不可正式发布（No-Go for Production）**
-- 说明：本地默认门禁可通过；生产严格门禁在缺真实AppID与最终联系方式前应保持失败（正确阻断）。
-- 新增说明：PaymentCompensationTask Prisma model已完整落地（schema+migrations+Client+tests），支付补偿任务业务逻辑已完整实现（create+find+list+resolve+幂等性保证）。
-- 真实性口径更新：
-  - 本地 `pnpm release:check`：已真实执行并通过（104 PASS, 0 FAIL, 10 WARN）。
-  - GitHub Actions CI：已推送 CI 触发提交（`8b1d483`），但当前执行环境无法获取可核验 run URL（`gh` 未登录且匿名 GitHub API 限流），暂记“待核验”。
-  - 空库 `prisma migrate deploy`：未通过（本机 MySQL/Docker daemon 不可用，无法完成空库链路验证）。
-  - 已有库 `prisma migrate deploy`：未通过（`localhost:3306` 不可达）。
-  - `pnpm release:check:prod`：未执行（需真实生产环境变量和证书）。
+- 结论：**代码层面可冻结，允许进入预生产部署；正式发布仍为 No-Go。**
+- 当前 HEAD：`57874a9d9882fbb73a6b77218488dd5524b05dbf`
+- 代码冻结版本说明：当前工作区仍包含未提交的最终代码修复与文档更新；正式冻结前必须提交并以提交后的最终 commit sha 为准。
+- 说明：真实生产发布仍依赖真实 AppID、生产 API 地址、微信支付配置、证书、HTTPS、数据库迁移、微信开发者工具上传体验版、真机完整验收与运营/法务信息确认。
+- 人工配置项不作为代码冻结失败项：真实 AppID、密钥、证书、资质图片、客服电话、客服微信、退货地址仍由部署/运营阶段补齐，不在仓库中编造。
 
-## 2. 代码完成项（已完成）
+## 2. 本次已完成代码修复
 
-1. PaymentCompensationTask model已完整实现到schema.prisma，包含：
-   - 所有必要字段（id, orderNo, transactionId, amount, reason, status, callbackPayload, handledBy, handledAt, resolution, createdAt, updatedAt）
-   - 复合唯一约束（orderNo+reason+transactionId）
-   - 必要索引（orderNo, transactionId, status, createdAt）
-2. 对应数据库迁移已完整生成，共15个迁移文件（最新为20260529173000_align_payment_compensation_task_schema）
-3. Prisma Client已重新生成，类型安全完整
-4. 支付补偿任务API（service+controller+admin前端）已完整实现
-5. 所有单元测试+e2e测试已通过（397个单元测试+20个e2e测试）
-6. 所有构建（api/admin/mini）已通过
-7. release-check完整门禁已通过（104 PASS, 0 FAIL, 10 WARN）
+- 订单详情物流信息链路已补齐：`logisticsInfo` / `deliveredAt` 展示与后端返回保持一致。
+- 微信 `access_token` 已接入 Redis 缓存，减少重复请求与运行期不稳定性。
+- 确认订单页协议确认已补齐，下单前协议入口可访问。
+- API、管理后台、小程序默认构建链路已完成本地门禁验证。
+- 小程序前端视觉升级已完成，并保持首页、商品、购物车、订单、售后、我的、客服与协议页路径不变。
+- 商品详情页不再依赖缺失的 `uni-popup`，已替换为项目内自研底部弹层。
+- `common.scss` / `tokens.scss` 已拆分：全局样式仅由 `App.vue` 引入，SFC 只注入变量、mixin 与函数。
+- 商品规格弹层已区分 `select` / `cart` / `buy`，点击规格仅选择规格，不自动加购。
+- `ProductCard` 前端类型已兼容后端 `ProductCardVO.id` 的 string 返回，不影响商品详情跳转。
+- 清理了明确未使用 import，并修复 tokens 拆分后 scoped 样式 `@extend` 导致的小程序构建问题。
 
-## 3. 当前门禁状态
+## 3. 本次真实执行命令
 
-1. `pnpm release:check`：**PASS（104 PASS, 0 FAIL, 10 WARN）**
-2. GitHub Actions CI：待核验（缺可核验 run URL）
-3. 空库 `pnpm --filter @baby-mall/api prisma migrate deploy`：FAIL（本机数据库环境不可用）
-4. 已有库 `pnpm --filter @baby-mall/api prisma migrate deploy`：FAIL（`localhost:3306` 不可达）
-5. `pnpm release:check:prod`：待执行（需真实生产环境变量）
-6. 严格失败原因（生产环境）：
-   - 未提供真实小程序AppID
-   - `legal.ts`中客服电话/客服微信/退货地址仍为占位口径
+以下命令均已在本地真实执行通过，允许写 PASS：
 
-## 3.1 本次真实执行留痕（2026-05-30 19:00:00 +08:00）
+| 命令 | 结果 | 备注 |
+|---|---|---|
+| `pnpm --filter @baby-mall/api prisma:validate` | PASS | Prisma schema 校验通过 |
+| `pnpm --filter @baby-mall/api test:ci` | PASS | 29 个单测套件、5 个 e2e 套件通过 |
+| `pnpm build:api` | PASS | Nest 构建通过 |
+| `pnpm build:admin` | PASS | `vue-tsc && vite build` 通过；存在非阻塞 chunk/Sass 警告 |
+| `VITE_API_BASE_URL=https://example.invalid pnpm build:mini` | PASS | mp-weixin 构建通过 |
+| `pnpm build:all` | PASS | API、Admin、小程序默认构建通过 |
+| `pnpm release:check` | PASS | Release Gate：105 PASS / 0 FAIL / 11 WARN |
 
-1. `pnpm install`：PASS
-2. `pnpm --filter @baby-mall/api prisma:generate`：PASS
-3. `pnpm --filter @baby-mall/api prisma:validate`：PASS
-4. `pnpm --filter @baby-mall/api test:ci`：PASS（28个test suites，397个tests）
-5. `pnpm build:api`：PASS
-6. `pnpm build:admin`：PASS
-7. `VITE_API_BASE_URL=https://example.invalid pnpm build:mini`：PASS
-8. `pnpm release:check`：**PASS（104 PASS, 0 FAIL, 10 WARN）**
-9. `pnpm --filter @baby-mall/api exec prisma migrate deploy`（空库 URL：`baby_mall_migration_check`）：FAIL（Schema engine error；`127.0.0.1:3306` 不可达）
-10. `pnpm --filter @baby-mall/api exec prisma migrate deploy`（已有库 URL：`baby_mall`）：FAIL（Schema engine error；`localhost:3306` 不可达）
+未执行或未核验项不得写 PASS：
 
-## 4. 人工阻塞项（P0）
+- GitHub Actions：待核验，当前未取得可核验 run 结果。
+- `pnpm --filter @baby-mall/api prisma migrate deploy`：待真实数据库执行，本地未连真实预生产/生产数据库执行。
+- `pnpm release:check:prod`：待真实生产变量、真实 AppID、生产 API、协议联系方式与证书配置完成后执行。
+- 微信开发者工具上传体验版：待执行。
+- 真机支付、退款、售后、自提、客服与协议验收：待预生产阶段执行。
 
-1. 真实小程序AppID（体验版/正式版构建）
-2. 法务/运营确认后的最终联系方式（客服电话、客服微信、退货地址）
-3. 私有`.env.production`真实值（仅服务器本地）
-4. 微信支付生产参数与证书（商户号、APIv3 Key、商户私钥、平台证书、序列号）
-5. HTTPS证书（`fullchain.pem`、`privkey.pem`）
+## 4. 仍需真实部署阶段完成
 
-## 5. 部署执行口径
+- 准备服务器本地 `.env.production`，不得提交 Git。
+- 配置真实微信小程序 AppID，并完成体验版/正式版构建校验。
+- 配置微信支付商户号、商户证书序列号、APIv3 Key、商户私钥、平台证书与平台证书序列号。
+- 配置 `WECHAT_NOTIFY_URL` 与 `WECHAT_REFUND_NOTIFY_URL`，确保公网 HTTPS 可访问。
+- 配置 HTTPS 证书、Nginx、域名解析、CORS 与上传资源公网访问地址。
+- 在真实预生产/生产数据库上执行 `pnpm --filter @baby-mall/api prisma migrate deploy`。
+- 使用 Docker Compose 或既定部署脚本启动服务并完成健康检查。
+- 使用微信开发者工具上传体验版。
+- 完成真机完整链路验收：登录、首页、商品、购物车、下单、支付、支付回调、退款、退款回调、售后、自提、客服、协议。
+- 运营/法务确认客服电话、客服微信、退货地址、资质图片、资质编号等真实信息。
+- 提审前处理或确认分享奖励/诱导分享口径风险。
 
-1. 所有部署命令默认在仓库根目录执行（`package.json`所在目录）
-2. 敏感值仅允许在服务器本地填写，不得提交Git
-3. 真机验收记录使用：
-   - `docs/PREPROD_ACCEPTANCE_RECORD.md`
-   - `docs/MANUAL_ACCEPTANCE_CHECKLIST.md`
-4. 预生产部署完成后必须执行：
-   - `pnpm --filter @baby-mall/api prisma migrate deploy`
-   - `pnpm --filter @baby-mall/api prisma:validate`
+## 5. 真实部署前命令
 
-## 6. 下一步
+以下命令需在仓库根目录执行。真实敏感值只放在服务器本地环境文件和证书目录，不写入仓库。
 
-1. 运维按`docs/SERVER_DEPLOY_COMMANDS.md`执行服务器预生产部署
-2. 运营/法务按`docs/ENV_PRODUCTION_FILL_GUIDE.md`与`docs/LEGAL_CONTENT_GUIDE.md`补齐真实信息
-3. 完成体验版构建与真机闭环后，再发起正式发布Go/No-Go评审
+```bash
+pnpm install
+pnpm --filter @baby-mall/api prisma:validate
+pnpm --filter @baby-mall/api test:ci
+pnpm build:all
+pnpm release:check
+```
+
+生产严格门禁需在真实生产变量准备完成后执行：
+
+```bash
+pnpm release:check:prod
+```
+
+服务器部署前配置检查：
+
+```bash
+cd deploy
+docker compose --env-file ../.env.production config
+```
+
+真实数据库迁移命令，必须确认连接的是目标预生产/生产数据库：
+
+```bash
+pnpm --filter @baby-mall/api prisma migrate deploy
+```
+
+预生产部署脚本：
+
+```bash
+ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
+```
+
+部署后健康检查与冒烟测试：
+
+```bash
+pnpm smoke
+pnpm smoke:public
+pnpm smoke:login
+pnpm smoke:all
+```
+
+## 6. Go / No-Go
+
+- 代码层面：**Go**。本地代码门禁已通过，未发现新的构建阻塞项。
+- 预生产部署：**Go**。允许进入预生产部署，但必须使用真实服务器环境、真实数据库和真实证书完成部署核验。
+- 正式发布：**No-Go**。尚未完成真实 AppID、生产支付配置、证书、数据库迁移、体验版上传、真机验收、运营/法务信息确认与微信审核风险处理。

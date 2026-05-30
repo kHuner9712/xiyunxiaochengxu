@@ -2,7 +2,29 @@
 
 临沂禧孕文化传媒有限公司自营母婴用品商城微信小程序项目。
 
-当前发布状态：**可进入预生产部署，不可正式发布**。
+当前发布状态（2026-05-31）：**代码层面可冻结，允许进入预生产部署；正式发布尚未完成**。
+
+说明：当前工作区仍包含未提交的最终代码修复与文档更新，正式冻结前应提交并记录最终 commit sha。真实生产发布仍依赖真实 AppID、生产支付配置、证书、HTTPS、数据库迁移、微信开发者工具上传体验版和真机验收。
+
+## 最新本地门禁（2026-05-31）
+
+以下命令已在本地真实执行通过：
+
+- `pnpm --filter @baby-mall/api prisma:validate`
+- `pnpm --filter @baby-mall/api test:ci`
+- `pnpm build:api`
+- `pnpm build:admin`
+- `VITE_API_BASE_URL=https://example.invalid pnpm build:mini`
+- `pnpm build:all`
+- `pnpm release:check`
+
+以下项目仍待部署阶段核验，不得记录为已通过：
+
+- GitHub Actions 对应冻结 commit 的 run 结果
+- 真实数据库上的 `pnpm --filter @baby-mall/api prisma migrate deploy`
+- 真实生产变量下的 `pnpm release:check:prod`
+- 微信开发者工具上传体验版
+- 真机完整链路验收，包括登录、下单、支付、退款、售后、自提、客服与协议页
 
 ## 商用加固进展（2026-05-29）
 
@@ -67,6 +89,8 @@ pnpm release:check:prod
 
 - `release:check`：默认环境，允许占位 AppID（WARN）
 - `release:check:prod`：强制生产门禁，缺少真实 AppID 或协议占位将直接 FAIL
+
+GitHub Actions、真实数据库迁移、生产严格门禁和真机验收只有在实际执行并取得可核验结果后，才可在发布记录中标记为通过。
 
 ## 前端构建依赖冻结说明
 
