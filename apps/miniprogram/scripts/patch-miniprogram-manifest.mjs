@@ -22,6 +22,17 @@ if (isProduction && !apiBaseUrl) {
   console.error('ERROR: 生产构建必须配置 VITE_API_BASE_URL，禁止空 API 地址打包')
   process.exit(1)
 }
+if (isProduction && apiBaseUrl) {
+  if (!apiBaseUrl.startsWith('https://')) {
+    console.error(`ERROR: 生产构建 VITE_API_BASE_URL 必须以 https:// 开头，当前值: ${apiBaseUrl}，正确格式: https://域名/api`)
+    process.exit(1)
+  }
+  const trimmedUrl = apiBaseUrl.replace(/\/+$/, '')
+  if (!trimmedUrl.endsWith('/api')) {
+    console.error(`ERROR: 生产构建 VITE_API_BASE_URL 必须以 /api 结尾，当前值: ${apiBaseUrl}，正确格式: https://域名/api`)
+    process.exit(1)
+  }
+}
 
 const originalManifestText = readFileSync(manifestPath, 'utf-8')
 if (!existsSync(backupPath)) {

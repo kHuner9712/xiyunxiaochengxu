@@ -405,8 +405,14 @@ fi
 
 section "8.65b. 上传大小限制检查"
 if [ -n "${UPLOAD_MAX_SIZE:-}" ]; then
-  if [ "${UPLOAD_MAX_SIZE}" -gt 104857600 ] 2>/dev/null; then
+  if ! [[ "${UPLOAD_MAX_SIZE}" =~ ^[1-9][0-9]*$ ]]; then
+    fail "UPLOAD_MAX_SIZE 必须为正整数，当前值: ${UPLOAD_MAX_SIZE}"
+  elif [ "${UPLOAD_MAX_SIZE}" -lt 1048576 ]; then
+    warn "UPLOAD_MAX_SIZE 小于 1MB (${UPLOAD_MAX_SIZE} bytes)，请确认是否合理"
+    pass "UPLOAD_MAX_SIZE 格式合法"
+  elif [ "${UPLOAD_MAX_SIZE}" -gt 104857600 ]; then
     warn "UPLOAD_MAX_SIZE 超过 100MB (${UPLOAD_MAX_SIZE} bytes)，请确认是否合理"
+    pass "UPLOAD_MAX_SIZE 格式合法"
   else
     pass "UPLOAD_MAX_SIZE 在合理范围内 (${UPLOAD_MAX_SIZE} bytes)"
   fi
