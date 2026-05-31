@@ -16,21 +16,38 @@ const FILE_MAGIC_NUMBERS: Record<string, number[][]> = {
   'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
 };
 
-const ALLOWED_MIME_TYPES = [
+const MIME_TO_EXTENSIONS: Record<string, string[]> = {
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/gif': ['.gif'],
+  'image/webp': ['.webp'],
+  'image/bmp': ['.bmp'],
+  'video/mp4': ['.mp4'],
+  'application/pdf': ['.pdf'],
+};
+
+const DEFAULT_ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
-  'image/bmp',
   'video/mp4',
-  'application/pdf',
 ];
 
-const ALLOWED_EXTENSIONS = [
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
-  '.mp4',
-  '.pdf',
-];
+function parseAllowedMimeTypes(): string[] {
+  const envValue = process.env.UPLOAD_ALLOWED_TYPES;
+  if (!envValue) return DEFAULT_ALLOWED_MIME_TYPES;
+  return envValue.split(',').map(t => t.trim()).filter(Boolean);
+}
+
+function getAllowedExtensions(allowedMimes: string[]): string[] {
+  const extensions: string[] = [];
+  for (const mime of allowedMimes) {
+    const exts = MIME_TO_EXTENSIONS[mime];
+    if (exts) extensions.push(...exts);
+  }
+  return extensions;
+}
 
 interface StorageProvider {
   save(file: Express.Multer.File, targetFileName: string): Promise<{ filePath: string; url: string }>;
@@ -75,9 +92,13 @@ class LocalStorageProvider implements StorageProvider {
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
   private readonly storageProvider: StorageProvider;
+  private readonly allowedMimeTypes: string[];
+  private readonly allowedExtensions: string[];
 
   constructor(private prisma: PrismaService) {
     this.storageProvider = new LocalStorageProvider();
+    this.allowedMimeTypes = parseAllowedMimeTypes();
+    this.allowedExtensions = getAllowedExtensions(this.allowedMimeTypes);
   }
 
   async uploadFile(file: Express.Multer.File, uploaderId: string, uploaderType: string, groupName?: string) {
@@ -89,10 +110,10 @@ export class UploadService {
       throw new BadRequestException(`文件大小超过限制（最大 ${Math.round(maxFileSize / 1024 / 1024)}MB）`);
     }
     const ext = path.extname(file.originalname).toLowerCase();
-    if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      throw new BadRequestException(`不支持的文件类型: ${ext}，仅允许图片、视频和PDF`);
+    if (!this.allowedExtensions.includes(ext)) {
+      throw new BadRequestException(`不支持的文件类型: ${ext}，仅允许: ${this.allowedExtensions.join(', ')}`);
     }
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    if (!this.allowedMimeTypes.includes(file.mimetype)) {
       throw new BadRequestException(`不支持的MIME类型: ${file.mimetype}`);
     }
     this.validateFileMagic(file);

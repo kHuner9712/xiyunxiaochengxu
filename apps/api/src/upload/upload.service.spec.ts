@@ -24,46 +24,43 @@ function createService(mockPrisma?: any) {
   return { service, mockPrisma: prisma };
 }
 
-const ALLOWED_EXTENSIONS = [
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+const DEFAULT_ALLOWED_EXTENSIONS = [
+  '.jpg', '.jpeg', '.png', '.gif', '.webp',
   '.mp4',
-  '.pdf',
 ];
 
-const ALLOWED_MIME_TYPES = [
+const DEFAULT_ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
-  'image/bmp',
   'video/mp4',
-  'application/pdf',
 ];
 
 describe('UploadService 文件安全校验', () => {
-  describe('ALLOWED_EXTENSIONS 白名单', () => {
-    it('应允许 jpg/png/gif/webp/bmp 图片', () => {
-      const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+  describe('DEFAULT_ALLOWED_EXTENSIONS 白名单', () => {
+    it('应允许 jpg/png/gif/webp 图片', () => {
+      const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
       for (const ext of allowed) {
-        expect(ALLOWED_EXTENSIONS).toContain(ext);
+        expect(DEFAULT_ALLOWED_EXTENSIONS).toContain(ext);
       }
     });
 
     it('不应允许 svg 扩展名', () => {
-      expect(ALLOWED_EXTENSIONS).not.toContain('.svg');
+      expect(DEFAULT_ALLOWED_EXTENSIONS).not.toContain('.svg');
     });
 
     it('不应允许可执行文件扩展名', () => {
       const dangerous = ['.exe', '.bat', '.sh', '.php', '.jsp', '.asp', '.html', '.htm', '.js', '.svg'];
       for (const ext of dangerous) {
-        expect(ALLOWED_EXTENSIONS).not.toContain(ext);
+        expect(DEFAULT_ALLOWED_EXTENSIONS).not.toContain(ext);
       }
     });
   });
 
-  describe('ALLOWED_MIME_TYPES 白名单', () => {
+  describe('DEFAULT_ALLOWED_MIME_TYPES 白名单', () => {
     it('不应允许 image/svg+xml MIME 类型', () => {
-      expect(ALLOWED_MIME_TYPES).not.toContain('image/svg+xml');
+      expect(DEFAULT_ALLOWED_MIME_TYPES).not.toContain('image/svg+xml');
     });
 
     it('不应允许脚本相关 MIME 类型', () => {
@@ -73,7 +70,7 @@ describe('UploadService 文件安全校验', () => {
         'image/svg+xml',
       ];
       for (const mime of dangerous) {
-        expect(ALLOWED_MIME_TYPES).not.toContain(mime);
+        expect(DEFAULT_ALLOWED_MIME_TYPES).not.toContain(mime);
       }
     });
   });
@@ -201,16 +198,6 @@ describe('UploadService 文件魔数校验', () => {
     expect(() => service['validateFileMagic'](file)).toThrow(BadRequestException);
   });
 
-  it('PDF 文件魔数正确时不报错', () => {
-    const file = {
-      originalname: 'test.pdf',
-      mimetype: 'application/pdf',
-      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A, 0x25, 0xE2, 0xE3]),
-      size: 12,
-    } as Express.Multer.File;
-    expect(() => service['validateFileMagic'](file)).not.toThrow();
-  });
-
   it('无魔数映射的 MIME 类型跳过校验', () => {
     const file = {
       originalname: 'test.txt',
@@ -224,27 +211,27 @@ describe('UploadService 文件魔数校验', () => {
 
 describe('UploadService Office 文档默认禁用', () => {
   it('不应允许 .doc 扩展名', () => {
-    expect(ALLOWED_EXTENSIONS).not.toContain('.doc');
+    expect(DEFAULT_ALLOWED_EXTENSIONS).not.toContain('.doc');
   });
 
   it('不应允许 .docx 扩展名', () => {
-    expect(ALLOWED_EXTENSIONS).not.toContain('.docx');
+    expect(DEFAULT_ALLOWED_EXTENSIONS).not.toContain('.docx');
   });
 
   it('不应允许 .xls 扩展名', () => {
-    expect(ALLOWED_EXTENSIONS).not.toContain('.xls');
+    expect(DEFAULT_ALLOWED_EXTENSIONS).not.toContain('.xls');
   });
 
   it('不应允许 .xlsx 扩展名', () => {
-    expect(ALLOWED_EXTENSIONS).not.toContain('.xlsx');
+    expect(DEFAULT_ALLOWED_EXTENSIONS).not.toContain('.xlsx');
   });
 
   it('不应允许 application/msword MIME', () => {
-    expect(ALLOWED_MIME_TYPES).not.toContain('application/msword');
+    expect(DEFAULT_ALLOWED_MIME_TYPES).not.toContain('application/msword');
   });
 
   it('不应允许 Office Open XML MIME', () => {
-    expect(ALLOWED_MIME_TYPES).not.toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(DEFAULT_ALLOWED_MIME_TYPES).not.toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   });
 });
 
@@ -277,32 +264,13 @@ describe('UploadService webp RIFF+WEBP magic', () => {
   });
 });
 
-describe('UploadService bmp magic', () => {
-  let service: UploadService;
-  let mockPrisma: any;
-
-  beforeEach(() => {
-    ({ service, mockPrisma } = createService());
-  });
-
-  it('bmp 文件 BM magic 正确时不报错', () => {
-    const file = {
-      originalname: 'test.bmp',
-      mimetype: 'image/bmp',
-      buffer: Buffer.from([0x42, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-      size: 12,
-    } as Express.Multer.File;
-    expect(() => service['validateFileMagic'](file)).not.toThrow();
-  });
-});
-
 describe('UploadService webm removed', () => {
   it('不应允许 video/webm MIME', () => {
-    expect(ALLOWED_MIME_TYPES).not.toContain('video/webm');
+    expect(DEFAULT_ALLOWED_MIME_TYPES).not.toContain('video/webm');
   });
 
   it('不应允许 .webm 扩展名', () => {
-    expect(ALLOWED_EXTENSIONS).not.toContain('.webm');
+    expect(DEFAULT_ALLOWED_EXTENSIONS).not.toContain('.webm');
   });
 });
 
@@ -329,5 +297,72 @@ describe('UploadService 本地存储删除路径', () => {
 
     process.env.UPLOAD_DIR = previousUploadDir;
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe('UploadService UPLOAD_ALLOWED_TYPES 环境变量驱动', () => {
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    mockPrisma = createMockPrisma();
+  });
+
+  afterEach(() => {
+    delete process.env.UPLOAD_ALLOWED_TYPES;
+  });
+
+  it('默认不允许 application/pdf', () => {
+    const { service } = createService(mockPrisma);
+    expect(service['allowedMimeTypes']).not.toContain('application/pdf');
+    expect(service['allowedExtensions']).not.toContain('.pdf');
+  });
+
+  it('默认不允许 image/bmp', () => {
+    const { service } = createService(mockPrisma);
+    expect(service['allowedMimeTypes']).not.toContain('image/bmp');
+    expect(service['allowedExtensions']).not.toContain('.bmp');
+  });
+
+  it('设置 UPLOAD_ALLOWED_TYPES 后允许 PDF', () => {
+    process.env.UPLOAD_ALLOWED_TYPES = 'image/jpeg,image/png,application/pdf';
+    const { service } = createService(mockPrisma);
+    expect(service['allowedMimeTypes']).toContain('application/pdf');
+    expect(service['allowedExtensions']).toContain('.pdf');
+    expect(service['allowedMimeTypes']).not.toContain('image/gif');
+  });
+
+  it('上传 PDF 文件在默认配置下被拒绝', async () => {
+    const { service } = createService(mockPrisma);
+    const file = {
+      originalname: 'test.pdf',
+      mimetype: 'application/pdf',
+      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A, 0x25, 0xE2, 0xE3]),
+      size: 12,
+    } as Express.Multer.File;
+    await expect(service.uploadFile(file, '1', 'user'))
+      .rejects.toThrow(BadRequestException);
+  });
+
+  it('上传 PDF 文件在配置允许时通过', async () => {
+    process.env.UPLOAD_ALLOWED_TYPES = 'image/jpeg,application/pdf';
+    const { service } = createService(mockPrisma);
+    (service as any).storageProvider = {
+      save: jest.fn().mockResolvedValue({ filePath: '/uploads/test.pdf', url: '/uploads/test.pdf' }),
+      remove: jest.fn(),
+    };
+    mockPrisma.fileAsset.create.mockResolvedValue({
+      id: BigInt(1), fileName: 'test.pdf', filePath: '/uploads/test.pdf',
+      fileSize: BigInt(12), fileType: 'document', mimeType: 'application/pdf',
+      storageType: 1, url: '/uploads/test.pdf', groupName: null,
+      uploaderId: BigInt(1), uploaderType: 'user',
+    });
+    const file = {
+      originalname: 'test.pdf',
+      mimetype: 'application/pdf',
+      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A, 0x25, 0xE2, 0xE3]),
+      size: 12,
+    } as Express.Multer.File;
+    const result = await service.uploadFile(file, '1', 'user');
+    expect(result.fileType).toBe('document');
   });
 });
