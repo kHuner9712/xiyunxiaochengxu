@@ -89,3 +89,37 @@ describe('PaymentController refundCallback 异常兜底', () => {
     expect(result).toEqual({ code: 'FAIL', message: '退款回调处理失败' });
   });
 });
+
+describe('PaymentCompensationController', () => {
+  let controller: any;
+  let mockService: any;
+
+  beforeEach(() => {
+    mockService = {
+      getCompensationTaskList: jest.fn(),
+      resolveCompensationTask: jest.fn(),
+    };
+    const { PaymentCompensationController } = require('./payment.controller');
+    controller = new PaymentCompensationController(mockService);
+  });
+
+  it('resolveCompensationTask 合法 status=resolved 正常处理', async () => {
+    mockService.resolveCompensationTask.mockResolvedValue({ id: '1', status: 'resolved' });
+    const result = await controller.resolveCompensationTask('1', 'admin1', {
+      resolution: '已处理',
+      status: 'resolved',
+    });
+    expect(result.status).toBe('resolved');
+    expect(mockService.resolveCompensationTask).toHaveBeenCalledWith('1', 'admin1', '已处理', 'resolved');
+  });
+
+  it('resolveCompensationTask 合法 status=ignored 正常处理', async () => {
+    mockService.resolveCompensationTask.mockResolvedValue({ id: '2', status: 'ignored' });
+    const result = await controller.resolveCompensationTask('2', 'admin1', {
+      resolution: '忽略处理',
+      status: 'ignored',
+    });
+    expect(result.status).toBe('ignored');
+    expect(mockService.resolveCompensationTask).toHaveBeenCalledWith('2', 'admin1', '忽略处理', 'ignored');
+  });
+});

@@ -2038,3 +2038,52 @@ describe('PaymentService callback timestamp replay guard', () => {
     expect(result.message).toBe('回调时间戳无效');
   });
 });
+
+describe('PaymentService resolveCompensationTask 防御式校验', () => {
+  let service: PaymentService;
+  let mockPrisma: any;
+  let mockConfigService: any;
+  let mockReconcileService: any;
+  let mockBusinessEventService: any;
+
+  beforeEach(() => {
+    mockPrisma = createMockPrisma();
+    mockConfigService = createMockConfigService();
+    mockReconcileService = { reconcilePayment: jest.fn() };
+    mockBusinessEventService = { emit: jest.fn() };
+    service = new PaymentService(mockPrisma as any, mockConfigService as any, mockBusinessEventService as any, {} as any, {} as any);
+  });
+
+  it('非法 status 抛 BadRequestException', async () => {
+    await expect(
+      service.resolveCompensationTask('1', 'admin1', '测试', 'pending' as any),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.resolveCompensationTask('1', 'admin1', '测试', 'pending' as any),
+    ).rejects.toThrow(/非法的 status 值: pending/);
+  });
+
+  it('合法 status=resolved 正常更新', async () => {
+    mockPrisma.paymentCompensationTask.findFirst.mockResolvedValue({
+      id: BigInt(1), status: 'pending', orderNo: 'ORD001',
+    });
+    mockPrisma.paymentCompensationTask.update.mockResolvedValue({
+      id: BigInt(1), status: 'resolved', resolution: '已处理', handledBy: 'admin1',
+    });
+    const result = await service.resolveCompensationTask('1', 'admin1', '已处理', 'resolved');
+    expect(result.status).toBe('resolved');
+    expect(mockPrisma.paymentCompensationTask.update).toHaveBeenCalled();
+  });
+
+  it('合法 status=ignored 正常更新', async () => {
+    mockPrisma.paymentCompensationTask.findFirst.mockResolvedValue({
+      id: BigInt(2), status: 'pending', orderNo: 'ORD002',
+    });
+    mockPrisma.paymentCompensationTask.update.mockResolvedValue({
+      id: BigInt(2), status: 'ignored', resolution: '忽略', handledBy: 'admin1',
+    });
+    const result = await service.resolveCompensationTask('2', 'admin1', '忽略', 'ignored');
+    expect(result.status).toBe('ignored');
+    expect(mockPrisma.paymentCompensationTask.update).toHaveBeenCalled();
+  });
+});

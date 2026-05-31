@@ -6,7 +6,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { SkipThrottle } from '@nestjs/throttler';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max, IsIn } from 'class-validator';
 
 class CreatePaymentDto {
   @IsString()
@@ -65,6 +65,7 @@ class ResolveCompensationTaskDto {
   @IsNotEmpty()
   resolution!: string;
 
+  @IsIn(['resolved', 'ignored'])
   @IsString()
   @IsNotEmpty()
   status!: 'resolved' | 'ignored';

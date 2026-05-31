@@ -1669,6 +1669,10 @@ export class PaymentService {
   }
 
   async resolveCompensationTask(id: string, handledBy: string, resolution: string, status: 'resolved' | 'ignored') {
+    const validStatuses = ['resolved', 'ignored'];
+    if (!validStatuses.includes(status)) {
+      throw new BadRequestException(`非法的 status 值: ${status}，允许值: ${validStatuses.join(', ')}`);
+    }
     const task = await this.prisma.paymentCompensationTask.findFirst({ where: { id: BigInt(id) } });
     if (!task) throw new NotFoundException('补偿任务不存在');
     const updated = await this.prisma.paymentCompensationTask.update({
