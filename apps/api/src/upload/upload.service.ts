@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { paginate } from '@baby-mall/shared';
@@ -16,7 +16,7 @@ const FILE_MAGIC_NUMBERS: Record<string, number[][]> = {
   'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
 };
 
-const MIME_TO_EXTENSIONS: Record<string, string[]> = {
+export const MIME_TO_EXTENSIONS: Record<string, string[]> = {
   'image/jpeg': ['.jpg', '.jpeg'],
   'image/png': ['.png'],
   'image/gif': ['.gif'],
@@ -34,13 +34,13 @@ const DEFAULT_ALLOWED_MIME_TYPES = [
   'video/mp4',
 ];
 
-function parseAllowedMimeTypes(): string[] {
+export function parseAllowedMimeTypes(): string[] {
   const envValue = process.env.UPLOAD_ALLOWED_TYPES;
   if (!envValue) return DEFAULT_ALLOWED_MIME_TYPES;
   return envValue.split(',').map(t => t.trim()).filter(Boolean);
 }
 
-function getAllowedExtensions(allowedMimes: string[]): string[] {
+export function getAllowedExtensions(allowedMimes: string[]): string[] {
   const extensions: string[] = [];
   for (const mime of allowedMimes) {
     const exts = MIME_TO_EXTENSIONS[mime];
@@ -87,6 +87,8 @@ class LocalStorageProvider implements StorageProvider {
     }
   }
 }
+
+const SENSITIVE_GROUP_NAMES = ['aftersale', 'admin', 'cert', 'business_license', 'private'];
 
 @Injectable()
 export class UploadService {
@@ -153,6 +155,22 @@ export class UploadService {
     });
     if (!file) throw new NotFoundException('文件不存在');
     return this.serializeFileAsset(file);
+  }
+
+  async findPublicById(id: string) {
+    const file = await this.prisma.fileAsset.findFirst({
+      where: { id: BigInt(id) },
+    });
+    if (!file) throw new NotFoundException('文件不存在');
+    if (file.groupName && SENSITIVE_GROUP_NAMES.includes(file.groupName)) {
+      throw new ForbiddenException('该文件不允许公开访问');
+    }
+    return {
+      id: file.id.toString(),
+      url: normalizeAssetUrl(file.url || file.filePath),
+      fileType: file.fileType,
+      mimeType: file.mimeType,
+    };
   }
 
   async findAll(dto: PaginationDto & { groupName?: string; fileType?: string }) {

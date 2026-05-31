@@ -1081,11 +1081,18 @@ export class OrderService {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const code = await this.generatePickupCode();
       try {
-        await tx.order.updateMany({
-          where: { id: orderId },
+        const result = await tx.order.updateMany({
+          where: { id: orderId, pickupCode: null },
           data: { pickupCode: code },
         });
-        return code;
+        if (result.count > 0) {
+          return code;
+        }
+        const existing = await tx.order.findUnique({ where: { id: orderId }, select: { pickupCode: true } });
+        if (existing?.pickupCode) {
+          return existing.pickupCode;
+        }
+        continue;
       } catch (error: any) {
         if (
           error?.code === 'P2002' &&

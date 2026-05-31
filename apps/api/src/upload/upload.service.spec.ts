@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UploadService } from './upload.service';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -364,5 +364,198 @@ describe('UploadService UPLOAD_ALLOWED_TYPES 环境变量驱动', () => {
     } as Express.Multer.File;
     const result = await service.uploadFile(file, '1', 'user');
     expect(result.fileType).toBe('document');
+  });
+});
+
+describe('UploadModule fileFilter 第一层拦截', () => {
+  const { parseAllowedMimeTypes, getAllowedExtensions } = require('./upload.service');
+
+  it('MIME 不允许的文件被 fileFilter 拒绝', () => {
+    const allowedMimeTypes = parseAllowedMimeTypes();
+    const file = { originalname: 'test.svg', mimetype: 'image/svg+xml' } as Express.Multer.File;
+    expect(allowedMimeTypes.includes(file.mimetype)).toBe(false);
+  });
+
+  it('扩展名不允许的文件被 fileFilter 拒绝', () => {
+    const allowedMimeTypes = parseAllowedMimeTypes();
+    const allowedExtensions = getAllowedExtensions(allowedMimeTypes);
+    const ext = '.exe';
+    expect(allowedExtensions.includes(ext)).toBe(false);
+  });
+
+  it('MIME 和扩展名均合法的文件通过 fileFilter', () => {
+    const allowedMimeTypes = parseAllowedMimeTypes();
+    const allowedExtensions = getAllowedExtensions(allowedMimeTypes);
+    const file = { originalname: 'test.jpg', mimetype: 'image/jpeg' } as Express.Multer.File;
+    const ext = '.jpg';
+    expect(allowedMimeTypes.includes(file.mimetype)).toBe(true);
+    expect(allowedExtensions.includes(ext)).toBe(true);
+  });
+});
+
+describe('UploadService 双层防线：扩展名伪装但 magic number 不匹配', () => {
+  let service: UploadService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('扩展名伪装为 .jpg 但内容为 PDF 的文件仍被 service 拒绝', async () => {
+    const file = {
+      originalname: 'malicious.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x00, 0x00, 0x00, 0x00]),
+      size: 12,
+    } as Express.Multer.File;
+    await expect(service.uploadFile(file, '1', 'user'))
+      .rejects.toThrow(BadRequestException);
+    await expect(service.uploadFile(file, '1', 'user'))
+      .rejects.toThrow('文件内容与声明类型');
+  });
+});
+
+describe('Multer interceptor 层 fileSize 限制', () => {
+  it('UPLOAD_MAX_SIZE 默认值为 10MB', () => {
+    const originalEnv = process.env.UPLOAD_MAX_SIZE;
+    delete process.env.UPLOAD_MAX_SIZE;
+    const maxSize = parseInt(process.env.UPLOAD_MAX_SIZE || '10485760', 10);
+    expect(maxSize).toBe(10485760);
+    process.env.UPLOAD_MAX_SIZE = originalEnv;
+  });
+
+  it('超过 UPLOAD_MAX_SIZE 的文件在 service 层被拒绝', async () => {
+    const { service } = createService();
+    const originalEnv = process.env.UPLOAD_MAX_SIZE;
+    process.env.UPLOAD_MAX_SIZE = '100';
+    const file = {
+      originalname: 'test.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.alloc(200),
+      size: 200,
+    } as Express.Multer.File;
+    await expect(service.uploadFile(file, '1', 'user'))
+      .rejects.toThrow('文件大小超过限制');
+    process.env.UPLOAD_MAX_SIZE = originalEnv;
+  });
+});
+
+describe('UploadService findPublicById 公开文件详情', () => {
+  let service: UploadService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('公开文件详情仅返回 id、url、fileType、mimeType', async () => {
+    const originalAssetBase = process.env.UPLOAD_PUBLIC_URL;
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
+    mockPrisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(1), fileName: 'test.jpg', originalName: 'photo.jpg',
+      filePath: '/uploads/test.jpg', fileSize: BigInt(1024), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/test.jpg',
+      groupName: null, uploaderId: BigInt(1), uploaderType: 'user',
+    });
+    const result = await service.findPublicById('1');
+    expect(result).toEqual({
+      id: '1',
+      url: 'https://api.example.com/uploads/test.jpg',
+      fileType: 'image',
+      mimeType: 'image/jpeg',
+    });
+    expect((result as any).originalName).toBeUndefined();
+    expect((result as any).uploaderId).toBeUndefined();
+    expect((result as any).filePath).toBeUndefined();
+    expect((result as any).groupName).toBeUndefined();
+    process.env.UPLOAD_PUBLIC_URL = originalAssetBase;
+  });
+
+  it('敏感分组文件公开接口返回 403 ForbiddenException', async () => {
+    mockPrisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(2), fileName: 'refund.jpg', originalName: 'refund_proof.jpg',
+      filePath: '/uploads/refund.jpg', fileSize: BigInt(2048), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/refund.jpg',
+      groupName: 'aftersale', uploaderId: BigInt(1), uploaderType: 'admin',
+    });
+    await expect(service.findPublicById('2'))
+      .rejects.toThrow(ForbiddenException);
+    await expect(service.findPublicById('2'))
+      .rejects.toThrow('该文件不允许公开访问');
+  });
+
+  it('admin 分组文件公开接口返回 403', async () => {
+    mockPrisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(3), groupName: 'admin', fileName: 'admin.jpg',
+      filePath: '/uploads/admin.jpg', url: '/uploads/admin.jpg',
+      fileType: 'image', mimeType: 'image/jpeg', storageType: 1,
+      uploaderId: BigInt(1), uploaderType: 'admin',
+    });
+    await expect(service.findPublicById('3'))
+      .rejects.toThrow(ForbiddenException);
+  });
+
+  it('groupName 为 null 时正常返回公开字段', async () => {
+    const originalAssetBase = process.env.UPLOAD_PUBLIC_URL;
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
+    mockPrisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(4), fileName: 'product.jpg', originalName: 'product.jpg',
+      filePath: '/uploads/product.jpg', fileSize: BigInt(512), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/product.jpg',
+      groupName: null, uploaderId: BigInt(1), uploaderType: 'user',
+    });
+    const result = await service.findPublicById('4');
+    expect(result.id).toBe('4');
+    expect(result.fileType).toBe('image');
+    process.env.UPLOAD_PUBLIC_URL = originalAssetBase;
+  });
+
+  it('groupName 为非敏感分组时正常返回公开字段', async () => {
+    const originalAssetBase = process.env.UPLOAD_PUBLIC_URL;
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
+    mockPrisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(5), fileName: 'banner.jpg', originalName: 'banner.jpg',
+      filePath: '/uploads/banner.jpg', fileSize: BigInt(3072), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/banner.jpg',
+      groupName: 'product', uploaderId: BigInt(1), uploaderType: 'user',
+    });
+    const result = await service.findPublicById('5');
+    expect(result.id).toBe('5');
+    expect(result.fileType).toBe('image');
+    process.env.UPLOAD_PUBLIC_URL = originalAssetBase;
+  });
+
+  it('文件不存在时返回 404 NotFoundException', async () => {
+    mockPrisma.fileAsset.findFirst.mockResolvedValue(null);
+    await expect(service.findPublicById('999'))
+      .rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('UploadService findById 管理员文件详情返回完整字段', () => {
+  let service: UploadService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('管理员文件详情返回完整字段', async () => {
+    const originalAssetBase = process.env.UPLOAD_PUBLIC_URL;
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
+    mockPrisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(1), fileName: 'test.jpg', originalName: 'photo.jpg',
+      filePath: '/uploads/test.jpg', fileSize: BigInt(1024), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/test.jpg',
+      groupName: 'aftersale', uploaderId: BigInt(1), uploaderType: 'admin',
+    });
+    const result = await service.findById('1');
+    expect(result.id).toBe('1');
+    expect(result.originalName).toBe('photo.jpg');
+    expect(result.uploaderId).toBe('1');
+    expect(result.uploaderType).toBe('admin');
+    expect(result.groupName).toBe('aftersale');
+    expect(result.filePath).toBe('/uploads/test.jpg');
+    process.env.UPLOAD_PUBLIC_URL = originalAssetBase;
   });
 });

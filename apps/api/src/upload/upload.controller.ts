@@ -36,7 +36,7 @@ export class UploadController {
   @Public()
   @Get(':id')
   async findById(@Param('id') id: string) {
-    return this.uploadService.findById(id);
+    return this.uploadService.findPublicById(id);
   }
 }
 

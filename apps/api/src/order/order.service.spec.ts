@@ -1457,7 +1457,7 @@ describe('OrderService.create 0元订单', () => {
     expect(createCall.data.autoCloseAt).toBeUndefined();
     expect(mockPrisma._mockTx.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: BigInt(1) },
+        where: { id: BigInt(1), pickupCode: null },
         data: { pickupCode: '12345678' },
       }),
     );
@@ -1780,7 +1780,7 @@ describe('generatePickupCode', () => {
     expect(createCall.data.paidAt).toBeInstanceOf(Date);
     expect(mockPrisma._mockTx.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: BigInt(1) },
+        where: { id: BigInt(1), pickupCode: null },
         data: expect.objectContaining({ pickupCode: expect.stringMatching(/^\d{8}$/) }),
       }),
     );
@@ -1806,7 +1806,7 @@ describe('assignUniquePickupCode', () => {
     expect(updateMany).toHaveBeenCalledTimes(1);
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: BigInt(1) },
+        where: { id: BigInt(1), pickupCode: null },
         data: { pickupCode: code },
       }),
     );
@@ -1857,6 +1857,23 @@ describe('assignUniquePickupCode', () => {
     await expect(service.assignUniquePickupCode(tx, BigInt(1), 3)).rejects.toThrow(InternalServerErrorException);
     await expect(service.assignUniquePickupCode(tx, BigInt(1), 3)).rejects.toThrow('自提码写入失败，请重试');
     expect(updateMany).toHaveBeenCalledTimes(6);
+  });
+
+  it('updateMany count=0 时查询并返回已有 pickupCode', async () => {
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 0 });
+    const findUnique = jest.fn<any>().mockResolvedValue({ pickupCode: '87654321' });
+    const tx: any = { order: { updateMany, findUnique } };
+    const code = await service.assignUniquePickupCode(tx, BigInt(1));
+    expect(code).toBe('87654321');
+    expect(findUnique).toHaveBeenCalledWith({ where: { id: BigInt(1) }, select: { pickupCode: true } });
+  });
+
+  it('updateMany count=0 且查询 pickupCode 为空时继续重试', async () => {
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 0 });
+    const findUnique = jest.fn<any>().mockResolvedValue({ pickupCode: null });
+    const tx: any = { order: { updateMany, findUnique } };
+    await expect(service.assignUniquePickupCode(tx, BigInt(1), 2)).rejects.toThrow(InternalServerErrorException);
+    expect(updateMany).toHaveBeenCalledTimes(2);
   });
 });
 

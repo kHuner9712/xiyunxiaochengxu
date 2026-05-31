@@ -552,13 +552,13 @@ export class PaymentService {
             data: updateData,
           });
 
-          if (order.fulfillmentType === 'pickup') {
-            await this.orderService.assignUniquePickupCode(tx, orderId);
-          }
-
           if (updateResult.count === 0) {
             this.logger.error(`支付半成功补偿失败: 订单${orderId}状态已变更，无法修复`);
             throw new BadRequestException('订单状态已变更，补偿失败');
+          }
+
+          if (order.fulfillmentType === 'pickup') {
+            await this.orderService.assignUniquePickupCode(tx, orderId);
           }
 
           await tx.orderLog.create({
@@ -620,10 +620,6 @@ export class PaymentService {
         data: updateOrderData,
       });
 
-      if (order.fulfillmentType === 'pickup') {
-        await this.orderService.assignUniquePickupCode(tx, orderId);
-      }
-
       if (updateResult.count === 0) {
         const currentOrder = await tx.order.findUnique({ where: { id: orderId } });
         if (!currentOrder) {
@@ -651,6 +647,10 @@ export class PaymentService {
 
         this.logger.error(`支付成功处理时订单状态异常: ${orderId}，状态: ${currentOrder.status}`);
         throw new BadRequestException('订单状态异常');
+      }
+
+      if (order.fulfillmentType === 'pickup') {
+        await this.orderService.assignUniquePickupCode(tx, orderId);
       }
 
       assertOrderTransition(OrderStatus.pending_payment, targetStatus, '支付成功');
@@ -710,7 +710,7 @@ export class PaymentService {
       const claimResult = await tx.orderRefund.updateMany({
         where: {
           id: refund.id,
-          status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] },
+          status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.FAILED] },
         },
         data: {
           status: REFUND_STATUS.PROCESSING,
@@ -1367,12 +1367,17 @@ export class PaymentService {
       return { code: 'FAIL', message: '退款正在处理中' };
     }
 
-    if (refund.status === REFUND_STATUS.FAILED) {
-      this.logger.warn(`微信退款回调退款记录已失败: ${outRefundNo}，返回 FAIL 让微信重试`);
-      return { code: 'FAIL', message: '退款记录已失败' };
-    }
-
     if (refund.status === REFUND_STATUS.CLOSED || refund.status === REFUND_STATUS.ABNORMAL) {
+      if (refundStatus === WECHAT_REFUND_STATUS.SUCCESS) {
+        this.businessEvent.emitCritical(
+          'refund_terminal_status_conflict',
+          'refund',
+          `微信退款SUCCESS但本地已终态(${refund.status})，拒绝自动修改: ${outRefundNo}`,
+          outRefundNo,
+          { outRefundNo, localStatus: refund.status, wechatStatus: refundStatus, refundId },
+        );
+        return { code: 'FAIL', message: `退款记录已终态(${refund.status})与微信SUCCESS冲突，需人工处理` };
+      }
       this.logger.warn(`微信退款回调退款记录已终态(${refund.status})，拒绝处理: ${outRefundNo}`);
       return { code: 'FAIL', message: `退款记录已终态: ${refund.status}` };
     }
@@ -1509,7 +1514,16 @@ export class PaymentService {
         };
       }
 
-      if (([REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] as string[]).includes(refund.status)) {
+      if (([REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.FAILED] as string[]).includes(refund.status)) {
+        if (refund.status === REFUND_STATUS.FAILED) {
+          this.businessEvent.emitWarn(
+            'refund_failed_to_success_recovery',
+            'refund',
+            `退款从failed恢复为success: ${outRefundNo}，微信侧已成功但本地曾标记失败`,
+            outRefundNo,
+            { outRefundNo, localStatus: refund.status, refundId: wechatResult.refund_id || refund.refundId },
+          );
+        }
         try {
           await this.processWechatRefundSuccess(refund, wechatResult.refund_id || refund.refundId, wechatResult);
           this.businessEvent.emitInfo('refund_sync_success', 'reconcile', `退款同步补偿成功: ${outRefundNo}`, outRefundNo, { outRefundNo, localStatus: refund.status });
@@ -1532,6 +1546,17 @@ export class PaymentService {
         }
 
         return { synced: true, reason: 'wechat_success_processed', message: '微信退款已成功，本地副作用已补偿完成' };
+      }
+
+      if (refund.status === REFUND_STATUS.CLOSED || refund.status === REFUND_STATUS.ABNORMAL) {
+        this.businessEvent.emitCritical(
+          'refund_terminal_status_conflict',
+          'refund',
+          `微信退款SUCCESS但本地已终态(${refund.status})，拒绝自动修改: ${outRefundNo}`,
+          outRefundNo,
+          { outRefundNo, localStatus: refund.status, wechatStatus },
+        );
+        return { synced: false, reason: 'terminal_status_conflict', message: `本地退款已终态(${refund.status})与微信SUCCESS冲突，需人工处理` };
       }
 
       return { synced: false, reason: 'unexpected_local_status', message: `本地退款状态异常(${refund.status})，无法自动补偿` };

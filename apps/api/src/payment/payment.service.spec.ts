@@ -77,7 +77,7 @@ function createPaymentService(mockPrisma?: any, mockConfigService?: any, mockBus
   const processFirstPaidReward = jest.fn() as any;
   processFirstPaidReward.mockResolvedValue(null);
   const mockShareService = { processFirstPaidReward };
-  const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
+  const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')), assignUniquePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
   const service = new PaymentService(prisma as any, configService as any, businessEvent as any, mockOrderService as any, mockShareService as any);
   jest.spyOn(service as any, 'verifyWechatSignature').mockReturnValue(true);
   jest.spyOn(service as any, 'isWechatPaymentConfigured').mockReturnValue(true);
@@ -873,6 +873,94 @@ describe('PaymentService.handleRefundCallback', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: REFUND_STATUS.CLOSED }) }),
     );
   });
+
+  it('本地 failed + 微信 SUCCESS 回调 → 补偿成功', async () => {
+    const failedRefund = { ...REFUND_RECORD, status: REFUND_STATUS.FAILED };
+    mockPrisma.orderRefund.findFirst.mockResolvedValue(failedRefund);
+    setupTransaction(mockPrisma);
+
+    mockPrisma.orderRefund.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.aftersaleOrder.findFirst
+      .mockResolvedValueOnce(AFTERSALE_RECORD)
+      .mockResolvedValueOnce(null);
+    mockPrisma.aftersaleOrder.update.mockResolvedValue({});
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU_RECORD);
+    mockPrisma.productSku.update.mockResolvedValue({});
+    mockPrisma.productStockLog.create.mockResolvedValue({});
+    mockPrisma.user.findFirst.mockResolvedValue(USER_RECORD);
+    mockPrisma.user.update.mockResolvedValue({});
+    mockPrisma.pointsRecord.create.mockResolvedValue({});
+    mockPrisma.order.update.mockResolvedValue({});
+    mockPrisma.orderRefund.update.mockResolvedValue({ status: REFUND_STATUS.SUCCESS });
+
+    const result = await service.handleRefundCallback(
+      buildRefundCallbackBody(DECRYPTED_REFUND_SUCCESS), CALLBACK_HEADERS, RAW_BODY,
+    );
+
+    expect(result.code).toBe('SUCCESS');
+    expect(mockPrisma.orderRefund.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: REFUND_STATUS.PROCESSING }) }),
+    );
+    expect(mockPrisma.orderRefund.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: REFUND_STATUS.SUCCESS }) }),
+    );
+    expect(mockPrisma.aftersaleOrder.update).toHaveBeenCalled();
+  });
+
+  it('本地 closed + 微信 SUCCESS 回调 → critical 事件 + FAIL', async () => {
+    const closedRefund = { ...REFUND_RECORD, status: REFUND_STATUS.CLOSED };
+    const mockBE = createMockBusinessEventService();
+    service = createPaymentService(mockPrisma, undefined, mockBE);
+    mockPrisma.orderRefund.findFirst.mockResolvedValue(closedRefund);
+
+    const result = await service.handleRefundCallback(
+      buildRefundCallbackBody(DECRYPTED_REFUND_SUCCESS), CALLBACK_HEADERS, RAW_BODY,
+    );
+
+    expect(result.code).toBe('FAIL');
+    expect(result.message).toContain('终态');
+    expect(mockBE.emitCritical).toHaveBeenCalledWith(
+      'refund_terminal_status_conflict',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ localStatus: REFUND_STATUS.CLOSED }),
+    );
+  });
+
+  it('本地 abnormal + 微信 SUCCESS 回调 → critical 事件 + FAIL', async () => {
+    const abnormalRefund = { ...REFUND_RECORD, status: REFUND_STATUS.ABNORMAL };
+    const mockBE = createMockBusinessEventService();
+    service = createPaymentService(mockPrisma, undefined, mockBE);
+    mockPrisma.orderRefund.findFirst.mockResolvedValue(abnormalRefund);
+
+    const result = await service.handleRefundCallback(
+      buildRefundCallbackBody(DECRYPTED_REFUND_SUCCESS), CALLBACK_HEADERS, RAW_BODY,
+    );
+
+    expect(result.code).toBe('FAIL');
+    expect(result.message).toContain('终态');
+    expect(mockBE.emitCritical).toHaveBeenCalledWith(
+      'refund_terminal_status_conflict',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ localStatus: REFUND_STATUS.ABNORMAL }),
+    );
+  });
+
+  it('重复 SUCCESS 回调不重复归还库存或积分', async () => {
+    mockPrisma.orderRefund.findFirst.mockResolvedValue({ ...REFUND_RECORD, status: REFUND_STATUS.SUCCESS });
+
+    const result = await service.handleRefundCallback(
+      buildRefundCallbackBody(DECRYPTED_REFUND_SUCCESS), CALLBACK_HEADERS, RAW_BODY,
+    );
+
+    expect(result.code).toBe('SUCCESS');
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(mockPrisma.productSku.update).not.toHaveBeenCalled();
+    expect(mockPrisma.pointsRecord.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('PaymentService.processPaymentSuccess (via handleCallback)', () => {
@@ -981,6 +1069,103 @@ describe('PaymentService.processPaymentSuccess (via handleCallback)', () => {
 
     expect(result.code).toBe('SUCCESS');
     expect(mockPrisma.paymentCompensationTask.create).toHaveBeenCalled();
+  });
+});
+
+describe('PaymentService.processPaymentSuccess pickup code idempotency', () => {
+  let service: PaymentService;
+  let mockPrisma: any;
+  let mockOrderService: any;
+
+  const PICKUP_ORDER = { id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment', payAmount: 10000, fulfillmentType: 'pickup' };
+  const PAYMENT_RECORD = { id: BigInt(1), orderId: BigInt(1), status: PAYMENT_STATUS.CREATED, transactionId: null };
+
+  beforeEach(() => {
+    mockOrderService = {
+      generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')),
+      assignUniquePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')),
+    };
+    const prisma = createMockPrisma();
+    mockPrisma = prisma;
+    const configService = createMockConfigService();
+    const businessEvent = createMockBusinessEventService();
+    const processFirstPaidReward = jest.fn() as any;
+    processFirstPaidReward.mockResolvedValue(null);
+    const mockShareService = { processFirstPaidReward };
+    service = new PaymentService(prisma as any, configService as any, businessEvent as any, mockOrderService as any, mockShareService as any);
+    jest.spyOn(service as any, 'verifyWechatSignature').mockReturnValue(true);
+    jest.spyOn(service as any, 'isWechatPaymentConfigured').mockReturnValue(true);
+    jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
+    jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
+    jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
+  });
+
+  it('pickup 订单首次支付成功会生成 pickupCode', async () => {
+    setupTransaction(mockPrisma);
+    mockPrisma.orderPayment.findUnique.mockResolvedValue(PAYMENT_RECORD);
+    mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.orderPayment.update.mockResolvedValue({ status: PAYMENT_STATUS.SUCCESS });
+    mockPrisma.orderLog.create.mockResolvedValue({});
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(null);
+
+    await service.processPaymentSuccess(BigInt(1), BigInt(1), 'TXN456', 10000, PICKUP_ORDER);
+
+    expect(mockOrderService.assignUniquePickupCode).toHaveBeenCalledWith(expect.anything(), BigInt(1));
+  });
+
+  it('同一个支付成功回调重复调用不会改变 pickupCode', async () => {
+    setupTransaction(mockPrisma);
+    const successPayment = { ...PAYMENT_RECORD, status: PAYMENT_STATUS.SUCCESS, transactionId: 'TXN456' };
+    const processedOrder = { ...PICKUP_ORDER, status: 'pending_pickup' };
+
+    mockPrisma.orderPayment.findUnique.mockResolvedValue(successPayment);
+    mockPrisma.order.findUnique.mockResolvedValue(processedOrder);
+
+    await service.processPaymentSuccess(BigInt(1), BigInt(1), 'TXN456', 10000, PICKUP_ORDER);
+
+    expect(mockOrderService.assignUniquePickupCode).not.toHaveBeenCalled();
+  });
+
+  it('订单已被并发处理为 pending_pickup 时，标准支付成功分支不覆盖 pickupCode', async () => {
+    setupTransaction(mockPrisma);
+    mockPrisma.orderPayment.findUnique.mockResolvedValue(PAYMENT_RECORD);
+    mockPrisma.order.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.order.findUnique.mockResolvedValue({ ...PICKUP_ORDER, status: 'pending_pickup', pickupCode: '87654321' });
+
+    await service.processPaymentSuccess(BigInt(1), BigInt(1), 'TXN456', 10000, PICKUP_ORDER);
+
+    expect(mockOrderService.assignUniquePickupCode).not.toHaveBeenCalled();
+  });
+
+  it('半成功补偿分支：updateResult.count > 0 时才调用 assignUniquePickupCode', async () => {
+    const successPayment = { ...PAYMENT_RECORD, status: PAYMENT_STATUS.SUCCESS, transactionId: 'TXN456' };
+    const halfSuccessOrder = { ...PICKUP_ORDER, status: 'pending_payment' };
+
+    setupTransaction(mockPrisma);
+    mockPrisma.orderPayment.findUnique.mockResolvedValue(successPayment);
+    mockPrisma.order.findUnique.mockResolvedValue(halfSuccessOrder);
+    mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.orderLog.create.mockResolvedValue({});
+    mockPrisma.userCoupon.findFirst.mockResolvedValue(null);
+
+    await service.processPaymentSuccess(BigInt(1), BigInt(1), 'TXN456', 10000, halfSuccessOrder);
+
+    expect(mockOrderService.assignUniquePickupCode).toHaveBeenCalledWith(expect.anything(), BigInt(1));
+  });
+
+  it('半成功补偿分支：updateResult.count === 0 时不调用 assignUniquePickupCode', async () => {
+    const successPayment = { ...PAYMENT_RECORD, status: PAYMENT_STATUS.SUCCESS, transactionId: 'TXN456' };
+    const halfSuccessOrder = { ...PICKUP_ORDER, status: 'pending_payment' };
+
+    setupTransaction(mockPrisma);
+    mockPrisma.orderPayment.findUnique.mockResolvedValue(successPayment);
+    mockPrisma.order.findUnique.mockResolvedValue(halfSuccessOrder);
+    mockPrisma.order.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.processPaymentSuccess(BigInt(1), BigInt(1), 'TXN456', 10000, halfSuccessOrder))
+      .rejects.toThrow('订单状态已变更，补偿失败');
+
+    expect(mockOrderService.assignUniquePickupCode).not.toHaveBeenCalled();
   });
 });
 
@@ -1372,8 +1557,36 @@ describe('PaymentService.syncRefund', () => {
     );
   });
 
-  it('本地状态异常(failed/closed/abnormal)且微信 SUCCESS 时返回 unexpected_local_status', async () => {
+  it('本地状态 failed 且微信 SUCCESS 时走补偿流程并记录 businessEvent', async () => {
+    const mockBE = createMockBusinessEventService();
+    service = createPaymentService(mockPrisma, undefined, mockBE);
     mockPrisma.orderRefund.findFirst.mockResolvedValue({ ...REFUND_RECORD, status: REFUND_STATUS.FAILED });
+    jest.spyOn(service as any, 'queryRefund').mockResolvedValue({
+      status: 'SUCCESS', refund_id: 'wx_refund_id', amount: { refund: 1000, total: 10000 },
+    });
+    setupTransaction(mockPrisma);
+    mockPrisma.orderRefund.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue(null);
+    mockPrisma.orderRefund.update.mockResolvedValue({ status: REFUND_STATUS.SUCCESS });
+    mockPrisma.refundCallbackLog.updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await service.syncRefund('REFUND123');
+
+    expect(result.synced).toBe(true);
+    expect(result.reason).toBe('wechat_success_processed');
+    expect(mockBE.emitWarn).toHaveBeenCalledWith(
+      'refund_failed_to_success_recovery',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ localStatus: REFUND_STATUS.FAILED }),
+    );
+  });
+
+  it('本地状态 closed/abnormal 且微信 SUCCESS 时记录 critical 事件', async () => {
+    const mockBE = createMockBusinessEventService();
+    service = createPaymentService(mockPrisma, undefined, mockBE);
+    mockPrisma.orderRefund.findFirst.mockResolvedValue({ ...REFUND_RECORD, status: REFUND_STATUS.CLOSED });
     jest.spyOn(service as any, 'queryRefund').mockResolvedValue({
       status: 'SUCCESS', refund_id: 'wx_refund_id', amount: { refund: 1000, total: 10000 },
     });
@@ -1381,8 +1594,14 @@ describe('PaymentService.syncRefund', () => {
     const result = await service.syncRefund('REFUND123');
 
     expect(result.synced).toBe(false);
-    expect(result.reason).toBe('unexpected_local_status');
-    expect(mockPrisma.orderRefund.updateMany).not.toHaveBeenCalled();
+    expect(result.reason).toBe('terminal_status_conflict');
+    expect(mockBE.emitCritical).toHaveBeenCalledWith(
+      'refund_terminal_status_conflict',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ localStatus: REFUND_STATUS.CLOSED }),
+    );
   });
 });
 
