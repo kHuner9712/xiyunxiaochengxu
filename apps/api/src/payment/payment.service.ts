@@ -546,15 +546,15 @@ export class PaymentService {
 
           const targetStatus = order.fulfillmentType === 'pickup' ? OrderStatus.pending_pickup : OrderStatus.pending_delivery;
           const updateData: any = { status: targetStatus, paidAt: new Date() };
-          if (order.fulfillmentType === 'pickup') {
-            const pickupCode = await this.orderService.generatePickupCode();
-            updateData.pickupCode = pickupCode;
-          }
 
           const updateResult = await tx.order.updateMany({
             where: { id: orderId, status: OrderStatus.pending_payment },
             data: updateData,
           });
+
+          if (order.fulfillmentType === 'pickup') {
+            await this.orderService.assignUniquePickupCode(tx, orderId);
+          }
 
           if (updateResult.count === 0) {
             this.logger.error(`支付半成功补偿失败: 订单${orderId}状态已变更，无法修复`);
@@ -611,10 +611,6 @@ export class PaymentService {
         status: targetStatus,
         paidAt: new Date(),
       };
-      if (order.fulfillmentType === 'pickup') {
-        const pickupCode = await this.orderService.generatePickupCode();
-        updateOrderData.pickupCode = pickupCode;
-      }
 
       const updateResult = await tx.order.updateMany({
         where: {
@@ -623,6 +619,10 @@ export class PaymentService {
         },
         data: updateOrderData,
       });
+
+      if (order.fulfillmentType === 'pickup') {
+        await this.orderService.assignUniquePickupCode(tx, orderId);
+      }
 
       if (updateResult.count === 0) {
         const currentOrder = await tx.order.findUnique({ where: { id: orderId } });

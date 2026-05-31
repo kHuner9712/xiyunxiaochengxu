@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Put, Body } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -13,12 +14,14 @@ export class AdminAuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Get('captcha')
   async getCaptcha() {
     return this.authService.getCaptcha();
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
   async login(@Body() dto: AdminLoginDto) {
     return this.authService.adminLogin(
@@ -30,6 +33,7 @@ export class AdminAuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
   async refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
@@ -68,11 +72,13 @@ export class WeappAuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
   async login(@Body() dto: WeappLoginDto) {
     return this.authService.weappLogin(dto.code);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('phone')
   async bindPhone(
     @CurrentUser('id') userId: string,

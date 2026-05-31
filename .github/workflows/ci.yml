@@ -17,10 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -29,7 +27,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build shared package
         run: pnpm --filter @baby-mall/shared build

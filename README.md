@@ -4,19 +4,16 @@
 
 当前发布状态（2026-05-31）：**代码层面可冻结，允许进入预生产部署；正式发布尚未完成**。
 
-说明：当前工作区仍包含未提交的最终代码修复与文档更新，正式冻结前应提交并记录最终 commit sha。真实生产发布仍依赖真实 AppID、生产支付配置、证书、HTTPS、数据库迁移、微信开发者工具上传体验版和真机验收。
-
 ## 最新本地门禁（2026-05-31）
 
 以下命令已在本地真实执行通过：
 
-- `pnpm --filter @baby-mall/api prisma:validate`
-- `pnpm --filter @baby-mall/api test:ci`
-- `pnpm build:api`
-- `pnpm build:admin`
-- `VITE_API_BASE_URL=https://example.invalid pnpm build:mini`
-- `pnpm build:all`
-- `pnpm release:check`
+| 门禁项 | 结果 |
+|---|---|
+| `prisma:validate` | PASS |
+| `test:ci` | 464 unit tests (30 suites) + 23 e2e tests (6 suites) |
+| `build:all` | PASS |
+| `release:check` | 106 PASS / 0 FAIL / 11 WARN |
 
 以下项目仍待部署阶段核验，不得记录为已通过：
 
@@ -25,6 +22,14 @@
 - 真实生产变量下的 `pnpm release:check:prod`
 - 微信开发者工具上传体验版
 - 真机完整链路验收，包括登录、下单、支付、退款、售后、自提、客服与协议页
+
+以下项目属于部署/运营阶段人工项，不作为代码冻结失败项：真实 AppID、密钥、证书、资质图片、客服电话、客服微信、退货地址。
+
+## Go/No-Go 结论
+
+- 代码层面：**Go**
+- 预生产部署：**Go**
+- 正式发布：**No-Go**，直到真实 AppID、支付配置、证书、数据库迁移、体验版上传、真机验收、运营/法务信息全部完成
 
 ## 商用加固进展（2026-05-29）
 
@@ -41,7 +46,7 @@
 ## 环境要求
 
 - Node.js >= 18
-- pnpm >= 8
+- pnpm 11.2.2（由 packageManager 字段管理，通过 corepack 激活）
 - MySQL 8+
 - Redis 7+
 - Docker / Docker Compose（用于预生产部署）

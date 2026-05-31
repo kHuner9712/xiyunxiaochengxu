@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# 自检说明：验证 one-off command 会正常退出
+# 执行: docker compose --env-file .env.production run --rm --entrypoint sh api -lc 'echo ok && exit 0'
+# 预期: 容器输出 "ok" 后立即退出，不会进入常驻服务模式
+# 若容器未退出，说明 --entrypoint 覆写未生效，需检查 Docker Compose 版本
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -227,13 +231,13 @@ pass "docker compose config 校验通过"
 info "启动数据库与缓存容器..."
 docker compose --env-file "$ENV_FILE" up -d mysql redis
 
-info "执行 Prisma 迁移..."
-docker compose --env-file "$ENV_FILE" run --rm api pnpm --filter @baby-mall/api prisma:migrate:deploy
-pass "prisma migrate deploy 执行完成"
+info "步骤 1/2: 数据库迁移"
+docker compose --env-file "$ENV_FILE" run --rm --entrypoint sh api -lc 'cd /app/apps/api && npx prisma migrate deploy'
+pass "步骤 1/2: 数据库迁移完成"
 
-info "启动全部服务..."
-docker compose --env-file "$ENV_FILE" up -d
-pass "服务已启动"
+info "步骤 2/2: 启动服务"
+SKIP_MIGRATE=true docker compose --env-file "$ENV_FILE" up -d
+pass "步骤 2/2: 服务已启动（SKIP_MIGRATE=true，迁移已在步骤 1 完成）"
 
 check_http() {
   local name="$1"

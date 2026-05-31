@@ -1,16 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { AuthModule } from '../src/auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { RedisService } from '../src/common/redis/redis.service';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../src/common/guards/permission.guard';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import {
   createMockPrismaService,
   createMockRedisService,
@@ -19,21 +18,10 @@ import {
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 
-jest.mock('axios', () => ({
-  __esModule: true,
-  default: {
-    get: jest.fn(),
-    post: jest.fn(),
-    create: jest.fn(() => ({ get: jest.fn(), post: jest.fn() })),
-  },
-}));
-
-describe('Weapp Auth (e2e)', () => {
+describe('Throttler Guard (e2e)', () => {
   let app: INestApplication;
   let mockPrisma: ReturnType<typeof createMockPrismaService>;
   let mockRedis: ReturnType<typeof createMockRedisService>;
-  let jwtService: JwtService;
-  let token: string;
 
   beforeAll(async () => {
     mockPrisma = createMockPrismaService();
@@ -45,7 +33,7 @@ describe('Weapp Auth (e2e)', () => {
           isGlobal: true,
           load: [() => createTestEnvConfig()],
         }),
-        ThrottlerModule.forRoot([{ ttl: 60000, limit: 1000 }]),
+        ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
         AuthModule,
       ],
       providers: [
@@ -88,71 +76,62 @@ describe('Weapp Auth (e2e)', () => {
     app.useGlobalInterceptors(new TransformInterceptor(app.get(Reflector)));
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
-
-    jwtService = moduleFixture.get<JwtService>(JwtService);
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  it('POST /api/weapp/auth/login with valid code returns token', async () => {
-    const axios = require('axios');
-    axios.default.get.mockResolvedValue({
-      data: { openid: 'test_openid', session_key: 'test_session_key' },
-    });
-
-    mockPrisma.user.findFirst.mockResolvedValue(null);
-    mockPrisma.user.create.mockResolvedValue({
-      id: BigInt(1),
-      openid: 'test_openid',
-      unionId: null,
-      status: 1,
-      deletedAt: null,
-    });
-
-    const res = await request(app.getHttpServer())
-      .post('/api/weapp/auth/login')
-      .send({ code: 'test_code' });
-
-    expect(res.status).toBe(201);
-    expect(res.body.data.token).toBeDefined();
-    expect(typeof res.body.data.token).toBe('string');
-    expect(res.body.data.isNewUser).toBe(true);
-
-    token = res.body.data.token;
+  it('GET /api/admin/auth/captcha 触发限流后返回 code=40501', async () => {
+    const requests = [];
+    for (let i = 0; i < 21; i++) {
+      requests.push(
+        request(app.getHttpServer()).get('/api/admin/auth/captcha'),
+      );
+    }
+    const responses = await Promise.all(requests);
+    const throttled = responses.find((res) => res.body.code === 40501);
+    expect(throttled).toBeDefined();
+    expect(throttled!.body.code).toBe(40501);
+    expect(throttled!.body.message).toBe('请求频率超限，请稍后再试');
+    expect(throttled!.body.data).toBeNull();
+    expect(throttled!.body).toHaveProperty('requestId');
   });
 
-  it('token payload contains roleType=user and tokenType=access', async () => {
-    const decoded = await jwtService.verifyAsync(token);
-    expect(decoded.roleType).toBe('user');
-    expect(decoded.tokenType).toBe('access');
+  it('POST /api/admin/auth/login 触发限流后返回 code=40501', async () => {
+    const requests = [];
+    for (let i = 0; i < 6; i++) {
+      requests.push(
+        request(app.getHttpServer())
+          .post('/api/admin/auth/login')
+          .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' }),
+      );
+    }
+    const responses = await Promise.all(requests);
+    const throttled = responses.find((res) => res.body.code === 40501);
+    expect(throttled).toBeDefined();
+    expect(throttled!.body.code).toBe(40501);
+    expect(throttled!.body.message).toBe('请求频率超限，请稍后再试');
+    expect(throttled!.body.data).toBeNull();
+    expect(throttled!.body).toHaveProperty('requestId');
   });
 
-  it('token can access weapp authenticated endpoints', async () => {
-    const axios = require('axios');
-    axios.default.get.mockResolvedValue({
-      data: { session_key: 'new_session_key' },
-    });
-
-    const res = await request(app.getHttpServer())
-      .post('/api/weapp/auth/phone')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ code: 'x', encryptedData: 'x', iv: 'x' });
-
-    expect([40101, 40102, 40103]).not.toContain(res.body.code);
-  });
-
-  it('POST /api/weapp/auth/login with WeChat error throws unauthorized', async () => {
-    const axios = require('axios');
-    axios.default.get.mockResolvedValue({
-      data: { errcode: 40029, errmsg: 'invalid code' },
-    });
-
-    const res = await request(app.getHttpServer())
-      .post('/api/weapp/auth/login')
-      .send({ code: 'bad_code' });
-
-    expect(res.body.code).toBe(40101);
+  it('限流响应结构包含 code, message, data, requestId', async () => {
+    const requests = [];
+    for (let i = 0; i < 6; i++) {
+      requests.push(
+        request(app.getHttpServer())
+          .post('/api/admin/auth/login')
+          .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' }),
+      );
+    }
+    const responses = await Promise.all(requests);
+    const throttled = responses.find((res) => res.body.code === 40501);
+    expect(throttled).toBeDefined();
+    const body = throttled!.body;
+    expect(body).toHaveProperty('code');
+    expect(body).toHaveProperty('message');
+    expect(body).toHaveProperty('data');
+    expect(body).toHaveProperty('requestId');
   });
 });

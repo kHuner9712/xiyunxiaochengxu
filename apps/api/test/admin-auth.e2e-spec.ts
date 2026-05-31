@@ -10,6 +10,7 @@ import { RedisService } from '../src/common/redis/redis.service';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../src/common/guards/permission.guard';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import {
   createMockPrismaService,
   createMockRedisService,
@@ -55,9 +56,11 @@ describe('Admin Auth (e2e)', () => {
           isGlobal: true,
           load: [() => createTestEnvConfig()],
         }),
+        ThrottlerModule.forRoot([{ ttl: 60000, limit: 1000 }]),
         AuthModule,
       ],
       providers: [
+        { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: PermissionGuard },
       ],

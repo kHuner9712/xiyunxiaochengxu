@@ -283,10 +283,7 @@ export class OrderService {
     const payAmount = Math.max(0, totalAmount - discountAmount - couponAmount - activityDiscountAmount - pointsAmount + freightAmount);
 
     const isZeroPay = payAmount === 0;
-    let zeroPayPickupCode: string | undefined;
-    if (isZeroPay && fulfillmentType === 'pickup') {
-      zeroPayPickupCode = await this.generatePickupCode();
-    }
+    const needPickupCode = isZeroPay && fulfillmentType === 'pickup';
 
     const order = await this.prisma.$transaction(async (tx) => {
       for (const check of skuStockChecks) {
@@ -388,7 +385,6 @@ export class OrderService {
           }),
           remark: data.remark,
           ...(isZeroPay ? { paidAt: new Date() } : { autoCloseAt: new Date(Date.now() + ORDER_AUTO_CLOSE_MINUTES * 60 * 1000) }),
-          ...(isZeroPay && fulfillmentType === 'pickup' ? { pickupCode: zeroPayPickupCode } : {}),
           orderItems: {
             create: orderItems,
           },
@@ -403,6 +399,10 @@ export class OrderService {
         },
         include: { orderItems: { include: { aftersaleOrders: true } } },
       });
+
+      if (needPickupCode) {
+        await this.assignUniquePickupCode(tx, createdOrder.id);
+      }
 
       if (couponId) {
         await tx.userCoupon.update({
@@ -1075,6 +1075,29 @@ export class OrderService {
       this.logger.warn(`自提码 ${code} 已存在，第 ${attempt + 1} 次重试`);
     }
     throw new InternalServerErrorException('自提码生成失败，请重试');
+  }
+
+  async assignUniquePickupCode(tx: any, orderId: bigint, maxRetries = 5): Promise<string> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const code = await this.generatePickupCode();
+      try {
+        await tx.order.updateMany({
+          where: { id: orderId },
+          data: { pickupCode: code },
+        });
+        return code;
+      } catch (error: any) {
+        if (
+          error?.code === 'P2002' &&
+          (error?.meta as any)?.target?.includes('pickupCode')
+        ) {
+          this.logger.warn(`自提码 ${code} 写入冲突(P2002)，第 ${attempt + 1} 次重试`);
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new InternalServerErrorException('自提码写入失败，请重试');
   }
 
   private async completeOrderAndReward(params: {

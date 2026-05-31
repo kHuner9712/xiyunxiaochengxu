@@ -62,14 +62,18 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 ## 5. 数据库迁移
 
 ```bash
-(cd deploy && docker compose --env-file ../.env.production run --rm api pnpm --filter @baby-mall/api prisma:migrate:deploy)
+(cd deploy && docker compose --env-file ../.env.production run --rm --entrypoint sh api -lc 'cd /app/apps/api && npx prisma migrate deploy')
 ```
+
+说明：使用 `--entrypoint sh` 覆写确保迁移命令执行后容器退出，不会进入常驻服务模式。迁移幂等，重复执行不会产生冲突。
 
 ## 6. 启动服务
 
 ```bash
-(cd deploy && docker compose --env-file ../.env.production up -d)
+(cd deploy && SKIP_MIGRATE=true docker compose --env-file ../.env.production up -d)
 ```
+
+说明：设置 `SKIP_MIGRATE=true` 跳过 entrypoint.sh 中的自动迁移步骤，因为迁移已在第 5 步单独完成。若未单独执行迁移，可省略该变量，entrypoint.sh 会在启动时自动执行 `prisma migrate deploy`。
 
 ## 7. 健康检查
 

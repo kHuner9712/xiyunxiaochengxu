@@ -34,7 +34,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AdminMustChangePasswordGuard } from './common/guards/admin-must-change-password.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { validateEnv } from './config/env.validation';
 
 @Module({
@@ -73,6 +73,7 @@ import { validateEnv } from './config/env.validation';
     PickupStoreModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: AdminMustChangePasswordGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },

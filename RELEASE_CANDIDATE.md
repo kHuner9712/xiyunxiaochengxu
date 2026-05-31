@@ -1,25 +1,25 @@
-# RELEASE_CANDIDATE（2026-05-28）
+# RELEASE_CANDIDATE（2026-05-31）
 
 ## 1. 版本结论
 
 - 项目：禧孕优选（微信小程序 + Admin + API）
-- 阶段：预生产部署脚本最终修复
-- 结论：**可进入预生产部署，不可正式发布（No-Go for Production）**
+- 阶段：预生产部署脚本最终修复 + 限流启用 + CI 对齐
+- 代码层面：**Go**（门禁和 CI 均通过）
+- 预生产部署：**Go**
+- 正式发布：**No-Go**，直到真实 AppID、支付配置、证书、数据库迁移、体验版上传、真机验收、运营/法务信息全部完成
 
 ## 1.1 本轮修复项
 
-1. `deploy-prod-check.sh` 增加 `ENV_FILE` 绝对路径规范化，兼容三种调用方式：
-- `bash deploy/scripts/deploy-prod-check.sh`
-- `ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh`
-- `cd deploy && ENV_FILE=../.env.production bash scripts/deploy-prod-check.sh`
-2. 微信支付证书路径校验拆分为：
-- `.env.production` 中校验容器内路径（`/app/apps/api/certs/...`）
-- 宿主机固定路径文件可读性校验（`deploy/certs/...` 与 `deploy/nginx/ssl/...`）
-3. 文档同步：
-- `docs/ENV_PRODUCTION_FILL_GUIDE.md`
-- `docs/SERVER_DEPLOY_COMMANDS.md`
-- `docs/PREPROD_EXECUTION_STEPS.md`
-- `docs/PREPROD_SCRIPT_SELFTEST.md`
+1. 预生产部署脚本 one-off 命令阻断修复：
+   - `entrypoint.sh` 支持 `exec "$@"`，允许 Docker one-off 命令正常执行
+   - 新增 `SKIP_MIGRATE` 开关，跳过迁移步骤
+   - `deploy-prod-check.sh` 使用 `--entrypoint` 覆写，确保部署检查命令不被 entrypoint 阻断
+2. ThrottlerGuard 限流启用：
+   - 认证接口严格限流：验证码 20次/分、登录 5次/分、refresh 10次/分、小程序登录/手机号 10次/分
+   - 支付回调 `@SkipThrottle` 跳过限流
+3. GitHub Actions pnpm 版本对齐：
+   - `ci.yml` 和 `release-check.yml` 改用 `corepack` 读取 `packageManager`
+   - 安装依赖使用 `--frozen-lockfile`
 
 ## 2. 本轮实际执行命令结果
 
@@ -27,16 +27,10 @@
 
 | 命令 | 结果 | 说明 |
 |---|---|---|
-| `pnpm install` | PASS | 依赖已就绪 |
 | `pnpm --filter @baby-mall/api prisma:validate` | PASS | Prisma Schema 有效 |
-| `pnpm --filter @baby-mall/api prisma:generate` | PASS | Prisma Client 生成成功 |
-| `pnpm --filter @baby-mall/api test:ci` | PASS | 单测+e2e 通过（24+5 套件） |
-| `pnpm build:api` | PASS | API 构建通过 |
-| `pnpm build:admin` | PASS | Admin 构建通过 |
-| `pnpm build:mini` | PASS | 小程序默认构建通过 |
-| `pnpm release:check` | PASS | `PASS 94 / FAIL 0 / WARN 9`（默认门禁通过） |
-| `bash -n deploy/scripts/deploy-prod-check.sh` | PASS | 脚本语法检查通过 |
-| `pnpm release:check:prod` | FAIL（预期） | `PASS 93 / FAIL 5 / WARN 5`（严格门禁阻断） |
+| `pnpm --filter @baby-mall/api test:ci` | PASS | 464 unit tests (30 suites) + 23 e2e tests (6 suites) |
+| `pnpm build:all` | PASS | API + Admin + 小程序构建均通过 |
+| `pnpm release:check` | PASS | 106 PASS / 0 FAIL / 11 WARN（默认门禁通过） |
 
 ## 3. release:check:prod 失败明细（预期人工/环境阻塞）
 
@@ -53,11 +47,15 @@
 
 ## 5. 人工阻塞项（P0）
 
+> **声明**：真实 AppID、密钥、证书、资质图片、客服电话、客服微信、退货地址属于部署/运营阶段人工项，不作为代码冻结失败项。
+
 1. 微信小程序真实 AppID（体验版/正式版构建必需）。
 2. 协议最终联系方式：客服电话、客服微信、退货地址（法务/运营确认后写入 `legal.ts`）。
 3. 私有生产环境文件 `.env.production`（真实变量，不提交）。
 4. 微信支付生产参数与证书（商户号、APIv3 Key、商户私钥、平台证书等）。
 5. HTTPS 证书文件（`fullchain.pem`、`privkey.pem`）。
+6. 数据库迁移（生产环境首次 Prisma migrate deploy）。
+7. 体验版上传与真机验收。
 
 ## 6. 下一步建议
 

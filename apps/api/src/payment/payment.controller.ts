@@ -4,6 +4,7 @@ import { PaymentReconcileService } from './payment-reconcile.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
+import { SkipThrottle } from '@nestjs/throttler';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max } from 'class-validator';
 
@@ -82,6 +83,7 @@ export class PaymentController {
 
   @Public()
   @SkipTransform()
+  @SkipThrottle()
   @Post('callback')
   async callback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
     const rawBody = req.rawBody;
@@ -95,6 +97,7 @@ export class PaymentController {
 
   @Public()
   @SkipTransform()
+  @SkipThrottle()
   @Post('refund-callback')
   async refundCallback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
     const rawBody = req.rawBody;

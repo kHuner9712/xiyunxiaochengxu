@@ -1441,6 +1441,7 @@ describe('OrderService.create 0元订单', () => {
     mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
 
     jest.spyOn(service, 'generatePickupCode' as any).mockResolvedValue('12345678');
+    mockPrisma._mockTx.order.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await service.create('100', {
       fulfillmentType: 'pickup',
@@ -1451,9 +1452,15 @@ describe('OrderService.create 0元订单', () => {
 
     const createCall = mockPrisma._mockTx.order.create.mock.calls[0][0];
     expect(createCall.data.status).toBe(OrderStatus.pending_pickup);
-    expect(createCall.data.pickupCode).toBe('12345678');
+    expect(createCall.data.pickupCode).toBeUndefined();
     expect(createCall.data.paidAt).toBeInstanceOf(Date);
     expect(createCall.data.autoCloseAt).toBeUndefined();
+    expect(mockPrisma._mockTx.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BigInt(1) },
+        data: { pickupCode: '12345678' },
+      }),
+    );
   });
 
   it('0元订单 OrderPayment 为 SUCCESS 状态，paymentMethod=zero_pay，amount=0', async () => {
@@ -1723,7 +1730,7 @@ describe('generatePickupCode', () => {
     expect(mockPrisma.order.findFirst).toHaveBeenCalledTimes(5);
   });
 
-  it('0 元自提订单路径正常生成自提码', async () => {
+  it('0 元自提订单路径通过 assignUniquePickupCode 生成自提码', async () => {
     const PICKUP_STORE = {
       id: BigInt(500), name: '测试自提点', province: '北京', city: '北京', district: '朝阳区',
       address: 'xxx路2号', contactPhone: '010-12345678', status: 1, deletedAt: null,
@@ -1758,6 +1765,7 @@ describe('generatePickupCode', () => {
     mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
 
     mockPrisma.order.findFirst.mockResolvedValue(null);
+    mockPrisma._mockTx.order.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await service.create('100', {
       fulfillmentType: 'pickup',
@@ -1768,8 +1776,87 @@ describe('generatePickupCode', () => {
 
     const createCall = mockPrisma._mockTx.order.create.mock.calls[0][0];
     expect(createCall.data.status).toBe(OrderStatus.pending_pickup);
-    expect(createCall.data.pickupCode).toMatch(/^\d{8}$/);
+    expect(createCall.data.pickupCode).toBeUndefined();
     expect(createCall.data.paidAt).toBeInstanceOf(Date);
+    expect(mockPrisma._mockTx.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BigInt(1) },
+        data: expect.objectContaining({ pickupCode: expect.stringMatching(/^\d{8}$/) }),
+      }),
+    );
+  });
+});
+
+describe('assignUniquePickupCode', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    const { service: s, mockPrisma: p } = createService();
+    service = s;
+    mockPrisma = p;
+  });
+
+  it('正常写入自提码并返回', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    const tx: any = { order: { updateMany } };
+    const code = await service.assignUniquePickupCode(tx, BigInt(1));
+    expect(code).toMatch(/^\d{8}$/);
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BigInt(1) },
+        data: { pickupCode: code },
+      }),
+    );
+  });
+
+  it('P2002 冲突时自动重试直到成功', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+    const p2002Error: any = Object.assign(new Error('Unique constraint failed'), {
+      code: 'P2002',
+      meta: { target: ['pickupCode'] },
+    });
+    const updateMany = jest.fn<any>();
+    updateMany.mockRejectedValueOnce(p2002Error).mockResolvedValueOnce({ count: 1 });
+    const tx: any = { order: { updateMany } };
+    const code = await service.assignUniquePickupCode(tx, BigInt(1));
+    expect(code).toMatch(/^\d{8}$/);
+    expect(updateMany).toHaveBeenCalledTimes(2);
+  });
+
+  it('非 pickupCode 的 P2002 不重试，直接抛出', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+    const otherP2002: any = Object.assign(new Error('Unique constraint failed'), {
+      code: 'P2002',
+      meta: { target: ['orderNo'] },
+    });
+    const updateMany = jest.fn<any>().mockRejectedValue(otherP2002);
+    const tx: any = { order: { updateMany } };
+    await expect(service.assignUniquePickupCode(tx, BigInt(1), 3)).rejects.toThrow('Unique constraint failed');
+    expect(updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('非 P2002 错误不重试，直接抛出', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+    const updateMany = jest.fn<any>().mockRejectedValue(new Error('Connection lost'));
+    const tx: any = { order: { updateMany } };
+    await expect(service.assignUniquePickupCode(tx, BigInt(1), 3)).rejects.toThrow('Connection lost');
+    expect(updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('超过最大重试次数抛出 InternalServerErrorException', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+    const p2002Error: any = Object.assign(new Error('Unique constraint failed'), {
+      code: 'P2002',
+      meta: { target: ['pickupCode'] },
+    });
+    const updateMany = jest.fn<any>().mockRejectedValue(p2002Error);
+    const tx: any = { order: { updateMany } };
+    await expect(service.assignUniquePickupCode(tx, BigInt(1), 3)).rejects.toThrow(InternalServerErrorException);
+    await expect(service.assignUniquePickupCode(tx, BigInt(1), 3)).rejects.toThrow('自提码写入失败，请重试');
+    expect(updateMany).toHaveBeenCalledTimes(6);
   });
 });
 
