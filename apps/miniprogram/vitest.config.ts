@@ -1,0 +1,40 @@
+import path from 'node:path'
+import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: tag => [
+            'checkbox',
+            'checkbox-group',
+            'image',
+            'input',
+            'scroll-view',
+            'switch',
+            'text',
+            'view',
+          ].includes(tag),
+        },
+      },
+    }),
+  ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        additionalData: '@import "@/styles/tokens.scss";',
+      },
+    },
+  },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+  },
+})

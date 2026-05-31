@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { calculateBabyMonthAge, getMemberLevelByGrowth, MEMBER_LEVELS, paginate, serializeProductCard } from '@baby-mall/shared';
+import { calculateBabyMonthAge, paginate, serializeProductCard } from '@baby-mall/shared';
 import { getAssetBaseUrl, normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
@@ -11,7 +11,7 @@ export class HomeService {
   constructor(private prisma: PrismaService) {}
 
   async getHomeData(userId?: string) {
-    const [banners, recommendations, hotProducts, newProducts, activities, monthAgeRecommend] = await Promise.all([
+    const [banners, _recommendations, hotProducts, newProducts, activities, monthAgeRecommend] = await Promise.all([
       this.getBanners(),
       this.getRecommendations(),
       this.getHotProducts(),

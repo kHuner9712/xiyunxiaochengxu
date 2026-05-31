@@ -39,8 +39,12 @@ if (!BASE_URL) {
   console.error('[baby-mall] VITE_API_BASE_URL 未配置，所有 API 请求将失败')
 }
 
-function getToken(): string {
+export function getToken(): string {
   return uni.getStorageSync(TOKEN_KEY) || ''
+}
+
+export function getApiBaseUrl(): string {
+  return BASE_URL
 }
 
 export function setToken(token: string) {

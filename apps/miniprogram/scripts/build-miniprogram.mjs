@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const backupPath = resolve(__dirname, '../src/manifest.json.bak')
 const scriptsDir = __dirname
+const isProduction = (process.env.NODE_ENV || '').toLowerCase() === 'production'
 
 if (existsSync(backupPath)) {
   console.error('检测到残留的 manifest.json.bak，请先运行 node scripts/restore-miniprogram-manifest.mjs 清理')
@@ -38,6 +39,12 @@ try {
     shell: true,
   })
   exitCode = buildResult.status ?? 1
+  if (exitCode === 0 && isProduction) {
+    const verifyResult = spawnSync('node', [resolve(scriptsDir, 'verify-mp-weixin-prod.mjs')], {
+      stdio: 'inherit',
+    })
+    exitCode = verifyResult.status ?? 1
+  }
 } finally {
   if (patchCreatedBak) {
     spawnSync('node', [resolve(scriptsDir, 'restore-miniprogram-manifest.mjs')], { stdio: 'inherit' })

@@ -129,4 +129,32 @@ describe('AddressService', () => {
       );
     });
   });
+
+  describe('ownership guard', () => {
+    it('findById scopes lookup by current user id', async () => {
+      prisma.userAddress.findFirst.mockResolvedValue(null);
+
+      await expect(service.findById('100', '9')).rejects.toThrow('地址不存在');
+
+      expect(prisma.userAddress.findFirst).toHaveBeenCalledWith({
+        where: { id: 9n, userId: 100n, deletedAt: null },
+      });
+    });
+
+    it('update refuses an address owned by another user before writing', async () => {
+      prisma.userAddress.findFirst.mockResolvedValue(null);
+
+      await expect(service.update('100', '9', { name: '越权' })).rejects.toThrow('地址不存在');
+
+      expect(prisma.userAddress.update).not.toHaveBeenCalled();
+    });
+
+    it('delete refuses an address owned by another user before soft deletion', async () => {
+      prisma.userAddress.findFirst.mockResolvedValue(null);
+
+      await expect(service.delete('100', '9')).rejects.toThrow('地址不存在');
+
+      expect(prisma.userAddress.update).not.toHaveBeenCalled();
+    });
+  });
 });

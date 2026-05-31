@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { OrderService } from './order.service';
 import { COUPON_STATUS, PAYMENT_STATUS } from '../common/constants/payment';
@@ -125,7 +125,7 @@ describe('OrderService.create 库存扣减', () => {
     mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
     mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
 
-    const result = await service.create('100', {
+    await service.create('100', {
       addressId: '1', items: [{ skuId: '200', quantity: 1 }],
     });
 
@@ -443,6 +443,14 @@ describe('OrderService.cancel 未支付订单释放资源', () => {
         data: expect.objectContaining({ status: COUPON_STATUS.FREE, usedOrderId: null }),
       }),
     );
+  });
+
+  it('不能取消其他用户订单，且不会释放库存/积分/优惠券', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue(null);
+
+    await expect(service.cancel('999', '1')).rejects.toThrow('订单不存在');
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('USED 优惠券不会被释放为 FREE', async () => {
@@ -877,7 +885,7 @@ describe('OrderService.confirmReceive 确认收货', () => {
     mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
     mockPrisma._mockTx.order.findFirst.mockResolvedValue(COMPLETED_ORDER);
 
-    const result = await service.confirmReceive('100', '1');
+    await service.confirmReceive('100', '1');
 
     expect(mockPrisma._mockTx.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1024,7 +1032,7 @@ describe('接口契约：createOrder 返回 orderId/orderNo', () => {
     ({ service, mockPrisma } = createService());
   });
 
-  it('create 返回 { orderId, orderNo }，不返回完整 order 对象', async () => {
+  it('create 返回支付判断字段，且不返回完整 order 对象', async () => {
     mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
     mockPrisma.productSku.findFirst.mockResolvedValue(SKU(10));
 
@@ -1033,7 +1041,7 @@ describe('接口契约：createOrder 返回 orderId/orderNo', () => {
     mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.order.create.mockResolvedValue({
-      id: BigInt(42), orderNo: 'XY20260523001', orderItems: [],
+      id: BigInt(42), orderNo: 'XY20260523001', status: OrderStatus.pending_payment, orderItems: [],
     });
     mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
     mockPrisma.cart.deleteMany.mockResolvedValue({ count: 1 });
@@ -1044,6 +1052,10 @@ describe('接口契约：createOrder 返回 orderId/orderNo', () => {
 
     expect(result).toHaveProperty('orderId', '42');
     expect(result).toHaveProperty('orderNo', 'XY20260523001');
+    expect(result.payAmount).toBeGreaterThan(0);
+    expect(result).toHaveProperty('isZeroPay', false);
+    expect(result).toHaveProperty('status', OrderStatus.pending_payment);
+    expect(result).toHaveProperty('fulfillmentType', 'delivery');
     expect(result).not.toHaveProperty('orderItems');
     expect(result).not.toHaveProperty('userId');
   });
@@ -1402,7 +1414,7 @@ describe('OrderService.create 0元订单', () => {
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma._mockTx.order.create.mockResolvedValue({
-      id: BigInt(1), orderNo: 'XY20260523001', orderItems: [],
+      id: BigInt(1), orderNo: 'XY20260523001', status: OrderStatus.pending_delivery, orderItems: [],
     });
     mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
     mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
@@ -1419,6 +1431,14 @@ describe('OrderService.create 0元订单', () => {
     expect(createCall.data.status).toBe(OrderStatus.pending_delivery);
     expect(createCall.data.paidAt).toBeInstanceOf(Date);
     expect(createCall.data.autoCloseAt).toBeUndefined();
+    expect(result).toEqual(expect.objectContaining({
+      orderId: '1',
+      orderNo: 'XY20260523001',
+      payAmount: 0,
+      isZeroPay: true,
+      status: OrderStatus.pending_delivery,
+      fulfillmentType: 'delivery',
+    }));
   });
 
   it('0元自提订单：状态为 pending_pickup 且有 pickupCode', async () => {
@@ -1433,7 +1453,7 @@ describe('OrderService.create 0元订单', () => {
     mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
     mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma._mockTx.order.create.mockResolvedValue({
-      id: BigInt(1), orderNo: 'XY20260523002', orderItems: [],
+      id: BigInt(1), orderNo: 'XY20260523002', status: OrderStatus.pending_pickup, orderItems: [],
     });
     mockPrisma._mockTx.userCoupon.update.mockResolvedValue({});
     mockPrisma._mockTx.orderPayment.create.mockResolvedValue({});
@@ -1461,6 +1481,14 @@ describe('OrderService.create 0元订单', () => {
         data: { pickupCode: '12345678' },
       }),
     );
+    expect(result).toEqual(expect.objectContaining({
+      orderId: '1',
+      orderNo: 'XY20260523002',
+      payAmount: 0,
+      isZeroPay: true,
+      status: OrderStatus.pending_pickup,
+      fulfillmentType: 'pickup',
+    }));
   });
 
   it('0元订单 OrderPayment 为 SUCCESS 状态，paymentMethod=zero_pay，amount=0', async () => {
@@ -1767,7 +1795,7 @@ describe('generatePickupCode', () => {
     mockPrisma.order.findFirst.mockResolvedValue(null);
     mockPrisma._mockTx.order.updateMany.mockResolvedValue({ count: 1 });
 
-    const result = await service.create('100', {
+    await service.create('100', {
       fulfillmentType: 'pickup',
       pickupStoreId: '500',
       couponId: '50',

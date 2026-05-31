@@ -1,5 +1,5 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { describe, it, expect, jest } from '@jest/globals';
+import { BadRequestException } from '@nestjs/common';
 
 describe('RefundLogic', () => {
   describe('微信退款请求失败时不应创建 OrderRefund', () => {

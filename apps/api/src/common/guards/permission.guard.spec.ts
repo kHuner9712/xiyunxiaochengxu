@@ -2,7 +2,6 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PermissionGuard } from './permission.guard';
-import { REQUIRE_PERMISSION_KEY } from '../decorators/require-permission.decorator';
 
 describe('PermissionGuard', () => {
   let guard: PermissionGuard;

@@ -408,6 +408,10 @@ async function handleSubmit() {
       remark: remark.value
     }
     const order = await createOrder(orderData)
+    if (order.isZeroPay === true || order.payAmount === 0) {
+      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}&payIntent=success&zeroPay=1` })
+      return
+    }
     try {
       const payment = await createPayment({ orderId: order.orderId })
       try {

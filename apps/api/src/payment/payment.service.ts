@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
@@ -115,6 +115,11 @@ export class PaymentService {
 
       if (!this.wechatpayCertificate) {
         this.logger.error('生产环境必须配置微信支付平台证书(WECHAT_PLATFORM_CERT_PATH)，回调验签将不可用');
+        process.exit(1);
+      }
+
+      if (skipVerify === 'true') {
+        this.logger.error('生产环境禁止 WECHAT_SKIP_VERIFY=true，支付回调验签不可关闭');
         process.exit(1);
       }
     }
@@ -869,7 +874,7 @@ export class PaymentService {
     });
   }
 
-  private async createWechatOrder(order: any, appId: string, mchId: string, outTradeNo: string): Promise<string> {
+  private async createWechatOrder(order: any, appId: string, mchId: string, _outTradeNo: string): Promise<string> {
     if (!this.privateKey) {
       throw new BadRequestException('商户私钥未配置，无法发起支付');
     }

@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import { BadRequestException } from '@nestjs/common';
 
 describe('PointsLogic', () => {

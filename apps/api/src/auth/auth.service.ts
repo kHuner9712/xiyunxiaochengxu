@@ -189,10 +189,6 @@ export class AuthService {
     }
 
     const roles = admin.adminUserRoles.map((ur) => ur.role.code);
-    const permissions = admin.adminUserRoles.flatMap((ur) =>
-      ur.role.adminRolePermissions.map((rp) => rp.permission.code),
-    );
-
     const newTokenId = crypto.randomUUID();
     const newAccessToken = await this.jwtService.signAsync(
       {

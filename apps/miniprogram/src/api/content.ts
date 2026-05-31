@@ -18,6 +18,7 @@ export interface ContentItem {
   coverImage: string
   summary: string
   categoryId: string
+  categoryName?: string
   contentType: string
   videoUrl?: string
   videoCover?: string

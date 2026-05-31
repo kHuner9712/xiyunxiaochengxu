@@ -22,7 +22,7 @@
       </view>
       <view class="form-item switch-item">
         <text class="form-label">设为默认地址</text>
-        <switch :checked="form.isDefault" @change="form.isDefault = $event.detail.value" color="#F47C7C" />
+        <switch :checked="form.isDefault" @change="onDefaultChange" color="#F47C7C" />
       </view>
     </view>
 
@@ -41,7 +41,7 @@ import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getAddressDetail, createAddress, updateAddress, deleteAddress as deleteAddressApi, type AddressForm } from '@/api/address'
 
-const form = ref<AddressForm & { id?: number }>({
+const form = ref<AddressForm & { id?: string | number }>({
   name: '',
   phone: '',
   province: '',
@@ -63,11 +63,15 @@ const regionText = computed(() => {
 const regionValue = ref<string[]>([])
 
 function onRegionChange(e: any) {
-  const { value, code } = e.detail
+  const { value } = e.detail
   regionValue.value = value
   form.value.province = value[0]
   form.value.city = value[1]
   form.value.district = value[2]
+}
+
+function onDefaultChange(e: any) {
+  form.value.isDefault = !!e.detail.value
 }
 
 async function loadAddress(id: string) {

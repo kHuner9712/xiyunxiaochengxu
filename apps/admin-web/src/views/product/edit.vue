@@ -164,7 +164,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { productApi } from '@/api/product'
@@ -173,6 +173,7 @@ import { brandApi } from '@/api/brand'
 import { supplierApi } from '@/api/supplier'
 import { uploadApi } from '@/api/upload'
 import { priceToFen } from '@/utils/format'
+import { resolvePrivateFileUrl, resolvePrivateFileUrls, revokePrivateObjectUrls } from '@/utils/private-file'
 
 const router = useRouter()
 const route = useRoute()
@@ -433,16 +434,18 @@ async function handleUploadSkuImage(options: any, row: any) {
 }
 
 async function handleUploadCertImage(options: any) {
-  const res = await uploadApi.uploadImage(options.file)
+  const res = await uploadApi.uploadImage(options.file, 'cert')
   const uploadedUrl = sanitizeUrl(res?.data?.url)
   if (!uploadedUrl) return
   form.compliance.certImages.push(uploadedUrl)
-  certImageFileList.value.push({ url: uploadedUrl })
+  certImageFileList.value.push({ url: await resolvePrivateFileUrl(uploadedUrl), rawUrl: uploadedUrl })
 }
 
 function handleRemoveCertImage(file: any) {
-  const idx = form.compliance.certImages.indexOf(file.url)
+  const rawUrl = file.rawUrl || file.url
+  const idx = form.compliance.certImages.indexOf(rawUrl)
   if (idx > -1) form.compliance.certImages.splice(idx, 1)
+  if (file.url) revokePrivateObjectUrls([file.url])
 }
 
 async function fetchDetail(id: number) {
@@ -485,7 +488,9 @@ async function fetchDetail(id: number) {
   applyComplianceTypeFromDetail(form.compliance)
   servicePromiseText.value = d.servicePromise ? JSON.stringify(d.servicePromise, null, 2) : ''
   imageFileList.value = form.images.map((url) => ({ url }))
-  certImageFileList.value = form.compliance.certImages.map((url: string) => ({ url }))
+  revokePrivateObjectUrls(certImageFileList.value.map((item: any) => item.url))
+  certImageFileList.value = (await resolvePrivateFileUrls(form.compliance.certImages))
+    .map((url: string, index: number) => ({ url, rawUrl: form.compliance.certImages[index] }))
   onCategoryChange()
 }
 
@@ -513,7 +518,7 @@ async function handleSubmit() {
       sortOrder: form.sortOrder,
       isRecommend: form.isRecommend,
       servicePromise,
-      skus: form.skus.map((s, index) => ({
+      skus: form.skus.map((s, _index) => ({
         skuCode: s.skuCode || generateSkuCode(form.id),
         specs: normalizeSpecs(s.name),
         price: priceToFen(s.price),
@@ -555,5 +560,9 @@ onMounted(async () => {
   supplierList.value = (supplierRes.data as any)?.list || supplierRes.data || []
 
   if (route.params.id) await fetchDetail(Number(route.params.id))
+})
+
+onUnmounted(() => {
+  revokePrivateObjectUrls(certImageFileList.value.map((item: any) => item.url))
 })
 </script>

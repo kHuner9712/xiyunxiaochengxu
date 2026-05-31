@@ -100,4 +100,41 @@ describe('CartService', () => {
       expect(result[0].skuName).toBe('颜色：蓝色 / 尺码：90cm');
     });
   });
+
+  describe('ownership guard', () => {
+    it('updateItem scopes cart item by current user id', async () => {
+      prisma.cart.findFirst.mockResolvedValue(null);
+
+      await expect(service.updateItem('100', { id: 9, quantity: 2 })).rejects.toThrow('购物车记录不存在');
+
+      expect(prisma.cart.findFirst).toHaveBeenCalledWith({
+        where: { id: 9n, userId: 100n },
+      });
+      expect(prisma.cart.update).not.toHaveBeenCalled();
+    });
+
+    it('removeItem refuses cart item owned by another user', async () => {
+      prisma.cart.findFirst.mockResolvedValue(null);
+
+      await expect(service.removeItem('100', '9')).rejects.toThrow('购物车记录不存在');
+
+      expect(prisma.cart.delete).not.toHaveBeenCalled();
+    });
+
+    it('bulk operations are always scoped to current user id', async () => {
+      prisma.cart.updateMany.mockResolvedValue({ count: 2 });
+      prisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+      await service.selectAll('100', 1);
+      await service.removeSelected('100');
+
+      expect(prisma.cart.updateMany).toHaveBeenCalledWith({
+        where: { userId: 100n },
+        data: { isSelected: 1 },
+      });
+      expect(prisma.cart.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 100n, isSelected: 1 },
+      });
+    });
+  });
 });

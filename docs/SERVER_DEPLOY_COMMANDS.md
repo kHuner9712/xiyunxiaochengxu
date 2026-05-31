@@ -75,15 +75,17 @@ nslookup admin.yunxixiaochengxu.com.cn
 
 ```bash
 pnpm install
-pnpm release:check
+DRY_RUN_DATABASE_URL=mysql://root:***@影子库:3306/baby_mall_dry_run \
+VITE_WX_APPID=真实AppID \
+VITE_API_BASE_URL=https://api.yunxixiaochengxu.com.cn/api \
 pnpm release:check:prod
 ```
 
 说明：
 
-1. `pnpm release:check` 是默认门禁，允许开发占位项以 WARN 形式存在。
-2. `pnpm release:check:prod` 是生产严格门禁，只有真实 AppID、生产 API 地址、协议联系方式、密钥和证书配置完成后才能作为正式发布依据。
-3. 在未提供真实 AppID 或 `legal.ts` 最终联系方式前，`pnpm release:check:prod` 失败是**正确阻断**。
+1. `pnpm release:check:prod` 是正式发布唯一门禁，要求代码检查、构建、测试、权限审计和迁移演练全部通过。
+2. 真实 AppID、生产 API 地址、协议联系方式、密钥、证书和 `DRY_RUN_DATABASE_URL` 必须由服务器环境或 CI Secret 注入，不提交 Git。
+3. 在未提供上述真实配置前，`pnpm release:check:prod` 失败是**正确阻断**。
 
 ## 7. Docker 配置检查
 
@@ -100,14 +102,15 @@ ENV_FILE=../.env.production bash scripts/deploy-prod-check.sh
 
 ## 9. 数据库迁移
 
-返回仓库根目录后执行。执行前必须确认 `.env.production` 或当前环境变量连接的是目标预生产/生产数据库，且已完成数据库备份。
+返回仓库根目录后执行。执行真实目标库迁移前，必须先用可丢弃影子库完成 dry-run，并确认 `.env.production` 或当前环境变量连接的是目标预生产/生产数据库，且已完成数据库备份。
 
 ```bash
 cd ..
+DRY_RUN_DATABASE_URL=mysql://root:***@影子库:3306/baby_mall_dry_run pnpm prisma:migrate:dry-run
 pnpm --filter @baby-mall/api prisma migrate deploy
 ```
 
-说明：本命令未连接真实目标数据库执行前，只能记录为“待核验”，不得写为通过。
+说明：`DRY_RUN_DATABASE_URL` 不得等于生产 `DATABASE_URL`，也不得指向生产主库；真实迁移命令未连接目标数据库执行前，只能记录为“待核验”，不得写为通过。
 
 ## 10. 查看日志
 

@@ -90,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import request from '@/utils/request'
 import { formatPrice, formatPercent } from '@/utils/format'
 

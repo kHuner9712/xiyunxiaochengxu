@@ -6,8 +6,17 @@
 上线前请同时执行：
 
 1. [部署前收口清单](./DEPLOYMENT_CHECKLIST.md)
-2. `pnpm release:check:prod`
+2. `pnpm release:check:prod`（冻结前唯一推荐入口）
 3. `pnpm smoke:public`（需设置公网 URL 环境变量）
+
+## 0. 版本要求
+
+| 工具 | 版本 |
+| --- | --- |
+| Node.js | `v24.15.0`（`package.json` 要求 `>=18.0.0`） |
+| pnpm | `11.2.2` |
+| Docker | 服务器发行版仓库或 Docker 官方稳定版 |
+| 微信开发者工具 | 上传体验版前由发布负责人记录 |
 
 ## 1. 服务器准备
 
@@ -40,12 +49,30 @@
 ## 4. Docker 启动前检查
 
 ```bash
-pnpm release:check
+DRY_RUN_DATABASE_URL=mysql://root:***@影子库:3306/baby_mall_dry_run \
+VITE_WX_APPID=真实AppID \
+VITE_API_BASE_URL=https://api.yunxixiaochengxu.com.cn/api \
 pnpm release:check:prod
 (cd deploy && docker compose --env-file ../.env.production config)
 ```
 
-说明：在未提供真实 AppID 与 `legal.ts` 最终联系方式前，`pnpm release:check:prod` 失败是预期阻断，不应绕过。
+说明：`pnpm release:check:prod` 是正式发布唯一门禁。真实 AppID、生产 API 地址、协议联系方式、密钥、证书与 `DRY_RUN_DATABASE_URL` 缺失时失败是正确阻断，不应绕过。
+
+生产小程序包只能使用：
+
+```bash
+VITE_WX_APPID=真实AppID VITE_API_BASE_URL=https://api.yunxixiaochengxu.com.cn/api pnpm build:mini:prod
+```
+
+禁止直接使用占位 `manifest.json`、空 AppID、`urlCheck=false` 或本地 API 地址上传体验版/正式版。
+
+迁移演练必须先使用可丢弃影子库：
+
+```bash
+DRY_RUN_DATABASE_URL=mysql://root:***@影子库:3306/baby_mall_dry_run pnpm prisma:migrate:dry-run
+```
+
+`DRY_RUN_DATABASE_URL` 不得等于生产 `DATABASE_URL`，也不得指向生产主库。
 
 如需一键执行部署前检查与启动：
 
@@ -62,10 +89,11 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 ## 5. 数据库迁移
 
 ```bash
+DRY_RUN_DATABASE_URL=mysql://root:***@影子库:3306/baby_mall_dry_run pnpm prisma:migrate:dry-run
 (cd deploy && docker compose --env-file ../.env.production run --rm --entrypoint sh api -lc 'cd /app/apps/api && npx prisma migrate deploy')
 ```
 
-说明：使用 `--entrypoint sh` 覆写确保迁移命令执行后容器退出，不会进入常驻服务模式。迁移幂等，重复执行不会产生冲突。
+说明：先在可丢弃影子库完成 dry-run，再对目标库执行真实迁移。使用 `--entrypoint sh` 覆写确保迁移命令执行后容器退出，不会进入常驻服务模式。迁移幂等，重复执行不会产生冲突。
 
 ## 6. 启动服务
 
@@ -96,6 +124,15 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 2. 后台首页：`https://admin.yunxixiaochengxu.com.cn`
 3. 上传静态资源路由：`https://api.yunxixiaochengxu.com.cn/uploads/`
 4. 容器日志：`docker compose logs -f api nginx`
+
+## 8.5 Smoke Test
+
+```bash
+API_BASE_URL=https://api.yunxixiaochengxu.com.cn/api ADMIN_BASE_URL=https://admin.yunxixiaochengxu.com.cn pnpm smoke:public
+pnpm smoke:all
+```
+
+支付、退款、售后与自提核销必须在微信沙箱或真实预生产商户配置下单独验收，并留存回调日志与业务事件截图。
 
 ## 9. 上传文件生产存储
 

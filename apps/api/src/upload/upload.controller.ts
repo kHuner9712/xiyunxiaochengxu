@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Query, UploadedFile, UseInterceptors, Body, Res, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, UploadedFile, UseInterceptors, Body, BadRequestException, StreamableFile, Res } from '@nestjs/common';
 import { UploadService } from './upload.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -6,6 +6,7 @@ import { RequirePermission } from '../common/decorators/require-permission.decor
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { IsOptional, IsString } from 'class-validator';
+import type { Response } from 'express';
 
 class FileListDto extends PaginationDto {
   @IsOptional()
@@ -31,6 +32,19 @@ export class UploadController {
   ) {
     if (!file) throw new BadRequestException('请选择要上传的文件');
     return this.uploadService.uploadFile(file, userId, roleType === 'admin' ? 'admin' : 'user', groupName);
+  }
+
+  @Get('private/:id')
+  async findPrivateById(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('roleType') roleType: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.uploadService.findPrivateById(id, { id: userId, roleType });
+    res.setHeader('Content-Type', result.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(result.fileName)}"`);
+    return new StreamableFile(result.stream);
   }
 
   @Public()

@@ -45,7 +45,14 @@ export function createOrder(data: {
   pointsDeduct?: number
   remark?: string
 }) {
-  return post<{ orderId: string; orderNo: string }>('/weapp/order/create', data)
+  return post<{
+    orderId: string
+    orderNo: string
+    payAmount: number
+    isZeroPay: boolean
+    status: OrderStatus
+    fulfillmentType?: string
+  }>('/weapp/order/create', data)
 }
 
 export function getOrderList(params: {

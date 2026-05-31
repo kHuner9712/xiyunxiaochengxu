@@ -486,7 +486,14 @@ export class OrderService {
     }
 
     this.logger.log(`用户${userId}创建订单：${order.orderNo}，实付${payAmount}分`);
-    return { orderId: order.id.toString(), orderNo: order.orderNo };
+    return {
+      orderId: order.id.toString(),
+      orderNo: order.orderNo,
+      payAmount,
+      isZeroPay,
+      status: order.status,
+      fulfillmentType,
+    };
   }
 
   async cancel(userId: string, id: string) {

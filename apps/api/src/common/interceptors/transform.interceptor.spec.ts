@@ -2,7 +2,6 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { TransformInterceptor } from './transform.interceptor';
 import { Reflector } from '@nestjs/core';
 import { of } from 'rxjs';
-import { TRANSFORM_SKIP_KEY } from '../decorators/skip-transform.decorator';
 
 describe('TransformInterceptor', () => {
   let interceptor: TransformInterceptor<any>;
@@ -13,7 +12,7 @@ describe('TransformInterceptor', () => {
     interceptor = new TransformInterceptor(reflector);
   });
 
-  const createMockContext = (skipTransform = false) => ({
+  const createMockContext = (_skipTransform = false) => ({
     switchToHttp: () => ({
       getRequest: () => ({ headers: { 'x-request-id': 'test-request-id' } }),
       getResponse: () => ({ setHeader: jest.fn() }),

@@ -3,6 +3,7 @@ import { BabyProfileService } from './baby-profile.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateBabyProfileDto } from './dto/create-baby-profile.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 
 @Controller('weapp/baby-profile')
 export class WeappBabyProfileController {
@@ -43,6 +44,7 @@ export class AdminBabyProfileController {
   constructor(private readonly babyProfileService: BabyProfileService) {}
 
   @Get()
+  @RequirePermission('user:detail')
   async list(@Query() dto: PaginationDto & { userId?: string }) {
     return this.babyProfileService.findAllAdmin(dto);
   }

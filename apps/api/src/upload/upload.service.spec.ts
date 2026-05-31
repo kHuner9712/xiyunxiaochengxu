@@ -78,10 +78,9 @@ describe('UploadService 文件安全校验', () => {
 
 describe('UploadService 空文件保护', () => {
   let service: UploadService;
-  let mockPrisma: any;
 
   beforeEach(() => {
-    ({ service, mockPrisma } = createService());
+    ({ service } = createService());
   });
 
   it('file 为 null 时抛出 BadRequestException', async () => {
@@ -137,7 +136,7 @@ describe('UploadService 文件大小限制', () => {
     process.env.UPLOAD_MAX_SIZE = '10485760';
     process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     (service as any).storageProvider = {
-      save: jest.fn().mockResolvedValue({ filePath: '/uploads/test.jpg', url: '/uploads/test.jpg' }),
+      save: jest.fn().mockResolvedValue({ filePath: '/uploads/public/test.jpg', url: '/uploads/public/test.jpg' }),
       remove: jest.fn(),
     };
     const file = {
@@ -147,14 +146,14 @@ describe('UploadService 文件大小限制', () => {
       size: 12,
     } as Express.Multer.File;
     mockPrisma.fileAsset.create.mockResolvedValue({
-      id: BigInt(1), fileName: 'test.jpg', filePath: '/uploads/test.jpg',
+      id: BigInt(1), fileName: 'test.jpg', filePath: '/uploads/public/test.jpg',
       fileSize: BigInt(12), fileType: 'image', mimeType: 'image/jpeg',
-      storageType: 1, url: '/uploads/test.jpg', groupName: null,
+      storageType: 1, url: '/uploads/public/test.jpg', groupName: null,
       uploaderId: BigInt(1), uploaderType: 'user',
     });
     const result = await service.uploadFile(file, '1', 'user');
-    expect(result.url).toBe('https://api.example.com/uploads/test.jpg');
-    expect(result.filePath).toBe('/uploads/test.jpg');
+    expect(result.url).toBe('https://api.example.com/uploads/public/test.jpg');
+    expect(result.filePath).toBe('/uploads/public/test.jpg');
     process.env.UPLOAD_MAX_SIZE = originalEnv;
     process.env.UPLOAD_PUBLIC_URL = originalAssetBase;
   });
@@ -162,10 +161,9 @@ describe('UploadService 文件大小限制', () => {
 
 describe('UploadService 文件魔数校验', () => {
   let service: UploadService;
-  let mockPrisma: any;
 
   beforeEach(() => {
-    ({ service, mockPrisma } = createService());
+    ({ service } = createService());
   });
 
   it('JPEG 文件魔数正确时不报错', () => {
@@ -237,10 +235,9 @@ describe('UploadService Office 文档默认禁用', () => {
 
 describe('UploadService webp RIFF+WEBP magic', () => {
   let service: UploadService;
-  let mockPrisma: any;
 
   beforeEach(() => {
-    ({ service, mockPrisma } = createService());
+    ({ service } = createService());
   });
 
   it('webp 文件 RIFF+WEBP magic 正确时不报错', () => {
@@ -395,10 +392,9 @@ describe('UploadModule fileFilter 第一层拦截', () => {
 
 describe('UploadService 双层防线：扩展名伪装但 magic number 不匹配', () => {
   let service: UploadService;
-  let mockPrisma: any;
 
   beforeEach(() => {
-    ({ service, mockPrisma } = createService());
+    ({ service } = createService());
   });
 
   it('扩展名伪装为 .jpg 但内容为 PDF 的文件仍被 service 拒绝', async () => {
@@ -453,14 +449,14 @@ describe('UploadService findPublicById 公开文件详情', () => {
     process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     mockPrisma.fileAsset.findFirst.mockResolvedValue({
       id: BigInt(1), fileName: 'test.jpg', originalName: 'photo.jpg',
-      filePath: '/uploads/test.jpg', fileSize: BigInt(1024), fileType: 'image',
-      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/test.jpg',
+      filePath: '/uploads/public/test.jpg', fileSize: BigInt(1024), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/public/test.jpg',
       groupName: null, uploaderId: BigInt(1), uploaderType: 'user',
     });
     const result = await service.findPublicById('1');
     expect(result).toEqual({
       id: '1',
-      url: 'https://api.example.com/uploads/test.jpg',
+      url: 'https://api.example.com/uploads/public/test.jpg',
       fileType: 'image',
       mimeType: 'image/jpeg',
     });
@@ -500,8 +496,8 @@ describe('UploadService findPublicById 公开文件详情', () => {
     process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     mockPrisma.fileAsset.findFirst.mockResolvedValue({
       id: BigInt(4), fileName: 'product.jpg', originalName: 'product.jpg',
-      filePath: '/uploads/product.jpg', fileSize: BigInt(512), fileType: 'image',
-      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/product.jpg',
+      filePath: '/uploads/public/product.jpg', fileSize: BigInt(512), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/public/product.jpg',
       groupName: null, uploaderId: BigInt(1), uploaderType: 'user',
     });
     const result = await service.findPublicById('4');
@@ -515,8 +511,8 @@ describe('UploadService findPublicById 公开文件详情', () => {
     process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     mockPrisma.fileAsset.findFirst.mockResolvedValue({
       id: BigInt(5), fileName: 'banner.jpg', originalName: 'banner.jpg',
-      filePath: '/uploads/banner.jpg', fileSize: BigInt(3072), fileType: 'image',
-      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/banner.jpg',
+      filePath: '/uploads/public/banner.jpg', fileSize: BigInt(3072), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/public/banner.jpg',
       groupName: 'product', uploaderId: BigInt(1), uploaderType: 'user',
     });
     const result = await service.findPublicById('5');
@@ -557,5 +553,84 @@ describe('UploadService findById 管理员文件详情返回完整字段', () =>
     expect(result.groupName).toBe('aftersale');
     expect(result.filePath).toBe('/uploads/test.jpg');
     process.env.UPLOAD_PUBLIC_URL = originalAssetBase;
+  });
+});
+
+describe('UploadService public/private uploads', () => {
+  let service: UploadService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('公共商品图保存到 public 并返回公开 URL', async () => {
+    const save = jest.fn().mockResolvedValue({ filePath: '/uploads/public/product.jpg', url: '/uploads/public/product.jpg' });
+    (service as any).storageProvider = { save, remove: jest.fn(), createReadStream: jest.fn() };
+    mockPrisma.fileAsset.create.mockResolvedValue({
+      id: BigInt(10), fileName: 'product.jpg', originalName: 'product.jpg',
+      filePath: '/uploads/public/product.jpg', fileSize: BigInt(16), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: '/uploads/public/product.jpg',
+      groupName: 'product', uploaderId: BigInt(1), uploaderType: 'admin',
+    });
+
+    const result = await service.uploadFile({
+      originalname: 'product.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+      size: 16,
+    } as Express.Multer.File, '1', 'admin', 'product');
+
+    expect(save).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/\.jpg$/), 'public');
+    expect(result.url).toContain('/uploads/public/product.jpg');
+  });
+
+  it('敏感组保存到 private，上传响应为鉴权 API URL', async () => {
+    const save = jest.fn().mockResolvedValue({ filePath: '/uploads/private/refund.jpg', url: null });
+    (service as any).storageProvider = { save, remove: jest.fn(), createReadStream: jest.fn() };
+    mockPrisma.fileAsset.create.mockResolvedValue({
+      id: BigInt(11), fileName: 'refund.jpg', originalName: 'refund.jpg',
+      filePath: '/uploads/private/refund.jpg', fileSize: BigInt(16), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: null,
+      groupName: 'aftersale', uploaderId: BigInt(1), uploaderType: 'user',
+    });
+
+    const result = await service.uploadFile({
+      originalname: 'refund.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+      size: 16,
+    } as Express.Multer.File, '1', 'user', ' afterSALE ');
+
+    expect(save).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/\.jpg$/), 'private');
+    expect(result.url).toBe('/api/common/file/private/11');
+    expect(result.url).not.toContain('/uploads/private/');
+  });
+
+  it('findPublicById 拒绝 private 路径和敏感组大小写变体', async () => {
+    mockPrisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(12), fileName: 'cert.jpg', originalName: 'cert.jpg',
+      filePath: '/uploads/private/cert.jpg', fileSize: BigInt(16), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: null,
+      groupName: ' Cert ', uploaderId: BigInt(1), uploaderType: 'admin',
+    });
+
+    await expect(service.findPublicById('12')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('findPrivateById 仅允许所属用户或管理员访问', async () => {
+    const stream = fs.createReadStream(__filename);
+    const createReadStream = jest.fn().mockReturnValue(stream);
+    (service as any).storageProvider = { save: jest.fn(), remove: jest.fn(), createReadStream };
+    mockPrisma.fileAsset.findFirst.mockResolvedValue({
+      id: BigInt(13), fileName: 'refund.jpg', originalName: 'refund.jpg',
+      filePath: '/uploads/private/refund.jpg', fileSize: BigInt(16), fileType: 'image',
+      mimeType: 'image/jpeg', storageType: 1, url: null,
+      groupName: 'aftersale', uploaderId: BigInt(9), uploaderType: 'user',
+    });
+
+    await expect(service.findPrivateById('13', { id: '8', roleType: 'user' })).rejects.toThrow(ForbiddenException);
+    await expect(service.findPrivateById('13', { id: '9', roleType: 'user' })).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+    await expect(service.findPrivateById('13', { id: '1', roleType: 'admin' })).resolves.toMatchObject({ mimeType: 'image/jpeg' });
   });
 });

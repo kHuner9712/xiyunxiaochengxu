@@ -38,9 +38,15 @@ if [ "$IS_WINDOWS" = true ]; then
   run_pnpm() {
     cmd.exe /c "pnpm $*" > "$TMPFILE" 2>&1
   }
+  run_node() {
+    cmd.exe /c "node $*" > "$TMPFILE" 2>&1
+  }
 else
   run_pnpm() {
     pnpm "$@" > "$TMPFILE" 2>&1
+  }
+  run_node() {
+    node "$@" > "$TMPFILE" 2>&1
   }
 fi
 
@@ -60,12 +66,61 @@ echo "║   禧孕小程序 Release Gate Check          ║"
 echo "╚══════════════════════════════════════════╝"
 echo -e "${NC}"
 
+section "0. 冻结入口与依赖锁定检查"
+if [ "$STRICT_PROD_GATE" = "true" ]; then
+  pass "当前执行 strict prod gate；冻结前唯一推荐入口为 pnpm release:check:prod"
+else
+  warn "当前不是 strict prod gate；冻结前请以 pnpm release:check:prod 为准"
+fi
+
+if run_pnpm install --frozen-lockfile; then
+  pass "pnpm install --frozen-lockfile 通过，lockfile 与 package.json 同步"
+else
+  fail "pnpm install --frozen-lockfile 失败，请先执行 pnpm install 并提交 pnpm-lock.yaml"
+  tail -10 "$TMPFILE" | sed 's/^/    /'
+fi
+
+if run_pnpm list -r --depth -1; then
+  pass "workspace 包可完整解析"
+else
+  fail "workspace 包解析失败，请检查 pnpm-workspace.yaml 与依赖声明"
+  tail -10 "$TMPFILE" | sed 's/^/    /'
+fi
+
+if run_node deploy/scripts/check-miniprogram.mjs; then
+  pass "小程序 DCloud 锁定、路由、页面、tabBar 与包大小检查通过"
+else
+  fail "小程序 DCloud 锁定、路由、页面、tabBar 或包大小检查失败"
+  tail -20 "$TMPFILE" | sed 's/^/    /'
+fi
+
 section "1. Prisma Schema 验证"
 if run_pnpm --filter @baby-mall/api prisma:validate; then
   pass "prisma:validate 通过"
 else
   fail "prisma:validate 失败，请检查 schema.prisma"
   tail -5 "$TMPFILE" | sed 's/^/    /'
+fi
+
+section "1.5 Prisma 迁移 Dry-run"
+if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+  if [ -z "${DRY_RUN_DATABASE_URL:-}" ]; then
+    fail "生产严格门禁下必须提供 DRY_RUN_DATABASE_URL，用于一次性影子库/临时库执行 migrate deploy dry-run"
+  elif run_pnpm prisma:migrate:dry-run; then
+    pass "prisma migrate deploy dry-run 通过"
+  else
+    fail "prisma migrate deploy dry-run 失败"
+    tail -20 "$TMPFILE" | sed 's/^/    /'
+  fi
+else
+  if [ -z "${DRY_RUN_DATABASE_URL:-}" ]; then
+    warn "未提供 DRY_RUN_DATABASE_URL，跳过 migrate deploy dry-run（生产门禁将失败）"
+  elif run_pnpm prisma:migrate:dry-run; then
+    pass "prisma migrate deploy dry-run 通过"
+  else
+    fail "prisma migrate deploy dry-run 失败"
+    tail -20 "$TMPFILE" | sed 's/^/    /'
+  fi
 fi
 
 section "2. API 测试 (unit + e2e)"
@@ -76,12 +131,42 @@ else
   tail -10 "$TMPFILE" | sed 's/^/    /'
 fi
 
+section "2.5 API Lint 与权限审计"
+if run_pnpm --filter @baby-mall/api lint; then
+  pass "API lint 通过"
+else
+  fail "API lint 失败"
+  tail -10 "$TMPFILE" | sed 's/^/    /'
+fi
+
+if run_node deploy/scripts/audit-api-permissions.mjs; then
+  pass "API @Public / admin permission / weapp CurrentUser 审计通过"
+else
+  fail "API 权限与越权静态审计失败"
+  tail -30 "$TMPFILE" | sed 's/^/    /'
+fi
+
 section "3. API 构建"
 if run_pnpm build:api; then
   pass "build:api 通过"
 else
   fail "build:api 失败"
   tail -5 "$TMPFILE" | sed 's/^/    /'
+fi
+
+section "3.5 Admin Web Lint 与类型检查"
+if run_pnpm --filter @baby-mall/admin-web lint; then
+  pass "admin-web lint 通过"
+else
+  fail "admin-web lint 失败"
+  tail -10 "$TMPFILE" | sed 's/^/    /'
+fi
+
+if run_pnpm --filter @baby-mall/admin-web typecheck; then
+  pass "admin-web typecheck 通过"
+else
+  fail "admin-web typecheck 失败"
+  tail -10 "$TMPFILE" | sed 's/^/    /'
 fi
 
 section "4. Admin Web 构建"
@@ -92,11 +177,31 @@ else
   tail -5 "$TMPFILE" | sed 's/^/    /'
 fi
 
-section "4.5 小程序构建"
-if run_pnpm build:mini; then
-  pass "build:mini 通过"
+section "4.5 小程序 TypeScript 与构建"
+if run_pnpm --filter @baby-mall/miniprogram typecheck; then
+  pass "miniprogram typecheck 通过"
 else
-  fail "build:mini 失败，商用上线前小程序构建必须通过"
+  fail "miniprogram typecheck 失败"
+  tail -10 "$TMPFILE" | sed 's/^/    /'
+fi
+
+MINI_BUILD_SCRIPT="build:mini"
+if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+  MINI_BUILD_SCRIPT="build:mini:prod"
+fi
+
+if run_pnpm "$MINI_BUILD_SCRIPT"; then
+  pass "$MINI_BUILD_SCRIPT 通过"
+else
+  fail "$MINI_BUILD_SCRIPT 失败，商用上线前小程序构建必须通过"
+  tail -10 "$TMPFILE" | sed 's/^/    /'
+fi
+
+if run_node deploy/scripts/check-miniprogram.mjs; then
+  pass "小程序构建产物包大小检查通过"
+else
+  fail "小程序构建产物包大小检查失败"
+  tail -20 "$TMPFILE" | sed 's/^/    /'
 fi
 
 section "5. 敏感文件未提交检查"

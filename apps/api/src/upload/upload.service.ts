@@ -49,9 +49,12 @@ export function getAllowedExtensions(allowedMimes: string[]): string[] {
   return extensions;
 }
 
+type UploadVisibility = 'public' | 'private';
+
 interface StorageProvider {
-  save(file: Express.Multer.File, targetFileName: string): Promise<{ filePath: string; url: string }>;
+  save(file: Express.Multer.File, targetFileName: string, visibility: UploadVisibility): Promise<{ filePath: string; url: string | null }>;
   remove(filePath: string): Promise<void>;
+  createReadStream(filePath: string): fs.ReadStream;
 }
 
 class LocalStorageProvider implements StorageProvider {
@@ -61,19 +64,36 @@ class LocalStorageProvider implements StorageProvider {
     this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
   }
 
-  async save(file: Express.Multer.File, targetFileName: string) {
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true });
+  async save(file: Express.Multer.File, targetFileName: string, visibility: UploadVisibility) {
+    const targetDir = path.join(this.uploadDir, visibility);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
     }
-    const filePath = path.join(this.uploadDir, targetFileName);
+    const filePath = path.join(targetDir, targetFileName);
     fs.writeFileSync(filePath, file.buffer);
+    const publicPath = `/uploads/${visibility}/${targetFileName}`;
     return {
-      filePath: `/uploads/${targetFileName}`,
-      url: `/uploads/${targetFileName}`,
+      filePath: publicPath,
+      url: visibility === 'public' ? publicPath : null,
     };
   }
 
   async remove(filePath: string) {
+    const fullPath = this.resolveStoredPath(filePath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  }
+
+  createReadStream(filePath: string) {
+    const fullPath = this.resolveStoredPath(filePath);
+    if (!fs.existsSync(fullPath)) {
+      throw new NotFoundException('文件不存在');
+    }
+    return fs.createReadStream(fullPath);
+  }
+
+  private resolveStoredPath(filePath: string) {
     const normalizedUploadDir = path.resolve(this.uploadDir);
     const storedPath = (filePath || '').replace(/\\/g, '/');
     const uploadPrefix = '/uploads/';
@@ -82,13 +102,21 @@ class LocalStorageProvider implements StorageProvider {
     if (!fullPath.startsWith(`${normalizedUploadDir}${path.sep}`) && fullPath !== normalizedUploadDir) {
       throw new BadRequestException('非法文件路径');
     }
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
-    }
+    return fullPath;
   }
 }
 
-const SENSITIVE_GROUP_NAMES = ['aftersale', 'admin', 'cert', 'business_license', 'private'];
+export const SENSITIVE_GROUP_NAMES = ['aftersale', 'admin', 'cert', 'business_license', 'private'];
+
+export function normalizeGroupName(groupName?: string | null): string | null {
+  const normalized = (groupName || '').trim().toLowerCase();
+  return normalized || null;
+}
+
+export function isSensitiveGroup(groupName?: string | null): boolean {
+  const normalized = normalizeGroupName(groupName);
+  return !!normalized && SENSITIVE_GROUP_NAMES.includes(normalized);
+}
 
 @Injectable()
 export class UploadService {
@@ -120,8 +148,10 @@ export class UploadService {
     }
     this.validateFileMagic(file);
 
+    const normalizedGroupName = normalizeGroupName(groupName);
+    const visibility: UploadVisibility = isSensitiveGroup(normalizedGroupName) ? 'private' : 'public';
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
-    const stored = await this.storageProvider.save(file, fileName);
+    const stored = await this.storageProvider.save(file, fileName, visibility);
 
     const fileType = file.mimetype.startsWith('image/')
       ? 'image'
@@ -139,7 +169,7 @@ export class UploadService {
         mimeType: file.mimetype,
         storageType: 1,
         url: stored.url,
-        groupName: groupName || null,
+        groupName: normalizedGroupName,
         uploaderId: BigInt(uploaderId),
         uploaderType,
       },
@@ -162,7 +192,7 @@ export class UploadService {
       where: { id: BigInt(id) },
     });
     if (!file) throw new NotFoundException('文件不存在');
-    if (file.groupName && SENSITIVE_GROUP_NAMES.includes(file.groupName)) {
+    if (this.isPrivateFile(file)) {
       throw new ForbiddenException('该文件不允许公开访问');
     }
     return {
@@ -202,6 +232,30 @@ export class UploadService {
     return { success: true };
   }
 
+  async findPrivateById(id: string, currentUser: { id?: string; roleType?: string }) {
+    const file = await this.prisma.fileAsset.findFirst({
+      where: { id: BigInt(id) },
+    });
+    if (!file) throw new NotFoundException('文件不存在');
+    if (!this.isPrivateFile(file)) {
+      throw new ForbiddenException('该文件不是私有文件');
+    }
+
+    const isAdmin = currentUser?.roleType === 'admin';
+    const isOwner = file.uploaderType === 'user'
+      && file.uploaderId?.toString() === currentUser?.id?.toString();
+    if (!isAdmin && !isOwner) {
+      throw new ForbiddenException('无权访问该文件');
+    }
+
+    return {
+      file: this.serializeFileAsset(file),
+      stream: this.storageProvider.createReadStream(file.filePath),
+      mimeType: file.mimeType || 'application/octet-stream',
+      fileName: file.originalName || file.fileName || 'file',
+    };
+  }
+
   private validateFileMagic(file: Express.Multer.File): void {
     const magicNumbers = FILE_MAGIC_NUMBERS[file.mimetype];
     if (!magicNumbers || !file.buffer || file.buffer.length < 12) return;
@@ -217,13 +271,22 @@ export class UploadService {
     }
   }
 
+  private isPrivateFile(file: any): boolean {
+    const storedPath = String(file.filePath || file.url || '').replace(/\\/g, '/');
+    return isSensitiveGroup(file.groupName) || storedPath.startsWith('/uploads/private/') || !storedPath.startsWith('/uploads/public/');
+  }
+
   private serializeFileAsset(file: any) {
+    const privateFile = this.isPrivateFile(file);
+    const url = privateFile
+      ? `/api/common/file/private/${file.id.toString()}`
+      : normalizeAssetUrl(file.url || file.filePath);
     return {
       ...file,
       id: file.id.toString(),
       fileSize: file.fileSize?.toString(),
       uploaderId: file.uploaderId?.toString(),
-      url: normalizeAssetUrl(file.url || file.filePath),
+      url,
       filePath: file.filePath || '',
     };
   }

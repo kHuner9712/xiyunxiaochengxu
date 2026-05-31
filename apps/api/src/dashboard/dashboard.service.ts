@@ -25,7 +25,7 @@ export class DashboardService {
       monthSales,
       todayOrders,
       yesterdayOrders,
-      monthOrders,
+      _monthOrders,
       todayUsers,
       monthUsers,
       totalUsers,

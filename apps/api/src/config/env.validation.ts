@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { plainToClass } from 'class-transformer';
-import { IsString, IsOptional, ValidateIf, validateSync } from 'class-validator';
+import { IsString, IsOptional, validateSync } from 'class-validator';
 import * as fs from 'fs';
 
 const logger = new Logger('EnvValidator');

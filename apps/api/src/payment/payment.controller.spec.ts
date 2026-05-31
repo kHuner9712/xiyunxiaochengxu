@@ -1,6 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { PaymentController } from './payment.controller';
-import { PaymentService } from './payment.service';
 
 function createMockPaymentService() {
   return {

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { UploadController, AdminUploadController } from './upload.controller';
-import { UploadService, MIME_TO_EXTENSIONS, parseAllowedMimeTypes, getAllowedExtensions } from './upload.service';
+import { UploadService, parseAllowedMimeTypes, getAllowedExtensions } from './upload.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { MulterModule } from '@nestjs/platform-express';
 import * as path from 'path';

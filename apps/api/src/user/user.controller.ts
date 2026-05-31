@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Param, Query, Body } from '@nestjs/common';
 import { UserService } from './user.service';
 import { PointsService } from '../points/points.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';

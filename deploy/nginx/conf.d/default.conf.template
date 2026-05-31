@@ -43,11 +43,19 @@ server {
 
     # Expected value example:
     # UPLOAD_PUBLIC_URL=https://${API_DOMAIN}/uploads
-    location /uploads/ {
-        alias /usr/share/nginx/uploads/;
+    location ^~ /uploads/private/ {
+        return 403;
+    }
+
+    location ^~ /uploads/public/ {
+        alias /usr/share/nginx/uploads/public/;
         expires 30d;
         add_header Cache-Control "public, immutable";
         access_log off;
+    }
+
+    location ^~ /uploads/ {
+        return 403;
     }
 
     location / {
@@ -92,11 +100,19 @@ server {
         proxy_busy_buffers_size 256k;
     }
 
-    location /uploads/ {
-        alias /usr/share/nginx/uploads/;
+    location ^~ /uploads/private/ {
+        return 403;
+    }
+
+    location ^~ /uploads/public/ {
+        alias /usr/share/nginx/uploads/public/;
         expires 30d;
         add_header Cache-Control "public, immutable";
         access_log off;
+    }
+
+    location ^~ /uploads/ {
+        return 403;
     }
 
     location / {

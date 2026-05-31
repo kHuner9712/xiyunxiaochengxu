@@ -31,7 +31,7 @@ export class CouponService {
     return paginate(list.map((c) => this.serializeCoupon(c)), total, page, pageSize);
   }
 
-  async findAvailable(userId: string) {
+  async findAvailable(_userId: string) {
     const now = new Date();
     const where: any = {
       status: 1,

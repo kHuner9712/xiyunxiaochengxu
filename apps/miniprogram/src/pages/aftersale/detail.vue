@@ -49,7 +49,7 @@
       <view v-if="detail.images?.length" class="info-row vertical">
         <text class="info-label">凭证图片</text>
         <view class="image-list">
-          <image v-for="(img, index) in detail.images" :key="index" class="evidence-image" :src="img" mode="aspectFill" @tap="previewImage(img)" />
+          <image v-for="(img, index) in displayImages" :key="index" class="evidence-image" :src="img" mode="aspectFill" @tap="previewImage(img)" />
         </view>
       </view>
     </view>
@@ -66,17 +66,20 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getAftersaleDetail, cancelAftersale, type AftersaleDetail } from '@/api/aftersale'
 import { formatAftersaleStatus, formatPrice } from '@/utils/format'
+import { resolvePrivateFileUrls } from '@/utils/private-file'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
 const detail = ref<AftersaleDetail>({
-  id: 0, orderId: 0, orderNo: '', type: 1, reason: '', description: '',
+  id: '', orderId: '', orderNo: '', type: 1, reason: '', description: '',
   images: [], status: 0, refundAmount: 0, productName: '', productImage: '',
   skuName: '', price: 0, quantity: 0, logs: [], createTime: ''
 })
+const displayImages = ref<string[]>([])
 
-async function loadDetail(id: number) {
+async function loadDetail(id: string | number) {
   try {
     detail.value = await getAftersaleDetail(id)
+    displayImages.value = await resolvePrivateFileUrls(detail.value.images || [])
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
   }
@@ -94,7 +97,7 @@ function getStatusClass(status: number): string {
 }
 
 function previewImage(url: string) {
-  uni.previewImage({ urls: detail.value.images, current: url })
+  uni.previewImage({ urls: displayImages.value, current: url })
 }
 
 async function handleCancel() {
@@ -119,7 +122,8 @@ function goCustomerService() {
 }
 
 onLoad((options) => {
-  if (options?.id) loadDetail(options.id)
+  const id = Array.isArray(options?.id) ? options?.id[0] : options?.id
+  if (id) loadDetail(id)
 })
 </script>
 

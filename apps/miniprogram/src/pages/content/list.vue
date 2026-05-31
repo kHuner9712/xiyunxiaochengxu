@@ -14,12 +14,12 @@
 
     <view class="content-list">
       <view v-for="item in contents" :key="item.id" class="content-card card" @tap="goDetail(item.id)">
-        <image v-if="item.cover" class="content-cover" :src="item.cover" mode="aspectFill" />
+        <image v-if="item.coverImage" class="content-cover" :src="item.coverImage" mode="aspectFill" />
         <view class="content-info">
           <text class="content-title">{{ item.title }}</text>
           <text class="content-summary">{{ item.summary }}</text>
           <view class="content-meta">
-            <text class="meta-category">{{ item.categoryName }}</text>
+            <text class="meta-category">{{ item.categoryName || item.categoryId }}</text>
             <text class="meta-views">{{ item.viewCount }}阅读</text>
           </view>
         </view>
@@ -83,7 +83,7 @@ function switchCategory(id: number) {
   loadContents(true)
 }
 
-function goDetail(id: number) {
+function goDetail(id: string | number) {
   uni.navigateTo({ url: `/pages/content/detail?id=${id}` })
 }
 

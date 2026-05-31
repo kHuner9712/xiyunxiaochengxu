@@ -75,7 +75,7 @@ pnpm build:all
 pnpm build:mini:prod
 ```
 
-冻结前推荐使用 `pnpm build:all` 覆盖 API、Admin 与小程序默认构建；上线门禁以 `pnpm release:check` 为准。
+冻结前唯一推荐入口是 `pnpm release:check:prod`。该命令会覆盖依赖锁定、API/Admin lint、类型检查、API 测试、API/Admin/小程序构建、小程序生产包校验、权限审计与部署配置检查。
 
 小程序体验版/正式版构建（必须真实 AppID）：
 
@@ -85,6 +85,8 @@ NODE_ENV=production VITE_WX_APPID=真实AppID pnpm build:mini
 pnpm build:mini:prod
 ```
 
+生产小程序包只能通过 `apps/miniprogram/scripts/build-miniprogram.mjs` 或根命令 `pnpm build:mini:prod` 生成。禁止直接用 `apps/miniprogram/src/manifest.json` 中的占位 AppID、`urlCheck=false` 或本地 API 地址上传体验版/正式版。
+
 ## 上线门禁命令
 
 ```bash
@@ -93,7 +95,7 @@ pnpm release:check:prod
 ```
 
 - `release:check`：默认环境，允许占位 AppID（WARN）
-- `release:check:prod`：强制生产门禁，缺少真实 AppID 或协议占位将直接 FAIL
+- `release:check:prod`：冻结前唯一推荐入口；强制生产门禁，缺少真实 AppID、生产 API 地址、协议占位、证书或密钥将直接 FAIL
 
 GitHub Actions、真实数据库迁移、生产严格门禁和真机验收只有在实际执行并取得可核验结果后，才可在发布记录中标记为通过。
 

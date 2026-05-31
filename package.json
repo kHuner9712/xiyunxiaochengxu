@@ -13,8 +13,8 @@
     "build:mini:prod": "cross-env NODE_ENV=production pnpm --filter @baby-mall/miniprogram build:mp-weixin",
     "build:all": "pnpm build:api && pnpm build:admin && pnpm build:mini",
     "build": "pnpm build:api && pnpm build:admin",
-    "typecheck": "pnpm --filter @baby-mall/api build && pnpm --filter @baby-mall/admin-web build",
-    "lint": "pnpm -r lint",
+    "typecheck": "pnpm --filter @baby-mall/api build && pnpm --filter @baby-mall/admin-web typecheck && pnpm --filter @baby-mall/miniprogram typecheck",
+    "lint": "pnpm --filter @baby-mall/api lint && pnpm --filter @baby-mall/admin-web lint",
     "clean": "pnpm -r clean",
     "docker:up": "cd deploy && docker compose up -d --build",
     "docker:down": "cd deploy && docker compose down",
@@ -23,6 +23,8 @@
     "smoke:login": "cd deploy && bash scripts/smoke-admin-login.sh",
     "smoke:all": "cd deploy && bash scripts/smoke-all.sh",
     "validate:api": "pnpm --filter @baby-mall/api prisma:validate && pnpm --filter @baby-mall/api test:ci && pnpm build:api",
+    "prisma:migrate:dry-run": "bash deploy/scripts/prisma-migrate-dry-run.sh",
+    "uploads:migrate-visibility": "node deploy/scripts/migrate-upload-visibility.mjs",
     "release:check": "bash deploy/scripts/release-check.sh",
     "release:check:prod": "cross-env NODE_ENV=production bash deploy/scripts/release-check.sh --require-real-wx-appid --strict-prod-gate"
   },
@@ -30,20 +32,6 @@
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=11.2.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@nestjs/core",
-      "@parcel/watcher",
-      "@prisma/client",
-      "@prisma/engines",
-      "bcrypt",
-      "core-js",
-      "core-js-pure",
-      "esbuild",
-      "prisma",
-      "vue-demi"
-    ]
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

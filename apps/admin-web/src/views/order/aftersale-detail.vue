@@ -26,8 +26,8 @@
             <el-image
               v-for="(img, idx) in detail.images"
               :key="idx"
-              :src="img"
-              :preview-src-list="detail.images"
+              :src="displayImages[idx] || img"
+              :preview-src-list="displayImages"
               style="width: 80px; height: 80px; margin-right: 8px"
               fit="cover"
             />
@@ -96,11 +96,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
 import { formatPrice, formatDate, formatAftersaleStatus, priceToFen } from '@/utils/format'
+import { resolvePrivateFileUrls, revokePrivateObjectUrls } from '@/utils/private-file'
 
 const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款', 3: '换货' }
 const router = useRouter()
@@ -110,12 +111,16 @@ const detail = ref<any>({})
 const auditResult = ref('approve')
 const rejectReason = ref('')
 const refundAmountYuan = ref(0)
+const displayImages = ref<string[]>([])
 
 async function fetchDetail() {
   try {
+    revokePrivateObjectUrls(displayImages.value)
+    displayImages.value = []
     const res = await aftersaleApi.getDetail(Number(route.params.id))
     detail.value = res.data || {}
     refundAmountYuan.value = (res.data?.refundAmount || 0) / 100
+    displayImages.value = await resolvePrivateFileUrls(detail.value.images || [])
   } catch (e: any) {
     ElMessage.error(e?.message || '获取售后详情失败')
   }
@@ -171,5 +176,9 @@ async function handleRefund() {
 
 onMounted(() => {
   fetchDetail()
+})
+
+onUnmounted(() => {
+  revokePrivateObjectUrls(displayImages.value)
 })
 </script>

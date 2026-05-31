@@ -70,9 +70,11 @@ const maxPollCount = 6
 const pollIntervalMs = 2000
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 const payIntent = ref('')
+const zeroPay = ref(false)
 
 const resultText = computed(() => {
   if (checking.value || paymentState.value === 'confirming') return '正在确认支付结果...'
+  if (zeroPay.value && paymentState.value === 'success') return '订单提交成功'
   if (paymentState.value === 'success') return '支付成功'
   if (paymentState.value === 'pending') return '支付结果确认中，请稍后在订单详情查看'
   if (paymentState.value === 'failed') return '支付失败'
@@ -169,8 +171,15 @@ function goHome() {
 onLoad((options) => {
   if (options?.orderId) orderId.value = options.orderId
   if (options?.payIntent) payIntent.value = options.payIntent
+  zeroPay.value = options?.zeroPay === '1'
   if (payIntent.value === 'cancel') {
     uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
+  }
+  if (zeroPay.value) {
+    paymentState.value = 'success'
+    checking.value = false
+    loadOrder()
+    return
   }
   startPollingStatus()
 })

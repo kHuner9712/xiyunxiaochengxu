@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { AftersaleStatus, OrderStatus } from '@prisma/client';
 import { AftersaleService } from './aftersale.service';
 
@@ -79,7 +79,7 @@ describe('AftersaleService.create 售后申请幂等', () => {
     });
     mockPrisma._mockTx.order.update.mockResolvedValue({});
 
-    const result = await service.create('100', CREATE_DTO);
+    await service.create('100', CREATE_DTO);
 
     expect(mockPrisma._mockTx.aftersaleOrder.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -145,7 +145,7 @@ describe('AftersaleService.refund 退款发起幂等与状态一致性', () => {
       refundId: '1', refundNo: 'REFUND001', outRefundNo: 'REFUND001',
     });
 
-    const result = await service.refund('50', '1');
+    await service.refund('50', '1');
 
     expect(mockPayment.createRefund).toHaveBeenCalledWith(
       expect.objectContaining({ aftersaleId: '50', refundAmount: 9900 }),
@@ -160,7 +160,7 @@ describe('AftersaleService.refund 退款发起幂等与状态一致性', () => {
       refundId: '1', refundNo: 'REFUND001', outRefundNo: 'REFUND001',
     });
 
-    const result = await service.refund('50', '1');
+    await service.refund('50', '1');
 
     expect(mockPayment.createRefund).toHaveBeenCalled();
   });

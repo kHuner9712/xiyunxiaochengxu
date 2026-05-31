@@ -77,12 +77,6 @@ async function handleUnauthorized() {
   return refreshPromise
 }
 
-async function retryRequest(config: AxiosRequestConfig, newToken: string) {
-  config.headers = config.headers || {}
-  config.headers.Authorization = `Bearer ${newToken}`
-  return request(config)
-}
-
 request.interceptors.response.use(
   async (response: AxiosResponse<ApiResponse>) => {
     const responseType = response.config?.responseType

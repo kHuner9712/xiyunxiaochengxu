@@ -23,7 +23,7 @@
           <text v-if="item.summary" class="feed-summary">{{ item.summary }}</text>
           <view class="feed-meta">
             <text v-if="item.type === 'activity'" class="meta-item">
-              <CountdownTimer :endTime="item.endTime" label="距结束" />
+              <CountdownTimer :endTime="endTimeNumber(item.endTime)" label="距结束" />
             </text>
             <text v-if="item.type === 'video' && item.videoDuration" class="meta-item">
               {{ formatDuration(item.videoDuration) }}
@@ -42,8 +42,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
-import { getActivityFeed, getActivityList, type FeedItem } from '@/api/activity'
-import { getContentList } from '@/api/content'
+import { getActivityFeed, type FeedItem } from '@/api/activity'
 import CountdownTimer from '@/components/CountdownTimer.vue'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -111,6 +110,14 @@ function formatDuration(seconds: number) {
   const min = Math.floor(seconds / 60)
   const sec = seconds % 60
   return `${min}:${sec.toString().padStart(2, '0')}`
+}
+
+function endTimeNumber(value?: string) {
+  if (!value) return Date.now()
+  const parsed = Number(value)
+  if (Number.isFinite(parsed)) return parsed
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : Date.now()
 }
 
 onPullDownRefresh(async () => {

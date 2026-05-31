@@ -32,7 +32,7 @@
       <view class="form-item vertical">
         <text class="form-label">上传凭证</text>
         <view class="image-list">
-          <view v-for="(img, index) in imageList" :key="index" class="image-item">
+          <view v-for="(img, index) in displayImageList" :key="index" class="image-item">
             <image class="upload-image" :src="img" mode="aspectFill" />
             <view class="image-delete" @tap="removeImage(index)">✕</view>
           </view>
@@ -55,11 +55,13 @@ import { onLoad } from '@dcloudio/uni-app'
 import { applyAftersale } from '@/api/aftersale'
 import { getOrderDetail } from '@/api/order'
 import { chooseAndUploadImage } from '@/api/upload'
+import { resolvePrivateFileUrl } from '@/utils/private-file'
 
 const orderId = ref('')
 const orderItemId = ref('')
 const reasons = ref<string[]>(['不想要了', '商品与描述不符', '质量问题', '收到商品损坏', '其他原因'])
 const imageList = ref<string[]>([])
+const displayImageList = ref<string[]>([])
 
 const form = ref({
   type: 1,
@@ -74,11 +76,12 @@ function onReasonChange(e: any) {
 
 async function addImage() {
   try {
-    const results = await chooseAndUploadImage(5 - imageList.value.length)
-    results.forEach(r => {
+    const results = await chooseAndUploadImage(5 - imageList.value.length, 'aftersale')
+    for (const r of results) {
       imageList.value.push(r.url)
       form.value.images.push(r.url)
-    })
+      displayImageList.value.push(await resolvePrivateFileUrl(r.url))
+    }
   } catch {
     uni.showToast({ title: '图片上传失败', icon: 'none' })
   }
@@ -86,6 +89,7 @@ async function addImage() {
 
 function removeImage(index: number) {
   imageList.value.splice(index, 1)
+  displayImageList.value.splice(index, 1)
   form.value.images.splice(index, 1)
 }
 
