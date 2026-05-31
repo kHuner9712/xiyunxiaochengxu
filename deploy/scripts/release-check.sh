@@ -434,6 +434,29 @@ else
   pass "小程序源码未发现生产禁止的 demo/演示口径"
 fi
 
+section "8.67. 管理后台静态资源刷新机制检查"
+DOCKERFILE_API_PATH="deploy/Dockerfile.api"
+ENTRYPOINT_PATH="deploy/scripts/entrypoint.sh"
+COMPOSE_PATH="deploy/docker-compose.yml"
+
+if grep -q 'COPY --from=admin-builder.*\/app\/admin-dist' "$DOCKERFILE_API_PATH"; then
+  pass "Dockerfile.api: admin dist 复制到 /app/admin-dist"
+else
+  fail "Dockerfile.api: 未找到 COPY --from=admin-builder 到 /app/admin-dist 的行"
+fi
+
+if grep -q 'cp -a /app/admin-dist' "$ENTRYPOINT_PATH"; then
+  pass "entrypoint.sh: 包含 admin dist 同步逻辑"
+else
+  fail "entrypoint.sh: 未找到 admin dist 同步逻辑（cp -a /app/admin-dist）"
+fi
+
+if grep -q 'admin_dist:/usr/share/nginx/admin' "$COMPOSE_PATH"; then
+  pass "docker-compose.yml: api 服务挂载 admin_dist volume"
+else
+  fail "docker-compose.yml: api 服务未挂载 admin_dist volume"
+fi
+
 section "8.7. 协议页面正式化检查"
 AGREEMENT_FILES=(
   "apps/miniprogram/src/pages/privacy/index.vue"

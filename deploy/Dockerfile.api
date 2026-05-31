@@ -66,7 +66,8 @@ COPY --from=builder /app/apps/api/node_modules/typescript ./node_modules/typescr
 COPY --from=builder /app/apps/api/node_modules/ts-node ./node_modules/ts-node
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
-COPY --from=admin-builder /app/apps/admin-web/dist /usr/share/nginx/admin
+COPY --from=admin-builder /app/apps/admin-web/dist /app/admin-dist
+RUN echo "$(git rev-parse --short HEAD 2>/dev/null || echo unknown-$(date +%s))" > /app/admin-dist/.build-hash
 COPY deploy/scripts/entrypoint.sh ./entrypoint.sh
 
 RUN mkdir -p /app/apps/api/uploads /app/apps/api/logs /app/apps/api/certs && chmod +x ./entrypoint.sh

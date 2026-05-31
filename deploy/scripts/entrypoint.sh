@@ -5,6 +5,12 @@ if [ $# -gt 0 ]; then
   exec "$@"
 fi
 
+if [ -d /app/admin-dist ]; then
+  rm -rf /usr/share/nginx/admin/*
+  cp -a /app/admin-dist/. /usr/share/nginx/admin/
+  echo "管理后台静态资源: 已同步到 /usr/share/nginx/admin"
+fi
+
 if [ "$NODE_ENV" = "production" ]; then
   if [ "$SKIP_MIGRATE" = "true" ]; then
     echo "SKIP_MIGRATE=true: 跳过数据库迁移"

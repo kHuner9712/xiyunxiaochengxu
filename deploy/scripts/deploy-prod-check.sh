@@ -255,6 +255,23 @@ check_http "API 健康检查" "https://${API_DOMAIN}/api/health" "^(200)$"
 check_http "Admin 首页" "https://${ADMIN_DOMAIN}/" "^(200|301|302)$"
 check_http "uploads 静态资源路由" "https://${API_DOMAIN}/uploads/" "^(200|301|302|403)$"
 
+info "Admin 静态资源 smoke 检查..."
+ADMIN_BUILD_HASH_URL="https://${ADMIN_DOMAIN}/.build-hash"
+ADMIN_BUILD_HASH_HTTP_STATUS="$(curl -k -s -o /dev/null -w '%{http_code}' "$ADMIN_BUILD_HASH_URL" || true)"
+if [[ "$ADMIN_BUILD_HASH_HTTP_STATUS" != "200" ]]; then
+  fail "Admin .build-hash 不可访问：$ADMIN_BUILD_HASH_URL 返回 HTTP $ADMIN_BUILD_HASH_HTTP_STATUS"
+fi
+ADMIN_BUILD_HASH_FROM_NGINX="$(curl -k -s "$ADMIN_BUILD_HASH_URL" || true)"
+ADMIN_BUILD_HASH_FROM_IMAGE="$(docker compose --env-file "$ENV_FILE" exec -T api cat /app/admin-dist/.build-hash 2>/dev/null || true)"
+if [ -z "$ADMIN_BUILD_HASH_FROM_IMAGE" ]; then
+  warn "无法从 api 容器读取 /app/admin-dist/.build-hash，跳过一致性比对"
+else
+  if [ "$ADMIN_BUILD_HASH_FROM_NGINX" != "$ADMIN_BUILD_HASH_FROM_IMAGE" ]; then
+    fail "Admin .build-hash 不一致：nginx 返回 '${ADMIN_BUILD_HASH_FROM_NGINX}'，镜像内 '${ADMIN_BUILD_HASH_FROM_IMAGE}'，volume 可能未刷新"
+  fi
+  pass "Admin .build-hash 一致：${ADMIN_BUILD_HASH_FROM_NGINX}"
+fi
+
 echo ""
 echo -e "${CYAN}下一步真机验收清单：${NC}"
 echo "1. 上传小程序体验版（真实 AppID 构建产物）"
