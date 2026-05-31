@@ -75,14 +75,29 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 
 说明：设置 `SKIP_MIGRATE=true` 跳过 entrypoint.sh 中的自动迁移步骤，因为迁移已在第 5 步单独完成。若未单独执行迁移，可省略该变量，entrypoint.sh 会在启动时自动执行 `prisma migrate deploy`。
 
-## 7. 健康检查
+## 7. 限流策略说明
+
+当前 API 限流（ThrottlerGuard）按单实例生效，使用进程内存储。若未来扩展为多实例部署，需将 ThrottlerGuard 的存储接入 Redis（如 @nestjs/throttler-storage-redis），使验证码、登录、refresh、小程序登录/手机号绑定等限流在多实例间共享。
+
+当前限流阈值：
+| 接口 | 限流策略 |
+|------|---------|
+| 默认 | 100次/60秒 |
+| GET /api/admin/auth/captcha | 20次/60秒 |
+| POST /api/admin/auth/login | 5次/60秒 |
+| POST /api/admin/auth/refresh | 10次/60秒 |
+| POST /api/weapp/auth/login | 10次/60秒 |
+| POST /api/weapp/auth/phone | 10次/60秒 |
+| 微信支付回调 | 跳过应用层限流（由 Nginx 层承担） |
+
+## 8. 健康检查
 
 1. API：`https://api.yunxixiaochengxu.com.cn/api/health`
 2. 后台首页：`https://admin.yunxixiaochengxu.com.cn`
 3. 上传静态资源路由：`https://api.yunxixiaochengxu.com.cn/uploads/`
 4. 容器日志：`docker compose logs -f api nginx`
 
-## 8. 上传文件生产存储
+## 9. 上传文件生产存储
 
 1. 正式商用推荐使用对象存储 + CDN 承载上传文件，本地 `uploads` 不应作为唯一长期存储。
 2. 暂未接入 OSS/COS/S3 时，必须把 `UPLOAD_DIR` 挂载到宿主机持久化卷，并纳入每日备份与恢复演练。
@@ -91,14 +106,14 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 5. `/uploads/` 公开访问仅适合商品图、内容图等公开资源。营业执照、食品资质等敏感资质图片如需上传，应优先走私有对象存储或后台鉴权访问；如暂时公开，运营必须知晓可被 URL 访问的风险。
 6. 对象存储接入时只在私有环境变量中配置访问密钥，不得提交任何云厂商密钥到仓库。
 
-## 9. 错误响应与可观测性
+## 10. 错误响应与可观测性
 
 1. API 继续采用 HTTP 200 + 业务 `code` 响应模式，前端按业务 `code` 判断成功、登录过期、参数错误等。
 2. 响应头与响应体会带 `requestId`，也支持客户端传入 `X-Request-Id` 或 `X-Correlation-Id`。
 3. 排查线上问题时，先用 `requestId` 关联网关日志、API 日志与 BusinessEvent。
 4. 支付、退款、库存、补偿任务异常应优先查看后台业务事件表，再查看容器日志。
 
-## 10. 回滚
+## 11. 回滚
 
 1. 代码回滚到上一稳定 commit/tag。
 2. 停止并重启旧版本镜像：
@@ -107,7 +122,7 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 ```
 3. 数据库回滚前必须先备份；优先使用前向修复，谨慎执行迁移回滚。
 
-## 11. 常见问题
+## 12. 常见问题
 
 1. `release:check:prod` 因 AppID 失败：未提供真实 `VITE_WX_APPID`。
 2. API 启动失败：检查 `.env.production` 是否缺必填变量或存在弱密钥。

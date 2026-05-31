@@ -14,7 +14,23 @@ interface RequestConfig {
   showError?: boolean
 }
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+function normalizeApiBaseUrl(raw: string): string {
+  if (!raw) return ''
+  let url = raw.replace(/\/+$/, '')
+  if (import.meta.env.PROD) {
+    if (!url.startsWith('https://')) {
+      console.error('[baby-mall] 生产环境 VITE_API_BASE_URL 必须以 https:// 开头，当前值:', raw)
+      return ''
+    }
+    if (!url.endsWith('/api')) {
+      console.error('[baby-mall] 生产环境 VITE_API_BASE_URL 必须以 /api 结尾，当前值:', raw)
+      return ''
+    }
+  }
+  return url
+}
+
+const BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || '')
 const TOKEN_KEY = 'baby_mall_token'
 const AUTH_ERROR_CODES = [40101, 40102, 40103]
 let isHandlingAuthError = false

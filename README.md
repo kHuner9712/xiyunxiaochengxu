@@ -46,7 +46,7 @@
 ## 环境要求
 
 - Node.js >= 18
-- pnpm 11.2.2（由 packageManager 字段管理，通过 corepack 激活）
+- pnpm 11.2.2（版本由 `package.json` 的 `packageManager` 字段指定；通过 `corepack enable` 激活；CI 与 Dockerfile 均通过 corepack 读取 `packageManager`）
 - MySQL 8+
 - Redis 7+
 - Docker / Docker Compose（用于预生产部署）

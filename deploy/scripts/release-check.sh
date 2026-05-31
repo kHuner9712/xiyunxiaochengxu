@@ -386,15 +386,32 @@ section "8.65. 小程序生产 API 地址检查"
 if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
   if [ -z "${VITE_API_BASE_URL:-}" ]; then
     fail "生产严格门禁下必须提供 VITE_API_BASE_URL"
+  elif [[ ! "$VITE_API_BASE_URL" =~ ^https:// ]]; then
+    fail "生产环境 VITE_API_BASE_URL 必须以 https:// 开头，当前值: $VITE_API_BASE_URL"
+  elif [[ ! "${VITE_API_BASE_URL%/}" =~ /api$ ]]; then
+    fail "生产环境 VITE_API_BASE_URL 必须以 /api 结尾，当前值: $VITE_API_BASE_URL"
   else
-    pass "VITE_API_BASE_URL 已提供"
+    pass "VITE_API_BASE_URL 格式正确 (https://... /api)"
   fi
 else
   if [ -z "${VITE_API_BASE_URL:-}" ]; then
     warn "未提供 VITE_API_BASE_URL（默认门禁允许，生产门禁将失败）"
+  elif [[ ! "$VITE_API_BASE_URL" =~ ^https:// ]] || [[ ! "${VITE_API_BASE_URL%/}" =~ /api$ ]]; then
+    warn "VITE_API_BASE_URL 格式不符合生产要求（需 https:// 开头且 /api 结尾），生产门禁将失败"
   else
     pass "VITE_API_BASE_URL 已提供"
   fi
+fi
+
+section "8.65b. 上传大小限制检查"
+if [ -n "${UPLOAD_MAX_SIZE:-}" ]; then
+  if [ "${UPLOAD_MAX_SIZE}" -gt 104857600 ] 2>/dev/null; then
+    warn "UPLOAD_MAX_SIZE 超过 100MB (${UPLOAD_MAX_SIZE} bytes)，请确认是否合理"
+  else
+    pass "UPLOAD_MAX_SIZE 在合理范围内 (${UPLOAD_MAX_SIZE} bytes)"
+  fi
+else
+  pass "UPLOAD_MAX_SIZE 未设置，使用默认 10MB"
 fi
 
 section "8.66. 小程序生产演示口径检查"
