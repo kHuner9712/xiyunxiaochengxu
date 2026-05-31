@@ -45,7 +45,7 @@ jobs:
         run: pnpm build:admin
 
       - name: Build Miniprogram
-        run: VITE_API_BASE_URL=https://example.invalid pnpm build:mini
+        run: VITE_API_BASE_URL=https://example.invalid/api pnpm build:mini
 
       - name: Release Gate Check (non-strict)
         run: pnpm release:check
