@@ -4,6 +4,7 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 import { paginate } from '@baby-mall/shared';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as fsp from 'fs/promises';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 
 const FILE_MAGIC_NUMBERS: Record<string, number[][]> = {
@@ -54,7 +55,7 @@ type UploadVisibility = 'public' | 'private';
 interface StorageProvider {
   save(file: Express.Multer.File, targetFileName: string, visibility: UploadVisibility): Promise<{ filePath: string; url: string | null }>;
   remove(filePath: string): Promise<void>;
-  createReadStream(filePath: string): fs.ReadStream;
+  createReadStream(filePath: string): Promise<fs.ReadStream>;
 }
 
 class LocalStorageProvider implements StorageProvider {
@@ -66,11 +67,9 @@ class LocalStorageProvider implements StorageProvider {
 
   async save(file: Express.Multer.File, targetFileName: string, visibility: UploadVisibility) {
     const targetDir = path.join(this.uploadDir, visibility);
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
+    await fsp.mkdir(targetDir, { recursive: true });
     const filePath = path.join(targetDir, targetFileName);
-    fs.writeFileSync(filePath, file.buffer);
+    await fsp.writeFile(filePath, file.buffer);
     const publicPath = `/uploads/${visibility}/${targetFileName}`;
     return {
       filePath: publicPath,
@@ -80,14 +79,20 @@ class LocalStorageProvider implements StorageProvider {
 
   async remove(filePath: string) {
     const fullPath = this.resolveStoredPath(filePath);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
+    try {
+      await fsp.unlink(fullPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
     }
   }
 
-  createReadStream(filePath: string) {
+  async createReadStream(filePath: string) {
     const fullPath = this.resolveStoredPath(filePath);
-    if (!fs.existsSync(fullPath)) {
+    try {
+      await fsp.access(fullPath, fs.constants.F_OK);
+    } catch {
       throw new NotFoundException('文件不存在');
     }
     return fs.createReadStream(fullPath);
@@ -250,7 +255,7 @@ export class UploadService {
 
     return {
       file: this.serializeFileAsset(file),
-      stream: this.storageProvider.createReadStream(file.filePath),
+      stream: await this.storageProvider.createReadStream(file.filePath),
       mimeType: file.mimeType || 'application/octet-stream',
       fileName: file.originalName || file.fileName || 'file',
     };

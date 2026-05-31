@@ -32,6 +32,8 @@
 | `pnpm build:all` | PASS | API + Admin + 小程序构建均通过 |
 | `pnpm release:check` | PASS | 106 PASS / 0 FAIL / 11 WARN（默认门禁通过） |
 
+进入服务器预生产部署前需执行 `pnpm release:check:freeze` 作为代码冻结门禁；正式上线前仍必须执行 `pnpm release:check:prod`。
+
 ## 3. release:check:prod 失败明细（预期人工/环境阻塞）
 
 1. 严格模式下小程序生产构建失败（未提供真实 `VITE_WX_APPID`）。
@@ -42,7 +44,7 @@
 
 ## 4. 当前可发布性判断
 
-1. 代码质量门禁（默认）已通过，可进入预生产部署与真机验收。
+1. 代码冻结门禁需以 `pnpm release:check:freeze` 为准，通过后可进入预生产部署与真机验收。
 2. 正式发布门禁（prod strict）未通过，禁止正式发布。
 
 ## 5. 人工阻塞项（P0）

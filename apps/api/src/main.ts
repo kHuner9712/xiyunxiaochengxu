@@ -18,6 +18,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
+  if (nodeEnv === 'production') {
+    app.set('trust proxy', 1);
+  }
+
   const uploadDir = configService.get<string>('UPLOAD_DIR') || path.join(process.cwd(), 'uploads');
   app.useStaticAssets(uploadDir, { prefix: '/uploads/' });
 

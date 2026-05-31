@@ -33,7 +33,10 @@ describe('Throttler Guard (e2e)', () => {
           isGlobal: true,
           load: [() => createTestEnvConfig()],
         }),
-        ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+        ThrottlerModule.forRoot({
+          throttlers: [{ ttl: 60000, limit: 100 }],
+          getTracker: (req: Record<string, any>) => req.ip || req.socket?.remoteAddress || 'unknown',
+        }),
         AuthModule,
       ],
       providers: [
@@ -64,6 +67,7 @@ describe('Throttler Guard (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication({ rawBody: true });
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -98,6 +102,25 @@ describe('Throttler Guard (e2e)', () => {
     expect(throttled!.body).toHaveProperty('requestId');
   });
 
+  it('GET /api/admin/auth/captcha 按 X-Forwarded-For 解析后的真实客户端 IP 限流', async () => {
+    const limitedIp = '203.0.113.10';
+    for (let i = 0; i < 20; i++) {
+      await request(app.getHttpServer())
+        .get('/api/admin/auth/captcha')
+        .set('X-Forwarded-For', limitedIp);
+    }
+
+    const throttled = await request(app.getHttpServer())
+      .get('/api/admin/auth/captcha')
+      .set('X-Forwarded-For', limitedIp);
+    expect(throttled.body.code).toBe(40501);
+
+    const otherIpResponse = await request(app.getHttpServer())
+      .get('/api/admin/auth/captcha')
+      .set('X-Forwarded-For', '203.0.113.11');
+    expect(otherIpResponse.body.code).not.toBe(40501);
+  });
+
   it('POST /api/admin/auth/login 触发限流后返回 code=40501', async () => {
     const requests = [];
     for (let i = 0; i < 6; i++) {
@@ -114,6 +137,28 @@ describe('Throttler Guard (e2e)', () => {
     expect(throttled!.body.message).toBe('请求频率超限，请稍后再试');
     expect(throttled!.body.data).toBeNull();
     expect(throttled!.body).toHaveProperty('requestId');
+  });
+
+  it('POST /api/admin/auth/login 按 X-Forwarded-For 解析后的真实客户端 IP 限流', async () => {
+    const limitedIp = '203.0.113.20';
+    for (let i = 0; i < 5; i++) {
+      await request(app.getHttpServer())
+        .post('/api/admin/auth/login')
+        .set('X-Forwarded-For', limitedIp)
+        .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' });
+    }
+
+    const throttled = await request(app.getHttpServer())
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', limitedIp)
+      .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' });
+    expect(throttled.body.code).toBe(40501);
+
+    const otherIpResponse = await request(app.getHttpServer())
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', '203.0.113.21')
+      .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' });
+    expect(otherIpResponse.body.code).not.toBe(40501);
   });
 
   it('限流响应结构包含 code, message, data, requestId', async () => {

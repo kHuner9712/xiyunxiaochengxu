@@ -435,7 +435,7 @@ export class AuthService {
       throw new UnauthorizedException('会话已过期，请重新登录');
     }
 
-    const newAppId = this.configService.get('WECHAT_APP_ID');
+    const newAppId = this.configService.get<string>('WECHAT_APP_ID');
     const newUrl = `https://api.weixin.qq.com/sns/jscode2session?appid=${newAppId}&secret=${this.configService.get('WECHAT_APP_SECRET')}&js_code=${code}&grant_type=authorization_code`;
     const newResponse = await axios.get(newUrl);
     const { session_key: newSessionKey, errcode, errmsg } = newResponse.data;
@@ -445,28 +445,47 @@ export class AuthService {
     }
 
     const effectiveSessionKey = newSessionKey || sessionKey;
+    const phoneData = this.parseLegacyPhoneData(effectiveSessionKey, iv, encryptedData, newAppId);
 
+    if (newSessionKey) {
+      await this.redisService.set(
+        `wechat_session:${userId}`,
+        newSessionKey,
+        86400 * 7,
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: BigInt(userId) },
+      data: { phone: phoneData.phoneNumber },
+    });
+
+    return { phone: phoneData.phoneNumber };
+  }
+
+  private parseLegacyPhoneData(sessionKey: string, iv: string, encryptedData: string, expectedAppId?: string) {
+    let phoneData: any;
     try {
-      const decrypted = this.decryptWechatData(effectiveSessionKey, iv, encryptedData);
-      const phoneData = JSON.parse(decrypted);
-
-      if (newSessionKey) {
-        await this.redisService.set(
-          `wechat_session:${userId}`,
-          newSessionKey,
-          86400 * 7,
-        );
-      }
-
-      await this.prisma.user.update({
-        where: { id: BigInt(userId) },
-        data: { phone: phoneData.phoneNumber },
-      });
-
-      return { phone: phoneData.phoneNumber };
-    } catch (e) {
+      const decrypted = this.decryptWechatData(sessionKey, iv, encryptedData);
+      phoneData = JSON.parse(decrypted);
+    } catch {
       throw new BadRequestException('手机号解密失败，请重试');
     }
+
+    const isPlainObject = phoneData && typeof phoneData === 'object' && !Array.isArray(phoneData);
+    const phoneNumber = isPlainObject ? phoneData.phoneNumber : undefined;
+    const watermark = isPlainObject ? phoneData.watermark : undefined;
+    const appid = watermark && typeof watermark === 'object' ? watermark.appid : undefined;
+
+    if (typeof phoneNumber !== 'string' || phoneNumber.trim() === '') {
+      throw new BadRequestException('手机号解密失败，请重试');
+    }
+
+    if (!expectedAppId || appid !== expectedAppId) {
+      throw new BadRequestException('手机号解密失败，请重试');
+    }
+
+    return { phoneNumber };
   }
 
   private decryptWechatData(sessionKey: string, iv: string, encryptedData: string): string {

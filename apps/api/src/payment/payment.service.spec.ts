@@ -5,6 +5,7 @@ import { PaymentService } from './payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { BusinessEventService } from '../common/business-event.service';
 import * as crypto from 'crypto';
+import axios from 'axios';
 
 jest.mock('axios');
 
@@ -70,8 +71,18 @@ function createMockBusinessEventService() {
   };
 }
 
+function createP2002Error(target: string[] | string) {
+  return Object.assign(new Error('Unique constraint failed'), {
+    code: 'P2002',
+    meta: { target },
+  });
+}
+
 function createPaymentService(mockPrisma?: any, mockConfigService?: any, mockBusinessEvent?: any) {
   const prisma = mockPrisma || createMockPrisma();
+  if (prisma.$transaction && !prisma.$transaction.getMockImplementation?.()) {
+    prisma.$transaction.mockImplementation(async (callback: any) => callback(prisma));
+  }
   const configService = mockConfigService || createMockConfigService();
   const businessEvent = mockBusinessEvent || createMockBusinessEventService();
   const processFirstPaidReward = jest.fn() as any;
@@ -1852,6 +1863,38 @@ describe('支付契约测试', () => {
     expect(result.package).toBe('prepay_id=wx_prepay_id_123');
   });
 
+  it('微信 JSAPI 下单 out_trade_no 使用业务订单号，paymentNo 仅作为内部支付单号', async () => {
+    const mockedAxios = axios as jest.Mocked<typeof axios>;
+    mockedAxios.post.mockClear();
+    mockedAxios.post.mockResolvedValue({ data: { prepay_id: 'wx_prepay_id_123' } } as any);
+
+    const ORDER = {
+      id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment',
+      payAmount: 10000, userId: BigInt(100),
+      user: { id: BigInt(100), openid: 'test_openid' },
+    };
+
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+    mockPrisma.orderPayment.findFirst.mockResolvedValue(null);
+    (service as any).privateKey = 'test-private-key-present';
+    jest.spyOn(service as any, 'signRequest').mockReturnValue('test-signature');
+
+    const result = await service.createPayment('1', '100');
+
+    const createdPayment = mockPrisma.orderPayment.create.mock.calls[0][0].data;
+    expect(createdPayment.paymentNo).toEqual(expect.stringMatching(/^PAY/));
+    expect(createdPayment.paymentNo).not.toBe(ORDER.orderNo);
+
+    const jsapiCall = mockedAxios.post.mock.calls.find(([url]) => (
+      url === 'https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi'
+    ));
+    expect(jsapiCall).toBeDefined();
+    const requestBody = jsapiCall![1] as any;
+    expect(requestBody.out_trade_no).toBe(ORDER.orderNo);
+    expect(JSON.stringify(requestBody)).not.toContain(createdPayment.paymentNo);
+    expect(result.package).toBe('prepay_id=wx_prepay_id_123');
+  });
+
   it('同一订单重复创建支付复用已有有效支付单，不创建第二条支付记录', async () => {
     const ORDER = {
       id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment',
@@ -1876,6 +1919,98 @@ describe('支付契约测试', () => {
     expect(mockPrisma.orderPayment.create).not.toHaveBeenCalled();
     expect(createWechatOrderSpy).not.toHaveBeenCalled();
     expect(result.package).toBe('prepay_id=wx_existing_prepay_id');
+  });
+
+  it('并发两次创建同一订单支付时，第二次命中 orderId P2002 后复用已有支付记录', async () => {
+    const ORDER = {
+      id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment',
+      payAmount: 10000, userId: BigInt(100),
+      user: { id: BigInt(100), openid: 'test_openid' },
+    };
+    const EXISTING_PAYMENT = {
+      id: BigInt(9), orderId: BigInt(1), paymentNo: 'PAY_EXISTING',
+      amount: 10000, status: PAYMENT_STATUS.CREATED,
+    };
+
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+    mockPrisma.orderPayment.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(EXISTING_PAYMENT);
+    mockPrisma.orderPayment.create
+      .mockResolvedValueOnce({ id: BigInt(8), orderId: BigInt(1), status: PAYMENT_STATUS.CREATED })
+      .mockRejectedValueOnce(createP2002Error(['orderId']));
+    jest.spyOn(service as any, 'createWechatOrder').mockResolvedValue('wx_new_prepay_id');
+    jest.spyOn(service, 'queryWechatOrder').mockResolvedValue({
+      trade_state: 'NOTPAY',
+      prepay_id: 'wx_existing_prepay_id',
+    });
+
+    const results = await Promise.all([
+      service.createPayment('1', '100'),
+      service.createPayment('1', '100'),
+    ]);
+
+    expect(results.map((result) => result.package).sort()).toEqual([
+      'prepay_id=wx_existing_prepay_id',
+      'prepay_id=wx_new_prepay_id',
+    ].sort());
+    expect(mockPrisma.orderPayment.create).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.orderPayment.findFirst).toHaveBeenCalledWith({ where: { orderId: BigInt(1) } });
+  });
+
+  it('orderId P2002 时回查并复用已有 payment', async () => {
+    const ORDER = {
+      id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment',
+      payAmount: 10000, userId: BigInt(100),
+      user: { id: BigInt(100), openid: 'test_openid' },
+    };
+    const EXISTING_PAYMENT = {
+      id: BigInt(9), orderId: BigInt(1), paymentNo: 'PAY_EXISTING',
+      amount: 10000, status: PAYMENT_STATUS.CREATED,
+    };
+
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+    mockPrisma.orderPayment.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(EXISTING_PAYMENT);
+    mockPrisma.orderPayment.create.mockRejectedValueOnce(createP2002Error(['orderId']));
+    jest.spyOn(service, 'queryWechatOrder').mockResolvedValue({
+      trade_state: 'NOTPAY',
+      prepay_id: 'wx_existing_prepay_id',
+    });
+    const createWechatOrderSpy = jest.spyOn(service as any, 'createWechatOrder');
+
+    const result = await service.createPayment('1', '100');
+
+    expect(result.package).toBe('prepay_id=wx_existing_prepay_id');
+    expect(createWechatOrderSpy).not.toHaveBeenCalled();
+    expect(mockPrisma.orderPayment.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('paymentNo P2002 时重新生成支付单号并重试', async () => {
+    const ORDER = {
+      id: BigInt(1), orderNo: 'ORDER123', status: 'pending_payment',
+      payAmount: 10000, userId: BigInt(100),
+      user: { id: BigInt(100), openid: 'test_openid' },
+    };
+
+    mockPrisma.order.findFirst.mockResolvedValue(ORDER);
+    mockPrisma.orderPayment.findFirst.mockResolvedValue(null);
+    mockPrisma.orderPayment.create
+      .mockRejectedValueOnce(createP2002Error(['paymentNo']))
+      .mockResolvedValueOnce({ id: BigInt(8), orderId: BigInt(1), status: PAYMENT_STATUS.CREATED });
+    jest.spyOn(service as any, 'createWechatOrder').mockResolvedValue('wx_new_prepay_id');
+
+    const result = await service.createPayment('1', '100');
+
+    expect(result.package).toBe('prepay_id=wx_new_prepay_id');
+    expect(mockPrisma.orderPayment.create).toHaveBeenCalledTimes(2);
+    const firstPaymentNo = mockPrisma.orderPayment.create.mock.calls[0][0].data.paymentNo;
+    const secondPaymentNo = mockPrisma.orderPayment.create.mock.calls[1][0].data.paymentNo;
+    expect(firstPaymentNo).toMatch(/^PAY/);
+    expect(secondPaymentNo).toMatch(/^PAY/);
+    expect(firstPaymentNo).not.toBe(secondPaymentNo);
   });
 
   it('支付成功回调金额不一致时拒绝并记录业务事件', async () => {

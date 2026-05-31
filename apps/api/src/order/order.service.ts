@@ -843,38 +843,77 @@ export class OrderService {
   }
 
   async adminDeliver(dto: DeliverDto) {
-    const order = await this.prisma.order.findFirst({
-      where: { id: BigInt(dto.orderId) },
-    });
-    if (!order) throw new NotFoundException('订单不存在');
-    assertOrderTransition(order.status, OrderStatus.delivered, '发货');
+    const orderId = BigInt(dto.orderId);
+    const orderViewInclude = {
+      orderItems: { include: { aftersaleOrders: true } },
+      payment: true,
+      delivery: true,
+      orderLogs: { orderBy: { createdAt: 'desc' as const } },
+      user: { select: { id: true, nickname: true, phone: true } },
+    };
 
-    const result = await this.prisma.order.update({
-      where: { id: BigInt(dto.orderId) },
-      data: {
-        status: OrderStatus.delivered,
-        deliveredAt: new Date(),
-        autoCompleteAt: new Date(Date.now() + ORDER_AUTO_COMPLETE_DAYS * 24 * 60 * 60 * 1000),
-        delivery: {
-          create: {
+    const deliveredAt = new Date();
+    const autoCompleteAt = new Date(deliveredAt.getTime() + ORDER_AUTO_COMPLETE_DAYS * 24 * 60 * 60 * 1000);
+
+    const { order, delivered } = await this.prisma.$transaction(async (tx) => {
+      const claimResult = await tx.order.updateMany({
+        where: { id: orderId, status: OrderStatus.pending_delivery },
+        data: {
+          status: OrderStatus.delivered,
+          deliveredAt,
+          autoCompleteAt,
+        },
+      });
+
+      if (claimResult.count === 0) {
+        const currentOrder = await tx.order.findFirst({
+          where: { id: orderId },
+          include: orderViewInclude,
+        });
+        if (!currentOrder) throw new NotFoundException('订单不存在');
+        if (currentOrder.status === OrderStatus.delivered) {
+          if (currentOrder.delivery) {
+            return { order: currentOrder, delivered: false };
+          }
+          throw new BadRequestException('订单已发货');
+        }
+        throw new BadRequestException(`订单状态不允许发货: ${currentOrder.status}`);
+      }
+
+      const existingDelivery = await tx.orderDelivery.findFirst({ where: { orderId } });
+      if (!existingDelivery) {
+        await tx.orderDelivery.create({
+          data: {
+            orderId,
             logisticsCompany: dto.logisticsCompany,
             logisticsNo: dto.logisticsNo,
             deliveryImages: dto.deliveryImages,
-            deliveredAt: new Date(),
+            deliveredAt,
           },
-        },
-        orderLogs: {
-          create: {
+        });
+
+        await tx.orderLog.create({
+          data: {
+            orderId,
             operatorType: 'admin',
             action: 'deliver',
             content: `管理员发货，物流公司：${dto.logisticsCompany}，物流单号：${dto.logisticsNo}`,
           },
-        },
-      },
+        });
+      }
+
+      const currentOrder = await tx.order.findFirst({
+        where: { id: orderId },
+        include: orderViewInclude,
+      });
+      if (!currentOrder) throw new NotFoundException('订单不存在');
+      return { order: currentOrder, delivered: !existingDelivery };
     });
 
-    this.logger.log(`管理员发货订单：${dto.orderId}，物流：${dto.logisticsCompany} ${dto.logisticsNo}`);
-    return this.serializeOrderView(result);
+    if (delivered) {
+      this.logger.log(`管理员发货订单：${dto.orderId}，物流：${dto.logisticsCompany} ${dto.logisticsNo}`);
+    }
+    return this.serializeOrderView(order);
   }
 
   async adminRemark(id: string, remark: string) {

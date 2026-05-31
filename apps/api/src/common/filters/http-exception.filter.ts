@@ -24,10 +24,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let code: number = ERROR_CODE.INTERNAL_ERROR;
     let message = '服务器内部错误';
+    let httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
     const requestIdHeader = request.headers['x-request-id'] || request.headers['x-correlation-id'];
     const requestId = Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader || randomUUID();
 
     if (exception instanceof HttpException) {
+      httpStatus = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
       if (typeof exceptionResponse === 'string') {
@@ -44,13 +46,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (exception instanceof ThrottlerException) {
         code = ERROR_CODE.THROTTLER;
         message = '请求频率超限，请稍后再试';
-      } else if (exception.getStatus() === HttpStatus.BAD_REQUEST) {
+      } else if (httpStatus === HttpStatus.BAD_REQUEST || httpStatus === HttpStatus.PAYLOAD_TOO_LARGE) {
         code = ERROR_CODE.PARAM_ERROR;
-      } else if (exception.getStatus() === HttpStatus.UNAUTHORIZED) {
+      } else if (httpStatus === HttpStatus.UNAUTHORIZED) {
         code = this.mapUnauthorizedCode(message);
-      } else if (exception.getStatus() === HttpStatus.FORBIDDEN) {
+      } else if (httpStatus === HttpStatus.FORBIDDEN) {
         code = ERROR_CODE.FORBIDDEN;
-      } else if (exception.getStatus() === HttpStatus.NOT_FOUND) {
+      } else if (httpStatus === HttpStatus.NOT_FOUND) {
         code = ERROR_CODE.NOT_FOUND;
       } else {
         code = ERROR_CODE.INTERNAL_ERROR;
@@ -67,7 +69,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       this.logger.warn(`requestId=${requestId} ${request.method} ${request.originalUrl || request.url} code=${code} message=${message}`);
     }
 
-    response.status(HttpStatus.OK).json({
+    const responseStatus = this.shouldUseUploadHttpStatus(request, httpStatus) ? httpStatus : HttpStatus.OK;
+    response.status(responseStatus).json({
       code,
       message,
       data: null,
@@ -84,5 +87,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return ERROR_CODE.TOKEN_INVALID;
     }
     return ERROR_CODE.UNAUTHORIZED;
+  }
+
+  private shouldUseUploadHttpStatus(request: Request, status: number): boolean {
+    const url = request.originalUrl || request.url || '';
+    return url.includes('/file/upload') && [HttpStatus.BAD_REQUEST, HttpStatus.PAYLOAD_TOO_LARGE].includes(status);
   }
 }

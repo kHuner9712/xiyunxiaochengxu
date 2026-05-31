@@ -35,6 +35,30 @@ class EnvValidation {
 
   @IsString()
   @IsOptional()
+  DB_HOST?: string;
+
+  @IsString()
+  @IsOptional()
+  DB_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  DB_NAME?: string;
+
+  @IsString()
+  @IsOptional()
+  DB_USER?: string;
+
+  @IsString()
+  @IsOptional()
+  DB_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  DB_CHARSET?: string;
+
+  @IsString()
+  @IsOptional()
   REDIS_HOST?: string;
 
   @IsString()
@@ -43,11 +67,23 @@ class EnvValidation {
 
   @IsString()
   @IsOptional()
+  REDIS_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  REDIS_DB?: string;
+
+  @IsString()
+  @IsOptional()
   JWT_SECRET?: string;
 
   @IsString()
   @IsOptional()
   JWT_EXPIRES_IN?: string;
+
+  @IsString()
+  @IsOptional()
+  JWT_ADMIN_EXPIRES_IN?: string;
 
   @IsString()
   @IsOptional()
@@ -87,7 +123,23 @@ class EnvValidation {
 
   @IsString()
   @IsOptional()
+  WECHAT_PLATFORM_CERT_SERIAL_NO?: string;
+
+  /**
+   * Optional JSON map of platform certificate serial numbers to PEM file paths.
+   * Used for WeChat callback signature verification during certificate rotation.
+   */
+  @IsString()
+  @IsOptional()
+  WECHAT_PLATFORM_CERT_MAP?: string;
+
+  @IsString()
+  @IsOptional()
   WECHAT_SKIP_VERIFY?: string;
+
+  @IsString()
+  @IsOptional()
+  WECHAT_REFUND_MOCK?: string;
 
   @IsString()
   @IsOptional()
@@ -103,11 +155,183 @@ class EnvValidation {
 
   @IsString()
   @IsOptional()
+  UPLOAD_DRIVER?: string;
+
+  @IsString()
+  @IsOptional()
+  UPLOAD_DIR?: string;
+
+  @IsString()
+  @IsOptional()
+  UPLOAD_MAX_SIZE?: string;
+
+  @IsString()
+  @IsOptional()
+  UPLOAD_ALLOWED_TYPES?: string;
+
+  @IsString()
+  @IsOptional()
+  PUBLIC_ASSET_BASE_URL?: string;
+
+  @IsString()
+  @IsOptional()
+  COS_SECRET_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  COS_SECRET_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  COS_BUCKET?: string;
+
+  @IsString()
+  @IsOptional()
+  COS_REGION?: string;
+
+  @IsString()
+  @IsOptional()
+  OSS_ACCESS_KEY_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  OSS_ACCESS_KEY_SECRET?: string;
+
+  @IsString()
+  @IsOptional()
+  OSS_BUCKET?: string;
+
+  @IsString()
+  @IsOptional()
+  OSS_REGION?: string;
+
+  @IsString()
+  @IsOptional()
+  OSS_ENDPOINT?: string;
+
+  @IsString()
+  @IsOptional()
+  ORDER_AUTO_CLOSE_MINUTES?: string;
+
+  @IsString()
+  @IsOptional()
+  ORDER_AUTO_COMPLETE_DAYS?: string;
+
+  @IsString()
+  @IsOptional()
+  ORDER_AUTO_COMPLETE_REMIND_DAYS?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_RATE_PER_YUAN?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_SIGN_IN_BASE?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_SIGN_IN_MAX?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_SHARE_AWARD?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_SHARE_DAILY_LIMIT?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_PROFILE_AWARD?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_REVIEW_AWARD?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_REVIEW_DAILY_LIMIT?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_REGISTER_AWARD?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_DEDUCT_RATE?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_DEDUCT_MAX_PERCENT?: string;
+
+  @IsString()
+  @IsOptional()
+  POINTS_EXPIRE_MONTHS?: string;
+
+  @IsString()
+  @IsOptional()
+  FREIGHT_FREE_AMOUNT?: string;
+
+  @IsString()
+  @IsOptional()
+  FREIGHT_DEFAULT_FEE?: string;
+
+  @IsString()
+  @IsOptional()
+  FREIGHT_REMOTE_AREAS?: string;
+
+  @IsString()
+  @IsOptional()
+  FREIGHT_REMOTE_FEE?: string;
+
+  @IsString()
+  @IsOptional()
+  MEMBER_LEVEL_NORMAL_MAX?: string;
+
+  @IsString()
+  @IsOptional()
+  MEMBER_LEVEL_SILVER_MIN?: string;
+
+  @IsString()
+  @IsOptional()
+  MEMBER_LEVEL_SILVER_MAX?: string;
+
+  @IsString()
+  @IsOptional()
+  MEMBER_LEVEL_GOLD_MIN?: string;
+
+  @IsString()
+  @IsOptional()
+  MEMBER_LEVEL_GOLD_MAX?: string;
+
+  @IsString()
+  @IsOptional()
+  MEMBER_LEVEL_BLACK_GOLD_MIN?: string;
+
+  @IsString()
+  @IsOptional()
+  LOG_LEVEL?: string;
+
+  @IsString()
+  @IsOptional()
+  LOG_DIR?: string;
+
+  @IsString()
+  @IsOptional()
   CORS_ORIGINS?: string;
 
   @IsString()
   @IsOptional()
+  ALERT_WEBHOOK_URL?: string;
+
+  @IsString()
+  @IsOptional()
   SMOKE_TEST_BYPASS_CAPTCHA?: string;
+
+  @IsString()
+  @IsOptional()
+  ADMIN_DEFAULT_USERNAME?: string;
 
   @IsString()
   @IsOptional()
@@ -121,6 +345,7 @@ export function validateEnv(env: Record<string, any>) {
     const requiredVars = [
       'DATABASE_URL',
       'REDIS_HOST',
+      'REDIS_PASSWORD',
       'JWT_SECRET',
       'REFRESH_TOKEN_SECRET',
       'WECHAT_APP_ID',

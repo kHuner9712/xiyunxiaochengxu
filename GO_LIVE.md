@@ -41,6 +41,7 @@
 
 - GitHub Actions：待核验，当前未取得可核验 run 结果。
 - `pnpm --filter @baby-mall/api prisma migrate deploy`：待真实数据库执行，本地未连真实预生产/生产数据库执行。
+- `pnpm release:check:freeze`：进入服务器预生产部署前必须执行，人工/部署项只作为 WARN。
 - `pnpm release:check:prod`：待真实生产变量、真实 AppID、生产 API、协议联系方式与证书配置完成后执行。
 - 微信开发者工具上传体验版：待执行。
 - 真机支付、退款、售后、自提、客服与协议验收：待预生产阶段执行。
@@ -68,7 +69,7 @@ pnpm install
 pnpm --filter @baby-mall/api prisma:validate
 pnpm --filter @baby-mall/api test:ci
 pnpm build:all
-pnpm release:check
+pnpm release:check:freeze
 ```
 
 生产严格门禁需在真实生产变量准备完成后执行：

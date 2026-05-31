@@ -40,7 +40,11 @@ import { validateEnv } from './config/env.validation';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60000, limit: 100 }],
+      // X-Forwarded-For is only trusted after Express trust proxy resolves it into req.ip.
+      getTracker: (req: Record<string, any>) => req.ip || req.socket?.remoteAddress || 'unknown',
+    }),
     PrismaModule,
     RedisModule,
     BusinessEventModule,

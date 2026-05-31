@@ -17,6 +17,7 @@ function createProductionEnv(overrides: Record<string, any> = {}) {
       NODE_ENV: 'production',
       DATABASE_URL: 'mysql://root:strong_password@localhost:3306/baby_mall',
       REDIS_HOST: 'localhost',
+      REDIS_PASSWORD: 'Redis_Strong_Password_2026!',
       JWT_SECRET: 'JwTk_qwertyuiopasdfghjklzxcvbnm9081726354',
       REFRESH_TOKEN_SECRET: 'RfTk_mnbvcxzlkjhgfdsapoiuytrewq9081726354',
       WECHAT_APP_ID: 'wx1234567890abcdef',
@@ -59,8 +60,30 @@ describe('validateEnv 生产环境强校验', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('缺少 REDIS_PASSWORD 时应启动失败', () => {
+    const { tmpDir, env } = createProductionEnv({ REDIS_PASSWORD: '' });
+    createdDirs.push(tmpDir);
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    expect(() => validateEnv(env)).toThrow('process.exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('缺少 WECHAT_PLATFORM_CERT_SERIAL_NO 时应启动失败', () => {
     const { tmpDir, env } = createProductionEnv({ WECHAT_PLATFORM_CERT_SERIAL_NO: '' });
+    createdDirs.push(tmpDir);
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    expect(() => validateEnv(env)).toThrow('process.exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('弱 JWT_SECRET 时应启动失败', () => {
+    const { tmpDir, env } = createProductionEnv({ JWT_SECRET: 'your_jwt_secret_key_change_this' });
     createdDirs.push(tmpDir);
     const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`process.exit:${code}`);
@@ -104,6 +127,63 @@ describe('validateEnv 生产环境强校验', () => {
 
   it('UPLOAD_PUBLIC_URL 非 https 时应启动失败', () => {
     const { tmpDir, env } = createProductionEnv({ UPLOAD_PUBLIC_URL: 'http://api.example.com' });
+    createdDirs.push(tmpDir);
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    expect(() => validateEnv(env)).toThrow('process.exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('WECHAT_NOTIFY_URL 非 https 时应启动失败', () => {
+    const { tmpDir, env } = createProductionEnv({ WECHAT_NOTIFY_URL: 'http://api.example.com/pay/callback' });
+    createdDirs.push(tmpDir);
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    expect(() => validateEnv(env)).toThrow('process.exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('WECHAT_REFUND_NOTIFY_URL 非 https 时应启动失败', () => {
+    const { tmpDir, env } = createProductionEnv({ WECHAT_REFUND_NOTIFY_URL: 'http://api.example.com/pay/refund-callback' });
+    createdDirs.push(tmpDir);
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    expect(() => validateEnv(env)).toThrow('process.exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('WECHAT_PRIVATE_KEY_PATH 不可读时应启动失败', () => {
+    const { tmpDir, env } = createProductionEnv();
+    createdDirs.push(tmpDir);
+    env.WECHAT_PRIVATE_KEY_PATH = path.join(tmpDir, 'missing_apiclient_key.pem');
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    expect(() => validateEnv(env)).toThrow('process.exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('WECHAT_PLATFORM_CERT_PATH 不可读时应启动失败', () => {
+    const { tmpDir, env } = createProductionEnv();
+    createdDirs.push(tmpDir);
+    env.WECHAT_PLATFORM_CERT_PATH = path.join(tmpDir, 'missing_wechatpay_platform.pem');
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    expect(() => validateEnv(env)).toThrow('process.exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('WECHAT_SKIP_VERIFY=true 时应启动失败', () => {
+    const { tmpDir, env } = createProductionEnv({ WECHAT_SKIP_VERIFY: 'true' });
     createdDirs.push(tmpDir);
     const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`process.exit:${code}`);

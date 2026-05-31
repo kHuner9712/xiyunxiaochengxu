@@ -24,7 +24,7 @@ function createMockPrisma() {
     order: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findFirst: jest.fn() },
     orderPayment: { create: jest.fn() },
     orderLog: { create: jest.fn() },
-    orderDelivery: { update: jest.fn() },
+    orderDelivery: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     cart: { deleteMany: jest.fn() },
     $executeRaw: jest.fn(),
   };
@@ -35,6 +35,8 @@ function createMockPrisma() {
     user: { findFirst: jest.fn() },
     userCoupon: { findFirst: jest.fn() },
     order: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+    orderDelivery: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+    orderLog: { create: jest.fn() },
     cart: { deleteMany: jest.fn() },
     $transaction: jest.fn(),
     _mockTx: mockTx,
@@ -587,6 +589,111 @@ describe('OrderService.cancel 并发竞态保护', () => {
     expect(mockPrisma._mockTx.productSku.update).toHaveBeenCalled();
     expect(mockPrisma._mockTx.user.update).toHaveBeenCalled();
     expect(mockPrisma._mockTx.orderLog.create).toHaveBeenCalled();
+  });
+});
+
+describe('OrderService.adminDeliver 发货幂等与并发保护', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  const delivery = {
+    id: BigInt(10),
+    orderId: BigInt(1),
+    logisticsCompany: '顺丰速运',
+    logisticsNo: 'SF123',
+    deliveryImages: null,
+    deliveredAt: new Date('2026-05-31T10:00:00Z'),
+    logisticsInfo: null,
+  };
+  const orderView = (status: OrderStatus, orderDelivery: any = null) => ({
+    id: BigInt(1),
+    orderNo: 'ORDER123',
+    userId: BigInt(100),
+    status,
+    totalAmount: 1000,
+    discountAmount: 0,
+    couponAmount: 0,
+    activityDiscountAmount: 0,
+    pointsAmount: 0,
+    freightAmount: 0,
+    payAmount: 1000,
+    receiverName: '张三',
+    receiverPhone: '13800138000',
+    province: '北京',
+    city: '北京',
+    district: '朝阳区',
+    detailAddress: '测试路1号',
+    fulfillmentType: 'delivery',
+    createdAt: new Date('2026-05-31T09:00:00Z'),
+    deliveredAt: status === OrderStatus.delivered ? new Date('2026-05-31T10:00:00Z') : null,
+    completedAt: null,
+    paidAt: new Date('2026-05-31T09:30:00Z'),
+    orderItems: [],
+    payment: null,
+    delivery: orderDelivery,
+    orderLogs: [],
+    user: null,
+  });
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+    setupTransaction(mockPrisma);
+  });
+
+  it('重复发货已 delivered 且已有 delivery 时返回幂等结果，不重复写 delivery 和日志', async () => {
+    mockPrisma._mockTx.order.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma._mockTx.order.findFirst.mockResolvedValue(orderView(OrderStatus.delivered, delivery));
+
+    const result = await service.adminDeliver({
+      orderId: 1,
+      logisticsCompany: '顺丰速运',
+      logisticsNo: 'SF123',
+    });
+
+    expect(result.status).toBe(OrderStatus.delivered);
+    expect(result.logistics).toEqual(expect.objectContaining({ company: '顺丰速运', trackingNo: 'SF123' }));
+    expect(mockPrisma._mockTx.orderDelivery.create).not.toHaveBeenCalled();
+    expect(mockPrisma._mockTx.orderLog.create).not.toHaveBeenCalled();
+  });
+
+  it('并发发货只有一次成功写入 delivery 和发货日志', async () => {
+    mockPrisma._mockTx.order.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+    mockPrisma._mockTx.orderDelivery.findFirst.mockResolvedValue(null);
+    mockPrisma._mockTx.orderDelivery.create.mockResolvedValue(delivery);
+    mockPrisma._mockTx.orderLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.order.findFirst
+      .mockResolvedValueOnce(orderView(OrderStatus.delivered, delivery))
+      .mockResolvedValueOnce(orderView(OrderStatus.delivered, delivery));
+
+    const results = await Promise.all([
+      service.adminDeliver({ orderId: 1, logisticsCompany: '顺丰速运', logisticsNo: 'SF123' }),
+      service.adminDeliver({ orderId: 1, logisticsCompany: '顺丰速运', logisticsNo: 'SF123' }),
+    ]);
+
+    expect(results.every((result) => result.status === OrderStatus.delivered)).toBe(true);
+    expect(mockPrisma._mockTx.orderDelivery.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma._mockTx.orderLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    OrderStatus.cancelled,
+    OrderStatus.completed,
+    OrderStatus.aftersale,
+    OrderStatus.pending_pickup,
+  ])('%s 状态订单无法发货且不写 delivery', async (status) => {
+    mockPrisma._mockTx.order.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma._mockTx.order.findFirst.mockResolvedValue(orderView(status));
+
+    await expect(service.adminDeliver({
+      orderId: 1,
+      logisticsCompany: '顺丰速运',
+      logisticsNo: 'SF123',
+    })).rejects.toThrow(`订单状态不允许发货: ${status}`);
+
+    expect(mockPrisma._mockTx.orderDelivery.create).not.toHaveBeenCalled();
+    expect(mockPrisma._mockTx.orderLog.create).not.toHaveBeenCalled();
   });
 });
 

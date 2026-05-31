@@ -152,74 +152,145 @@ export class PaymentService {
     return this.isWechatPaymentConfigured();
   }
 
-  async createPayment(orderId: string, userId: string) {
-    this.ensureWechatPaymentAvailable();
-    const order = await this.prisma.order.findFirst({
-      where: { id: BigInt(orderId), userId: BigInt(userId) },
-      include: { user: { select: { id: true, openid: true } } },
-    });
-    if (!order) throw new NotFoundException('订单不存在');
-    if (order.status !== OrderStatus.pending_payment) {
-      throw new BadRequestException('订单已支付');
-    }
-    if (order.payAmount === null || order.payAmount <= 0) {
-      throw new BadRequestException('支付金额异常');
-    }
+  private isPrismaP2002(error: unknown): boolean {
+    const knownRequestError = (Prisma as any).PrismaClientKnownRequestError;
+    return (
+      (typeof knownRequestError === 'function' && error instanceof knownRequestError && (error as any).code === 'P2002') ||
+      (typeof error === 'object' && error !== null && (error as any).code === 'P2002')
+    );
+  }
 
-    const appId = this.configService.get<string>('WECHAT_APP_ID')!;
-    const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
+  private getPrismaUniqueTargets(error: unknown): string[] {
+    const meta = typeof error === 'object' && error !== null ? (error as any).meta : undefined;
+    const rawTarget = meta?.target ?? meta?.constraint;
+    const targets = Array.isArray(rawTarget) ? rawTarget : rawTarget ? [rawTarget] : [];
+    return targets.map((target) => String(target).toLowerCase().replace(/[^a-z0-9]/g, ''));
+  }
 
-    const existingPayment = await this.prisma.orderPayment.findFirst({
-      where: { orderId: BigInt(orderId), status: 1 },
-    });
+  private hasPrismaUniqueTarget(error: unknown, candidates: string[]): boolean {
+    const targets = this.getPrismaUniqueTargets(error);
+    const normalizedCandidates = candidates.map((target) => target.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    return targets.some((target) => normalizedCandidates.some((candidate) => target === candidate || target.includes(candidate)));
+  }
 
-    let prepayId: string;
+  private isOrderPaymentOrderIdConflict(error: unknown): boolean {
+    return this.isPrismaP2002(error) && this.hasPrismaUniqueTarget(error, [
+      'orderId',
+      'order_id',
+      'order_payments_order_id_key',
+      'OrderPayment_orderId_key',
+    ]);
+  }
 
-    if (existingPayment) {
-      try {
-        const queryResult = await this.queryWechatOrder(order.orderNo);
-        if (queryResult.trade_state === 'SUCCESS') {
-          await this.processPaymentSuccess(existingPayment.id, order.id, queryResult.transaction_id, queryResult.amount?.total, order);
-          throw new BadRequestException('订单已支付，请勿重复支付');
-        }
-        if (queryResult.trade_state === 'NOTPAY' && queryResult.prepay_id) {
-          prepayId = queryResult.prepay_id;
-        } else {
-          prepayId = await this.createWechatOrder(order, appId, mchId, existingPayment.paymentNo!);
-        }
-      } catch (e) {
-        if (e instanceof BadRequestException) throw e;
-        prepayId = await this.createWechatOrder(order, appId, mchId, existingPayment.paymentNo!);
+  private isPaymentNoConflict(error: unknown): boolean {
+    return this.isPrismaP2002(error) && this.hasPrismaUniqueTarget(error, [
+      'paymentNo',
+      'payment_no',
+      'uk_payment_no',
+      'order_payments_payment_no_key',
+    ]);
+  }
+
+  private async loadExistingPaymentRecord(orderId: string, userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { id: BigInt(orderId), userId: BigInt(userId) },
+        include: { user: { select: { id: true, openid: true } } },
+      });
+      if (!order) throw new NotFoundException('订单不存在');
+      if (order.status !== OrderStatus.pending_payment) {
+        throw new BadRequestException('订单已支付');
       }
-    } else {
-      let paymentNo = '';
-      let paymentCreated = false;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        paymentNo = generatePaymentNo();
-        try {
-          await this.prisma.orderPayment.create({
+      if (order.payAmount === null || order.payAmount <= 0) {
+        throw new BadRequestException('支付金额异常');
+      }
+
+      const existingPayment = await tx.orderPayment.findFirst({
+        where: { orderId: BigInt(orderId) },
+      });
+      return existingPayment ? { order, payment: existingPayment, created: false } : null;
+    });
+  }
+
+  private async findOrCreatePaymentRecord(orderId: string, userId: string) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const paymentNo = generatePaymentNo();
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const order = await tx.order.findFirst({
+            where: { id: BigInt(orderId), userId: BigInt(userId) },
+            include: { user: { select: { id: true, openid: true } } },
+          });
+          if (!order) throw new NotFoundException('订单不存在');
+          if (order.status !== OrderStatus.pending_payment) {
+            throw new BadRequestException('订单已支付');
+          }
+          if (order.payAmount === null || order.payAmount <= 0) {
+            throw new BadRequestException('支付金额异常');
+          }
+
+          const existingPayment = await tx.orderPayment.findFirst({
+            where: { orderId: BigInt(orderId) },
+          });
+          if (existingPayment) {
+            return { order, payment: existingPayment, created: false };
+          }
+
+          const payment = await tx.orderPayment.create({
             data: {
               orderId: BigInt(orderId),
               paymentNo,
               amount: order.payAmount!,
               paymentMethod: 'wechat',
-              status: 1,
+              status: PAYMENT_STATUS.CREATED,
             },
           });
-          paymentCreated = true;
-          break;
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            this.logger.warn(`支付单号 ${paymentNo} 冲突，第 ${attempt + 1} 次重试`);
-            continue;
-          }
+          return { order, payment, created: true };
+        });
+      } catch (error) {
+        if (this.isOrderPaymentOrderIdConflict(error)) {
+          const existing = await this.loadExistingPaymentRecord(orderId, userId);
+          if (existing) return existing;
           throw error;
         }
+        if (this.isPaymentNoConflict(error)) {
+          this.logger.warn(`支付单号 ${paymentNo} 冲突，第 ${attempt + 1} 次重试`);
+          continue;
+        }
+        throw error;
       }
-      if (!paymentCreated) {
-        throw new InternalServerErrorException('支付单号生成失败，请重试');
+    }
+
+    throw new InternalServerErrorException('支付单号生成失败，请重试');
+  }
+
+  async createPayment(orderId: string, userId: string) {
+    this.ensureWechatPaymentAvailable();
+    const { order, payment, created } = await this.findOrCreatePaymentRecord(orderId, userId);
+
+    const appId = this.configService.get<string>('WECHAT_APP_ID')!;
+    const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
+
+    let prepayId: string;
+
+    if (!created) {
+      try {
+        const queryResult = await this.queryWechatOrder(order.orderNo);
+        if (queryResult.trade_state === 'SUCCESS') {
+          await this.processPaymentSuccess(payment.id, order.id, queryResult.transaction_id, queryResult.amount?.total, order);
+          throw new BadRequestException('订单已支付，请勿重复支付');
+        }
+        if (queryResult.trade_state === 'NOTPAY' && queryResult.prepay_id) {
+          prepayId = queryResult.prepay_id;
+        } else {
+          prepayId = await this.createWechatOrder(order, appId, mchId);
+        }
+      } catch (e) {
+        if (e instanceof BadRequestException) throw e;
+        prepayId = await this.createWechatOrder(order, appId, mchId);
       }
-      prepayId = await this.createWechatOrder(order, appId, mchId, paymentNo);
+    } else {
+      prepayId = await this.createWechatOrder(order, appId, mchId);
     }
 
     const timeStamp = Math.floor(Date.now() / 1000).toString();
@@ -874,7 +945,7 @@ export class PaymentService {
     });
   }
 
-  private async createWechatOrder(order: any, appId: string, mchId: string, _outTradeNo: string): Promise<string> {
+  private async createWechatOrder(order: any, appId: string, mchId: string): Promise<string> {
     if (!this.privateKey) {
       throw new BadRequestException('商户私钥未配置，无法发起支付');
     }
@@ -882,6 +953,7 @@ export class PaymentService {
     const notifyUrl = this.configService.get<string>('WECHAT_NOTIFY_URL')!;
     const description = order.orderItems?.[0]?.productName || `订单${order.orderNo}`;
 
+    // 微信商户订单号必须使用业务订单号；orderPayment.paymentNo 仅作内部支付记录编号。
     const body = {
       appid: appId,
       mchid: mchId,

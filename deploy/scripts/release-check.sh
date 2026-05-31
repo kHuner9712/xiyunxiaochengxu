@@ -17,8 +17,12 @@ cd "$ROOT_DIR"
 
 REQUIRE_REAL_WX_APPID_CHECK="${REQUIRE_REAL_WX_APPID:-}"
 STRICT_PROD_GATE=false
+CODE_FREEZE_GATE=false
 while [ $# -gt 0 ]; do
   case "$1" in
+    --code-freeze-gate)
+      CODE_FREEZE_GATE=true
+      ;;
     --require-real-wx-appid)
       REQUIRE_REAL_WX_APPID_CHECK="true"
       ;;
@@ -67,10 +71,12 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 section "0. 冻结入口与依赖锁定检查"
-if [ "$STRICT_PROD_GATE" = "true" ]; then
+if [ "$CODE_FREEZE_GATE" = "true" ]; then
+  pass "当前执行 Code Freeze Gate；人工/部署项仅作为 WARN，正式上线仍必须执行 pnpm release:check:prod"
+elif [ "$STRICT_PROD_GATE" = "true" ]; then
   pass "当前执行 strict prod gate；冻结前唯一推荐入口为 pnpm release:check:prod"
 else
-  warn "当前不是 strict prod gate；冻结前请以 pnpm release:check:prod 为准"
+  warn "当前不是 Code Freeze Gate 或 strict prod gate；预生产前请执行 pnpm release:check:freeze，正式上线前请执行 pnpm release:check:prod"
 fi
 
 if run_pnpm install --frozen-lockfile; then
@@ -143,6 +149,20 @@ if run_node deploy/scripts/audit-api-permissions.mjs; then
   pass "API @Public / admin permission / weapp CurrentUser 审计通过"
 else
   fail "API 权限与越权静态审计失败"
+  tail -30 "$TMPFILE" | sed 's/^/    /'
+fi
+
+if run_node --test deploy/scripts/audit-api-permissions.test.mjs; then
+  pass "API 权限审计 fixture 测试通过"
+else
+  fail "API 权限审计 fixture 测试失败"
+  tail -30 "$TMPFILE" | sed 's/^/    /'
+fi
+
+if run_node --test deploy/scripts/release-check.test.mjs; then
+  pass "Release gate 入口与结论输出测试通过"
+else
+  fail "Release gate 入口与结论输出测试失败"
   tail -30 "$TMPFILE" | sed 's/^/    /'
 fi
 
@@ -525,6 +545,51 @@ else
   pass "UPLOAD_MAX_SIZE 未设置，使用默认 10MB"
 fi
 
+parse_nginx_size_bytes() {
+  local raw
+  raw="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d ';')"
+  if [[ "$raw" =~ ^([0-9]+)$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+  elif [[ "$raw" =~ ^([0-9]+)k$ ]]; then
+    echo $((BASH_REMATCH[1] * 1024))
+  elif [[ "$raw" =~ ^([0-9]+)m$ ]]; then
+    echo $((BASH_REMATCH[1] * 1024 * 1024))
+  elif [[ "$raw" =~ ^([0-9]+)g$ ]]; then
+    echo $((BASH_REMATCH[1] * 1024 * 1024 * 1024))
+  else
+    echo ""
+  fi
+}
+
+UPLOAD_MAX_SIZE_BYTES="${UPLOAD_MAX_SIZE:-10485760}"
+if [[ "$UPLOAD_MAX_SIZE_BYTES" =~ ^[1-9][0-9]*$ ]]; then
+  NGINX_UPLOAD_FILES=("deploy/nginx/nginx.conf" "deploy/nginx/conf.d/default.conf")
+  for nginx_file in "${NGINX_UPLOAD_FILES[@]}"; do
+    if [ ! -f "$nginx_file" ]; then
+      fail "$nginx_file 不存在，无法校验 client_max_body_size"
+      continue
+    fi
+    nginx_values=$(grep -E "^[[:space:]]*client_max_body_size[[:space:]]+" "$nginx_file" | awk '{print $2}' || true)
+    if [ -z "$nginx_values" ]; then
+      fail "$nginx_file 未配置 client_max_body_size，无法确认上传网关上限"
+      continue
+    fi
+    while read -r nginx_size; do
+      [ -z "$nginx_size" ] && continue
+      nginx_bytes="$(parse_nginx_size_bytes "$nginx_size")"
+      if [ -z "$nginx_bytes" ]; then
+        fail "$nginx_file client_max_body_size 格式无法解析: $nginx_size"
+      elif [ "$nginx_bytes" -lt "$UPLOAD_MAX_SIZE_BYTES" ]; then
+        fail "$nginx_file client_max_body_size($nginx_size) 小于 UPLOAD_MAX_SIZE(${UPLOAD_MAX_SIZE_BYTES} bytes)"
+      else
+        pass "$nginx_file client_max_body_size($nginx_size) >= UPLOAD_MAX_SIZE(${UPLOAD_MAX_SIZE_BYTES} bytes)"
+      fi
+    done <<< "$nginx_values"
+  done
+else
+  warn "UPLOAD_MAX_SIZE 非法，跳过 Nginx client_max_body_size 关系检查"
+fi
+
 section "8.66. 小程序生产演示口径检查"
 DEMO_HITS=$(grep -RInE "演示版|公开演示内容|demo=1|allowDemo|VITE_ENABLE_DEMO_MODE[[:space:]]*=[[:space:]]*true" apps/miniprogram/src apps/miniprogram/.env.example apps/miniprogram/.env.production.example 2>/dev/null || true)
 if [ -n "$DEMO_HITS" ]; then
@@ -668,6 +733,27 @@ fi
 echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}PASS: $PASS${NC}  ${RED}FAIL: $FAIL${NC}  ${YELLOW}WARN: $WARN${NC}  ${CYAN}SKIP: $SKIP${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+if [ "$FAIL" -gt 0 ]; then
+  CODE_FREEZE_RESULT="FAIL"
+else
+  CODE_FREEZE_RESULT="PASS"
+fi
+
+if [ "$STRICT_PROD_GATE" = "true" ]; then
+  if [ "$FAIL" -gt 0 ]; then
+    PRODUCTION_GATE_RESULT="FAIL"
+  else
+    PRODUCTION_GATE_RESULT="PASS"
+  fi
+elif [ "$FAIL" -gt 0 ]; then
+  PRODUCTION_GATE_RESULT="FAIL"
+else
+  PRODUCTION_GATE_RESULT="WARN"
+fi
+
+echo -e "Code Freeze Gate: ${CODE_FREEZE_RESULT}"
+echo -e "Production Release Gate: ${PRODUCTION_GATE_RESULT}"
 
 if [ "$FAIL" -gt 0 ]; then
   echo -e "\n${RED}✗ Release Gate 未通过！请修复上述 FAIL 项后重试。${NC}"

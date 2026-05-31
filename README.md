@@ -75,7 +75,7 @@ pnpm build:all
 pnpm build:mini:prod
 ```
 
-冻结前唯一推荐入口是 `pnpm release:check:prod`。该命令会覆盖依赖锁定、API/Admin lint、类型检查、API 测试、API/Admin/小程序构建、小程序生产包校验、权限审计与部署配置检查。
+进入服务器预生产部署前使用 `pnpm release:check:freeze` 作为代码冻结门禁。该命令覆盖依赖锁定、API/Admin lint、类型检查、API 测试、API/Admin/小程序构建、权限审计、敏感文件检查与部署配置静态检查；真实 AppID、密钥、证书、资质、客服电话、客服微信、退货地址等人工/部署项只输出 WARN。正式上线前必须执行 `pnpm release:check:prod`，严格生产门禁不可弱化。
 
 小程序体验版/正式版构建（必须真实 AppID）：
 
@@ -91,11 +91,13 @@ pnpm build:mini:prod
 
 ```bash
 pnpm release:check
+pnpm release:check:freeze
 pnpm release:check:prod
 ```
 
 - `release:check`：默认环境，允许占位 AppID（WARN）
-- `release:check:prod`：冻结前唯一推荐入口；强制生产门禁，缺少真实 AppID、生产 API 地址、协议占位、证书或密钥将直接 FAIL
+- `release:check:freeze`：进入服务器预生产部署前的代码冻结门禁；人工/部署项只 WARN，不作为代码冻结 FAIL
+- `release:check:prod`：正式上线前必须执行；强制生产门禁，缺少真实 AppID、生产 API 地址、协议占位、证书或密钥将直接 FAIL
 
 GitHub Actions、真实数据库迁移、生产严格门禁和真机验收只有在实际执行并取得可核验结果后，才可在发布记录中标记为通过。
 
@@ -120,7 +122,7 @@ ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
 
 生产环境变量模板：`/.env.production.example`
 
-说明：在未提供真实 AppID 与 `legal.ts` 最终联系方式前，`pnpm release:check:prod` 失败是预期阻断。
+说明：服务器预生产部署前使用 `pnpm release:check:freeze`；在未提供真实 AppID 与 `legal.ts` 最终联系方式前，`pnpm release:check:prod` 失败是正式上线前的预期阻断。
 
 ## 安全红线（必须遵守）
 

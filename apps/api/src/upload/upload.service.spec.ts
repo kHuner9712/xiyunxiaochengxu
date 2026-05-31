@@ -1,6 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UploadService } from './upload.service';
+import { createUploadMulterOptions, getUploadMaxSize } from './upload.multer-options';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -272,6 +273,71 @@ describe('UploadService webm removed', () => {
 });
 
 describe('UploadService 本地存储删除路径', () => {
+  it('public 上传写入 public 目录并返回公开地址', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-public-test-'));
+    const previousUploadDir = process.env.UPLOAD_DIR;
+    const previousAssetBase = process.env.UPLOAD_PUBLIC_URL;
+    process.env.UPLOAD_DIR = tmpDir;
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
+
+    try {
+      const prisma = createMockPrisma();
+      prisma.fileAsset.create.mockImplementation(async ({ data }: any) => ({ id: BigInt(1), ...data }));
+      const { service } = createService(prisma);
+      const file = {
+        originalname: 'test.png',
+        mimetype: 'image/png',
+        buffer: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D]),
+        size: 12,
+      } as Express.Multer.File;
+
+      const result = await service.uploadFile(file, '1', 'user');
+
+      expect(result.filePath).toMatch(/^\/uploads\/public\/.+\.png$/);
+      expect(result.url).toBe(`https://api.example.com${result.filePath}`);
+      expect(fs.existsSync(path.join(tmpDir, 'public', result.fileName))).toBe(true);
+    } finally {
+      if (previousUploadDir === undefined) delete process.env.UPLOAD_DIR;
+      else process.env.UPLOAD_DIR = previousUploadDir;
+      if (previousAssetBase === undefined) delete process.env.UPLOAD_PUBLIC_URL;
+      else process.env.UPLOAD_PUBLIC_URL = previousAssetBase;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('private group 上传写入 private 目录并返回私有文件接口地址', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-private-test-'));
+    const previousUploadDir = process.env.UPLOAD_DIR;
+    const previousAssetBase = process.env.UPLOAD_PUBLIC_URL;
+    process.env.UPLOAD_DIR = tmpDir;
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
+
+    try {
+      const prisma = createMockPrisma();
+      prisma.fileAsset.create.mockImplementation(async ({ data }: any) => ({ id: BigInt(2), ...data }));
+      const { service } = createService(prisma);
+      const file = {
+        originalname: 'refund.png',
+        mimetype: 'image/png',
+        buffer: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D]),
+        size: 12,
+      } as Express.Multer.File;
+
+      const result = await service.uploadFile(file, '9', 'user', 'aftersale');
+
+      expect(result.filePath).toMatch(/^\/uploads\/private\/.+\.png$/);
+      expect(result.url).toBe('/api/common/file/private/2');
+      expect(result.groupName).toBe('aftersale');
+      expect(fs.existsSync(path.join(tmpDir, 'private', result.fileName))).toBe(true);
+    } finally {
+      if (previousUploadDir === undefined) delete process.env.UPLOAD_DIR;
+      else process.env.UPLOAD_DIR = previousUploadDir;
+      if (previousAssetBase === undefined) delete process.env.UPLOAD_PUBLIC_URL;
+      else process.env.UPLOAD_PUBLIC_URL = previousAssetBase;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('UPLOAD_DIR 为自定义目录时应删除真实文件', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-test-'));
     const previousUploadDir = process.env.UPLOAD_DIR;
@@ -292,8 +358,84 @@ describe('UploadService 本地存储删除路径', () => {
     await service.delete('1');
     expect(fs.existsSync(targetFile)).toBe(false);
 
-    process.env.UPLOAD_DIR = previousUploadDir;
+    if (previousUploadDir === undefined) delete process.env.UPLOAD_DIR;
+    else process.env.UPLOAD_DIR = previousUploadDir;
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('非法路径删除被拒绝且不删除数据库记录', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-delete-guard-'));
+    const previousUploadDir = process.env.UPLOAD_DIR;
+    process.env.UPLOAD_DIR = tmpDir;
+
+    try {
+      const prisma = createMockPrisma();
+      prisma.fileAsset.findFirst.mockResolvedValue({
+        id: BigInt(1),
+        fileName: 'outside.jpg',
+        filePath: '/uploads/../outside.jpg',
+      });
+      const { service } = createService(prisma);
+
+      await expect(service.delete('1')).rejects.toThrow(BadRequestException);
+      expect(prisma.fileAsset.delete).not.toHaveBeenCalled();
+    } finally {
+      if (previousUploadDir === undefined) delete process.env.UPLOAD_DIR;
+      else process.env.UPLOAD_DIR = previousUploadDir;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('磁盘文件不存在时删除仍清理数据库记录', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-delete-missing-'));
+    const previousUploadDir = process.env.UPLOAD_DIR;
+    process.env.UPLOAD_DIR = tmpDir;
+
+    try {
+      const prisma = createMockPrisma();
+      prisma.fileAsset.findFirst.mockResolvedValue({
+        id: BigInt(1),
+        fileName: 'missing.jpg',
+        filePath: '/uploads/public/missing.jpg',
+      });
+      prisma.fileAsset.delete.mockResolvedValue({});
+      const { service } = createService(prisma);
+
+      await expect(service.delete('1')).resolves.toEqual({ success: true });
+      expect(prisma.fileAsset.delete).toHaveBeenCalledWith({ where: { id: BigInt(1) } });
+    } finally {
+      if (previousUploadDir === undefined) delete process.env.UPLOAD_DIR;
+      else process.env.UPLOAD_DIR = previousUploadDir;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('私有文件磁盘不存在时读取返回 NotFoundException', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-private-missing-'));
+    const previousUploadDir = process.env.UPLOAD_DIR;
+    process.env.UPLOAD_DIR = tmpDir;
+
+    try {
+      const prisma = createMockPrisma();
+      prisma.fileAsset.findFirst.mockResolvedValue({
+        id: BigInt(1),
+        fileName: 'missing.jpg',
+        originalName: 'missing.jpg',
+        filePath: '/uploads/private/missing.jpg',
+        mimeType: 'image/jpeg',
+        groupName: 'aftersale',
+        uploaderId: BigInt(9),
+        uploaderType: 'user',
+      });
+      const { service } = createService(prisma);
+
+      await expect(service.findPrivateById('1', { id: '9', roleType: 'user' }))
+        .rejects.toThrow(NotFoundException);
+    } finally {
+      if (previousUploadDir === undefined) delete process.env.UPLOAD_DIR;
+      else process.env.UPLOAD_DIR = previousUploadDir;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -365,39 +507,52 @@ describe('UploadService UPLOAD_ALLOWED_TYPES 环境变量驱动', () => {
 });
 
 describe('UploadModule fileFilter 第一层拦截', () => {
-  const { parseAllowedMimeTypes, getAllowedExtensions } = require('./upload.service');
-
   it('MIME 不允许的文件被 fileFilter 拒绝', () => {
-    const allowedMimeTypes = parseAllowedMimeTypes();
+    const options = createUploadMulterOptions();
     const file = { originalname: 'test.svg', mimetype: 'image/svg+xml' } as Express.Multer.File;
-    expect(allowedMimeTypes.includes(file.mimetype)).toBe(false);
+    const callback = jest.fn();
+
+    options.fileFilter?.({} as any, file, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.any(BadRequestException), false);
   });
 
-  it('扩展名不允许的文件被 fileFilter 拒绝', () => {
-    const allowedMimeTypes = parseAllowedMimeTypes();
-    const allowedExtensions = getAllowedExtensions(allowedMimeTypes);
-    const ext = '.exe';
-    expect(allowedExtensions.includes(ext)).toBe(false);
+  it('扩展名伪造但 MIME 合法时由 service 二次校验处理', () => {
+    const options = createUploadMulterOptions();
+    const file = { originalname: 'test.exe', mimetype: 'image/jpeg' } as Express.Multer.File;
+    const callback = jest.fn();
+
+    options.fileFilter?.({} as any, file, callback);
+
+    expect(callback).toHaveBeenCalledWith(null, true);
   });
 
-  it('MIME 和扩展名均合法的文件通过 fileFilter', () => {
-    const allowedMimeTypes = parseAllowedMimeTypes();
-    const allowedExtensions = getAllowedExtensions(allowedMimeTypes);
+  it('MIME 合法的文件通过 fileFilter', () => {
+    const options = createUploadMulterOptions();
     const file = { originalname: 'test.jpg', mimetype: 'image/jpeg' } as Express.Multer.File;
-    const ext = '.jpg';
-    expect(allowedMimeTypes.includes(file.mimetype)).toBe(true);
-    expect(allowedExtensions.includes(ext)).toBe(true);
+    const callback = jest.fn();
+
+    options.fileFilter?.({} as any, file, callback);
+
+    expect(callback).toHaveBeenCalledWith(null, true);
   });
 });
 
 describe('UploadService 双层防线：扩展名伪装但 magic number 不匹配', () => {
   let service: UploadService;
+  let mockPrisma: any;
 
   beforeEach(() => {
-    ({ service } = createService());
+    ({ service, mockPrisma } = createService());
   });
 
   it('扩展名伪装为 .jpg 但内容为 PDF 的文件仍被 service 拒绝', async () => {
+    const storageProvider = {
+      save: jest.fn(),
+      remove: jest.fn(),
+      createReadStream: jest.fn(),
+    };
+    (service as any).storageProvider = storageProvider;
     const file = {
       originalname: 'malicious.jpg',
       mimetype: 'image/jpeg',
@@ -408,6 +563,8 @@ describe('UploadService 双层防线：扩展名伪装但 magic number 不匹配
       .rejects.toThrow(BadRequestException);
     await expect(service.uploadFile(file, '1', 'user'))
       .rejects.toThrow('文件内容与声明类型');
+    expect(storageProvider.save).not.toHaveBeenCalled();
+    expect(mockPrisma.fileAsset.create).not.toHaveBeenCalled();
   });
 });
 
@@ -415,8 +572,7 @@ describe('Multer interceptor 层 fileSize 限制', () => {
   it('UPLOAD_MAX_SIZE 默认值为 10MB', () => {
     const originalEnv = process.env.UPLOAD_MAX_SIZE;
     delete process.env.UPLOAD_MAX_SIZE;
-    const maxSize = parseInt(process.env.UPLOAD_MAX_SIZE || '10485760', 10);
-    expect(maxSize).toBe(10485760);
+    expect(getUploadMaxSize()).toBe(10485760);
     process.env.UPLOAD_MAX_SIZE = originalEnv;
   });
 

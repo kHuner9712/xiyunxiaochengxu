@@ -26,6 +26,7 @@
     "prisma:migrate:dry-run": "bash deploy/scripts/prisma-migrate-dry-run.sh",
     "uploads:migrate-visibility": "node deploy/scripts/migrate-upload-visibility.mjs",
     "release:check": "bash deploy/scripts/release-check.sh",
+    "release:check:freeze": "bash deploy/scripts/release-check.sh --code-freeze-gate",
     "release:check:prod": "cross-env NODE_ENV=production bash deploy/scripts/release-check.sh --require-real-wx-appid --strict-prod-gate"
   },
   "packageManager": "pnpm@11.2.2",

@@ -7,6 +7,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { IsOptional, IsString } from 'class-validator';
 import type { Response } from 'express';
+import { createUploadMulterOptions } from './upload.multer-options';
 
 class FileListDto extends PaginationDto {
   @IsOptional()
@@ -23,7 +24,7 @@ export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', createUploadMulterOptions()))
   async upload(
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser('id') userId: string,
@@ -72,7 +73,7 @@ export class AdminUploadController {
 
   @Post('upload')
   @RequirePermission('system:file')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', createUploadMulterOptions()))
   async upload(
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser('id') userId: string,

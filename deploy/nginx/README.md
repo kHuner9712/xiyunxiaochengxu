@@ -22,6 +22,8 @@ nslookup admin.yunxixiaochengxu.com.cn
 ## Nginx 配置模板（可选）
 
 当前可直接使用 `conf.d/default.conf`。  
+`nginx.conf` 与 `conf.d/default.conf` 中的 `client_max_body_size` 必须大于或等于 API 环境变量 `UPLOAD_MAX_SIZE`（默认 10485760 bytes / 10MB）。当前示例配置为 20m，`pnpm release:check:freeze` 与 `pnpm release:check:prod` 会做静态校验。
+
 若希望按环境变量生成配置，请使用 `conf.d/default.conf.template`：
 
 ```bash

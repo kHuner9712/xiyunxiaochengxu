@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   NotFoundException,
   HttpException,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { HttpExceptionFilter } from './http-exception.filter';
 import { ERROR_CODE } from '../constants';
@@ -131,6 +132,31 @@ describe('ErrorCodeMapping', () => {
       const exception = new BadRequestException('测试错误');
       const result = invokeFilter(exception);
       expect(result.code).not.toBe(0);
+    });
+
+    it('上传接口 BadRequest 使用 HTTP 400', () => {
+      mockHost = {
+        switchToHttp: () => ({
+          getResponse: () => mockResponse,
+          getRequest: () => ({ url: '/api/common/file/upload', method: 'POST', headers: { 'x-request-id': 'test-request-id' } }),
+        }),
+      };
+
+      invokeFilter(new BadRequestException('不支持的MIME类型'));
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+    });
+
+    it('上传接口文件超限使用 HTTP 413', () => {
+      mockHost = {
+        switchToHttp: () => ({
+          getResponse: () => mockResponse,
+          getRequest: () => ({ url: '/api/common/file/upload', method: 'POST', headers: { 'x-request-id': 'test-request-id' } }),
+        }),
+      };
+
+      const result = invokeFilter(new PayloadTooLargeException('File too large'));
+      expect(result.code).toBe(ERROR_CODE.PARAM_ERROR);
+      expect(mockResponse.status).toHaveBeenCalledWith(413);
     });
 
     it('成功响应格式包含 code=0', () => {

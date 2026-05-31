@@ -22,5 +22,19 @@ if printf '%s' "$DRY_RUN_DATABASE_URL" | grep -Eqi '(prod|production|master|prim
 fi
 
 echo "Prisma migrate dry-run target: disposable database from DRY_RUN_DATABASE_URL"
-DATABASE_URL="$DRY_RUN_DATABASE_URL" pnpm --filter @baby-mall/api prisma:migrate:deploy
-DATABASE_URL="$DRY_RUN_DATABASE_URL" pnpm --filter @baby-mall/api exec prisma migrate status
+
+IS_WINDOWS=false
+if [ -n "${WINDIR:-}" ] || [ -n "${MSYSTEM:-}" ] || uname -r 2>/dev/null | grep -qi microsoft; then
+  IS_WINDOWS=true
+fi
+
+run_with_dry_run_db() {
+  if [ "$IS_WINDOWS" = true ]; then
+    cmd.exe /c "pnpm exec cross-env DATABASE_URL=$DRY_RUN_DATABASE_URL pnpm --filter @baby-mall/api $*"
+  else
+    DATABASE_URL="$DRY_RUN_DATABASE_URL" pnpm --filter @baby-mall/api "$@"
+  fi
+}
+
+run_with_dry_run_db prisma:migrate:deploy
+run_with_dry_run_db exec prisma migrate status

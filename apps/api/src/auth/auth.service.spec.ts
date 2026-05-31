@@ -3,6 +3,7 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import axios from 'axios';
+import * as crypto from 'crypto';
 
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
@@ -35,6 +36,19 @@ function createMockRedis() {
       return 1;
     }),
   };
+}
+
+const LEGACY_SESSION_KEY = Buffer.from('0123456789abcdef').toString('base64');
+const LEGACY_IV = Buffer.from('abcdef9876543210').toString('base64');
+
+function encryptLegacyPhoneData(payload: unknown): string {
+  const cipher = crypto.createCipheriv(
+    'aes-128-cbc',
+    Buffer.from(LEGACY_SESSION_KEY, 'base64'),
+    Buffer.from(LEGACY_IV, 'base64'),
+  );
+  const plaintext = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  return Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]).toString('base64');
 }
 
 describe('AuthService refresh token secret and rotation', () => {
@@ -161,6 +175,89 @@ describe('AuthService bindPhone access_token cache', () => {
 
     await expect(authService.bindPhone('1', 'phone-code')).rejects.toThrow(BadRequestException);
     expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService bindPhoneLegacy encrypted data validation', () => {
+  let prisma: ReturnType<typeof createMockPrisma>;
+  let redis: ReturnType<typeof createMockRedis>;
+  let jwtService: JwtService;
+  let authService: AuthService;
+  const mockedAxios = axios as jest.Mocked<typeof axios>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    prisma = createMockPrisma();
+    redis = createMockRedis();
+    jwtService = new JwtService({ secret: 'jwt-secret-for-access-token-32-chars' });
+    const config = {
+      get: jest.fn((key: string, defaultValue?: string) => {
+        const map: Record<string, string> = {
+          NODE_ENV: 'development',
+          JWT_SECRET: 'jwt-secret-for-access-token-32-chars',
+          REFRESH_TOKEN_SECRET: 'refresh-secret-for-refresh-token-32c',
+          REFRESH_TOKEN_EXPIRES_IN: '30d',
+          WECHAT_APP_ID: 'wx-test-appid',
+          WECHAT_APP_SECRET: 'wx-test-secret',
+        };
+        return map[key] ?? defaultValue;
+      }),
+    };
+    authService = new AuthService(prisma as any, jwtService, config as any, redis as any);
+    (prisma.user.update as any).mockResolvedValue({});
+    await redis.set('wechat_session:1', LEGACY_SESSION_KEY);
+    (redis.set as any).mockClear();
+    mockedAxios.get.mockResolvedValue({ data: { session_key: LEGACY_SESSION_KEY } } as any);
+  });
+
+  it('正常解密并校验 watermark.appid 后写入手机号', async () => {
+    const encryptedData = encryptLegacyPhoneData({
+      phoneNumber: '13800138000',
+      watermark: { appid: 'wx-test-appid' },
+    });
+
+    const result = await authService.bindPhone('1', 'phone-code', encryptedData, LEGACY_IV);
+
+    expect(result).toEqual({ phone: '13800138000' });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: BigInt(1) },
+      data: { phone: '13800138000' },
+    });
+  });
+
+  it('缺少 phoneNumber 时返回 BadRequestException 且不写入手机号', async () => {
+    const encryptedData = encryptLegacyPhoneData({
+      watermark: { appid: 'wx-test-appid' },
+    });
+
+    await expect(authService.bindPhone('1', 'phone-code', encryptedData, LEGACY_IV))
+      .rejects.toThrow(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('watermark.appid 不匹配时返回 BadRequestException 且不写入手机号', async () => {
+    const encryptedData = encryptLegacyPhoneData({
+      phoneNumber: '13800138000',
+      watermark: { appid: 'wx-other-appid' },
+    });
+
+    await expect(authService.bindPhone('1', 'phone-code', encryptedData, LEGACY_IV))
+      .rejects.toThrow(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('JSON 非法时返回 BadRequestException 且不写入手机号', async () => {
+    const encryptedData = encryptLegacyPhoneData('{not-json');
+
+    await expect(authService.bindPhone('1', 'phone-code', encryptedData, LEGACY_IV))
+      .rejects.toThrow(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('解密失败时返回 BadRequestException 且不写入手机号', async () => {
+    await expect(authService.bindPhone('1', 'phone-code', 'not-valid-encrypted-data', LEGACY_IV))
+      .rejects.toThrow(BadRequestException);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });
