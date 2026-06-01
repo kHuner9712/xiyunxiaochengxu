@@ -83,3 +83,10 @@ coverage/
 
 # Prisma migrations (optional, some teams prefer to version them)
 # prisma/migrations/
+
+# Local deployment backups
+*.bak.*
+.env*.bak*
+
+# Local WeChat Pay tools / downloaded platform cert utilities
+tools/

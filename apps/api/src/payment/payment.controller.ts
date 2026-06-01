@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger, HttpCode } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -86,6 +86,7 @@ export class PaymentController {
   @SkipTransform()
   @SkipThrottle()
   @Post('callback')
+  @HttpCode(200)
   async callback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
     const rawBody = req.rawBody;
     try {
@@ -100,6 +101,7 @@ export class PaymentController {
   @SkipTransform()
   @SkipThrottle()
   @Post('refund-callback')
+  @HttpCode(200)
   async refundCallback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
     const rawBody = req.rawBody;
     try {
