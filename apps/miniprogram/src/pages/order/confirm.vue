@@ -5,6 +5,21 @@
       <text class="confirm-subtitle">自营母婴好物 · 安心履约</text>
     </view>
 
+    <view class="trust-strip">
+      <view class="trust-item">
+        <text class="trust-dot">正</text>
+        <text class="trust-text">自营正品</text>
+      </view>
+      <view class="trust-item">
+        <text class="trust-dot sage">售</text>
+        <text class="trust-text">售后无忧</text>
+      </view>
+      <view class="trust-item">
+        <text class="trust-dot peach">配</text>
+        <text class="trust-text">安心履约</text>
+      </view>
+    </view>
+
     <view class="delivery-mode-section card">
       <view class="card-title-row">
         <text class="card-title">配送方式</text>
@@ -23,6 +38,7 @@
     <view v-if="fulfillmentType === 'delivery'" class="address-section card" @tap="selectAddress">
       <view class="address-badge">收</view>
       <view v-if="address" class="address-info">
+        <text class="address-label">收货地址</text>
         <view class="address-top">
           <text class="address-name">{{ address.name }}</text>
           <text class="address-phone">{{ address.phone }}</text>
@@ -30,7 +46,8 @@
         <text class="address-detail">{{ address.province }}{{ address.city }}{{ address.district }}{{ address.detail }}</text>
       </view>
       <view v-else class="no-address">
-        <text class="no-address-text">请选择收货地址</text>
+        <text class="no-address-title">请选择收货地址</text>
+        <text class="no-address-text">完善地址后为你试算运费与优惠</text>
       </view>
       <text class="address-arrow">›</text>
     </view>
@@ -38,6 +55,7 @@
     <view v-if="fulfillmentType === 'pickup'" class="pickup-section card" @tap="selectPickupStore">
       <view class="address-badge pickup">提</view>
       <view v-if="selectedPickupStore" class="pickup-info">
+        <text class="address-label">自提门店</text>
         <view class="pickup-top">
           <text class="pickup-name">{{ selectedPickupStore.name }}</text>
         </view>
@@ -45,7 +63,8 @@
         <text v-if="selectedPickupStore.businessHours" class="pickup-hours">营业时间：{{ selectedPickupStore.businessHours }}</text>
       </view>
       <view v-else class="no-address">
-        <text class="no-address-text">请选择自提点</text>
+        <text class="no-address-title">请选择自提点</text>
+        <text class="no-address-text">选择后为你确认可履约门店</text>
       </view>
       <text class="address-arrow">›</text>
     </view>
@@ -56,7 +75,9 @@
         <text class="card-subtitle">共 {{ orderItems.length }} 件</text>
       </view>
       <view v-for="item in orderItems" :key="item.skuId" class="product-item">
-        <image class="product-image" :src="item.productImage" mode="aspectFill" />
+        <view class="product-image-wrap">
+          <image class="product-image" :src="item.productImage" mode="aspectFill" />
+        </view>
         <view class="product-info">
           <text class="product-name">{{ item.productName }}</text>
           <text class="product-sku">{{ item.skuName }}</text>
@@ -68,27 +89,43 @@
       </view>
     </view>
 
-    <view class="coupon-section card" @tap="openCouponPicker">
-      <text class="section-label">优惠券</text>
-      <text class="section-value" :class="{ 'coupon-selected': selectedCoupon }">
-        <template v-if="selectedCoupon">-¥{{ formatPrice(couponDiscount) }}</template>
-        <template v-else-if="couponList.length === 0">暂无可用优惠券</template>
-        <template v-else>选择优惠券</template>
-      </text>
-      <text v-if="couponList.length > 0" class="section-arrow">›</text>
-    </view>
-
-    <view class="points-section card">
-      <view class="points-row">
-        <text class="section-label">积分抵扣</text>
-        <text class="points-info">可用{{ availablePoints }}积分，抵扣¥{{ formatPrice(pointsDeduct) }}</text>
+    <view class="order-options-section card">
+      <view class="option-row" @tap="openCouponPicker">
+        <view class="option-copy">
+          <text class="section-label">优惠券</text>
+          <text class="section-desc">系统将按可用优惠试算</text>
+        </view>
+        <view class="option-value-wrap">
+          <text class="section-value" :class="{ 'coupon-selected': selectedCoupon }">
+            <template v-if="selectedCoupon">-¥{{ formatPrice(couponDiscount) }}</template>
+            <template v-else-if="couponList.length === 0">暂无可用</template>
+            <template v-else>选择优惠券</template>
+          </text>
+          <text v-if="couponList.length > 0" class="section-arrow">›</text>
+        </view>
       </view>
-      <switch :checked="usePoints" @change="togglePoints" color="#F27678" />
+
+      <view class="option-row">
+        <view class="option-copy">
+          <text class="section-label">积分抵扣</text>
+          <text class="section-desc">可用 {{ availablePoints }} 积分，抵扣 ¥{{ formatPrice(pointsDeduct) }}</text>
+        </view>
+        <switch :checked="usePoints" @change="togglePoints" color="#F27678" />
+      </view>
+
+      <view class="option-row remark-row">
+        <view class="option-copy">
+          <text class="section-label">订单备注</text>
+          <text class="section-desc">选填，请先和商家协商一致</text>
+        </view>
+        <input class="remark-input" v-model="remark" placeholder="填写备注" />
+      </view>
     </view>
 
     <view class="price-section card">
       <view class="card-title-row">
         <text class="card-title">金额明细</text>
+        <text class="card-subtitle">确认无误后再支付</text>
       </view>
       <view class="price-row">
         <text class="price-label">商品金额</text>
@@ -107,14 +144,9 @@
         <text class="price-value discount">-¥{{ formatPrice(pointsDeduct) }}</text>
       </view>
       <view class="price-row total">
-        <text class="price-label">应付金额</text>
+        <text class="price-label">实付款</text>
         <PriceDisplay :price="payAmount" />
       </view>
-    </view>
-
-    <view class="remark-section card">
-      <text class="section-label">订单备注</text>
-      <input class="remark-input" v-model="remark" placeholder="选填，请先和商家协商一致" />
     </view>
 
     <view class="legal-section card">
@@ -135,8 +167,11 @@
 
     <view class="bottom-bar bottom-action-bar">
       <view class="total-row">
-        <text class="total-label">合计：</text>
-        <PriceDisplay :price="payAmount" />
+        <view class="bottom-total-main">
+          <text class="total-label">实付款</text>
+          <PriceDisplay :price="payAmount" size="large" />
+        </view>
+        <text class="bottom-note">放心支付 · 自营售后</text>
       </view>
       <view class="submit-btn" :class="{ disabled: submitting }" @tap="handleSubmit">
         <text class="submit-text">{{ submitting ? '提交中...' : '提交订单' }}</text>
@@ -485,16 +520,17 @@ onLoad(async (options) => {
 <style lang="scss" scoped>
 .confirm-page {
   min-height: 100vh;
-  padding-bottom: 168rpx;
+  padding-bottom: calc(188rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(188rpx + env(safe-area-inset-bottom));
 }
 
 .confirm-head {
-  padding: 34rpx $spacing-md 18rpx;
+  padding: 34rpx $spacing-md 16rpx;
 }
 
 .confirm-title {
   display: block;
-  font-size: $font-xl;
+  font-size: 42rpx;
   line-height: 1.16;
   color: $text-color;
   font-weight: 900;
@@ -507,6 +543,58 @@ onLoad(async (options) => {
   color: $text-secondary;
 }
 
+.trust-strip {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin: 0 $spacing-md $spacing-sm;
+  padding: 10rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1rpx solid rgba(255, 255, 255, 0.78);
+  box-shadow: $shadow-xs;
+}
+
+.trust-item {
+  @include flex-center;
+  flex: 1;
+  min-width: 0;
+  min-height: 54rpx;
+  padding: 0 8rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 250, 246, 0.84);
+}
+
+.trust-dot {
+  @include flex-center;
+  width: 30rpx;
+  height: 30rpx;
+  margin-right: 6rpx;
+  border-radius: 50%;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: 18rpx;
+  font-weight: 900;
+  flex-shrink: 0;
+
+  &.sage {
+    background: $success-soft;
+    color: $success-dark;
+  }
+
+  &.peach {
+    background: $secondary-soft;
+    color: $secondary-color;
+  }
+}
+
+.trust-text {
+  font-size: $font-xs;
+  color: $text-secondary;
+  font-weight: 700;
+  @include text-ellipsis;
+}
+
 .address-section {
   display: flex;
   align-items: flex-start;
@@ -515,11 +603,15 @@ onLoad(async (options) => {
     radial-gradient(circle at 88% 0%, rgba($primary-color, 0.12) 0%, rgba($primary-color, 0) 220rpx),
     $gradient-card;
   border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: $shadow-md;
 }
 
 .delivery-mode-section {
   margin: $spacing-sm $spacing-md;
-  background: rgba(255, 255, 255, 0.82);
+  background:
+    radial-gradient(circle at 8% 0%, rgba($success-color, 0.12), rgba($success-color, 0) 180rpx),
+    rgba(255, 255, 255, 0.86);
+  border-color: rgba(255, 255, 255, 0.78);
 }
 
 .mode-tabs {
@@ -536,10 +628,11 @@ onLoad(async (options) => {
   border-radius: $radius-round;
   transition: all 0.3s;
   background: rgba(255, 255, 255, 0.78);
+  color: $text-secondary;
 
   &.active {
-    border-color: rgba($primary-color, 0.28);
-    background: #FFFFFF;
+    border-color: rgba($primary-color, 0.32);
+    background: $primary-soft;
     box-shadow: $shadow-xs;
   }
 }
@@ -562,13 +655,14 @@ onLoad(async (options) => {
     radial-gradient(circle at 88% 0%, rgba($secondary-color, 0.16) 0%, rgba($secondary-color, 0) 220rpx),
     $gradient-card;
   border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: $shadow-md;
 }
 
 .address-badge {
   @include flex-center;
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 22rpx;
+  width: 62rpx;
+  height: 62rpx;
+  border-radius: 24rpx;
   background: $primary-soft;
   color: $primary-dark;
   font-size: $font-sm;
@@ -584,6 +678,7 @@ onLoad(async (options) => {
 
 .pickup-info {
   flex: 1;
+  min-width: 0;
 }
 
 .pickup-top {
@@ -594,12 +689,14 @@ onLoad(async (options) => {
   font-size: $font-md;
   font-weight: 600;
   color: $text-color;
+  @include text-ellipsis;
 }
 
 .pickup-address {
   font-size: $font-sm;
   color: $text-secondary;
   display: block;
+  line-height: 1.55;
 }
 
 .pickup-hours {
@@ -611,6 +708,20 @@ onLoad(async (options) => {
 
 .address-info {
   flex: 1;
+  min-width: 0;
+}
+
+.address-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34rpx;
+  padding: 0 14rpx;
+  margin-bottom: 10rpx;
+  border-radius: $radius-round;
+  background: rgba($success-color, 0.12);
+  color: $success-dark;
+  font-size: 18rpx;
+  font-weight: 800;
 }
 
 .address-top {
@@ -624,6 +735,8 @@ onLoad(async (options) => {
   font-weight: 600;
   color: $text-color;
   margin-right: $spacing-sm;
+  max-width: 220rpx;
+  @include text-ellipsis;
 }
 
 .address-phone {
@@ -635,11 +748,26 @@ onLoad(async (options) => {
   font-size: $font-sm;
   color: $text-secondary;
   line-height: 1.55;
+  display: block;
+}
+
+.no-address {
+  flex: 1;
+  min-width: 0;
+}
+
+.no-address-title {
+  display: block;
+  font-size: $font-md;
+  color: $text-color;
+  font-weight: 800;
 }
 
 .no-address-text {
-  font-size: $font-md;
-  color: $text-hint;
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-secondary;
 }
 
 .address-arrow {
@@ -650,7 +778,9 @@ onLoad(async (options) => {
 
 .products-section {
   margin: $spacing-sm $spacing-md;
-  background: rgba(255, 255, 255, 0.88);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 252, 248, 0.94) 100%);
+  border-color: rgba(255, 255, 255, 0.78);
 }
 
 .card-title-row {
@@ -671,25 +801,36 @@ onLoad(async (options) => {
 
 .product-item {
   display: flex;
-  padding: $spacing-md 0;
+  padding: $spacing-md 0 22rpx;
   border-bottom: 1rpx solid $divider-color;
 
   &:last-child {
     border-bottom: none;
+    padding-bottom: 0;
   }
 }
 
-.product-image {
-  width: 156rpx;
-  height: 156rpx;
+.product-image-wrap {
+  width: 164rpx;
+  height: 164rpx;
   border-radius: 28rpx;
   flex-shrink: 0;
-  background: $bg-gray;
+  overflow: hidden;
+  background: $bg-ivory;
+  border: 1rpx solid rgba($border-color, 0.62);
+}
+
+.product-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 28rpx;
+  background: $bg-ivory;
 }
 
 .product-info {
   flex: 1;
   margin-left: $spacing-sm;
+  min-width: 0;
 }
 
 .product-name {
@@ -698,6 +839,7 @@ onLoad(async (options) => {
   font-weight: 600;
   @include text-ellipsis-2;
   display: block;
+  line-height: 1.42;
 }
 
 .product-sku {
@@ -708,13 +850,16 @@ onLoad(async (options) => {
   max-width: 100%;
   padding: 6rpx 14rpx;
   border-radius: $radius-round;
-  background: $bg-soft;
+  background: $primary-soft;
+  border: 1rpx solid rgba($primary-color, 0.12);
   @include text-ellipsis;
 }
 
 .product-bottom {
   @include flex-between;
+  align-items: flex-end;
   margin-top: $spacing-sm;
+  gap: $spacing-sm;
 }
 
 .product-qty {
@@ -722,28 +867,64 @@ onLoad(async (options) => {
   color: $text-hint;
 }
 
-.coupon-section,
-.points-section,
-.remark-section,
+.order-options-section,
 .legal-section {
-  display: flex;
-  align-items: center;
   margin: $spacing-sm $spacing-md;
   background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(255, 255, 255, 0.78);
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 94rpx;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid $divider-color;
+
+  &:first-child {
+    padding-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+}
+
+.option-copy {
+  flex: 1;
+  min-width: 0;
+  padding-right: $spacing-sm;
+}
+
+.option-value-wrap {
+  display: flex;
+  align-items: center;
+  max-width: 300rpx;
+  flex-shrink: 0;
 }
 
 .section-label {
+  display: block;
   font-size: $font-md;
   color: $text-color;
-  margin-right: $spacing-sm;
   font-weight: 800;
 }
 
+.section-desc {
+  display: block;
+  margin-top: 6rpx;
+  color: $text-hint;
+  font-size: $font-xs;
+  @include text-ellipsis;
+}
+
 .section-value {
-  flex: 1;
   font-size: $font-sm;
   color: $text-hint;
   text-align: right;
+  @include text-ellipsis;
 
   &.coupon-selected {
     color: $price-color;
@@ -757,27 +938,18 @@ onLoad(async (options) => {
   margin-left: 8rpx;
 }
 
-.points-row {
-  flex: 1;
-  display: flex;
-  align-items: center;
-}
-
-.points-info {
-  font-size: $font-xs;
-  color: $text-hint;
-  margin-left: $spacing-sm;
-}
-
 .remark-input {
-  flex: 1;
+  width: 260rpx;
   font-size: $font-sm;
   text-align: right;
   color: $text-color;
+  flex-shrink: 0;
 }
 
 .legal-section {
+  display: flex;
   align-items: flex-start;
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .legal-check-group {
@@ -815,22 +987,25 @@ onLoad(async (options) => {
 .price-section {
   margin: $spacing-sm $spacing-md;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 246, 241, 0.92) 100%);
+    radial-gradient(circle at 88% 0%, rgba($primary-color, 0.1) 0%, rgba($primary-color, 0) 220rpx),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 246, 241, 0.94) 100%);
   border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: $shadow-md;
 }
 
 .price-row {
   @include flex-between;
-  padding: 10rpx 0;
+  padding: 12rpx 0;
 
   &.total {
-    margin-top: $spacing-xs;
-    padding-top: $spacing-sm;
+    margin-top: 10rpx;
+    padding-top: $spacing-md;
     border-top: 1rpx solid $divider-color;
 
     .price-label {
       color: $text-color;
       font-weight: 800;
+      font-size: $font-md;
     }
   }
 }
@@ -851,27 +1026,52 @@ onLoad(async (options) => {
 
 .bottom-bar {
   justify-content: space-between;
-  min-height: 136rpx;
+  min-height: 144rpx;
+  padding-top: 14rpx;
+  padding-bottom: calc(14rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(14rpx + env(safe-area-inset-bottom));
 }
 
 .total-row {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: flex-start;
   margin-right: $spacing-md;
+  min-width: 0;
+  flex: 1;
+}
+
+.bottom-total-main {
+  display: flex;
+  align-items: baseline;
+  max-width: 100%;
 }
 
 .total-label {
   font-size: $font-sm;
   color: $text-secondary;
+  margin-right: 6rpx;
+  flex-shrink: 0;
+}
+
+.bottom-note {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 18rpx;
+  color: $text-hint;
+  max-width: 310rpx;
+  @include text-ellipsis;
 }
 
 .submit-btn {
   background: $gradient-coral;
   border-radius: $radius-round;
-  min-height: 82rpx;
-  padding: 0 56rpx;
+  min-width: 230rpx;
+  min-height: 84rpx;
+  padding: 0 42rpx;
   @include flex-center;
   box-shadow: $shadow-coral;
+  flex-shrink: 0;
 
   &.disabled {
     opacity: 0.6;
@@ -891,7 +1091,7 @@ onLoad(async (options) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(58, 48, 44, 0.42);
+  background: rgba(58, 48, 44, 0.46);
   z-index: 999;
   display: flex;
   align-items: flex-end;
@@ -900,10 +1100,14 @@ onLoad(async (options) => {
 .coupon-popup {
   width: 100%;
   max-height: 70vh;
-  background: $bg-page;
-  border-radius: $radius-xxl $radius-xxl 0 0;
+  background:
+    radial-gradient(circle at 14% 0%, rgba($primary-color, 0.12), rgba($primary-color, 0) 260rpx),
+    $bg-page;
+  border-radius: 44rpx 44rpx 0 0;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 -24rpx 60rpx rgba(92, 64, 52, 0.18);
+  border-top: 1rpx solid rgba(255, 255, 255, 0.78);
 }
 
 .popup-header {
@@ -930,6 +1134,7 @@ onLoad(async (options) => {
   flex: 1;
   padding: $spacing-sm $spacing-md;
   max-height: 60vh;
+  @include safe-bottom;
 }
 
 .coupon-item {
@@ -940,10 +1145,11 @@ onLoad(async (options) => {
   border-radius: $radius-xl;
   border: 2rpx solid rgba($border-color, 0.9);
   background: rgba(255, 255, 255, 0.82);
+  box-shadow: $shadow-xs;
 
   &.active {
     border-color: $primary-color;
-    background: rgba($primary-color, 0.07);
+    background: $primary-soft;
   }
 }
 
