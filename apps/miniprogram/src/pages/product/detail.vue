@@ -27,16 +27,20 @@
 
     <view class="service-section card">
       <view class="service-item">
-        <text class="service-mark">选</text>
-        <text class="service-text">精选母婴好物</text>
+        <text class="service-mark">正</text>
+        <text class="service-text">自营正品</text>
+      </view>
+      <view class="service-item">
+        <text class="service-mark warm">严</text>
+        <text class="service-text">严选品质</text>
       </view>
       <view class="service-item">
         <text class="service-mark mint">售</text>
-        <text class="service-text">售后流程清晰</text>
+        <text class="service-text">售后无忧</text>
       </view>
       <view class="service-item">
-        <text class="service-mark warm">规</text>
-        <text class="service-text">合规资料展示</text>
+        <text class="service-mark sage">规</text>
+        <text class="service-text">合规资料</text>
       </view>
     </view>
 
@@ -119,6 +123,10 @@
     </view>
 
     <view class="bottom-bar">
+      <view class="bar-icon" @tap="goCustomerService">
+        <text class="icon-text">讯</text>
+        <text class="icon-label">客服</text>
+      </view>
       <view class="bar-icon" @tap="goHome">
         <text class="icon-text">⌂</text>
         <text class="icon-label">首页</text>
@@ -126,10 +134,6 @@
       <view class="bar-icon" @tap="goCart">
         <text class="icon-text">袋</text>
         <text class="icon-label">购物车</text>
-      </view>
-      <view class="bar-icon" @tap="goCustomerService">
-        <text class="icon-text">讯</text>
-        <text class="icon-label">客服</text>
       </view>
       <view class="add-cart-btn" :class="{ disabled: !canPurchase }" @tap="handleAddCart">
         <text class="btn-text">加入购物车</text>
@@ -329,16 +333,18 @@ onLoad((options) => {
 
 <style lang="scss" scoped>
 .product-detail-page {
-  padding-bottom: 148rpx;
+  padding-bottom: 168rpx;
 }
 
 .hero-stage {
-  background: linear-gradient(180deg, $bg-page 0%, $bg-color 100%);
-  padding-bottom: 34rpx;
+  background:
+    radial-gradient(circle at 80% 10%, rgba($success-color, 0.16) 0%, rgba($success-color, 0) 260rpx),
+    linear-gradient(180deg, $bg-ivory 0%, $bg-soft 100%);
+  padding-bottom: 44rpx;
 }
 
 .image-swiper {
-  height: 760rpx;
+  height: 770rpx;
   background: $bg-gray;
 }
 
@@ -348,11 +354,13 @@ onLoad((options) => {
 }
 
 .price-section {
-  margin: -64rpx $spacing-md $spacing-sm;
+  margin: -76rpx $spacing-md $spacing-sm;
   position: relative;
   z-index: 2;
   border-radius: $radius-xxl;
-  padding: $spacing-lg;
+  padding: 34rpx $spacing-lg $spacing-lg;
+  border-color: rgba(255, 255, 255, 0.82);
+  box-shadow: $shadow-md;
 }
 
 .price-row {
@@ -380,11 +388,11 @@ onLoad((options) => {
 }
 
 .product-name {
-  font-size: $font-xl;
+  font-size: 40rpx;
   font-weight: 800;
   color: $text-color;
   display: block;
-  line-height: 1.5;
+  line-height: 1.42;
 }
 
 .product-subtitle {
@@ -404,29 +412,32 @@ onLoad((options) => {
 .tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8rpx;
+  gap: 10rpx;
   margin-top: $spacing-sm;
 }
 
 .product-tag {
   @include tag-base;
-  @include status-primary;
+  background: rgba($primary-color, 0.1);
+  color: $primary-dark;
 }
 
 .service-section {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: $spacing-sm;
+  grid-template-columns: repeat(4, 1fr);
+  gap: $spacing-xs;
   margin: $spacing-sm $spacing-md;
   padding: $spacing-sm;
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .service-item {
   @include flex-center;
   @include flex-column;
-  min-height: 112rpx;
-  border-radius: $radius-lg;
-  background: $bg-soft;
+  min-height: 116rpx;
+  border-radius: 26rpx;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba($bg-soft, 0.88) 100%);
+  border: 1rpx solid rgba($border-color, 0.68);
 }
 
 .service-mark {
@@ -449,24 +460,32 @@ onLoad((options) => {
     background: $secondary-soft;
     color: $secondary-color;
   }
+
+  &.sage {
+    background: $success-soft;
+    color: $success-dark;
+  }
 }
 
 .service-text {
   font-size: $font-xs;
   color: $text-secondary;
+  line-height: 1.2;
 }
 
 .sku-section {
   display: flex;
   align-items: center;
   margin: $spacing-sm $spacing-md;
-  min-height: 92rpx;
+  min-height: 104rpx;
+  background: rgba(255, 255, 255, 0.84);
 }
 
 .section-label {
   font-size: $font-md;
   color: $text-color;
   margin-right: $spacing-sm;
+  font-weight: 800;
 }
 
 .section-value {
@@ -483,6 +502,7 @@ onLoad((options) => {
 
 .detail-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .detail-title {
@@ -505,24 +525,26 @@ onLoad((options) => {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-sm;
+  gap: 22rpx;
 }
 
 .bottom-bar {
   @include bottom-action-bar;
   display: flex;
   align-items: center;
-  min-height: 128rpx;
+  min-height: 132rpx;
 }
 
 .bar-icon {
   @include flex-center;
   @include flex-column;
-  width: 78rpx;
+  width: 76rpx;
   height: 78rpx;
-  border-radius: 30rpx;
-  background: $bg-gray;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1rpx solid rgba($border-color, 0.76);
   padding: 0;
+  box-shadow: $shadow-xs;
 }
 
 .icon-text {
@@ -538,11 +560,14 @@ onLoad((options) => {
 
 .add-cart-btn {
   flex: 1;
-  background: linear-gradient(135deg, $secondary-color, #FFD39A);
+  min-width: 0;
+  background: linear-gradient(135deg, $secondary-soft 0%, #FFDCC4 100%);
   border-radius: $radius-round;
   padding: 22rpx 0;
   text-align: center;
   margin-left: $spacing-sm;
+  border: 1rpx solid rgba($secondary-color, 0.2);
+  box-shadow: $shadow-peach;
 
   &.disabled {
     opacity: 0.55;
@@ -551,11 +576,13 @@ onLoad((options) => {
 
 .buy-now-btn {
   flex: 1;
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  min-width: 0;
+  background: $gradient-coral;
   border-radius: $radius-round;
   padding: 22rpx 0;
   text-align: center;
   margin-left: $spacing-sm;
+  box-shadow: $shadow-coral;
 
   &.disabled {
     opacity: 0.55;
@@ -565,11 +592,15 @@ onLoad((options) => {
 .btn-text {
   color: #FFFFFF;
   font-size: $font-md;
-  font-weight: 500;
+  font-weight: 700;
+}
+
+.add-cart-btn .btn-text {
+  color: $primary-dark;
 }
 
 .sku-popup {
-  background: $bg-white;
+  background: $bg-page;
   border-radius: $radius-xxl $radius-xxl 0 0;
   padding: $spacing-lg;
   max-height: 80vh;
@@ -581,6 +612,9 @@ onLoad((options) => {
   margin-bottom: $spacing-md;
   padding-bottom: $spacing-md;
   border-bottom: 1rpx solid $divider-color;
+  background: rgba(255, 255, 255, 0.76);
+  border-radius: $radius-xl;
+  padding: $spacing-md;
 }
 
 .sku-image {
@@ -602,10 +636,11 @@ onLoad((options) => {
 
 .sku-confirm-btn {
   margin-top: $spacing-lg;
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   padding: 24rpx 0;
   text-align: center;
+  box-shadow: $shadow-coral;
 }
 
 .confirm-text {
@@ -616,6 +651,7 @@ onLoad((options) => {
 
 .compliance-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .compliance-title-row {
@@ -635,7 +671,7 @@ onLoad((options) => {
 }
 
 .health-warning {
-  background: $warning-soft;
+  background: rgba($warning-color, 0.1);
   border: 1rpx solid rgba($warning-color, 0.24);
   border-radius: $radius-lg;
   padding: $spacing-sm $spacing-md;

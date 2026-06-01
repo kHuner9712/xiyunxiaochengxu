@@ -1,11 +1,15 @@
 <template>
   <view class="search-page page-shell">
+    <view class="search-hero">
+      <text class="hero-title">搜索母婴好物</text>
+      <text class="hero-subtitle">自营正品 · 按需严选</text>
+    </view>
     <view class="search-header">
       <view class="search-input-wrap">
         <input
           class="search-input"
           v-model="keyword"
-          placeholder="搜索商品"
+          placeholder="搜索母婴好物"
           confirm-type="search"
           @confirm="doSearch"
           focus
@@ -136,18 +140,37 @@ onMounted(() => {
   min-height: 100vh;
 }
 
+.search-hero {
+  padding: 34rpx $spacing-md 10rpx;
+}
+
+.hero-title {
+  display: block;
+  font-size: $font-xl;
+  color: $text-color;
+  font-weight: 900;
+  line-height: 1.18;
+}
+
+.hero-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-secondary;
+}
+
 .search-header {
   display: flex;
   align-items: center;
-  padding: $spacing-sm $spacing-md;
+  padding: $spacing-sm $spacing-md $spacing-md;
   background: transparent;
 }
 
 .search-input-wrap {
   flex: 1;
-  background: $bg-white;
+  background: rgba(255, 255, 255, 0.92);
   border-radius: $radius-round;
-  padding: 16rpx 24rpx;
+  padding: 18rpx 26rpx;
   border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
 }
@@ -159,9 +182,13 @@ onMounted(() => {
 
 .search-btn {
   margin-left: $spacing-sm;
-  color: $primary-color;
+  color: #FFFFFF;
   font-size: $font-md;
-  padding: 12rpx;
+  padding: 18rpx 28rpx;
+  border-radius: $radius-round;
+  background: $gradient-coral;
+  box-shadow: $shadow-coral;
+  font-weight: 700;
 }
 
 .search-suggest {
@@ -178,8 +205,8 @@ onMounted(() => {
 }
 
 .section-title {
-  font-size: $font-md;
-  font-weight: 600;
+  font-size: $font-lg;
+  font-weight: 800;
   color: $text-color;
 }
 
@@ -195,10 +222,11 @@ onMounted(() => {
 }
 
 .keyword-tag {
-  background: $bg-white;
+  background: rgba(255, 255, 255, 0.88);
   border-radius: $radius-round;
-  padding: 12rpx 24rpx;
-  border: 1rpx solid rgba($border-color, 0.72);
+  padding: 14rpx 26rpx;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-xs;
 }
 
 .keyword-text {
@@ -213,6 +241,6 @@ onMounted(() => {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-md;
+  gap: 22rpx;
 }
 </style>

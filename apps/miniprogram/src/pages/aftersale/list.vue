@@ -97,6 +97,7 @@ onMounted(() => {
 .aftersale-card {
   margin: $spacing-sm $spacing-md $spacing-md;
   border-radius: $radius-xxl;
+  background: $gradient-card;
 }
 
 .card-header {
@@ -129,9 +130,9 @@ onMounted(() => {
 }
 
 .product-image {
-  width: 144rpx;
-  height: 144rpx;
-  border-radius: $radius-lg;
+  width: 156rpx;
+  height: 156rpx;
+  border-radius: 28rpx;
   flex-shrink: 0;
   background: $bg-gray;
 }
@@ -153,9 +154,14 @@ onMounted(() => {
 
 .aftersale-reason {
   font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-  margin-top: 4rpx;
+  color: $text-secondary;
+  display: inline-flex;
+  max-width: 100%;
+  margin-top: 8rpx;
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: $bg-soft;
+  @include text-ellipsis;
 }
 
 .refund-amount {
@@ -171,7 +177,7 @@ onMounted(() => {
 
 .amount-value {
   font-size: $font-md;
-  color: $primary-color;
+  color: $price-color;
   font-weight: 800;
 }
 </style>

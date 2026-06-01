@@ -165,7 +165,7 @@ watch(() => [props.specs, props.skus], () => {
   padding: 0 30rpx;
   font-size: $font-sm;
   color: $text-secondary;
-  background: $bg-gray;
+  background: $bg-soft;
   border-radius: $radius-round;
   border: 2rpx solid rgba($border-color, 0.86);
   display: inline-flex;
@@ -199,9 +199,10 @@ watch(() => [props.specs, props.skus], () => {
   display: flex;
   align-items: center;
   min-height: 64rpx;
-  background: $bg-gray;
+  background: $bg-soft;
   border-radius: $radius-round;
   padding: 6rpx;
+  border: 1rpx solid rgba($border-color, 0.7);
 }
 
 .quantity-btn {

@@ -92,11 +92,11 @@ onMounted(() => {
 
 .coupon-card {
   display: flex;
-  background: linear-gradient(135deg, #FFFFFF 0%, $primary-soft 100%);
+  background: $gradient-card;
   border-radius: $radius-xxl;
   overflow: hidden;
   margin-bottom: $spacing-md;
-  border: 1rpx solid rgba($border-color, 0.72);
+  border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
 }
 
@@ -104,7 +104,7 @@ onMounted(() => {
   width: 200rpx;
   @include flex-center;
   @include flex-column;
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   padding: $spacing-md;
   flex-shrink: 0;
 }
@@ -160,11 +160,11 @@ onMounted(() => {
   border: 2rpx solid rgba($primary-color, 0.36);
   border-radius: $radius-round;
   @include flex-center;
-  background: $bg-white;
+  background: rgba(255, 255, 255, 0.9);
 
   &.disabled {
     border-color: $border-color;
-    background: $bg-gray;
+    background: $bg-soft;
   }
 }
 

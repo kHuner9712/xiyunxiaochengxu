@@ -1,28 +1,67 @@
 <template>
   <view class="home-page page-shell">
-    <view class="search-bar" @tap="goSearch">
-      <view class="search-input">
-        <text class="search-icon">⌕</text>
-        <text class="search-placeholder">搜索商品</text>
+    <view class="brand-panel">
+      <view class="brand-top">
+        <view>
+          <text class="brand-title">禧孕优选</text>
+          <text class="brand-subtitle">科学育儿 · 品质之选</text>
+        </view>
+        <view class="brand-badge">
+          <text class="brand-badge-text">自营母婴精品</text>
+        </view>
+      </view>
+      <view class="search-bar" @tap="goSearch">
+        <view class="search-input">
+          <text class="search-icon">⌕</text>
+          <text class="search-placeholder">搜索母婴好物</text>
+        </view>
       </view>
     </view>
 
-    <swiper class="banner-swiper" indicator-dots autoplay circular :interval="4000">
-      <swiper-item v-for="banner in homeData.banners" :key="banner.id" @tap="handleBannerTap(banner)">
-        <image class="banner-image" :src="banner.image" mode="aspectFill" />
-      </swiper-item>
-    </swiper>
+    <view class="hero-card">
+      <swiper class="banner-swiper" indicator-dots autoplay circular :interval="4000">
+        <swiper-item v-for="banner in homeData.banners" :key="banner.id" @tap="handleBannerTap(banner)">
+          <image class="banner-image" :src="banner.image" mode="aspectFill" />
+          <view class="banner-mask"></view>
+          <view class="banner-copy">
+            <text class="banner-kicker">XIYUN SELECT</text>
+            <text class="banner-title">安心母婴好物</text>
+            <text class="banner-desc">严选品质 · 温柔送达</text>
+          </view>
+        </swiper-item>
+      </swiper>
+    </view>
 
-    <view class="quick-entries">
+    <view class="quick-entries surface-card">
       <view v-for="entry in homeData.quickEntries" :key="entry.id" class="entry-item" @tap="handleEntryTap(entry)">
-        <image class="entry-icon" :src="entry.icon" mode="aspectFit" />
+        <view class="entry-icon-wrap">
+          <image class="entry-icon" :src="entry.icon" mode="aspectFit" />
+        </view>
         <text class="entry-name">{{ entry.name }}</text>
+      </view>
+    </view>
+
+    <view class="trust-strip">
+      <view class="trust-item">
+        <text class="trust-mark">正</text>
+        <text class="trust-text">自营正品</text>
+      </view>
+      <view class="trust-item">
+        <text class="trust-mark peach">达</text>
+        <text class="trust-text">极速发货</text>
+      </view>
+      <view class="trust-item">
+        <text class="trust-mark sage">护</text>
+        <text class="trust-text">贴心售后</text>
       </view>
     </view>
 
     <view v-if="homeData.monthRecommend.length" class="section">
       <view class="section-header">
-        <text class="section-title">月龄推荐</text>
+        <view>
+          <text class="section-title">月龄推荐</text>
+          <text class="section-subtitle">按宝宝成长阶段精选</text>
+        </view>
       </view>
       <scroll-view scroll-x class="month-scroll">
         <view class="month-list">
@@ -33,7 +72,10 @@
 
     <view v-if="homeData.hotProducts.length" class="section">
       <view class="section-header">
-        <text class="section-title">热门推荐</text>
+        <view>
+          <text class="section-title">热门推荐</text>
+          <text class="section-subtitle">妈妈们正在回购</text>
+        </view>
         <text class="section-more" @tap="goProductList('hot')">更多 ›</text>
       </view>
       <view class="product-grid">
@@ -43,7 +85,10 @@
 
     <view v-if="homeData.newProducts.length" class="section">
       <view class="section-header">
-        <text class="section-title">新品上架</text>
+        <view>
+          <text class="section-title">新品上架</text>
+          <text class="section-subtitle">更适合当季育儿需求</text>
+        </view>
         <text class="section-more" @tap="goProductList('new')">更多 ›</text>
       </view>
       <view class="product-grid">
@@ -53,13 +98,17 @@
 
     <view v-if="homeData.activities.length" class="section">
       <view class="section-header">
-        <text class="section-title">热门活动</text>
+        <view>
+          <text class="section-title">限时福利</text>
+          <text class="section-subtitle">秒杀、会员与新人礼</text>
+        </view>
         <text class="section-more" @tap="goActivityList">更多 ›</text>
       </view>
       <scroll-view scroll-x class="activity-scroll">
         <view class="activity-list">
-          <view v-for="act in homeData.activities" :key="act.id" class="activity-card" @tap="goActivityDetail(act.id)">
+          <view v-for="(act, index) in homeData.activities" :key="act.id" class="activity-card" @tap="goActivityDetail(act.id)">
             <image class="activity-image" :src="act.image" mode="aspectFill" />
+            <view class="activity-badge">{{ activityLabels[index % activityLabels.length] }}</view>
             <view class="activity-info">
               <text class="activity-name">{{ act.name }}</text>
               <CountdownTimer :endTime="act.endTime" :showLabel="true" />
@@ -71,7 +120,10 @@
 
     <view class="section">
       <view class="section-header">
-        <text class="section-title">猜你喜欢</text>
+        <view>
+          <text class="section-title">猜你喜欢</text>
+          <text class="section-subtitle">为你的家庭清单继续精选</text>
+        </view>
       </view>
       <view class="product-grid">
         <ProductCard v-for="item in guessProducts" :key="item.id" :product="item" />
@@ -93,6 +145,7 @@ import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
 const userStore = useUserStore()
+const activityLabels = ['限时秒杀', '会员专享', '新人礼包']
 
 onShareAppMessage(() => ({
   title: '禧孕优选 - 品质母婴好物',
@@ -201,20 +254,58 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .home-page {
-  padding-bottom: 32rpx;
+  padding-bottom: 48rpx;
+}
+
+.brand-panel {
+  padding: 34rpx $spacing-md 18rpx;
+}
+
+.brand-top {
+  @include flex-between;
+  align-items: flex-start;
+  margin-bottom: $spacing-md;
+}
+
+.brand-title {
+  display: block;
+  font-size: 52rpx;
+  line-height: 1.12;
+  font-weight: 900;
+  color: $text-color;
+}
+
+.brand-subtitle {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $font-sm;
+  color: $text-secondary;
+}
+
+.brand-badge {
+  padding: 12rpx 18rpx;
+  border-radius: $radius-round;
+  background: rgba($success-color, 0.12);
+  border: 1rpx solid rgba($success-color, 0.18);
+}
+
+.brand-badge-text {
+  font-size: $font-xs;
+  color: $success-dark;
+  font-weight: 700;
 }
 
 .search-bar {
-  padding: $spacing-md $spacing-md $spacing-sm;
   background: transparent;
 }
 
 .search-input {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.88);
+  min-height: 82rpx;
+  background: rgba(255, 255, 255, 0.9);
   border-radius: $radius-round;
-  padding: 18rpx 26rpx;
+  padding: 0 28rpx;
   border: 1rpx solid rgba($border-color, 0.86);
   box-shadow: $shadow-sm;
 }
@@ -230,12 +321,17 @@ onMounted(() => {
   color: $text-hint;
 }
 
-.banner-swiper {
-  height: 340rpx;
-  margin: $spacing-sm $spacing-md;
+.hero-card {
+  margin: 0 $spacing-md $spacing-md;
   border-radius: $radius-xxl;
   overflow: hidden;
   box-shadow: $shadow-md;
+  border: 1rpx solid rgba(255, 255, 255, 0.78);
+  background: $gradient-peach;
+}
+
+.banner-swiper {
+  height: 356rpx;
 }
 
 .banner-image {
@@ -243,37 +339,126 @@ onMounted(() => {
   height: 100%;
 }
 
-.quick-entries {
+.banner-mask {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(58, 48, 44, 0.28) 0%, rgba(58, 48, 44, 0.04) 62%, rgba(58, 48, 44, 0) 100%);
+}
+
+.banner-copy {
+  position: absolute;
+  left: 34rpx;
+  bottom: 34rpx;
   display: flex;
-  justify-content: space-around;
-  padding: $spacing-md $spacing-sm;
-  background: $bg-white;
+  flex-direction: column;
+}
+
+.banner-kicker {
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: 700;
+}
+
+.banner-title {
+  margin-top: 8rpx;
+  font-size: 42rpx;
+  color: #FFFFFF;
+  font-weight: 900;
+  line-height: 1.16;
+}
+
+.banner-desc {
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.quick-entries {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  row-gap: $spacing-md;
+  column-gap: $spacing-xs;
   margin: $spacing-sm $spacing-md;
-  border-radius: $radius-xl;
-  border: 1rpx solid rgba($border-color, 0.72);
-  box-shadow: $shadow-sm;
+  padding: $spacing-lg $spacing-sm;
 }
 
 .entry-item {
   @include flex-center;
   @include flex-column;
+  min-width: 0;
+}
+
+.entry-icon-wrap {
+  @include flex-center;
+  width: 92rpx;
+  height: 92rpx;
+  margin-bottom: 10rpx;
+  border-radius: 34rpx;
+  background: linear-gradient(135deg, $primary-soft 0%, $secondary-soft 100%);
+  box-shadow: inset 0 -8rpx 18rpx rgba($primary-color, 0.06);
 }
 
 .entry-icon {
-  width: 88rpx;
-  height: 88rpx;
-  margin-bottom: 8rpx;
-  border-radius: 30rpx;
-  background: $primary-soft;
+  width: 58rpx;
+  height: 58rpx;
 }
 
 .entry-name {
   font-size: $font-xs;
   color: $text-secondary;
+  max-width: 126rpx;
+  @include text-ellipsis;
+}
+
+.trust-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $spacing-sm;
+  margin: $spacing-sm $spacing-md 0;
+}
+
+.trust-item {
+  @include flex-center;
+  min-height: 72rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1rpx solid rgba($border-color, 0.74);
+  box-shadow: $shadow-xs;
+}
+
+.trust-mark {
+  @include flex-center;
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 8rpx;
+  border-radius: 50%;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: 20rpx;
+  font-weight: 800;
+
+  &.peach {
+    background: $secondary-soft;
+    color: $secondary-color;
+  }
+
+  &.sage {
+    background: $success-soft;
+    color: $success-dark;
+  }
+}
+
+.trust-text {
+  font-size: $font-xs;
+  color: $text-secondary;
+  font-weight: 700;
 }
 
 .section {
-  margin-top: $spacing-lg;
+  margin-top: 42rpx;
 }
 
 .section-header {
@@ -283,9 +468,18 @@ onMounted(() => {
 }
 
 .section-title {
+  display: block;
   font-size: $font-lg;
   font-weight: 800;
   color: $text-color;
+  line-height: 1.2;
+}
+
+.section-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-xs;
+  color: $text-hint;
 }
 
 .section-more {
@@ -300,18 +494,18 @@ onMounted(() => {
 .month-list {
   display: inline-flex;
   padding: 0 $spacing-md;
-  gap: $spacing-sm;
+  gap: $spacing-md;
 }
 
 .month-item {
-  width: 240rpx;
+  width: 252rpx;
   flex-shrink: 0;
 }
 
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-md;
+  gap: 22rpx;
   padding: 0 $spacing-md;
 }
 
@@ -322,34 +516,49 @@ onMounted(() => {
 .activity-list {
   display: inline-flex;
   padding: 0 $spacing-md;
-  gap: $spacing-sm;
+  gap: $spacing-md;
 }
 
 .activity-card {
-  width: 500rpx;
+  position: relative;
+  width: 520rpx;
   flex-shrink: 0;
-  background: $bg-white;
-  border-radius: $radius-xl;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
   overflow: hidden;
-  border: 1rpx solid rgba($border-color, 0.72);
+  border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
 }
 
 .activity-image {
   width: 100%;
-  height: 250rpx;
+  height: 238rpx;
+}
+
+.activity-badge {
+  position: absolute;
+  left: 18rpx;
+  top: 18rpx;
+  padding: 8rpx 18rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.92);
+  color: $primary-dark;
+  font-size: $font-xs;
+  font-weight: 700;
+  box-shadow: $shadow-xs;
 }
 
 .activity-info {
-  padding: $spacing-sm;
+  padding: $spacing-md;
 }
 
 .activity-name {
   font-size: $font-md;
   color: $text-color;
+  font-weight: 700;
   @include text-ellipsis;
   display: block;
-  margin-bottom: 8rpx;
+  margin-bottom: 12rpx;
 }
 
 .floating-cs {

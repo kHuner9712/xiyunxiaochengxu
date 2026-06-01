@@ -48,7 +48,7 @@ defineEmits<{
   margin-bottom: $spacing-lg;
   border-radius: 44rpx;
   background: linear-gradient(135deg, $primary-soft, $secondary-soft);
-  box-shadow: inset 0 -10rpx 24rpx rgba(244, 124, 124, 0.08);
+  box-shadow: inset 0 -10rpx 24rpx rgba(242, 118, 120, 0.08);
 
   &::before {
     content: '';

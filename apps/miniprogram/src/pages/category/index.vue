@@ -1,6 +1,9 @@
 <template>
   <view class="category-page page-shell">
     <scroll-view scroll-y class="category-left">
+      <view class="category-brand">
+        <text class="brand-text">优选</text>
+      </view>
       <view
         v-for="item in categories"
         :key="item.id"
@@ -66,28 +69,45 @@ onMounted(() => {
 .category-page {
   display: flex;
   height: 100vh;
-  padding-top: $spacing-sm;
+  padding-top: $spacing-md;
 }
 
 .category-left {
-  width: 188rpx;
+  width: 196rpx;
   background: transparent;
   height: 100%;
-  padding: 0 0 $spacing-md $spacing-sm;
+  padding: 0 0 $spacing-md $spacing-md;
+}
+
+.category-brand {
+  @include flex-center;
+  height: 72rpx;
+  margin: 0 $spacing-xs $spacing-sm 0;
+  border-radius: $radius-round;
+  background: $gradient-coral;
+  box-shadow: $shadow-coral;
+}
+
+.brand-text {
+  color: #FFFFFF;
+  font-size: $font-sm;
+  font-weight: 800;
 }
 
 .category-item {
   @include flex-center;
-  min-height: 84rpx;
+  min-height: 88rpx;
   padding: 0 14rpx;
-  margin-bottom: 10rpx;
+  margin: 0 $spacing-xs 12rpx 0;
   position: relative;
   border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.52);
+  border: 1rpx solid rgba($border-color, 0.5);
 
   &.active {
-    background: $bg-white;
+    background: #FFFFFF;
     box-shadow: $shadow-sm;
-    border: 1rpx solid rgba($border-color, 0.72);
+    border: 1rpx solid rgba($border-color, 0.78);
 
     &::before {
       content: '';
@@ -131,9 +151,9 @@ onMounted(() => {
   @include flex-center;
   @include flex-column;
   min-height: 204rpx;
-  background: $bg-white;
-  border-radius: $radius-xl;
-  border: 1rpx solid rgba($border-color, 0.72);
+  background: $gradient-card;
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
   padding: $spacing-sm;
 }
@@ -150,5 +170,7 @@ onMounted(() => {
   font-size: $font-sm;
   color: $text-secondary;
   text-align: center;
+  line-height: 1.35;
+  @include text-ellipsis-2;
 }
 </style>

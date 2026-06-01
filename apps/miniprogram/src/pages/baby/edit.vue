@@ -120,7 +120,8 @@ onLoad((options) => {
 }
 
 .intro-card {
-  background: linear-gradient(135deg, #FFFFFF, $primary-soft);
+  background: $gradient-sage;
+  border-color: rgba($success-color, 0.18);
 }
 
 .intro-title {
@@ -163,7 +164,7 @@ onLoad((options) => {
 .form-input {
   flex: 1;
   font-size: $font-md;
-  background: $bg-gray;
+  background: $bg-soft;
   border-radius: $radius-lg;
   padding: 16rpx 20rpx;
 }
@@ -223,10 +224,11 @@ onLoad((options) => {
 }
 
 .submit-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   padding: 24rpx 0;
   text-align: center;
+  box-shadow: $shadow-coral;
 }
 
 .submit-text {

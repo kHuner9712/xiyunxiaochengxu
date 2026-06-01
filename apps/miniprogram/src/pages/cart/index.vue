@@ -1,12 +1,16 @@
 <template>
   <view class="cart-page page-shell">
     <view v-if="cartStore.items.length" class="cart-content">
+      <view class="care-tip">
+        <text class="care-tip-mark">安</text>
+        <text class="care-tip-text">自营订单享安心售后，发货与优惠以确认订单为准</text>
+      </view>
       <view class="cart-summary card">
         <view>
           <text class="summary-title">购物车</text>
-          <text class="summary-subtitle">已选 {{ cartStore.checkedCount }} 件</text>
+          <text class="summary-subtitle">已选 {{ cartStore.checkedCount }} 件好物</text>
         </view>
-        <text class="summary-hint">满减和优惠以确认订单为准</text>
+        <text class="summary-hint">科学育儿 · 品质之选</text>
       </view>
       <view v-for="(item, index) in cartStore.items" :key="item.id" class="cart-item">
         <view class="item-check" @tap="cartStore.toggleCheck(index)">
@@ -125,18 +129,51 @@ onShow(() => {
 <style lang="scss" scoped>
 .cart-page {
   min-height: 100vh;
-  padding-bottom: 148rpx;
+  padding-bottom: 168rpx;
 }
 
 .cart-content {
-  padding-top: $spacing-sm;
+  padding-top: $spacing-md;
+}
+
+.care-tip {
+  display: flex;
+  align-items: center;
+  min-height: 72rpx;
+  margin: 0 $spacing-md $spacing-sm;
+  padding: 0 $spacing-md;
+  border-radius: $radius-round;
+  background: rgba($success-color, 0.1);
+  border: 1rpx solid rgba($success-color, 0.16);
+}
+
+.care-tip-mark {
+  @include flex-center;
+  width: 38rpx;
+  height: 38rpx;
+  margin-right: 10rpx;
+  border-radius: 50%;
+  background: $success-soft;
+  color: $success-dark;
+  font-size: $font-xs;
+  font-weight: 800;
+}
+
+.care-tip-text {
+  flex: 1;
+  font-size: $font-xs;
+  color: $success-dark;
+  @include text-ellipsis;
 }
 
 .cart-summary {
   @include flex-between;
   align-items: flex-start;
   margin: $spacing-sm $spacing-md $spacing-md;
-  background: linear-gradient(135deg, #FFFFFF 0%, $primary-soft 100%);
+  background:
+    radial-gradient(circle at 88% 0%, rgba($primary-color, 0.12) 0%, rgba($primary-color, 0) 220rpx),
+    $gradient-card;
+  border-color: rgba(255, 255, 255, 0.78);
 }
 
 .summary-title {
@@ -162,16 +199,16 @@ onShow(() => {
 .cart-item {
   display: flex;
   align-items: flex-start;
-  padding: $spacing-sm;
-  background: $bg-white;
+  padding: $spacing-md;
+  background: $gradient-card;
   margin: $spacing-sm $spacing-md $spacing-md;
-  border-radius: $radius-xl;
-  border: 1rpx solid rgba($border-color, 0.72);
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
 }
 
 .item-check {
-  padding: 58rpx 8rpx 0 0;
+  padding: 68rpx 8rpx 0 0;
   margin-right: $spacing-sm;
 }
 
@@ -184,7 +221,7 @@ onShow(() => {
   @include flex-center;
 
   &.checked {
-    background: $primary-color;
+    background: $gradient-coral;
     border-color: $primary-color;
   }
 }
@@ -195,9 +232,9 @@ onShow(() => {
 }
 
 .item-image {
-  width: 164rpx;
-  height: 164rpx;
-  border-radius: $radius-lg;
+  width: 178rpx;
+  height: 178rpx;
+  border-radius: 28rpx;
   flex-shrink: 0;
   background: $bg-gray;
 }
@@ -219,9 +256,14 @@ onShow(() => {
 
 .item-sku {
   font-size: $font-xs;
-  color: $text-hint;
-  margin-top: 4rpx;
-  display: block;
+  color: $text-secondary;
+  margin-top: 10rpx;
+  display: inline-flex;
+  max-width: 100%;
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: $bg-soft;
+  @include text-ellipsis;
 }
 
 .item-bottom {
@@ -232,9 +274,10 @@ onShow(() => {
 .quantity-control {
   display: flex;
   align-items: center;
-  background: $bg-gray;
+  background: rgba($bg-gray, 0.86);
   border-radius: $radius-round;
   padding: 4rpx;
+  border: 1rpx solid rgba($border-color, 0.7);
 }
 
 .qty-btn {
@@ -256,7 +299,7 @@ onShow(() => {
 
 .cart-footer {
   justify-content: space-between;
-  min-height: 128rpx;
+  min-height: 136rpx;
 }
 
 .footer-left {
@@ -273,12 +316,14 @@ onShow(() => {
 .footer-right {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .total-price {
   display: flex;
   align-items: baseline;
   margin-right: $spacing-md;
+  min-width: 0;
 }
 
 .total-label {
@@ -287,12 +332,13 @@ onShow(() => {
 }
 
 .checkout-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   min-height: 82rpx;
-  padding: 0 44rpx;
+  padding: 0 42rpx;
   @include flex-center;
-  box-shadow: 0 10rpx 22rpx rgba(244, 124, 124, 0.2);
+  box-shadow: $shadow-coral;
+  flex-shrink: 0;
 }
 
 .checkout-text {

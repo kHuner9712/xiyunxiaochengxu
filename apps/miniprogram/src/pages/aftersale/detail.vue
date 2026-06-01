@@ -130,15 +130,15 @@ onLoad((options) => {
 <style lang="scss" scoped>
 .aftersale-detail-page {
   min-height: 100vh;
-  padding-bottom: 148rpx;
+  padding-bottom: 168rpx;
 }
 
 .status-section {
   margin: $spacing-md;
   padding: $spacing-lg;
   border-radius: $radius-xxl;
-  border: 1rpx solid rgba($border-color, 0.72);
-  box-shadow: $shadow-sm;
+  border: 1rpx solid rgba(255, 255, 255, 0.78);
+  box-shadow: $shadow-md;
 
   &.pending { background: $warning-soft; }
   &.processing { background: $info-soft; }
@@ -157,6 +157,7 @@ onLoad((options) => {
 .product-section,
 .info-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .section-title {
@@ -223,9 +224,9 @@ onLoad((options) => {
 }
 
 .product-image {
-  width: 144rpx;
-  height: 144rpx;
-  border-radius: $radius-lg;
+  width: 156rpx;
+  height: 156rpx;
+  border-radius: 28rpx;
   flex-shrink: 0;
   background: $bg-gray;
 }
@@ -246,9 +247,14 @@ onLoad((options) => {
 
 .product-sku {
   font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-  margin-top: 4rpx;
+  color: $text-secondary;
+  display: inline-flex;
+  max-width: 100%;
+  margin-top: 8rpx;
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: $bg-soft;
+  @include text-ellipsis;
 }
 
 .product-bottom {
@@ -285,7 +291,7 @@ onLoad((options) => {
   text-align: right;
   max-width: 460rpx;
 
-  &.price { color: $primary-color; font-weight: 800; }
+  &.price { color: $price-color; font-weight: 800; }
 }
 
 .image-list {
@@ -318,11 +324,12 @@ onLoad((options) => {
 .cs-btn {
   min-height: 76rpx;
   padding: 0 80rpx;
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   font-size: $font-md;
   color: #FFFFFF;
   margin-right: $spacing-sm;
   @include flex-center;
+  box-shadow: $shadow-coral;
 }
 </style>

@@ -86,13 +86,15 @@ onMounted(() => {
 }
 
 .member-header {
-  background: linear-gradient(135deg, #FFE5DF 0%, #FFF4E4 60%, #F2FBF7 100%);
+  background:
+    radial-gradient(circle at 82% 18%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 240rpx),
+    $gradient-peach;
   padding: $spacing-xl $spacing-md $spacing-lg;
   border-radius: 0 0 $radius-xxl $radius-xxl;
 }
 
 .member-card {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.84);
   border-radius: $radius-xxl;
   padding: $spacing-lg;
   border: 1rpx solid rgba(255, 255, 255, 0.82);
@@ -159,6 +161,7 @@ onMounted(() => {
 
 .rights-section {
   margin: $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .section-title {
@@ -180,7 +183,8 @@ onMounted(() => {
   @include flex-column;
   min-height: 168rpx;
   border-radius: $radius-xl;
-  background: $bg-soft;
+  background: linear-gradient(180deg, $bg-soft 0%, #FFFFFF 100%);
+  border: 1rpx solid rgba($border-color, 0.68);
   padding: $spacing-sm;
 }
 

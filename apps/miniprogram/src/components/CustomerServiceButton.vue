@@ -50,8 +50,8 @@ onMounted(() => {
   width: 92rpx;
   height: 92rpx;
   border-radius: 50%;
-  background: $bg-white;
-  border: 1rpx solid rgba($border-color, 0.72);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-md;
 }
 

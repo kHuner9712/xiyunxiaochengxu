@@ -33,9 +33,9 @@ withDefaults(defineProps<{
   align-items: center;
   min-height: 168rpx;
   padding: $spacing-md;
-  border-radius: $radius-xl;
-  background: linear-gradient(135deg, $primary-soft 0%, #FFFFFF 56%, $secondary-soft 100%);
-  border: 1rpx solid rgba($border-color, 0.72);
+  border-radius: $radius-xxl;
+  background: linear-gradient(135deg, $primary-soft 0%, #FFFFFF 58%, $secondary-soft 100%);
+  border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
 
   &.disabled {
@@ -45,7 +45,7 @@ withDefaults(defineProps<{
 
 .coupon-value {
   width: 150rpx;
-  color: $primary-dark;
+  color: $price-color;
   display: flex;
   align-items: baseline;
 }

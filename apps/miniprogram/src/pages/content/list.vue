@@ -1,5 +1,9 @@
 <template>
   <view class="content-list-page page-shell">
+    <view class="content-hero">
+      <text class="hero-title">育儿知识</text>
+      <text class="hero-subtitle">科学喂养 · 安心成长</text>
+    </view>
     <view class="tab-bar">
       <view
         v-for="cat in categories"
@@ -107,12 +111,31 @@ onMounted(async () => {
   min-height: 100vh;
 }
 
+.content-hero {
+  padding: 34rpx $spacing-md $spacing-md;
+}
+
+.hero-title {
+  display: block;
+  font-size: $font-xl;
+  font-weight: 900;
+  color: $text-color;
+}
+
+.hero-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-secondary;
+}
+
 .tab-bar {
   display: flex;
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.78);
   padding: $spacing-sm $spacing-md;
   overflow-x: auto;
   white-space: nowrap;
+  border-top: 1rpx solid rgba($border-color, 0.54);
   border-bottom: 1rpx solid rgba($border-color, 0.72);
 }
 
@@ -142,12 +165,13 @@ onMounted(async () => {
   display: flex;
   margin-bottom: $spacing-md;
   border-radius: $radius-xxl;
+  background: $gradient-card;
 }
 
 .content-cover {
-  width: 200rpx;
-  height: 150rpx;
-  border-radius: $radius-lg;
+  width: 210rpx;
+  height: 164rpx;
+  border-radius: 28rpx;
   flex-shrink: 0;
   background: $bg-gray;
 }

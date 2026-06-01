@@ -1,33 +1,42 @@
-$primary-color: #F47C7C;
-$primary-light: #FFA7A0;
-$primary-dark: #D95D63;
-$primary-soft: #FFF1F0;
-$secondary-color: #F7B267;
-$secondary-soft: #FFF4E4;
-$success-color: #57B894;
-$success-soft: #EAF8F2;
-$warning-color: #E9A23B;
-$warning-soft: #FFF5DE;
-$danger-color: #D95D63;
-$danger-soft: #FFF0F0;
-$info-color: #7AA7D9;
-$info-soft: #EEF6FF;
-$mint-color: #7BCBB8;
-$lavender-color: #A99BE8;
+$primary-color: #F27678;
+$primary-light: #FFA29A;
+$primary-dark: #C9565B;
+$primary-soft: #FFF0EE;
+$primary-glow: #FFE0DB;
+$secondary-color: #F4A261;
+$secondary-light: #FFD4A8;
+$secondary-soft: #FFF4E6;
+$success-color: #7EAD89;
+$success-dark: #527E5D;
+$success-soft: #EFF8F0;
+$warning-color: #D99A3E;
+$warning-soft: #FFF6E4;
+$danger-color: #D96868;
+$danger-soft: #FFF0EF;
+$info-color: #7EA6C7;
+$info-soft: #EEF6FA;
+$mint-color: #8EC8B1;
+$lavender-color: #B5A9DC;
+$price-color: #E96F6D;
 
-$text-color: #2F2825;
-$text-secondary: #6F625D;
-$text-hint: #A99B95;
-$text-disabled: #D8CEC9;
+$text-color: #3A302C;
+$text-secondary: #76665F;
+$text-hint: #A8968D;
+$text-disabled: #D9CBC4;
 
-$bg-color: #F8F3F1;
-$bg-page: #FFFDFB;
+$bg-color: #FFF7F2;
+$bg-page: #FFFCF7;
 $bg-white: #FFFFFF;
-$bg-gray: #FAF6F3;
-$bg-soft: #FFF8F5;
+$bg-gray: #FAF1EC;
+$bg-soft: #FFF4EF;
+$bg-ivory: #FFFCF4;
+$bg-cream: #FFF8EC;
+$bg-blush: #FFF1F0;
+$bg-sage: #F1F7EE;
 
-$border-color: #EFE4DF;
-$divider-color: #F3EAE6;
+$border-color: #F1DFD6;
+$divider-color: #F5E8E1;
+$glass-bg: rgba(255, 252, 247, 0.86);
 
 $font-xs: 20rpx;
 $font-sm: 24rpx;
@@ -50,9 +59,18 @@ $spacing-md: 24rpx;
 $spacing-lg: 32rpx;
 $spacing-xl: 48rpx;
 
-$shadow-sm: 0 6rpx 20rpx rgba(119, 82, 74, 0.06);
-$shadow-md: 0 12rpx 32rpx rgba(119, 82, 74, 0.08);
-$shadow-lg: 0 18rpx 48rpx rgba(119, 82, 74, 0.1);
+$shadow-xs: 0 4rpx 14rpx rgba(131, 91, 78, 0.05);
+$shadow-sm: 0 8rpx 24rpx rgba(131, 91, 78, 0.07);
+$shadow-md: 0 16rpx 40rpx rgba(131, 91, 78, 0.09);
+$shadow-lg: 0 24rpx 60rpx rgba(131, 91, 78, 0.12);
+$shadow-coral: 0 12rpx 28rpx rgba(242, 118, 120, 0.22);
+$shadow-peach: 0 12rpx 28rpx rgba(244, 162, 97, 0.18);
+
+$gradient-page: linear-gradient(180deg, #FFFCF7 0%, #FFF2EE 44%, #FFF8F2 100%);
+$gradient-card: linear-gradient(180deg, #FFFFFF 0%, #FFFCF8 100%);
+$gradient-coral: linear-gradient(135deg, #F27678 0%, #FFA29A 100%);
+$gradient-peach: linear-gradient(135deg, #FFF5E8 0%, #FFE2D7 100%);
+$gradient-sage: linear-gradient(135deg, #F6FBF3 0%, #E8F4E7 100%);
 
 @mixin flex-center {
   display: flex;
@@ -108,7 +126,7 @@ $shadow-lg: 0 18rpx 48rpx rgba(119, 82, 74, 0.1);
 
 @mixin status-success {
   background: $success-soft;
-  color: $success-color;
+  color: $success-dark;
 }
 
 @mixin status-warning {
@@ -140,7 +158,7 @@ $shadow-lg: 0 18rpx 48rpx rgba(119, 82, 74, 0.1);
 @mixin primary-pill-btn {
   @include flex-center;
   min-height: 76rpx;
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   color: #FFFFFF;
   border: none;
   border-radius: $radius-round;
@@ -148,7 +166,7 @@ $shadow-lg: 0 18rpx 48rpx rgba(119, 82, 74, 0.1);
   font-size: $font-md;
   font-weight: 600;
   text-align: center;
-  box-shadow: 0 10rpx 22rpx rgba(244, 124, 124, 0.2);
+  box-shadow: $shadow-coral;
 }
 
 @mixin ghost-pill-btn {
@@ -164,6 +182,19 @@ $shadow-lg: 0 18rpx 48rpx rgba(119, 82, 74, 0.1);
   text-align: center;
 }
 
+@mixin soft-card {
+  background: $gradient-card;
+  border-radius: $radius-xl;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-sm;
+}
+
+@mixin glass-surface {
+  background: $glass-bg;
+  border: 1rpx solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8rpx 26rpx rgba(131, 91, 78, 0.07);
+}
+
 @mixin bottom-action-bar {
   position: fixed;
   left: 0;
@@ -174,9 +205,9 @@ $shadow-lg: 0 18rpx 48rpx rgba(119, 82, 74, 0.1);
   align-items: center;
   gap: $spacing-sm;
   min-height: 112rpx;
-  background: rgba(255, 253, 251, 0.96);
-  border-top: 1rpx solid rgba(239, 228, 223, 0.82);
-  box-shadow: 0 -10rpx 30rpx rgba(119, 82, 74, 0.06);
+  background: rgba(255, 252, 247, 0.96);
+  border-top: 1rpx solid rgba($border-color, 0.82);
+  box-shadow: 0 -12rpx 36rpx rgba(131, 91, 78, 0.08);
   padding: $spacing-sm $spacing-md;
   @include safe-bottom;
 }

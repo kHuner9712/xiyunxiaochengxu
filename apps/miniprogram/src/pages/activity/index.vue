@@ -1,5 +1,10 @@
 <template>
   <view class="activity-page page-shell">
+    <view class="activity-hero">
+      <text class="hero-title">育儿福利社</text>
+      <text class="hero-subtitle">限时活动 · 亲子内容 · 会员福利</text>
+    </view>
+    <view class="tab-wrap">
     <view class="tab-bar pill-tab-bar">
       <view
         v-for="tab in tabs"
@@ -10,6 +15,7 @@
       >
         <text class="tab-text">{{ tab.label }}</text>
       </view>
+    </view>
     </view>
 
     <view class="feed-list">
@@ -136,14 +142,38 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .activity-page {
-  padding: $spacing-md;
+  padding-bottom: $spacing-lg;
 }
 
-.tab-bar {
-  margin-bottom: $spacing-md;
+.activity-hero {
+  padding: 34rpx $spacing-md $spacing-md;
+}
+
+.hero-title {
+  display: block;
+  font-size: $font-xl;
+  color: $text-color;
+  font-weight: 900;
+}
+
+.hero-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-secondary;
+}
+
+.tab-wrap {
   position: sticky;
   top: 0;
   z-index: 5;
+  padding: $spacing-sm $spacing-md;
+  background: rgba($bg-page, 0.94);
+}
+
+.tab-bar {
+  margin-bottom: 0;
+  overflow: hidden;
 }
 
 .tab-item {
@@ -162,11 +192,11 @@ onMounted(() => {
 }
 
 .feed-card {
-  background: $bg-white;
+  background: $gradient-card;
   border-radius: $radius-xxl;
   overflow: hidden;
-  margin-bottom: $spacing-md;
-  border: 1rpx solid rgba($border-color, 0.72);
+  margin: 0 $spacing-md $spacing-md;
+  border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
 }
 
@@ -197,7 +227,7 @@ onMounted(() => {
 
   &.video {
     background: $success-soft;
-    color: $success-color;
+    color: $success-dark;
   }
 
   &.article {

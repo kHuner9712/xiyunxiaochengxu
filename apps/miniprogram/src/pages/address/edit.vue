@@ -22,7 +22,7 @@
       </view>
       <view class="form-item switch-item">
         <text class="form-label">设为默认地址</text>
-        <switch :checked="form.isDefault" @change="onDefaultChange" color="#F47C7C" />
+        <switch :checked="form.isDefault" @change="onDefaultChange" color="#F27678" />
       </view>
     </view>
 
@@ -153,6 +153,8 @@ onLoad((options) => {
 
 .form-section {
   margin-bottom: $spacing-lg;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: $radius-xxl;
 }
 
 .form-item {
@@ -173,11 +175,16 @@ onLoad((options) => {
   color: $text-color;
   width: 160rpx;
   flex-shrink: 0;
+  font-weight: 800;
 }
 
 .form-input {
   flex: 1;
   font-size: $font-md;
+  min-width: 0;
+  background: $bg-soft;
+  border-radius: $radius-lg;
+  padding: 16rpx 20rpx;
 }
 
 .form-value {
@@ -198,13 +205,18 @@ onLoad((options) => {
   flex: 1;
   font-size: $font-md;
   min-height: 120rpx;
+  min-width: 0;
+  background: $bg-soft;
+  border-radius: $radius-lg;
+  padding: 16rpx 20rpx;
 }
 
 .submit-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   padding: 24rpx 0;
   text-align: center;
+  box-shadow: $shadow-coral;
 }
 
 .submit-text {
@@ -217,6 +229,8 @@ onLoad((options) => {
   margin-top: $spacing-md;
   padding: 24rpx 0;
   text-align: center;
+  border-radius: $radius-round;
+  background: rgba($danger-color, 0.08);
 }
 
 .delete-text {

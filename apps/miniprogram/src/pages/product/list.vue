@@ -1,16 +1,29 @@
 <template>
   <view class="product-list-page page-shell">
-    <view class="filter-wrap">
-      <view class="filter-bar pill-tab-bar">
-      <view
-        v-for="filter in filters"
-        :key="filter.value"
-        class="filter-item pill-tab-item"
-        :class="{ active: currentSort === filter.value }"
-        @tap="switchSort(filter.value)"
-      >
-        <text class="filter-text">{{ filter.label }}</text>
+    <view class="list-top sticky-glass">
+      <view class="list-title-row">
+        <view>
+          <text class="list-title">严选好物</text>
+          <text class="list-subtitle">自营母婴精品 · 安心选购</text>
+        </view>
+        <view class="filter-entry">
+          <text class="filter-entry-icon">筛</text>
+        </view>
       </view>
+      <view class="search-box" @tap="goSearch">
+        <text class="search-icon">⌕</text>
+        <text class="search-placeholder">{{ keyword || '搜索母婴好物' }}</text>
+      </view>
+      <view class="filter-bar pill-tab-bar">
+        <view
+          v-for="filter in filters"
+          :key="filter.value"
+          class="filter-item pill-tab-item"
+          :class="{ active: currentSort === filter.value }"
+          @tap="switchSort(filter.value)"
+        >
+          <text class="filter-text">{{ filter.label }}</text>
+        </view>
       </view>
     </view>
 
@@ -80,6 +93,10 @@ function switchSort(value: string) {
   loadProducts(true)
 }
 
+function goSearch() {
+  uni.navigateTo({ url: '/pages/search/index' })
+}
+
 onLoad((options) => {
   if (options?.categoryId) categoryId.value = Number(options.categoryId)
   if (options?.sort) currentSort.value = options.sort
@@ -102,16 +119,78 @@ onReachBottom(() => {
   min-height: 100vh;
 }
 
-.filter-wrap {
-  padding: $spacing-sm $spacing-md;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: rgba($bg-color, 0.92);
+.list-top {
+  padding: 24rpx $spacing-md $spacing-md;
+  border-radius: 0 0 $radius-xxl $radius-xxl;
+}
+
+.list-title-row {
+  @include flex-between;
+  align-items: flex-start;
+  margin-bottom: $spacing-md;
+}
+
+.list-title {
+  display: block;
+  font-size: $font-xl;
+  line-height: 1.16;
+  color: $text-color;
+  font-weight: 900;
+}
+
+.list-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-xs;
+  color: $text-hint;
+}
+
+.filter-entry {
+  @include flex-center;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 24rpx;
+  background: $success-soft;
+  border: 1rpx solid rgba($success-color, 0.18);
+}
+
+.filter-entry-icon {
+  font-size: $font-xs;
+  color: $success-dark;
+  font-weight: 800;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  min-height: 76rpx;
+  padding: 0 26rpx;
+  margin-bottom: $spacing-sm;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1rpx solid rgba($border-color, 0.8);
+}
+
+.search-icon {
+  margin-right: 10rpx;
+  color: $primary-color;
+  font-size: $font-lg;
+}
+
+.search-placeholder {
+  flex: 1;
+  font-size: $font-sm;
+  color: $text-hint;
+  @include text-ellipsis;
+}
+
+.filter-bar {
+  overflow: hidden;
 }
 
 .filter-item {
   flex: 1;
+  min-width: 0;
 
   &.active {
     .filter-text {
@@ -124,12 +203,13 @@ onReachBottom(() => {
 .filter-text {
   font-size: $font-sm;
   color: $text-secondary;
+  white-space: nowrap;
 }
 
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-md;
-  padding: $spacing-sm $spacing-md $spacing-lg;
+  gap: 22rpx;
+  padding: $spacing-md $spacing-md $spacing-xl;
 }
 </style>

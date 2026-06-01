@@ -92,6 +92,8 @@ function goBaby() {
 .profile-header {
   @include flex-center;
   padding: $spacing-xl;
+  margin: $spacing-md;
+  background: $gradient-peach;
 }
 
 .avatar-section {
@@ -102,6 +104,8 @@ function goBaby() {
   width: 160rpx;
   height: 160rpx;
   border-radius: 50%;
+  border: 6rpx solid rgba(255, 255, 255, 0.86);
+  box-shadow: $shadow-md;
 }
 
 .avatar-edit {
@@ -109,7 +113,7 @@ function goBaby() {
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba($text-color, 0.58);
   border-radius: 0 0 80rpx 80rpx;
   text-align: center;
   padding: 4rpx 0;
@@ -123,6 +127,7 @@ function goBaby() {
 .form-section,
 .menu-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .form-item {
@@ -138,6 +143,7 @@ function goBaby() {
   font-size: $font-md;
   color: $text-color;
   width: 160rpx;
+  font-weight: 800;
 }
 
 .form-value {

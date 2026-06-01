@@ -194,7 +194,7 @@ onUnload(() => {
   @include flex-center;
   @include flex-column;
   min-height: 100vh;
-  padding: 96rpx $spacing-md 0;
+  padding: 96rpx $spacing-md $spacing-xl;
 }
 
 .result-card {
@@ -204,9 +204,11 @@ onUnload(() => {
   padding: $spacing-xl $spacing-md;
   margin-bottom: $spacing-md;
   border-radius: $radius-xxl;
-  background: linear-gradient(180deg, #FFFFFF 0%, $bg-soft 100%);
-  border: 1rpx solid rgba($border-color, 0.72);
-  box-shadow: $shadow-sm;
+  background:
+    radial-gradient(circle at 50% 0%, rgba($success-color, 0.14) 0%, rgba($success-color, 0) 220rpx),
+    $gradient-card;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-md;
 }
 
 .result-icon {
@@ -232,7 +234,7 @@ onUnload(() => {
 .icon-success {
   font-size: 60rpx;
   color: #FFFFFF;
-  background: $success-color;
+  background: $success-dark;
   width: 104rpx;
   height: 104rpx;
   border-radius: 50%;
@@ -270,15 +272,15 @@ onUnload(() => {
   width: 100%;
   text-align: center;
   padding: $spacing-lg $spacing-md;
-  background: linear-gradient(135deg, $primary-soft, #FFFFFF);
+  background: $gradient-sage;
   border: 2rpx solid rgba($primary-color, 0.18);
-  border-radius: $radius-xl;
+  border-radius: $radius-xxl;
   margin-bottom: $spacing-md;
 }
 
 .tip-text {
   font-size: $font-md;
-  color: $primary-color;
+  color: $success-dark;
   font-weight: 600;
   display: block;
   margin-bottom: $spacing-sm;
@@ -322,8 +324,8 @@ onUnload(() => {
   color: $text-color;
 
   &.price {
-    color: $primary-color;
-    font-weight: 600;
+    color: $price-color;
+    font-weight: 800;
   }
 }
 

@@ -26,7 +26,7 @@ const props = withDefaults(defineProps<{
 const priceStr = computed(() => formatPrice(props.price))
 const integerPart = computed(() => priceStr.value.split('.')[0])
 const decimalPart = computed(() => priceStr.value.split('.')[1])
-const priceColor = computed(() => props.color || '#F47C7C')
+const priceColor = computed(() => props.color || '#E96F6D')
 </script>
 
 <style lang="scss" scoped>

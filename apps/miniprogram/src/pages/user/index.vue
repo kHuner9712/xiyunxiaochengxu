@@ -243,7 +243,9 @@ onShow(() => {
 }
 
 .user-header {
-  background: linear-gradient(135deg, #FFE5DF 0%, #FFF7EF 52%, #F2FBF7 100%);
+  background:
+    radial-gradient(circle at 86% 20%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 220rpx),
+    $gradient-peach;
   padding: 68rpx $spacing-md 58rpx;
   border-radius: 0 0 $radius-xxl $radius-xxl;
 }
@@ -287,10 +289,11 @@ onShow(() => {
 
 .login-btn {
   margin-top: $spacing-md;
-  background: $bg-white;
+  background: #FFFFFF;
   border-radius: $radius-round;
   padding: 16rpx 48rpx;
   display: inline-flex;
+  box-shadow: $shadow-sm;
 }
 
 .login-text {
@@ -317,6 +320,7 @@ onShow(() => {
 .order-section {
   margin: -20rpx $spacing-md $spacing-md;
   position: relative;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .section-header {
@@ -326,7 +330,7 @@ onShow(() => {
 
 .section-title {
   font-size: $font-md;
-  font-weight: 600;
+  font-weight: 800;
   color: $text-color;
 }
 
@@ -379,6 +383,7 @@ onShow(() => {
 
 .menu-section {
   margin: 0 $spacing-md $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .menu-item {
@@ -405,8 +410,8 @@ onShow(() => {
   margin: $spacing-xl $spacing-md;
   padding: 24rpx;
   text-align: center;
-  background: $bg-white;
-  border-radius: $radius-lg;
+  background: rgba($danger-color, 0.08);
+  border-radius: $radius-round;
 }
 
 .logout-text {

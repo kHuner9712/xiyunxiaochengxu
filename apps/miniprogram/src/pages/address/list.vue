@@ -111,11 +111,13 @@ onShow(() => {
 <style lang="scss" scoped>
 .address-list-page {
   min-height: 100vh;
-  padding-bottom: 120rpx;
+  padding: $spacing-sm 0 168rpx;
 }
 
 .address-card {
   margin: $spacing-sm $spacing-md;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
 }
 
 .address-info {
@@ -131,7 +133,7 @@ onShow(() => {
 
 .address-name {
   font-size: $font-md;
-  font-weight: 600;
+  font-weight: 800;
   margin-right: $spacing-sm;
 }
 
@@ -143,10 +145,10 @@ onShow(() => {
 
 .default-tag {
   background: rgba($primary-color, 0.1);
-  color: $primary-color;
+  color: $primary-dark;
   font-size: $font-xs;
-  padding: 2rpx 12rpx;
-  border-radius: $radius-sm;
+  padding: 4rpx 14rpx;
+  border-radius: $radius-round;
 }
 
 .address-detail {
@@ -178,12 +180,13 @@ onShow(() => {
 }
 
 .add-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   min-height: 78rpx;
   padding: 0 120rpx;
   @include flex-center;
   text-align: center;
+  box-shadow: $shadow-coral;
 }
 
 .add-text {

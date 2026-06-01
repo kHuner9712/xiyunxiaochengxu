@@ -58,7 +58,7 @@ onLoad((options) => {
 }
 
 .banner-wrap {
-  padding: $spacing-md $spacing-md 0;
+  padding: 34rpx $spacing-md 0;
 }
 
 .activity-banner {
@@ -70,8 +70,11 @@ onLoad((options) => {
 }
 
 .activity-info {
-  margin: $spacing-md $spacing-md $spacing-sm;
+  margin: -24rpx $spacing-md $spacing-sm;
   border-radius: $radius-xxl;
+  position: relative;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .activity-name {
@@ -80,6 +83,7 @@ onLoad((options) => {
   color: $text-color;
   display: block;
   margin-bottom: $spacing-sm;
+  line-height: 1.38;
 }
 
 .activity-meta {
@@ -94,6 +98,7 @@ onLoad((options) => {
 
 .rules-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .section-title {

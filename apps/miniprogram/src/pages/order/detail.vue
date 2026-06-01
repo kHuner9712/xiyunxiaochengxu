@@ -282,16 +282,16 @@ onLoad((options) => {
 <style lang="scss" scoped>
 .order-detail-page {
   min-height: 100vh;
-  padding-bottom: 148rpx;
+  padding-bottom: 168rpx;
 }
 
 .status-section {
   margin: $spacing-md;
   padding: $spacing-lg;
   border-radius: $radius-xxl;
-  background: linear-gradient(135deg, $primary-soft, $secondary-soft);
-  border: 1rpx solid rgba($border-color, 0.72);
-  box-shadow: $shadow-sm;
+  background: $gradient-peach;
+  border: 1rpx solid rgba(255, 255, 255, 0.78);
+  box-shadow: $shadow-md;
 
   &.status-unpaid { background: $warning-soft; }
   &.status-shipping { background: $info-soft; }
@@ -322,10 +322,12 @@ onLoad((options) => {
 .price-section,
 .info-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .pickup-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .pickup-header {
@@ -473,9 +475,9 @@ onLoad((options) => {
 }
 
 .product-image {
-  width: 144rpx;
-  height: 144rpx;
-  border-radius: $radius-lg;
+  width: 156rpx;
+  height: 156rpx;
+  border-radius: 28rpx;
   flex-shrink: 0;
   background: $bg-gray;
 }
@@ -497,9 +499,14 @@ onLoad((options) => {
 
 .product-sku {
   font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-  margin-top: 4rpx;
+  color: $text-secondary;
+  display: inline-flex;
+  max-width: 100%;
+  margin-top: 8rpx;
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: $bg-soft;
+  @include text-ellipsis;
 }
 
 .product-right {
@@ -549,8 +556,8 @@ onLoad((options) => {
   font-size: $font-sm;
   color: $text-color;
 
-  &.discount { color: $danger-color; }
-  &.pay-amount { color: $primary-color; font-weight: 600; font-size: $font-lg; }
+  &.discount { color: $price-color; }
+  &.pay-amount { color: $price-color; font-weight: 800; font-size: $font-lg; }
 }
 
 .info-row {
@@ -570,7 +577,7 @@ onLoad((options) => {
 
 .bottom-bar {
   justify-content: flex-end;
-  min-height: 128rpx;
+  min-height: 136rpx;
 }
 
 .action-btn {
@@ -586,8 +593,9 @@ onLoad((options) => {
   &.primary {
     color: #FFFFFF;
     border-color: transparent;
-    background: linear-gradient(135deg, $primary-color, $primary-light);
+    background: $gradient-coral;
     font-weight: 700;
+    box-shadow: $shadow-coral;
   }
   &.cancel { color: $text-hint; }
 }

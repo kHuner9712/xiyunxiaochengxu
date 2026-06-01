@@ -1,5 +1,9 @@
 <template>
   <view class="order-list-page page-shell">
+    <view class="order-hero">
+      <text class="hero-title">我的订单</text>
+      <text class="hero-subtitle">自营履约 · 售后无忧</text>
+    </view>
     <scroll-view scroll-x class="tab-scroll">
       <view class="tab-bar pill-tab-bar">
       <view
@@ -214,12 +218,30 @@ onReachBottom(() => {
   padding-bottom: $spacing-md;
 }
 
+.order-hero {
+  padding: 34rpx $spacing-md $spacing-sm;
+}
+
+.hero-title {
+  display: block;
+  font-size: $font-xl;
+  font-weight: 900;
+  color: $text-color;
+}
+
+.hero-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-secondary;
+}
+
 .tab-scroll {
   position: sticky;
   top: 0;
   z-index: 10;
   white-space: nowrap;
-  background: rgba($bg-color, 0.94);
+  background: rgba($bg-page, 0.94);
   padding: $spacing-sm $spacing-md;
 }
 
@@ -249,6 +271,8 @@ onReachBottom(() => {
 .order-card {
   margin: $spacing-sm $spacing-md $spacing-md;
   padding: $spacing-md;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
 }
 
 .order-header {
@@ -260,6 +284,8 @@ onReachBottom(() => {
 .order-no {
   font-size: $font-xs;
   color: $text-hint;
+  @include text-ellipsis;
+  max-width: 430rpx;
 }
 
 .order-status {
@@ -283,9 +309,9 @@ onReachBottom(() => {
 }
 
 .product-image {
-  width: 132rpx;
-  height: 132rpx;
-  border-radius: $radius-lg;
+  width: 148rpx;
+  height: 148rpx;
+  border-radius: 28rpx;
   flex-shrink: 0;
   background: $bg-gray;
 }
@@ -307,9 +333,14 @@ onReachBottom(() => {
 
 .product-sku {
   font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-  margin-top: 4rpx;
+  color: $text-secondary;
+  display: inline-flex;
+  max-width: 100%;
+  margin-top: 8rpx;
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: $bg-soft;
+  @include text-ellipsis;
 }
 
 .product-right {
@@ -342,7 +373,7 @@ onReachBottom(() => {
 }
 
 .total-price {
-  color: $primary-color;
+  color: $price-color;
   font-weight: 800;
   font-size: $font-lg;
 }
@@ -362,13 +393,14 @@ onReachBottom(() => {
   color: $text-secondary;
   border: 2rpx solid $border-color;
   @include flex-center;
-  background: $bg-white;
+  background: rgba(255, 255, 255, 0.88);
 
   &.primary {
-    color: $primary-dark;
-    border-color: rgba($primary-color, 0.36);
-    background: $primary-soft;
+    color: #FFFFFF;
+    border-color: transparent;
+    background: $gradient-coral;
     font-weight: 700;
+    box-shadow: $shadow-coral;
   }
 
   &.cancel {

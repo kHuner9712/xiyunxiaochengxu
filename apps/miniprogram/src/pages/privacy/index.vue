@@ -66,9 +66,10 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
 }
 
 .content-section {
-  background: $bg-white;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 250, 246, 0.94) 100%);
   border-radius: $radius-xxl;
-  border: 1rpx solid rgba($border-color, 0.72);
+  border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
   padding: $spacing-lg;
   padding-bottom: 60rpx;
@@ -80,6 +81,7 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
   color: $text-color;
   display: block;
   margin-bottom: $spacing-md;
+  line-height: 1.28;
 }
 
 .update-date {
@@ -87,6 +89,8 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
   color: $text-hint;
   display: block;
   margin-bottom: 4rpx;
+  padding-left: 18rpx;
+  border-left: 6rpx solid rgba($success-color, 0.32);
 }
 
 .section-subtitle {

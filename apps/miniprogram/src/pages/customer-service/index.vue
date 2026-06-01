@@ -143,7 +143,7 @@ onMounted(() => {
 }
 
 .notice-section {
-  background: $warning-soft;
+  background: rgba($warning-color, 0.1);
   border: 1rpx solid rgba($warning-color, 0.18);
   margin-bottom: $spacing-md;
 }
@@ -157,6 +157,7 @@ onMounted(() => {
 .entry-section {
   margin-bottom: $spacing-md;
   border-radius: $radius-xxl;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .entry-item {
@@ -214,6 +215,7 @@ onMounted(() => {
   @include flex-center;
   @include flex-column;
   margin-bottom: $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .section-title {
@@ -238,6 +240,7 @@ onMounted(() => {
 
 .faq-section {
   margin-bottom: $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .faq-item {
@@ -282,6 +285,7 @@ onMounted(() => {
 
 .reply-section {
   margin-bottom: $spacing-md;
+  background: $gradient-sage;
 }
 
 .reply-text {

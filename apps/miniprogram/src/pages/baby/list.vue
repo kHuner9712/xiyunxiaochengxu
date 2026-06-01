@@ -83,11 +83,12 @@ onShow(() => {
 .baby-list-page {
   min-height: 100vh;
   padding: $spacing-md;
-  padding-bottom: 148rpx;
+  padding-bottom: 168rpx;
 }
 
 .privacy-card {
-  background: linear-gradient(135deg, #FFFFFF, $primary-soft);
+  background: $gradient-sage;
+  border-color: rgba($success-color, 0.18);
 }
 
 .privacy-title {
@@ -109,6 +110,7 @@ onShow(() => {
   display: flex;
   align-items: center;
   border-radius: $radius-xxl;
+  background: $gradient-card;
 }
 
 .baby-avatar {
@@ -153,7 +155,8 @@ onShow(() => {
   @include flex-center;
 
   &.delete {
-    border-color: $danger-color;
+    border-color: rgba($danger-color, 0.36);
+    background: $danger-soft;
     .action-text { color: $danger-color; }
   }
 }
@@ -168,12 +171,13 @@ onShow(() => {
 }
 
 .add-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   min-height: 84rpx;
   padding: 0 120rpx;
   @include flex-center;
   text-align: center;
+  box-shadow: $shadow-coral;
 }
 
 .add-text {

@@ -168,7 +168,8 @@ onLoad(async (options) => {
 }
 
 .apply-guide {
-  background: linear-gradient(135deg, #FFFFFF, $info-soft);
+  background: $gradient-sage;
+  border-color: rgba($success-color, 0.18);
 }
 
 .guide-title {
@@ -247,7 +248,7 @@ onLoad(async (options) => {
   width: 100%;
   min-height: 160rpx;
   font-size: $font-md;
-  background: $bg-gray;
+  background: $bg-soft;
   border-radius: $radius-lg;
   padding: $spacing-sm;
   line-height: 1.6;
@@ -287,7 +288,7 @@ onLoad(async (options) => {
 .image-add {
   width: 160rpx;
   height: 160rpx;
-  background: $bg-gray;
+  background: $bg-soft;
   border-radius: $radius-lg;
   @include flex-center;
   border: 2rpx dashed rgba($primary-color, 0.28);
@@ -299,11 +300,11 @@ onLoad(async (options) => {
 }
 
 .submit-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   padding: 24rpx 0;
   text-align: center;
-  box-shadow: 0 10rpx 22rpx rgba(244, 124, 124, 0.2);
+  box-shadow: $shadow-coral;
 }
 
 .submit-text {

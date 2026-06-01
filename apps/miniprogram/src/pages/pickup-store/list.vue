@@ -72,16 +72,18 @@ onReachBottom(() => loadStores())
 <style lang="scss" scoped>
 .pickup-store-page {
   min-height: 100vh;
-  padding: $spacing-sm $spacing-md;
+  padding: $spacing-md;
 }
 
 .store-card {
-  margin-bottom: $spacing-sm;
+  margin-bottom: $spacing-md;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
 }
 
 .store-name {
-  font-size: $font-md;
-  font-weight: 600;
+  font-size: $font-lg;
+  font-weight: 800;
   color: $text-color;
   margin-bottom: 8rpx;
 }
@@ -100,6 +102,11 @@ onReachBottom(() => loadStores())
 
 .phone-text {
   font-size: $font-sm;
-  color: $primary-color;
+  color: $primary-dark;
+  display: inline-flex;
+  padding: 8rpx 18rpx;
+  border-radius: $radius-round;
+  background: $primary-soft;
+  margin-top: 8rpx;
 }
 </style>

@@ -83,7 +83,9 @@ onMounted(() => {
 }
 
 .header-section {
-  background: linear-gradient(135deg, $primary-color, $secondary-color);
+  background:
+    radial-gradient(circle at 88% 14%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 240rpx),
+    $gradient-coral;
   padding: 60rpx $spacing-md 40rpx;
   text-align: center;
 }
@@ -107,6 +109,7 @@ onMounted(() => {
   align-items: center;
   margin: -20rpx $spacing-md $spacing-md;
   padding: $spacing-lg;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .stat-item {
@@ -118,7 +121,7 @@ onMounted(() => {
 .stat-value {
   font-size: $font-xxl;
   font-weight: 700;
-  color: $primary-color;
+  color: $price-color;
   display: block;
 }
 
@@ -140,13 +143,14 @@ onMounted(() => {
 }
 
 .share-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   color: #FFFFFF;
   border: none;
   border-radius: $radius-round;
   padding: 24rpx 0;
   font-size: $font-lg;
   font-weight: 600;
+  box-shadow: $shadow-coral;
 
   &::after {
     border: none;
@@ -155,6 +159,7 @@ onMounted(() => {
 
 .list-section {
   margin: 0 $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .section-title {
@@ -215,7 +220,7 @@ onMounted(() => {
   color: $text-hint;
 
   .paid & {
-    color: $success-color;
+    color: $success-dark;
   }
 }
 

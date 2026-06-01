@@ -63,8 +63,8 @@ onLoad((options) => {
 }
 
 .content-header {
-  padding: $spacing-lg $spacing-md;
-  background: linear-gradient(180deg, $bg-page, transparent);
+  padding: 34rpx $spacing-md $spacing-lg;
+  background: linear-gradient(180deg, rgba($primary-glow, 0.42), rgba($primary-glow, 0));
 }
 
 .content-title {
@@ -101,6 +101,7 @@ onLoad((options) => {
 .content-body {
   margin: $spacing-sm $spacing-md;
   border-radius: $radius-xxl;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .content-rich {

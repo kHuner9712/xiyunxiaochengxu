@@ -149,7 +149,9 @@ onMounted(() => {
 }
 
 .points-header {
-  background: linear-gradient(135deg, #FFE5DF 0%, #FFF4E4 62%, #F2FBF7 100%);
+  background:
+    radial-gradient(circle at 86% 18%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 240rpx),
+    $gradient-peach;
   padding: $spacing-xl $spacing-md;
   border-radius: 0 0 $radius-xxl $radius-xxl;
 }
@@ -167,7 +169,7 @@ onMounted(() => {
 
 .balance-value {
   font-size: 72rpx;
-  color: $primary-dark;
+  color: $price-color;
   font-weight: 800;
 }
 
@@ -198,6 +200,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin: $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .checkin-info {
@@ -219,9 +222,10 @@ onMounted(() => {
 }
 
 .checkin-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   padding: 16rpx 40rpx;
+  box-shadow: $shadow-coral;
 
   &.checked {
     background: $bg-gray;
@@ -255,6 +259,7 @@ onMounted(() => {
   justify-content: space-between;
   margin-bottom: $spacing-sm;
   border-radius: $radius-xl;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .detail-info {
@@ -278,12 +283,13 @@ onMounted(() => {
   font-size: $font-md;
   font-weight: 600;
 
-  &.earn { color: $success-color; }
+  &.earn { color: $success-dark; }
   &.spend { color: $text-secondary; }
 }
 
 .rules-section {
   margin: $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .rule-item {
@@ -301,7 +307,7 @@ onMounted(() => {
 
 .rule-value {
   font-size: $font-sm;
-  color: $primary-color;
+  color: $price-color;
   font-weight: 500;
 }
 </style>

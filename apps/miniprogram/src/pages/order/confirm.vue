@@ -1,6 +1,15 @@
 <template>
   <view class="confirm-page page-shell">
+    <view class="confirm-head">
+      <text class="confirm-title">确认订单</text>
+      <text class="confirm-subtitle">自营母婴好物 · 安心履约</text>
+    </view>
+
     <view class="delivery-mode-section card">
+      <view class="card-title-row">
+        <text class="card-title">配送方式</text>
+        <text class="card-subtitle">请选择本次履约方式</text>
+      </view>
       <view class="mode-tabs">
         <view class="mode-tab" :class="{ active: fulfillmentType === 'delivery' }" @tap="switchFulfillmentType('delivery')">
           <text class="mode-tab-text">快递配送</text>
@@ -74,7 +83,7 @@
         <text class="section-label">积分抵扣</text>
         <text class="points-info">可用{{ availablePoints }}积分，抵扣¥{{ formatPrice(pointsDeduct) }}</text>
       </view>
-      <switch :checked="usePoints" @change="togglePoints" color="#F47C7C" />
+      <switch :checked="usePoints" @change="togglePoints" color="#F27678" />
     </view>
 
     <view class="price-section card">
@@ -111,7 +120,7 @@
     <view class="legal-section card">
       <checkbox-group class="legal-check-group" @change="toggleLegalAgreement">
         <label class="legal-check-label">
-          <checkbox class="legal-checkbox" value="agree" :checked="agreedToLegal" color="#F47C7C" />
+          <checkbox class="legal-checkbox" value="agree" :checked="agreedToLegal" color="#F27678" />
           <view class="legal-copy">
             <text class="legal-text">我已阅读并同意</text>
             <text class="legal-link" @tap.stop="openLegalPage('/pages/agreement/index')">《用户协议》</text>
@@ -476,18 +485,41 @@ onLoad(async (options) => {
 <style lang="scss" scoped>
 .confirm-page {
   min-height: 100vh;
-  padding-bottom: 148rpx;
+  padding-bottom: 168rpx;
+}
+
+.confirm-head {
+  padding: 34rpx $spacing-md 18rpx;
+}
+
+.confirm-title {
+  display: block;
+  font-size: $font-xl;
+  line-height: 1.16;
+  color: $text-color;
+  font-weight: 900;
+}
+
+.confirm-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-secondary;
 }
 
 .address-section {
   display: flex;
   align-items: flex-start;
   margin: $spacing-sm $spacing-md;
-  background: linear-gradient(135deg, #FFFFFF 0%, $primary-soft 120%);
+  background:
+    radial-gradient(circle at 88% 0%, rgba($primary-color, 0.12) 0%, rgba($primary-color, 0) 220rpx),
+    $gradient-card;
+  border-color: rgba(255, 255, 255, 0.78);
 }
 
 .delivery-mode-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .mode-tabs {
@@ -498,14 +530,17 @@ onLoad(async (options) => {
 .mode-tab {
   flex: 1;
   @include flex-center;
-  padding: 20rpx 0;
+  min-height: 76rpx;
+  padding: 0 12rpx;
   border: 2rpx solid rgba($border-color, 0.9);
   border-radius: $radius-round;
   transition: all 0.3s;
+  background: rgba(255, 255, 255, 0.78);
 
   &.active {
     border-color: rgba($primary-color, 0.28);
-    background: $primary-soft;
+    background: #FFFFFF;
+    box-shadow: $shadow-xs;
   }
 }
 
@@ -523,7 +558,10 @@ onLoad(async (options) => {
   display: flex;
   align-items: flex-start;
   margin: $spacing-sm $spacing-md;
-  background: linear-gradient(135deg, #FFFFFF 0%, $secondary-soft 120%);
+  background:
+    radial-gradient(circle at 88% 0%, rgba($secondary-color, 0.16) 0%, rgba($secondary-color, 0) 220rpx),
+    $gradient-card;
+  border-color: rgba(255, 255, 255, 0.78);
 }
 
 .address-badge {
@@ -596,6 +634,7 @@ onLoad(async (options) => {
 .address-detail {
   font-size: $font-sm;
   color: $text-secondary;
+  line-height: 1.55;
 }
 
 .no-address-text {
@@ -611,6 +650,7 @@ onLoad(async (options) => {
 
 .products-section {
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .card-title-row {
@@ -631,7 +671,7 @@ onLoad(async (options) => {
 
 .product-item {
   display: flex;
-  padding: 18rpx 0;
+  padding: $spacing-md 0;
   border-bottom: 1rpx solid $divider-color;
 
   &:last-child {
@@ -640,9 +680,9 @@ onLoad(async (options) => {
 }
 
 .product-image {
-  width: 144rpx;
-  height: 144rpx;
-  border-radius: $radius-lg;
+  width: 156rpx;
+  height: 156rpx;
+  border-radius: 28rpx;
   flex-shrink: 0;
   background: $bg-gray;
 }
@@ -662,9 +702,14 @@ onLoad(async (options) => {
 
 .product-sku {
   font-size: $font-xs;
-  color: $text-hint;
-  margin-top: 4rpx;
-  display: block;
+  color: $text-secondary;
+  margin-top: 8rpx;
+  display: inline-flex;
+  max-width: 100%;
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: $bg-soft;
+  @include text-ellipsis;
 }
 
 .product-bottom {
@@ -684,12 +729,14 @@ onLoad(async (options) => {
   display: flex;
   align-items: center;
   margin: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .section-label {
   font-size: $font-md;
   color: $text-color;
   margin-right: $spacing-sm;
+  font-weight: 800;
 }
 
 .section-value {
@@ -699,7 +746,8 @@ onLoad(async (options) => {
   text-align: right;
 
   &.coupon-selected {
-    color: $danger-color;
+    color: $price-color;
+    font-weight: 700;
   }
 }
 
@@ -725,6 +773,7 @@ onLoad(async (options) => {
   flex: 1;
   font-size: $font-sm;
   text-align: right;
+  color: $text-color;
 }
 
 .legal-section {
@@ -765,6 +814,9 @@ onLoad(async (options) => {
 
 .price-section {
   margin: $spacing-sm $spacing-md;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 246, 241, 0.92) 100%);
+  border-color: rgba(255, 255, 255, 0.78);
 }
 
 .price-row {
@@ -775,6 +827,11 @@ onLoad(async (options) => {
     margin-top: $spacing-xs;
     padding-top: $spacing-sm;
     border-top: 1rpx solid $divider-color;
+
+    .price-label {
+      color: $text-color;
+      font-weight: 800;
+    }
   }
 }
 
@@ -788,13 +845,13 @@ onLoad(async (options) => {
   color: $text-color;
 
   &.discount {
-    color: $danger-color;
+    color: $price-color;
   }
 }
 
 .bottom-bar {
   justify-content: space-between;
-  min-height: 128rpx;
+  min-height: 136rpx;
 }
 
 .total-row {
@@ -809,12 +866,12 @@ onLoad(async (options) => {
 }
 
 .submit-btn {
-  background: linear-gradient(135deg, $primary-color, $primary-light);
+  background: $gradient-coral;
   border-radius: $radius-round;
   min-height: 82rpx;
   padding: 0 56rpx;
   @include flex-center;
-  box-shadow: 0 10rpx 22rpx rgba(244, 124, 124, 0.2);
+  box-shadow: $shadow-coral;
 
   &.disabled {
     opacity: 0.6;
@@ -825,7 +882,7 @@ onLoad(async (options) => {
 .submit-text {
   color: #FFFFFF;
   font-size: $font-md;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .coupon-mask {
@@ -834,7 +891,7 @@ onLoad(async (options) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(58, 48, 44, 0.42);
   z-index: 999;
   display: flex;
   align-items: flex-end;
@@ -843,8 +900,8 @@ onLoad(async (options) => {
 .coupon-popup {
   width: 100%;
   max-height: 70vh;
-  background: $bg-white;
-  border-radius: $radius-xl $radius-xl 0 0;
+  background: $bg-page;
+  border-radius: $radius-xxl $radius-xxl 0 0;
   display: flex;
   flex-direction: column;
 }
@@ -880,12 +937,13 @@ onLoad(async (options) => {
   align-items: center;
   padding: $spacing-md;
   margin-bottom: $spacing-sm;
-  border-radius: $radius-md;
-  border: 2rpx solid $border-color;
+  border-radius: $radius-xl;
+  border: 2rpx solid rgba($border-color, 0.9);
+  background: rgba(255, 255, 255, 0.82);
 
   &.active {
     border-color: $primary-color;
-    background: rgba($primary-color, 0.03);
+    background: rgba($primary-color, 0.07);
   }
 }
 
@@ -900,7 +958,7 @@ onLoad(async (options) => {
 .coupon-item-value {
   font-size: $font-xl;
   font-weight: 700;
-  color: $danger-color;
+  color: $price-color;
 }
 
 .coupon-item-condition {
