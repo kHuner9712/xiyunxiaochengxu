@@ -7,12 +7,20 @@
           <text class="list-subtitle">自营母婴精品 · 安心选购</text>
         </view>
         <view class="filter-entry">
-          <text class="filter-entry-icon">筛</text>
+          <text class="filter-entry-icon">筛选</text>
         </view>
       </view>
       <view class="search-box" @tap="goSearch">
         <text class="search-icon">⌕</text>
-        <text class="search-placeholder">{{ keyword || '搜索母婴好物' }}</text>
+        <text class="search-placeholder">{{ keyword || '搜索奶粉/纸尿裤/洗护用品' }}</text>
+      </view>
+      <view class="list-assurance">
+        <text class="assurance-dot"></text>
+        <text class="assurance-text">自营正品</text>
+        <text class="assurance-dot peach"></text>
+        <text class="assurance-text">严选品质</text>
+        <text class="assurance-dot sage"></text>
+        <text class="assurance-text">安心售后</text>
       </view>
       <view class="filter-bar pill-tab-bar">
         <view
@@ -47,9 +55,8 @@ import Empty from '@/components/Empty.vue'
 const filters = [
   { label: '综合', value: 'default' },
   { label: '销量', value: 'sales' },
-  { label: '价格↑', value: 'price_asc' },
-  { label: '价格↓', value: 'price_desc' },
-  { label: '新品', value: 'new' }
+  { label: '新品', value: 'new' },
+  { label: '价格', value: 'price_asc' }
 ]
 
 const currentSort = ref('default')
@@ -120,8 +127,12 @@ onReachBottom(() => {
 }
 
 .list-top {
-  padding: 24rpx $spacing-md $spacing-md;
+  padding: 28rpx $spacing-md 18rpx;
   border-radius: 0 0 $radius-xxl $radius-xxl;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.96) 0%, rgba(255, 248, 242, 0.9) 100%);
+  border-bottom: 1rpx solid rgba($border-color, 0.72);
+  box-shadow: 0 12rpx 34rpx rgba(131, 91, 78, 0.07);
 }
 
 .list-title-row {
@@ -132,7 +143,7 @@ onReachBottom(() => {
 
 .list-title {
   display: block;
-  font-size: $font-xl;
+  font-size: 42rpx;
   line-height: 1.16;
   color: $text-color;
   font-weight: 900;
@@ -147,11 +158,12 @@ onReachBottom(() => {
 
 .filter-entry {
   @include flex-center;
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 24rpx;
-  background: $success-soft;
-  border: 1rpx solid rgba($success-color, 0.18);
+  min-width: 88rpx;
+  height: 58rpx;
+  padding: 0 18rpx;
+  border-radius: $radius-round;
+  background: rgba($success-color, 0.12);
+  border: 1rpx solid rgba($success-color, 0.2);
 }
 
 .filter-entry-icon {
@@ -163,12 +175,13 @@ onReachBottom(() => {
 .search-box {
   display: flex;
   align-items: center;
-  min-height: 76rpx;
-  padding: 0 26rpx;
-  margin-bottom: $spacing-sm;
+  min-height: 82rpx;
+  padding: 0 28rpx;
+  margin-bottom: 14rpx;
   border-radius: $radius-round;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1rpx solid rgba($border-color, 0.8);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1rpx solid rgba(255, 255, 255, 0.9);
+  box-shadow: $shadow-xs;
 }
 
 .search-icon {
@@ -184,8 +197,40 @@ onReachBottom(() => {
   @include text-ellipsis;
 }
 
+.list-assurance {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-bottom: 14rpx;
+  padding: 0 4rpx;
+}
+
+.assurance-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: $primary-color;
+
+  &.peach {
+    background: $secondary-color;
+  }
+
+  &.sage {
+    background: $success-color;
+  }
+}
+
+.assurance-text {
+  margin-right: 10rpx;
+  font-size: $font-xs;
+  color: $text-secondary;
+}
+
 .filter-bar {
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba($border-color, 0.58);
 }
 
 .filter-item {
@@ -193,8 +238,11 @@ onReachBottom(() => {
   min-width: 0;
 
   &.active {
+    background: $primary-soft;
+    box-shadow: none;
+
     .filter-text {
-      color: $primary-dark;
+      color: $text-color;
       font-weight: 700;
     }
   }
@@ -209,7 +257,7 @@ onReachBottom(() => {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 22rpx;
-  padding: $spacing-md $spacing-md $spacing-xl;
+  gap: 24rpx;
+  padding: 26rpx $spacing-md $spacing-xl;
 }
 </style>

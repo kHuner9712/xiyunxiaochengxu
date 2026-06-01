@@ -1,14 +1,24 @@
 <template>
   <view class="product-detail-page page-shell">
     <view class="hero-stage">
-      <swiper class="image-swiper" indicator-dots circular :interval="4000">
+      <swiper class="image-swiper" indicator-dots circular :interval="4000" @change="onImageChange">
         <swiper-item v-for="(img, index) in product.images" :key="index">
           <image class="product-image" :src="img" mode="aspectFill" @tap="previewImage(index)" />
         </swiper-item>
       </swiper>
+      <view v-if="product.images.length" class="image-counter">
+        <text class="counter-text">{{ currentImageIndex + 1 }}/{{ product.images.length }}</text>
+      </view>
     </view>
 
     <view class="price-section surface-card">
+      <view class="price-card-head">
+        <view class="self-badge">
+          <text class="badge-dot"></text>
+          <text class="badge-text">禧孕自营精选</text>
+        </view>
+        <text class="stock-chip">库存 {{ product.stock }}</text>
+      </view>
       <view class="price-row">
         <PriceDisplay :price="product.price" size="large" />
         <text v-if="product.originalPrice > product.price" class="original-price">
@@ -17,7 +27,13 @@
       </view>
       <text class="product-name">{{ product.name }}</text>
       <text v-if="product.subtitle" class="product-subtitle">{{ product.subtitle }}</text>
-      <text class="sales-text">已售{{ product.sales }}件</text>
+      <view class="product-meta-row">
+        <text class="sales-text">已售 {{ product.sales }} 件</text>
+        <text class="meta-separator"></text>
+        <text class="meta-text">正品保障</text>
+        <text class="meta-separator"></text>
+        <text class="meta-text">安心售后</text>
+      </view>
       <text v-if="product.status !== undefined && product.status !== 1" class="sale-warning">该商品已下架，暂不可购买</text>
       <text v-else-if="product.stock <= 0" class="sale-warning">该商品库存不足，暂不可购买</text>
       <view v-if="product.tags?.length" class="tag-row">
@@ -45,20 +61,33 @@
     </view>
 
     <view class="sku-section card" @tap="openSkuPopup('select')">
-      <text class="section-label">规格</text>
-      <text class="section-value">{{ currentSku?.specText || '请选择规格' }}</text>
+      <view class="sku-copy">
+        <text class="section-label">规格</text>
+        <text class="section-hint">选择规格与购买数量</text>
+      </view>
+      <view class="section-value-pill">
+        <text class="section-value">{{ currentSku?.specText || '请选择规格' }}</text>
+      </view>
       <text class="section-arrow">›</text>
     </view>
 
     <view class="detail-section card">
-      <text class="detail-title">商品详情</text>
+      <view class="block-title-row">
+        <view>
+          <text class="detail-title">商品详情</text>
+          <text class="detail-subtitle">细节信息以页面展示为准</text>
+        </view>
+      </view>
       <rich-text class="detail-content" :nodes="product.description" />
     </view>
 
     <view v-if="product.compliance && (product.compliance.isFood || product.compliance.isHealthSupplement || product.compliance.isInfantFormula)" class="compliance-section card">
       <view class="compliance-title-row">
-        <text class="detail-title">商品合规信息</text>
-        <text class="compliance-note">以下信息来自商品资料</text>
+        <view>
+          <text class="detail-title">商品合规信息</text>
+          <text class="detail-subtitle">食品/保健/奶粉类商品资料公示</text>
+        </view>
+        <text class="compliance-note">可信资料</text>
       </view>
       <view v-if="product.compliance.isHealthSupplement" class="health-warning">
         <text class="warning-text">保健食品不是药物，不能代替药物治疗疾病</text>
@@ -116,7 +145,12 @@
     </view>
 
     <view class="recommend-section" v-if="recommendProducts.length">
-      <text class="section-title">为你推荐</text>
+      <view class="recommend-title-row">
+        <view>
+          <text class="section-title">为你推荐</text>
+          <text class="recommend-subtitle">同类家庭也在关注</text>
+        </view>
+      </view>
       <view class="product-grid">
         <ProductCard v-for="item in recommendProducts" :key="item.id" :product="item" />
       </view>
@@ -145,12 +179,20 @@
 
     <BottomSheet v-model:show="showSkuPopup">
       <view class="sku-popup">
+        <view class="popup-handle"></view>
+        <view class="popup-title-row">
+          <text class="popup-title">选择规格</text>
+          <text class="popup-subtitle">确认后继续{{ skuAction === 'buy' ? '购买' : skuAction === 'cart' ? '加入购物车' : '查看规格' }}</text>
+        </view>
         <view class="sku-header">
           <image class="sku-image" :src="currentSku?.image || primaryImage" mode="aspectFill" />
-          <view class="sku-price">
-            <PriceDisplay :price="currentSku?.price || product.price" />
+          <view class="sku-summary">
+            <view class="sku-price">
+              <PriceDisplay :price="currentSku?.price || product.price" />
+            </view>
+            <text class="sku-selected">{{ currentSku?.specText || '请选择规格' }}</text>
+            <text class="sku-stock">库存：{{ currentSku?.stock || product.stock }}</text>
           </view>
-          <text class="sku-stock">库存：{{ currentSku?.stock || product.stock }}</text>
         </view>
         <SkuSelector :specs="product.specs" :skus="product.skus" @change="onSkuChange" />
         <view class="sku-confirm-btn" @tap="confirmSku">
@@ -186,6 +228,7 @@ const currentSku = ref<SkuItem | null>(null)
 const selectedSkuId = ref(0)
 const selectedQuantity = ref(1)
 const skuAction = ref<SkuAction>('select')
+const currentImageIndex = ref(0)
 
 const cartStore = useCartStore()
 const userStore = useUserStore()
@@ -225,6 +268,10 @@ async function loadRecommend(id: number) {
 
 function previewImage(index: number) {
   uni.previewImage({ urls: product.value.images, current: index })
+}
+
+function onImageChange(e: any) {
+  currentImageIndex.value = e.detail.current || 0
 }
 
 function previewCertImage(index: number) {
@@ -333,19 +380,24 @@ onLoad((options) => {
 
 <style lang="scss" scoped>
 .product-detail-page {
-  padding-bottom: 168rpx;
+  padding-bottom: 180rpx;
 }
 
 .hero-stage {
+  position: relative;
   background:
     radial-gradient(circle at 80% 10%, rgba($success-color, 0.16) 0%, rgba($success-color, 0) 260rpx),
+    radial-gradient(circle at 14% 18%, rgba($primary-color, 0.12) 0%, rgba($primary-color, 0) 260rpx),
     linear-gradient(180deg, $bg-ivory 0%, $bg-soft 100%);
-  padding-bottom: 44rpx;
+  padding: 18rpx $spacing-md 60rpx;
 }
 
 .image-swiper {
-  height: 770rpx;
-  background: $bg-gray;
+  height: 724rpx;
+  overflow: hidden;
+  border-radius: 0 0 $radius-xxl $radius-xxl;
+  background: linear-gradient(180deg, #FFFFFF 0%, $bg-soft 100%);
+  box-shadow: $shadow-sm;
 }
 
 .product-image {
@@ -353,14 +405,70 @@ onLoad((options) => {
   height: 100%;
 }
 
+.image-counter {
+  position: absolute;
+  right: 38rpx;
+  bottom: 84rpx;
+  min-width: 72rpx;
+  height: 40rpx;
+  padding: 0 14rpx;
+  border-radius: $radius-round;
+  background: rgba(58, 48, 44, 0.44);
+  @include flex-center;
+}
+
+.counter-text {
+  font-size: $font-xs;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
 .price-section {
-  margin: -76rpx $spacing-md $spacing-sm;
+  margin: -88rpx $spacing-md $spacing-sm;
   position: relative;
   z-index: 2;
   border-radius: $radius-xxl;
   padding: 34rpx $spacing-lg $spacing-lg;
   border-color: rgba(255, 255, 255, 0.82);
-  box-shadow: $shadow-md;
+  box-shadow: $shadow-lg;
+}
+
+.price-card-head {
+  @include flex-between;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+}
+
+.self-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42rpx;
+  padding: 0 16rpx;
+  border-radius: $radius-round;
+  background: rgba($success-color, 0.12);
+  border: 1rpx solid rgba($success-color, 0.16);
+}
+
+.badge-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  margin-right: 8rpx;
+  background: $success-color;
+}
+
+.badge-text {
+  font-size: $font-xs;
+  color: $success-dark;
+  font-weight: 800;
+}
+
+.stock-chip {
+  font-size: $font-xs;
+  color: $text-hint;
+  padding: 8rpx 16rpx;
+  border-radius: $radius-round;
+  background: $bg-soft;
 }
 
 .price-row {
@@ -378,9 +486,27 @@ onLoad((options) => {
 
 .sales-text {
   font-size: $font-xs;
+  color: $text-secondary;
+}
+
+.product-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: $spacing-sm;
+}
+
+.meta-text {
+  font-size: $font-xs;
   color: $text-hint;
-  margin-top: 8rpx;
-  display: block;
+}
+
+.meta-separator {
+  width: 6rpx;
+  height: 6rpx;
+  border-radius: 50%;
+  background: rgba($text-hint, 0.42);
 }
 
 .info-section {
@@ -427,14 +553,15 @@ onLoad((options) => {
   grid-template-columns: repeat(4, 1fr);
   gap: $spacing-xs;
   margin: $spacing-sm $spacing-md;
-  padding: $spacing-sm;
-  background: rgba(255, 255, 255, 0.74);
+  padding: 14rpx;
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(255, 255, 255, 0.8);
 }
 
 .service-item {
   @include flex-center;
   @include flex-column;
-  min-height: 116rpx;
+  min-height: 120rpx;
   border-radius: 26rpx;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba($bg-soft, 0.88) 100%);
   border: 1rpx solid rgba($border-color, 0.68);
@@ -477,39 +604,75 @@ onLoad((options) => {
   display: flex;
   align-items: center;
   margin: $spacing-sm $spacing-md;
-  min-height: 104rpx;
-  background: rgba(255, 255, 255, 0.84);
+  min-height: 116rpx;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.78);
+}
+
+.sku-copy {
+  flex-shrink: 0;
+  margin-right: $spacing-sm;
 }
 
 .section-label {
+  display: block;
   font-size: $font-md;
   color: $text-color;
-  margin-right: $spacing-sm;
   font-weight: 800;
 }
 
-.section-value {
-  flex: 1;
-  font-size: $font-sm;
+.section-hint {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-xs;
   color: $text-hint;
+}
+
+.section-value-pill {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.section-value {
+  max-width: 360rpx;
+  padding: 10rpx 18rpx;
+  border-radius: $radius-round;
+  background: $bg-soft;
+  font-size: $font-sm;
+  color: $text-secondary;
   @include text-ellipsis;
 }
 
 .section-arrow {
-  font-size: $font-lg;
-  color: $text-hint;
+  margin-left: 10rpx;
+  font-size: $font-xl;
+  color: $primary-dark;
 }
 
 .detail-section {
   margin: $spacing-sm $spacing-md;
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.block-title-row {
+  @include flex-between;
+  align-items: flex-start;
+  margin-bottom: $spacing-md;
 }
 
 .detail-title {
   font-size: $font-lg;
   font-weight: 800;
   display: block;
-  margin-bottom: $spacing-md;
+  margin-bottom: 6rpx;
+}
+
+.detail-subtitle {
+  display: block;
+  font-size: $font-xs;
+  color: $text-hint;
 }
 
 .detail-content {
@@ -518,8 +681,19 @@ onLoad((options) => {
 }
 
 .recommend-section {
-  margin-top: $spacing-md;
+  margin-top: $spacing-lg;
   padding: 0 $spacing-md;
+}
+
+.recommend-title-row {
+  margin-bottom: $spacing-md;
+}
+
+.recommend-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-xs;
+  color: $text-hint;
 }
 
 .product-grid {
@@ -532,17 +706,18 @@ onLoad((options) => {
   @include bottom-action-bar;
   display: flex;
   align-items: center;
-  min-height: 132rpx;
+  min-height: 138rpx;
+  background: rgba(255, 252, 247, 0.98);
 }
 
 .bar-icon {
   @include flex-center;
   @include flex-column;
-  width: 76rpx;
-  height: 78rpx;
+  width: 78rpx;
+  height: 82rpx;
   border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1rpx solid rgba($border-color, 0.76);
+  background: #FFFFFF;
+  border: 1rpx solid rgba($border-color, 0.8);
   padding: 0;
   box-shadow: $shadow-xs;
 }
@@ -563,7 +738,8 @@ onLoad((options) => {
   min-width: 0;
   background: linear-gradient(135deg, $secondary-soft 0%, #FFDCC4 100%);
   border-radius: $radius-round;
-  padding: 22rpx 0;
+  min-height: 84rpx;
+  padding: 0;
   text-align: center;
   margin-left: $spacing-sm;
   border: 1rpx solid rgba($secondary-color, 0.2);
@@ -579,7 +755,8 @@ onLoad((options) => {
   min-width: 0;
   background: $gradient-coral;
   border-radius: $radius-round;
-  padding: 22rpx 0;
+  min-height: 84rpx;
+  padding: 0;
   text-align: center;
   margin-left: $spacing-sm;
   box-shadow: $shadow-coral;
@@ -600,38 +777,84 @@ onLoad((options) => {
 }
 
 .sku-popup {
-  background: $bg-page;
+  background:
+    linear-gradient(180deg, #FFFFFF 0%, $bg-page 100%);
   border-radius: $radius-xxl $radius-xxl 0 0;
-  padding: $spacing-lg;
+  padding: $spacing-sm $spacing-lg $spacing-lg;
   max-height: 80vh;
+}
+
+.popup-handle {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: $radius-round;
+  background: rgba($border-color, 0.92);
+  margin: 4rpx auto $spacing-md;
+}
+
+.popup-title-row {
+  margin-bottom: $spacing-md;
+}
+
+.popup-title {
+  display: block;
+  font-size: $font-lg;
+  color: $text-color;
+  font-weight: 900;
+}
+
+.popup-subtitle {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-xs;
+  color: $text-hint;
 }
 
 .sku-header {
   display: flex;
   align-items: center;
   margin-bottom: $spacing-md;
-  padding-bottom: $spacing-md;
-  border-bottom: 1rpx solid $divider-color;
-  background: rgba(255, 255, 255, 0.76);
-  border-radius: $radius-xl;
+  background: $gradient-peach;
+  border-radius: $radius-xxl;
   padding: $spacing-md;
+  border: 1rpx solid rgba(255, 255, 255, 0.8);
 }
 
 .sku-image {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: $radius-lg;
+  width: 168rpx;
+  height: 168rpx;
+  border-radius: 30rpx;
   margin-right: $spacing-md;
   background: $bg-gray;
+  box-shadow: $shadow-xs;
+}
+
+.sku-summary {
+  flex: 1;
+  min-width: 0;
 }
 
 .sku-price {
-  flex: 1;
+  margin-bottom: 10rpx;
+}
+
+.sku-selected {
+  display: block;
+  max-width: 100%;
+  font-size: $font-sm;
+  color: $text-secondary;
+  line-height: 1.4;
+  @include text-ellipsis;
 }
 
 .sku-stock {
+  display: inline-flex;
+  margin-top: 10rpx;
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.76);
   font-size: $font-sm;
-  color: $text-hint;
+  color: $success-dark;
 }
 
 .sku-confirm-btn {
@@ -646,12 +869,12 @@ onLoad((options) => {
 .confirm-text {
   color: #FFFFFF;
   font-size: $font-lg;
-  font-weight: 500;
+  font-weight: 800;
 }
 
 .compliance-section {
   margin: $spacing-sm $spacing-md;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .compliance-title-row {
@@ -666,8 +889,11 @@ onLoad((options) => {
 
 .compliance-note {
   font-size: $font-xs;
-  color: $text-hint;
+  color: $success-dark;
   margin-left: $spacing-sm;
+  padding: 8rpx 14rpx;
+  border-radius: $radius-round;
+  background: rgba($success-color, 0.12);
 }
 
 .health-warning {
@@ -686,7 +912,7 @@ onLoad((options) => {
 
 .compliance-row {
   display: flex;
-  padding: 14rpx 0;
+  padding: 18rpx 0;
   border-bottom: 1rpx solid $divider-color;
 }
 

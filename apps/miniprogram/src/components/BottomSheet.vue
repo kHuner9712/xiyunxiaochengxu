@@ -66,7 +66,7 @@ function handleClose() {
   right: 0;
   top: 0;
   bottom: 0;
-  background: rgba(47, 40, 37, 0.42);
+  background: rgba(58, 48, 44, 0.46);
   opacity: 0;
   transition: opacity 0.2s ease;
 }
@@ -78,6 +78,11 @@ function handleClose() {
   bottom: 0;
   transform: translateY(100%);
   transition: transform 0.22s ease;
+  overflow: hidden;
+  border-radius: $radius-xxl $radius-xxl 0 0;
+  background: linear-gradient(180deg, #FFFFFF 0%, $bg-page 100%);
+  box-shadow: 0 -20rpx 56rpx rgba(131, 91, 78, 0.14);
+  border-top: 1rpx solid rgba(255, 255, 255, 0.88);
   padding-bottom: constant(safe-area-inset-bottom);
   padding-bottom: env(safe-area-inset-bottom);
 }

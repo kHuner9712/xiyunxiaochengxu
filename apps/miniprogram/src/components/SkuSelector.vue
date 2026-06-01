@@ -139,17 +139,17 @@ watch(() => [props.specs, props.skus], () => {
 
 <style lang="scss" scoped>
 .sku-selector {
-  padding: $spacing-sm 0;
+  padding: 6rpx 0 $spacing-sm;
 }
 
 .spec-group {
-  margin-bottom: $spacing-lg;
+  margin-bottom: 34rpx;
 }
 
 .spec-name {
   font-size: $font-md;
   color: $text-color;
-  font-weight: 700;
+  font-weight: 900;
   margin-bottom: $spacing-sm;
   display: block;
 }
@@ -157,49 +157,57 @@ watch(() => [props.specs, props.skus], () => {
 .spec-values {
   display: flex;
   flex-wrap: wrap;
-  gap: $spacing-sm;
+  gap: 14rpx;
 }
 
 .spec-value {
-  min-height: 64rpx;
-  padding: 0 30rpx;
+  min-height: 68rpx;
+  max-width: 100%;
+  padding: 0 28rpx;
   font-size: $font-sm;
   color: $text-secondary;
-  background: $bg-soft;
+  background: rgba(255, 255, 255, 0.86);
   border-radius: $radius-round;
-  border: 2rpx solid rgba($border-color, 0.86);
+  border: 2rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-xs;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 1.35;
+  text-align: center;
 
   &.active {
     color: $primary-dark;
-    background: $primary-soft;
-    border-color: rgba($primary-color, 0.34);
-    font-weight: 700;
+    background: linear-gradient(180deg, $primary-soft 0%, #FFFFFF 100%);
+    border-color: rgba($primary-color, 0.44);
+    font-weight: 800;
+    box-shadow: 0 8rpx 18rpx rgba(242, 118, 120, 0.1);
   }
 
   &.disabled {
     color: $text-disabled;
-    background: rgba($bg-gray, 0.62);
-    border-color: rgba($border-color, 0.5);
+    background: rgba($bg-gray, 0.54);
+    border-color: rgba($border-color, 0.45);
+    box-shadow: none;
     text-decoration: line-through;
   }
 }
 
 .sku-quantity {
   @include flex-between;
-  min-height: 88rpx;
+  min-height: 96rpx;
   margin-top: $spacing-sm;
-  padding-top: $spacing-md;
+  padding: $spacing-md $spacing-md 0;
   border-top: 1rpx solid $divider-color;
+  background: rgba(255, 255, 255, 0.58);
+  border-radius: $radius-xl;
 }
 
 .quantity-control {
   display: flex;
   align-items: center;
-  min-height: 64rpx;
-  background: $bg-soft;
+  min-height: 68rpx;
+  background: rgba($bg-soft, 0.92);
   border-radius: $radius-round;
   padding: 6rpx;
   border: 1rpx solid rgba($border-color, 0.7);
@@ -207,13 +215,14 @@ watch(() => [props.specs, props.skus], () => {
 
 .quantity-btn {
   @include flex-center;
-  width: 56rpx;
-  height: 56rpx;
+  width: 58rpx;
+  height: 58rpx;
   background: $bg-white;
   border-radius: $radius-round;
   font-size: $font-lg;
   color: $primary-dark;
   font-weight: 700;
+  box-shadow: $shadow-xs;
 }
 
 .quantity-value {
