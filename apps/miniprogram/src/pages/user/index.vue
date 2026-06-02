@@ -1,17 +1,21 @@
 <template>
   <view class="user-page page-shell">
     <view class="user-header">
+      <view class="header-brand-row">
+        <text class="brand-pill">禧孕优选自营</text>
+        <text class="brand-copy">安心育儿好物</text>
+      </view>
       <view class="user-info" @tap="goProfile">
         <image class="user-avatar" :src="userStore.avatar || '/static/default-avatar.png'" mode="aspectFill" />
         <view class="user-detail">
-          <text class="user-name">{{ userStore.nickname }}</text>
+          <text class="user-name">{{ userStore.isLoggedIn ? userStore.nickname : '欢迎来到禧孕优选' }}</text>
           <view class="member-badge" @tap.stop="goMember">
-            <text class="member-text">{{ userStore.memberLevelName }}</text>
+            <text class="member-text">{{ userStore.isLoggedIn ? userStore.memberLevelName : '登录后查看会员权益' }}</text>
           </view>
         </view>
       </view>
       <view v-if="!userStore.isLoggedIn" class="login-btn" @tap="handleLogin">
-        <text class="login-text">点击登录</text>
+        <text class="login-text">微信一键登录</text>
       </view>
       <view v-if="!userStore.isLoggedIn" class="login-agreement">
         <text class="agreement-prefix">登录即视为同意</text>
@@ -19,11 +23,19 @@
         <text class="agreement-prefix">与</text>
         <text class="agreement-link" @tap.stop="openPolicy('/pages/privacy/index')">《隐私政策》</text>
       </view>
+      <view class="header-trust">
+        <text>自营正品</text>
+        <text>会员福利</text>
+        <text>贴心售后</text>
+      </view>
     </view>
 
     <view class="order-section card">
       <view class="section-header">
-        <text class="section-title">我的订单</text>
+        <view>
+          <text class="section-title">我的订单</text>
+          <text class="section-subtitle">查看履约进度与售后服务</text>
+        </view>
         <text class="section-more" @tap="goOrderList()">全部订单 ›</text>
       </view>
       <view class="order-shortcuts">
@@ -57,43 +69,73 @@
 
     <view class="menu-section card">
       <view class="menu-item" @tap="navigateTo('/pages/coupon/my')">
-        <text class="menu-text">我的优惠券</text>
+        <view class="menu-left">
+          <text class="menu-icon">券</text>
+          <text class="menu-text">我的优惠券</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/points/index')">
-        <text class="menu-text">积分中心</text>
+        <view class="menu-left">
+          <text class="menu-icon sage">分</text>
+          <text class="menu-text">积分中心</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/member/index')">
-        <text class="menu-text">会员中心</text>
+        <view class="menu-left">
+          <text class="menu-icon peach">会</text>
+          <text class="menu-text">会员中心</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/baby/list')">
-        <text class="menu-text">宝宝档案</text>
+        <view class="menu-left">
+          <text class="menu-icon mint">宝</text>
+          <text class="menu-text">宝宝档案</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/address/list')">
-        <text class="menu-text">地址管理</text>
+        <view class="menu-left">
+          <text class="menu-icon sage">址</text>
+          <text class="menu-text">地址管理</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/share/invite')">
-        <text class="menu-text">邀请好友</text>
+        <view class="menu-left">
+          <text class="menu-icon peach">邀</text>
+          <text class="menu-text">邀请好友</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/customer-service/index')">
-        <text class="menu-text">客服与帮助</text>
+        <view class="menu-left">
+          <text class="menu-icon">客</text>
+          <text class="menu-text">客服与帮助</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/agreement/index')">
-        <text class="menu-text">用户协议</text>
+        <view class="menu-left">
+          <text class="menu-icon muted">协</text>
+          <text class="menu-text">用户协议</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/privacy/index')">
-        <text class="menu-text">隐私政策</text>
+        <view class="menu-left">
+          <text class="menu-icon muted">隐</text>
+          <text class="menu-text">隐私政策</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" @tap="navigateTo('/pages/food-safety/index')">
-        <text class="menu-text">食品安全与售后</text>
+        <view class="menu-left">
+          <text class="menu-icon sage">安</text>
+          <text class="menu-text">食品安全与售后</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
     </view>
@@ -240,14 +282,42 @@ onShow(() => {
 <style lang="scss" scoped>
 .user-page {
   min-height: 100vh;
+  padding-bottom: $spacing-xl;
 }
 
 .user-header {
+  position: relative;
+  overflow: hidden;
   background:
-    radial-gradient(circle at 86% 20%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 220rpx),
-    $gradient-peach;
-  padding: 68rpx $spacing-md 58rpx;
+    radial-gradient(circle at 86% 18%, rgba($success-color, 0.2) 0%, rgba($success-color, 0) 230rpx),
+    radial-gradient(circle at 12% 8%, rgba($primary-color, 0.18) 0%, rgba($primary-color, 0) 260rpx),
+    linear-gradient(135deg, #FFF8EC 0%, #FFE9DF 54%, #F7F7EA 100%);
+  padding: 58rpx $spacing-md 50rpx;
   border-radius: 0 0 $radius-xxl $radius-xxl;
+  box-shadow: 0 18rpx 40rpx rgba(131, 91, 78, 0.08);
+}
+
+.header-brand-row {
+  @include flex-between;
+  margin-bottom: $spacing-lg;
+}
+
+.brand-pill {
+  min-height: 40rpx;
+  padding: 0 18rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.78);
+  color: $primary-dark;
+  font-size: $font-xs;
+  line-height: 40rpx;
+  font-weight: 800;
+  box-shadow: $shadow-xs;
+}
+
+.brand-copy {
+  color: $text-secondary;
+  font-size: $font-xs;
+  font-weight: 700;
 }
 
 .user-info {
@@ -256,53 +326,63 @@ onShow(() => {
 }
 
 .user-avatar {
-  width: 120rpx;
-  height: 120rpx;
+  width: 132rpx;
+  height: 132rpx;
   border-radius: 50%;
   border: 4rpx solid rgba(255, 255, 255, 0.9);
-  box-shadow: $shadow-sm;
+  box-shadow: $shadow-md;
+  background: $bg-ivory;
 }
 
 .user-detail {
   margin-left: $spacing-md;
+  min-width: 0;
 }
 
 .user-name {
   font-size: $font-xl;
   color: $text-color;
-  font-weight: 800;
+  font-weight: 900;
   display: block;
+  max-width: 420rpx;
+  @include text-ellipsis;
 }
 
 .member-badge {
   display: inline-flex;
-  background: rgba($primary-color, 0.12);
+  align-items: center;
+  min-height: 42rpx;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1rpx solid rgba($primary-color, 0.16);
   border-radius: $radius-round;
-  padding: 4rpx 16rpx;
-  margin-top: 8rpx;
+  padding: 0 16rpx;
+  margin-top: 10rpx;
 }
 
 .member-text {
   font-size: $font-xs;
   color: $primary-dark;
+  font-weight: 700;
 }
 
 .login-btn {
-  margin-top: $spacing-md;
-  background: #FFFFFF;
+  @include flex-center;
+  width: 240rpx;
+  min-height: 76rpx;
+  margin-top: $spacing-lg;
+  background: $gradient-coral;
   border-radius: $radius-round;
-  padding: 16rpx 48rpx;
-  display: inline-flex;
-  box-shadow: $shadow-sm;
+  box-shadow: $shadow-coral;
 }
 
 .login-text {
-  color: $primary-dark;
+  color: #FFFFFF;
   font-size: $font-md;
+  font-weight: 800;
 }
 
 .login-agreement {
-  margin-top: $spacing-sm;
+  margin-top: 14rpx;
 }
 
 .agreement-prefix {
@@ -317,10 +397,32 @@ onShow(() => {
   margin: 0 6rpx;
 }
 
+.header-trust {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: $spacing-lg;
+
+  text {
+    min-height: 38rpx;
+    padding: 0 16rpx;
+    border-radius: $radius-round;
+    background: rgba($success-color, 0.12);
+    color: $success-dark;
+    font-size: $font-xs;
+    line-height: 38rpx;
+    font-weight: 700;
+  }
+}
+
 .order-section {
-  margin: -20rpx $spacing-md $spacing-md;
+  margin: -24rpx $spacing-md $spacing-md;
   position: relative;
-  background: rgba(255, 255, 255, 0.92);
+  background:
+    radial-gradient(circle at 90% 0%, rgba($primary-color, 0.1), rgba($primary-color, 0) 220rpx),
+    rgba(255, 255, 255, 0.94);
+  border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: $shadow-md;
 }
 
 .section-header {
@@ -329,33 +431,48 @@ onShow(() => {
 }
 
 .section-title {
+  display: block;
   font-size: $font-md;
   font-weight: 800;
   color: $text-color;
 }
 
+.section-subtitle {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-xs;
+  color: $text-hint;
+}
+
 .section-more {
   font-size: $font-sm;
   color: $text-hint;
+  flex-shrink: 0;
 }
 
 .order-shortcuts {
   display: flex;
-  justify-content: space-around;
+  gap: 10rpx;
 }
 
 .shortcut-item {
   @include flex-center;
   @include flex-column;
   position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 132rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 248, 244, 0.78);
+  border: 1rpx solid rgba($border-color, 0.66);
 }
 
 .shortcut-icon {
-  width: 68rpx;
-  height: 68rpx;
-  border-radius: 26rpx;
+  width: 62rpx;
+  height: 62rpx;
+  border-radius: 24rpx;
   @include flex-center;
-  background: $primary-soft;
+  background: linear-gradient(135deg, $primary-soft, $secondary-soft);
   color: $primary-dark;
   font-size: $font-md;
   font-weight: 800;
@@ -369,9 +486,9 @@ onShow(() => {
 
 .shortcut-badge {
   position: absolute;
-  top: -8rpx;
-  right: -16rpx;
-  background: $danger-color;
+  top: 8rpx;
+  right: 8rpx;
+  background: $gradient-coral;
   color: #FFFFFF;
   font-size: 20rpx;
   min-width: 32rpx;
@@ -383,12 +500,14 @@ onShow(() => {
 
 .menu-section {
   margin: 0 $spacing-md $spacing-md;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.78);
 }
 
 .menu-item {
   @include flex-between;
-  padding: $spacing-md 0;
+  min-height: 94rpx;
+  padding: 14rpx 0;
   border-bottom: 1rpx solid $divider-color;
 
   &:last-child {
@@ -396,9 +515,50 @@ onShow(() => {
   }
 }
 
+.menu-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.menu-icon {
+  @include flex-center;
+  width: 56rpx;
+  height: 56rpx;
+  margin-right: $spacing-sm;
+  border-radius: 22rpx;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: $font-sm;
+  font-weight: 900;
+  flex-shrink: 0;
+
+  &.sage {
+    background: $success-soft;
+    color: $success-dark;
+  }
+
+  &.peach {
+    background: $secondary-soft;
+    color: $secondary-color;
+  }
+
+  &.mint {
+    background: rgba($mint-color, 0.14);
+    color: $success-dark;
+  }
+
+  &.muted {
+    background: rgba($bg-gray, 0.9);
+    color: $text-secondary;
+  }
+}
+
 .menu-text {
   font-size: $font-md;
   color: $text-color;
+  font-weight: 600;
+  @include text-ellipsis;
 }
 
 .menu-arrow {
@@ -412,6 +572,7 @@ onShow(() => {
   text-align: center;
   background: rgba($danger-color, 0.08);
   border-radius: $radius-round;
+  border: 1rpx solid rgba($danger-color, 0.1);
 }
 
 .logout-text {

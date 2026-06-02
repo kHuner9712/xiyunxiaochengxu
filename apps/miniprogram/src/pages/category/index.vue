@@ -1,29 +1,56 @@
 <template>
   <view class="category-page page-shell">
-    <scroll-view scroll-y class="category-left">
-      <view class="category-brand">
-        <text class="brand-text">优选</text>
+    <view class="category-top">
+      <view class="search-pill" @tap="goSearch">
+        <text class="search-icon">⌕</text>
+        <text class="search-text">搜索奶粉、纸尿裤、洗护好物</text>
       </view>
-      <view
-        v-for="item in categories"
-        :key="item.id"
-        class="category-item"
-        :class="{ active: currentCategoryId === item.id }"
-        @tap="selectCategory(item)"
-      >
-        <text class="category-name">{{ item.name }}</text>
+      <view class="category-trust">
+        <text>自营正品</text>
+        <text>严选母婴</text>
+        <text>安心售后</text>
       </view>
-    </scroll-view>
+    </view>
 
-    <scroll-view scroll-y class="category-right">
-      <view v-if="currentChildren.length" class="sub-categories">
-        <view v-for="sub in currentChildren" :key="sub.id" class="sub-category" @tap="goProductList(sub.id)">
-          <image class="sub-icon" :src="sub.icon" mode="aspectFit" />
-          <text class="sub-name">{{ sub.name }}</text>
+    <view class="category-body">
+      <scroll-view scroll-y class="category-left">
+        <view class="category-brand">
+          <text class="brand-text">优选</text>
+          <text class="brand-sub">分类</text>
         </view>
-      </view>
-      <Empty v-else text="暂无分类" />
-    </scroll-view>
+        <view
+          v-for="item in categories"
+          :key="item.id"
+          class="category-item"
+          :class="{ active: currentCategoryId === item.id }"
+          @tap="selectCategory(item)"
+        >
+          <text class="category-name">{{ item.name }}</text>
+        </view>
+      </scroll-view>
+
+      <scroll-view scroll-y class="category-right">
+        <view class="category-panel">
+          <view class="panel-head">
+            <view>
+              <text class="panel-title">{{ currentCategoryName }}</text>
+              <text class="panel-subtitle">按宝宝和妈妈所需挑选安心好物</text>
+            </view>
+            <text class="panel-badge">精选</text>
+          </view>
+
+          <view v-if="currentChildren.length" class="sub-categories">
+            <view v-for="sub in currentChildren" :key="sub.id" class="sub-category" @tap="goProductList(sub.id)">
+              <view class="sub-icon-wrap">
+                <image class="sub-icon" :src="sub.icon" mode="aspectFit" />
+              </view>
+              <text class="sub-name">{{ sub.name }}</text>
+            </view>
+          </view>
+          <Empty v-else text="暂无分类" />
+        </view>
+      </scroll-view>
+    </view>
   </view>
 </template>
 
@@ -38,6 +65,11 @@ const currentCategoryId = ref(0)
 const currentChildren = computed(() => {
   const current = categories.value.find(c => c.id === currentCategoryId.value)
   return current?.children || []
+})
+
+const currentCategoryName = computed(() => {
+  const current = categories.value.find(c => c.id === currentCategoryId.value)
+  return current?.name || '母婴分类'
 })
 
 async function loadCategories() {
@@ -60,6 +92,10 @@ function goProductList(categoryId: number) {
   uni.navigateTo({ url: `/pages/product/list?categoryId=${categoryId}` })
 }
 
+function goSearch() {
+  uni.navigateTo({ url: '/pages/search/index' })
+}
+
 onMounted(() => {
   loadCategories()
 })
@@ -67,23 +103,76 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .category-page {
+  min-height: 100vh;
+}
+
+.category-top {
+  padding: 24rpx $spacing-md 18rpx;
+  background:
+    radial-gradient(circle at 88% 0%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 240rpx),
+    linear-gradient(180deg, rgba(255, 252, 247, 0.96) 0%, rgba(255, 247, 242, 0.78) 100%);
+}
+
+.search-pill {
   display: flex;
-  height: 100vh;
-  padding-top: $spacing-md;
+  align-items: center;
+  min-height: 78rpx;
+  padding: 0 24rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1rpx solid rgba(255, 255, 255, 0.82);
+  box-shadow: $shadow-sm;
+}
+
+.search-icon {
+  margin-right: 12rpx;
+  color: $primary-dark;
+  font-size: $font-lg;
+  font-weight: 800;
+}
+
+.search-text {
+  color: $text-hint;
+  font-size: $font-sm;
+}
+
+.category-trust {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 14rpx;
+
+  text {
+    min-height: 38rpx;
+    padding: 0 16rpx;
+    border-radius: $radius-round;
+    background: rgba($success-color, 0.11);
+    color: $success-dark;
+    font-size: $font-xs;
+    line-height: 38rpx;
+    font-weight: 700;
+  }
+}
+
+.category-body {
+  display: flex;
+  height: calc(100vh - 174rpx);
+  min-height: 720rpx;
 }
 
 .category-left {
-  width: 196rpx;
+  width: 190rpx;
   background: transparent;
   height: 100%;
-  padding: 0 0 $spacing-md $spacing-md;
+  padding: $spacing-sm 0 $spacing-md $spacing-md;
 }
 
 .category-brand {
   @include flex-center;
-  height: 72rpx;
-  margin: 0 $spacing-xs $spacing-sm 0;
-  border-radius: $radius-round;
+  flex-direction: column;
+  height: 92rpx;
+  margin: 0 10rpx $spacing-sm 0;
+  border-radius: 30rpx;
   background: $gradient-coral;
   box-shadow: $shadow-coral;
 }
@@ -94,30 +183,36 @@ onMounted(() => {
   font-weight: 800;
 }
 
+.brand-sub {
+  margin-top: 2rpx;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 18rpx;
+}
+
 .category-item {
   @include flex-center;
-  min-height: 88rpx;
+  min-height: 90rpx;
   padding: 0 14rpx;
-  margin: 0 $spacing-xs 12rpx 0;
+  margin: 0 10rpx 12rpx 0;
   position: relative;
-  border-radius: $radius-round;
-  background: rgba(255, 255, 255, 0.52);
-  border: 1rpx solid rgba($border-color, 0.5);
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1rpx solid rgba($border-color, 0.42);
 
   &.active {
-    background: #FFFFFF;
+    background: $primary-soft;
     box-shadow: $shadow-sm;
-    border: 1rpx solid rgba($border-color, 0.78);
+    border: 1rpx solid rgba($primary-color, 0.2);
 
     &::before {
       content: '';
       position: absolute;
-      left: 10rpx;
+      left: 8rpx;
       top: 50%;
       transform: translateY(-50%);
       width: 8rpx;
-      height: 32rpx;
-      background: $primary-color;
+      height: 36rpx;
+      background: $gradient-coral;
       border-radius: $radius-round;
     }
 
@@ -137,33 +232,81 @@ onMounted(() => {
 
 .category-right {
   flex: 1;
-  padding: 0 $spacing-md $spacing-md $spacing-sm;
+  padding: $spacing-sm $spacing-md $spacing-md $spacing-sm;
   height: 100%;
+}
+
+.category-panel {
+  min-height: 100%;
+  padding: $spacing-md;
+  border-radius: $radius-xxl;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1rpx solid rgba(255, 255, 255, 0.78);
+  box-shadow: $shadow-sm;
+}
+
+.panel-head {
+  @include flex-between;
+  align-items: flex-start;
+  margin-bottom: $spacing-md;
+}
+
+.panel-title {
+  display: block;
+  font-size: $font-lg;
+  color: $text-color;
+  font-weight: 900;
+}
+
+.panel-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  color: $text-hint;
+  font-size: $font-xs;
+}
+
+.panel-badge {
+  flex-shrink: 0;
+  min-height: 38rpx;
+  padding: 0 16rpx;
+  border-radius: $radius-round;
+  background: $secondary-soft;
+  color: $secondary-color;
+  font-size: $font-xs;
+  line-height: 38rpx;
+  font-weight: 800;
 }
 
 .sub-categories {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: $spacing-md;
+  gap: 18rpx;
 }
 
 .sub-category {
   @include flex-center;
   @include flex-column;
-  min-height: 204rpx;
+  min-height: 190rpx;
   background: $gradient-card;
-  border-radius: $radius-xxl;
-  border: 1rpx solid rgba($border-color, 0.78);
-  box-shadow: $shadow-sm;
-  padding: $spacing-sm;
+  border-radius: 30rpx;
+  border: 1rpx solid rgba($border-color, 0.68);
+  box-shadow: $shadow-xs;
+  padding: 14rpx 10rpx;
+}
+
+.sub-icon-wrap {
+  @include flex-center;
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 36rpx;
+  background: linear-gradient(135deg, $primary-soft, $secondary-soft);
+  margin-bottom: 12rpx;
+  overflow: hidden;
 }
 
 .sub-icon {
-  width: 104rpx;
-  height: 104rpx;
-  border-radius: 34rpx;
-  background: linear-gradient(135deg, $primary-soft, $secondary-soft);
-  margin-bottom: 12rpx;
+  width: 82rpx;
+  height: 82rpx;
 }
 
 .sub-name {

@@ -2,9 +2,10 @@
   <view class="empty-state">
     <image v-if="image" class="empty-image" :src="image" mode="aspectFit" />
     <view v-else class="empty-illustration">
-      <text v-if="iconText" class="empty-icon-text">{{ iconText }}</text>
+      <text class="empty-icon-text">{{ iconText || '禧' }}</text>
     </view>
     <text class="empty-text">{{ text }}</text>
+    <text class="empty-hint">安心好物会在这里为你准备好</text>
     <view v-if="actionText" class="empty-action" @tap="$emit('action')">
       <text class="empty-action-text">{{ actionText }}</text>
     </view>
@@ -32,32 +33,38 @@ defineEmits<{
 .empty-state {
   @include flex-center;
   @include flex-column;
-  padding: 128rpx 32rpx;
+  padding: 132rpx 32rpx;
+  text-align: center;
 }
 
 .empty-image {
-  width: 240rpx;
-  height: 240rpx;
-  margin-bottom: $spacing-md;
+  width: 228rpx;
+  height: 228rpx;
+  margin-bottom: $spacing-lg;
+  border-radius: $radius-xxl;
 }
 
 .empty-illustration {
   position: relative;
-  width: 176rpx;
-  height: 136rpx;
+  @include flex-center;
+  width: 184rpx;
+  height: 148rpx;
   margin-bottom: $spacing-lg;
-  border-radius: 44rpx;
-  background: linear-gradient(135deg, $primary-soft, $secondary-soft);
-  box-shadow: inset 0 -10rpx 24rpx rgba(242, 118, 120, 0.08);
+  border-radius: 48rpx;
+  background:
+    radial-gradient(circle at 72% 20%, rgba($success-color, 0.18), rgba($success-color, 0) 82rpx),
+    $gradient-peach;
+  border: 1rpx solid rgba(255, 255, 255, 0.82);
+  box-shadow: $shadow-md;
 
   &::before {
     content: '';
     position: absolute;
-    left: 44rpx;
-    top: 38rpx;
-    width: 88rpx;
-    height: 48rpx;
-    border-radius: 28rpx 28rpx 18rpx 18rpx;
+    left: 34rpx;
+    right: 34rpx;
+    bottom: 30rpx;
+    height: 42rpx;
+    border-radius: 28rpx;
     background: rgba(255, 255, 255, 0.92);
     border: 2rpx solid rgba($primary-color, 0.12);
   }
@@ -65,42 +72,53 @@ defineEmits<{
   &::after {
     content: '';
     position: absolute;
-    left: 70rpx;
-    top: 96rpx;
-    width: 36rpx;
-    height: 10rpx;
+    left: 72rpx;
+    bottom: 18rpx;
+    width: 40rpx;
+    height: 12rpx;
     border-radius: $radius-round;
-    background: rgba($primary-color, 0.26);
+    background: rgba($primary-color, 0.22);
   }
 }
 
 .empty-icon-text {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 40rpx;
-  text-align: center;
-  font-size: 44rpx;
-  color: $primary-color;
+  position: relative;
+  z-index: 1;
+  margin-top: -18rpx;
+  font-size: 50rpx;
+  color: $primary-dark;
+  font-weight: 900;
 }
 
 .empty-text {
+  max-width: 560rpx;
   font-size: $font-md;
-  color: $text-hint;
+  color: $text-color;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.empty-hint {
+  max-width: 520rpx;
+  margin-top: 10rpx;
   margin-bottom: $spacing-lg;
+  font-size: $font-sm;
+  color: $text-hint;
+  line-height: 1.5;
 }
 
 .empty-action {
   @include flex-center;
-  min-height: 68rpx;
-  padding: 0 38rpx;
+  min-height: 76rpx;
+  padding: 0 46rpx;
   border-radius: $radius-round;
-  background: $primary-soft;
+  background: $gradient-coral;
+  box-shadow: $shadow-coral;
 
   .empty-action-text {
-    color: $primary-dark;
+    color: #FFFFFF;
     font-size: $font-md;
-    font-weight: 600;
+    font-weight: 800;
   }
 }
 </style>

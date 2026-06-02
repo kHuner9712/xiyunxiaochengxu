@@ -34,21 +34,25 @@ const priceColor = computed(() => props.color || '#E96F6D')
   display: inline-flex;
   align-items: baseline;
   color: v-bind(priceColor);
-  font-weight: 800;
+  font-weight: 900;
   line-height: 1;
+  letter-spacing: 0;
 }
 
 .price-symbol {
   font-size: $font-xs;
-  margin-right: 2rpx;
+  margin-right: 3rpx;
+  font-weight: 800;
 }
 
 .price-integer {
   font-size: $font-xl;
+  font-weight: 900;
 }
 
 .price-decimal {
   font-size: $font-sm;
+  font-weight: 800;
 }
 
 .price-display.small {
@@ -59,6 +63,21 @@ const priceColor = computed(() => props.color || '#E96F6D')
 
   .price-integer {
     font-size: $font-md;
+    font-weight: 900;
+  }
+}
+
+.price-display.normal {
+  .price-symbol {
+    font-size: $font-xs;
+  }
+
+  .price-integer {
+    font-size: $font-xl;
+  }
+
+  .price-decimal {
+    font-size: $font-sm;
   }
 }
 
