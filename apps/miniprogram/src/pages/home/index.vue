@@ -32,6 +32,11 @@
       </swiper>
     </view>
 
+    <view v-if="homeData.announcement" class="home-announcement surface-card">
+      <text class="announcement-mark">告</text>
+      <text class="announcement-text">{{ homeData.announcement }}</text>
+    </view>
+
     <view class="quick-entries surface-card">
       <view v-for="entry in homeData.quickEntries" :key="entry.id" class="entry-item" @tap="handleEntryTap(entry)">
         <view class="entry-icon-wrap">
@@ -155,6 +160,7 @@ onShareAppMessage(() => ({
 const homeData = reactive<{
   banners: BannerItem[]
   quickEntries: QuickEntry[]
+  announcement: string
   monthRecommend: ProductItem[]
   hotProducts: ProductItem[]
   newProducts: ProductItem[]
@@ -163,6 +169,7 @@ const homeData = reactive<{
 }>({
   banners: [],
   quickEntries: [],
+  announcement: '',
   monthRecommend: [],
   hotProducts: [],
   newProducts: [],
@@ -218,8 +225,13 @@ function handleEntryTap(entry: QuickEntry) {
     'points': '/pages/points/index',
     'member': '/pages/member/index'
   }
-  const url = routes[entry.linkValue]
-  if (url) uni.navigateTo({ url })
+  const url = routes[entry.linkValue] || entry.linkUrl || entry.linkValue
+  if (!url) return
+  if (['/pages/home/index', '/pages/category/index', '/pages/activity/index', '/pages/cart/index', '/pages/user/index'].includes(url)) {
+    uni.switchTab({ url })
+  } else if (url.startsWith('/pages/')) {
+    uni.navigateTo({ url })
+  }
 }
 
 function goProductList(sort: string) {
@@ -559,6 +571,36 @@ onMounted(() => {
   @include text-ellipsis;
   display: block;
   margin-bottom: 12rpx;
+}
+
+.home-announcement {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin: $spacing-sm $spacing-md;
+  padding: 18rpx 22rpx;
+  border-radius: $radius-round;
+}
+
+.announcement-mark {
+  @include flex-center;
+  width: 42rpx;
+  height: 42rpx;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.announcement-text {
+  flex: 1;
+  min-width: 0;
+  font-size: $font-xs;
+  color: $text-secondary;
+  line-height: 1.45;
+  @include text-ellipsis;
 }
 
 .home-page :deep(.countdown-wrap) {

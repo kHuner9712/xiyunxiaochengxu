@@ -11,18 +11,20 @@ export class HomeService {
   constructor(private prisma: PrismaService) {}
 
   async getHomeData(userId?: string) {
-    const [banners, _recommendations, hotProducts, newProducts, activities, monthAgeRecommend] = await Promise.all([
+    const [banners, _recommendations, hotProducts, newProducts, activities, monthAgeRecommend, homeDecor] = await Promise.all([
       this.getBanners(),
       this.getRecommendations(),
       this.getHotProducts(),
       this.getNewProducts(),
       this.getActivities(),
       userId ? this.getMonthAgeRecommend(userId) : [],
+      this.getHomeDecorConfig(),
     ]);
 
     return {
       banners,
-      quickEntries: [],
+      quickEntries: homeDecor.quickEntries,
+      announcement: homeDecor.announcement,
       monthRecommend: monthAgeRecommend,
       hotProducts,
       newProducts,
@@ -163,6 +165,53 @@ export class HomeService {
       id: a.id.toString(),
       image: normalizeAssetUrl(a.bannerImage, this.assetBaseUrl),
     }));
+  }
+
+  private async getHomeDecorConfig() {
+    const config = await this.prisma.systemConfig.findFirst({
+      where: { groupName: 'home_decor', configKey: 'config' },
+    });
+    const announcementSection = await this.prisma.homeSection.findFirst({
+      where: { type: 'announcement', status: 1 },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    const parsedConfig = this.parseJsonConfig(config?.configValue);
+    const sectionConfig = this.parseJsonConfig(announcementSection?.config);
+    const navIcons = Array.isArray(parsedConfig.navIcons) ? parsedConfig.navIcons : [];
+    const quickEntries = navIcons
+      .slice()
+      .sort((a: any, b: any) => Number(a?.sort || 0) - Number(b?.sort || 0))
+      .map((item: any, index: number) => ({
+        id: String(index + 1),
+        name: String(item?.name || ''),
+        icon: normalizeAssetUrl(item?.icon, this.assetBaseUrl),
+        linkType: Number(item?.linkType || 0),
+        linkValue: String(item?.linkValue || item?.linkUrl || ''),
+        linkUrl: String(item?.linkUrl || item?.linkValue || ''),
+      }))
+      .filter((item: any) => item.name && item.icon);
+
+    return {
+      quickEntries,
+      announcement: String(
+        parsedConfig.announcement ||
+        sectionConfig.announcement ||
+        (Array.isArray(sectionConfig.announcements) ? sectionConfig.announcements[0] : '') ||
+        '',
+      ),
+    };
+  }
+
+  private parseJsonConfig(value: unknown): any {
+    if (!value) return {};
+    if (typeof value === 'object') return value;
+    if (typeof value !== 'string') return {};
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
   }
 
   private async getMonthAgeRecommend(userId: string) {

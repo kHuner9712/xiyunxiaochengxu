@@ -4,6 +4,7 @@ export function getHomeData() {
   return get<{
     banners: BannerItem[]
     quickEntries: QuickEntry[]
+    announcement?: string
     monthRecommend: ProductItem[]
     hotProducts: ProductItem[]
     newProducts: ProductItem[]
@@ -29,6 +30,7 @@ export interface QuickEntry {
   icon: string
   linkType: number
   linkValue: string
+  linkUrl?: string
 }
 
 export interface ProductItem {
