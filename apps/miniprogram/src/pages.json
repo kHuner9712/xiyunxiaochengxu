@@ -38,6 +38,7 @@
     "color": "#A99B95",
     "selectedColor": "#F27678",
     "backgroundColor": "#FFFCF7",
+    "borderStyle": "white",
     "list": [
       { "pagePath": "pages/home/index", "text": "首页", "iconPath": "static/tab/home.png", "selectedIconPath": "static/tab/home-active.png" },
       { "pagePath": "pages/category/index", "text": "分类", "iconPath": "static/tab/category.png", "selectedIconPath": "static/tab/category-active.png" },
