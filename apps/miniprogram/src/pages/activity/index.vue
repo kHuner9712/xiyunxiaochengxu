@@ -88,7 +88,7 @@ const tabs = [
   { label: '优惠', value: 'discount' },
   { label: '视频', value: 'video' },
   { label: '文章', value: 'article' },
-  { label: '线下/活动', value: 'offline' }
+  { label: '线下', value: 'offline' }
 ]
 
 const currentTab = ref('recommend')
