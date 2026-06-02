@@ -380,7 +380,8 @@ onLoad((options) => {
 
 <style lang="scss" scoped>
 .product-detail-page {
-  padding-bottom: 180rpx;
+  padding-bottom: calc(190rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(190rpx + env(safe-area-inset-bottom));
 }
 
 .hero-stage {

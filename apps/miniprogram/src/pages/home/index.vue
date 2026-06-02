@@ -561,6 +561,47 @@ onMounted(() => {
   margin-bottom: 12rpx;
 }
 
+.home-page :deep(.countdown-wrap) {
+  min-height: 44rpx;
+  padding: 4rpx 8rpx 4rpx 14rpx;
+  border-radius: $radius-round;
+  background: rgba($primary-color, 0.08);
+}
+
+.home-page :deep(.countdown-label) {
+  color: $primary-dark;
+  font-size: $font-xs;
+  font-weight: 700;
+}
+
+.home-page :deep(.countdown-block) {
+  min-width: 38rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: $shadow-xs;
+}
+
+.home-page :deep(.countdown-num) {
+  color: $primary-dark;
+  font-size: $font-xs;
+  font-weight: 800;
+}
+
+.home-page :deep(.countdown-sep) {
+  color: $primary-color;
+  font-size: $font-xs;
+}
+
+.home-page :deep(.countdown-expired) {
+  min-height: 40rpx;
+  padding: 0 16rpx;
+  border-radius: $radius-round;
+  background: rgba($bg-gray, 0.86);
+  color: $text-hint;
+  font-size: $font-xs;
+  line-height: 40rpx;
+}
+
 .floating-cs {
   position: fixed;
   right: 24rpx;
