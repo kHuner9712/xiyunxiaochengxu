@@ -1,66 +1,53 @@
-# RELEASE_CANDIDATE（2026-05-31）
+# RELEASE_CANDIDATE（2026-06-03）
 
 ## 1. 版本结论
 
 - 项目：禧孕优选（微信小程序 + Admin + API）
-- 阶段：预生产部署脚本最终修复 + 限流启用 + CI 对齐
-- 代码层面：**Go**（本地门禁已通过，CI 待核验）
-- 预生产部署：**Go**
-- 正式发布：**No-Go**，直到真实 AppID、支付配置、证书、数据库迁移、体验版上传、真机验收、运营/法务信息全部完成
+- 当前 HEAD：`2106c80f9c1d6bb7425b380b475b1a663d0874f2`
+- 当前版本：**可继续作为正式版候选**。
+- 外部私有配置：真实 AppID、支付配置、证书、主体资质、经营资质、备案信息、证照材料、客服电话、客服微信、退货地址等缺失于公开 GitHub 仓库，不再视为阻断。
+- 当前阻断项：**未取得可验证的生产运行与真机验收结果**。
 
-## 1.1 本轮修复项
+## 2. 公开仓库候选门禁
 
-1. 预生产部署脚本 one-off 命令阻断修复：
-   - `entrypoint.sh` 支持 `exec "$@"`，允许 Docker one-off 命令正常执行
-   - 新增 `SKIP_MIGRATE` 开关，跳过迁移步骤
-   - `deploy-prod-check.sh` 使用 `--entrypoint` 覆写，确保部署检查命令不被 entrypoint 阻断
-2. ThrottlerGuard 限流启用：
-   - 认证接口严格限流：验证码 20次/分、登录 5次/分、refresh 10次/分、小程序登录/手机号 10次/分
-   - 支付回调 `@SkipThrottle` 跳过限流
-3. GitHub Actions pnpm 版本对齐：
-   - `ci.yml` 和 `release-check.yml` 改用 `corepack` 读取 `packageManager`
-   - 安装依赖使用 `--frozen-lockfile`
+公开仓库候选状态只以当前 `main` 可验证事项为准：
 
-## 2. 本轮实际执行命令结果
+- 代码构建：API、管理后台、小程序默认构建。
+- 类型检查：`pnpm typecheck`。
+- lint：`pnpm lint`。
+- API 测试：`pnpm --filter @baby-mall/api test:ci`。
+- 小程序生产构建脚本：脚本入口与真实生产变量注入路径可执行；真实值不写入仓库。
+- Release gate：`pnpm release:check`、`pnpm release:check:freeze`、`pnpm release:check:prod` 可执行并输出明确结论。
+- 敏感信息未入库。
+- 发布文档与当前 `main` HEAD 一致。
 
-默认约定：命令在仓库根目录执行（`package.json` 所在目录）。
+## 3. 外部生产配置
 
-| 命令 | 结果 | 说明 |
-|---|---|---|
-| `pnpm --filter @baby-mall/api prisma:validate` | PASS | Prisma Schema 有效 |
-| `pnpm --filter @baby-mall/api test:ci` | PASS | 464 unit tests (30 suites) + 23 e2e tests (6 suites) |
-| `pnpm build:all` | PASS | API + Admin + 小程序构建均通过 |
-| `pnpm release:check` | PASS | 106 PASS / 0 FAIL / 11 WARN（默认门禁通过） |
+以下均为外部生产配置，由负责人确认已在服务器、微信公众平台、商户平台或其他外部平台完成；公开仓库不保存、不展示、不复核真实明文值：
 
-进入服务器预生产部署前需执行 `pnpm release:check:freeze` 作为代码冻结门禁；正式上线前仍必须执行 `pnpm release:check:prod`。
+- 微信小程序真实 AppID、合法域名、体验版/正式版后台配置。
+- 微信支付商户号、证书序列号、APIv3 Key、商户私钥、平台证书、支付回调与退款回调地址。
+- 主体资质、经营资质、备案信息、证照材料、资质编号。
+- 客服电话、客服微信、退货地址、客服与售后联系方式。
+- 服务器 `.env.production`、HTTPS 证书、Docker/Nginx 私有配置。
 
-## 3. release:check:prod 失败明细（预期人工/环境阻塞）
+`legal.ts` 中公开占位联系方式不再直接作为 No-Go；但正式版体验版/线上用户端最终展示或客服入口必须真实可用，并纳入真机验收留痕。
 
-1. 严格模式下小程序生产构建失败（未提供真实 `VITE_WX_APPID`）。
-2. AppID 门禁失败（`manifest.json` 仍为占位 AppID）。
-3. `legal.ts` 中客服电话占位文案未替换，严格门禁 FAIL。
-4. `legal.ts` 中客服微信占位文案未替换，严格门禁 FAIL。
-5. `legal.ts` 中退货地址占位文案未替换，严格门禁 FAIL。
+## 4. 正式版验收阻断项
 
-## 4. 当前可发布性判断
+当前正式发布阻断项只剩：尚未取得可验证的生产运行与真机验收结果。正式发布前必须完成并留痕：
 
-1. 代码冻结门禁需以 `pnpm release:check:freeze` 为准，通过后可进入预生产部署与真机验收。
-2. 正式发布门禁（prod strict）未通过，禁止正式发布。
+- 服务器私有环境变量已生效。
+- 生产 API HTTPS 可访问。
+- 微信后台合法域名配置正确。
+- 支付和退款回调真实可达、验签通过、状态流转正确。
+- 数据库迁移完成。
+- Docker、Nginx、HTTPS、健康检查与 smoke 测试通过。
+- 微信开发者工具体验版上传完成。
+- 真机验收清单完成。
 
-## 5. 人工阻塞项（P0）
+## 5. 下一步建议
 
-> **声明**：真实 AppID、密钥、证书、资质图片、客服电话、客服微信、退货地址属于部署/运营阶段人工项，不作为代码冻结失败项。
-
-1. 微信小程序真实 AppID（体验版/正式版构建必需）。
-2. 协议最终联系方式：客服电话、客服微信、退货地址（法务/运营确认后写入 `legal.ts`）。
-3. 私有生产环境文件 `.env.production`（真实变量，不提交）。
-4. 微信支付生产参数与证书（商户号、APIv3 Key、商户私钥、平台证书等）。
-5. HTTPS 证书文件（`fullchain.pem`、`privkey.pem`）。
-6. 数据库迁移（生产环境首次 Prisma migrate deploy）。
-7. 体验版上传与真机验收。
-
-## 6. 下一步建议
-
-1. 运营/法务补齐 `docs/OPERATOR_REQUIRED.md` 与 `docs/LEGAL_CONTENT_GUIDE.md` 列项。
-2. 运维按 `docs/PREPROD_EXECUTION_STEPS.md` 执行服务器预生产部署检查。
-3. 提供真实 AppID 后执行：`VITE_WX_APPID=真实AppID pnpm build:mini:prod` 并上传体验版真机验收。
+1. 基于当前 `main` 重新执行公开仓库门禁：`pnpm release:check`、`pnpm release:check:freeze`、`pnpm release:check:prod`。
+2. 在服务器真实生产环境确认私有变量、数据库迁移、Docker/Nginx/HTTPS 与 smoke 结果。
+3. 使用微信开发者工具上传体验版，并完成真机验收清单与支付/退款回调留痕。

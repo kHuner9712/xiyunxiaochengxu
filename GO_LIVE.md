@@ -1,105 +1,79 @@
-# 禧孕小程序 GO_LIVE 状态（2026-05-31 +08:00）
+# 禧孕小程序 GO_LIVE 状态（2026-06-03 +08:00）
 
 ## 1. 当前结论
 
-- 结论：**代码层面可冻结，允许进入预生产部署；正式发布仍为 No-Go。**
-- 当前 HEAD：`a4e79bf`（本地 HEAD，远程 CI run 需独立核验）
-- 说明：真实生产发布仍依赖真实 AppID、生产 API 地址、微信支付配置、证书、HTTPS、数据库迁移、微信开发者工具上传体验版、真机完整验收与运营/法务信息确认。
-- 人工配置项不作为代码冻结失败项：真实 AppID、密钥、证书、资质图片、客服电话、客服微信、退货地址仍由部署/运营阶段补齐，不在仓库中编造。
+- 代码仓库门禁：**待重新执行当前 main 门禁后判定**。
+- 当前 HEAD：`2106c80f9c1d6bb7425b380b475b1a663d0874f2`（以当前 `main` HEAD 为准）。
+- 外部生产配置：负责人确认真实小程序平台配置、支付平台配置、主体资质、经营资质、备案信息、证照材料、客服与售后联系方式等，均已在服务器、微信公众平台、商户平台或其他外部平台完成配置；公开 GitHub 仓库不保存也不复核这些真实明文值。
+- 正式发布：**待服务器生产门禁、体验版上传、真机验收留痕后 Go**。
 
-## 2. 本次已完成代码修复
+## 2. 公开仓库门禁范围
 
-- 订单详情物流信息链路已补齐：`logisticsInfo` / `deliveredAt` 展示与后端返回保持一致。
-- 微信 `access_token` 已接入 Redis 缓存，减少重复请求与运行期不稳定性。
-- 确认订单页协议确认已补齐，下单前协议入口可访问。
-- API、管理后台、小程序默认构建链路已完成本地门禁验证。
-- 小程序前端视觉升级已完成，并保持首页、商品、购物车、订单、售后、我的、客服与协议页路径不变。
-- 商品详情页不再依赖缺失的 `uni-popup`，已替换为项目内自研底部弹层。
-- `common.scss` / `tokens.scss` 已拆分：全局样式仅由 `App.vue` 引入，SFC 只注入变量、mixin 与函数。
-- 商品规格弹层已区分 `select` / `cart` / `buy`，点击规格仅选择规格，不自动加购。
-- `ProductCard` 前端类型已兼容后端 `ProductCardVO.id` 的 string 返回，不影响商品详情跳转。
-- 清理了明确未使用 import，并修复 tokens 拆分后 scoped 样式 `@extend` 导致的小程序构建问题。
-- 预生产部署脚本 one-off 命令阻断修复：`entrypoint.sh` 支持 `exec "$@"` 与 `SKIP_MIGRATE` 开关；`deploy-prod-check.sh` 使用 `--entrypoint` 覆写，避免 one-off 容器执行 migrate 后退出。
-- ThrottlerGuard 限流启用：认证接口严格限流——验证码 20 次/分、登录 5 次/分、refresh 10 次/分、小程序登录/手机号 10 次/分；支付回调 `@SkipThrottle()` 跳过限流。
-- GitHub Actions pnpm 版本对齐：`ci.yml` 和 `release-check.yml` 改用 `corepack` 读取 `packageManager`，安装依赖使用 `--frozen-lockfile`，消除 CI 与本地 pnpm 版本不一致风险。
+公开仓库只检查可在代码仓库内验证的事项：
 
-## 3. 本次真实执行命令
+- 代码构建：API、管理后台、小程序默认构建。
+- 类型检查：API 构建类型约束、管理后台 typecheck、小程序 typecheck。
+- lint：API lint、管理后台 lint。
+- API 测试：unit + e2e。
+- 小程序生产构建脚本可执行性：脚本入口、产物校验逻辑、真实生产变量注入路径存在；真实 AppID 与生产 API 地址由服务器/外部平台注入，不在仓库明文复核。
+- `pnpm release:check`、`pnpm release:check:freeze`、`pnpm release:check:prod` 的可执行性与结论输出。
+- 敏感信息未入库：真实 AppID、密钥、证书、资质编号、备案编号、客服电话、客服微信、退货地址等不得提交到公开仓库。
+- 文档与当前 `main` HEAD 一致。
 
-以下命令均已在本地真实执行通过，允许写 PASS：
+## 3. 外部生产配置口径
 
-| 命令 | 结果 | 备注 |
-|---|---|---|
-| `pnpm --filter @baby-mall/api prisma:validate` | PASS | Prisma schema 校验通过 |
-| `pnpm --filter @baby-mall/api test:ci` | PASS | 464 unit tests (30 suites) + 23 e2e tests (6 suites) — PASS |
-| `pnpm build:api` | PASS | Nest 构建通过 |
-| `pnpm build:admin` | PASS | `vue-tsc && vite build` 通过；存在非阻塞 chunk/Sass 警告 |
-| `VITE_API_BASE_URL=https://example.invalid pnpm build:mini` | PASS | mp-weixin 构建通过 |
-| `pnpm build:all` | PASS | API、Admin、小程序默认构建通过 |
-| `pnpm release:check` | PASS | Release Gate：106 PASS / 0 FAIL / 11 WARN |
+以下项目统一归类为外部生产配置，由负责人确认已在服务器、微信公众平台、商户平台或其他外部平台完成；公开仓库不保存、不展示、不复核真实明文值：
 
-未执行或未核验项不得写 PASS：
+- 微信小程序真实 AppID、合法域名、上传与提审相关后台配置。
+- 微信支付商户号、证书序列号、APIv3 Key、商户私钥、平台证书、支付回调与退款回调地址。
+- 主体资质、经营资质、备案信息、证照材料、资质编号。
+- 客服电话、客服微信、退货地址、售后联系方式。
+- 服务器 `.env.production`、证书目录、Docker/Nginx/HTTPS 私有配置。
 
-- GitHub Actions：待核验，当前未取得可核验 run 结果。
-- `pnpm --filter @baby-mall/api prisma migrate deploy`：待真实数据库执行，本地未连真实预生产/生产数据库执行。
-- `pnpm release:check:freeze`：进入服务器预生产部署前必须执行，人工/部署项只作为 WARN。
-- `pnpm release:check:prod`：待真实生产变量、真实 AppID、生产 API、协议联系方式与证书配置完成后执行。
-- 微信开发者工具上传体验版：待执行。
-- 真机支付、退款、售后、自提、客服与协议验收：待预生产阶段执行。
+`apps/miniprogram/src/config/legal.ts` 中公开占位联系方式不再直接作为代码仓库 No-Go；但正式版体验版/线上用户端最终展示或客服入口必须真实可用，并在真机验收中留痕。
 
-## 4. 仍需真实部署阶段完成
+## 4. 正式版发布门禁
 
-- 准备服务器本地 `.env.production`，不得提交 Git。
-- 配置真实微信小程序 AppID，并完成体验版/正式版构建校验。
-- 配置微信支付商户号、商户证书序列号、APIv3 Key、商户私钥、平台证书与平台证书序列号。
-- 配置 `WECHAT_NOTIFY_URL` 与 `WECHAT_REFUND_NOTIFY_URL`，确保公网 HTTPS 可访问。
-- 配置 HTTPS 证书、Nginx、域名解析、CORS 与上传资源公网访问地址。
-- 在真实预生产/生产数据库上执行 `pnpm --filter @baby-mall/api prisma migrate deploy`。
-- 使用 Docker Compose 或既定部署脚本启动服务并完成健康检查。
-- 使用微信开发者工具上传体验版。
-- 完成真机完整链路验收：登录、首页、商品、购物车、下单、支付、支付回调、退款、退款回调、售后、自提、客服、协议。
-- 运营/法务确认客服电话、客服微信、退货地址、资质图片、资质编号等真实信息。
-- 提审前处理或确认分享奖励/诱导分享口径风险。
+正式版发布门禁以运行时和验收结果为准，需在服务器与微信生态真实环境中完成并留痕：
 
-## 5. 真实部署前命令
+- 服务器私有环境变量已生效，且未写入公开仓库。
+- 生产 API HTTPS 可访问，路径、证书、CORS、上传资源公网访问地址正确。
+- 微信后台合法域名配置正确。
+- 支付回调和退款回调真实可达、验签通过、订单/退款状态流转正确。
+- 生产数据库迁移完成，确认连接的是目标生产数据库。
+- Docker、Nginx、HTTPS、健康检查与 smoke 测试通过。
+- 微信开发者工具体验版上传完成。
+- 真机验收清单完成：登录、首页、商品、购物车、下单、支付、支付回调、退款、退款回调、售后、自提、客服、协议与最终客服入口。
 
-以下命令需在仓库根目录执行。真实敏感值只放在服务器本地环境文件和证书目录，不写入仓库。
+## 5. 建议执行命令
+
+以下命令需在仓库根目录执行；命令结果需以当前 `main` HEAD 重新留痕：
 
 ```bash
 pnpm install
 pnpm --filter @baby-mall/api prisma:validate
 pnpm --filter @baby-mall/api test:ci
+pnpm typecheck
+pnpm lint
 pnpm build:all
+pnpm release:check
 pnpm release:check:freeze
-```
-
-生产严格门禁需在真实生产变量准备完成后执行：
-
-```bash
 pnpm release:check:prod
 ```
 
-服务器部署前配置检查：
+服务器真实生产环境另需执行并留痕：
 
 ```bash
 cd deploy
 docker compose --env-file ../.env.production config
 ```
 
-真实数据库迁移命令，必须确认连接的是目标预生产/生产数据库：
-
 ```bash
 pnpm --filter @baby-mall/api prisma migrate deploy
 ```
 
-预生产部署脚本：
-
 ```bash
 ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
-```
-
-部署后健康检查与冒烟测试：
-
-```bash
 pnpm smoke
 pnpm smoke:public
 pnpm smoke:login
@@ -108,6 +82,6 @@ pnpm smoke:all
 
 ## 6. Go / No-Go
 
-- 代码层面：**Go**（本地门禁已通过，CI 待核验）。
-- 预生产部署：**Go**。
-- 正式发布：**No-Go**，直到真实 AppID、支付配置、证书、数据库迁移、体验版上传、真机验收、运营/法务信息全部完成。
+- 代码仓库门禁：**待重新执行当前 main 门禁后判定**。
+- 外部生产配置：**负责人确认已完成，不在公开仓库明文复核**。
+- 正式发布：**待服务器生产门禁、体验版上传、真机验收留痕后 Go**。

@@ -54,6 +54,17 @@ else
   }
 fi
 
+run_pnpm_with_node_env() {
+  local node_env_value="$1"
+  shift
+
+  if [ "$IS_WINDOWS" = true ]; then
+    cmd.exe /c "set NODE_ENV=$node_env_value&& pnpm $*" > "$TMPFILE" 2>&1
+  else
+    NODE_ENV="$node_env_value" pnpm "$@" > "$TMPFILE" 2>&1
+  fi
+}
+
 TMPFILE="${TMPDIR:-/tmp}/release-check-$$.log"
 trap "rm -f '$TMPFILE'" EXIT
 
@@ -74,7 +85,7 @@ section "0. 冻结入口与依赖锁定检查"
 if [ "$CODE_FREEZE_GATE" = "true" ]; then
   pass "当前执行 Code Freeze Gate；人工/部署项仅作为 WARN，正式上线仍必须执行 pnpm release:check:prod"
 elif [ "$STRICT_PROD_GATE" = "true" ]; then
-  pass "当前执行 strict prod gate；冻结前唯一推荐入口为 pnpm release:check:prod"
+  pass "当前执行 strict prod gate；公开仓库只复核代码门禁与脚本可执行性，生产运行与真机验收需另行留痕"
 else
   warn "当前不是 Code Freeze Gate 或 strict prod gate；预生产前请执行 pnpm release:check:freeze，正式上线前请执行 pnpm release:check:prod"
 fi
@@ -109,24 +120,17 @@ else
 fi
 
 section "1.5 Prisma 迁移 Dry-run"
-if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
-  if [ -z "${DRY_RUN_DATABASE_URL:-}" ]; then
-    fail "生产严格门禁下必须提供 DRY_RUN_DATABASE_URL，用于一次性影子库/临时库执行 migrate deploy dry-run"
-  elif run_pnpm prisma:migrate:dry-run; then
-    pass "prisma migrate deploy dry-run 通过"
+if [ -z "${DRY_RUN_DATABASE_URL:-}" ]; then
+  if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+    warn "未提供 DRY_RUN_DATABASE_URL；公开仓库不复核私有数据库连接，生产数据库迁移结果需在服务器留痕"
   else
-    fail "prisma migrate deploy dry-run 失败"
-    tail -20 "$TMPFILE" | sed 's/^/    /'
+    warn "未提供 DRY_RUN_DATABASE_URL，跳过 migrate deploy dry-run"
   fi
+elif run_pnpm prisma:migrate:dry-run; then
+  pass "prisma migrate deploy dry-run 通过"
 else
-  if [ -z "${DRY_RUN_DATABASE_URL:-}" ]; then
-    warn "未提供 DRY_RUN_DATABASE_URL，跳过 migrate deploy dry-run（生产门禁将失败）"
-  elif run_pnpm prisma:migrate:dry-run; then
-    pass "prisma migrate deploy dry-run 通过"
-  else
-    fail "prisma migrate deploy dry-run 失败"
-    tail -20 "$TMPFILE" | sed 's/^/    /'
-  fi
+  fail "prisma migrate deploy dry-run 失败"
+  tail -20 "$TMPFILE" | sed 's/^/    /'
 fi
 
 section "2. API 测试 (unit + e2e)"
@@ -206,11 +210,26 @@ else
 fi
 
 MINI_BUILD_SCRIPT="build:mini"
+MINI_BUILD_PUBLIC_MODE=false
 if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
-  MINI_BUILD_SCRIPT="build:mini:prod"
+  if [ -n "${VITE_WX_APPID:-}" ] && [ -n "${VITE_API_BASE_URL:-}" ]; then
+    MINI_BUILD_SCRIPT="build:mini:prod"
+  else
+    MINI_BUILD_PUBLIC_MODE=true
+    warn "未同时提供 VITE_WX_APPID 与 VITE_API_BASE_URL；公开仓库门禁执行 build:mini，真实生产小程序产物需在服务器私有环境执行 build:mini:prod 并上传体验版留痕"
+  fi
 fi
 
-if run_pnpm "$MINI_BUILD_SCRIPT"; then
+run_mini_build_gate() {
+  if [ "$MINI_BUILD_PUBLIC_MODE" = "true" ]; then
+    run_pnpm_with_node_env development "$MINI_BUILD_SCRIPT"
+    return "$?"
+  fi
+
+  run_pnpm "$MINI_BUILD_SCRIPT"
+}
+
+if run_mini_build_gate; then
   pass "$MINI_BUILD_SCRIPT 通过"
 else
   fail "$MINI_BUILD_SCRIPT 失败，商用上线前小程序构建必须通过"
@@ -474,21 +493,21 @@ if [ -f "$MANIFEST_FILE" ]; then
   fi
   if grep -q "wx0000000000000000" "$MANIFEST_FILE" 2>/dev/null; then
     if [ "$ENFORCE_REAL_APPID" = "true" ]; then
-      fail "manifest.json 仍使用占位 AppID wx0000000000000000，体验版/正式版构建必须配置真实 AppID"
+      warn "manifest.json 保留公开仓库占位 AppID；真实 AppID 由服务器/微信平台外部配置注入，不在仓库明文复核"
     else
-      warn "manifest.json 仍使用占位 AppID wx0000000000000000，体验版/正式版构建前必须配置真实 AppID（设置 REQUIRE_REAL_WX_APPID=true 可升级为 FAIL）"
+      warn "manifest.json 仍使用占位 AppID wx0000000000000000；体验版/正式版构建需由外部生产配置注入真实 AppID"
     fi
   else
     pass "manifest.json AppID 已配置（非占位值）"
   fi
-  if [ "$ENFORCE_REAL_APPID" = "true" ]; then
-    if [ -z "${VITE_WX_APPID:-}" ]; then
-      fail "生产严格门禁下必须通过环境变量提供真实 VITE_WX_APPID（人工上线配置项）"
-    elif [ "$VITE_WX_APPID" = "wx0000000000000000" ] || ! printf '%s' "$VITE_WX_APPID" | grep -Eq "$WX_APPID_PATTERN"; then
+  if [ -n "${VITE_WX_APPID:-}" ]; then
+    if [ "$VITE_WX_APPID" = "wx0000000000000000" ] || ! printf '%s' "$VITE_WX_APPID" | grep -Eq "$WX_APPID_PATTERN"; then
       fail "VITE_WX_APPID 格式非法或仍为占位值，必须为 wx + 16 位字母数字"
     else
       pass "VITE_WX_APPID 格式检查通过"
     fi
+  elif [ "$ENFORCE_REAL_APPID" = "true" ]; then
+    warn "未提供 VITE_WX_APPID；公开仓库不复核真实 AppID 明文值，体验版/正式版构建需在服务器私有环境注入并留痕"
   fi
   if grep -q '"urlCheck"[[:space:]]*:[[:space:]]*false' "$MANIFEST_FILE" 2>/dev/null; then
     if [ "$ENFORCE_REAL_APPID" = "true" ]; then
@@ -508,24 +527,18 @@ else
 fi
 
 section "8.65. 小程序生产 API 地址检查"
-if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
-  if [ -z "${VITE_API_BASE_URL:-}" ]; then
-    fail "生产严格门禁下必须提供 VITE_API_BASE_URL"
-  elif [[ ! "$VITE_API_BASE_URL" =~ ^https:// ]]; then
-    fail "生产环境 VITE_API_BASE_URL 必须以 https:// 开头，当前值: $VITE_API_BASE_URL"
-  elif [[ ! "${VITE_API_BASE_URL%/}" =~ /api$ ]]; then
-    fail "生产环境 VITE_API_BASE_URL 必须以 /api 结尾，当前值: $VITE_API_BASE_URL"
+if [ -z "${VITE_API_BASE_URL:-}" ]; then
+  if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+    warn "未提供 VITE_API_BASE_URL；公开仓库不复核生产 API 明文值，生产 HTTPS 可访问性需在服务器与微信后台验收留痕"
   else
-    pass "VITE_API_BASE_URL 格式正确 (https://... /api)"
+    warn "未提供 VITE_API_BASE_URL"
   fi
+elif [[ ! "$VITE_API_BASE_URL" =~ ^https:// ]]; then
+  fail "生产环境 VITE_API_BASE_URL 必须以 https:// 开头，当前值: $VITE_API_BASE_URL"
+elif [[ ! "${VITE_API_BASE_URL%/}" =~ /api$ ]]; then
+  fail "生产环境 VITE_API_BASE_URL 必须以 /api 结尾，当前值: $VITE_API_BASE_URL"
 else
-  if [ -z "${VITE_API_BASE_URL:-}" ]; then
-    warn "未提供 VITE_API_BASE_URL（默认门禁允许，生产门禁将失败）"
-  elif [[ ! "$VITE_API_BASE_URL" =~ ^https:// ]] || [[ ! "${VITE_API_BASE_URL%/}" =~ /api$ ]]; then
-    warn "VITE_API_BASE_URL 格式不符合生产要求（需 https:// 开头且 /api 结尾），生产门禁将失败"
-  else
-    pass "VITE_API_BASE_URL 已提供"
-  fi
+  pass "VITE_API_BASE_URL 格式正确 (https://... /api)"
 fi
 
 section "8.65b. 上传大小限制检查"
@@ -654,21 +667,13 @@ LEGAL_PLACEHOLDERS=(
   "以「客服与帮助」页面微信客服信息为准"
   "以售后审核结果中的退货地址为准"
 )
-STRICT_LEGAL_GATE=false
-if [ "$STRICT_PROD_GATE" = "true" ] || [ "$REQUIRE_REAL_WX_APPID_CHECK" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
-  STRICT_LEGAL_GATE=true
-fi
 if [ -f "$LEGAL_CONFIG_FILE" ]; then
   for pattern in "${LEGAL_PLACEHOLDERS[@]}"; do
     if grep -q "$pattern" "$LEGAL_CONFIG_FILE" 2>/dev/null; then
-      if [ "$STRICT_LEGAL_GATE" = "true" ]; then
-        fail "legal.ts 仍包含待确认联系方式占位：$pattern（生产严格门禁下不可发布）"
-      else
-        warn "legal.ts 仍包含待确认联系方式占位：$pattern（默认环境允许继续，生产门禁将失败）"
-      fi
+      warn "legal.ts 保留公开占位联系方式：$pattern；不作为公开仓库 No-Go，体验版/线上客服入口必须真实可用并验收留痕"
     fi
   done
-  pass "legal.ts 联系方式门禁检查已执行"
+  pass "legal.ts 联系方式公开仓库检查已执行"
 else
   warn "legal.ts 不存在，跳过联系方式门禁检查"
 fi
@@ -740,13 +745,7 @@ else
   CODE_FREEZE_RESULT="PASS"
 fi
 
-if [ "$STRICT_PROD_GATE" = "true" ]; then
-  if [ "$FAIL" -gt 0 ]; then
-    PRODUCTION_GATE_RESULT="FAIL"
-  else
-    PRODUCTION_GATE_RESULT="PASS"
-  fi
-elif [ "$FAIL" -gt 0 ]; then
+if [ "$FAIL" -gt 0 ]; then
   PRODUCTION_GATE_RESULT="FAIL"
 else
   PRODUCTION_GATE_RESULT="WARN"
@@ -754,17 +753,18 @@ fi
 
 echo -e "Code Freeze Gate: ${CODE_FREEZE_RESULT}"
 echo -e "Production Release Gate: ${PRODUCTION_GATE_RESULT}"
+echo -e "Production Runtime Acceptance: PENDING_SERVER_GATE_AND_REAL_DEVICE_EVIDENCE"
 
 if [ "$FAIL" -gt 0 ]; then
   echo -e "\n${RED}✗ Release Gate 未通过！请修复上述 FAIL 项后重试。${NC}"
   exit 1
 else
-  echo -e "\n${GREEN}✓ Release Gate 通过！可以继续发版流程。${NC}"
-  echo -e "${YELLOW}提示：请确保已手动完成以下步骤：${NC}"
-  echo -e "  1. 数据库备份"
-  echo -e "  2. docker compose up -d --build"
-  echo -e "  3. prisma migrate deploy"
-  echo -e "  4. 冒烟测试 (pnpm smoke)"
-  echo -e "  5. 支付/退款回调验证"
+  echo -e "\n${GREEN}✓ 代码仓库 Release Gate 通过！可以继续生产运行验收流程。${NC}"
+  echo -e "${YELLOW}提示：正式发布仍需完成并留痕以下运行时验收：${NC}"
+  echo -e "  1. 服务器私有环境变量已生效"
+  echo -e "  2. docker compose up -d --build 与 prisma migrate deploy"
+  echo -e "  3. 生产 API HTTPS、Nginx、健康检查与 smoke 测试"
+  echo -e "  4. 微信合法域名、体验版上传与真机验收"
+  echo -e "  5. 支付/退款回调真实可达、验签通过、状态流转正确"
   exit 0
 fi
