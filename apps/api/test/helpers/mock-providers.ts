@@ -114,6 +114,7 @@ export function createTestEnvConfig(): Record<string, string> {
   return {
     NODE_ENV: 'test',
     JWT_SECRET: 'test_jwt_secret_key_that_is_long_enough_32chars',
+    REFRESH_TOKEN_SECRET: 'test_refresh_secret_key_that_is_long_enough_32chars',
     DATABASE_URL: 'mysql://test:test@localhost:3306/test',
     REDIS_HOST: 'localhost',
     REDIS_PORT: '6379',

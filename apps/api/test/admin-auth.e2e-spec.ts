@@ -5,7 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { AuthModule } from '../src/auth/auth.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { RedisService } from '../src/common/redis/redis.service';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
@@ -44,6 +44,7 @@ describe('Admin Auth (e2e)', () => {
   let mockPrisma: ReturnType<typeof createMockPrismaService>;
   let mockRedis: ReturnType<typeof createMockRedisService>;
   let jwtService: JwtService;
+  let configService: ConfigService;
   let accessToken: string;
   let refreshToken: string;
 
@@ -111,6 +112,7 @@ describe('Admin Auth (e2e)', () => {
     await app.init();
 
     jwtService = moduleFixture.get<JwtService>(JwtService);
+    configService = moduleFixture.get<ConfigService>(ConfigService);
   });
 
   afterAll(async () => {
@@ -168,7 +170,12 @@ describe('Admin Auth (e2e)', () => {
   });
 
   it('refreshToken payload contains tokenType=refresh', async () => {
-    const decoded = await jwtService.verifyAsync(refreshToken);
+    const refreshTokenSecret = configService.get<string>('REFRESH_TOKEN_SECRET');
+    expect(refreshTokenSecret).toBeDefined();
+
+    const decoded = await jwtService.verifyAsync(refreshToken, {
+      secret: refreshTokenSecret,
+    });
     expect(decoded.tokenType).toBe('refresh');
     expect(decoded.roleType).toBe('admin');
   });
