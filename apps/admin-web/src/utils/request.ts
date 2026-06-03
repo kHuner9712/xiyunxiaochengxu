@@ -17,6 +17,15 @@ const request = axios.create({
 
 let refreshPromise: Promise<any> | null = null
 
+function cleanQueryParams(params: unknown): unknown {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return params
+  return Object.fromEntries(
+    Object.entries(params as Record<string, unknown>).filter(([, value]) => {
+      return value !== undefined && value !== null && value !== ''
+    })
+  )
+}
+
 request.interceptors.request.use(
   (config) => {
     const userStore = useUserStore()
@@ -24,6 +33,7 @@ request.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    config.params = cleanQueryParams(config.params)
     return config
   },
   (error) => {

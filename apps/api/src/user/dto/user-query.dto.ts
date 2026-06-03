@@ -8,6 +8,19 @@ export class UserQueryDto extends PaginationDto {
   keyword?: string;
 
   @IsOptional()
+  @IsString()
+  nickname?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  memberLevel?: number;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   memberLevelId?: number;

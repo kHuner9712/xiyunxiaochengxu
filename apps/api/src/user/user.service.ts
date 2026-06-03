@@ -97,8 +97,17 @@ export class UserService {
       ];
     }
 
-    if (dto.memberLevelId) {
-      where.memberLevelId = BigInt(dto.memberLevelId);
+    if (dto.nickname) {
+      where.nickname = { contains: dto.nickname };
+    }
+
+    if (dto.phone) {
+      where.phone = { contains: dto.phone };
+    }
+
+    const memberLevelId = dto.memberLevelId ?? dto.memberLevel;
+    if (memberLevelId) {
+      where.memberLevelId = BigInt(memberLevelId);
     }
 
     if (dto.status !== undefined) {

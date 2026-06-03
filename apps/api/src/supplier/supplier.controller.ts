@@ -12,6 +12,14 @@ class SupplierQueryDto extends PaginationDto {
   keyword?: string;
 
   @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  contactPhone?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   status?: number;

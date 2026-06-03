@@ -4,6 +4,10 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 export class OperationLogQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
+  adminName?: string;
+
+  @IsOptional()
+  @IsString()
   module?: string;
 
   @IsOptional()
@@ -13,4 +17,12 @@ export class OperationLogQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   action?: string;
+
+  @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @IsOptional()
+  @IsString()
+  endTime?: string;
 }

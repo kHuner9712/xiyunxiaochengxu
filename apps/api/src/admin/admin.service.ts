@@ -19,6 +19,8 @@ export class AdminService {
         { realName: { contains: dto.keyword } },
       ];
     }
+    if (dto.username) where.username = { contains: dto.username };
+    if (dto.status !== undefined) where.status = dto.status;
 
     const [list, total] = await Promise.all([
       this.prisma.adminUser.findMany({
@@ -263,6 +265,23 @@ export class AdminService {
     if (dto.module) where.module = dto.module;
     if (dto.adminUserId) where.adminUserId = BigInt(dto.adminUserId);
     if (dto.action) where.action = dto.action;
+    if (dto.adminName) {
+      where.adminUser = {
+        OR: [
+          { username: { contains: dto.adminName } },
+          { realName: { contains: dto.adminName } },
+        ],
+      };
+    }
+    if (dto.startTime || dto.endTime) {
+      where.createdAt = {};
+      if (dto.startTime) where.createdAt.gte = new Date(dto.startTime);
+      if (dto.endTime) {
+        const endTime = new Date(dto.endTime);
+        endTime.setDate(endTime.getDate() + 1);
+        where.createdAt.lt = endTime;
+      }
+    }
 
     const [list, total] = await Promise.all([
       this.prisma.adminOperationLog.findMany({
@@ -282,6 +301,10 @@ export class AdminService {
         adminUserId: l.adminUserId.toString(),
         targetId: l.targetId?.toString(),
         adminUser: l.adminUser ? { ...l.adminUser, id: l.adminUser.id.toString() } : null,
+        adminName: l.adminUser?.realName || l.adminUser?.username || l.adminUserId.toString(),
+        description: l.content,
+        createTime: l.createdAt,
+        requestData: l.content,
       })),
       total,
       dto.page,

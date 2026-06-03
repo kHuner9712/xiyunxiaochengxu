@@ -30,6 +30,9 @@ import { ShareModule } from './share/share.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { HealthModule } from './health/health.module';
 import { PickupStoreModule } from './pickup-store/pickup-store.module';
+import { StockModule } from './stock/stock.module';
+import { RecommendationModule } from './recommendation/recommendation.module';
+import { StatisticsModule } from './statistics/statistics.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AdminMustChangePasswordGuard } from './common/guards/admin-must-change-password.guard';
@@ -75,6 +78,9 @@ import { validateEnv } from './config/env.validation';
     ScheduleModule,
     HealthModule,
     PickupStoreModule,
+    StockModule,
+    RecommendationModule,
+    StatisticsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

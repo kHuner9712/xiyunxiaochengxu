@@ -10,9 +10,11 @@ export class SupplierService {
 
   constructor(private prisma: PrismaService) {}
 
-  async findAll(dto: PaginationDto & { keyword?: string; status?: number }) {
+  async findAll(dto: PaginationDto & { keyword?: string; name?: string; contactPhone?: string; status?: number }) {
     const where: any = { deletedAt: null };
     if (dto.keyword) where.name = { contains: dto.keyword };
+    if (dto.name) where.name = { contains: dto.name };
+    if (dto.contactPhone) where.contactPhone = { contains: dto.contactPhone };
     if (dto.status !== undefined) where.status = dto.status;
 
     const [list, total] = await Promise.all([
