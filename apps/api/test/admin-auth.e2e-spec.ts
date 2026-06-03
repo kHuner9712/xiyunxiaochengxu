@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { AuthModule } from '../src/auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
@@ -22,7 +23,7 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 const adminUser = {
   id: BigInt(1),
   username: 'admin',
-  password: 'hashed_password',
+  password: '$2b$10$GRxvTUnwy7NwRJh2GSc.wePn7TZ1fJYfKsaE36f8VOOUnvcUTk3Me',
   realName: 'Admin',
   avatar: null,
   status: 1,
@@ -130,20 +131,26 @@ describe('Admin Auth (e2e)', () => {
       });
   });
 
-  it('POST /api/admin/auth/login with bypass captcha returns tokens and adminUser', async () => {
+  it('POST /api/admin/auth/login with cached captcha returns tokens and adminUser', async () => {
     mockPrisma.adminUser.findFirst.mockResolvedValue(adminUser);
     mockPrisma.adminUser.update.mockResolvedValue(adminUser);
+    await mockRedis.set('captcha:test-login', '1234', 300);
+    (bcrypt.compare as unknown as jest.Mock).mockImplementationOnce((password, hash) =>
+      Promise.resolve(password === 'admin123' && hash === adminUser.password),
+    );
 
     const res = await request(app.getHttpServer())
       .post('/api/admin/auth/login')
       .send({
         username: 'admin',
         password: 'admin123',
-        captchaId: 'smoke-test',
-        captchaCode: 'bypass',
+        captchaId: 'captcha:test-login',
+        captchaCode: '1234',
       });
 
     expect(res.status).toBe(200);
+    expect(mockRedis.get).toHaveBeenCalledWith('captcha:test-login');
+    expect(mockRedis.del).toHaveBeenCalledWith('captcha:test-login');
     expect(res.body.data.accessToken).toBeDefined();
     expect(typeof res.body.data.accessToken).toBe('string');
     expect(res.body.data.refreshToken).toBeDefined();
