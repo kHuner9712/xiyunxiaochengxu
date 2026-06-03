@@ -28,6 +28,7 @@ uploads/
 *.png
 *.gif
 *.webp
+!apps/miniprogram/src/static/tab/*.png
 
 # OS files
 .DS_Store

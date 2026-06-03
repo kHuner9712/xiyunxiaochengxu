@@ -16,6 +16,12 @@ function createMockPrisma() {
     babyProfile: {
       findFirst: jest.fn() as any,
     },
+    systemConfig: {
+      findFirst: jest.fn() as any,
+    },
+    homeSection: {
+      findFirst: jest.fn() as any,
+    },
   };
 }
 

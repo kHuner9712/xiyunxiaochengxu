@@ -102,7 +102,7 @@ describe('PaymentController callback (e2e)', () => {
       .send({})
       .set('Content-Type', 'application/json');
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     expect(res.body).toEqual({ code: 'SUCCESS', message: '' });
     expect(res.body).not.toEqual({
       code: 0,
@@ -119,7 +119,7 @@ describe('PaymentController callback (e2e)', () => {
       .send({})
       .set('Content-Type', 'application/json');
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     expect(res.body.code).toBe('FAIL');
     expect(res.body.message).toBe('缺少rawBody');
   });
@@ -132,7 +132,7 @@ describe('PaymentController callback (e2e)', () => {
       .send({})
       .set('Content-Type', 'application/json');
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     expect(res.body.code).toBe('FAIL');
     expect(res.body.message).toBe('金额不一致');
   });
