@@ -15,11 +15,11 @@
         router
       >
         <template v-for="route in filteredMenuRoutes" :key="route.path">
-          <el-menu-item v-if="!route.children || route.children.length === 0" :index="route.path">
+          <el-menu-item v-if="!route.children || route.children.length === 0" :index="menuIndex(route.path)">
             <el-icon v-if="route.meta?.icon"><component :is="route.meta.icon" /></el-icon>
             <template #title>{{ route.meta?.title }}</template>
           </el-menu-item>
-          <el-sub-menu v-else :index="route.path">
+          <el-sub-menu v-else :index="menuIndex(route.path)">
             <template #title>
               <el-icon v-if="route.meta?.icon"><component :is="route.meta.icon" /></el-icon>
               <span>{{ route.meta?.title }}</span>
@@ -27,7 +27,7 @@
             <el-menu-item
               v-for="child in filterChildren(route.children)"
               :key="child.path"
-              :index="`${route.path}/${child.path}`"
+              :index="menuIndex(route.path, child.path)"
             >
               <template #title>{{ child.meta?.title }}</template>
             </el-menu-item>
@@ -86,7 +86,7 @@ const router = useRouter()
 const userStore = useUserStore()
 const isCollapse = ref(false)
 
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => toAbsolutePath(route.path))
 
 const breadcrumbs = computed(() => {
   return route.matched.filter((item) => item.meta?.title)
@@ -109,6 +109,17 @@ const filteredMenuRoutes = computed(() => {
 
 function filterChildren(children: RouteRecordRaw[]) {
   return children.filter((child) => !child.meta?.hidden && hasMenuPermission(child))
+}
+
+function toAbsolutePath(path: string): string {
+  const normalized = path.replace(/\/+/g, '/')
+  return normalized.startsWith('/') ? normalized : `/${normalized}`
+}
+
+function menuIndex(routePath: string, childPath?: string) {
+  if (childPath?.startsWith('/')) return toAbsolutePath(childPath)
+  if (!childPath) return toAbsolutePath(routePath)
+  return toAbsolutePath(`${routePath}/${childPath}`)
 }
 
 function handleCommand(command: string) {

@@ -1,7 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { IsOptional, IsInt } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, Matches } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class TrendQuery {
@@ -9,6 +9,16 @@ class TrendQuery {
   @Type(() => Number)
   @IsInt()
   days?: number;
+
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  endDate?: string;
 }
 
 @Controller('admin/dashboard')
@@ -24,6 +34,12 @@ export class DashboardController {
   @Get('sales-chart')
   @RequirePermission('dashboard')
   async getSalesChart(@Query() query: TrendQuery) {
+    if (query.startDate || query.endDate) {
+      if (!query.startDate || !query.endDate) {
+        throw new BadRequestException('startDate and endDate must be provided together');
+      }
+      return this.dashboardService.getSalesChartByDateRange(query.startDate, query.endDate);
+    }
     return this.dashboardService.getSalesChart(query.days || 7);
   }
 

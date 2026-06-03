@@ -149,7 +149,7 @@ async function fetchCategoryTree() {
 
 async function fetchBrandList() {
   try {
-    const res = await brandApi.getList({ page: 1, pageSize: 1000 })
+    const res = await brandApi.getList({ page: 1, pageSize: 100 })
     brandList.value = (res.data as any)?.list || res.data || []
   } catch {}
 }

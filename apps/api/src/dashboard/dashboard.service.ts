@@ -1,6 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { OrderStatus } from '@prisma/client';
+
+interface SalesChartDateRange {
+  date: Date;
+  nextDate: Date;
+  label: string;
+}
 
 @Injectable()
 export class DashboardService {
@@ -115,7 +121,22 @@ export class DashboardService {
   }
 
   async getSalesChart(days: number = 7) {
-    const result = [];
+    return this.getSalesChartForRanges(this.buildRecentDateRanges(days));
+  }
+
+  async getSalesChartByDateRange(startDate: string, endDate: string) {
+    const start = this.parseChartDate(startDate);
+    const end = this.parseChartDate(endDate);
+
+    if (end < start) {
+      throw new BadRequestException('endDate must not be earlier than startDate');
+    }
+
+    return this.getSalesChartForRanges(this.buildDateRanges(start, end));
+  }
+
+  private buildRecentDateRanges(days: number): SalesChartDateRange[] {
+    const ranges: SalesChartDateRange[] = [];
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -123,23 +144,81 @@ export class DashboardService {
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
 
-      const paidStatuses = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed];
+      ranges.push({
+        date,
+        nextDate,
+        label: this.formatDateKey(date),
+      });
+    }
+    return ranges;
+  }
 
+  private buildDateRanges(start: Date, end: Date): SalesChartDateRange[] {
+    const ranges: SalesChartDateRange[] = [];
+    const current = new Date(start);
+
+    while (current <= end) {
+      const date = new Date(current);
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+
+      ranges.push({
+        date,
+        nextDate,
+        label: this.formatDateKey(date),
+      });
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    return ranges;
+  }
+
+  private parseChartDate(value: string): Date {
+    const dateOnly = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/.exec(value);
+    if (dateOnly?.groups) {
+      const date = new Date(
+        Number(dateOnly.groups.year),
+        Number(dateOnly.groups.month) - 1,
+        Number(dateOnly.groups.day),
+      );
+      date.setHours(0, 0, 0, 0);
+      if (this.formatDateKey(date) !== value) {
+        throw new BadRequestException('Invalid date range');
+      }
+      return date;
+    }
+
+    throw new BadRequestException('Invalid date range');
+  }
+
+  private formatDateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private async getSalesChartForRanges(ranges: SalesChartDateRange[]) {
+    const result = [];
+    const paidStatuses = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed];
+
+    for (const range of ranges) {
       const [orderCount, revenue] = await Promise.all([
         this.prisma.order.count({
-          where: { createdAt: { gte: date, lt: nextDate } },
+          where: { createdAt: { gte: range.date, lt: range.nextDate } },
         }),
         this.prisma.order.aggregate({
           _sum: { payAmount: true },
           where: {
             status: { in: paidStatuses },
-            paidAt: { gte: date, lt: nextDate },
+            paidAt: { gte: range.date, lt: range.nextDate },
           },
         }),
       ]);
 
       result.push({
-        date: date.toISOString().split('T')[0],
+        date: range.label,
         orderCount,
         revenue: revenue._sum.payAmount || 0,
       });

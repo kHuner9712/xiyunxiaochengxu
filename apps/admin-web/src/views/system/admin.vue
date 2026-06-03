@@ -149,7 +149,7 @@ async function fetchList() {
 
 async function fetchRoleList() {
   try {
-    const res = await roleApi.getList({ page: 1, pageSize: 1000 })
+    const res = await roleApi.getList({ page: 1, pageSize: 100 })
     roleList.value = Array.isArray(res.data) ? res.data : ((res.data as any)?.list || [])
   } catch {}
 }

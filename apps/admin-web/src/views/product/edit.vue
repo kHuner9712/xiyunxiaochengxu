@@ -552,8 +552,8 @@ async function handleSubmit() {
 onMounted(async () => {
   const [catRes, brandRes, supplierRes] = await Promise.all([
     categoryApi.getTree(),
-    brandApi.getList({ page: 1, pageSize: 1000 }),
-    supplierApi.getList({ page: 1, pageSize: 999 }),
+    brandApi.getList({ page: 1, pageSize: 100 }),
+    supplierApi.getList({ page: 1, pageSize: 100 }),
   ])
   categoryTree.value = catRes.data || []
   brandList.value = (brandRes.data as any)?.list || brandRes.data || []
