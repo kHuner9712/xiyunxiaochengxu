@@ -4,13 +4,13 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 const adminRoleWhereByCode = (code: string): Prisma.AdminRoleWhereUniqueInput =>
-  ({ uk_code: { code } } as unknown as Prisma.AdminRoleWhereUniqueInput);
+  ({ code });
 
 const adminPermissionWhereByCode = (code: string): Prisma.AdminPermissionWhereUniqueInput =>
-  ({ uk_code: { code } } as unknown as Prisma.AdminPermissionWhereUniqueInput);
+  ({ code });
 
 const adminUserWhereByUsername = (username: string): Prisma.AdminUserWhereUniqueInput =>
-  ({ uk_username: { username } } as unknown as Prisma.AdminUserWhereUniqueInput);
+  ({ username });
 
 async function main() {
   console.log('开始种子数据初始化...');
