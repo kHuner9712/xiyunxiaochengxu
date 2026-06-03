@@ -1,7 +1,16 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+
+const adminRoleWhereByCode = (code: string): Prisma.AdminRoleWhereUniqueInput =>
+  ({ uk_code: { code } } as unknown as Prisma.AdminRoleWhereUniqueInput);
+
+const adminPermissionWhereByCode = (code: string): Prisma.AdminPermissionWhereUniqueInput =>
+  ({ uk_code: { code } } as unknown as Prisma.AdminPermissionWhereUniqueInput);
+
+const adminUserWhereByUsername = (username: string): Prisma.AdminUserWhereUniqueInput =>
+  ({ uk_username: { username } } as unknown as Prisma.AdminUserWhereUniqueInput);
 
 async function main() {
   console.log('开始种子数据初始化...');
@@ -68,7 +77,7 @@ async function main() {
   console.log(`创建 ${memberLevels.length} 个会员等级`);
 
   const superAdminRole = await prisma.adminRole.upsert({
-    where: { code: 'super_admin' },
+    where: adminRoleWhereByCode('super_admin'),
     update: {},
     create: {
       name: '超级管理员',
@@ -79,7 +88,7 @@ async function main() {
   });
 
   const operatorRole = await prisma.adminRole.upsert({
-    where: { code: 'operator' },
+    where: adminRoleWhereByCode('operator'),
     update: {},
     create: {
       name: '运营管理',
@@ -90,7 +99,7 @@ async function main() {
   });
 
   const csRole = await prisma.adminRole.upsert({
-    where: { code: 'cs' },
+    where: adminRoleWhereByCode('cs'),
     update: {},
     create: {
       name: '客服',
@@ -101,7 +110,7 @@ async function main() {
   });
 
   const financeRole = await prisma.adminRole.upsert({
-    where: { code: 'finance' },
+    where: adminRoleWhereByCode('finance'),
     update: {},
     create: {
       name: '财务',
@@ -128,7 +137,7 @@ async function main() {
   const parentMap: Record<string, any> = {};
   for (const perm of parentPermissions) {
     const p = await prisma.adminPermission.upsert({
-      where: { code: perm.code },
+      where: adminPermissionWhereByCode(perm.code),
       update: {},
       create: perm,
     });
@@ -188,7 +197,7 @@ async function main() {
   for (const perm of childPermissions) {
     const parent = parentMap[perm.parentCode];
     const p = await prisma.adminPermission.upsert({
-      where: { code: perm.code },
+      where: adminPermissionWhereByCode(perm.code),
       update: {},
       create: {
         name: perm.name,
@@ -253,7 +262,7 @@ async function main() {
   console.log(`Creating admin user: ${adminUsername}${nodeEnv === 'production' ? ' (must change password on first login)' : ''}`);
 
   const admin = await prisma.adminUser.upsert({
-    where: { username: adminUsername },
+    where: adminUserWhereByUsername(adminUsername),
     update: {},
     create: {
       username: adminUsername,
