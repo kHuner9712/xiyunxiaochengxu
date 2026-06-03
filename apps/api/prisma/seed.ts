@@ -1,16 +1,114 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-const adminRoleWhereByCode = (code: string): Prisma.AdminRoleWhereUniqueInput =>
-  ({ code });
+async function upsertAdminRoleByCode(code: string, data: {
+  name: string;
+  description?: string | null;
+  status?: number;
+}) {
+  const existing = await prisma.adminRole.findFirst({ where: { code } });
+  if (existing) {
+    return prisma.adminRole.update({
+      where: { id: existing.id },
+      data: {
+        name: data.name,
+        description: data.description ?? null,
+        status: data.status ?? 1,
+      },
+    });
+  }
+  return prisma.adminRole.create({
+    data: {
+      code,
+      name: data.name,
+      description: data.description ?? null,
+      status: data.status ?? 1,
+    },
+  });
+}
 
-const adminPermissionWhereByCode = (code: string): Prisma.AdminPermissionWhereUniqueInput =>
-  ({ code });
+async function upsertAdminPermissionByCode(code: string, data: {
+  name: string;
+  type: number;
+  parentId: bigint;
+  sortOrder: number;
+}) {
+  const existing = await prisma.adminPermission.findFirst({ where: { code } });
+  if (existing) {
+    return prisma.adminPermission.update({
+      where: { id: existing.id },
+      data,
+    });
+  }
+  return prisma.adminPermission.create({
+    data: { code, ...data },
+  });
+}
 
-const adminUserWhereByUsername = (username: string): Prisma.AdminUserWhereUniqueInput =>
-  ({ username });
+async function upsertAdminUserByUsername(username: string, data: {
+  password: string;
+  realName: string;
+  mustChangePassword: boolean;
+  status: number;
+}) {
+  const existing = await prisma.adminUser.findFirst({ where: { username } });
+  if (existing) {
+    // Do not overwrite an existing admin password during seed; use a separate reset flow.
+    return prisma.adminUser.update({
+      where: { id: existing.id },
+      data: {
+        realName: data.realName,
+        status: data.status,
+        deletedAt: null,
+      },
+    });
+  }
+  return prisma.adminUser.create({ data: { username, ...data } });
+}
+
+async function ensureAdminRolePermission(roleId: bigint, permissionId: bigint) {
+  const existing = await prisma.adminRolePermission.findFirst({
+    where: { roleId, permissionId },
+  });
+  if (existing) return existing;
+  return prisma.adminRolePermission.create({
+    data: { roleId, permissionId },
+  });
+}
+
+async function ensureAdminUserRole(adminUserId: bigint, roleId: bigint) {
+  const existing = await prisma.adminUserRole.findFirst({
+    where: { adminUserId, roleId },
+  });
+  if (existing) return existing;
+  return prisma.adminUserRole.create({
+    data: { adminUserId, roleId },
+  });
+}
+
+async function upsertSystemConfigByGroupKey(data: {
+  groupName: string;
+  configKey: string;
+  configValue: string;
+  valueType: string;
+  description?: string | null;
+}) {
+  const existing = await prisma.systemConfig.findFirst({
+    where: {
+      groupName: data.groupName,
+      configKey: data.configKey,
+    },
+  });
+  if (existing) {
+    return prisma.systemConfig.update({
+      where: { id: existing.id },
+      data,
+    });
+  }
+  return prisma.systemConfig.create({ data });
+}
 
 async function main() {
   console.log('开始种子数据初始化...');
@@ -76,48 +174,28 @@ async function main() {
 
   console.log(`创建 ${memberLevels.length} 个会员等级`);
 
-  const superAdminRole = await prisma.adminRole.upsert({
-    where: adminRoleWhereByCode('super_admin'),
-    update: {},
-    create: {
-      name: '超级管理员',
-      code: 'super_admin',
-      description: '拥有所有权限',
-      status: 1,
-    },
+  const superAdminRole = await upsertAdminRoleByCode('super_admin', {
+    name: '超级管理员',
+    description: '拥有所有权限',
+    status: 1,
   });
 
-  const operatorRole = await prisma.adminRole.upsert({
-    where: adminRoleWhereByCode('operator'),
-    update: {},
-    create: {
-      name: '运营管理',
-      code: 'operator',
-      description: '商品管理、订单管理、营销管理、内容管理',
-      status: 1,
-    },
+  const operatorRole = await upsertAdminRoleByCode('operator', {
+    name: '运营管理',
+    description: '商品管理、订单管理、营销管理、内容管理',
+    status: 1,
   });
 
-  const csRole = await prisma.adminRole.upsert({
-    where: adminRoleWhereByCode('cs'),
-    update: {},
-    create: {
-      name: '客服',
-      code: 'cs',
-      description: '订单查看、售后处理',
-      status: 1,
-    },
+  const csRole = await upsertAdminRoleByCode('cs', {
+    name: '客服',
+    description: '订单查看、售后处理',
+    status: 1,
   });
 
-  const financeRole = await prisma.adminRole.upsert({
-    where: adminRoleWhereByCode('finance'),
-    update: {},
-    create: {
-      name: '财务',
-      code: 'finance',
-      description: '订单查看、退款审核、数据导出',
-      status: 1,
-    },
+  const financeRole = await upsertAdminRoleByCode('finance', {
+    name: '财务',
+    description: '订单查看、退款审核、数据导出',
+    status: 1,
   });
 
   console.log('创建 4 个角色');
@@ -136,10 +214,11 @@ async function main() {
 
   const parentMap: Record<string, any> = {};
   for (const perm of parentPermissions) {
-    const p = await prisma.adminPermission.upsert({
-      where: adminPermissionWhereByCode(perm.code),
-      update: {},
-      create: perm,
+    const p = await upsertAdminPermissionByCode(perm.code, {
+      name: perm.name,
+      type: perm.type,
+      parentId: perm.parentId,
+      sortOrder: perm.sortOrder,
     });
     parentMap[perm.code] = p;
   }
@@ -196,16 +275,11 @@ async function main() {
   const createdPermissions = [...Object.values(parentMap)];
   for (const perm of childPermissions) {
     const parent = parentMap[perm.parentCode];
-    const p = await prisma.adminPermission.upsert({
-      where: adminPermissionWhereByCode(perm.code),
-      update: {},
-      create: {
-        name: perm.name,
-        code: perm.code,
-        type: perm.type,
-        parentId: parent.id,
-        sortOrder: perm.sortOrder,
-      },
+    const p = await upsertAdminPermissionByCode(perm.code, {
+      name: perm.name,
+      type: perm.type,
+      parentId: parent.id,
+      sortOrder: perm.sortOrder,
     });
     createdPermissions.push(p);
   }
@@ -213,19 +287,7 @@ async function main() {
   console.log(`创建 ${createdPermissions.length} 个权限`);
 
   for (const perm of createdPermissions) {
-    await prisma.adminRolePermission.upsert({
-      where: {
-        uk_role_permission: {
-          roleId: superAdminRole.id,
-          permissionId: perm.id,
-        },
-      },
-      update: {},
-      create: {
-        roleId: superAdminRole.id,
-        permissionId: perm.id,
-      },
-    });
+    await ensureAdminRolePermission(superAdminRole.id, perm.id);
   }
 
   console.log('超级管理员角色关联所有权限');
@@ -261,31 +323,14 @@ async function main() {
   const hashedPassword = await bcrypt.hash(adminPassword, 10);
   console.log(`Creating admin user: ${adminUsername}${nodeEnv === 'production' ? ' (must change password on first login)' : ''}`);
 
-  const admin = await prisma.adminUser.upsert({
-    where: adminUserWhereByUsername(adminUsername),
-    update: {},
-    create: {
-      username: adminUsername,
-      password: hashedPassword,
-      realName: '超级管理员',
-      mustChangePassword,
-      status: 1,
-    },
+  const admin = await upsertAdminUserByUsername(adminUsername, {
+    password: hashedPassword,
+    realName: '超级管理员',
+    mustChangePassword,
+    status: 1,
   });
 
-  await prisma.adminUserRole.upsert({
-    where: {
-      uk_admin_role: {
-        adminUserId: admin.id,
-        roleId: superAdminRole.id,
-      },
-    },
-    update: {},
-    create: {
-      adminUserId: admin.id,
-      roleId: superAdminRole.id,
-    },
-  });
+  await ensureAdminUserRole(admin.id, superAdminRole.id);
 
   console.log(`创建超级管理员账号 ${adminUsername} (密码已隐藏)`);
 
@@ -318,16 +363,7 @@ async function main() {
   ];
 
   for (const config of configs) {
-    await prisma.systemConfig.upsert({
-      where: {
-        uk_group_key: {
-          groupName: config.groupName,
-          configKey: config.configKey,
-        },
-      },
-      update: {},
-      create: config,
-    });
+    await upsertSystemConfigByGroupKey(config);
   }
 
   console.log(`创建 ${configs.length} 个系统配置`);
