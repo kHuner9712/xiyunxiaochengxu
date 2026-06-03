@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, HttpCode } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { Public } from '../common/decorators/public.decorator';
@@ -23,6 +23,7 @@ export class AdminAuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
+  @HttpCode(200)
   async login(@Body() dto: AdminLoginDto) {
     return this.authService.adminLogin(
       dto.username,
@@ -35,6 +36,7 @@ export class AdminAuthController {
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
+  @HttpCode(200)
   async refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
   }

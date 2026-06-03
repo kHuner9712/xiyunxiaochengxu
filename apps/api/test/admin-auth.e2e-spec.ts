@@ -143,7 +143,7 @@ describe('Admin Auth (e2e)', () => {
         captchaCode: 'bypass',
       });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     expect(res.body.data.accessToken).toBeDefined();
     expect(typeof res.body.data.accessToken).toBe('string');
     expect(res.body.data.refreshToken).toBeDefined();
@@ -173,7 +173,7 @@ describe('Admin Auth (e2e)', () => {
       .post('/api/admin/auth/refresh')
       .send({ refreshToken });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     expect(res.body.data.accessToken).toBeDefined();
     expect(typeof res.body.data.accessToken).toBe('string');
     expect(res.body.data.refreshToken).toBeDefined();
