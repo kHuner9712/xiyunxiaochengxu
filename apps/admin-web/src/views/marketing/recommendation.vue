@@ -51,8 +51,8 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
-            <el-radio :label="1">启用</el-radio>
-            <el-radio :label="0">禁用</el-radio>
+            <el-radio :value="1">启用</el-radio>
+            <el-radio :value="0">禁用</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
@@ -87,6 +87,7 @@
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import request from '@/utils/request'
+import { asArray } from '@/utils/response'
 
 const RECOMMENDATION_TYPE_MAP: Record<number, string> = { 1: '商品', 2: '活动', 3: '内容' }
 const loading = ref(false)
@@ -120,7 +121,7 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await request.get('/admin/recommendation/list', { params: { page: 1, pageSize: 100 } })
-    tableData.value = res.data.list || res.data || []
+    tableData.value = asArray(res.data)
   } catch {} finally {
     loading.value = false
   }
@@ -178,7 +179,7 @@ async function handleManageItems(row: any) {
   currentId.value = row.id
   try {
     const res = await request.get(`/admin/recommendation/items/${row.id}`)
-    items.value = res.data || []
+    items.value = asArray(res.data)
   } catch {}
   itemDialogVisible.value = true
 }

@@ -31,6 +31,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { pointsApi } from '@/api/points'
+import { asArray } from '@/utils/response'
 
 const loading = ref(false)
 const ruleList = ref<any[]>([])
@@ -39,7 +40,7 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await pointsApi.getList()
-    ruleList.value = res.data || []
+    ruleList.value = asArray(res.data)
   } catch {} finally {
     loading.value = false
   }

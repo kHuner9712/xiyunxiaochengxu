@@ -61,8 +61,8 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
-            <el-radio :label="1">启用</el-radio>
-            <el-radio :label="0">禁用</el-radio>
+            <el-radio :value="1">启用</el-radio>
+            <el-radio :value="0">禁用</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
@@ -79,6 +79,7 @@ import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { bannerApi } from '@/api/banner'
 import { uploadApi } from '@/api/upload'
+import { asArray } from '@/utils/response'
 
 const BANNER_POSITION_MAP: Record<number, string> = { 1: '首页', 2: '分类页', 3: '活动页' }
 const loading = ref(false)
@@ -109,7 +110,7 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await bannerApi.getList({ page: 1, pageSize: 100 })
-    tableData.value = res.data.list || res.data || []
+    tableData.value = asArray(res.data)
   } catch (e: any) {
     ElMessage.error(e?.message || '获取Banner列表失败')
   } finally {

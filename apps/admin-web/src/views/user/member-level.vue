@@ -64,6 +64,7 @@ import { ref, reactive, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { memberApi } from '@/api/member'
 import { formatPrice, priceToFen } from '@/utils/format'
+import { asArray } from '@/utils/response'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -92,7 +93,7 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await memberApi.getList()
-    levelList.value = res.data || []
+    levelList.value = asArray(res.data)
   } catch {} finally {
     loading.value = false
   }

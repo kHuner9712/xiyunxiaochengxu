@@ -77,6 +77,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { orderApi } from '@/api/order'
 import { formatPrice, formatDate, formatOrderStatus, getOrderStatusTagType, ORDER_STATUS_MAP } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const router = useRouter()
 const loading = ref(false)
@@ -98,8 +99,8 @@ async function fetchList() {
     params.page = pagination.page
     params.pageSize = pagination.pageSize
     const res = await orderApi.getList(params)
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch (e: any) {
     ElMessage.error(e?.message || '获取订单列表失败')
   } finally {

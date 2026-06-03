@@ -19,8 +19,8 @@
             <div style="display: flex; justify-content: space-between; align-items: center">
               <span>销售趋势</span>
               <el-radio-group v-model="trendType" size="small" @change="fetchSalesTrend">
-                <el-radio-button label="week">近7天</el-radio-button>
-                <el-radio-button label="month">近30天</el-radio-button>
+                <el-radio-button value="week">近7天</el-radio-button>
+                <el-radio-button value="month">近30天</el-radio-button>
               </el-radio-group>
             </div>
           </template>
@@ -89,6 +89,7 @@
 import { ref, onMounted } from 'vue'
 import { dashboardApi } from '@/api/dashboard'
 import { formatPrice, formatDate, formatOrderStatus, getOrderStatusTagType } from '@/utils/format'
+import { asArray } from '@/utils/response'
 
 const trendType = ref('week')
 const trendData = ref<any[]>([])
@@ -124,21 +125,21 @@ async function fetchSalesTrend() {
       startDate: start.toISOString().slice(0, 10),
       endDate: end.toISOString().slice(0, 10),
     })
-    trendData.value = res.data || []
+    trendData.value = asArray(res.data)
   } catch {}
 }
 
 async function fetchTopProducts() {
   try {
     const res = await dashboardApi.getTopProducts({ limit: 10 })
-    topProducts.value = res.data || []
+    topProducts.value = asArray(res.data)
   } catch {}
 }
 
 async function fetchRecentOrders() {
   try {
     const res = await dashboardApi.getRecentOrders({ limit: 10 })
-    recentOrders.value = res.data || []
+    recentOrders.value = asArray(res.data)
   } catch {}
 }
 

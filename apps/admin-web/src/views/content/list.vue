@@ -89,6 +89,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { contentApi } from '@/api/content'
 import { formatDate } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const CONTENT_TYPE_MAP: Record<string, string> = { article: '文章', video: '视频' }
 const router = useRouter()
@@ -108,8 +109,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await contentApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }

@@ -96,6 +96,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { activityApi } from '@/api/activity'
 import { productApi } from '@/api/product'
 import { formatPrice, priceToFen } from '@/utils/format'
+import { asArray } from '@/utils/response'
 
 const router = useRouter()
 const route = useRoute()
@@ -126,7 +127,7 @@ const rules: FormRules = {
 async function fetchProducts() {
   try {
     const res = await productApi.getList({ page: 1, pageSize: 100, status: 1 })
-    productList.value = res.data.list || []
+    productList.value = asArray(res.data)
   } catch {}
 }
 
@@ -159,11 +160,11 @@ async function fetchDetail(id: number) {
       name: d.name,
       type: d.type,
       dateRange: [d.startTime, d.endTime],
-      fullReductionRules: (d.fullReductionRules || []).map((r: any) => ({
+      fullReductionRules: asArray(d.fullReductionRules).map((r: any) => ({
         fullAmount: r.fullAmount / 100,
         reduceAmount: r.reduceAmount / 100,
       })),
-      products: (d.products || []).map((p: any) => ({
+      products: asArray(d.products).map((p: any) => ({
         ...p,
         originalPrice: p.originalPrice,
         activityPrice: p.activityPrice / 100,

@@ -70,6 +70,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { activityApi } from '@/api/activity'
 import { formatDate, formatActivityStatus } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const ACTIVITY_TYPE_MAP: Record<number, string> = { 1: '限时折扣', 2: '满减活动', 3: '满赠活动', 4: '组合套餐', 5: '新人礼包' }
 const router = useRouter()
@@ -87,8 +88,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await activityApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }

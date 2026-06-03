@@ -58,8 +58,8 @@
 
         <el-form-item label="规格模式">
           <el-radio-group v-model="form.skuMode">
-            <el-radio label="single">单规格（默认SKU）</el-radio>
-            <el-radio label="multi">多规格</el-radio>
+            <el-radio value="single">单规格（默认SKU）</el-radio>
+            <el-radio value="multi">多规格</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -108,11 +108,11 @@
 
         <el-form-item label="商品合规类型" required>
           <el-radio-group v-model="form.complianceType">
-            <el-radio label="normal">普通商品/非特殊监管商品</el-radio>
-            <el-radio label="food">食品/辅食/零食</el-radio>
-            <el-radio label="health">保健食品/营养补充</el-radio>
-            <el-radio label="infant">婴幼儿配方奶粉</el-radio>
-            <el-radio label="advanced">多类型组合/高级模式</el-radio>
+            <el-radio value="normal">普通商品/非特殊监管商品</el-radio>
+            <el-radio value="food">食品/辅食/零食</el-radio>
+            <el-radio value="health">保健食品/营养补充</el-radio>
+            <el-radio value="infant">婴幼儿配方奶粉</el-radio>
+            <el-radio value="advanced">多类型组合/高级模式</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -174,6 +174,7 @@ import { supplierApi } from '@/api/supplier'
 import { uploadApi } from '@/api/upload'
 import { priceToFen } from '@/utils/format'
 import { resolvePrivateFileUrl, resolvePrivateFileUrls, revokePrivateObjectUrls } from '@/utils/private-file'
+import { asArray } from '@/utils/response'
 
 const router = useRouter()
 const route = useRoute()
@@ -451,7 +452,7 @@ function handleRemoveCertImage(file: any) {
 async function fetchDetail(id: number) {
   const res = await productApi.getDetail(id)
   const d = res.data
-  const skus = (d.skus || []).filter((s: any) => s.status === 1 || s.status === undefined)
+  const skus = asArray(d.skus).filter((s: any) => s.status === 1 || s.status === undefined)
   const firstSku = skus[0]
 
   Object.assign(form, {
@@ -555,9 +556,9 @@ onMounted(async () => {
     brandApi.getList({ page: 1, pageSize: 100 }),
     supplierApi.getList({ page: 1, pageSize: 100 }),
   ])
-  categoryTree.value = catRes.data || []
-  brandList.value = (brandRes.data as any)?.list || brandRes.data || []
-  supplierList.value = (supplierRes.data as any)?.list || supplierRes.data || []
+  categoryTree.value = asArray(catRes.data)
+  brandList.value = asArray(brandRes.data)
+  supplierList.value = asArray(supplierRes.data)
 
   if (route.params.id) await fetchDetail(Number(route.params.id))
 })

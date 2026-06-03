@@ -75,8 +75,8 @@
         </el-form-item>
         <el-form-item label="合作状态">
           <el-radio-group v-model="form.status">
-            <el-radio :label="1">合作中</el-radio>
-            <el-radio :label="0">已停用</el-radio>
+            <el-radio :value="1">合作中</el-radio>
+            <el-radio :value="0">已停用</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="备注">
@@ -95,6 +95,7 @@
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { supplierApi } from '@/api/supplier'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -128,8 +129,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await supplierApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }

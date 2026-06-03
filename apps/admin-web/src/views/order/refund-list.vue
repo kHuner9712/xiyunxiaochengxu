@@ -78,6 +78,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { refundApi } from '@/api/refund'
 import { formatPrice, formatDate } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const REFUND_STATUS_MAP: Record<string, string> = {
   pending: '待处理',
@@ -117,8 +118,8 @@ async function fetchList() {
     if (searchForm.orderId) params.orderId = searchForm.orderId
     if (searchForm.status) params.status = searchForm.status
     const res = await refundApi.getList(params)
-    tableData.value = res.data.list || []
-    pagination.total = res.data.pagination?.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }

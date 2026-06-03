@@ -60,8 +60,8 @@
         <el-form-item label="当前库存">{{ adjustForm.currentStock }}</el-form-item>
         <el-form-item label="调整类型" prop="type">
           <el-radio-group v-model="adjustForm.type">
-            <el-radio label="in">入库</el-radio>
-            <el-radio label="out">出库</el-radio>
+            <el-radio value="in">入库</el-radio>
+            <el-radio value="out">出库</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="调整数量" prop="quantity">
@@ -104,6 +104,7 @@ import { ref, reactive } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import request from '@/utils/request'
 import { formatPrice, formatDate } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -135,8 +136,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await request.get('/admin/stock/list', { params: { page: pagination.page, pageSize: pagination.pageSize, ...searchForm } })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }
@@ -145,7 +146,7 @@ async function fetchList() {
 async function fetchLogs() {
   try {
     const res = await request.get('/admin/stock/logs', { params: { page: 1, pageSize: 20 } })
-    logData.value = res.data.list || []
+    logData.value = asArray(res.data)
   } catch {}
 }
 

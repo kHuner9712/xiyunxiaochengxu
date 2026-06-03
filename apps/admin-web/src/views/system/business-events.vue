@@ -66,6 +66,7 @@ import { useRouter } from 'vue-router'
 import { businessEventApi } from '@/api/business-event'
 import { formatDate } from '@/utils/format'
 import { ElMessage } from 'element-plus'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const router = useRouter()
 const loading = ref(false)
@@ -106,8 +107,8 @@ async function fetchList() {
       params.createdAt = `${dateRange.value[0]},${dateRange.value[1]}`
     }
     const res = await businessEventApi.getList(params)
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch (e: any) {
     ElMessage.error(e?.message || '查询业务事件失败')
   } finally {

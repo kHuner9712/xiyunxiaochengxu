@@ -81,6 +81,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { roleApi } from '@/api/role'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -112,9 +113,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await roleApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    const list = Array.isArray(res.data) ? res.data : (res.data.list || [])
-    tableData.value = list
-    pagination.total = Array.isArray(res.data) ? list.length : (res.data.total || 0)
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }
@@ -123,7 +123,7 @@ async function fetchList() {
 async function fetchPermissions() {
   try {
     const res = await roleApi.getPermissions()
-    permissionTree.value = res.data || []
+    permissionTree.value = asArray(res.data)
   } catch {}
 }
 

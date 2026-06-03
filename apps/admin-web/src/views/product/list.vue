@@ -105,6 +105,7 @@ import { productApi } from '@/api/product'
 import { categoryApi } from '@/api/category'
 import { brandApi } from '@/api/brand'
 import { formatPrice } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const router = useRouter()
 const loading = ref(false)
@@ -133,8 +134,8 @@ async function fetchList() {
       pageSize: pagination.pageSize,
       ...searchForm,
     })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }
@@ -143,14 +144,14 @@ async function fetchList() {
 async function fetchCategoryTree() {
   try {
     const res = await categoryApi.getTree()
-    categoryTree.value = res.data || []
+    categoryTree.value = asArray(res.data)
   } catch {}
 }
 
 async function fetchBrandList() {
   try {
     const res = await brandApi.getList({ page: 1, pageSize: 100 })
-    brandList.value = (res.data as any)?.list || res.data || []
+    brandList.value = asArray(res.data)
   } catch {}
 }
 

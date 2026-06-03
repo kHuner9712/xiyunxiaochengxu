@@ -56,6 +56,7 @@
 import { ref, reactive } from 'vue'
 import { userApi } from '@/api/user'
 import { formatDate, formatDateShort } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -72,8 +73,8 @@ async function fetchList() {
       name: searchForm.name || undefined,
       userId: searchForm.userId ? Number(searchForm.userId) : undefined,
     })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }

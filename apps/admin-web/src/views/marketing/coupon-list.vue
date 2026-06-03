@@ -87,6 +87,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { couponApi } from '@/api/coupon'
 import { formatPrice, formatDate, formatCouponType } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const router = useRouter()
 const loading = ref(false)
@@ -104,8 +105,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await couponApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch (e: any) {
     ElMessage.error(e?.message || '获取优惠券列表失败')
   } finally {

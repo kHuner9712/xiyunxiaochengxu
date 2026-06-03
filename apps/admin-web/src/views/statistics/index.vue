@@ -93,6 +93,7 @@
 import { ref, onMounted } from 'vue'
 import request from '@/utils/request'
 import { formatPrice, formatPercent } from '@/utils/format'
+import { asArray } from '@/utils/response'
 
 const dateRange = ref<string[]>([])
 const salesData = ref<any[]>([])
@@ -122,10 +123,10 @@ async function fetchData() {
       { label: '总用户数', value: String(d.totalUsers || 0) },
       { label: '平均客单价', value: `¥${formatPrice(d.avgOrderAmount)}` },
     ]
-    salesData.value = d.salesList || []
-    categoryData.value = d.categoryList || []
-    userGrowthData.value = d.userGrowthList || []
-    productRankData.value = d.productRankList || []
+    salesData.value = asArray(d.salesList)
+    categoryData.value = asArray(d.categoryList)
+    userGrowthData.value = asArray(d.userGrowthList)
+    productRankData.value = asArray(d.productRankList)
   } catch {}
 }
 

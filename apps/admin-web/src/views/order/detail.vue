@@ -25,7 +25,7 @@
 
         <el-card style="margin-bottom: 20px">
           <template #header><span>商品列表</span></template>
-          <el-table :data="order.items || []" stripe>
+          <el-table :data="asArray(order.items)" stripe>
             <el-table-column label="商品图片" width="80">
               <template #default="{ row }">
                 <el-image :src="row.productImage" style="width: 50px; height: 50px" fit="cover" />
@@ -51,7 +51,7 @@
           </el-descriptions>
           <el-timeline style="margin-top: 16px">
             <el-timeline-item
-              v-for="(item, idx) in order.logistics.traces || []"
+              v-for="(item, idx) in asArray(order.logistics?.traces)"
               :key="idx"
               :timestamp="item.time"
               placement="top"
@@ -84,7 +84,7 @@
           <template #header><span>操作日志</span></template>
           <el-timeline>
             <el-timeline-item
-              v-for="(log, idx) in order.operationLogs || []"
+              v-for="(log, idx) in asArray(order.operationLogs)"
               :key="idx"
               :timestamp="formatDate(log.createTime)"
               placement="top"
@@ -135,6 +135,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { orderApi } from '@/api/order'
 import { formatPrice, formatDate, formatOrderStatus, getOrderStatusTagType } from '@/utils/format'
+import { asArray } from '@/utils/response'
 
 const router = useRouter()
 const route = useRoute()

@@ -12,8 +12,8 @@
 
         <el-form-item label="内容类型" prop="contentType">
           <el-radio-group v-model="form.contentType">
-            <el-radio label="article">文章</el-radio>
-            <el-radio label="video">视频</el-radio>
+            <el-radio value="article">文章</el-radio>
+            <el-radio value="video">视频</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -109,8 +109,8 @@
 
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
-            <el-radio :label="1">发布</el-radio>
-            <el-radio :label="2">草稿</el-radio>
+            <el-radio :value="1">发布</el-radio>
+            <el-radio :value="2">草稿</el-radio>
           </el-radio-group>
         </el-form-item>
 

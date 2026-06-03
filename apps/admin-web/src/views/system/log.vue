@@ -82,6 +82,7 @@
 import { ref, reactive } from 'vue'
 import { operationLogApi } from '@/api/operation-log'
 import { formatDate } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const detailVisible = ref(false)
@@ -118,8 +119,8 @@ async function fetchList() {
       params.endTime = dateRange.value[1]
     }
     const res = await operationLogApi.getList(params)
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }

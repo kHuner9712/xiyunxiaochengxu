@@ -73,6 +73,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
 import { formatPrice, formatDate, formatAftersaleStatus, AFTERSALE_STATUS_MAP } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款', 3: '换货' }
 const router = useRouter()
@@ -91,8 +92,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await aftersaleApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch (e: any) {
     ElMessage.error(e?.message || '获取售后列表失败')
   } finally {

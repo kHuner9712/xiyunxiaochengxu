@@ -70,8 +70,8 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.isShow">
-            <el-radio :label="1">启用</el-radio>
-            <el-radio :label="0">禁用</el-radio>
+            <el-radio :value="1">启用</el-radio>
+            <el-radio :value="0">禁用</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-divider content-position="left">类目合规配置</el-divider>
@@ -115,6 +115,7 @@ import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { categoryApi } from '@/api/category'
 import { uploadApi } from '@/api/upload'
+import { asArray } from '@/utils/response'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -149,7 +150,7 @@ async function fetchTree() {
   loading.value = true
   try {
     const res = await categoryApi.getTree()
-    categoryTree.value = res.data || []
+    categoryTree.value = asArray(res.data)
   } catch {} finally {
     loading.value = false
   }

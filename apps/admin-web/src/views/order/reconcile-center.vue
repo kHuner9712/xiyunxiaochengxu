@@ -187,8 +187,8 @@
       <el-form :model="resolveForm" label-width="100px">
         <el-form-item label="处理动作">
           <el-radio-group v-model="resolveForm.status">
-            <el-radio label="resolved">resolved</el-radio>
-            <el-radio label="ignored">ignored</el-radio>
+            <el-radio value="resolved">resolved</el-radio>
+            <el-radio value="ignored">ignored</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="处理结论">
@@ -207,6 +207,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { reconcileApi } from '@/api/reconcile'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const paymentLoading = ref(false)
 const refundLoading = ref(false)
@@ -401,10 +402,10 @@ async function fetchCompensationTasks() {
       status: compensationQuery.status || undefined,
       orderNo: compensationQuery.orderNo.trim() || undefined,
     })
-    compensationList.value = res.data.list || []
+    compensationList.value = asArray(res.data)
     compensationPagination.page = res.data.pagination?.page || compensationQuery.page
     compensationPagination.pageSize = res.data.pagination?.pageSize || compensationQuery.pageSize
-    compensationPagination.total = res.data.pagination?.total || 0
+    compensationPagination.total = paginationTotal(res.data)
   } catch (error: any) {
     const message = error?.response?.data?.message || error?.message || '补偿任务列表加载失败'
     ElMessage.error(message)

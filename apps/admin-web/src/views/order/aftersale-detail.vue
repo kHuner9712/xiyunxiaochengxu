@@ -21,10 +21,10 @@
             <el-descriptions-item label="售后描述" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
           </el-descriptions>
 
-          <div v-if="detail.images?.length" style="margin-top: 16px">
+          <div v-if="asArray(detail.images).length" style="margin-top: 16px">
             <p style="font-weight: 600; margin-bottom: 8px">凭证图片</p>
             <el-image
-              v-for="(img, idx) in detail.images"
+              v-for="(img, idx) in asArray(detail.images)"
               :key="idx"
               :src="displayImages[idx] || img"
               :preview-src-list="displayImages"
@@ -36,7 +36,7 @@
 
         <el-card>
           <template #header><span>商品信息</span></template>
-          <el-table :data="detail.items || []" stripe>
+          <el-table :data="asArray(detail.items)" stripe>
             <el-table-column label="商品图片" width="80">
               <template #default="{ row }">
                 <el-image :src="row.productImage" style="width: 50px; height: 50px" fit="cover" />
@@ -66,8 +66,8 @@
           <el-form label-width="100px">
             <el-form-item label="审核结果">
               <el-radio-group v-model="auditResult">
-                <el-radio label="approve">通过</el-radio>
-                <el-radio label="reject">拒绝</el-radio>
+                <el-radio value="approve">通过</el-radio>
+                <el-radio value="reject">拒绝</el-radio>
               </el-radio-group>
             </el-form-item>
             <el-form-item v-if="auditResult === 'reject'" label="拒绝原因">
@@ -102,6 +102,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
 import { formatPrice, formatDate, formatAftersaleStatus, priceToFen } from '@/utils/format'
 import { resolvePrivateFileUrls, revokePrivateObjectUrls } from '@/utils/private-file'
+import { asArray } from '@/utils/response'
 
 const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款', 3: '换货' }
 const router = useRouter()
@@ -120,7 +121,7 @@ async function fetchDetail() {
     const res = await aftersaleApi.getDetail(Number(route.params.id))
     detail.value = res.data || {}
     refundAmountYuan.value = (res.data?.refundAmount || 0) / 100
-    displayImages.value = await resolvePrivateFileUrls(detail.value.images || [])
+    displayImages.value = await resolvePrivateFileUrls(asArray(detail.value.images))
   } catch (e: any) {
     ElMessage.error(e?.message || '获取售后详情失败')
   }

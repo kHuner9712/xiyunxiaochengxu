@@ -80,6 +80,7 @@ import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { brandApi } from '@/api/brand'
 import { uploadApi } from '@/api/upload'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -108,8 +109,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await brandApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }

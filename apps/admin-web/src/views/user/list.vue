@@ -96,6 +96,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { userApi } from '@/api/user'
 import { memberApi } from '@/api/member'
 import { formatPrice, formatDate } from '@/utils/format'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const router = useRouter()
 const loading = ref(false)
@@ -130,8 +131,8 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await userApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = res.data.list || []
-    pagination.total = res.data.total || 0
+    tableData.value = asArray(res.data)
+    pagination.total = paginationTotal(res.data)
   } catch {} finally {
     loading.value = false
   }
@@ -140,7 +141,7 @@ async function fetchList() {
 async function fetchMemberLevels() {
   try {
     const res = await memberApi.getList()
-    memberLevels.value = res.data || []
+    memberLevels.value = asArray(res.data)
   } catch {}
 }
 
