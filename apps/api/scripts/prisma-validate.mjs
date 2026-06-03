@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 
-const defaultDatabaseUrl = 'mysql://release_check:release_check@127.0.0.1:3306/release_check'
+const defaultDatabaseUrl = 'mysql://root:dummy@localhost:3306/baby_mall'
 const env = {
   ...process.env,
   DATABASE_URL: process.env.DATABASE_URL || defaultDatabaseUrl,

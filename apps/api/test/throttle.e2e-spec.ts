@@ -87,13 +87,11 @@ describe('Throttler Guard (e2e)', () => {
   });
 
   it('GET /api/admin/auth/captcha 触发限流后返回 code=40501', async () => {
-    const requests = [];
+    const responses = [];
     for (let i = 0; i < 21; i++) {
-      requests.push(
-        request(app.getHttpServer()).get('/api/admin/auth/captcha'),
-      );
+      const res = await request(app.getHttpServer()).get('/api/admin/auth/captcha');
+      responses.push(res);
     }
-    const responses = await Promise.all(requests);
     const throttled = responses.find((res) => res.body.code === 40501);
     expect(throttled).toBeDefined();
     expect(throttled!.body.code).toBe(40501);
@@ -122,15 +120,13 @@ describe('Throttler Guard (e2e)', () => {
   });
 
   it('POST /api/admin/auth/login 触发限流后返回 code=40501', async () => {
-    const requests = [];
+    const responses = [];
     for (let i = 0; i < 6; i++) {
-      requests.push(
-        request(app.getHttpServer())
-          .post('/api/admin/auth/login')
-          .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' }),
-      );
+      const res = await request(app.getHttpServer())
+        .post('/api/admin/auth/login')
+        .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' });
+      responses.push(res);
     }
-    const responses = await Promise.all(requests);
     const throttled = responses.find((res) => res.body.code === 40501);
     expect(throttled).toBeDefined();
     expect(throttled!.body.code).toBe(40501);
@@ -162,15 +158,13 @@ describe('Throttler Guard (e2e)', () => {
   });
 
   it('限流响应结构包含 code, message, data, requestId', async () => {
-    const requests = [];
+    const responses = [];
     for (let i = 0; i < 6; i++) {
-      requests.push(
-        request(app.getHttpServer())
-          .post('/api/admin/auth/login')
-          .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' }),
-      );
+      const res = await request(app.getHttpServer())
+        .post('/api/admin/auth/login')
+        .send({ username: 'test', password: 'test', captchaId: 'x', captchaCode: 'x' });
+      responses.push(res);
     }
-    const responses = await Promise.all(requests);
     const throttled = responses.find((res) => res.body.code === 40501);
     expect(throttled).toBeDefined();
     const body = throttled!.body;

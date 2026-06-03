@@ -65,6 +65,16 @@ run_pnpm_with_node_env() {
   fi
 }
 
+run_pnpm_with_database_url() {
+  local database_url="${DATABASE_URL:-mysql://root:dummy@localhost:3306/baby_mall}"
+
+  if [ "$IS_WINDOWS" = true ]; then
+    cmd.exe /c "set DATABASE_URL=$database_url&& pnpm $*" > "$TMPFILE" 2>&1
+  else
+    DATABASE_URL="$database_url" pnpm "$@" > "$TMPFILE" 2>&1
+  fi
+}
+
 TMPFILE="${TMPDIR:-/tmp}/release-check-$$.log"
 trap "rm -f '$TMPFILE'" EXIT
 
@@ -112,7 +122,7 @@ else
 fi
 
 section "1. Prisma Schema 验证"
-if run_pnpm --filter @baby-mall/api prisma:validate; then
+if run_pnpm_with_database_url --filter @baby-mall/api prisma:validate; then
   pass "prisma:validate 通过"
 else
   fail "prisma:validate 失败，请检查 schema.prisma"
