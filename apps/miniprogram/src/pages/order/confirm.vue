@@ -495,6 +495,16 @@ async function handleSubmit() {
   }
 }
 
+defineExpose({
+  handleSubmit,
+  agreedToLegal,
+  fulfillmentType,
+  address,
+  selectedPickupStore,
+  orderItems,
+  preview
+})
+
 onLoad(async (options) => {
   if (options?.items) {
     orderItems.value = JSON.parse(decodeURIComponent(options.items))
