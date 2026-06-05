@@ -19,7 +19,7 @@ export const useUserStore = defineStore('user', () => {
   let loginPromise: Promise<any> | null = null
 
   const isLoggedIn = computed(() => !!token.value)
-  const nickname = computed(() => userInfo.value?.nickname || '未登录')
+  const nickname = computed(() => userInfo.value?.nickname || (token.value ? '微信用户' : '未登录'))
   const avatar = computed(() => userInfo.value?.avatar || '')
   const phone = computed(() => userInfo.value?.phone || '')
   const memberLevel = computed(() => userInfo.value?.memberLevel || 0)

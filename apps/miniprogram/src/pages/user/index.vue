@@ -15,7 +15,7 @@
         </view>
       </view>
       <view v-if="!userStore.isLoggedIn" class="login-btn" @tap="handleLogin">
-        <text class="login-text">微信一键登录</text>
+        <text class="login-text">微信快捷登录</text>
       </view>
       <button
         v-if="userStore.isLoggedIn && !userStore.phone"
@@ -179,8 +179,12 @@ async function loadOrderCount() {
   }
 }
 
-function handleLogin() {
-  userStore.wxLogin().catch((err: any) => {
+async function handleLogin() {
+  try {
+    await userStore.wxLogin()
+    await loadOrderCount()
+    uni.showToast({ title: '登录成功', icon: 'success' })
+  } catch (err: any) {
     console.error('[baby-mall] wxLogin failed:', err)
     uni.showModal({
       title: '登录失败',
@@ -188,7 +192,7 @@ function handleLogin() {
       showCancel: false,
       confirmText: '我知道了'
     })
-  })
+  }
 }
 
 async function handleGetPhoneNumber(e: any) {
