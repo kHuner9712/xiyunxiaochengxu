@@ -1,13 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { get, post, setToken, removeToken } from '@/utils/request'
-import { wxLogin as wxLoginApi, bindPhone as bindPhoneApi } from '@/api/auth'
+import { wxLogin as wxLoginApi, bindPhone as bindPhoneApi, updateProfile as updateProfileApi } from '@/api/auth'
 
 interface UserInfo {
   id: number | string
-  nickname: string
-  avatar: string
-  phone: string
+  nickname?: string | null
+  avatar?: string | null
+  avatarUrl?: string | null
+  phone?: string | null
   memberLevel: number
   memberLevelName: string
   points: number
@@ -22,6 +23,11 @@ export const useUserStore = defineStore('user', () => {
   const nickname = computed(() => userInfo.value?.nickname || (token.value ? '微信用户' : '未登录'))
   const avatar = computed(() => userInfo.value?.avatar || '')
   const phone = computed(() => userInfo.value?.phone || '')
+  const isProfileComplete = computed(() => {
+    const rawNickname = userInfo.value?.nickname?.trim()
+    const rawAvatar = userInfo.value?.avatar || userInfo.value?.avatarUrl
+    return !!(rawNickname && rawAvatar)
+  })
   const memberLevel = computed(() => userInfo.value?.memberLevel || 0)
   const memberLevelName = computed(() => userInfo.value?.memberLevelName || '普通用户')
   const points = computed(() => userInfo.value?.points || 0)
@@ -89,6 +95,12 @@ export const useUserStore = defineStore('user', () => {
     return data
   }
 
+  async function updateProfile(payload: { nickname?: string; avatar?: string; avatarUrl?: string }) {
+    const data = await updateProfileApi(payload) as UserInfo
+    userInfo.value = data
+    return data
+  }
+
   function logout() {
     token.value = ''
     userInfo.value = null
@@ -111,6 +123,7 @@ export const useUserStore = defineStore('user', () => {
     nickname,
     avatar,
     phone,
+    isProfileComplete,
     memberLevel,
     memberLevelName,
     points,
@@ -118,6 +131,7 @@ export const useUserStore = defineStore('user', () => {
     fetchUserInfo,
     wxLogin,
     bindPhone,
+    updateProfile,
     logout,
     requireLogin
   }

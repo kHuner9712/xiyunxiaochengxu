@@ -27,7 +27,7 @@
         </el-form-item>
 
         <el-form-item label="客服微信">
-          <el-input v-model="form.serviceWechat" placeholder="请输入客服微信号" />
+          <el-input v-model="form.serviceWechat" placeholder="请输入微信客服账号" />
         </el-form-item>
 
         <el-divider content-position="left">订单配置</el-divider>

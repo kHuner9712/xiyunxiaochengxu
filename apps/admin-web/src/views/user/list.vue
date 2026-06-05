@@ -25,11 +25,19 @@
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column label="头像" width="80">
           <template #default="{ row }">
-            <el-avatar :src="row.avatar" :size="40">{{ row.nickname?.charAt(0) }}</el-avatar>
+            <el-avatar :src="row.avatar" :size="40">{{ displayName(row).charAt(0) }}</el-avatar>
           </template>
         </el-table-column>
-        <el-table-column prop="nickname" label="昵称" width="120" />
+        <el-table-column label="昵称" width="120">
+          <template #default="{ row }">{{ displayName(row) }}</template>
+        </el-table-column>
         <el-table-column prop="phone" label="手机号" width="130" />
+        <el-table-column label="微信OpenID" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">{{ displayWechatIdentifier(row.openidMasked, row.openid) }}</template>
+        </el-table-column>
+        <el-table-column label="微信UnionID" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">{{ displayWechatIdentifier(row.unionIdMasked, row.unionId) }}</template>
+        </el-table-column>
         <el-table-column label="会员等级" width="100">
           <template #default="{ row }">
             <el-tag size="small">{{ row.memberLevelName || '普通用户' }}</el-tag>
@@ -46,7 +54,10 @@
           <template #default="{ row }">¥{{ formatPrice(row.totalSpent) }}</template>
         </el-table-column>
         <el-table-column label="注册时间" width="180">
-          <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
+          <template #default="{ row }">{{ formatDate(row.createdAt || row.createTime) }}</template>
+        </el-table-column>
+        <el-table-column label="最后登录" width="180">
+          <template #default="{ row }">{{ formatDate(row.lastLoginAt || row.lastLoginTime) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
@@ -125,6 +136,20 @@ const pointsForm = reactive({
 const pointsRules: FormRules = {
   points: [{ required: true, message: '请输入调整积分', trigger: 'blur' }],
   reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
+}
+
+function displayName(row: any) {
+  return row.nickname || '微信用户'
+}
+
+function maskIdentifier(value?: string) {
+  if (!value) return ''
+  if (value.length <= 8) return `${value.slice(0, 2)}****${value.slice(-2)}`
+  return `${value.slice(0, 4)}****${value.slice(-4)}`
+}
+
+function displayWechatIdentifier(masked?: string, raw?: string) {
+  return masked || maskIdentifier(raw) || '-'
 }
 
 async function fetchList() {

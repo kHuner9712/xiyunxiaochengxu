@@ -25,11 +25,11 @@ export class UserService {
 
     return {
       id: user.id.toString(),
-      openid: user.openid,
       phone: user.phone,
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
       avatar: user.avatarUrl,
+      profileComplete: !!(user.nickname && user.avatarUrl),
       gender: user.gender,
       memberLevelId: user.memberLevelId?.toString(),
       memberLevel: user.memberLevel
@@ -74,7 +74,8 @@ export class UserService {
 
     const updateData: any = {};
     if (dto.nickname !== undefined) updateData.nickname = dto.nickname;
-    if (dto.avatarUrl !== undefined) updateData.avatarUrl = dto.avatarUrl;
+    const avatarUrl = dto.avatarUrl ?? dto.avatar;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
     if (dto.gender !== undefined) updateData.gender = dto.gender;
 
     if (Object.keys(updateData).length > 0) {
@@ -258,13 +259,20 @@ export class UserService {
   }
 
   private serializeUser(user: any) {
+    const orderCount = user._count?.orders ?? 0;
+    const babyCount = user._count?.babyProfiles ?? 0;
+
     return {
       id: user.id.toString(),
       openid: user.openid,
+      unionId: user.unionId,
+      openidMasked: this.maskIdentifier(user.openid),
+      unionIdMasked: this.maskIdentifier(user.unionId),
       phone: user.phone,
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
       avatar: user.avatarUrl,
+      profileComplete: !!(user.nickname && user.avatarUrl),
       gender: user.gender,
       memberLevelId: user.memberLevelId?.toString(),
       memberLevel: user.memberLevel
@@ -291,13 +299,25 @@ export class UserService {
         : null,
       status: user.status,
       lastLoginAt: user.lastLoginAt,
+      lastLoginTime: user.lastLoginAt,
       createdAt: user.createdAt,
+      createTime: user.createdAt,
+      orderCount,
+      babyCount,
       _count: user._count
         ? {
-            orders: user._count.orders ?? 0,
-            babyProfiles: user._count.babyProfiles ?? 0,
+            orders: orderCount,
+            babyProfiles: babyCount,
           }
         : undefined,
     };
+  }
+
+  private maskIdentifier(value?: string | null) {
+    if (!value) return '';
+    if (value.length <= 8) {
+      return `${value.slice(0, 2)}****${value.slice(-2)}`;
+    }
+    return `${value.slice(0, 4)}****${value.slice(-4)}`;
   }
 }

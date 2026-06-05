@@ -1,24 +1,28 @@
 <template>
   <view class="profile-page page-shell">
     <view class="profile-header card">
-      <view class="avatar-section" @tap="changeAvatar">
-        <image class="user-avatar" :src="userStore.avatar || '/static/default-avatar.png'" mode="aspectFill" />
+      <button class="avatar-picker" open-type="chooseAvatar" @chooseavatar="handleChooseAvatar">
+        <image class="user-avatar" :src="avatarPreview" mode="aspectFill" />
         <view class="avatar-edit">
           <text class="edit-text">修改</text>
         </view>
-      </view>
+      </button>
     </view>
 
     <view class="form-section card">
-      <view class="form-item" @tap="editNickname">
+      <view class="form-item">
         <text class="form-label">昵称</text>
-        <text class="form-value">{{ userStore.nickname }}</text>
-        <text class="form-arrow">›</text>
+        <input
+          v-model="form.nickname"
+          class="nickname-input"
+          type="nickname"
+          placeholder="请输入昵称"
+          maxlength="20"
+        />
       </view>
       <view class="form-item">
         <text class="form-label">手机号</text>
         <text class="form-value">{{ formatPhone(userStore.userInfo?.phone || '') }}</text>
-        <text class="form-arrow">›</text>
       </view>
       <view class="form-item" @tap="goMember">
         <text class="form-label">会员等级</text>
@@ -26,6 +30,10 @@
         <text class="form-arrow">›</text>
       </view>
     </view>
+
+    <button class="save-btn" :disabled="submitting" :loading="submitting" @tap="handleSubmit">
+      保存资料
+    </button>
 
     <view class="menu-section card">
       <view class="menu-item" @tap="goAddress">
@@ -41,34 +49,85 @@
 </template>
 
 <script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
-import { chooseAndUploadImage } from '@/api/upload'
+import { uploadImage } from '@/api/upload'
 import { formatPhone } from '@/utils/format'
 
 const userStore = useUserStore()
+const submitting = ref(false)
+const selectedAvatarPath = ref('')
+const form = reactive({
+  nickname: '',
+  avatar: ''
+})
 
-async function changeAvatar() {
-  try {
-    const results = await chooseAndUploadImage(1)
-    if (results.length) {
-      await userStore.fetchUserInfo()
-    }
-  } catch {
-    uni.showToast({ title: '头像上传失败', icon: 'none' })
-  }
+const avatarPreview = computed(() => form.avatar || userStore.avatar || '/static/default-avatar.png')
+
+function syncForm() {
+  form.nickname = userStore.userInfo?.nickname || ''
+  form.avatar = userStore.userInfo?.avatar || userStore.userInfo?.avatarUrl || ''
+  selectedAvatarPath.value = ''
 }
 
-function editNickname() {
-  uni.showModal({
-    title: '修改昵称',
-    editable: true,
-    placeholderText: '请输入新昵称',
-    success: async (res) => {
-      if (res.confirm && res.content) {
-        await userStore.fetchUserInfo()
-      }
+onShow(async () => {
+  if (!userStore.isLoggedIn) return
+  try {
+    await userStore.fetchUserInfo()
+  } catch (err) {
+    console.error('[baby-mall] profile fetchUserInfo failed:', err)
+  } finally {
+    syncForm()
+  }
+})
+
+function handleChooseAvatar(e: any) {
+  const avatarUrl = e?.detail?.avatarUrl
+  if (!avatarUrl) {
+    uni.showToast({ title: '未获取到头像', icon: 'none' })
+    return
+  }
+  selectedAvatarPath.value = avatarUrl
+  form.avatar = avatarUrl
+}
+
+async function handleSubmit() {
+  if (submitting.value) return
+
+  const nickname = form.nickname.trim()
+  if (!nickname) {
+    uni.showToast({ title: '请输入昵称', icon: 'none' })
+    return
+  }
+  if (!form.avatar) {
+    uni.showToast({ title: '请选择头像', icon: 'none' })
+    return
+  }
+
+  submitting.value = true
+  try {
+    let avatar = form.avatar
+    if (selectedAvatarPath.value) {
+      const uploaded = await uploadImage(selectedAvatarPath.value, 'user-avatar')
+      avatar = uploaded.url
     }
-  })
+    await userStore.updateProfile({ nickname, avatar })
+    form.avatar = avatar
+    selectedAvatarPath.value = ''
+    uni.showToast({ title: '保存成功', icon: 'success' })
+  } catch (err) {
+    console.error('[baby-mall] update profile failed:', err)
+    uni.showToast({ title: '保存失败，请稍后重试', icon: 'none' })
+    try {
+      await userStore.fetchUserInfo()
+      syncForm()
+    } catch {
+      // ignore secondary refresh failure; the primary save error has already been shown
+    }
+  } finally {
+    submitting.value = false
+  }
 }
 
 function goMember() {
@@ -96,8 +155,17 @@ function goBaby() {
   background: $gradient-peach;
 }
 
-.avatar-section {
+.avatar-picker {
   position: relative;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  line-height: normal;
+
+  &::after {
+    border: none;
+  }
 }
 
 .user-avatar {
@@ -153,6 +221,15 @@ function goBaby() {
   text-align: right;
 }
 
+.nickname-input {
+  flex: 1;
+  min-width: 0;
+  height: 56rpx;
+  color: $text-color;
+  font-size: $font-md;
+  text-align: right;
+}
+
 .form-arrow {
   font-size: $font-lg;
   color: $text-hint;
@@ -175,5 +252,28 @@ function goBaby() {
 .menu-arrow {
   font-size: $font-lg;
   color: $text-hint;
+}
+
+.save-btn {
+  @include flex-center;
+  width: calc(100% - 64rpx);
+  min-height: 88rpx;
+  margin: $spacing-lg 32rpx $spacing-md;
+  padding: 0;
+  background: $gradient-coral;
+  border-radius: $radius-round;
+  color: #FFFFFF;
+  font-size: $font-md;
+  font-weight: 800;
+  line-height: 88rpx;
+  box-shadow: $shadow-coral;
+
+  &::after {
+    border: none;
+  }
+
+  &[disabled] {
+    opacity: 0.72;
+  }
 }
 </style>

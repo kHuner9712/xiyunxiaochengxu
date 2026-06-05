@@ -39,6 +39,7 @@ describe('UserService', () => {
       prisma.user.findFirst.mockResolvedValue({
         id: 1n,
         openid: 'test_openid',
+        unionId: 'test_unionid',
         phone: '13800138000',
         nickname: '测试用户',
         avatarUrl: 'https://example.com/avatar.jpg',
@@ -70,12 +71,15 @@ describe('UserService', () => {
       expect(result).toHaveProperty('availablePoints', 800);
       expect(result).toHaveProperty('memberLevel');
       expect(result.memberLevel!.name).toBe('金卡会员');
+      expect(result).not.toHaveProperty('openid');
+      expect(result).not.toHaveProperty('unionId');
     });
 
     it('should default memberLevelName to "普通会员" when no memberLevel', async () => {
       prisma.user.findFirst.mockResolvedValue({
         id: 1n,
         openid: 'test_openid',
+        unionId: null,
         phone: '13800138000',
         nickname: '测试用户',
         avatarUrl: 'https://example.com/avatar.jpg',
@@ -96,6 +100,48 @@ describe('UserService', () => {
 
       expect(result.memberLevelName).toBe('普通会员');
       expect(result.points).toBe(0);
+    });
+  });
+
+  describe('updateProfile', () => {
+    it('should accept avatar alias and save it as avatarUrl', async () => {
+      prisma.user.findFirst
+        .mockResolvedValueOnce({ id: 1n, deletedAt: null })
+        .mockResolvedValueOnce({
+          id: 1n,
+          openid: 'test_openid',
+          unionId: 'test_unionid',
+          phone: '13800138000',
+          nickname: '新昵称',
+          avatarUrl: 'https://example.com/new-avatar.jpg',
+          gender: 0,
+          memberLevelId: null,
+          memberLevel: null,
+          growthValue: 0,
+          totalPoints: 0,
+          availablePoints: 0,
+          profile: null,
+          lastLoginAt: new Date(),
+          status: 1,
+          createdAt: new Date(),
+          _count: { babyProfiles: 0 },
+        });
+      prisma.user.update.mockResolvedValue({});
+
+      const result = await service.updateProfile('1', {
+        nickname: '新昵称',
+        avatar: 'https://example.com/new-avatar.jpg',
+      });
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 1n },
+        data: {
+          nickname: '新昵称',
+          avatarUrl: 'https://example.com/new-avatar.jpg',
+        },
+      });
+      expect(result.nickname).toBe('新昵称');
+      expect(result.avatar).toBe('https://example.com/new-avatar.jpg');
     });
   });
 });

@@ -390,7 +390,6 @@ export class AuthService {
     const token = await this.jwtService.signAsync(
       {
         id: user.id.toString(),
-        openid: user.openid,
         roleType: 'user',
         type: 'user',
         tokenType: 'access',

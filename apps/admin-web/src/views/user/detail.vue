@@ -7,17 +7,19 @@
         <el-card>
           <template #header><span>基本信息</span></template>
           <div style="text-align: center; margin-bottom: 16px">
-            <el-avatar :src="user.avatar" :size="80">{{ user.nickname?.charAt(0) }}</el-avatar>
-            <h3 style="margin: 8px 0">{{ user.nickname }}</h3>
+            <el-avatar :src="user.avatar" :size="80">{{ displayName(user).charAt(0) }}</el-avatar>
+            <h3 style="margin: 8px 0">{{ displayName(user) }}</h3>
           </div>
           <el-descriptions :column="1" border>
             <el-descriptions-item label="用户ID">{{ user.id }}</el-descriptions-item>
+            <el-descriptions-item label="微信OpenID">{{ displayWechatIdentifier(user.openidMasked, user.openid) }}</el-descriptions-item>
+            <el-descriptions-item label="微信UnionID">{{ displayWechatIdentifier(user.unionIdMasked, user.unionId) }}</el-descriptions-item>
             <el-descriptions-item label="手机号">{{ user.phone || '-' }}</el-descriptions-item>
             <el-descriptions-item label="会员等级">{{ user.memberLevelName || '普通用户' }}</el-descriptions-item>
             <el-descriptions-item label="积分">{{ user.points || 0 }}</el-descriptions-item>
             <el-descriptions-item label="余额">¥{{ formatPrice(user.balance) }}</el-descriptions-item>
-            <el-descriptions-item label="注册时间">{{ formatDate(user.createTime) }}</el-descriptions-item>
-            <el-descriptions-item label="最后登录">{{ formatDate(user.lastLoginTime) }}</el-descriptions-item>
+            <el-descriptions-item label="注册时间">{{ formatDate(user.createdAt || user.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="最后登录">{{ formatDate(user.lastLoginAt || user.lastLoginTime) }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-col>
@@ -41,14 +43,18 @@
         <el-card style="margin-bottom: 20px">
           <template #header><span>宝宝档案</span></template>
           <el-table :data="babies" stripe size="small">
-            <el-table-column prop="name" label="宝宝昵称" />
+            <el-table-column label="宝宝昵称">
+              <template #default="{ row }">{{ row.nickname || row.name || '-' }}</template>
+            </el-table-column>
             <el-table-column label="性别" width="80">
               <template #default="{ row }">{{ row.gender === 1 ? '男' : '女' }}</template>
             </el-table-column>
             <el-table-column label="出生日期" width="120">
               <template #default="{ row }">{{ formatDateShort(row.birthday) }}</template>
             </el-table-column>
-            <el-table-column prop="age" label="月龄" width="80" />
+            <el-table-column label="月龄" width="80">
+              <template #default="{ row }">{{ row.currentMonthAge ?? row.age ?? '-' }}</template>
+            </el-table-column>
           </el-table>
         </el-card>
 
@@ -90,9 +96,23 @@ async function fetchDetail() {
   try {
     const res = await userApi.getDetail(Number(route.params.id))
     user.value = res.data || {}
-    babies.value = res.data?.babies || []
+    babies.value = res.data?.babyProfiles || res.data?.babies || []
     recentOrders.value = res.data?.recentOrders || []
   } catch {}
+}
+
+function displayName(row: any) {
+  return row.nickname || '微信用户'
+}
+
+function maskIdentifier(value?: string) {
+  if (!value) return ''
+  if (value.length <= 8) return `${value.slice(0, 2)}****${value.slice(-2)}`
+  return `${value.slice(0, 4)}****${value.slice(-4)}`
+}
+
+function displayWechatIdentifier(masked?: string, raw?: string) {
+  return masked || maskIdentifier(raw) || '-'
 }
 
 onMounted(() => {

@@ -8,6 +8,7 @@ const storeMock = vi.hoisted(() => ({
     nickname: '微信用户',
     avatar: '',
     phone: '',
+    isProfileComplete: false,
     memberLevelName: '普通用户',
     wxLogin: vi.fn(),
     bindPhone: vi.fn(),
@@ -43,6 +44,7 @@ beforeEach(() => {
   storeMock.userStore.nickname = '微信用户'
   storeMock.userStore.avatar = ''
   storeMock.userStore.phone = ''
+  storeMock.userStore.isProfileComplete = false
   storeMock.userStore.memberLevelName = '普通用户'
   storeMock.userStore.wxLogin.mockResolvedValue({})
   storeMock.userStore.bindPhone.mockResolvedValue({})

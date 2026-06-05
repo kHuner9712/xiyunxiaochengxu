@@ -11,6 +11,10 @@ export class UpdateProfileDto {
   avatarUrl?: string;
 
   @IsOptional()
+  @IsString()
+  avatar?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   gender?: number;

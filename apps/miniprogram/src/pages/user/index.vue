@@ -25,6 +25,9 @@
       >
         绑定手机号
       </button>
+      <view v-if="userStore.isLoggedIn && !userStore.isProfileComplete" class="profile-btn" @tap="goProfile">
+        <text class="profile-text">完善资料</text>
+      </view>
       <view v-if="!userStore.isLoggedIn" class="login-agreement">
         <text class="agreement-prefix">登录即视为同意</text>
         <text class="agreement-link" @tap.stop="openPolicy('/pages/agreement/index')">《用户协议》</text>
@@ -465,6 +468,22 @@ onShow(() => {
   &::after {
     border: none;
   }
+}
+
+.profile-btn {
+  @include flex-center;
+  width: 240rpx;
+  min-height: 76rpx;
+  margin-top: $spacing-sm;
+  background: rgba($success-color, 0.12);
+  border: 2rpx solid rgba($success-color, 0.24);
+  border-radius: $radius-round;
+}
+
+.profile-text {
+  color: $success-color;
+  font-size: $font-md;
+  font-weight: 800;
 }
 
 .login-agreement {
