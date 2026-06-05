@@ -162,6 +162,7 @@ import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
 import { getOrderCount, normalizeOrderStatus, type OrderCount, type OrderStatus } from '@/api/order'
+import { navigateToStoredRedirect } from '@/utils/request'
 
 const userStore = useUserStore()
 const orderCount = ref<OrderCount>({
@@ -187,6 +188,9 @@ async function handleLogin() {
     await userStore.wxLogin()
     await loadOrderCount()
     uni.showToast({ title: '登录成功', icon: 'success' })
+    setTimeout(() => {
+      navigateToStoredRedirect()
+    }, 300)
   } catch (err: any) {
     console.error('[baby-mall] wxLogin failed:', err)
     uni.showModal({

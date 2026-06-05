@@ -10,8 +10,11 @@ export const userApi = {
   updateStatus(id: number, status: number) {
     return request.put(`/admin/user/status/${id}`, { status })
   },
+  adjustLevel(id: number, memberLevelId: number, reason?: string) {
+    return request.put(`/admin/user/level/${id}`, { memberLevelId, reason })
+  },
   adjustPoints(id: number, points: number, reason: string) {
-    return request.put(`/admin/user/level/${id}`, { points, reason })
+    return request.put(`/admin/user/points/${id}`, { points, reason })
   },
   getBabyList(params: { page: number; pageSize: number; name?: string; userId?: number }) {
     return request.get('/admin/baby-profile', { params })

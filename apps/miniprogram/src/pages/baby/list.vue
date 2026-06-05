@@ -6,7 +6,7 @@
     </view>
     <view class="baby-list">
       <view v-for="item in babies" :key="item.id" class="baby-card card">
-        <image class="baby-avatar" :src="item.avatar || '/static/default-baby.png'" mode="aspectFill" />
+        <image class="baby-avatar" :src="item.avatar || item.avatarUrl || '/static/default-baby.png'" mode="aspectFill" />
         <view class="baby-info">
           <text class="baby-name">{{ item.nickname }}</text>
           <text class="baby-meta">{{ item.gender === 1 ? '男' : '女' }} · {{ formatBabyAge(item.birthday) }}</text>

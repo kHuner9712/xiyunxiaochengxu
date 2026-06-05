@@ -87,6 +87,32 @@ describe('ContentService', () => {
         })
       );
     });
+
+    it('should include category and serialize categoryName', async () => {
+      prisma.content.findMany.mockResolvedValue([{
+        id: 3n, title: '分类文章', contentType: 'article', coverImage: 'cover.jpg',
+        content: 'body', summary: 'desc', videoUrl: null,
+        videoCover: null, videoDuration: null, placement: ['activity'],
+        tags: null, relatedProductIds: null, relatedActivityId: null,
+        isFeatured: 0, viewCount: 10, sortOrder: 0, status: 1,
+        publishedAt: new Date(), categoryId: 9n, category: { id: 9n, name: '喂养' },
+        createdAt: new Date(), updatedAt: new Date(),
+      }]);
+      prisma.content.count.mockResolvedValue(1);
+
+      const result = await service.findPublished({ categoryId: '9', page: 1, pageSize: 10, skip: 0, take: 10 } as any);
+
+      expect(prisma.content.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ categoryId: 9n }),
+          include: { category: { select: { id: true, name: true } } },
+        }),
+      );
+      expect(result.list[0]).toMatchObject({
+        categoryId: '9',
+        categoryName: '喂养',
+      });
+    });
   });
 
   describe('create - video validation', () => {
@@ -216,7 +242,8 @@ describe('ContentService', () => {
         videoCover: 'vc.jpg', videoDuration: 120, placement: ['activity', 'home'],
         tags: ['种草', '好物'], relatedProductIds: [1, 2], relatedActivityId: 5n,
         isFeatured: 1, viewCount: 300, sortOrder: 10, status: 1,
-        publishedAt: new Date(), categoryId: 1n, createdAt: new Date(), updatedAt: new Date(),
+        publishedAt: new Date(), categoryId: 1n, category: { id: 1n, name: '育儿知识' },
+        createdAt: new Date(), updatedAt: new Date(),
       });
       prisma.content.update.mockResolvedValue({});
 
@@ -230,6 +257,12 @@ describe('ContentService', () => {
       expect(result.relatedProductIds).toEqual([1, 2]);
       expect(result.relatedActivityId).toBe('5');
       expect(result.isFeatured).toBe(1);
+      expect(result.categoryName).toBe('育儿知识');
+      expect(prisma.content.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: { category: { select: { id: true, name: true } } },
+        }),
+      );
     });
   });
 });

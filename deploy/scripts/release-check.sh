@@ -688,6 +688,25 @@ else
   warn "legal.ts 不存在，跳过联系方式门禁检查"
 fi
 
+section "8.76. 客服入口真实可用检查"
+CS_DEAD_END_HITS=$(grep -RInE "暂无客服电话|暂未配置微信客服|暂无客服信息" apps/miniprogram/src 2>/dev/null || true)
+if [ -n "$CS_DEAD_END_HITS" ]; then
+  fail "小程序客服入口仍包含不可用死胡同文案"
+  echo "$CS_DEAD_END_HITS" | head -10 | sed 's/^/    /'
+else
+  pass "小程序客服入口未出现“暂无/暂未配置”死胡同文案"
+fi
+
+if [ "$STRICT_PROD_GATE" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; then
+  if [ -n "${CUSTOMER_SERVICE_PHONE:-}" ] || [ -n "${CUSTOMER_SERVICE_WECHAT_QR_CODE:-}" ]; then
+    pass "生产客服联系方式环境变量已提供"
+  else
+    warn "未提供 CUSTOMER_SERVICE_PHONE/CUSTOMER_SERVICE_WECHAT_QR_CODE；公开仓库不复核生产 DB 客服配置，体验版/线上必须在后台 customer-service 配置真实电话或微信客服并留痕"
+  fi
+else
+  warn "非生产门禁不强制校验真实客服联系方式"
+fi
+
 section "8.8. GO_LIVE 结论一致性检查"
 GO_LIVE_FILE="GO_LIVE.md"
 if [ -f "$GO_LIVE_FILE" ]; then

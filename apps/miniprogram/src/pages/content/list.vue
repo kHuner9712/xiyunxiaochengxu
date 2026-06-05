@@ -23,7 +23,7 @@
           <text class="content-title">{{ item.title }}</text>
           <text class="content-summary">{{ item.summary }}</text>
           <view class="content-meta">
-            <text class="meta-category">{{ item.categoryName || item.categoryId }}</text>
+            <text class="meta-category">{{ item.categoryName || '未分类' }}</text>
             <text class="meta-views">{{ item.viewCount }}阅读</text>
           </view>
         </view>
@@ -43,7 +43,7 @@ import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
 const categories = ref<ContentCategory[]>([])
-const currentCategoryId = ref(0)
+const currentCategoryId = ref<string>('')
 const contents = ref<ContentItem[]>([])
 const loading = ref(false)
 const page = ref(1)
@@ -82,7 +82,7 @@ async function loadContents(reset = false) {
   }
 }
 
-function switchCategory(id: number) {
+function switchCategory(id: string) {
   currentCategoryId.value = id
   loadContents(true)
 }

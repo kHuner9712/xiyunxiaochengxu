@@ -14,12 +14,7 @@ export class BabyProfileService {
       where: { userId: BigInt(userId), deletedAt: null },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
     });
-    return profiles.map((p) => ({
-      ...p,
-      id: p.id.toString(),
-      userId: p.userId.toString(),
-      currentMonthAge: calculateBabyMonthAge(p.birthday),
-    }));
+    return profiles.map((p) => this.serializeProfile(p));
   }
 
   async findById(userId: string, id: string) {
@@ -27,12 +22,7 @@ export class BabyProfileService {
       where: { id: BigInt(id), userId: BigInt(userId), deletedAt: null },
     });
     if (!profile) throw new NotFoundException('宝宝档案不存在');
-    return {
-      ...profile,
-      id: profile.id.toString(),
-      userId: profile.userId.toString(),
-      currentMonthAge: calculateBabyMonthAge(profile.birthday),
-    };
+    return this.serializeProfile(profile);
   }
 
   async create(userId: string, data: {
@@ -40,6 +30,7 @@ export class BabyProfileService {
     gender?: number;
     birthday: string;
     avatarUrl?: string;
+    avatar?: string;
     isDefault?: number;
   }) {
     if (data.isDefault === 1) {
@@ -49,20 +40,20 @@ export class BabyProfileService {
       });
     }
 
+    const { avatar, avatarUrl: rawAvatarUrl, ...profileData } = data;
+    const avatarUrl = rawAvatarUrl ?? avatar;
+
     const profile = await this.prisma.babyProfile.create({
       data: {
         userId: BigInt(userId),
-        ...data,
+        ...profileData,
+        avatarUrl,
         birthday: new Date(data.birthday),
         currentMonthAge: calculateBabyMonthAge(data.birthday),
       },
     });
     this.logger.log(`用户${userId}创建宝宝档案`);
-    return {
-      ...profile,
-      id: profile.id.toString(),
-      userId: profile.userId.toString(),
-    };
+    return this.serializeProfile(profile);
   }
 
   async update(userId: string, id: string, data: any) {
@@ -79,6 +70,11 @@ export class BabyProfileService {
     }
 
     const updateData: any = { ...data };
+    const avatarUrl = data.avatarUrl ?? data.avatar;
+    delete updateData.avatar;
+    if (avatarUrl !== undefined) {
+      updateData.avatarUrl = avatarUrl;
+    }
     if (data.birthday) {
       updateData.birthday = new Date(data.birthday);
       updateData.currentMonthAge = calculateBabyMonthAge(data.birthday);
@@ -89,11 +85,7 @@ export class BabyProfileService {
       data: updateData,
     });
     this.logger.log(`用户${userId}更新宝宝档案${id}`);
-    return {
-      ...result,
-      id: result.id.toString(),
-      userId: result.userId.toString(),
-    };
+    return this.serializeProfile(result);
   }
 
   async delete(userId: string, id: string) {
@@ -107,11 +99,7 @@ export class BabyProfileService {
       data: { deletedAt: new Date() },
     });
     this.logger.log(`用户${userId}删除宝宝档案${id}`);
-    return {
-      ...result,
-      id: result.id.toString(),
-      userId: result.userId.toString(),
-    };
+    return this.serializeProfile(result);
   }
 
   async findAllAdmin(dto: PaginationDto & { userId?: string }) {
@@ -131,15 +119,24 @@ export class BabyProfileService {
 
     return paginate(
       list.map((p) => ({
-        ...p,
-        id: p.id.toString(),
-        userId: p.userId.toString(),
-        currentMonthAge: calculateBabyMonthAge(p.birthday),
+        ...this.serializeProfile(p),
         user: p.user ? { ...p.user, id: p.user.id.toString() } : null,
       })),
       total,
       dto.page,
       dto.pageSize,
     );
+  }
+
+  private serializeProfile(profile: any) {
+    const avatarUrl = profile.avatarUrl || '';
+    return {
+      ...profile,
+      id: profile.id.toString(),
+      userId: profile.userId.toString(),
+      avatarUrl,
+      avatar: avatarUrl,
+      currentMonthAge: calculateBabyMonthAge(profile.birthday),
+    };
   }
 }

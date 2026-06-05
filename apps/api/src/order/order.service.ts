@@ -92,20 +92,6 @@ export class OrderService {
       });
     }
 
-    let pointsAmount = 0;
-    if (data.pointsDeduct && data.pointsDeduct > 0) {
-      const user = await this.prisma.user.findFirst({
-        where: { id: BigInt(userId) },
-      });
-      if (!user) throw new NotFoundException('用户不存在');
-      if (data.pointsDeduct > user.availablePoints) {
-        throw new BadRequestException('积分不足');
-      }
-      const maxPointsDeduct = Math.floor(totalAmount * POINTS_DEDUCT_MAX_PERCENT / 100) * POINTS_DEDUCT_RATE;
-      const actualPointsDeduct = Math.min(data.pointsDeduct, maxPointsDeduct);
-      pointsAmount = Math.floor(actualPointsDeduct / POINTS_DEDUCT_RATE);
-    }
-
     if (data.couponId) {
       const userCoupon = await this.prisma.userCoupon.findFirst({
         where: {
@@ -132,6 +118,14 @@ export class OrderService {
       }
     }
 
+    const user = await this.prisma.user.findFirst({
+      where: { id: BigInt(userId) },
+    });
+    if ((data.pointsDeduct || 0) > 0 && !user) throw new NotFoundException('用户不存在');
+    const pointsBaseAmount = Math.max(0, totalAmount - discountAmount - activityDiscountAmount);
+    const pointsDeduction = this.calculatePointsDeduction(pointsBaseAmount, user?.availablePoints || 0, data.pointsDeduct || 0);
+    const pointsAmount = pointsDeduction.pointsAmount;
+
     let freightAmount = 0;
     if (fulfillmentType === 'delivery') {
       if (data.addressId) {
@@ -157,6 +151,11 @@ export class OrderService {
       couponAmount,
       activityDiscountAmount,
       pointsAmount,
+      pointsDeducted: pointsDeduction.pointsDeducted,
+      availablePoints: pointsDeduction.availablePoints,
+      maxPointsDeduct: pointsDeduction.maxPointsDeduct,
+      pointsDeductRate: POINTS_DEDUCT_RATE,
+      pointsDeductMaxPercent: POINTS_DEDUCT_MAX_PERCENT,
       freightAmount,
       payAmount,
       fulfillmentType,
@@ -262,17 +261,15 @@ export class OrderService {
 
     let pointsAmount = 0;
     let pointsDeducted = 0;
-    if (data.pointsDeduct && data.pointsDeduct > 0) {
+    if ((data.pointsDeduct || 0) > 0) {
       const user = await this.prisma.user.findFirst({
         where: { id: BigInt(userId) },
       });
       if (!user) throw new NotFoundException('用户不存在');
-      if (data.pointsDeduct > user.availablePoints) {
-        throw new BadRequestException('积分不足');
-      }
-      const maxPointsDeduct = Math.floor(totalAmount * POINTS_DEDUCT_MAX_PERCENT / 100) * POINTS_DEDUCT_RATE;
-      pointsDeducted = Math.min(data.pointsDeduct, maxPointsDeduct);
-      pointsAmount = Math.floor(pointsDeducted / POINTS_DEDUCT_RATE);
+      const pointsBaseAmount = Math.max(0, totalAmount - activityDiscountAmount);
+      const pointsDeduction = this.calculatePointsDeduction(pointsBaseAmount, user.availablePoints, data.pointsDeduct || 0);
+      pointsDeducted = pointsDeduction.pointsDeducted;
+      pointsAmount = pointsDeduction.pointsAmount;
     }
 
     const discountAmount = 0;
@@ -1082,6 +1079,38 @@ export class OrderService {
       if (dto.endDate) where.createdAt.lte = new Date(dto.endDate);
     }
     return where;
+  }
+
+  private calculatePointsDeduction(baseAmount: number, availablePoints: number, requestedPoints: number) {
+    const maxDeductAmount = Math.floor(baseAmount * POINTS_DEDUCT_MAX_PERCENT / 100);
+    const maxPointsDeduct = Math.floor(maxDeductAmount / 100) * POINTS_DEDUCT_RATE;
+    const normalizedAvailablePoints = Math.max(0, availablePoints || 0);
+    const normalizedRequestedPoints = Math.max(0, requestedPoints || 0);
+
+    if (normalizedRequestedPoints > 0) {
+      if (normalizedRequestedPoints > normalizedAvailablePoints) {
+        throw new BadRequestException('积分不足');
+      }
+      if (normalizedRequestedPoints % POINTS_DEDUCT_RATE !== 0) {
+        throw new BadRequestException(`积分抵扣需按${POINTS_DEDUCT_RATE}积分为单位`);
+      }
+      if (maxPointsDeduct <= 0) {
+        throw new BadRequestException('当前订单金额不满足积分抵扣');
+      }
+      if (normalizedRequestedPoints > maxPointsDeduct) {
+        throw new BadRequestException('积分抵扣超过订单可用上限');
+      }
+    }
+
+    const pointsDeducted = normalizedRequestedPoints;
+    const pointsAmount = Math.floor(pointsDeducted / POINTS_DEDUCT_RATE) * 100;
+
+    return {
+      availablePoints: normalizedAvailablePoints,
+      maxPointsDeduct,
+      pointsDeducted,
+      pointsAmount,
+    };
   }
 
   private calculateFreight(totalAmount: number, province?: string): number {

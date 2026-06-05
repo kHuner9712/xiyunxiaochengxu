@@ -165,7 +165,6 @@ const homeData = reactive<{
   hotProducts: ProductItem[]
   newProducts: ProductItem[]
   activities: ActivityItem[]
-  guessProducts: ProductItem[]
 }>({
   banners: [],
   quickEntries: [],
@@ -173,8 +172,7 @@ const homeData = reactive<{
   monthRecommend: [],
   hotProducts: [],
   newProducts: [],
-  activities: [],
-  guessProducts: []
+  activities: []
 })
 
 const guessProducts = ref<ProductItem[]>([])

@@ -2,12 +2,21 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ConfirmPage from '../confirm.vue'
 import PayResultPage from '../pay-result.vue'
-import { createOrder } from '@/api/order'
+import { createOrder, previewOrder } from '@/api/order'
 import { createPayment, getPaymentStatus, wxPay } from '@/api/payment'
 
 const uniAppMock = vi.hoisted(() => ({
   onLoadCallbacks: [] as Array<(options?: Record<string, any>) => void>,
   onUnloadCallbacks: [] as Array<() => void>,
+}))
+
+const storeMock = vi.hoisted(() => ({
+  userStore: {
+    isLoggedIn: true,
+    phone: '13800138000',
+    points: 500,
+    requireLogin: vi.fn(),
+  },
 }))
 
 vi.mock('@dcloudio/uni-app', () => ({
@@ -23,6 +32,10 @@ vi.mock('@/api/order', () => ({
   createOrder: vi.fn(),
   previewOrder: vi.fn(),
   getOrderDetail: vi.fn(),
+}))
+
+vi.mock('@/stores/user', () => ({
+  useUserStore: () => storeMock.userStore,
 }))
 
 vi.mock('@/api/payment', () => ({
@@ -84,6 +97,11 @@ function fillConfirmReadyState(wrapper: ReturnType<typeof mountConfirm>, fulfill
     pointsAmount: 0,
     freightAmount: 0,
     payAmount: 0,
+    pointsDeducted: 0,
+    availablePoints: 500,
+    maxPointsDeduct: 500,
+    pointsDeductRate: 100,
+    pointsDeductMaxPercent: 30,
     fulfillmentType,
   }
 }
@@ -99,6 +117,9 @@ beforeEach(() => {
     navigateTo: vi.fn(),
     switchTab: vi.fn(),
   }
+  storeMock.userStore.isLoggedIn = true
+  storeMock.userStore.phone = '13800138000'
+  storeMock.userStore.points = 500
 })
 
 describe('确认订单 0 元支付流程', () => {
@@ -153,6 +174,56 @@ describe('确认订单 0 元支付流程', () => {
     expect((globalThis as any).uni.redirectTo).toHaveBeenCalledWith({
       url: '/pages/order/pay-result?orderId=order-2&payScene=confirm&payIntent=success',
     })
+  })
+})
+
+describe('确认订单积分抵扣', () => {
+  it('无积分时不可开启抵扣', async () => {
+    const wrapper = mountConfirm()
+    ;(wrapper.vm as any).availablePoints = 0
+    ;(wrapper.vm as any).maxPointsDeduct = 500
+
+    await (wrapper.vm as any).togglePoints({ detail: { value: true } })
+
+    expect((wrapper.vm as any).usePoints).toBe(false)
+    expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
+      title: '暂无可用积分',
+      icon: 'none',
+    })
+  })
+
+  it('有积分时按可用积分重新试算金额', async () => {
+    orderApiMock.previewOrder.mockResolvedValue({
+      items: [],
+      totalAmount: 9900,
+      discountAmount: 0,
+      couponAmount: 0,
+      activityDiscountAmount: 0,
+      pointsAmount: 500,
+      pointsDeducted: 500,
+      availablePoints: 500,
+      maxPointsDeduct: 500,
+      pointsDeductRate: 100,
+      pointsDeductMaxPercent: 30,
+      freightAmount: 0,
+      payAmount: 9400,
+      fulfillmentType: 'delivery',
+      isZeroPay: false,
+    })
+
+    const wrapper = mountConfirm()
+    fillConfirmReadyState(wrapper, 'delivery')
+    ;(wrapper.vm as any).availablePoints = 500
+    ;(wrapper.vm as any).maxPointsDeduct = 500
+
+    await (wrapper.vm as any).togglePoints({ detail: { value: true } })
+    await flushPromises()
+
+    expect(previewOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ pointsDeduct: 500 }),
+    )
+    expect((wrapper.vm as any).pointsDeduct).toBe(500)
+    expect((wrapper.vm as any).payAmount).toBe(9400)
   })
 })
 

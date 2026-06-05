@@ -54,10 +54,13 @@
       <text class="section-arrow">›</text>
     </view>
 
-    <view class="products-section card">
+    <view class="products-section card" :class="{ 'aftersale-focus': selectAftersaleMode }">
       <view class="section-title-row">
         <text class="section-title">商品信息</text>
         <text class="section-count">共 {{ order.items.length }} 件</text>
+      </view>
+      <view v-if="selectAftersaleMode" class="aftersale-select-tip">
+        <text class="aftersale-select-text">请选择要申请售后的商品</text>
       </view>
       <view v-for="item in order.items" :key="item.id" class="product-item">
         <image class="product-image" :src="item.productImage" mode="aspectFill" />
@@ -153,13 +156,37 @@ const order = ref<OrderDetail>({
 })
 
 const showLogistics = ref(false)
+const selectAftersaleMode = ref(false)
+const shouldSelectAftersale = ref(false)
 
 async function loadOrder(id: string) {
   try {
     order.value = await getOrderDetail(id)
+    if (shouldSelectAftersale.value) {
+      guideAftersaleSelection()
+    }
   } catch {
     uni.showToast({ title: '订单加载失败', icon: 'none' })
   }
+}
+
+function guideAftersaleSelection() {
+  const canApplyItems = (order.value.items || []).filter((item) => item.canApplyAftersale !== false)
+  if (canApplyItems.length === 0) {
+    const reason = order.value.items?.find((item) => item.aftersaleDisabledReason)?.aftersaleDisabledReason || '当前订单暂无可申请售后的商品'
+    uni.showToast({ title: reason, icon: 'none' })
+    return
+  }
+  if (canApplyItems.length === 1) {
+    goAftersale(canApplyItems[0])
+    return
+  }
+  selectAftersaleMode.value = true
+  uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
+  uni.pageScrollTo?.({
+    selector: '.products-section',
+    duration: 300
+  })
 }
 
 function getStatusClass(status: string): string {
@@ -275,7 +302,16 @@ function callPhone(phone: string) {
 }
 
 onLoad((options) => {
+  shouldSelectAftersale.value = options?.selectAftersale === '1'
   if (options?.id) loadOrder(options.id)
+})
+
+defineExpose({
+  loadOrder,
+  guideAftersaleSelection,
+  goAftersale,
+  order,
+  selectAftersaleMode
 })
 </script>
 
@@ -534,6 +570,24 @@ onLoad((options) => {
     color: $text-hint;
     border-color: $border-color;
   }
+}
+
+.aftersale-focus {
+  border: 2rpx solid rgba($primary-color, 0.42);
+  box-shadow: $shadow-coral;
+}
+
+.aftersale-select-tip {
+  margin-bottom: $spacing-sm;
+  padding: 14rpx 18rpx;
+  border-radius: $radius-lg;
+  background: $primary-soft;
+}
+
+.aftersale-select-text {
+  font-size: $font-sm;
+  color: $primary-dark;
+  font-weight: 700;
 }
 
 .price-row {

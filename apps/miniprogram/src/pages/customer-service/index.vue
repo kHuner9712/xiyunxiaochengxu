@@ -4,25 +4,25 @@
       <text class="notice-text">{{ config.notice }}</text>
     </view>
 
-    <view class="entry-section card">
-      <view v-if="config.type === 'wechat' || config.type === 'both'" class="entry-item" @tap="handleWechat">
+    <view v-if="hasWechatContact || hasPhone || config.serviceTime" class="entry-section card">
+      <button v-if="hasWechatContact" class="entry-item contact-entry" open-type="contact">
         <view class="entry-icon-wrap wechat">
           <text class="entry-icon-text">微</text>
         </view>
         <view class="entry-info">
           <text class="entry-name">微信客服</text>
-          <text class="entry-desc">在线客服咨询</text>
+          <text class="entry-desc">点击进入微信客服</text>
         </view>
         <text class="entry-arrow">›</text>
-      </view>
+      </button>
 
-      <view v-if="config.type === 'phone' || config.type === 'both'" class="entry-item" @tap="handlePhone">
+      <view v-if="hasPhone" class="entry-item" @tap="handlePhone">
         <view class="entry-icon-wrap phone">
           <text class="entry-icon-text">电</text>
         </view>
         <view class="entry-info">
           <text class="entry-name">电话客服</text>
-          <text class="entry-desc">{{ config.phone || '暂无' }}</text>
+          <text class="entry-desc">{{ config.phone }}</text>
         </view>
         <text class="entry-arrow">›</text>
       </view>
@@ -38,7 +38,12 @@
       </view>
     </view>
 
-    <view v-if="config.wechatQrCode" class="qrcode-section card">
+    <view v-if="showUnavailableFallback" class="unavailable-section card">
+      <text class="section-title">客服暂不可用</text>
+      <text class="unavailable-text">{{ unavailableText }}</text>
+    </view>
+
+    <view v-if="hasQrCode" class="qrcode-section card">
       <text class="section-title">微信客服二维码</text>
       <image class="qrcode-image" :src="config.wechatQrCode" mode="widthFix" @tap="previewQrCode" />
       <text class="qrcode-tip">长按识别或截图扫码添加客服</text>
@@ -86,6 +91,14 @@ interface FaqItem {
 }
 
 const faqList = ref<FaqItem[]>([])
+const normalizedType = computed(() => config.value.type || 'phone')
+const allowsWechat = computed(() => normalizedType.value === 'wechat' || normalizedType.value === 'both')
+const allowsPhone = computed(() => normalizedType.value === 'phone' || normalizedType.value === 'both')
+const hasWechatContact = computed(() => !!config.value.enabled && allowsWechat.value)
+const hasPhone = computed(() => !!config.value.enabled && allowsPhone.value && !!config.value.phone)
+const hasQrCode = computed(() => !!config.value.enabled && allowsWechat.value && !!config.value.wechatQrCode)
+const showUnavailableFallback = computed(() => !hasWechatContact.value && !hasPhone.value && !hasQrCode.value)
+const unavailableText = computed(() => config.value.notice || '服务暂不可用，请稍后再试')
 
 async function loadConfig() {
   try {
@@ -107,19 +120,9 @@ async function loadConfig() {
   }
 }
 
-function handleWechat() {
-  if (config.value.wechatQrCode) {
-    uni.previewImage({ urls: [config.value.wechatQrCode] })
-  } else {
-    uni.showToast({ title: '暂未配置微信客服', icon: 'none' })
-  }
-}
-
 function handlePhone() {
   if (config.value.phone) {
     uni.makePhoneCall({ phoneNumber: config.value.phone })
-  } else {
-    uni.showToast({ title: '暂无客服电话', icon: 'none' })
   }
 }
 
@@ -164,10 +167,25 @@ onMounted(() => {
   @include flex-between;
   padding: $spacing-md 0;
   border-bottom: 1rpx solid $divider-color;
+  width: 100%;
+  background: transparent;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  text-align: left;
 
   &:last-child {
     border-bottom: none;
   }
+
+  &::after {
+    border: none;
+  }
+}
+
+.contact-entry {
+  margin: 0;
 }
 
 .entry-icon-wrap {
@@ -216,6 +234,17 @@ onMounted(() => {
   @include flex-column;
   margin-bottom: $spacing-md;
   background: rgba(255, 255, 255, 0.9);
+}
+
+.unavailable-section {
+  margin-bottom: $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.unavailable-text {
+  font-size: $font-sm;
+  color: $text-secondary;
+  line-height: 1.7;
 }
 
 .section-title {

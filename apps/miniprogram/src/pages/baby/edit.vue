@@ -29,7 +29,7 @@
       <view class="form-item">
         <text class="form-label">头像</text>
         <view class="avatar-upload" @tap="uploadAvatar">
-          <image v-if="form.avatar" class="avatar-preview" :src="form.avatar" mode="aspectFill" />
+          <image v-if="avatarPreview" class="avatar-preview" :src="avatarPreview" mode="aspectFill" />
           <text v-else class="avatar-placeholder">+</text>
         </view>
       </view>
@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getBabyDetail, createBaby, updateBaby, type BabyForm } from '@/api/baby'
 import { chooseAndUploadImage } from '@/api/upload'
@@ -51,15 +51,18 @@ const form = ref<BabyForm & { id?: number }>({
   nickname: '',
   gender: 1,
   birthday: '',
-  avatar: ''
+  avatar: '',
+  avatarUrl: ''
 })
 
 const isEdit = ref(false)
+const avatarPreview = computed(() => form.value.avatar || form.value.avatarUrl || '')
 
 async function loadBaby(id: number) {
   try {
     const data = await getBabyDetail(id)
-    form.value = { ...data, id: data.id }
+    const avatar = data.avatar || data.avatarUrl || ''
+    form.value = { ...data, id: data.id as any, avatar, avatarUrl: avatar }
     isEdit.value = true
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
@@ -75,6 +78,7 @@ async function uploadAvatar() {
     const results = await chooseAndUploadImage(1)
     if (results.length) {
       form.value.avatar = results[0].url
+      form.value.avatarUrl = results[0].url
     }
   } catch {
     uni.showToast({ title: '图片上传失败', icon: 'none' })
@@ -96,10 +100,14 @@ function validate(): boolean {
 async function handleSubmit() {
   if (!validate()) return
   try {
+    const payload = {
+      ...form.value,
+      avatarUrl: form.value.avatarUrl || form.value.avatar || ''
+    }
     if (isEdit.value && form.value.id) {
-      await updateBaby(form.value as any)
+      await updateBaby(payload as any)
     } else {
-      await createBaby(form.value)
+      await createBaby(payload)
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1500)
@@ -110,6 +118,13 @@ async function handleSubmit() {
 
 onLoad((options) => {
   if (options?.id) loadBaby(Number(options.id))
+})
+
+defineExpose({
+  form,
+  handleSubmit,
+  uploadAvatar,
+  avatarPreview
 })
 </script>
 

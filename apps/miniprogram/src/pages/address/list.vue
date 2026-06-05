@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getAddressList, deleteAddress as deleteAddressApi, setDefaultAddress, type AddressItem } from '@/api/address'
 import Empty from '@/components/Empty.vue'
@@ -43,6 +43,7 @@ import Empty from '@/components/Empty.vue'
 const addresses = ref<AddressItem[]>([])
 const loading = ref(false)
 const isSelectMode = ref(false)
+let eventChannel: any = null
 
 async function loadAddresses() {
   loading.value = true
@@ -57,11 +58,7 @@ async function loadAddresses() {
 
 function handleSelect(item: AddressItem) {
   if (!isSelectMode.value) return
-  const pages = getCurrentPages()
-  const prevPage = pages[pages.length - 2] as any
-  if (prevPage?.$vm?.selectAddressCallback) {
-    prevPage.$vm.selectAddressCallback(item)
-  }
+  eventChannel?.emit('selectAddress', item)
   uni.navigateBack()
 }
 
@@ -101,6 +98,9 @@ async function deleteAddress(item: AddressItem) {
 
 onLoad((options) => {
   if (options?.select) isSelectMode.value = true
+  const pages = getCurrentPages()
+  const currentPage = pages[pages.length - 1]
+  eventChannel = (currentPage as any)?.getOpenerEventChannel?.()
 })
 
 onShow(() => {

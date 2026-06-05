@@ -4,9 +4,8 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class ContentQueryDto extends PaginationDto {
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  categoryId?: number;
+  @IsString()
+  categoryId?: string;
 
   @IsOptional()
   @Type(() => Number)

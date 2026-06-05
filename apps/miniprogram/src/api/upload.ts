@@ -1,10 +1,22 @@
-import { post } from '@/utils/request'
+import { getApiBaseUrl, getToken } from '@/utils/request'
+
+const UPLOAD_MODULE = '[baby-mall][upload]'
+const UPLOAD_PATH = '/common/file/upload'
 
 export function uploadImage(filePath: string, groupName?: string): Promise<{ url: string }> {
   return new Promise((resolve, reject) => {
-    const token = uni.getStorageSync('baby_mall_token')
+    const apiBaseUrl = getApiBaseUrl()
+    if (!apiBaseUrl) {
+      const errMsg = 'API 地址未配置，无法上传图片'
+      console.error(`${UPLOAD_MODULE} missing API base URL`)
+      uni.showToast({ title: errMsg, icon: 'none', duration: 3000 })
+      reject(new Error(errMsg))
+      return
+    }
+
+    const token = getToken()
     uni.uploadFile({
-      url: `${import.meta.env.VITE_API_BASE_URL || ''}/common/file/upload`,
+      url: `${apiBaseUrl}${UPLOAD_PATH}`,
       filePath,
       name: 'file',
       formData: groupName ? { groupName } : undefined,
@@ -12,14 +24,43 @@ export function uploadImage(filePath: string, groupName?: string): Promise<{ url
         'Authorization': token ? `Bearer ${token}` : ''
       },
       success: (res) => {
-        const data = JSON.parse(res.data)
+        let data: any
+        try {
+          data = JSON.parse(res.data)
+        } catch (err) {
+          console.error(`${UPLOAD_MODULE} invalid response`, {
+            statusCode: res.statusCode,
+            error: res.data
+          })
+          reject(new Error('上传响应解析失败'))
+          return
+        }
+
+        if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+          console.error(`${UPLOAD_MODULE} HTTP failed`, {
+            statusCode: res.statusCode,
+            error: data?.message || data
+          })
+          reject(new Error(data?.message || '上传失败'))
+          return
+        }
+
         if (data.code === 0 || data.code === 200) {
           resolve(data.data)
         } else {
+          console.error(`${UPLOAD_MODULE} API failed`, {
+            statusCode: res.statusCode,
+            code: data.code,
+            error: data.message || data.data || data
+          })
           reject(new Error(data.message || '上传失败'))
         }
       },
       fail: (err) => {
+        console.error(`${UPLOAD_MODULE} request failed`, {
+          statusCode: (err as any)?.statusCode,
+          error: (err as any)?.errMsg || err
+        })
         reject(err)
       }
     })

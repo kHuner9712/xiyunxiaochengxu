@@ -370,6 +370,30 @@ describe('OrderService.create 积分抵扣', () => {
     );
     expect(mockPrisma._mockTx.pointsRecord.create).toHaveBeenCalled();
   });
+
+  it('超过订单积分抵扣上限时不能下单', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU(10));
+    mockPrisma.user.findFirst.mockResolvedValue(USER);
+
+    await expect(service.create('100', {
+      addressId: '1', pointsDeduct: 3000, items: [{ skuId: '200', quantity: 1 }],
+    })).rejects.toThrow('积分抵扣超过订单可用上限');
+  });
+
+  it('订单金额太低不足以抵扣积分时不能下单', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue({
+      ...SKU(10),
+      price: 99,
+      originalPrice: 199,
+    });
+    mockPrisma.user.findFirst.mockResolvedValue(USER);
+
+    await expect(service.create('100', {
+      addressId: '1', pointsDeduct: 100, items: [{ skuId: '200', quantity: 1 }],
+    })).rejects.toThrow('当前订单金额不满足积分抵扣');
+  });
 });
 
 function setupCancelMocks(mockPrisma: any, claimCount: number) {
@@ -877,7 +901,7 @@ describe('订单主链路', () => {
     expect(mockPrisma._mockTx.order.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          pointsAmount: 5,
+          pointsAmount: 500,
           pointsDeducted: 500,
         }),
       }),
@@ -956,9 +980,12 @@ describe('订单主链路', () => {
 
     expect(result.totalAmount).toBe(9900);
     expect(result.couponAmount).toBe(500);
-    expect(result.pointsAmount).toBe(5);
+    expect(result.pointsAmount).toBe(500);
     expect(result.freightAmount).toBe(0);
-    expect(result.payAmount).toBe(9395);
+    expect(result.payAmount).toBe(8900);
+    expect(result.availablePoints).toBe(5000);
+    expect(result.maxPointsDeduct).toBe(2900);
+    expect(result.pointsDeducted).toBe(500);
   });
 });
 
@@ -1729,6 +1756,11 @@ describe('OrderService.create 0元订单', () => {
       items: [{ skuId: '201', quantity: 1 }],
     });
 
+    const createCall = mockPrisma._mockTx.order.create.mock.calls[0][0];
+    expect(createCall.data.status).toBe(OrderStatus.pending_delivery);
+    expect(createCall.data.payAmount).toBe(0);
+    expect(createCall.data.pointsAmount).toBe(100);
+    expect(createCall.data.pointsDeducted).toBe(100);
     expect(mockPrisma._mockTx.pointsRecord.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

@@ -7,6 +7,8 @@ interface ShareParams {
   sceneCode?: string
 }
 
+let isBindingInvite = false
+
 export function parseShareParams(query: Record<string, any>): ShareParams {
   return {
     inviter: query.inviter || undefined,
@@ -22,18 +24,32 @@ export function handleShareVisit(params: ShareParams) {
   }
 }
 
-export function handleShareBindOnLogin() {
+export async function handleShareBindOnLogin() {
+  if (isBindingInvite) return false
   const pending = uni.getStorageSync('pending_invite')
-  if (!pending) return
+  if (!pending) return false
+  let data: ShareParams
   try {
-    const data = JSON.parse(pending)
-    bindInvite(data).catch(() => {})
+    data = JSON.parse(pending)
+  } catch {
     uni.removeStorageSync('pending_invite')
-  } catch {}
+    return false
+  }
+
+  try {
+    isBindingInvite = true
+    await bindInvite(data)
+    uni.removeStorageSync('pending_invite')
+    return true
+  } catch (err) {
+    throw err
+  } finally {
+    isBindingInvite = false
+  }
 }
 
 export function savePendingInvite(params: ShareParams) {
-  if (params.inviter) {
+  if (params.inviter || params.shareRecordId || params.campaignId) {
     uni.setStorageSync('pending_invite', JSON.stringify(params))
   }
 }

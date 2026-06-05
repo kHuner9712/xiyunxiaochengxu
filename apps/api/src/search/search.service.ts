@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
-import { paginate } from '@baby-mall/shared';
+import { paginate, serializeProductCard } from '@baby-mall/shared';
+import { getAssetBaseUrl, normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
+  private readonly assetBaseUrl = getAssetBaseUrl();
 
   constructor(
     private prisma: PrismaService,
@@ -54,7 +56,10 @@ export class SearchService {
     }
 
     return paginate(
-      list.map((p) => ({ ...p, id: p.id.toString() })),
+      list.map((p) => ({
+        ...serializeProductCard(p),
+        image: normalizeAssetUrl(p.mainImage, this.assetBaseUrl) || '/static/default-cover.png',
+      })),
       total,
       page,
       pageSize,
@@ -64,17 +69,17 @@ export class SearchService {
   async getHotKeywords() {
     const cached = await this.redisService.get('search:hot_keywords');
     if (cached) {
-      return JSON.parse(cached);
+      return this.normalizeHotKeywords(JSON.parse(cached));
     }
 
     const keywords = await this.prisma.searchKeyword.findMany({
       where: { status: 1 },
       orderBy: { searchCount: 'desc' },
       take: 10,
-      select: { id: true, keyword: true, searchCount: true },
+      select: { keyword: true },
     });
 
-    const result = keywords.map((k) => ({ ...k, id: k.id.toString() }));
+    const result = this.normalizeHotKeywords(keywords);
 
     await this.redisService.set('search:hot_keywords', JSON.stringify(result), 3600);
 
@@ -120,5 +125,19 @@ export class SearchService {
     await this.redisService.del(cacheKey);
     this.logger.log(`用户${userId}清空搜索历史`);
     return { success: true };
+  }
+
+  private normalizeHotKeywords(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object' && 'keyword' in item) {
+          return String((item as { keyword?: unknown }).keyword || '');
+        }
+        return '';
+      })
+      .map((item) => item.trim())
+      .filter((item) => !!item);
   }
 }

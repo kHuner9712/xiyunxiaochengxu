@@ -25,10 +25,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
-  endTime: number
+  endTime: number | string | Date
   label?: string
   showLabel?: boolean
 }>(), {
@@ -48,33 +48,58 @@ function padZero(n: number): string {
   return String(n).padStart(2, '0')
 }
 
+function normalizeEndTime(value: number | string | Date): number {
+  if (typeof value === 'number') return value
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'string') return new Date(value).getTime()
+  return Number.NaN
+}
+
+function stopTimer() {
+  if (timer) {
+    clearInterval(timer)
+    timer = null
+  }
+}
+
 function update() {
   const now = Date.now()
-  const diff = props.endTime - now
-  if (diff <= 0) {
+  const endTimestamp = normalizeEndTime(props.endTime)
+  const diff = endTimestamp - now
+  if (!Number.isFinite(endTimestamp) || diff <= 0) {
+    days.value = 0
+    hours.value = 0
+    minutes.value = 0
+    seconds.value = 0
     expired.value = true
-    if (timer) {
-      clearInterval(timer)
-      timer = null
-    }
+    stopTimer()
     return
   }
+  expired.value = false
   days.value = Math.floor(diff / (1000 * 60 * 60 * 24))
   hours.value = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
   minutes.value = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
   seconds.value = Math.floor((diff % (1000 * 60)) / 1000)
 }
 
-onMounted(() => {
+function startTimer() {
+  stopTimer()
   update()
-  timer = setInterval(update, 1000)
+  if (!expired.value) {
+    timer = setInterval(update, 1000)
+  }
+}
+
+onMounted(() => {
+  startTimer()
+})
+
+watch(() => props.endTime, () => {
+  startTimer()
 })
 
 onUnmounted(() => {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
+  stopTimer()
 })
 </script>
 

@@ -86,10 +86,17 @@ export class SystemConfigService {
     for (const item of group) {
       configMap[item.configKey] = item.value;
     }
+    const fallbackPhone = await this.getValue('basic', 'customer_service_phone');
+    const phone = this.isPlaceholderContact(configMap.phone)
+      ? ''
+      : (configMap.phone ?? '');
+    const basicPhone = this.isPlaceholderContact(fallbackPhone)
+      ? ''
+      : (fallbackPhone ?? '');
     return {
       enabled: configMap.enabled === 'true' || configMap.enabled === true,
       type: configMap.type ?? 'phone',
-      phone: configMap.phone ?? '',
+      phone: phone || basicPhone,
       wechatQrCode: configMap.wechatQrCode ?? '',
       serviceTime: configMap.serviceTime ?? '',
       autoReplyText: configMap.autoReplyText ?? '',
@@ -106,6 +113,13 @@ export class SystemConfigService {
       configValue: String(dto[key] ?? ''),
     }));
     return this.batchUpdate(configs);
+  }
+
+  private isPlaceholderContact(value: unknown): boolean {
+    if (typeof value !== 'string') return !value;
+    const normalized = value.trim();
+    if (!normalized) return true;
+    return /x{3,}|待确认|暂定|placeholder|example/i.test(normalized);
   }
 
   private parseValue(value: string | null, type: string | null): any {

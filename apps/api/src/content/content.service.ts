@@ -36,6 +36,7 @@ export class ContentService {
         skip: dto.skip,
         take: dto.take,
         orderBy: { publishedAt: 'desc' },
+        include: { category: { select: { id: true, name: true } } },
       }),
       this.prisma.content.count({ where }),
     ]);
@@ -51,6 +52,7 @@ export class ContentService {
   async findById(id: string) {
     const content = await this.prisma.content.findFirst({
       where: { id: BigInt(id), deletedAt: null },
+      include: { category: { select: { id: true, name: true } } },
     });
     if (!content) throw new NotFoundException('内容不存在');
 
@@ -76,6 +78,7 @@ export class ContentService {
         skip: dto.skip,
         take: dto.take,
         orderBy: { createdAt: 'desc' },
+        include: { category: { select: { id: true, name: true } } },
       }),
       this.prisma.content.count({ where }),
     ]);
@@ -370,6 +373,7 @@ export class ContentService {
     return {
       id: c.id.toString(),
       categoryId: c.categoryId?.toString(),
+      categoryName: c.category?.name || '',
       title: c.title,
       contentType: c.contentType || 'article',
       coverImage: normalizeAssetUrl(c.coverImage, this.assetBaseUrl),

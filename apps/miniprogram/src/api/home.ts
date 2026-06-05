@@ -9,7 +9,6 @@ export function getHomeData() {
     hotProducts: ProductItem[]
     newProducts: ProductItem[]
     activities: ActivityItem[]
-    guessProducts: ProductItem[]
   }>('/weapp/home/data')
 }
 
@@ -48,6 +47,6 @@ export interface ActivityItem {
   name: string
   image: string
   type: number
-  startTime: number
-  endTime: number
+  startTime: number | string | Date
+  endTime: number | string | Date
 }

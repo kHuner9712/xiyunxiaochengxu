@@ -174,8 +174,14 @@ export interface OrderPreview {
   couponAmount: number
   activityDiscountAmount: number
   pointsAmount: number
+  pointsDeducted: number
+  availablePoints: number
+  maxPointsDeduct: number
+  pointsDeductRate: number
+  pointsDeductMaxPercent: number
   freightAmount: number
   payAmount: number
+  isZeroPay?: boolean
   fulfillmentType?: string
   pickupStore?: PickupStoreBrief
 }

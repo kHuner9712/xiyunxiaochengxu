@@ -108,9 +108,9 @@
       <view class="option-row">
         <view class="option-copy">
           <text class="section-label">积分抵扣</text>
-          <text class="section-desc">可用 {{ availablePoints }} 积分，抵扣 ¥{{ formatPrice(pointsDeduct) }}</text>
+          <text class="section-desc">{{ pointsDeductDesc }}</text>
         </view>
-        <switch :checked="usePoints" @change="togglePoints" color="#F27678" />
+        <switch :checked="usePoints" :disabled="!canUsePoints" @change="togglePoints" color="#F27678" />
       </view>
 
       <view class="option-row remark-row">
@@ -230,6 +230,7 @@ import { getAddressList, type AddressItem } from '@/api/address'
 import { getAvailableCoupons, type MyCouponItem } from '@/api/coupon'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatPrice } from '@/utils/format'
+import { useUserStore } from '@/stores/user'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
 interface OrderItemInput {
@@ -247,9 +248,12 @@ const fulfillmentType = ref<'delivery' | 'pickup'>('delivery')
 const selectedPickupStore = ref<PickupStoreItem | null>(null)
 const orderItems = ref<OrderItemInput[]>([])
 const selectedCoupon = ref<MyCouponItem | null>(null)
+const userStore = useUserStore()
 const usePoints = ref(false)
 const remark = ref('')
-const availablePoints = ref(0)
+const availablePoints = ref(userStore.points || 0)
+const maxPointsDeduct = ref(0)
+const pointsDeductRate = ref(100)
 const showCouponPicker = ref(false)
 const submitting = ref(false)
 const loading = ref(false)
@@ -270,6 +274,22 @@ const couponDiscount = computed(() => {
 const pointsDeduct = computed(() => {
   if (preview.value) return preview.value.pointsAmount
   return 0
+})
+
+const usablePoints = computed(() => Math.max(0, Math.min(availablePoints.value, maxPointsDeduct.value)))
+
+const requestedPointsDeduct = computed(() => {
+  const rate = Math.max(1, pointsDeductRate.value)
+  return Math.floor(usablePoints.value / rate) * rate
+})
+
+const canUsePoints = computed(() => requestedPointsDeduct.value > 0)
+
+const pointsDeductDesc = computed(() => {
+  if (availablePoints.value <= 0) return '暂无可用积分'
+  if (maxPointsDeduct.value <= 0) return `可用 ${availablePoints.value} 积分，当前订单暂不支持抵扣`
+  const rate = Math.max(1, pointsDeductRate.value)
+  return `可用 ${availablePoints.value} 积分，抵扣 ¥${formatPrice(Math.floor(requestedPointsDeduct.value / rate) * 100)}`
 })
 
 const freightAmount = computed(() => {
@@ -297,9 +317,15 @@ async function loadPreview() {
       pickupStoreId: fulfillmentType.value === 'pickup' ? selectedPickupStore.value?.id : undefined,
       fulfillmentType: fulfillmentType.value,
       couponId: selectedCoupon.value?.id,
-      pointsDeduct: usePoints.value ? availablePoints.value : 0
+      pointsDeduct: usePoints.value ? requestedPointsDeduct.value : 0
     })
     preview.value = data
+    availablePoints.value = data.availablePoints ?? availablePoints.value
+    maxPointsDeduct.value = data.maxPointsDeduct ?? maxPointsDeduct.value
+    pointsDeductRate.value = data.pointsDeductRate ?? pointsDeductRate.value
+    if (usePoints.value && (!data.pointsDeducted || data.pointsDeducted <= 0)) {
+      usePoints.value = false
+    }
     if (data.items?.length) {
       orderItems.value = data.items.map(item => ({
         productId: item.productId,
@@ -312,6 +338,8 @@ async function loadPreview() {
       }))
     }
   } catch (e: any) {
+    console.error('[baby-mall] order confirm loadPreview failed:', e)
+    if (usePoints.value) usePoints.value = false
     preview.value = null
     uni.showToast({ title: e.message || '获取订单金额失败', icon: 'none' })
   } finally {
@@ -397,7 +425,18 @@ async function selectCoupon(coupon: MyCouponItem | null) {
 }
 
 function togglePoints(e: any) {
-  usePoints.value = e.detail.value
+  const checked = !!e.detail.value
+  if (checked && availablePoints.value <= 0) {
+    usePoints.value = false
+    uni.showToast({ title: '暂无可用积分', icon: 'none' })
+    return
+  }
+  if (checked && !canUsePoints.value) {
+    usePoints.value = false
+    uni.showToast({ title: '当前订单暂不支持积分抵扣', icon: 'none' })
+    return
+  }
+  usePoints.value = checked
   loadPreview()
 }
 
@@ -416,6 +455,22 @@ function isUserCancelPayError(err: any): boolean {
 
 async function handleSubmit() {
   if (submitting.value) return
+  if (!userStore.isLoggedIn) {
+    userStore.requireLogin(() => {})
+    return
+  }
+  if (!userStore.phone) {
+    uni.showModal({
+      title: '需要绑定手机号',
+      content: '请先在“我的”页面绑定手机号，方便订单履约和售后联系。',
+      showCancel: false,
+      confirmText: '去绑定',
+      success: () => {
+        uni.switchTab({ url: '/pages/user/index' })
+      }
+    })
+    return
+  }
   if (!agreedToLegal.value) {
     uni.showToast({ title: '请先阅读并同意相关协议', icon: 'none' })
     return
@@ -436,6 +491,10 @@ async function handleSubmit() {
     uni.showToast({ title: '金额试算失败，请返回重试', icon: 'none' })
     return
   }
+  if (usePoints.value && !canUsePoints.value) {
+    uni.showToast({ title: availablePoints.value > 0 ? '当前订单暂不支持积分抵扣' : '暂无可用积分', icon: 'none' })
+    return
+  }
   try {
     submitting.value = true
     const orderData = {
@@ -448,7 +507,7 @@ async function handleSubmit() {
         quantity: item.quantity
       })),
       couponId: selectedCoupon.value?.id,
-      pointsDeduct: usePoints.value ? availablePoints.value : 0,
+      pointsDeduct: usePoints.value ? requestedPointsDeduct.value : 0,
       remark: remark.value
     }
     const order = await createOrder(orderData)
@@ -489,6 +548,7 @@ async function handleSubmit() {
       })
     }
   } catch (e: any) {
+    console.error('[baby-mall] order confirm submit failed:', e)
     uni.showToast({ title: e.message || '下单失败，请重试', icon: 'none' })
   } finally {
     submitting.value = false
@@ -497,12 +557,21 @@ async function handleSubmit() {
 
 defineExpose({
   handleSubmit,
+  loadPreview,
+  selectAddress,
+  selectPickupStore,
   agreedToLegal,
   fulfillmentType,
   address,
   selectedPickupStore,
   orderItems,
-  preview
+  preview,
+  usePoints,
+  availablePoints,
+  maxPointsDeduct,
+  pointsDeduct,
+  payAmount,
+  togglePoints
 })
 
 onLoad(async (options) => {

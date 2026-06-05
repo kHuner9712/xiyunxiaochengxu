@@ -56,12 +56,14 @@ import { applyAftersale } from '@/api/aftersale'
 import { getOrderDetail } from '@/api/order'
 import { chooseAndUploadImage } from '@/api/upload'
 import { resolvePrivateFileUrl } from '@/utils/private-file'
+import { useUserStore } from '@/stores/user'
 
 const orderId = ref('')
 const orderItemId = ref('')
 const reasons = ref<string[]>(['不想要了', '商品与描述不符', '质量问题', '收到商品损坏', '其他原因'])
 const imageList = ref<string[]>([])
 const displayImageList = ref<string[]>([])
+const userStore = useUserStore()
 
 const form = ref({
   type: 1,
@@ -94,6 +96,22 @@ function removeImage(index: number) {
 }
 
 async function handleSubmit() {
+  if (!userStore.isLoggedIn) {
+    userStore.requireLogin(() => {})
+    return
+  }
+  if (!userStore.phone) {
+    uni.showModal({
+      title: '需要绑定手机号',
+      content: '请先绑定手机号，便于售后联系。',
+      showCancel: false,
+      confirmText: '去绑定',
+      success: () => {
+        uni.switchTab({ url: '/pages/user/index' })
+      }
+    })
+    return
+  }
   if (!orderId.value) {
     uni.showToast({ title: '缺少订单信息，请从订单详情页申请售后', icon: 'none' })
     return
@@ -158,6 +176,13 @@ onLoad(async (options) => {
       uni.showToast({ title: '订单信息获取失败', icon: 'none' })
     }
   }
+})
+
+defineExpose({
+  handleSubmit,
+  orderId,
+  orderItemId,
+  form
 })
 </script>
 

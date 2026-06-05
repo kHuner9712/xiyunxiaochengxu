@@ -32,6 +32,15 @@ function normalizeApiBaseUrl(raw: string): string {
 
 const BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || '')
 const TOKEN_KEY = 'baby_mall_token'
+export const REDIRECT_AFTER_LOGIN_KEY = 'baby_mall_redirect_after_login'
+const USER_TAB_URL = '/pages/user/index'
+const TAB_BAR_ROUTES = new Set([
+  'pages/home/index',
+  'pages/category/index',
+  'pages/activity/index',
+  'pages/cart/index',
+  'pages/user/index'
+])
 const AUTH_ERROR_CODES = [40101, 40102, 40103]
 let isHandlingAuthError = false
 
@@ -55,20 +64,63 @@ export function removeToken() {
   uni.removeStorageSync(TOKEN_KEY)
 }
 
-function navigateToLogin() {
+function getCurrentPageUrl() {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1]
-  if (currentPage && currentPage.route !== 'pages/user/index' && !isHandlingAuthError) {
-    isHandlingAuthError = true
-    uni.navigateTo({
-      url: '/pages/user/index?needLogin=true',
-      complete: () => {
-        setTimeout(() => {
-          isHandlingAuthError = false
-        }, 1000)
-      }
-    })
+  if (!currentPage?.route) return ''
+  const options = (currentPage as any).options || {}
+  const query = Object.keys(options)
+    .filter(key => options[key] !== undefined && options[key] !== null && options[key] !== '')
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(options[key]))}`)
+    .join('&')
+  return `/${currentPage.route}${query ? `?${query}` : ''}`
+}
+
+function navigateToUrl(url: string) {
+  const route = url.replace(/^\//, '').split('?')[0]
+  if (TAB_BAR_ROUTES.has(route)) {
+    uni.switchTab({ url: `/${route}` })
+  } else {
+    uni.navigateTo({ url })
   }
+}
+
+export function consumeRedirectAfterLogin() {
+  const redirectUrl = uni.getStorageSync(REDIRECT_AFTER_LOGIN_KEY) || ''
+  if (redirectUrl) {
+    uni.removeStorageSync(REDIRECT_AFTER_LOGIN_KEY)
+  }
+  return redirectUrl
+}
+
+export function navigateToStoredRedirect() {
+  const redirectUrl = consumeRedirectAfterLogin()
+  if (!redirectUrl || redirectUrl.startsWith(USER_TAB_URL)) return false
+  navigateToUrl(redirectUrl)
+  return true
+}
+
+export function redirectToLoginTab(message = '请先登录后使用') {
+  if (isHandlingAuthError) return
+
+  const currentUrl = getCurrentPageUrl()
+  if (currentUrl && !currentUrl.startsWith(USER_TAB_URL)) {
+    uni.setStorageSync(REDIRECT_AFTER_LOGIN_KEY, currentUrl)
+  }
+
+  isHandlingAuthError = true
+  uni.showToast({ title: message, icon: 'none' })
+  uni.switchTab({
+    url: USER_TAB_URL,
+    fail: () => {
+      uni.reLaunch({ url: USER_TAB_URL })
+    },
+    complete: () => {
+      setTimeout(() => {
+        isHandlingAuthError = false
+      }, 1000)
+    }
+  })
 }
 
 export function request<T = any>(config: RequestConfig): Promise<T> {
@@ -121,7 +173,7 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
           resolve(response.data)
         } else if (AUTH_ERROR_CODES.includes(response.code)) {
           removeToken()
-          navigateToLogin()
+          redirectToLoginTab('登录已过期，请重新登录')
           reject(new Error('登录已过期，请重新登录'))
         } else {
           const errMsg = response.message || '请求失败'

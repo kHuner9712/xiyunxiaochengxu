@@ -19,7 +19,9 @@ onLaunch((options: any) => {
 onShow(() => {
   const userStore = useUserStore()
   if (userStore.isLoggedIn) {
-    handleShareBindOnLogin()
+    handleShareBindOnLogin().catch((err) => {
+      console.warn('[baby-mall] bind invite on show failed:', err)
+    })
   }
 })
 </script>

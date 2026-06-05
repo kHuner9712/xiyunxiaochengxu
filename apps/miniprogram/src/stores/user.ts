@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { get, post, setToken, removeToken } from '@/utils/request'
+import { get, setToken, removeToken, redirectToLoginTab } from '@/utils/request'
 import { wxLogin as wxLoginApi, bindPhone as bindPhoneApi, updateProfile as updateProfileApi } from '@/api/auth'
+import { handleShareBindOnLogin } from '@/utils/share'
 
 interface UserInfo {
   id: number | string
@@ -75,6 +76,11 @@ export const useUserStore = defineStore('user', () => {
         token.value = data.token
         setToken(data.token)
         await fetchUserInfo()
+        try {
+          await handleShareBindOnLogin()
+        } catch (err) {
+          console.warn('[baby-mall] bind invite after login failed:', err)
+        }
       } else {
         console.error('[baby-mall] /weapp/auth/login response missing token:', data)
         throw new Error('登录结果缺少 token')
@@ -112,7 +118,7 @@ export const useUserStore = defineStore('user', () => {
     if (isLoggedIn.value) {
       callback()
     } else {
-      uni.navigateTo({ url: '/pages/user/index?needLogin=true' })
+      redirectToLoginTab()
     }
   }
 

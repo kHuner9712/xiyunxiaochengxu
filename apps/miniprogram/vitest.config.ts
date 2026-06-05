@@ -8,10 +8,12 @@ export default defineConfig({
       template: {
         compilerOptions: {
           isCustomElement: tag => [
+            'button',
             'checkbox',
             'checkbox-group',
             'image',
             'input',
+            'picker',
             'scroll-view',
             'switch',
             'text',

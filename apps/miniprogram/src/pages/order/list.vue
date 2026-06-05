@@ -170,13 +170,39 @@ async function handlePay(order: OrderItem) {
     const payment = await createPayment({ orderId: order.id })
     try {
       await wxPay(payment)
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.id}` })
-    } catch {
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.id}` })
+      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.id}&payScene=list&payIntent=success` })
+    } catch (payClientErr: any) {
+      if (isUserCancelPayError(payClientErr)) {
+        uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
+        return
+      }
+      uni.showModal({
+        title: '支付未完成',
+        content: '支付客户端异常，请前往订单详情页继续支付。',
+        showCancel: false,
+        confirmText: '查看订单',
+        success: () => {
+          uni.navigateTo({ url: `/pages/order/detail?id=${order.id}` })
+        }
+      })
     }
-  } catch {
-    uni.showToast({ title: '支付发起失败', icon: 'none' })
+  } catch (e: any) {
+    const msg = e?.message || '支付发起失败'
+    uni.showModal({
+      title: '支付发起失败',
+      content: msg.includes('暂未开通') ? msg : '支付功能暂未开放，请进入订单详情页稍后再试。',
+      showCancel: false,
+      confirmText: '查看订单',
+      success: () => {
+        uni.navigateTo({ url: `/pages/order/detail?id=${order.id}` })
+      }
+    })
   }
+}
+
+function isUserCancelPayError(err: any): boolean {
+  const msg = String(err?.errMsg || err?.message || '').toLowerCase()
+  return msg.includes('cancel')
 }
 
 async function handleConfirm(id: string) {
@@ -209,6 +235,12 @@ onPullDownRefresh(async () => {
 
 onReachBottom(() => {
   loadOrders()
+})
+
+defineExpose({
+  handlePay,
+  handleAftersale,
+  orders
 })
 </script>
 

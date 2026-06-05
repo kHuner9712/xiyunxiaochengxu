@@ -68,6 +68,39 @@ describe('SystemConfigService - CustomerService', () => {
       expect(result.autoReplyText).toBe('请稍候');
       expect(result.notice).toBe('公告');
     });
+
+    it('should fallback to basic customer_service_phone when customer_service phone is empty', async () => {
+      prisma.systemConfig.findMany.mockResolvedValue([
+        { groupName: 'customer_service', configKey: 'enabled', configValue: 'true', valueType: 'boolean' },
+        { groupName: 'customer_service', configKey: 'type', configValue: 'phone', valueType: 'string' },
+        { groupName: 'customer_service', configKey: 'phone', configValue: '', valueType: 'string' },
+      ]);
+      redis.get.mockResolvedValue('');
+      prisma.systemConfig.findFirst.mockResolvedValue({
+        groupName: 'basic',
+        configKey: 'customer_service_phone',
+        configValue: '400-123-4567',
+        valueType: 'string',
+      });
+
+      const result = await service.getCustomerServiceConfig();
+
+      expect(result.phone).toBe('400-123-4567');
+    });
+
+    it('should not expose placeholder customer service phone', async () => {
+      prisma.systemConfig.findMany.mockResolvedValue([
+        { groupName: 'customer_service', configKey: 'enabled', configValue: 'true', valueType: 'boolean' },
+        { groupName: 'customer_service', configKey: 'type', configValue: 'phone', valueType: 'string' },
+        { groupName: 'customer_service', configKey: 'phone', configValue: '400-XXX-XXXX', valueType: 'string' },
+      ]);
+      redis.get.mockResolvedValue('');
+      prisma.systemConfig.findFirst.mockResolvedValue(null);
+
+      const result = await service.getCustomerServiceConfig();
+
+      expect(result.phone).toBe('');
+    });
   });
 
   describe('updateCustomerServiceConfig', () => {

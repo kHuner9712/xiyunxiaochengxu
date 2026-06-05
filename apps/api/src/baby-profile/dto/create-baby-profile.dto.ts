@@ -20,6 +20,10 @@ export class CreateBabyProfileDto {
   avatarUrl?: string;
 
   @IsOptional()
+  @IsString()
+  avatar?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   isDefault?: number;
