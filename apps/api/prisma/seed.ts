@@ -110,69 +110,212 @@ async function upsertSystemConfigByGroupKey(data: {
   return prisma.systemConfig.create({ data });
 }
 
+function defaultMemberBenefits(levelCode: number, levelName: string, pointsRate: number) {
+  const pointsMultiplier = (pointsRate / 10).toFixed(1).replace(/\.0$/, '');
+  return [
+    {
+      id: `member_price_${levelCode}`,
+      name: '会员价',
+      icon: '/static/tab/cart.png',
+      description: `${levelName}可查看会员专享价与活动价`,
+      level: levelCode,
+    },
+    {
+      id: `points_growth_${levelCode}`,
+      name: '积分成长',
+      icon: '/static/tab/activity.png',
+      description: `消费可获得${pointsMultiplier}倍成长积分`,
+      level: levelCode,
+    },
+    {
+      id: `priority_service_${levelCode}`,
+      name: '售后优先',
+      icon: '/static/tab/user-active.png',
+      description: '售后咨询与处理优先响应',
+      level: levelCode,
+    },
+    {
+      id: `care_${levelCode}`,
+      name: '生日/孕产期关怀',
+      icon: '/static/default-baby.png',
+      description: '按宝宝生日或孕产阶段推送关怀福利',
+      level: levelCode,
+    },
+  ];
+}
+
+function hasRenderableBenefits(raw?: string | null): boolean {
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.some((item) => item?.name && item?.icon && item?.description);
+  } catch {
+    return false;
+  }
+}
+
+async function ensureMemberLevel(data: {
+  name: string;
+  icon?: string | null;
+  minGrowthValue: number;
+  maxGrowthValue: number | null;
+  discountRate: number | null;
+  pointsRate: number;
+  sortOrder: number;
+  status: number;
+  levelCode: number;
+}) {
+  const benefits = JSON.stringify(defaultMemberBenefits(data.levelCode, data.name, data.pointsRate));
+  const existing = await prisma.memberLevel.findFirst({ where: { name: data.name } });
+  if (existing) {
+    const updateData: any = {};
+    if (!hasRenderableBenefits(existing.benefits)) updateData.benefits = benefits;
+    if (!existing.icon && data.icon) updateData.icon = data.icon;
+    if (Object.keys(updateData).length === 0) return existing;
+    return prisma.memberLevel.update({
+      where: { id: existing.id },
+      data: updateData,
+    });
+  }
+  return prisma.memberLevel.create({
+    data: {
+      name: data.name,
+      icon: data.icon ?? null,
+      minGrowthValue: data.minGrowthValue,
+      maxGrowthValue: data.maxGrowthValue,
+      discountRate: data.discountRate,
+      pointsRate: data.pointsRate,
+      benefits,
+      sortOrder: data.sortOrder,
+      status: data.status,
+    },
+  });
+}
+
+async function ensureProductCategory(parentId: bigint, data: {
+  name: string;
+  icon: string;
+  complianceConfig?: Record<string, any>;
+  sortOrder: number;
+}) {
+  const existing = await prisma.productCategory.findFirst({
+    where: { parentId, name: data.name, deletedAt: null },
+  });
+  if (existing) {
+    const updateData: any = {};
+    if (!existing.icon) updateData.icon = data.icon;
+    if (existing.isShow !== 1) updateData.isShow = 1;
+    if (Object.keys(updateData).length === 0) return existing;
+    return prisma.productCategory.update({
+      where: { id: existing.id },
+      data: updateData,
+    });
+  }
+  return prisma.productCategory.create({
+    data: {
+      parentId,
+      name: data.name,
+      icon: data.icon,
+      complianceConfig: data.complianceConfig ?? {},
+      sortOrder: data.sortOrder,
+      isShow: 1,
+    },
+  });
+}
+
+async function seedDefaultCategories() {
+  const icon = '/static/default-cover.png';
+  const categoryDefs = [
+    { name: '奶粉辅食', children: ['配方奶粉', '米粉果泥', '宝宝零食', '营养面点'] },
+    { name: '纸尿裤', children: ['纸尿裤', '拉拉裤', '湿巾棉柔巾', '隔尿护理'] },
+    { name: '洗护清洁', children: ['宝宝护肤', '沐浴洗发', '洗衣清洁', '口腔护理'] },
+    { name: '喂养用品', children: ['奶瓶奶嘴', '水杯餐具', '辅食工具', '消毒暖奶'] },
+    { name: '孕产用品', children: ['待产护理', '产后修复', '哺乳用品', '孕妈营养'] },
+    { name: '童装童鞋', children: ['婴儿服饰', '童鞋袜帽', '家居睡袋'] },
+    { name: '玩具早教', children: ['安抚玩具', '布书早教', '牙胶摇铃', '益智积木'] },
+  ];
+
+  const result: any[] = [];
+  for (const [parentIndex, parent] of categoryDefs.entries()) {
+    const parentCategory = await ensureProductCategory(0n, {
+      name: parent.name,
+      icon,
+      complianceConfig: { defaultSeed: true, level: 1 },
+      sortOrder: (parentIndex + 1) * 10,
+    });
+    result.push(parentCategory);
+
+    for (const [childIndex, childName] of parent.children.entries()) {
+      result.push(await ensureProductCategory(parentCategory.id, {
+        name: childName,
+        icon,
+        complianceConfig: {
+          defaultSeed: true,
+          level: 2,
+          isFood: ['配方奶粉', '米粉果泥', '宝宝零食', '营养面点', '孕妈营养'].includes(childName),
+          isInfantFormula: childName === '配方奶粉',
+        },
+        sortOrder: (parentIndex + 1) * 100 + childIndex + 1,
+      }));
+    }
+  }
+  return result;
+}
+
 async function main() {
   console.log('开始种子数据初始化...');
 
   const memberLevels = await Promise.all([
-    prisma.memberLevel.upsert({
-      where: { id: 1n },
-      update: {},
-      create: {
-        name: '普通会员',
-        minGrowthValue: 0,
-        maxGrowthValue: 999,
-        discountRate: null,
-        pointsRate: 10,
-        benefits: null,
-        sortOrder: 1,
-        status: 1,
-      },
+    ensureMemberLevel({
+      name: '普通会员',
+      icon: '/static/tab/user.png',
+      minGrowthValue: 0,
+      maxGrowthValue: 999,
+      discountRate: null,
+      pointsRate: 10,
+      sortOrder: 1,
+      status: 1,
+      levelCode: 0,
     }),
-    prisma.memberLevel.upsert({
-      where: { id: 2n },
-      update: {},
-      create: {
-        name: '银卡会员',
-        minGrowthValue: 1000,
-        maxGrowthValue: 4999,
-        discountRate: 98,
-        pointsRate: 20,
-        benefits: JSON.stringify({ free_shipping: false, exclusive_coupons: 1 }),
-        sortOrder: 2,
-        status: 1,
-      },
+    ensureMemberLevel({
+      name: '银卡会员',
+      icon: '/static/tab/user-active.png',
+      minGrowthValue: 1000,
+      maxGrowthValue: 4999,
+      discountRate: 98,
+      pointsRate: 20,
+      sortOrder: 2,
+      status: 1,
+      levelCode: 1,
     }),
-    prisma.memberLevel.upsert({
-      where: { id: 3n },
-      update: {},
-      create: {
-        name: '金卡会员',
-        minGrowthValue: 5000,
-        maxGrowthValue: 19999,
-        discountRate: 95,
-        pointsRate: 30,
-        benefits: JSON.stringify({ free_shipping: true, exclusive_coupons: 2 }),
-        sortOrder: 3,
-        status: 1,
-      },
+    ensureMemberLevel({
+      name: '金卡会员',
+      icon: '/static/tab/activity-active.png',
+      minGrowthValue: 5000,
+      maxGrowthValue: 19999,
+      discountRate: 95,
+      pointsRate: 30,
+      sortOrder: 3,
+      status: 1,
+      levelCode: 2,
     }),
-    prisma.memberLevel.upsert({
-      where: { id: 4n },
-      update: {},
-      create: {
-        name: '黑金会员',
-        minGrowthValue: 20000,
-        maxGrowthValue: null,
-        discountRate: 90,
-        pointsRate: 50,
-        benefits: JSON.stringify({ free_shipping: true, exclusive_coupons: 3, birthday_gift: true }),
-        sortOrder: 4,
-        status: 1,
-      },
+    ensureMemberLevel({
+      name: '黑金会员',
+      icon: '/static/tab/cart-active.png',
+      minGrowthValue: 20000,
+      maxGrowthValue: null,
+      discountRate: 90,
+      pointsRate: 50,
+      sortOrder: 4,
+      status: 1,
+      levelCode: 3,
     }),
   ]);
 
   console.log(`创建 ${memberLevels.length} 个会员等级`);
+
+  const defaultCategories = await seedDefaultCategories();
+  console.log(`补齐 ${defaultCategories.length} 个默认母婴分类`);
 
   const superAdminRole = await upsertAdminRoleByCode('super_admin', {
     name: '超级管理员',

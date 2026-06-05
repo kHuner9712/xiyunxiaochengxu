@@ -31,9 +31,16 @@ export class WeappCouponController {
   @Get('my')
   async findMyCoupons(
     @CurrentUser('id') userId: string,
-    @Query('status') status?: number,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.couponService.findMyCoupons(userId, status ? Number(status) : undefined);
+    return this.couponService.findMyCoupons(
+      userId,
+      status ? Number(status) : undefined,
+      page ? Math.max(1, Number(page)) : 1,
+      Math.min(100, Math.max(1, pageSize ? Number(pageSize) : 10)),
+    );
   }
 
   @Post('receive/:couponId')

@@ -4,7 +4,7 @@ import { get, post, setToken, removeToken } from '@/utils/request'
 import { wxLogin as wxLoginApi, bindPhone as bindPhoneApi } from '@/api/auth'
 
 interface UserInfo {
-  id: number
+  id: number | string
   nickname: string
   avatar: string
   phone: string
@@ -21,6 +21,7 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!token.value)
   const nickname = computed(() => userInfo.value?.nickname || '未登录')
   const avatar = computed(() => userInfo.value?.avatar || '')
+  const phone = computed(() => userInfo.value?.phone || '')
   const memberLevel = computed(() => userInfo.value?.memberLevel || 0)
   const memberLevelName = computed(() => userInfo.value?.memberLevelName || '普通用户')
   const points = computed(() => userInfo.value?.points || 0)
@@ -37,10 +38,12 @@ export const useUserStore = defineStore('user', () => {
     try {
       const data = await get<UserInfo>('/weapp/user/info')
       userInfo.value = data
-    } catch {
+    } catch (err) {
+      console.error('[baby-mall] fetchUserInfo failed after auth:', err)
       token.value = ''
       userInfo.value = null
       removeToken()
+      throw err
     }
   }
 
@@ -56,11 +59,19 @@ export const useUserStore = defineStore('user', () => {
         })
       })
 
+      if (!loginRes.code) {
+        console.error('[baby-mall] uni.login succeeded without code:', loginRes)
+        throw new Error('未获取到微信登录凭证')
+      }
+
       const data = await wxLoginApi({ code: loginRes.code })
       if (data.token) {
         token.value = data.token
         setToken(data.token)
         await fetchUserInfo()
+      } else {
+        console.error('[baby-mall] /weapp/auth/login response missing token:', data)
+        throw new Error('登录结果缺少 token')
       }
       return data
     })()
@@ -72,8 +83,8 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function bindPhone(code: string) {
-    const data = await bindPhoneApi({ code })
+  async function bindPhone(payload: { code: string; encryptedData?: string; iv?: string }) {
+    const data = await bindPhoneApi(payload)
     await fetchUserInfo()
     return data
   }
@@ -99,6 +110,7 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     nickname,
     avatar,
+    phone,
     memberLevel,
     memberLevelName,
     points,

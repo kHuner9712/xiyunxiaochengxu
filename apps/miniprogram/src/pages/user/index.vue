@@ -17,6 +17,14 @@
       <view v-if="!userStore.isLoggedIn" class="login-btn" @tap="handleLogin">
         <text class="login-text">微信一键登录</text>
       </view>
+      <button
+        v-if="userStore.isLoggedIn && !userStore.phone"
+        class="phone-btn"
+        open-type="getPhoneNumber"
+        @getphonenumber="handleGetPhoneNumber"
+      >
+        绑定手机号
+      </button>
       <view v-if="!userStore.isLoggedIn" class="login-agreement">
         <text class="agreement-prefix">登录即视为同意</text>
         <text class="agreement-link" @tap.stop="openPolicy('/pages/agreement/index')">《用户协议》</text>
@@ -181,6 +189,57 @@ function handleLogin() {
       confirmText: '我知道了'
     })
   })
+}
+
+async function handleGetPhoneNumber(e: any) {
+  const detail = e?.detail || {}
+  if (detail.errMsg && !detail.errMsg.includes('ok')) {
+    console.warn('[baby-mall] getPhoneNumber cancelled or failed:', detail.errMsg)
+    uni.showToast({ title: '未完成手机号授权', icon: 'none' })
+    return
+  }
+
+  let code = detail.code
+  if (!code && detail.encryptedData && detail.iv) {
+    try {
+      const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
+        uni.login({
+          provider: 'weixin',
+          success: resolve,
+          fail: reject
+        })
+      })
+      code = loginRes.code
+    } catch (err) {
+      console.error('[baby-mall] uni.login for legacy bindPhone failed:', err)
+    }
+  }
+
+  if (!code) {
+    console.error('[baby-mall] getPhoneNumber missing code and legacy encrypted data:', detail)
+    uni.showToast({ title: '未获取到手机号授权凭证', icon: 'none' })
+    return
+  }
+
+  try {
+    if (!userStore.isLoggedIn) {
+      await userStore.wxLogin()
+    }
+    await userStore.bindPhone({
+      code,
+      encryptedData: detail.encryptedData,
+      iv: detail.iv
+    })
+    uni.showToast({ title: '手机号绑定成功', icon: 'success' })
+  } catch (err) {
+    console.error('[baby-mall] bindPhone failed:', err)
+    uni.showModal({
+      title: '绑定失败',
+      content: '手机号绑定失败，请稍后重试。',
+      showCancel: false,
+      confirmText: '我知道了'
+    })
+  }
 }
 
 function handleLogout() {
@@ -379,6 +438,25 @@ onShow(() => {
   color: #FFFFFF;
   font-size: $font-md;
   font-weight: 800;
+}
+
+.phone-btn {
+  @include flex-center;
+  width: 240rpx;
+  min-height: 76rpx;
+  margin: $spacing-lg 0 0;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2rpx solid rgba($primary-color, 0.28);
+  border-radius: $radius-round;
+  color: $primary-dark;
+  font-size: $font-md;
+  font-weight: 800;
+  line-height: 76rpx;
+
+  &::after {
+    border: none;
+  }
 }
 
 .login-agreement {

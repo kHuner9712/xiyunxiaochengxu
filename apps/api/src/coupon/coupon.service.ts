@@ -47,20 +47,33 @@ export class CouponService {
     return coupons.map((c) => this.serializeCoupon(c));
   }
 
-  async findMyCoupons(userId: string, status?: number) {
+  async findMyCoupons(userId: string, status?: number, page: number = 1, pageSize: number = 10) {
+    const now = new Date();
     const where: any = { userId: BigInt(userId) };
-    if (status !== undefined) where.status = status;
+    if (status === 1) {
+      where.status = COUPON_STATUS.FREE;
+      where.OR = [{ expireAt: null }, { expireAt: { gte: now } }];
+    } else if (status === 2) {
+      where.status = COUPON_STATUS.USED;
+    } else if (status === 3) {
+      where.OR = [
+        { status: COUPON_STATUS.EXPIRED },
+        { status: COUPON_STATUS.FREE, expireAt: { lt: now } },
+      ];
+    }
 
-    const list = await this.prisma.userCoupon.findMany({
-      where,
-      include: { coupon: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [list, total] = await Promise.all([
+      this.prisma.userCoupon.findMany({
+        where,
+        include: { coupon: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.userCoupon.count({ where }),
+    ]);
 
-    return list.map((uc) => ({
-      ...this.serializeUserCoupon(uc),
-      coupon: this.serializeCoupon(uc.coupon),
-    }));
+    return paginate(list.map((uc) => this.serializeUserCoupon(uc)), total, page, pageSize);
   }
 
   async findUsable(userId: string, amount: number) {
@@ -81,10 +94,7 @@ export class CouponService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return list.map((uc) => ({
-      ...this.serializeUserCoupon(uc),
-      coupon: this.serializeCoupon(uc.coupon),
-    }));
+    return list.map((uc) => this.serializeUserCoupon(uc));
   }
 
   async receive(userId: string, couponId: string) {
@@ -224,12 +234,30 @@ export class CouponService {
   }
 
   private serializeUserCoupon(uc: any) {
+    const coupon = uc.coupon ? this.serializeCoupon(uc.coupon) : null;
+    const isExpired = uc.status === COUPON_STATUS.EXPIRED || (uc.status === COUPON_STATUS.FREE && uc.expireAt && new Date() > uc.expireAt);
+    const displayStatus = isExpired
+      ? 3
+      : uc.status === COUPON_STATUS.USED
+        ? 2
+        : 1;
+
     return {
       ...uc,
       id: uc.id.toString(),
       userId: uc.userId.toString(),
       couponId: uc.couponId.toString(),
       usedOrderId: uc.usedOrderId?.toString(),
+      status: displayStatus,
+      name: coupon?.name || '',
+      type: coupon?.type || 1,
+      value: coupon?.value || 0,
+      minAmount: coupon?.minAmount || 0,
+      startTime: coupon?.startTime,
+      endTime: uc.expireAt || coupon?.endTime,
+      useTime: uc.usedAt,
+      orderNo: undefined,
+      coupon,
     };
   }
 }

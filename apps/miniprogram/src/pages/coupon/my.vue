@@ -44,6 +44,7 @@
 import { ref, onMounted } from 'vue'
 import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { getMyCoupons, type MyCouponItem } from '@/api/coupon'
+import { useUserStore } from '@/stores/user'
 import { formatPrice, formatCouponValue } from '@/utils/format'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -59,8 +60,13 @@ const coupons = ref<MyCouponItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const userStore = useUserStore()
 
 async function loadCoupons(reset = false) {
+  if (!userStore.isLoggedIn) {
+    showLoginRequired()
+    return
+  }
   if (loading.value) return
   if (!reset && finished.value) return
   if (reset) {
@@ -72,10 +78,12 @@ async function loadCoupons(reset = false) {
   loading.value = true
   try {
     const data = await getMyCoupons({ status: currentTab.value, page: page.value, pageSize: 10 })
-    coupons.value.push(...data.list)
-    finished.value = coupons.value.length >= data.total
+    const list = Array.isArray(data?.list) ? data.list : []
+    coupons.value.push(...list)
+    finished.value = coupons.value.length >= Number(data?.total || 0)
     page.value++
-  } catch {
+  } catch (err) {
+    console.error('[baby-mall] loadMyCoupons failed:', { status: currentTab.value, page: page.value, err })
     uni.showToast({ title: '加载失败', icon: 'none' })
   } finally {
     loading.value = false
@@ -89,6 +97,20 @@ function switchTab(value: number) {
 
 function goUse() {
   uni.switchTab({ url: '/pages/home/index' })
+}
+
+function showLoginRequired() {
+  uni.showModal({
+    title: '需要登录',
+    content: '请先登录后查看优惠券',
+    cancelText: '取消',
+    confirmText: '去登录',
+    success: (res) => {
+      if (res.confirm) {
+        uni.switchTab({ url: '/pages/user/index' })
+      }
+    }
+  })
 }
 
 onPullDownRefresh(async () => {

@@ -6,7 +6,7 @@ export function getCategoryTree() {
 }
 
 export interface CategoryItem {
-  id: number
+  id: string
   name: string
   icon: string
   children?: CategoryItem[]

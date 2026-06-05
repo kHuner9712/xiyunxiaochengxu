@@ -34,11 +34,43 @@ describe('CouponService ownership guard', () => {
 
   it('findMyCoupons only queries coupons owned by current user', async () => {
     prisma.userCoupon.findMany.mockResolvedValue([]);
+    prisma.userCoupon.count.mockResolvedValue(0);
 
     await service.findMyCoupons('100', COUPON_STATUS.FREE);
 
     expect(prisma.userCoupon.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId: 100n, status: COUPON_STATUS.FREE },
+      where: expect.objectContaining({ userId: 100n, status: COUPON_STATUS.FREE }),
+      skip: 0,
+      take: 10,
+    }));
+  });
+
+  it('findMyCoupons returns an empty pagination shape when user has no coupons', async () => {
+    prisma.userCoupon.findMany.mockResolvedValue([]);
+    prisma.userCoupon.count.mockResolvedValue(0);
+
+    const result = await service.findMyCoupons('100', 1, 1, 10);
+
+    expect(result).toEqual({ list: [], total: 0, page: 1, pageSize: 10 });
+  });
+
+  it('findMyCoupons maps front tab status 2 and 3 to used and expired coupons', async () => {
+    prisma.userCoupon.findMany.mockResolvedValue([]);
+    prisma.userCoupon.count.mockResolvedValue(0);
+
+    await service.findMyCoupons('100', 2);
+    expect(prisma.userCoupon.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { userId: 100n, status: COUPON_STATUS.USED },
+    }));
+
+    await service.findMyCoupons('100', 3);
+    expect(prisma.userCoupon.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        userId: 100n,
+        OR: expect.arrayContaining([
+          { status: COUPON_STATUS.EXPIRED },
+        ]),
+      }),
     }));
   });
 

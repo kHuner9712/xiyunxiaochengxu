@@ -147,7 +147,9 @@ describe('AuthService bindPhone access_token cache', () => {
     expect(result).toEqual({ phone: '13800138000' });
     expect(mockedAxios.get).not.toHaveBeenCalled();
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      expect.stringContaining('access_token=cached-token&code=phone-code'),
+      'https://api.weixin.qq.com/wxa/business/getuserphonenumber',
+      { code: 'phone-code' },
+      { params: { access_token: 'cached-token' } },
     );
   });
 
@@ -161,10 +163,21 @@ describe('AuthService bindPhone access_token cache', () => {
 
     await authService.bindPhone('1', 'phone-code');
 
-    expect(mockedAxios.get).toHaveBeenCalledWith(expect.stringContaining('/cgi-bin/token'));
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      'https://api.weixin.qq.com/cgi-bin/token',
+      {
+        params: {
+          grant_type: 'client_credential',
+          appid: 'wx-test-appid',
+          secret: 'wx-test-secret',
+        },
+      },
+    );
     expect(redis.set).toHaveBeenCalledWith('wechat_access_token', 'fresh-token', 6900);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      expect.stringContaining('access_token=fresh-token&code=phone-code'),
+      'https://api.weixin.qq.com/wxa/business/getuserphonenumber',
+      { code: 'phone-code' },
+      { params: { access_token: 'fresh-token' } },
     );
   });
 

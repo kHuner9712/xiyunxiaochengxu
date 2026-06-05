@@ -15,6 +15,7 @@
     "build": "pnpm build:api && pnpm build:admin",
     "typecheck": "pnpm --filter @baby-mall/api build && pnpm --filter @baby-mall/admin-web typecheck && pnpm --filter @baby-mall/miniprogram typecheck",
     "lint": "pnpm --filter @baby-mall/api lint && pnpm --filter @baby-mall/admin-web lint",
+    "test:ci": "pnpm --filter @baby-mall/api test:ci && pnpm --filter @baby-mall/miniprogram test",
     "clean": "pnpm -r clean",
     "docker:up": "cd deploy && docker compose up -d --build",
     "docker:down": "cd deploy && docker compose down",

@@ -20,13 +20,14 @@
 
     <view class="rights-section card">
       <text class="section-title">会员权益</text>
-      <view class="rights-list">
+      <view v-if="rights.length" class="rights-list">
         <view v-for="right in rights" :key="right.id" class="right-item">
           <image class="right-icon" :src="right.icon" mode="aspectFit" />
           <text class="right-name">{{ right.name }}</text>
           <text class="right-desc">{{ right.description }}</text>
         </view>
       </view>
+      <Empty v-else text="暂无会员权益" />
     </view>
   </view>
 </template>
@@ -35,6 +36,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { getMemberInfo, getMemberRights, type MemberInfo, type MemberRight } from '@/api/member'
+import Empty from '@/components/Empty.vue'
 
 const userStore = useUserStore()
 

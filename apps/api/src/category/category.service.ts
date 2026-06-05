@@ -107,6 +107,7 @@ export class CategoryService {
         ...c,
         id: c.id.toString(),
         parentId: c.parentId.toString(),
+        icon: c.icon || '/static/default-cover.png',
         children: this.buildTree(categories, c.id),
       }));
   }

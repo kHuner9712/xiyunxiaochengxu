@@ -322,15 +322,36 @@ export class AuthService {
   }
 
   async weappLogin(code: string) {
-    const appId = this.configService.get('WECHAT_APP_ID');
-    const appSecret = this.configService.get('WECHAT_APP_SECRET');
-    const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${appId}&secret=${appSecret}&js_code=${code}&grant_type=authorization_code`;
+    const appId = this.configService.get<string>('WECHAT_APP_ID');
+    const appSecret = this.configService.get<string>('WECHAT_APP_SECRET');
+    if (!appId || !appSecret) {
+      this.logger.error('微信登录失败：WECHAT_APP_ID 或 WECHAT_APP_SECRET 未配置');
+      throw new UnauthorizedException('微信登录暂不可用，请稍后重试');
+    }
 
-    const response = await axios.get(url);
+    let response;
+    try {
+      response = await axios.get('https://api.weixin.qq.com/sns/jscode2session', {
+        params: {
+          appid: appId,
+          secret: appSecret,
+          js_code: code,
+          grant_type: 'authorization_code',
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(`微信登录请求异常: status=${err?.response?.status || '-'} message=${err?.message || err}`);
+      throw new UnauthorizedException('微信登录暂不可用，请稍后重试');
+    }
     const { openid, unionid, session_key, errcode, errmsg } = response.data;
 
     if (errcode) {
+      this.logger.warn(`微信登录返回错误: errcode=${errcode} errmsg=${errmsg || '-'}`);
       throw new UnauthorizedException(`微信登录失败: ${errmsg}`);
+    }
+    if (!openid || !session_key) {
+      this.logger.warn('微信登录返回缺少 openid 或 session_key');
+      throw new UnauthorizedException('微信登录失败，请稍后重试');
     }
 
     let user = await this.prisma.user.findFirst({
@@ -346,6 +367,7 @@ export class AuthService {
           unionId: unionid || null,
           memberLevelId: 1n,
           status: 1,
+          lastLoginAt: new Date(),
         },
       });
       isNewUser = true;
@@ -387,18 +409,34 @@ export class AuthService {
   }
 
   private async bindPhoneByCode(userId: string, code: string) {
-    const appId = this.configService.get('WECHAT_APP_ID');
-    const appSecret = this.configService.get('WECHAT_APP_SECRET');
+    const appId = this.configService.get<string>('WECHAT_APP_ID');
+    const appSecret = this.configService.get<string>('WECHAT_APP_SECRET');
+    if (!appId || !appSecret) {
+      this.logger.error('手机号绑定失败：WECHAT_APP_ID 或 WECHAT_APP_SECRET 未配置');
+      throw new BadRequestException('手机号绑定暂不可用，请稍后重试');
+    }
 
     const accessTokenCacheKey = 'wechat_access_token';
     let access_token = await this.redisService.get(accessTokenCacheKey);
 
     if (!access_token) {
-      const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
-      const tokenRes = await axios.get(url);
+      let tokenRes;
+      try {
+        tokenRes = await axios.get('https://api.weixin.qq.com/cgi-bin/token', {
+          params: {
+            grant_type: 'client_credential',
+            appid: appId,
+            secret: appSecret,
+          },
+        });
+      } catch (err: any) {
+        this.logger.error(`获取微信 access_token 请求异常: status=${err?.response?.status || '-'} message=${err?.message || err}`);
+        throw new BadRequestException('手机号绑定暂不可用，请稍后重试');
+      }
       const { access_token: fetchedAccessToken, expires_in, errcode, errmsg } = tokenRes.data;
 
       if (errcode) {
+        this.logger.warn(`获取微信 access_token 返回错误: errcode=${errcode} errmsg=${errmsg || '-'}`);
         throw new BadRequestException(`获取access_token失败: ${errmsg}`);
       }
 
@@ -409,11 +447,21 @@ export class AuthService {
       }
     }
 
-    const phoneUrl = `https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${access_token}&code=${code}`;
-    const phoneRes = await axios.post(phoneUrl);
+    let phoneRes;
+    try {
+      phoneRes = await axios.post(
+        'https://api.weixin.qq.com/wxa/business/getuserphonenumber',
+        { code },
+        { params: { access_token } },
+      );
+    } catch (err: any) {
+      this.logger.error(`获取微信手机号请求异常: status=${err?.response?.status || '-'} message=${err?.message || err}`);
+      throw new BadRequestException('获取手机号失败，请稍后重试');
+    }
     const { errcode: phoneErrcode, errmsg: phoneErrmsg, phone_info } = phoneRes.data;
 
     if (phoneErrcode) {
+      this.logger.warn(`获取微信手机号返回错误: errcode=${phoneErrcode} errmsg=${phoneErrmsg || '-'}`);
       throw new BadRequestException(`获取手机号失败: ${phoneErrmsg}`);
     }
 
@@ -436,8 +484,25 @@ export class AuthService {
     }
 
     const newAppId = this.configService.get<string>('WECHAT_APP_ID');
-    const newUrl = `https://api.weixin.qq.com/sns/jscode2session?appid=${newAppId}&secret=${this.configService.get('WECHAT_APP_SECRET')}&js_code=${code}&grant_type=authorization_code`;
-    const newResponse = await axios.get(newUrl);
+    const newAppSecret = this.configService.get<string>('WECHAT_APP_SECRET');
+    if (!newAppId || !newAppSecret) {
+      this.logger.error('手机号兼容绑定失败：WECHAT_APP_ID 或 WECHAT_APP_SECRET 未配置');
+      throw new BadRequestException('手机号绑定暂不可用，请稍后重试');
+    }
+    let newResponse;
+    try {
+      newResponse = await axios.get('https://api.weixin.qq.com/sns/jscode2session', {
+        params: {
+          appid: newAppId,
+          secret: newAppSecret,
+          js_code: code,
+          grant_type: 'authorization_code',
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(`手机号兼容绑定获取会话异常: status=${err?.response?.status || '-'} message=${err?.message || err}`);
+      throw new BadRequestException('手机号绑定暂不可用，请稍后重试');
+    }
     const { session_key: newSessionKey, errcode, errmsg } = newResponse.data;
 
     if (errcode) {

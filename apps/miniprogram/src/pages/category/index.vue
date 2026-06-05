@@ -60,7 +60,7 @@ import { getCategoryTree, type CategoryItem } from '@/api/category'
 import Empty from '@/components/Empty.vue'
 
 const categories = ref<CategoryItem[]>([])
-const currentCategoryId = ref(0)
+const currentCategoryId = ref('')
 
 const currentChildren = computed(() => {
   const current = categories.value.find(c => c.id === currentCategoryId.value)
@@ -75,11 +75,16 @@ const currentCategoryName = computed(() => {
 async function loadCategories() {
   try {
     const data = await getCategoryTree()
-    categories.value = data
-    if (data.length) {
-      currentCategoryId.value = data[0].id
+    categories.value = Array.isArray(data) ? data : []
+    const firstWithChildren = categories.value.find(item => item.children?.length)
+    const firstCategory = firstWithChildren || categories.value[0]
+    if (firstCategory) {
+      currentCategoryId.value = firstCategory.id
+    } else {
+      currentCategoryId.value = ''
     }
-  } catch {
+  } catch (err) {
+    console.error('[baby-mall] loadCategories failed:', err)
     uni.showToast({ title: '分类加载失败', icon: 'none' })
   }
 }
@@ -88,7 +93,7 @@ function selectCategory(item: CategoryItem) {
   currentCategoryId.value = item.id
 }
 
-function goProductList(categoryId: number) {
+function goProductList(categoryId: string) {
   uni.navigateTo({ url: `/pages/product/list?categoryId=${categoryId}` })
 }
 
