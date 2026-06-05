@@ -199,8 +199,10 @@ async function handleGetPhoneNumber(e: any) {
     return
   }
 
-  let code = detail.code
-  if (!code && detail.encryptedData && detail.iv) {
+  let bindPayload: { code: string; encryptedData?: string; iv?: string } | null = null
+  if (detail.code) {
+    bindPayload = { code: detail.code }
+  } else if (detail.encryptedData && detail.iv) {
     try {
       const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
         uni.login({
@@ -209,13 +211,19 @@ async function handleGetPhoneNumber(e: any) {
           fail: reject
         })
       })
-      code = loginRes.code
+      if (loginRes.code) {
+        bindPayload = {
+          code: loginRes.code,
+          encryptedData: detail.encryptedData,
+          iv: detail.iv
+        }
+      }
     } catch (err) {
       console.error('[baby-mall] uni.login for legacy bindPhone failed:', err)
     }
   }
 
-  if (!code) {
+  if (!bindPayload?.code) {
     console.error('[baby-mall] getPhoneNumber missing code and legacy encrypted data:', detail)
     uni.showToast({ title: '未获取到手机号授权凭证', icon: 'none' })
     return
@@ -225,11 +233,7 @@ async function handleGetPhoneNumber(e: any) {
     if (!userStore.isLoggedIn) {
       await userStore.wxLogin()
     }
-    await userStore.bindPhone({
-      code,
-      encryptedData: detail.encryptedData,
-      iv: detail.iv
-    })
+    await userStore.bindPhone(bindPayload)
     uni.showToast({ title: '手机号绑定成功', icon: 'success' })
   } catch (err) {
     console.error('[baby-mall] bindPhone failed:', err)

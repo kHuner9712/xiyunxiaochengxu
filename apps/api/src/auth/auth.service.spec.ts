@@ -153,6 +153,24 @@ describe('AuthService bindPhone access_token cache', () => {
     );
   });
 
+  it('新版手机号 code 不进入 legacy 解密路径', async () => {
+    await redis.set('wechat_access_token', 'cached-token');
+    mockedAxios.post.mockResolvedValue({
+      data: { errcode: 0, phone_info: { phoneNumber: '13800138000' } },
+    } as any);
+    const legacySpy = jest.spyOn(authService as any, 'bindPhoneLegacy');
+
+    const result = await authService.bindPhone('1', 'phone-code');
+
+    expect(result).toEqual({ phone: '13800138000' });
+    expect(legacySpy).not.toHaveBeenCalled();
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      'https://api.weixin.qq.com/wxa/business/getuserphonenumber',
+      { code: 'phone-code' },
+      { params: { access_token: 'cached-token' } },
+    );
+  });
+
   it('缓存未命中时请求 token 并按 expires_in - 300 写入 Redis', async () => {
     mockedAxios.get.mockResolvedValue({
       data: { access_token: 'fresh-token', expires_in: 7200 },
