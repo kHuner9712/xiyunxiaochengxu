@@ -1,5 +1,4 @@
 import { flushPromises, mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SearchPage from '../index.vue';
 import { clearSearchHistory, getHotKeywords, getSearchHistory, searchProducts } from '@/api/search';
@@ -54,6 +53,7 @@ describe('搜索热门词', () => {
     expect(getHotKeywords).toHaveBeenCalled();
     expect(getSearchHistory).not.toHaveBeenCalled();
     expect((globalThis as any).uni.switchTab).not.toHaveBeenCalled();
+    expect(wrapper.find('.clear-btn').exists()).toBe(false);
     expect(wrapper.text()).toContain('奶粉');
   });
 
@@ -92,9 +92,9 @@ describe('搜索热门词', () => {
     const wrapper = mountSearchPage();
     await flushPromises();
 
-    (wrapper.vm as any).searchHistory = ['奶粉'];
-    await nextTick();
-    await wrapper.find('.clear-btn').trigger('tap');
+    expect(wrapper.find('.clear-btn').exists()).toBe(false);
+    await (wrapper.vm as any).clearHistory();
+    await flushPromises();
 
     expect(clearSearchHistory).not.toHaveBeenCalled();
     expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({

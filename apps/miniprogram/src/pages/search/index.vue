@@ -150,6 +150,11 @@ onMounted(() => {
     loadSearchHistory()
   }
 })
+
+defineExpose({
+  searchHistory,
+  clearHistory,
+})
 </script>
 
 <style lang="scss" scoped>

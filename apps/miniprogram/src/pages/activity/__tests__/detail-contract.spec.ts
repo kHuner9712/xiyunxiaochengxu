@@ -83,10 +83,6 @@ describe('活动详情字段契约', () => {
     const wrapper = mount(ActivityDetailPage, {
       global: {
         stubs: {
-          ProductCard: {
-            props: ['product'],
-            template: '<view class="product-card-stub">{{ product.name }} {{ product.image }} {{ product.price }} {{ product.originalPrice }} {{ product.sales }} {{ product.activityPrice }} {{ product.stock }}</view>',
-          },
           CountdownTimer: true,
         },
       },
@@ -95,10 +91,19 @@ describe('活动详情字段契约', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('活动奶粉')
-    expect(wrapper.text()).toContain('https://api.example.com/product.jpg')
-    expect(wrapper.text()).toContain('8900')
-    expect(wrapper.text()).toContain('9900')
-    expect(wrapper.text()).toContain('12')
-    expect(wrapper.text()).toContain('5')
+    expect(wrapper.text()).toContain('¥89.00')
+    expect(wrapper.text()).toContain('¥99.00')
+    expect(wrapper.text()).toContain('已售12件')
+    expect(wrapper.find('.product-image').attributes('src')).toBe('https://api.example.com/product.jpg')
+
+    expect((wrapper.vm as any).activityProducts[0]).toMatchObject({
+      name: '活动奶粉',
+      image: 'https://api.example.com/product.jpg',
+      price: 8900,
+      originalPrice: 9900,
+      sales: 12,
+      activityPrice: 8900,
+      stock: 5,
+    })
   })
 })

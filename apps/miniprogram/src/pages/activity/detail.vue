@@ -130,6 +130,10 @@ onLoad((options) => {
     loadActivity(id)
   }
 })
+
+defineExpose({
+  activityProducts,
+})
 </script>
 
 <style lang="scss" scoped>
