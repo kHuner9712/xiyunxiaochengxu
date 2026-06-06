@@ -26,9 +26,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { normalizeTimeToTimestamp, type CompatibleTime } from '@/utils/time'
 
 const props = withDefaults(defineProps<{
-  endTime: number | string | Date
+  endTime: CompatibleTime
   label?: string
   showLabel?: boolean
 }>(), {
@@ -48,13 +49,6 @@ function padZero(n: number): string {
   return String(n).padStart(2, '0')
 }
 
-function normalizeEndTime(value: number | string | Date): number {
-  if (typeof value === 'number') return value
-  if (value instanceof Date) return value.getTime()
-  if (typeof value === 'string') return new Date(value).getTime()
-  return Number.NaN
-}
-
 function stopTimer() {
   if (timer) {
     clearInterval(timer)
@@ -64,7 +58,7 @@ function stopTimer() {
 
 function update() {
   const now = Date.now()
-  const endTimestamp = normalizeEndTime(props.endTime)
+  const endTimestamp = normalizeTimeToTimestamp(props.endTime)
   const diff = endTimestamp - now
   if (!Number.isFinite(endTimestamp) || diff <= 0) {
     days.value = 0

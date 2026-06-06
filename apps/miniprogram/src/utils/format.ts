@@ -44,15 +44,31 @@ export function formatOrderStatus(status: string): string {
   return statusMap[status] || '未知状态'
 }
 
-export function formatAftersaleStatus(status: number): string {
-  const statusMap: Record<number, string> = {
-    10: '待审核',
-    20: '处理中',
-    30: '已完成',
-    40: '已拒绝',
-    50: '已取消'
+export type AftersaleStatusValue = string | number | null | undefined
+
+export function normalizeAftersaleStatus(status: AftersaleStatusValue): string {
+  const legacyMap: Record<string, string> = {
+    '10': 'pending_review',
+    '20': 'approved',
+    '30': 'refunded',
+    '40': 'rejected',
+    '50': 'closed'
   }
-  return statusMap[status] || '未知状态'
+  const value = String(status ?? '')
+  return legacyMap[value] || value
+}
+
+export function formatAftersaleStatus(status: AftersaleStatusValue): string {
+  const statusMap: Record<string, string> = {
+    pending_review: '待审核',
+    approved: '已通过/待处理',
+    returned: '待退款',
+    pending_refund: '待退款',
+    refunded: '已完成',
+    rejected: '已拒绝',
+    closed: '已取消'
+  }
+  return statusMap[normalizeAftersaleStatus(status)] || '未知状态'
 }
 
 export function formatCouponType(type: number): string {

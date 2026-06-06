@@ -17,9 +17,21 @@ export class PointsService {
     const user = await this.prisma.user.findFirst({
       where: { id: BigInt(userId), deletedAt: null },
     });
-    if (!user) return { availablePoints: 0, totalPoints: 0, frozenPoints: 0 };
+    if (!user) {
+      return {
+        balance: 0,
+        totalEarned: 0,
+        totalSpent: 0,
+        availablePoints: 0,
+        totalPoints: 0,
+        frozenPoints: 0,
+      };
+    }
 
     return {
+      balance: user.availablePoints,
+      totalEarned: user.totalPoints,
+      totalSpent: 0,
       availablePoints: user.availablePoints,
       totalPoints: user.totalPoints,
       frozenPoints: 0,
@@ -88,7 +100,12 @@ export class PointsService {
     );
 
     this.logger.log(`用户${userId}签到，获得${bonusPoints}积分，连续${consecutiveDays + 1}天`);
-    return { alreadySigned: false, points: bonusPoints, consecutiveDays: consecutiveDays + 1 };
+    return {
+      alreadySigned: false,
+      points: bonusPoints,
+      continuous: consecutiveDays + 1,
+      consecutiveDays: consecutiveDays + 1,
+    };
   }
 
   async getSignInStatus(userId: string) {
@@ -109,6 +126,9 @@ export class PointsService {
     const consecutiveDays = await this.getConsecutiveSignInDays(userId);
 
     return {
+      checked: !!todaySigned,
+      continuous: consecutiveDays,
+      todayPoints: Math.min(POINTS_SIGN_IN_BASE + consecutiveDays * 2, POINTS_SIGN_IN_MAX),
       todaySigned: !!todaySigned,
       consecutiveDays,
       basePoints: POINTS_SIGN_IN_BASE,
@@ -147,14 +167,26 @@ export class PointsService {
   }
 
   async getRules() {
-    return {
-      deductRate: POINTS_DEDUCT_RATE,
-      deductMaxPercent: POINTS_DEDUCT_MAX_PERCENT,
-      signInBase: POINTS_SIGN_IN_BASE,
-      signInMax: POINTS_SIGN_IN_MAX,
-      expireMonths: POINTS_EXPIRE_MONTHS,
-      description: `每${POINTS_DEDUCT_RATE}积分抵扣1元，最多抵扣订单金额的${POINTS_DEDUCT_MAX_PERCENT}%；签到每日${POINTS_SIGN_IN_BASE}积分起，连续签到递增，最高${POINTS_SIGN_IN_MAX}积分`,
-    };
+    return [
+      {
+        action: '每日签到',
+        points: POINTS_SIGN_IN_BASE,
+        dailyLimit: 1,
+        description: `每日签到${POINTS_SIGN_IN_BASE}积分起，连续签到递增，最高${POINTS_SIGN_IN_MAX}积分`,
+      },
+      {
+        action: '积分抵扣',
+        points: 0,
+        dailyLimit: 0,
+        description: `每${POINTS_DEDUCT_RATE}积分抵扣1元，最多抵扣订单金额的${POINTS_DEDUCT_MAX_PERCENT}%`,
+      },
+      {
+        action: '积分有效期',
+        points: 0,
+        dailyLimit: 0,
+        description: `积分有效期为${POINTS_EXPIRE_MONTHS}个月，请在有效期内使用`,
+      },
+    ];
   }
 
   async earnPoints(userId: string, points: number, source: string, sourceId?: string, description?: string, expireMonths: number = POINTS_EXPIRE_MONTHS) {

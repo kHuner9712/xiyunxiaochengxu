@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ActivityQueryDto } from './dto/activity-query.dto';
-import { paginate } from '@baby-mall/shared';
+import { paginate, serializeProductCard } from '@baby-mall/shared';
 import { getAssetBaseUrl, normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
@@ -188,23 +188,56 @@ export class ActivityService {
   }
 
   private serializeActivity(activity: any) {
+    const bannerImage = normalizeAssetUrl(activity.bannerImage, this.assetBaseUrl);
+    const activityProducts = activity.activityProducts?.map((ap: any) => this.serializeActivityProductRelation(ap)) || [];
+
     return {
       ...activity,
       id: activity.id.toString(),
-      bannerImage: normalizeAssetUrl(activity.bannerImage, this.assetBaseUrl),
-      activityProducts: activity.activityProducts?.map((ap: any) => ({
-        ...ap,
-        id: ap.id.toString(),
-        activityId: ap.activityId.toString(),
-        productId: ap.productId.toString(),
-        skuId: ap.skuId?.toString(),
-        product: ap.product
-          ? { ...ap.product, id: ap.product.id.toString(), mainImage: normalizeAssetUrl(ap.product.mainImage, this.assetBaseUrl) }
-          : undefined,
-        sku: ap.sku
-          ? { ...ap.sku, id: ap.sku.id.toString(), image: normalizeAssetUrl(ap.sku.image, this.assetBaseUrl) }
-          : undefined,
-      })),
+      bannerImage,
+      image: bannerImage,
+      activityProducts,
+      products: activityProducts.map((ap: any) => this.serializeActivityProductCard(ap)),
+    };
+  }
+
+  private serializeActivityProductRelation(ap: any) {
+    return {
+      ...ap,
+      id: ap.id.toString(),
+      activityId: ap.activityId.toString(),
+      productId: ap.productId.toString(),
+      skuId: ap.skuId?.toString(),
+      product: ap.product
+        ? { ...ap.product, id: ap.product.id.toString(), mainImage: normalizeAssetUrl(ap.product.mainImage, this.assetBaseUrl) }
+        : undefined,
+      sku: ap.sku
+        ? { ...ap.sku, id: ap.sku.id.toString(), image: normalizeAssetUrl(ap.sku.image, this.assetBaseUrl) }
+        : undefined,
+    };
+  }
+
+  private serializeActivityProductCard(ap: any) {
+    const product = ap.product || {};
+    const sku = ap.sku || {};
+    const card = serializeProductCard({
+      id: product.id || ap.productId || ap.id,
+      name: product.name || '',
+      mainImage: sku.image || product.mainImage || '',
+      minPrice: ap.activityPrice ?? sku.price ?? product.minPrice ?? 0,
+      originalPrice: sku.originalPrice ?? product.originalPrice ?? product.minPrice ?? ap.activityPrice ?? 0,
+      totalSales: product.totalSales ?? 0,
+      tag: '活动优选',
+    });
+
+    return {
+      ...card,
+      image: normalizeAssetUrl(sku.image || product.mainImage, this.assetBaseUrl) || '/static/default-cover.png',
+      activityProductId: ap.id,
+      productId: ap.productId,
+      skuId: ap.skuId,
+      activityPrice: ap.activityPrice ?? card.price,
+      stock: ap.activityStock ?? sku.stock ?? 0,
     };
   }
 }

@@ -16,6 +16,10 @@ export function cancelAftersale(id: string | number) {
   return put(`/weapp/aftersale/cancel/${id}`)
 }
 
+export function fillReturnLogistics(id: string | number, data: ReturnLogisticsForm) {
+  return put(`/weapp/aftersale/return-logistics/${id}`, data)
+}
+
 export interface AftersaleForm {
   orderId: string | number
   orderItemId: string | number
@@ -30,7 +34,7 @@ export interface AftersaleItem {
   orderNo: string
   type: number
   reason: string
-  status: number
+  status: string | number
   refundAmount: number
   productName: string
   productImage: string
@@ -45,7 +49,7 @@ export interface AftersaleDetail {
   reason: string
   description: string
   images: string[]
-  status: number
+  status: string | number
   refundAmount: number
   productName: string
   productImage: string
@@ -53,11 +57,21 @@ export interface AftersaleDetail {
   price: number
   quantity: number
   logs: AftersaleLog[]
+  aftersaleLogs?: any[]
+  returnLogisticsCompany?: string
+  returnLogisticsNo?: string
   createTime: string
 }
 
 export interface AftersaleLog {
   time: string
   content: string
-  status: number
+  status: string | number
+}
+
+export interface ReturnLogisticsForm {
+  returnLogisticsCompany: string
+  returnLogisticsNo: string
+  contactPhone?: string
+  remark?: string
 }

@@ -13,16 +13,21 @@ export function getActivityFeed(params: { tab: string; page: number; pageSize: n
 }
 
 export interface ActivityDetail {
-  id: number
+  id: string | number
   name: string
-  image: string
+  image?: string
+  bannerImage?: string
   description: string
-  type: number
-  startTime: number
-  endTime: number
+  type: string | number
+  startTime: number | string | Date
+  endTime: number | string | Date
   rules: string
   discount?: number
   minAmount?: number
+  products?: ActivityProduct[]
+  activityProducts?: any[]
+  productList?: ActivityProduct[]
+  goodsList?: ActivityProduct[]
 }
 
 export interface FeedItem {
@@ -45,11 +50,14 @@ export interface FeedItem {
 }
 
 export interface ActivityProduct {
-  productId: number
+  id?: string | number
+  productId: string | number
+  skuId?: string | number
   name: string
   image: string
   price: number
   originalPrice: number
+  sales: number
   activityPrice: number
   stock: number
 }

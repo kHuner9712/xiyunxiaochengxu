@@ -1,7 +1,7 @@
 <template>
   <view class="activity-detail-page page-shell">
     <view class="banner-wrap">
-      <image class="activity-banner" :src="activity.image" mode="aspectFill" />
+      <image class="activity-banner" :src="activityBanner" mode="aspectFill" />
       <view class="banner-shade"></view>
       <text class="banner-status" :class="activityStatusClass">{{ activityStatusText }}</text>
       <view class="banner-copy">
@@ -56,6 +56,7 @@
 import { computed, ref } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { getActivityDetail, type ActivityDetail } from '@/api/activity'
+import { normalizeTimeToTimestamp, type CompatibleTime } from '@/utils/time'
 import CountdownTimer from '@/components/CountdownTimer.vue'
 import ProductCard from '@/components/ProductCard.vue'
 
@@ -64,12 +65,14 @@ const activity = ref<ActivityDetail>({
   startTime: 0, endTime: 0, rules: ''
 })
 
+const activityBanner = computed(() => activity.value.image || activity.value.bannerImage || '/static/default-cover.png')
+
 const activityStatusText = computed(() => {
   const now = Date.now()
   const start = normalizeActivityTime(activity.value.startTime)
   const end = normalizeActivityTime(activity.value.endTime)
-  if (start && now < start) return '即将开始'
-  if (end && now > end) return '已结束'
+  if (Number.isFinite(start) && now < start) return '即将开始'
+  if (!Number.isFinite(end) || now > end) return '已结束'
   return '进行中'
 })
 
@@ -82,6 +85,7 @@ const activityStatusClass = computed(() => {
 const activityProducts = computed(() => {
   const source =
     (activity.value as any).products ||
+    (activity.value as any).activityProducts ||
     (activity.value as any).productList ||
     (activity.value as any).goodsList ||
     []
@@ -89,21 +93,22 @@ const activityProducts = computed(() => {
   if (!Array.isArray(source)) return []
 
   return source.map((item: any) => ({
-    id: item.productId || item.id,
-    name: item.name || item.productName || '',
-    image: item.image || item.productImage || item.cover || '',
+    id: item.id || item.productId || item.product?.id,
+    name: item.name || item.productName || item.product?.name || '',
+    image: item.image || item.productImage || item.product?.mainImage || item.sku?.image || item.cover || '/static/default-cover.png',
     price: Number(item.activityPrice ?? item.price ?? 0),
-    originalPrice: Number(item.originalPrice ?? item.price ?? item.activityPrice ?? 0),
-    sales: Number(item.sales ?? item.saleCount ?? 0),
+    originalPrice: Number(item.originalPrice ?? item.product?.minPrice ?? item.price ?? item.activityPrice ?? 0),
+    sales: Number(item.sales ?? item.product?.totalSales ?? item.saleCount ?? 0),
+    activityPrice: Number(item.activityPrice ?? item.price ?? 0),
+    stock: Number(item.stock ?? item.activityStock ?? item.sku?.stock ?? 0),
     tags: ['活动优选', '自营正品']
   })).filter((item: any) => item.id)
 })
 
-const normalizedEndTime = computed(() => normalizeActivityTime(activity.value.endTime) || Date.now())
+const normalizedEndTime = computed(() => normalizeActivityTime(activity.value.endTime))
 
-function normalizeActivityTime(value?: number) {
-  if (!value) return 0
-  return value < 10000000000 ? value * 1000 : value
+function normalizeActivityTime(value?: CompatibleTime) {
+  return normalizeTimeToTimestamp(value)
 }
 
 async function loadActivity(id: number) {

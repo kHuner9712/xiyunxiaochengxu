@@ -17,6 +17,7 @@ export default defineConfig({
             'scroll-view',
             'switch',
             'text',
+            'textarea',
             'view',
           ].includes(tag),
         },

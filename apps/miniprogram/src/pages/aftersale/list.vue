@@ -63,15 +63,22 @@ function goDetail(id: string) {
   uni.navigateTo({ url: `/pages/aftersale/detail?id=${id}` })
 }
 
-function getStatusClass(status: number): string {
-  const map: Record<number, string> = {
-    10: 'pending',
-    20: 'processing',
-    30: 'completed',
-    40: 'rejected',
-    50: 'cancelled'
+function getStatusClass(status: string | number): string {
+  const map: Record<string, string> = {
+    pending_review: 'pending',
+    approved: 'processing',
+    returned: 'processing',
+    pending_refund: 'processing',
+    refunded: 'completed',
+    rejected: 'rejected',
+    closed: 'cancelled',
+    '10': 'pending',
+    '20': 'processing',
+    '30': 'completed',
+    '40': 'rejected',
+    '50': 'cancelled'
   }
-  return map[status] || ''
+  return map[String(status)] || ''
 }
 
 onPullDownRefresh(async () => {

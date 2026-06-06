@@ -133,7 +133,11 @@ export class AftersaleService {
             operatorType: 'user',
             operatorId: BigInt(userId),
             action: 'fill_return_logistics',
-            content: `用户填写退货物流，${dto.returnLogisticsCompany}：${dto.returnLogisticsNo}`,
+            content: [
+              `用户填写退货物流，${dto.returnLogisticsCompany}：${dto.returnLogisticsNo}`,
+              dto.contactPhone ? `联系电话：${dto.contactPhone}` : '',
+              dto.remark ? `备注：${dto.remark}` : '',
+            ].filter(Boolean).join('；'),
           },
         },
       },

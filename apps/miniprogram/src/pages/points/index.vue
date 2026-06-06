@@ -43,8 +43,11 @@
     <view class="rules-section card">
       <text class="section-title">积分规则</text>
       <view v-for="rule in pointsRules" :key="rule.action" class="rule-item">
-        <text class="rule-action">{{ rule.action }}</text>
-        <text class="rule-value">+{{ rule.points }}</text>
+        <view class="rule-copy">
+          <text class="rule-action">{{ rule.action }}</text>
+          <text class="rule-desc">{{ rule.description }}</text>
+        </view>
+        <text class="rule-value">{{ formatRulePoints(rule.points) }}</text>
       </view>
     </view>
 
@@ -117,13 +120,18 @@ async function handleCheckIn() {
   try {
     const data = await checkIn()
     checkInStatus.value.checked = true
-    checkInStatus.value.continuous = data.continuous
+    checkInStatus.value.continuous = data.continuous ?? data.consecutiveDays ?? checkInStatus.value.continuous
+    checkInStatus.value.todayPoints = data.points
     uni.showToast({ title: `签到成功，+${data.points}积分`, icon: 'none' })
     await loadBalance()
     loadPointsDetail(true)
   } catch {
     uni.showToast({ title: '签到失败', icon: 'none' })
   }
+}
+
+function formatRulePoints(points: number) {
+  return points > 0 ? `+${points}` : '说明'
 }
 
 onPullDownRefresh(async () => {
@@ -303,11 +311,26 @@ onMounted(() => {
 .rule-action {
   font-size: $font-sm;
   color: $text-secondary;
+  display: block;
 }
 
 .rule-value {
   font-size: $font-sm;
   color: $price-color;
   font-weight: 500;
+}
+
+.rule-copy {
+  flex: 1;
+  min-width: 0;
+  margin-right: $spacing-sm;
+}
+
+.rule-desc {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $font-xs;
+  color: $text-hint;
+  line-height: 1.45;
 }
 </style>

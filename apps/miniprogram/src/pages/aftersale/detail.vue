@@ -1,7 +1,7 @@
 <template>
   <view class="aftersale-detail-page page-shell">
     <view class="status-section" :class="getStatusClass(detail.status)">
-      <text class="status-text">{{ formatAftersaleStatus(detail.status) }}</text>
+      <text class="status-text">{{ displayStatusText }}</text>
     </view>
 
     <view class="progress-section card">
@@ -54,18 +54,45 @@
       </view>
     </view>
 
-    <view v-if="detail.status === 10" class="bottom-bar bottom-action-bar">
+    <view v-if="showBottomBar" class="bottom-bar bottom-action-bar">
       <view class="cs-btn" @tap="goCustomerService">联系客服</view>
-      <view class="cancel-btn" @tap="handleCancel">取消申请</view>
+      <view v-if="canCancelAftersale" class="cancel-btn" @tap="handleCancel">取消申请</view>
+      <view v-if="canFillReturnLogistics" class="return-logistics-btn" @tap="openReturnLogisticsForm">填写退货物流</view>
+    </view>
+
+    <view v-if="showReturnLogisticsForm" class="logistics-modal-mask" @tap="closeReturnLogisticsForm">
+      <view class="logistics-modal card" @tap.stop>
+        <text class="modal-title">填写退货物流</text>
+        <view class="modal-field">
+          <text class="modal-label">物流公司</text>
+          <input class="modal-input return-company-input" v-model="returnLogisticsForm.returnLogisticsCompany" placeholder="请输入物流公司" />
+        </view>
+        <view class="modal-field">
+          <text class="modal-label">物流单号</text>
+          <input class="modal-input return-no-input" v-model="returnLogisticsForm.returnLogisticsNo" placeholder="请输入物流单号" />
+        </view>
+        <view class="modal-field">
+          <text class="modal-label">联系电话</text>
+          <input class="modal-input return-phone-input" v-model="returnLogisticsForm.contactPhone" placeholder="选填" />
+        </view>
+        <view class="modal-field">
+          <text class="modal-label">备注</text>
+          <textarea class="modal-textarea return-remark-input" v-model="returnLogisticsForm.remark" placeholder="选填" />
+        </view>
+        <view class="modal-actions">
+          <view class="modal-cancel-btn" @tap="closeReturnLogisticsForm">取消</view>
+          <view class="modal-submit-btn submit-logistics-btn" @tap="submitReturnLogistics">提交</view>
+        </view>
+      </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getAftersaleDetail, cancelAftersale, type AftersaleDetail } from '@/api/aftersale'
-import { formatAftersaleStatus, formatPrice } from '@/utils/format'
+import { getAftersaleDetail, cancelAftersale, fillReturnLogistics, type AftersaleDetail } from '@/api/aftersale'
+import { formatAftersaleStatus, formatPrice, normalizeAftersaleStatus } from '@/utils/format'
 import { resolvePrivateFileUrls } from '@/utils/private-file'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
@@ -75,25 +102,74 @@ const detail = ref<AftersaleDetail>({
   skuName: '', price: 0, quantity: 0, logs: [], createTime: ''
 })
 const displayImages = ref<string[]>([])
+const showReturnLogisticsForm = ref(false)
+const returnLogisticsForm = ref({
+  returnLogisticsCompany: '',
+  returnLogisticsNo: '',
+  contactPhone: '',
+  remark: ''
+})
+
+const normalizedStatus = computed(() => normalizeAftersaleStatus(detail.value.status))
+const canCancelAftersale = computed(() => normalizedStatus.value === 'pending_review')
+const canFillReturnLogistics = computed(() => detail.value.type === 2 && normalizedStatus.value === 'approved')
+const showBottomBar = computed(() => canCancelAftersale.value || canFillReturnLogistics.value)
+const displayStatusText = computed(() => {
+  if (normalizedStatus.value === 'approved') {
+    return detail.value.type === 2 ? '已通过/待退货' : '已通过/待退款'
+  }
+  return formatAftersaleStatus(detail.value.status)
+})
 
 async function loadDetail(id: string | number) {
   try {
-    detail.value = await getAftersaleDetail(id)
+    detail.value = normalizeDetail(await getAftersaleDetail(id))
     displayImages.value = await resolvePrivateFileUrls(detail.value.images || [])
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
   }
 }
 
-function getStatusClass(status: number): string {
-  const map: Record<number, string> = {
-    10: 'pending',
-    20: 'processing',
-    30: 'completed',
-    40: 'rejected',
-    50: 'cancelled'
+function normalizeDetail(data: any): AftersaleDetail {
+  const logs = Array.isArray(data.logs)
+    ? data.logs
+    : (data.aftersaleLogs || []).map((log: any) => ({
+        time: log.time || log.createdAt || '',
+        content: log.content || '',
+        status: data.status,
+      }))
+
+  return {
+    ...data,
+    orderNo: data.orderNo || data.order?.orderNo || '',
+    productName: data.productName || data.orderItem?.productName || '',
+    productImage: data.productImage || data.orderItem?.productImage || '',
+    skuName: data.skuName || data.orderItem?.skuName || '',
+    price: data.price ?? data.orderItem?.price ?? 0,
+    quantity: data.quantity ?? data.orderItem?.quantity ?? 0,
+    refundAmount: data.refundAmount ?? 0,
+    images: Array.isArray(data.images) ? data.images : [],
+    logs,
+    createTime: data.createTime || data.createdAt || '',
   }
-  return map[status] || ''
+}
+
+function getStatusClass(status: string | number): string {
+  const map: Record<string, string> = {
+    pending_review: 'pending',
+    approved: 'processing',
+    returned: 'processing',
+    pending_refund: 'processing',
+    refunded: 'completed',
+    rejected: 'rejected',
+    closed: 'cancelled',
+    '10': 'pending',
+    '20': 'processing',
+    '30': 'completed',
+    '40': 'rejected',
+    '50': 'cancelled'
+  }
+  return map[normalizeAftersaleStatus(status)] || map[String(status)] || ''
 }
 
 function previewImage(url: string) {
@@ -121,9 +197,59 @@ function goCustomerService() {
   uni.navigateTo({ url: '/pages/customer-service/index' })
 }
 
+function openReturnLogisticsForm() {
+  returnLogisticsForm.value = {
+    returnLogisticsCompany: detail.value.returnLogisticsCompany || '',
+    returnLogisticsNo: detail.value.returnLogisticsNo || '',
+    contactPhone: '',
+    remark: ''
+  }
+  showReturnLogisticsForm.value = true
+}
+
+function closeReturnLogisticsForm() {
+  showReturnLogisticsForm.value = false
+}
+
+async function submitReturnLogistics() {
+  const payload = {
+    returnLogisticsCompany: returnLogisticsForm.value.returnLogisticsCompany.trim(),
+    returnLogisticsNo: returnLogisticsForm.value.returnLogisticsNo.trim(),
+    contactPhone: returnLogisticsForm.value.contactPhone.trim(),
+    remark: returnLogisticsForm.value.remark.trim()
+  }
+
+  if (!payload.returnLogisticsCompany) {
+    uni.showToast({ title: '请输入物流公司', icon: 'none' })
+    return
+  }
+  if (!payload.returnLogisticsNo) {
+    uni.showToast({ title: '请输入物流单号', icon: 'none' })
+    return
+  }
+
+  try {
+    await fillReturnLogistics(detail.value.id, payload)
+    uni.showToast({ title: '提交成功', icon: 'success' })
+    closeReturnLogisticsForm()
+    await loadDetail(detail.value.id)
+  } catch {
+    uni.showToast({ title: '提交失败', icon: 'none' })
+  }
+}
+
 onLoad((options) => {
   const id = Array.isArray(options?.id) ? options?.id[0] : options?.id
   if (id) loadDetail(id)
+})
+
+defineExpose({
+  detail,
+  returnLogisticsForm,
+  showReturnLogisticsForm,
+  canFillReturnLogistics,
+  submitReturnLogistics,
+  openReturnLogisticsForm,
 })
 </script>
 
@@ -311,7 +437,8 @@ onLoad((options) => {
   justify-content: center;
 }
 
-.cancel-btn {
+.cancel-btn,
+.return-logistics-btn {
   min-height: 76rpx;
   padding: 0 80rpx;
   border: 2rpx solid $border-color;
@@ -319,6 +446,13 @@ onLoad((options) => {
   font-size: $font-md;
   color: $text-secondary;
   @include flex-center;
+}
+
+.return-logistics-btn {
+  border-color: transparent;
+  background: $gradient-coral;
+  color: #FFFFFF;
+  box-shadow: $shadow-coral;
 }
 
 .cs-btn {
@@ -330,6 +464,87 @@ onLoad((options) => {
   color: #FFFFFF;
   margin-right: $spacing-sm;
   @include flex-center;
+  box-shadow: $shadow-coral;
+}
+
+.logistics-modal-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 300;
+  padding: $spacing-md;
+  background: rgba(58, 48, 44, 0.36);
+  @include flex-center;
+}
+
+.logistics-modal {
+  width: 100%;
+  max-width: 680rpx;
+  background: #FFFFFF;
+  border-radius: $radius-xxl;
+}
+
+.modal-title {
+  display: block;
+  margin-bottom: $spacing-md;
+  font-size: $font-lg;
+  font-weight: 800;
+  color: $text-color;
+}
+
+.modal-field {
+  margin-bottom: $spacing-sm;
+}
+
+.modal-label {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: $font-sm;
+  color: $text-secondary;
+  font-weight: 700;
+}
+
+.modal-input,
+.modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: $radius-lg;
+  background: $bg-soft;
+  padding: 18rpx 20rpx;
+  font-size: $font-sm;
+  color: $text-color;
+}
+
+.modal-textarea {
+  min-height: 132rpx;
+}
+
+.modal-actions {
+  display: flex;
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+}
+
+.modal-cancel-btn,
+.modal-submit-btn {
+  flex: 1;
+  min-height: 76rpx;
+  border-radius: $radius-round;
+  @include flex-center;
+  font-size: $font-md;
+  font-weight: 700;
+}
+
+.modal-cancel-btn {
+  background: $bg-gray;
+  color: $text-secondary;
+}
+
+.modal-submit-btn {
+  background: $gradient-coral;
+  color: #FFFFFF;
   box-shadow: $shadow-coral;
 }
 </style>
