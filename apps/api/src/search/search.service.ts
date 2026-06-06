@@ -86,7 +86,9 @@ export class SearchService {
     return result;
   }
 
-  async getSearchHistory(userId: string) {
+  async getSearchHistory(userId?: string) {
+    if (!userId) return [];
+
     const cacheKey = `search:history:${userId}`;
     const cached = await this.redisService.get(cacheKey);
     if (cached) {
@@ -120,7 +122,9 @@ export class SearchService {
     });
   }
 
-  async clearSearchHistory(userId: string) {
+  async clearSearchHistory(userId?: string) {
+    if (!userId) return { success: true };
+
     const cacheKey = `search:history:${userId}`;
     await this.redisService.del(cacheKey);
     this.logger.log(`用户${userId}清空搜索历史`);

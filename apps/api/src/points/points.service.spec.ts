@@ -60,6 +60,32 @@ describe('PointsService ownership guard', () => {
     });
   });
 
+  it('findByUser serializes ids and createTime for point records', async () => {
+    const createdAt = new Date('2026-06-05T15:06:24.269Z');
+    prisma.pointsRecord.findMany.mockResolvedValue([{
+      id: 10n,
+      userId: 100n,
+      type: 1,
+      points: 5,
+      balance: 88,
+      source: 'sign_in',
+      sourceId: 99n,
+      description: '签到',
+      createdAt,
+    }]);
+    prisma.pointsRecord.count.mockResolvedValue(1);
+
+    const result = await service.findByUser('100', { page: 1, pageSize: 10, skip: 0, take: 10 } as any);
+
+    expect(result.list[0]).toMatchObject({
+      id: '10',
+      userId: '100',
+      sourceId: '99',
+      createTime: createdAt,
+      createdAt,
+    });
+  });
+
   it('getSignInStatus returns frontend aliases and original fields', async () => {
     prisma.pointsRecord.findFirst.mockResolvedValue(null);
 

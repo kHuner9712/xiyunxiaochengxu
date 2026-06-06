@@ -54,10 +54,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { searchProducts, getHotKeywords, getSearchHistory, clearSearchHistory } from '@/api/search'
+import { useUserStore } from '@/stores/user'
 import ProductCard from '@/components/ProductCard.vue'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
+const userStore = useUserStore()
 const keyword = ref('')
 const hasSearched = ref(false)
 const hotKeywords = ref<string[]>([])
@@ -76,6 +78,11 @@ async function loadHotKeywords() {
 }
 
 async function loadSearchHistory() {
+  if (!userStore.isLoggedIn) {
+    searchHistory.value = []
+    return
+  }
+
   try {
     searchHistory.value = await getSearchHistory()
   } catch {
@@ -93,7 +100,9 @@ async function doSearch() {
   finished.value = false
   products.value = []
   await loadProducts()
-  loadSearchHistory()
+  if (userStore.isLoggedIn) {
+    loadSearchHistory()
+  }
 }
 
 function searchByKeyword(kw: string) {
@@ -121,6 +130,12 @@ async function loadProducts() {
 }
 
 async function clearHistory() {
+  if (!userStore.isLoggedIn) {
+    searchHistory.value = []
+    uni.showToast({ title: '登录后可管理搜索历史', icon: 'none' })
+    return
+  }
+
   try {
     await clearSearchHistory()
     searchHistory.value = []
@@ -131,7 +146,9 @@ async function clearHistory() {
 
 onMounted(() => {
   loadHotKeywords()
-  loadSearchHistory()
+  if (userStore.isLoggedIn) {
+    loadSearchHistory()
+  }
 })
 </script>
 

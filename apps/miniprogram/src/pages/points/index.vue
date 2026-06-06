@@ -32,7 +32,7 @@
       <view v-for="item in pointsDetail" :key="item.id" class="detail-item card">
         <view class="detail-info">
           <text class="detail-desc">{{ item.description }}</text>
-          <text class="detail-time">{{ item.createTime }}</text>
+          <text class="detail-time">{{ formatPointTime(item) }}</text>
         </view>
         <text class="detail-points" :class="{ earn: item.points > 0, spend: item.points < 0 }">
           {{ item.points > 0 ? '+' : '' }}{{ item.points }}
@@ -59,6 +59,7 @@
 import { ref, onMounted } from 'vue'
 import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { getPointsBalance, getPointsDetail, checkIn, getCheckInStatus, getPointsRules, type PointsRecord, type PointsRule } from '@/api/points'
+import { formatDate } from '@/utils/format'
 import Loading from '@/components/Loading.vue'
 
 const pointsBalance = ref({ balance: 0, totalEarned: 0, totalSpent: 0 })
@@ -132,6 +133,11 @@ async function handleCheckIn() {
 
 function formatRulePoints(points: number) {
   return points > 0 ? `+${points}` : '说明'
+}
+
+function formatPointTime(item: PointsRecord) {
+  const rawTime = item.createTime || item.createdAt
+  return formatDate(rawTime, 'YYYY-MM-DD HH:mm') || String(rawTime || '')
 }
 
 onPullDownRefresh(async () => {

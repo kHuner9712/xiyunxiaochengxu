@@ -20,7 +20,16 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(getPointsBalance).mockResolvedValue({ balance: 88, totalEarned: 120, totalSpent: 32 })
   vi.mocked(getCheckInStatus).mockResolvedValue({ checked: false, continuous: 3, todayPoints: 16 })
-  vi.mocked(getPointsDetail).mockResolvedValue({ list: [], total: 0 })
+  vi.mocked(getPointsDetail).mockResolvedValue({
+    list: [{
+      id: 'record-1',
+      type: 1,
+      points: 10,
+      description: '签到奖励',
+      createdAt: '2026-06-05T15:06:24.269Z',
+    }],
+    total: 1,
+  })
   vi.mocked(getPointsRules).mockResolvedValue([
     { action: '每日签到', points: 10, dailyLimit: 1, description: '每日签到得积分' },
     { action: '积分抵扣', points: 0, dailyLimit: 0, description: '每100积分抵扣1元' },
@@ -47,6 +56,8 @@ describe('积分中心', () => {
     expect(wrapper.text()).toContain('120')
     expect(wrapper.text()).toContain('32')
     expect(wrapper.text()).toContain('已连续签到3天')
+    expect(wrapper.text()).toContain('签到奖励')
+    expect(wrapper.text()).toContain('2026-06-05')
     expect(wrapper.text()).toContain('每日签到')
     expect(wrapper.text()).toContain('积分抵扣')
     expect(wrapper.text()).not.toContain('undefined')

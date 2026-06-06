@@ -59,6 +59,8 @@ export class PointsService {
         id: r.id.toString(),
         userId: r.userId.toString(),
         sourceId: r.sourceId?.toString(),
+        createTime: r.createdAt,
+        createdAt: r.createdAt,
       })),
       total,
       dto.page,

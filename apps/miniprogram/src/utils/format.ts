@@ -1,3 +1,5 @@
+import { normalizeTimeToTimestamp, type CompatibleTime } from './time'
+
 export function formatPrice(priceInFen: number | string): string {
   const price = typeof priceInFen === 'string' ? parseInt(priceInFen, 10) : priceInFen
   if (isNaN(price)) return '0.00'
@@ -10,8 +12,11 @@ export function formatPriceYuan(priceInFen: number | string): number {
   return price / 100
 }
 
-export function formatDate(timestamp: number | string, format = 'YYYY-MM-DD HH:mm:ss'): string {
-  const date = new Date(typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp)
+export function formatDate(timestamp: CompatibleTime, format = 'YYYY-MM-DD HH:mm:ss'): string {
+  const normalizedTimestamp = normalizeTimeToTimestamp(timestamp)
+  if (!Number.isFinite(normalizedTimestamp)) return ''
+
+  const date = new Date(normalizedTimestamp)
   if (isNaN(date.getTime())) return ''
 
   const year = date.getFullYear()

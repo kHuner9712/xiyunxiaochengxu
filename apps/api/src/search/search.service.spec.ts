@@ -108,4 +108,18 @@ describe('SearchService', () => {
     expect(result).toEqual(['奶瓶', '湿巾']);
     expect(prisma.searchKeyword.findMany).not.toHaveBeenCalled();
   });
+
+  it('should return empty history for anonymous users without reading redis', async () => {
+    const result = await service.getSearchHistory();
+
+    expect(result).toEqual([]);
+    expect(redis.get).not.toHaveBeenCalled();
+  });
+
+  it('should treat anonymous clear history as a no-op', async () => {
+    const result = await service.clearSearchHistory();
+
+    expect(result).toEqual({ success: true });
+    expect(redis.del).not.toHaveBeenCalled();
+  });
 });

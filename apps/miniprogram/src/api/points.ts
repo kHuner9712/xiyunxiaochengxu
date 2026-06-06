@@ -1,4 +1,5 @@
 import { get, post } from '@/utils/request'
+import type { CompatibleTime } from '@/utils/time'
 
 export function getPointsBalance() {
   return get<PointsBalance>('/weapp/points/balance')
@@ -40,11 +41,14 @@ export interface CheckInStatus {
 }
 
 export interface PointsRecord {
-  id: number
+  id: string
+  userId?: string
   type: number
   points: number
   description: string
-  createTime: string
+  sourceId?: string
+  createTime?: CompatibleTime
+  createdAt?: CompatibleTime
 }
 
 export interface PointsRule {
