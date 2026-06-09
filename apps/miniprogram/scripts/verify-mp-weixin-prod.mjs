@@ -66,6 +66,10 @@ pass('production urlCheck is true')
 const textFiles = listFiles(distDir).filter((file) => /\.(js|json|wxml|wxss)$/.test(file))
 const combined = textFiles.map((file) => readFileSync(file, 'utf8')).join('\n')
 
+if (combined.includes(placeholderAppId)) {
+  fail(`built package contains placeholder AppID ${placeholderAppId}`)
+}
+
 if (!combined.includes(expectedApiBaseUrl)) {
   fail(`built package does not contain expected API base URL: ${expectedApiBaseUrl}`)
 }

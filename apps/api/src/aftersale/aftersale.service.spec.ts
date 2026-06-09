@@ -262,4 +262,73 @@ describe('AftersaleService.approve 退款金额校验', () => {
     });
     await expect(service.approve('50', '1', 1001)).rejects.toThrow('退款金额不能超过可退金额');
   });
+
+  it('使用优惠券后部分退款不能超过商品实付分摊金额', async () => {
+    mockPrisma.aftersaleOrder.update.mockResolvedValue({
+      ...APPROVED_AFTERSALE,
+      status: AftersaleStatus.approved,
+      refundAmount: 4000,
+    });
+    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue({
+      ...APPROVED_AFTERSALE,
+      status: AftersaleStatus.pending_review,
+      orderItem: { ...ORDER_ITEM_WITH_DELIVERED_ORDER, id: BigInt(10), subtotal: 5000 },
+      order: {
+        id: BigInt(1),
+        totalAmount: 10000,
+        discountAmount: 0,
+        couponAmount: 2000,
+        pointsAmount: 0,
+        activityDiscountAmount: 0,
+        freightAmount: 0,
+        payAmount: 8000,
+        orderItems: [
+          { id: BigInt(10), subtotal: 5000 },
+          { id: BigInt(11), subtotal: 5000 },
+        ],
+        orderRefunds: [],
+        aftersaleOrders: [{ id: BigInt(50), orderItemId: BigInt(10) }],
+      },
+    });
+
+    await expect(service.approve('50', '1', 5000)).rejects.toThrow('退款金额不能超过可退金额');
+    await expect(service.approve('50', '1', 4000)).resolves.toBeTruthy();
+  });
+
+  it('同一商品多次售后累计不能超过可退金额', async () => {
+    mockPrisma.aftersaleOrder.update.mockResolvedValue({
+      ...APPROVED_AFTERSALE,
+      id: BigInt(51),
+      status: AftersaleStatus.approved,
+      refundAmount: 1000,
+    });
+    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue({
+      ...APPROVED_AFTERSALE,
+      id: BigInt(51),
+      status: AftersaleStatus.pending_review,
+      orderItem: { ...ORDER_ITEM_WITH_DELIVERED_ORDER, id: BigInt(10), subtotal: 5000 },
+      order: {
+        id: BigInt(1),
+        totalAmount: 10000,
+        discountAmount: 0,
+        couponAmount: 2000,
+        pointsAmount: 0,
+        activityDiscountAmount: 0,
+        freightAmount: 0,
+        payAmount: 8000,
+        orderItems: [
+          { id: BigInt(10), subtotal: 5000 },
+          { id: BigInt(11), subtotal: 5000 },
+        ],
+        orderRefunds: [{ aftersaleId: BigInt(50), refundAmount: 3000, status: 'success' }],
+        aftersaleOrders: [
+          { id: BigInt(50), orderItemId: BigInt(10) },
+          { id: BigInt(51), orderItemId: BigInt(10) },
+        ],
+      },
+    });
+
+    await expect(service.approve('51', '1', 1001)).rejects.toThrow('退款金额不能超过可退金额');
+    await expect(service.approve('51', '1', 1000)).resolves.toBeTruthy();
+  });
 });

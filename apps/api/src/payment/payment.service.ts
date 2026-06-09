@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import axios from 'axios';
 import { ShareService } from '../share/share.service';
 import { generatePaymentNo, generateRefundNo } from '@baby-mall/shared';
+import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
 
 @Injectable()
 export class PaymentService {
@@ -323,16 +324,29 @@ export class PaymentService {
     return null;
   }
 
-  async handleCallback(body: any, headers: any, rawBody?: string) {
+  private getWechatpayHeader(headers: any, name: string): string {
+    if (!headers || typeof headers !== 'object') return '';
+    const direct = headers[name] ?? headers[name.toLowerCase()];
+    const value = direct ?? Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1];
+    const normalized = Array.isArray(value) ? value[0] : value;
+    return normalized === undefined || normalized === null ? '' : String(normalized).trim();
+  }
+
+  private getRawBodyText(rawBody?: string | Buffer): string {
+    if (Buffer.isBuffer(rawBody)) return rawBody.toString('utf8');
+    return rawBody || '';
+  }
+
+  async handleCallback(body: any, headers: any, rawBody?: string | Buffer) {
     const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
 
-    const signature = headers['wechatpay-signature'];
-    const timestamp = headers['wechatpay-timestamp'];
-    const nonce = headers['wechatpay-nonce'];
-    const serialNo = headers['wechatpay-serial'];
+    const signature = this.getWechatpayHeader(headers, 'wechatpay-signature');
+    const timestamp = this.getWechatpayHeader(headers, 'wechatpay-timestamp');
+    const nonce = this.getWechatpayHeader(headers, 'wechatpay-nonce');
+    const serialNo = this.getWechatpayHeader(headers, 'wechatpay-serial');
 
-    if (!signature || !timestamp || !nonce) {
+    if (!signature || !timestamp || !nonce || !serialNo) {
       this.logger.warn('微信回调缺少必要头部信息');
       return { code: 'FAIL', message: '缺少签名信息' };
     }
@@ -340,20 +354,22 @@ export class PaymentService {
     const timestampError = this.validateCallbackTimestamp(timestamp);
     if (timestampError) return timestampError;
 
-    if (!rawBody) {
+    const rawBodyText = this.getRawBodyText(rawBody);
+    if (!rawBodyText) {
       this.logger.warn('微信回调缺少rawBody，无法验签');
       return { code: 'FAIL', message: '缺少rawBody' };
     }
-    const message = `${timestamp}\n${nonce}\n${rawBody}\n`;
+
+    if (this.platformCertificates.size > 0 && !this.platformCertificates.has(serialNo)) {
+      this.logger.warn(`微信回调证书序列号不匹配: ${serialNo}`);
+      return { code: 'FAIL', message: '证书序列号不匹配' };
+    }
+
+    const message = `${timestamp}\n${nonce}\n${rawBodyText}\n`;
 
     if (!this.verifyWechatSignature(message, signature, serialNo)) {
       this.logger.warn('微信回调签名验证失败');
       return { code: 'FAIL', message: '签名验证失败' };
-    }
-
-    if (serialNo && this.platformCertificates.size > 0 && !this.platformCertificates.has(serialNo)) {
-      this.logger.warn(`微信回调证书序列号不匹配: ${serialNo}`);
-      return { code: 'FAIL', message: '证书序列号不匹配' };
     }
 
     const resource = body.resource;
@@ -581,7 +597,7 @@ export class PaymentService {
   }
 
   async processPaymentSuccess(paymentId: bigint, orderId: bigint, transactionId: string, totalAmount: number | null | undefined, order: any) {
-    await this.prisma.$transaction(async (tx) => {
+    const shouldProcessFirstPaidReward = await this.prisma.$transaction(async (tx) => {
       const existingPayment = await tx.orderPayment.findUnique({ where: { id: paymentId } });
       if (!existingPayment) {
         this.logger.error(`支付成功处理时支付记录不存在: ${paymentId}`);
@@ -613,7 +629,7 @@ export class PaymentService {
             }
           }
           this.logger.log(`支付成功幂等处理: 支付${paymentId}已成功处理，订单${orderId}状态${currentOrder.status}`);
-          return;
+          return false;
         }
 
         if (currentOrder.status === OrderStatus.pending_payment) {
@@ -663,7 +679,7 @@ export class PaymentService {
             }
           }
 
-          return;
+          return true;
         }
 
         if (currentOrder.status === OrderStatus.cancelled) {
@@ -706,7 +722,7 @@ export class PaymentService {
         const processedStatuses: OrderStatus[] = [OrderStatus.pending_delivery, OrderStatus.pending_pickup, OrderStatus.delivered, OrderStatus.completed];
         if (processedStatuses.includes(currentOrder.status)) {
           this.logger.log(`支付成功幂等处理: 订单${orderId}已处于${currentOrder.status}状态`);
-          return;
+          return false;
         }
 
         if (currentOrder.status === OrderStatus.cancelled) {
@@ -766,7 +782,12 @@ export class PaymentService {
           }
         }
       }
+      return true;
     });
+
+    if (!shouldProcessFirstPaidReward) {
+      return;
+    }
 
     try {
       await this.shareService.processFirstPaidReward(
@@ -1110,7 +1131,12 @@ export class PaymentService {
     this.ensureWechatPaymentAvailable();
     const order = await this.prisma.order.findFirst({
       where: { id: BigInt(params.orderId) },
-      include: { payment: true },
+      include: {
+        payment: true,
+        orderItems: true,
+        orderRefunds: true,
+        aftersaleOrders: true,
+      },
     });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status !== 'aftersale') {
@@ -1148,6 +1174,21 @@ export class PaymentService {
           refundNo: existingRefund.refundNo,
           outRefundNo: existingRefund.outRefundNo,
         };
+      }
+    }
+
+    if (params.aftersaleId) {
+      const aftersale = await this.prisma.aftersaleOrder.findFirst({
+        where: { id: BigInt(params.aftersaleId) },
+        include: { orderItem: true },
+      });
+      if (!aftersale || aftersale.orderId !== order.id) {
+        throw new BadRequestException('售后单与订单不匹配');
+      }
+
+      const refundCap = calculateOrderItemRefundCap(order, aftersale.orderItem, aftersale.id);
+      if (params.refundAmount > refundCap.remainingAmount) {
+        throw new BadRequestException(`退款金额不能超过该商品实付可退金额，剩余可退${refundCap.remainingAmount}分`);
       }
     }
 
@@ -1336,16 +1377,16 @@ export class PaymentService {
     }
   }
 
-  async handleRefundCallback(body: any, headers: any, rawBody?: string) {
+  async handleRefundCallback(body: any, headers: any, rawBody?: string | Buffer) {
     const apiV3Key = this.configService.get<string>('WECHAT_API_V3_KEY')!;
     const mchId = this.configService.get<string>('WECHAT_MCH_ID')!;
 
-    const signature = headers['wechatpay-signature'];
-    const timestamp = headers['wechatpay-timestamp'];
-    const nonce = headers['wechatpay-nonce'];
-    const serialNo = headers['wechatpay-serial'];
+    const signature = this.getWechatpayHeader(headers, 'wechatpay-signature');
+    const timestamp = this.getWechatpayHeader(headers, 'wechatpay-timestamp');
+    const nonce = this.getWechatpayHeader(headers, 'wechatpay-nonce');
+    const serialNo = this.getWechatpayHeader(headers, 'wechatpay-serial');
 
-    if (!signature || !timestamp || !nonce) {
+    if (!signature || !timestamp || !nonce || !serialNo) {
       this.logger.warn('微信退款回调缺少必要头部信息');
       return { code: 'FAIL', message: '缺少签名信息' };
     }
@@ -1353,20 +1394,22 @@ export class PaymentService {
     const timestampError = this.validateCallbackTimestamp(timestamp);
     if (timestampError) return timestampError;
 
-    if (!rawBody) {
+    const rawBodyText = this.getRawBodyText(rawBody);
+    if (!rawBodyText) {
       this.logger.warn('微信退款回调缺少rawBody，无法验签');
       return { code: 'FAIL', message: '缺少rawBody' };
     }
-    const message = `${timestamp}\n${nonce}\n${rawBody}\n`;
+
+    if (this.platformCertificates.size > 0 && !this.platformCertificates.has(serialNo)) {
+      this.logger.warn(`微信退款回调证书序列号不匹配: ${serialNo}`);
+      return { code: 'FAIL', message: '证书序列号不匹配' };
+    }
+
+    const message = `${timestamp}\n${nonce}\n${rawBodyText}\n`;
 
     if (!this.verifyWechatSignature(message, signature, serialNo)) {
       this.logger.warn('微信退款回调签名验证失败');
       return { code: 'FAIL', message: '签名验证失败' };
-    }
-
-    if (serialNo && this.platformCertificates.size > 0 && !this.platformCertificates.has(serialNo)) {
-      this.logger.warn(`微信退款回调证书序列号不匹配: ${serialNo}`);
-      return { code: 'FAIL', message: '证书序列号不匹配' };
     }
 
     let decryptedData: any;

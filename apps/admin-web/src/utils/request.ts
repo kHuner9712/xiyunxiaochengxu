@@ -136,9 +136,7 @@ request.interceptors.response.use(
       switch (status) {
         case 401:
           ElMessage.error('登录已过期，请重新登录')
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('refreshToken')
-          localStorage.removeItem('token')
+          useUserStore().clearTokens()
           router.push('/login')
           break
         case 403:

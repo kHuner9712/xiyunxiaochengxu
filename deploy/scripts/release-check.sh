@@ -570,7 +570,7 @@ fi
 
 parse_nginx_size_bytes() {
   local raw
-  raw="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d ';')"
+  raw="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:];')"
   if [[ "$raw" =~ ^([0-9]+)$ ]]; then
     echo "${BASH_REMATCH[1]}"
   elif [[ "$raw" =~ ^([0-9]+)k$ ]]; then

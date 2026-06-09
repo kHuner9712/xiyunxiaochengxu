@@ -105,17 +105,7 @@ export class OrderService {
       if (!userCoupon.expireAt || new Date() > userCoupon.expireAt) throw new BadRequestException('优惠券已过期');
       if (totalAmount < userCoupon.coupon.minAmount) throw new BadRequestException('未达到优惠券使用门槛');
 
-      if (userCoupon.coupon.type === 1) {
-        couponAmount = userCoupon.coupon.value;
-        if (userCoupon.coupon.discountLimit) {
-          couponAmount = Math.min(couponAmount, userCoupon.coupon.discountLimit);
-        }
-      } else if (userCoupon.coupon.type === 2) {
-        couponAmount = totalAmount - Math.floor(totalAmount * userCoupon.coupon.value / 1000);
-        if (userCoupon.coupon.discountLimit) {
-          couponAmount = Math.min(couponAmount, userCoupon.coupon.discountLimit);
-        }
-      }
+      couponAmount = this.calculateCouponAmount(userCoupon.coupon, totalAmount);
     }
 
     const user = await this.prisma.user.findFirst({
@@ -140,7 +130,14 @@ export class OrderService {
       }
     }
 
-    const payAmount = Math.max(0, totalAmount - discountAmount - couponAmount - activityDiscountAmount - pointsAmount + freightAmount);
+    const payAmount = this.calculatePayAmount({
+      totalAmount,
+      discountAmount,
+      couponAmount,
+      activityDiscountAmount,
+      pointsAmount,
+      freightAmount,
+    });
 
     this.logger.log(`用户${userId}确认订单金额：商品${totalAmount}分，优惠${discountAmount + couponAmount + activityDiscountAmount}分，积分抵扣${pointsAmount}分，运费${freightAmount}分，实付${payAmount}分`);
 
@@ -246,17 +243,7 @@ export class OrderService {
       if (totalAmount < userCoupon.coupon.minAmount) throw new BadRequestException('未达到优惠券使用门槛');
 
       couponId = userCoupon.id;
-      if (userCoupon.coupon.type === 1) {
-        couponAmount = userCoupon.coupon.value;
-        if (userCoupon.coupon.discountLimit) {
-          couponAmount = Math.min(couponAmount, userCoupon.coupon.discountLimit);
-        }
-      } else if (userCoupon.coupon.type === 2) {
-        couponAmount = totalAmount - Math.floor(totalAmount * userCoupon.coupon.value / 1000);
-        if (userCoupon.coupon.discountLimit) {
-          couponAmount = Math.min(couponAmount, userCoupon.coupon.discountLimit);
-        }
-      }
+      couponAmount = this.calculateCouponAmount(userCoupon.coupon, totalAmount);
     }
 
     let pointsAmount = 0;
@@ -277,7 +264,14 @@ export class OrderService {
     if (fulfillmentType === 'delivery') {
       freightAmount = this.calculateFreight(totalAmount, address.province);
     }
-    const payAmount = Math.max(0, totalAmount - discountAmount - couponAmount - activityDiscountAmount - pointsAmount + freightAmount);
+    const payAmount = this.calculatePayAmount({
+      totalAmount,
+      discountAmount,
+      couponAmount,
+      activityDiscountAmount,
+      pointsAmount,
+      freightAmount,
+    });
 
     const isZeroPay = payAmount === 0;
     const needPickupCode = isZeroPay && fulfillmentType === 'pickup';
@@ -464,23 +458,6 @@ export class OrderService {
         skuId: { in: data.items.map((i) => BigInt(i.skuId)) },
       },
     });
-
-    if (fulfillmentType === 'pickup' && data.pickupStoreId) {
-      const store = await this.prisma.pickupStore.findFirst({
-        where: { id: BigInt(data.pickupStoreId), status: 1, deletedAt: null },
-      });
-      if (store) {
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: {
-            pickupStoreId: store.id,
-            pickupStoreName: store.name,
-            pickupStoreAddress: `${store.province}${store.city}${store.district}${store.address}`,
-            pickupContactPhone: store.contactPhone,
-          },
-        });
-      }
-    }
 
     this.logger.log(`用户${userId}创建订单：${order.orderNo}，实付${payAmount}分`);
     return {
@@ -1111,6 +1088,38 @@ export class OrderService {
       pointsDeducted,
       pointsAmount,
     };
+  }
+
+  private calculateCouponAmount(coupon: any, totalAmount: number): number {
+    let couponAmount = 0;
+    if (coupon.type === 1) {
+      couponAmount = coupon.value;
+    } else if (coupon.type === 2) {
+      couponAmount = totalAmount - Math.floor(totalAmount * coupon.value / 1000);
+    }
+    if (coupon.discountLimit) {
+      couponAmount = Math.min(couponAmount, coupon.discountLimit);
+    }
+    return Math.max(0, Math.min(couponAmount, totalAmount));
+  }
+
+  private calculatePayAmount(amounts: {
+    totalAmount: number;
+    discountAmount: number;
+    couponAmount: number;
+    activityDiscountAmount: number;
+    pointsAmount: number;
+    freightAmount: number;
+  }): number {
+    return Math.max(
+      0,
+      amounts.totalAmount
+        - amounts.discountAmount
+        - amounts.couponAmount
+        - amounts.activityDiscountAmount
+        - amounts.pointsAmount
+        + amounts.freightAmount,
+    );
   }
 
   private calculateFreight(totalAmount: number, province?: string): number {

@@ -25,6 +25,7 @@ export const useUserStore = defineStore('user', () => {
     refreshToken.value = ''
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
+    localStorage.removeItem('token')
   }
 
   async function login(username: string, password: string, captchaCode: string, captchaId: string) {

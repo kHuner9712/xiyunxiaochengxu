@@ -5,6 +5,7 @@ import { ReturnLogisticsDto } from './dto/return-logistics.dto';
 import { generateAftersaleNo, paginate, AFTERSALE_APPLY_DAYS } from '@baby-mall/shared';
 import { AftersaleStatus, OrderStatus } from '@prisma/client';
 import { PaymentService } from '../payment/payment.service';
+import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
 
 @Injectable()
 export class AftersaleService {
@@ -235,7 +236,16 @@ export class AftersaleService {
   async approve(id: string, adminId: string, refundAmount: number) {
     const aftersale = await this.prisma.aftersaleOrder.findFirst({
       where: { id: BigInt(id) },
-      include: { orderItem: true },
+      include: {
+        orderItem: true,
+        order: {
+          include: {
+            orderItems: true,
+            orderRefunds: true,
+            aftersaleOrders: true,
+          },
+        },
+      },
     });
     if (!aftersale) throw new NotFoundException('售后单不存在');
     if (aftersale.status !== AftersaleStatus.pending_review) {
@@ -248,7 +258,8 @@ export class AftersaleService {
     if (refundAmount <= 0) {
       throw new BadRequestException('退款金额必须大于0分');
     }
-    if (refundAmount > aftersale.orderItem.subtotal) {
+    const refundCap = calculateOrderItemRefundCap(aftersale.order, aftersale.orderItem, aftersale.id);
+    if (refundAmount > refundCap.remainingAmount) {
       throw new BadRequestException('退款金额不能超过可退金额');
     }
 

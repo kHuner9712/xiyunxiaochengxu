@@ -157,7 +157,7 @@ function buildRefundCallbackBody(decryptedData: any) {
 
 const CALLBACK_HEADERS = {
   'wechatpay-signature': 'sig', 'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(),
-  'wechatpay-nonce': 'nonce', 'wechatpay-serial': '',
+  'wechatpay-nonce': 'nonce', 'wechatpay-serial': 'test_serial',
 };
 
 const RAW_BODY = '{"resource":{}}';
@@ -456,6 +456,12 @@ describe('PaymentService.createRefund', () => {
 
   beforeEach(() => {
     service = createPaymentService(mockPrisma = createMockPrisma());
+    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue({
+      id: BigInt(10),
+      orderId: BigInt(1),
+      orderItemId: BigInt(10),
+      orderItem: { id: BigInt(10), subtotal: 10000 },
+    });
   });
 
   it('order 不存在时抛出 NotFoundException', async () => {
@@ -502,6 +508,35 @@ describe('PaymentService.createRefund', () => {
     mockPrisma.orderRefund.findMany.mockResolvedValue([{ refundAmount: 8000 }]);
     await expect(service.createRefund({ orderId: '1', refundAmount: 3000 }))
       .rejects.toThrow('累计退款金额不能超过订单实付金额');
+  });
+
+  it('售后退款金额超过该商品实付分摊可退金额时拒绝', async () => {
+    mockPrisma.order.findFirst.mockResolvedValue({
+      ...ORDER_RECORD,
+      totalAmount: 10000,
+      discountAmount: 0,
+      couponAmount: 2000,
+      pointsAmount: 0,
+      activityDiscountAmount: 0,
+      freightAmount: 0,
+      payAmount: 8000,
+      orderItems: [
+        { id: BigInt(10), subtotal: 5000 },
+        { id: BigInt(11), subtotal: 5000 },
+      ],
+      orderRefunds: [],
+      aftersaleOrders: [{ id: BigInt(10), orderItemId: BigInt(10) }],
+    });
+    mockPrisma.orderRefund.findFirst.mockResolvedValue(null);
+    mockPrisma.aftersaleOrder.findFirst.mockResolvedValue({
+      id: BigInt(10),
+      orderId: BigInt(1),
+      orderItemId: BigInt(10),
+      orderItem: { id: BigInt(10), subtotal: 5000 },
+    });
+
+    await expect(service.createRefund({ orderId: '1', aftersaleId: '10', refundAmount: 5000 }))
+      .rejects.toThrow('退款金额不能超过该商品实付可退金额');
   });
 
   it('同一 aftersaleId 已有 pending 退款时返回已有退款单，不重复调微信', async () => {
@@ -599,6 +634,37 @@ describe('PaymentService.handleRefundCallback', () => {
 
   beforeEach(() => {
     service = createPaymentService(mockPrisma = createMockPrisma());
+  });
+
+  it.each([
+    'wechatpay-signature',
+    'wechatpay-timestamp',
+    'wechatpay-nonce',
+    'wechatpay-serial',
+  ])('缺少 %s 时返回 FAIL 且不验签', async (missingHeader) => {
+    const headers = { ...CALLBACK_HEADERS };
+    delete (headers as any)[missingHeader];
+    const result = await service.handleRefundCallback(
+      buildRefundCallbackBody(DECRYPTED_REFUND_SUCCESS), headers, RAW_BODY,
+    );
+
+    expect(result).toEqual({ code: 'FAIL', message: '缺少签名信息' });
+    expect((service as any).verifyWechatSignature).not.toHaveBeenCalled();
+  });
+
+  it('回调 header 大小写不敏感', async () => {
+    const result = await service.handleRefundCallback(
+      {},
+      {
+        'Wechatpay-Signature': 'sig',
+        'Wechatpay-Timestamp': Math.floor(Date.now() / 1000).toString(),
+        'Wechatpay-Nonce': 'nonce',
+        'Wechatpay-Serial': 'test_serial',
+      },
+      RAW_BODY,
+    );
+
+    expect(result.message).not.toBe('缺少签名信息');
   });
 
   it('rawBody 缺失时返回 FAIL', async () => {
@@ -993,6 +1059,37 @@ describe('PaymentService.processPaymentSuccess (via handleCallback)', () => {
     service = createPaymentService(mockPrisma = createMockPrisma());
   });
 
+  it.each([
+    'wechatpay-signature',
+    'wechatpay-timestamp',
+    'wechatpay-nonce',
+    'wechatpay-serial',
+  ])('缺少 %s 时返回 FAIL 且不验签', async (missingHeader) => {
+    const headers = { ...CALLBACK_HEADERS };
+    delete (headers as any)[missingHeader];
+    const result = await service.handleCallback(
+      buildPaymentCallbackBody(DECRYPTED_PAYMENT_SUCCESS), headers, RAW_BODY,
+    );
+
+    expect(result).toEqual({ code: 'FAIL', message: '缺少签名信息' });
+    expect((service as any).verifyWechatSignature).not.toHaveBeenCalled();
+  });
+
+  it('支付回调 header 大小写不敏感', async () => {
+    const result = await service.handleCallback(
+      {},
+      {
+        'Wechatpay-Signature': 'sig',
+        'Wechatpay-Timestamp': Math.floor(Date.now() / 1000).toString(),
+        'Wechatpay-Nonce': 'nonce',
+        'Wechatpay-Serial': 'test_serial',
+      },
+      RAW_BODY,
+    );
+
+    expect(result.message).not.toBe('缺少签名信息');
+  });
+
   it('pending_payment -> pending_delivery', async () => {
     mockPrisma.order.findFirst.mockResolvedValue(PAYMENT_ORDER);
     mockPrisma.orderPayment.findFirst.mockResolvedValue(PAYMENT_RECORD);
@@ -1134,6 +1231,34 @@ describe('PaymentService.processPaymentSuccess pickup code idempotency', () => {
     await service.processPaymentSuccess(BigInt(1), BigInt(1), 'TXN456', 10000, PICKUP_ORDER);
 
     expect(mockOrderService.assignUniquePickupCode).not.toHaveBeenCalled();
+  });
+
+  it('重复支付成功处理不重复触发首单奖励', async () => {
+    const processFirstPaidReward = jest.fn() as any;
+    processFirstPaidReward.mockResolvedValue(null);
+    const prisma = createMockPrisma();
+    mockPrisma = prisma;
+    service = new PaymentService(
+      prisma as any,
+      createMockConfigService() as any,
+      createMockBusinessEventService() as any,
+      mockOrderService as any,
+      { processFirstPaidReward } as any,
+    );
+    jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
+    jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
+    jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
+
+    setupTransaction(mockPrisma);
+    const successPayment = { ...PAYMENT_RECORD, status: PAYMENT_STATUS.SUCCESS, transactionId: 'TXN456' };
+    const processedOrder = { ...PICKUP_ORDER, userId: BigInt(100), status: 'pending_pickup' };
+
+    mockPrisma.orderPayment.findUnique.mockResolvedValue(successPayment);
+    mockPrisma.order.findUnique.mockResolvedValue(processedOrder);
+
+    await service.processPaymentSuccess(BigInt(1), BigInt(1), 'TXN456', 10000, processedOrder);
+
+    expect(processFirstPaidReward).not.toHaveBeenCalled();
   });
 
   it('订单已被并发处理为 pending_pickup 时，标准支付成功分支不覆盖 pickupCode', async () => {
@@ -2032,7 +2157,7 @@ describe('支付契约测试', () => {
 
     const result = await service.handleCallback(
       { resource: encryptCallbackData(callbackData) },
-      { 'wechatpay-signature': 'sig', 'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(), 'wechatpay-nonce': 'nonce', 'wechatpay-serial': '' },
+      { 'wechatpay-signature': 'sig', 'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(), 'wechatpay-nonce': 'nonce', 'wechatpay-serial': 'test_serial' },
       '{}',
     );
 
@@ -2070,7 +2195,7 @@ describe('支付契约测试', () => {
 
     const result = await service.handleCallback(
       { resource: encryptCallbackData(callbackData) },
-      { 'wechatpay-signature': 'sig', 'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(), 'wechatpay-nonce': 'nonce', 'wechatpay-serial': '' },
+      { 'wechatpay-signature': 'sig', 'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(), 'wechatpay-nonce': 'nonce', 'wechatpay-serial': 'test_serial' },
       '{}',
     );
 
@@ -2196,7 +2321,7 @@ describe('支付契约测试', () => {
 
     const callbackResult = await service.handleCallback(
       { resource: encryptCallbackData(callbackData) },
-      { 'wechatpay-signature': 'sig', 'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(), 'wechatpay-nonce': 'nonce', 'wechatpay-serial': '' },
+      { 'wechatpay-signature': 'sig', 'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(), 'wechatpay-nonce': 'nonce', 'wechatpay-serial': 'test_serial' },
       '{}',
     );
     const statusResult = await service.getPaymentStatus('1', '100');
@@ -2485,7 +2610,7 @@ describe('PaymentService callback timestamp replay guard', () => {
       'wechatpay-signature': 'sig',
       'wechatpay-timestamp': Math.floor(Date.now() / 1000).toString(),
       'wechatpay-nonce': 'nonce',
-      'wechatpay-serial': '',
+      'wechatpay-serial': 'test_serial',
     };
     const result = await service.handleCallback({ resource: { ciphertext: '', nonce: '', associated_data: '' } }, validHeaders, '{}');
     expect(result.message).not.toBe('回调时间戳过期');
@@ -2497,7 +2622,7 @@ describe('PaymentService callback timestamp replay guard', () => {
       'wechatpay-signature': 'sig',
       'wechatpay-timestamp': '1234567890',
       'wechatpay-nonce': 'nonce',
-      'wechatpay-serial': '',
+      'wechatpay-serial': 'test_serial',
     };
     const result = await service.handleCallback({}, expiredHeaders, '{}');
     expect(result.code).toBe('FAIL');
@@ -2509,7 +2634,7 @@ describe('PaymentService callback timestamp replay guard', () => {
       'wechatpay-signature': 'sig',
       'wechatpay-timestamp': 'abc',
       'wechatpay-nonce': 'nonce',
-      'wechatpay-serial': '',
+      'wechatpay-serial': 'test_serial',
     };
     const result = await service.handleCallback({}, invalidHeaders, '{}');
     expect(result.code).toBe('FAIL');
@@ -2521,7 +2646,7 @@ describe('PaymentService callback timestamp replay guard', () => {
       'wechatpay-signature': 'sig',
       'wechatpay-timestamp': '1234567890',
       'wechatpay-nonce': 'nonce',
-      'wechatpay-serial': '',
+      'wechatpay-serial': 'test_serial',
     };
     const result = await service.handleRefundCallback({}, expiredHeaders, '{}');
     expect(result.code).toBe('FAIL');
@@ -2533,7 +2658,7 @@ describe('PaymentService callback timestamp replay guard', () => {
       'wechatpay-signature': 'sig',
       'wechatpay-timestamp': 'not-a-number',
       'wechatpay-nonce': 'nonce',
-      'wechatpay-serial': '',
+      'wechatpay-serial': 'test_serial',
     };
     const result = await service.handleRefundCallback({}, invalidHeaders, '{}');
     expect(result.code).toBe('FAIL');
