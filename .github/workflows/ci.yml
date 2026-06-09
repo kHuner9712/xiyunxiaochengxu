@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PRISMA_SKIP_POSTINSTALL_GENERATE: true
 
     strategy:
       matrix:
