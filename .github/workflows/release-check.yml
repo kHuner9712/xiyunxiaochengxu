@@ -69,8 +69,8 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @baby-mall/api prisma:generate
 
-      - name: Build Mini Program
-        run: pnpm build:mini
+      - name: Build shared package
+        run: pnpm --filter @baby-mall/shared build
 
       - name: Run Release Gate Check
         run: bash deploy/scripts/release-check.sh
