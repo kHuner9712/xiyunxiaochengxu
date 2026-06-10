@@ -99,6 +99,18 @@ describe('toPublicAssetUrl', () => {
       'https://api.example.com/uploads/a.png',
     );
   });
+
+  it('does not duplicate base path when UPLOAD_PUBLIC_URL includes /uploads', () => {
+    expect(toPublicAssetUrl('/uploads/public/a.png', 'https://api.example.com/uploads')).toBe(
+      'https://api.example.com/uploads/public/a.png',
+    );
+  });
+
+  it('does not duplicate base path when UPLOAD_PUBLIC_URL includes /uploads/public', () => {
+    expect(toPublicAssetUrl('/uploads/public/a.png', 'https://api.example.com/uploads/public')).toBe(
+      'https://api.example.com/uploads/public/a.png',
+    );
+  });
 });
 
 describe('normalizeImageList', () => {

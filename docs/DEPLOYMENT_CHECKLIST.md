@@ -41,7 +41,16 @@
 - 退款回调：`https://<API_DOMAIN>/api/weapp/pay/refund-callback`
 - 要求：公网可达、HTTPS 证书有效、路径与后端路由一致
 
-## 6. .env 必填项（生产）
+## 6. 上传文件公网访问规则
+
+- `UPLOAD_PUBLIC_URL` 建议填写 API 域名根地址：`https://<API_DOMAIN>`。
+- 公开文件只允许访问 `/uploads/public/...`。
+- `/uploads/private/...` 必须返回 403；售后图片、营业执照、资质图片、后台敏感上传文件不得被静态 URL 直接打开。
+- 兜底 `/uploads/...` 必须返回 403，避免未来新增目录误公开。
+- API 容器如被误直连公网，也不得由 NestJS 静态资源暴露整个 `UPLOAD_DIR`；仅允许后端公开 `uploads/public`。
+- 私有文件验收路径：本人/管理员通过 `/api/common/file/private/:id` 鉴权访问成功，其他普通用户访问失败。
+
+## 7. .env 必填项（生产）
 
 至少确认以下变量已填写真实值（不可占位）：
 
@@ -70,7 +79,7 @@
 2. 填写真实值（仅服务器本地保存）
 3. 执行 `pnpm release:check:prod`
 
-## 7. 微信支付证书文件放置路径
+## 8. 微信支付证书文件放置路径
 
 宿主机路径（不进 Git）：
 
@@ -82,7 +91,7 @@
 - `/app/apps/api/certs/apiclient_key.pem`
 - `/app/apps/api/certs/wechatpay_platform.pem`
 
-## 8. 首次启动步骤
+## 9. 首次启动步骤
 
 1. 首次启动前执行：
    - `pnpm release:check`
@@ -94,48 +103,50 @@
 4. 后续部署默认：
    - `RUN_SEED=false`
 
-## 9. 数据库迁移
+## 10. 数据库迁移
 
 - 生产使用 `prisma migrate deploy`，不使用 `db push`
 - 当前 entrypoint 在 `NODE_ENV=production` 下会自动执行迁移
 - 发布后核验：
   - `docker compose logs api | grep -i migrate`
 
-## 10. 管理后台访问地址
+## 11. 管理后台访问地址
 
 - `https://<ADMIN_DOMAIN>/`
 - 登录后必须验证：
   - 首次登录强制改密流程
   - 关键页面可正常加载
 
-## 11. 小程序构建与上传
+## 12. 小程序构建与上传
 
-1. 本地构建：`pnpm build:mini`
+1. 生产构建必须走脚本：`pnpm build:mini:prod`
 2. 使用真实 AppID 在微信开发者工具上传体验版
 3. 确认请求域名、上传下载域名与线上一致
+4. 禁止直接使用源码 `apps/miniprogram/src/manifest.json` 上传体验版/正式版
+5. 生产 `VITE_API_BASE_URL` 必须为 `https://<API_DOMAIN>/api`，不得使用 localhost、127.0.0.1、example.com、your-domain 等本地或占位地址
 
-## 12. 真机验收清单
+## 13. 真机验收清单
 
 - 微信登录、浏览商品、加购、下单、支付发起
 - 支付取消分流是否正确（不误导为失败）
 - 支付结果确认页是否显示“确认中/成功/待支付”
 - 订单详情继续支付、退款申请、退款状态更新
-- 上传图片、商品图、订单图是否可访问
+- 商品公开图片是否可访问，售后/资质/营业执照私有图片是否不可被静态 URL 直接访问
 
-## 13. 回滚方案
+## 14. 回滚方案
 
 - 代码回滚到上一个稳定 tag/commit
 - 重新 `docker compose up -d --build`
 - 数据库回滚前必须先备份；优先前向修复
 - 回滚后立即跑 `smoke` 与健康检查
 
-## 14. 数据备份建议
+## 15. 数据备份建议
 
 - 每日自动备份 MySQL（至少保留 7 天）
 - 发布前手动做一次全量备份
 - 备份文件异地存储并定期做恢复演练
 
-## 15. 必须人工准备的真实资质/信息
+## 16. 必须人工准备的真实资质/信息
 
 以下信息不得由代码仓库占位替代，必须由运营/老板/法务线下提供并在上线前确认：
 
@@ -155,7 +166,7 @@
 ```bash
 export API_DOMAIN=api.example.com
 export ADMIN_DOMAIN=admin.example.com
-export UPLOAD_PUBLIC_URL=https://api.example.com/uploads
+export UPLOAD_PUBLIC_URL=https://api.example.com
 envsubst '${API_DOMAIN} ${ADMIN_DOMAIN} ${UPLOAD_PUBLIC_URL}' \
   < deploy/nginx/conf.d/default.conf.template \
   > deploy/nginx/conf.d/default.conf

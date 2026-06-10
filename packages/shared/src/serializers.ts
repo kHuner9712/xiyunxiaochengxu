@@ -53,8 +53,19 @@ export function toPublicAssetUrl(urlOrPath: unknown, baseUrl?: string): string {
   if (/^data:/i.test(raw)) return raw;
 
   const base = safeTrim(baseUrl);
-  const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
+  let normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
   if (!base) return normalizedPath;
+
+  try {
+    const parsedBase = new URL(base);
+    const basePath = parsedBase.pathname.replace(/\/+$/, '');
+    if (basePath && basePath !== '/' && normalizedPath.startsWith(`${basePath}/`)) {
+      normalizedPath = normalizedPath.slice(basePath.length);
+    }
+  } catch {
+    // Keep joining behavior for non-URL bases used in tests or local tooling.
+  }
+
   return `${base.replace(/\/+$/, '')}${normalizedPath}`;
 }
 

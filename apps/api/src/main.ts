@@ -8,6 +8,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { PrismaService } from './common/prisma/prisma.service';
 import * as path from 'path';
+import { configurePublicUploadStaticAssets } from './common/utils/upload-static-assets';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -23,7 +24,7 @@ async function bootstrap() {
   }
 
   const uploadDir = configService.get<string>('UPLOAD_DIR') || path.join(process.cwd(), 'uploads');
-  app.useStaticAssets(uploadDir, { prefix: '/uploads/' });
+  configurePublicUploadStaticAssets(app, uploadDir);
 
   // API 前缀固定为 /api，Nginx 代理和前端 baseURL 均依赖此路径，不可更改
   app.setGlobalPrefix('api');

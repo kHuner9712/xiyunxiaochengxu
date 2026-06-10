@@ -15,6 +15,7 @@ function createMockPrisma() {
       findMany: jest.fn() as any,
       count: jest.fn() as any,
       create: jest.fn() as any,
+      updateMany: jest.fn() as any,
     },
     order: { count: jest.fn() as any },
     user: { findFirst: jest.fn() as any },
@@ -28,6 +29,7 @@ describe('CouponService ownership guard', () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    prisma.userCoupon.updateMany.mockResolvedValue({ count: 0 });
     service = new CouponService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   });

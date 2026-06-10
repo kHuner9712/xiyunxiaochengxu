@@ -29,11 +29,13 @@ nslookup admin.yunxixiaochengxu.com.cn
 ```bash
 export API_DOMAIN=api.yourdomain.com
 export ADMIN_DOMAIN=admin.yourdomain.com
-export UPLOAD_PUBLIC_URL=https://api.yourdomain.com/uploads
+export UPLOAD_PUBLIC_URL=https://api.yourdomain.com
 envsubst '${API_DOMAIN} ${ADMIN_DOMAIN} ${UPLOAD_PUBLIC_URL}' \
   < deploy/nginx/conf.d/default.conf.template \
   > deploy/nginx/conf.d/default.conf
 ```
+
+上传资源只允许公开访问 `/uploads/public/`；`/uploads/private/` 与兜底 `/uploads/` 必须保持 403，售后图片、资质图片、营业执照等敏感文件只能通过后端鉴权接口读取。
 
 生成后请执行：
 

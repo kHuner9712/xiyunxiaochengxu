@@ -42,7 +42,8 @@ server {
     }
 
     # Expected value example:
-    # UPLOAD_PUBLIC_URL=https://${API_DOMAIN}/uploads
+    # UPLOAD_PUBLIC_URL=https://${API_DOMAIN}
+    # Only /uploads/public/ is publicly readable; /uploads/private/ and /uploads/ are blocked.
     location ^~ /uploads/private/ {
         return 403;
     }

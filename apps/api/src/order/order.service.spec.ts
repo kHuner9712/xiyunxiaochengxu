@@ -18,7 +18,7 @@ function createMockPrisma() {
   const mockTx = {
     productSku: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     productStockLog: { create: jest.fn() },
-    user: { findFirst: jest.fn(), update: jest.fn() },
+    user: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
     pointsRecord: { create: jest.fn(), findFirst: jest.fn() },
     userCoupon: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     order: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findFirst: jest.fn() },
@@ -363,12 +363,33 @@ describe('OrderService.create 积分抵扣', () => {
       addressId: '1', pointsDeduct: 500, items: [{ skuId: '200', quantity: 1 }],
     });
 
-    expect(mockPrisma._mockTx.user.update).toHaveBeenCalledWith(
+    expect(mockPrisma._mockTx.user.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ availablePoints: { gte: 500 } }),
         data: expect.objectContaining({ availablePoints: { decrement: 500 } }),
       }),
     );
     expect(mockPrisma._mockTx.pointsRecord.create).toHaveBeenCalled();
+  });
+
+  it('积分并发扣减抢占失败时不创建订单', async () => {
+    mockPrisma.userAddress.findFirst.mockResolvedValue(ADDRESS);
+    mockPrisma.productSku.findFirst.mockResolvedValue(SKU(10));
+    mockPrisma.user.findFirst.mockResolvedValue(USER);
+
+    setupTransaction(mockPrisma);
+    mockPrisma._mockTx.productSku.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma._mockTx.productSku.findFirst.mockResolvedValue({ productId: BigInt(300), stock: 9 });
+    mockPrisma._mockTx.productStockLog.create.mockResolvedValue({});
+    mockPrisma._mockTx.user.findFirst.mockResolvedValue(USER);
+    mockPrisma._mockTx.user.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.create('100', {
+      addressId: '1', pointsDeduct: 500, items: [{ skuId: '200', quantity: 1 }],
+    })).rejects.toThrow('积分不足');
+
+    expect(mockPrisma._mockTx.order.create).not.toHaveBeenCalled();
+    expect(mockPrisma._mockTx.pointsRecord.create).not.toHaveBeenCalled();
   });
 
   it('超过订单积分抵扣上限时不能下单', async () => {
@@ -465,7 +486,7 @@ describe('OrderService.cancel 未支付订单释放资源', () => {
 
     expect(mockPrisma._mockTx.userCoupon.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: BigInt(50), status: COUPON_STATUS.LOCKED }),
+        where: expect.objectContaining({ id: BigInt(50), status: { in: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED] } }),
         data: expect.objectContaining({ status: COUPON_STATUS.FREE, usedOrderId: null }),
       }),
     );
@@ -479,7 +500,7 @@ describe('OrderService.cancel 未支付订单释放资源', () => {
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('USED 优惠券不会被释放为 FREE', async () => {
+  it('未支付订单上的异常 USED 优惠券也会释放为 FREE', async () => {
     mockPrisma.order.findFirst.mockResolvedValue(PENDING_ORDER);
     setupCancelMocks(mockPrisma, 1);
     mockPrisma._mockTx.userCoupon.updateMany.mockResolvedValue({ count: 0 });
@@ -488,7 +509,7 @@ describe('OrderService.cancel 未支付订单释放资源', () => {
 
     expect(mockPrisma._mockTx.userCoupon.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ status: COUPON_STATUS.LOCKED }),
+        where: expect.objectContaining({ status: { in: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED] } }),
       }),
     );
   });
@@ -762,7 +783,7 @@ describe('OrderService.closeTimeoutOrders 超时关闭释放资源', () => {
     expect(mockPrisma._mockTx.user.update).toHaveBeenCalled();
     expect(mockPrisma._mockTx.userCoupon.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: BigInt(50), status: COUPON_STATUS.LOCKED }),
+        where: expect.objectContaining({ id: BigInt(50), status: { in: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED] } }),
         data: expect.objectContaining({ status: COUPON_STATUS.FREE, usedOrderId: null }),
       }),
     );
@@ -906,8 +927,9 @@ describe('订单主链路', () => {
         }),
       }),
     );
-    expect(mockPrisma._mockTx.user.update).toHaveBeenCalledWith(
+    expect(mockPrisma._mockTx.user.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ availablePoints: { gte: 500 } }),
         data: expect.objectContaining({ availablePoints: { decrement: 500 } }),
       }),
     );
@@ -959,7 +981,7 @@ describe('订单主链路', () => {
     );
     expect(mockPrisma._mockTx.userCoupon.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ status: COUPON_STATUS.LOCKED }),
+        where: expect.objectContaining({ status: { in: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED] } }),
         data: expect.objectContaining({ status: COUPON_STATUS.FREE, usedOrderId: null }),
       }),
     );
@@ -1155,6 +1177,35 @@ describe('OrderService.autoCompleteOrders 自动完成', () => {
     const result = await service.autoCompleteOrders();
 
     expect(result.completedCount).toBe(0);
+  });
+});
+
+describe('OrderService.completePickupOrderByCode 自提重复核销', () => {
+  let service: OrderService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    ({ service, mockPrisma } = createService());
+  });
+
+  it('已完成自提订单重复核销返回成功且不重复发积分', async () => {
+    const pickedUpAt = new Date('2026-05-23T10:00:00Z');
+    mockPrisma.order.findFirst.mockResolvedValue({
+      id: BigInt(1),
+      orderNo: 'XY20260523001',
+      status: OrderStatus.completed,
+      fulfillmentType: 'pickup',
+      pickedUpAt,
+      completedAt: pickedUpAt,
+      payAmount: 9900,
+    });
+
+    const result = await service.completePickupOrderByCode('12345678', '1');
+
+    expect(result.success).toBe(true);
+    expect(result.alreadyCompleted).toBe(true);
+    expect(result.pickedUpAt).toBe(pickedUpAt);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 });
 

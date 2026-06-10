@@ -10,6 +10,7 @@ import { UploadModule } from '../src/upload/upload.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../src/common/guards/permission.guard';
+import { configurePublicUploadStaticAssets } from '../src/common/utils/upload-static-assets';
 
 describe('Private upload access (e2e)', () => {
   let app: INestApplication;
@@ -60,6 +61,7 @@ describe('Private upload access (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
+    configurePublicUploadStaticAssets(app as any, tempUploadDir);
     app.setGlobalPrefix('api');
     await app.init();
     jwtService = moduleFixture.get(JwtService);
@@ -83,6 +85,17 @@ describe('Private upload access (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/api/common/file/1');
     expect(res.status).toBe(200);
     expect(res.body.url).toContain('/uploads/public/product.jpg');
+  });
+
+  it('只公开暴露 uploads/public 静态文件', async () => {
+    const res = await request(app.getHttpServer()).get('/uploads/public/product.jpg');
+    expect(res.status).toBe(200);
+    expect(res.text ?? Buffer.from(res.body).toString('utf8')).toBe('public');
+  });
+
+  it('不通过 Nest 静态资源公开 uploads/private 文件', async () => {
+    const res = await request(app.getHttpServer()).get('/uploads/private/refund.jpg');
+    expect(res.status).not.toBe(200);
   });
 
   it('公开接口访问敏感文件返回 403', async () => {

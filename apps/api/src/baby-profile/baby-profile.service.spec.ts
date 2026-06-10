@@ -6,6 +6,7 @@ function createMockPrisma() {
     babyProfile: {
       findMany: jest.fn() as any,
       findFirst: jest.fn() as any,
+      count: jest.fn() as any,
       create: jest.fn() as any,
       update: jest.fn() as any,
       updateMany: jest.fn() as any,
@@ -35,6 +36,7 @@ describe('BabyProfileService', () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    prisma.babyProfile.count.mockResolvedValue(0);
     service = new BabyProfileService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   });

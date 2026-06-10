@@ -314,18 +314,22 @@ export class OrderService {
         if (!user || user.availablePoints < pointsDeducted) {
           throw new BadRequestException('积分不足');
         }
-        await tx.user.update({
-          where: { id: BigInt(userId) },
+        const pointsClaim = await tx.user.updateMany({
+          where: { id: BigInt(userId), availablePoints: { gte: pointsDeducted } },
           data: {
             availablePoints: { decrement: pointsDeducted },
           },
         });
+        if (pointsClaim.count === 0) {
+          throw new BadRequestException('积分不足');
+        }
+        const updatedUser = await tx.user.findFirst({ where: { id: BigInt(userId) } });
         await tx.pointsRecord.create({
           data: {
             userId: BigInt(userId),
             type: 2,
             points: pointsDeducted,
-            balance: user.availablePoints - pointsDeducted,
+            balance: updatedUser?.availablePoints ?? (user.availablePoints - pointsDeducted),
             source: 'order_deduct',
             description: `订单积分抵扣，扣除${pointsDeducted}积分`,
           },
@@ -459,14 +463,6 @@ export class OrderService {
       return createdOrder;
     });
 
-    await this.prisma.cart.deleteMany({
-      where: {
-        userId: BigInt(userId),
-        skuId: { in: data.items.map((i) => BigInt(i.skuId)) },
-      },
-    });
-
-
     this.logger.log(`用户${userId}创建订单：${order.orderNo}，实付${payAmount}分`);
     return {
       orderId: order.id.toString(),
@@ -589,6 +585,15 @@ export class OrderService {
     if (!order) throw new NotFoundException('自提码不存在');
     if (order.fulfillmentType !== 'pickup') {
       throw new BadRequestException('该订单不是自提订单');
+    }
+    if (order.status === OrderStatus.completed) {
+      return {
+        success: true,
+        orderId: order.id.toString(),
+        orderNo: order.orderNo,
+        pickedUpAt: order.pickedUpAt ?? order.completedAt ?? null,
+        alreadyCompleted: true,
+      };
     }
     assertOrderTransition(order.status, OrderStatus.completed, 'pickup_verify');
 

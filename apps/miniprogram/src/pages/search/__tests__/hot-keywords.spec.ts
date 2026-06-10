@@ -16,6 +16,11 @@ vi.mock('@/api/search', () => ({
   clearSearchHistory: vi.fn(),
 }));
 
+vi.mock('@dcloudio/uni-app', () => ({
+  onReachBottom: vi.fn(),
+  onPullDownRefresh: vi.fn(),
+}));
+
 vi.mock('@/stores/user', () => ({
   useUserStore: () => storeMock.userStore,
 }));

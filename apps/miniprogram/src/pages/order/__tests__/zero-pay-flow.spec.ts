@@ -8,6 +8,8 @@ import { createPayment, getPaymentStatus, wxPay } from '@/api/payment'
 const uniAppMock = vi.hoisted(() => ({
   onLoadCallbacks: [] as Array<(options?: Record<string, any>) => void>,
   onUnloadCallbacks: [] as Array<() => void>,
+  onHideCallbacks: [] as Array<() => void>,
+  onShowCallbacks: [] as Array<() => void>,
 }))
 
 const storeMock = vi.hoisted(() => ({
@@ -25,6 +27,12 @@ vi.mock('@dcloudio/uni-app', () => ({
   }),
   onUnload: vi.fn((callback: () => void) => {
     uniAppMock.onUnloadCallbacks.push(callback)
+  }),
+  onHide: vi.fn((callback: () => void) => {
+    uniAppMock.onHideCallbacks.push(callback)
+  }),
+  onShow: vi.fn((callback: () => void) => {
+    uniAppMock.onShowCallbacks.push(callback)
   }),
 }))
 
@@ -110,6 +118,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   uniAppMock.onLoadCallbacks = []
   uniAppMock.onUnloadCallbacks = []
+  uniAppMock.onHideCallbacks = []
+  uniAppMock.onShowCallbacks = []
   ;(globalThis as any).uni = {
     redirectTo: vi.fn(),
     showToast: vi.fn(),

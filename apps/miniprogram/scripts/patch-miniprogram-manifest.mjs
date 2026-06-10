@@ -13,6 +13,7 @@ const appName = appNameFromEnv || '禧孕优选'
 const isProduction = (process.env.NODE_ENV || '').toLowerCase() === 'production'
 const PLACEHOLDER_APPID = 'wx0000000000000000'
 const APPID_PATTERN = /^wx[a-zA-Z0-9]{16}$/
+const FORBIDDEN_API_PATTERNS = [/localhost/i, /127\.0\.0\.1/, /0\.0\.0\.0/, /example\.com/i, /your-domain/i]
 
 if (isProduction && (!appId || appId === PLACEHOLDER_APPID || !APPID_PATTERN.test(appId))) {
   console.error('ERROR: 生产构建必须配置真实且格式合法的 VITE_WX_APPID，格式应为 wx + 16 位字母数字，且不能为占位值')
@@ -30,6 +31,11 @@ if (isProduction && apiBaseUrl) {
   const trimmedUrl = apiBaseUrl.replace(/\/+$/, '')
   if (!trimmedUrl.endsWith('/api')) {
     console.error(`ERROR: 生产构建 VITE_API_BASE_URL 必须以 /api 结尾，当前值: ${apiBaseUrl}，正确格式: https://域名/api`)
+    process.exit(1)
+  }
+  const forbiddenPattern = FORBIDDEN_API_PATTERNS.find((pattern) => pattern.test(trimmedUrl))
+  if (forbiddenPattern) {
+    console.error(`ERROR: 生产构建 VITE_API_BASE_URL 禁止使用本地或占位域名，当前值: ${apiBaseUrl}`)
     process.exit(1)
   }
 }

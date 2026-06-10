@@ -64,6 +64,13 @@
         </el-form-item>
 
         <el-divider content-position="left">规格与库存</el-divider>
+        <el-alert
+          v-if="isEdit && form.status === 1"
+          type="warning"
+          :closable="false"
+          title="已上架商品修改规格会影响用户购物车，请优先下架或确认无未支付购物车后再调整"
+          style="margin-bottom: 12px"
+        />
 
         <el-form-item label="规格模式">
           <el-radio-group v-model="form.skuMode">
@@ -212,6 +219,7 @@ const form = reactive({
   price: 0,
   originalPrice: 0,
   stock: 0,
+  status: 3,
   sortOrder: 0,
   isRecommend: 0,
   description: '',
@@ -487,6 +495,7 @@ async function fetchDetail(id: number) {
     price: Number(((d.minPrice ?? firstSku?.price ?? 0) / 100).toFixed(2)),
     originalPrice: Number((((firstSku?.originalPrice ?? d.minPrice ?? 0) as number) / 100).toFixed(2)),
     stock: Number(d.stock ?? 0),
+    status: Number(d.status ?? 3),
     sortOrder: Number(d.sortOrder ?? 0),
     isRecommend: Number(d.isRecommend ?? 0),
     description: d.description || '',

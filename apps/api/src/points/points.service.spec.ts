@@ -23,6 +23,7 @@ describe('PointsService ownership guard', () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    prisma.$transaction.mockImplementation(async (callback: any) => callback(prisma));
     const redis = { set: jest.fn() };
     service = new PointsService(prisma as any, redis as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
@@ -105,7 +106,6 @@ describe('PointsService ownership guard', () => {
   it('signIn returns continuous alias after success', async () => {
     prisma.pointsRecord.findFirst.mockResolvedValue(null);
     prisma.user.findFirst.mockResolvedValue({ id: 100n, availablePoints: 10, totalPoints: 20 });
-    prisma.$transaction.mockResolvedValue([]);
     jest.spyOn(service as any, 'getConsecutiveSignInDays').mockResolvedValue(2);
 
     const result = await service.signIn('100');

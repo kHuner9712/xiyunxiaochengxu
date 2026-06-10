@@ -20,6 +20,9 @@ function createPrismaMock() {
       create: jest.fn(),
       update: jest.fn(),
     },
+    memberLevel: {
+      findFirst: jest.fn(),
+    },
     order: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),

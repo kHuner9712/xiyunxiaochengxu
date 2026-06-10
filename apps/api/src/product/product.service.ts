@@ -196,30 +196,56 @@ export class ProductService {
       if (dto.isRecommend !== undefined) updateData.isRecommend = dto.isRecommend;
 
       if (dto.skus && dto.skus.length > 0) {
+        const productId = BigInt(id);
+        const incomingSkuCodes = dto.skus
+          .map((sku) => sku.skuCode)
+          .filter((skuCode): skuCode is string => !!skuCode);
+        const existingSkus = incomingSkuCodes.length > 0
+          ? await tx.productSku.findMany({
+              where: { productId, skuCode: { in: incomingSkuCodes } },
+            })
+          : [];
+        const existingSkuByCode = new Map(existingSkus.map((sku: any) => [sku.skuCode, sku]));
+        const activeSkuIds: bigint[] = [];
+
+        for (const sku of dto.skus) {
+          const skuData = {
+            skuCode: sku.skuCode || this.generateSkuCode(),
+            specs: sku.specs,
+            price: sku.price,
+            originalPrice: sku.originalPrice,
+            costPrice: sku.costPrice,
+            stock: sku.stock ?? 0,
+            image: sku.image,
+            weight: sku.weight,
+            barcode: sku.barcode,
+            status: 1,
+          };
+          const existingSku = sku.skuCode ? existingSkuByCode.get(sku.skuCode) : null;
+          if (existingSku) {
+            const updatedSku = await tx.productSku.update({
+              where: { id: existingSku.id },
+              data: skuData,
+            });
+            activeSkuIds.push(updatedSku.id);
+          } else {
+            const createdSku = await tx.productSku.create({
+              data: {
+                productId,
+                ...skuData,
+              },
+            });
+            activeSkuIds.push(createdSku.id);
+          }
+        }
+
         await tx.productSku.updateMany({
-          where: { productId: BigInt(id) },
+          where: { productId, id: { notIn: activeSkuIds } },
           data: { status: 2 },
         });
 
-        for (const sku of dto.skus) {
-          await tx.productSku.create({
-            data: {
-              productId: BigInt(id),
-              skuCode: sku.skuCode || this.generateSkuCode(),
-              specs: sku.specs,
-              price: sku.price,
-              originalPrice: sku.originalPrice,
-              costPrice: sku.costPrice,
-              stock: sku.stock ?? 0,
-              image: sku.image,
-              weight: sku.weight,
-              barcode: sku.barcode,
-            },
-          });
-        }
-
         const newSkus = await tx.productSku.findMany({
-          where: { productId: BigInt(id), status: 1 },
+          where: { productId, status: 1 },
         });
         const prices = newSkus.map((s) => s.price);
         if (prices.length > 0) {

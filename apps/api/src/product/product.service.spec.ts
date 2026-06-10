@@ -14,6 +14,7 @@ function createMockPrisma() {
     productSku: {
       findMany: jest.fn() as any,
       updateMany: jest.fn() as any,
+      update: jest.fn() as any,
       create: jest.fn() as any,
     },
     $transaction: jest.fn((fn: any) => fn({
@@ -23,6 +24,7 @@ function createMockPrisma() {
       },
       productSku: {
         updateMany: jest.fn() as any,
+        update: jest.fn() as any,
         create: jest.fn() as any,
         findMany: jest.fn() as any,
       },
@@ -269,6 +271,58 @@ describe('ProductService', () => {
       expect(data.mainImage).toBe('https://cdn.example.com/main.png');
       expect(data.images[0]).toBe('https://cdn.example.com/main.png');
       expect(data.skus[0].image).toBe('https://cdn.example.com/sku.png');
+    });
+  });
+
+  describe('ProductService.update SKU 兼容', () => {
+    it('编辑商品时复用同商品相同 skuCode 的 SKU，避免唯一索引冲突和购物车引用失效', async () => {
+      const tx = {
+        product: {
+          update: jest.fn<any>().mockResolvedValue({
+            id: BigInt(1),
+            name: '测试商品',
+            categoryId: BigInt(10),
+            minPrice: 1290,
+            maxPrice: 1290,
+            attributes: { compliance: { isRegulated: false } },
+            skus: [
+              { id: BigInt(100), productId: BigInt(1), skuCode: 'SKU-OLD', price: 1290, stock: 8, specs: { 规格1: '默认' }, status: 1 },
+            ],
+          }) as any,
+        },
+        productSku: {
+          findMany: jest.fn<any>()
+            .mockResolvedValueOnce([
+              { id: BigInt(100), productId: BigInt(1), skuCode: 'SKU-OLD', status: 1 },
+            ])
+            .mockResolvedValueOnce([
+              { id: BigInt(100), price: 1290, status: 1 },
+            ]) as any,
+          update: jest.fn<any>().mockResolvedValue({ id: BigInt(100) }) as any,
+          create: jest.fn() as any,
+          updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) as any,
+        },
+      };
+      prisma.product.findFirst.mockResolvedValue({ id: BigInt(1), deletedAt: null });
+      prisma.$transaction.mockImplementationOnce((fn: any) => fn(tx));
+
+      await service.update('1', {
+        name: '测试商品',
+        categoryId: 10,
+        skus: [
+          { skuCode: 'SKU-OLD', specs: { 规格1: '默认' }, price: 1290, stock: 8 },
+        ],
+      } as any);
+
+      expect(tx.productSku.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: BigInt(100) },
+        data: expect.objectContaining({ skuCode: 'SKU-OLD', status: 1, price: 1290, stock: 8 }),
+      }));
+      expect(tx.productSku.create).not.toHaveBeenCalled();
+      expect(tx.productSku.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { productId: BigInt(1), id: { notIn: [BigInt(100)] } },
+        data: { status: 2 },
+      }));
     });
   });
 });
