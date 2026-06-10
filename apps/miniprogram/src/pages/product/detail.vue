@@ -2,12 +2,15 @@
   <view class="product-detail-page page-shell">
     <view class="hero-stage">
       <swiper class="image-swiper" indicator-dots circular :interval="4000" @change="onImageChange">
+        <swiper-item v-if="product.videoUrl">
+          <video class="product-video" :src="product.videoUrl" controls :show-center-play-btn="true" :show-play-btn="true" object-fit="cover" />
+        </swiper-item>
         <swiper-item v-for="(img, index) in product.images" :key="index">
           <image class="product-image" :src="img" mode="aspectFill" @tap="previewImage(index)" />
         </swiper-item>
       </swiper>
-      <view v-if="product.images.length" class="image-counter">
-        <text class="counter-text">{{ currentImageIndex + 1 }}/{{ product.images.length }}</text>
+      <view v-if="product.images.length || product.videoUrl" class="image-counter">
+        <text class="counter-text">{{ currentImageIndex + 1 }}/{{ (product.videoUrl ? 1 : 0) + product.images.length }}</text>
       </view>
     </view>
 
@@ -321,11 +324,7 @@ async function confirmSku() {
     onSkuChange(defaultSku.id, 1)
   }
   if (!currentSku.value || currentSku.value.stock < selectedQuantity.value) {
-    uni.showToast({ title: '库存不足，请重新选择', icon: 'none' })
-    return
-  }
-  if (currentSku.value.stock <= 0) {
-    uni.showToast({ title: '商品暂无可售规格', icon: 'none' })
+    uni.showToast({ title: (currentSku.value?.stock ?? 0) <= 0 ? '商品暂无可售规格' : '库存不足，请重新选择', icon: 'none' })
     return
   }
   showSkuPopup.value = false
@@ -402,6 +401,11 @@ onLoad((options) => {
 }
 
 .product-image {
+  width: 100%;
+  height: 100%;
+}
+
+.product-video {
   width: 100%;
   height: 100%;
 }

@@ -247,6 +247,7 @@ model Product {
   brandId         BigInt?   @map("brand_id")
   supplierId      BigInt?   @map("supplier_id")
   mainImage       String?   @db.VarChar(500) @map("main_image")
+  videoUrl        String?   @db.VarChar(500) @map("video_url")
   images          Json?     @map("images")
   description     String?   @db.Text @map("description")
   attributes      Json?     @map("attributes")

@@ -114,10 +114,13 @@ export class StockService {
     const afterStock = dto.type === 'in' ? beforeStock + dto.quantity : beforeStock - dto.quantity;
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const updatedSku = await tx.productSku.update({
-        where: { id: sku.id },
+      const updated = await tx.productSku.updateMany({
+        where: { id: sku.id, stock: beforeStock },
         data: { stock: afterStock },
       });
+      if (updated.count === 0) {
+        throw new BadRequestException('库存已变更，请刷新后重试');
+      }
 
       await tx.productStockLog.create({
         data: {
@@ -132,13 +135,13 @@ export class StockService {
         },
       });
 
-      return updatedSku;
+      return tx.productSku.findFirst({ where: { id: sku.id } });
     });
 
     this.logger.log(`管理员调整库存：SKU ${sku.id.toString()} ${dto.type} ${dto.quantity}`);
     return {
-      skuId: result.id.toString(),
-      productId: result.productId.toString(),
+      skuId: result!.id.toString(),
+      productId: result!.productId.toString(),
       beforeStock,
       afterStock,
     };

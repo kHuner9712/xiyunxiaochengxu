@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../common/prisma/prisma.service';
 import { UserQueryDto } from './dto/user-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { getMemberLevelByGrowth, MEMBER_LEVELS } from '@baby-mall/shared';
 
 @Injectable()
 export class UserService {
@@ -41,7 +42,10 @@ export class UserService {
             pointsRate: user.memberLevel.pointsRate,
           }
         : null,
-      memberLevelName: user.memberLevel?.name || '普通会员',
+      memberLevelName: (() => {
+        const levelCode = getMemberLevelByGrowth(user.growthValue || 0);
+        return MEMBER_LEVELS[levelCode]?.name || '普通会员';
+      })(),
       points: user.availablePoints,
       growthValue: user.growthValue,
       totalPoints: user.totalPoints,
@@ -282,7 +286,10 @@ export class UserService {
             icon: user.memberLevel.icon,
           }
         : null,
-      memberLevelName: user.memberLevel?.name || '普通会员',
+      memberLevelName: (() => {
+        const levelCode = getMemberLevelByGrowth(user.growthValue || 0);
+        return MEMBER_LEVELS[levelCode]?.name || '普通会员';
+      })(),
       points: user.availablePoints,
       growthValue: user.growthValue,
       totalPoints: user.totalPoints,

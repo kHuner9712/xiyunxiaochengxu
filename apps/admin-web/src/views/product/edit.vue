@@ -46,6 +46,15 @@
           </el-upload>
         </el-form-item>
 
+        <el-form-item label="商品视频">
+          <el-upload action="" :http-request="handleUploadVideo" :show-file-list="false" accept="video/*" :limit="1">
+            <video v-if="form.videoUrl" :src="form.videoUrl" style="width: 240px; height: 160px; object-fit: cover; border-radius: 6px" controls />
+            <el-button v-else size="small">上传视频</el-button>
+          </el-upload>
+          <div style="margin-top: 8px; color: #909399; font-size: 12px">支持 mp4 格式，建议不超过 50MB，视频将展示在商品详情页顶部</div>
+          <el-button v-if="form.videoUrl" type="danger" link style="margin-top: 4px" @click="form.videoUrl = ''">移除视频</el-button>
+        </el-form-item>
+
         <el-form-item label="排序" prop="sortOrder">
           <el-input-number v-model="form.sortOrder" :min="0" />
         </el-form-item>
@@ -198,6 +207,7 @@ const form = reactive({
   brandId: undefined as number | undefined,
   supplierId: undefined as number | undefined,
   mainImage: '',
+  videoUrl: '',
   images: [] as string[],
   price: 0,
   originalPrice: 0,
@@ -424,6 +434,16 @@ async function handleUploadImage(options: any) {
   }
 }
 
+async function handleUploadVideo(options: any) {
+  try {
+    const res = await uploadApi.uploadImage(options.file, 'product-video')
+    const uploadedUrl = sanitizeUrl(res?.data?.url)
+    if (uploadedUrl) form.videoUrl = uploadedUrl
+  } catch {
+    ElMessage.error('视频上传失败')
+  }
+}
+
 function handleRemoveImage(file: any) {
   const idx = form.images.indexOf(file.url)
   if (idx > -1) form.images.splice(idx, 1)
@@ -462,6 +482,7 @@ async function fetchDetail(id: number) {
     brandId: d.brandId ? Number(d.brandId) : undefined,
     supplierId: d.supplierId ? Number(d.supplierId) : undefined,
     mainImage: sanitizeUrl(d.mainImage),
+    videoUrl: sanitizeUrl(d.videoUrl),
     images: sanitizeUrlList(d.images),
     price: Number(((d.minPrice ?? firstSku?.price ?? 0) / 100).toFixed(2)),
     originalPrice: Number((((firstSku?.originalPrice ?? d.minPrice ?? 0) as number) / 100).toFixed(2)),
@@ -514,6 +535,7 @@ async function handleSubmit() {
       brandId: form.brandId,
       supplierId: form.supplierId,
       mainImage: sanitizeUrl(form.mainImage),
+      videoUrl: sanitizeUrl(form.videoUrl),
       images: sanitizeUrlList(form.images),
       description: form.description,
       sortOrder: form.sortOrder,

@@ -49,6 +49,16 @@ export class CouponService {
 
   async findMyCoupons(userId: string, status?: number, page: number = 1, pageSize: number = 10) {
     const now = new Date();
+
+    await this.prisma.userCoupon.updateMany({
+      where: {
+        userId: BigInt(userId),
+        status: COUPON_STATUS.FREE,
+        expireAt: { lt: now },
+      },
+      data: { status: COUPON_STATUS.EXPIRED },
+    });
+
     const where: any = { userId: BigInt(userId) };
     if (status === 1) {
       where.status = COUPON_STATUS.FREE;
@@ -145,6 +155,15 @@ export class CouponService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
+      if (coupon.perLimit > 0) {
+        const currentCount = await tx.userCoupon.count({
+          where: { userId: BigInt(userId), couponId: BigInt(couponId) },
+        });
+        if (currentCount >= coupon.perLimit) {
+          throw new BadRequestException('已达到领取上限');
+        }
+      }
+
       if (coupon.totalCount > 0) {
         const updated = await tx.coupon.updateMany({
           where: { id: BigInt(couponId), receivedCount: { lt: coupon.totalCount } },

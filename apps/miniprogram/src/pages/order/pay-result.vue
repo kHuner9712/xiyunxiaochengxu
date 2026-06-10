@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onUnload } from '@dcloudio/uni-app'
+import { onLoad, onUnload, onHide, onShow } from '@dcloudio/uni-app'
 import { getOrderDetail, type OrderDetail } from '@/api/order'
 import { getPaymentStatus } from '@/api/payment'
 import { formatPrice } from '@/utils/format'
@@ -182,6 +182,16 @@ onLoad((options) => {
     return
   }
   startPollingStatus()
+})
+
+onHide(() => {
+  stopPolling()
+})
+
+onShow(() => {
+  if (!zeroPay.value && orderId.value && paymentState.value !== 'success' && paymentState.value !== 'failed') {
+    startPollingStatus()
+  }
 })
 
 onUnload(() => {

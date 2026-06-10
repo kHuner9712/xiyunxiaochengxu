@@ -87,6 +87,12 @@ async function deleteAddress(item: AddressItem) {
       if (res.confirm) {
         try {
           await deleteAddressApi(item.id)
+          if (item.isDefault) {
+            const remaining = addresses.value.filter(a => a.id !== item.id)
+            if (remaining.length > 0) {
+              await setDefaultAddress(remaining[0].id)
+            }
+          }
           await loadAddresses()
         } catch {
           uni.showToast({ title: '删除失败', icon: 'none' })

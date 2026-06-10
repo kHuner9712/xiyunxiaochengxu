@@ -878,39 +878,60 @@ export class PaymentService {
                 },
               });
             }
+          } else if (aftersaleWithRelations.type === 1) {
+            this.logger.log(`仅退款不归还库存: 售后单${aftersaleWithRelations.id}，类型为仅退款`);
           }
 
           if (aftersaleWithRelations.refundAmount && aftersaleWithRelations.refundAmount > 0 && aftersaleWithRelations.order?.payAmount) {
-            const deductedPoints = Math.floor(aftersaleWithRelations.refundAmount / 100);
-            if (deductedPoints > 0) {
+            const orderEarnedPoints = Math.floor((aftersaleWithRelations.order.payAmount || 0) / 100);
+            const proportionalDeductedPoints = Math.floor(orderEarnedPoints * aftersaleWithRelations.refundAmount / aftersaleWithRelations.order.payAmount);
+            if (proportionalDeductedPoints > 0) {
               const user = await tx.user.findFirst({ where: { id: aftersaleWithRelations.userId } });
-              if (user && user.availablePoints >= deductedPoints) {
+              if (user && user.availablePoints >= proportionalDeductedPoints) {
                 await tx.user.update({
                   where: { id: aftersaleWithRelations.userId },
-                  data: { availablePoints: { decrement: deductedPoints } },
+                  data: { availablePoints: { decrement: proportionalDeductedPoints } },
                 });
                 await tx.pointsRecord.create({
                   data: {
                     userId: aftersaleWithRelations.userId,
                     type: 2,
-                    points: deductedPoints,
-                    balance: user.availablePoints - deductedPoints,
+                    points: proportionalDeductedPoints,
+                    balance: user.availablePoints - proportionalDeductedPoints,
                     source: 'aftersale_refund_deduct_reward',
                     sourceId: aftersaleWithRelations.id,
-                    description: `售后退款扣回${deductedPoints}积分`,
+                    description: `售后退款按比例扣回${proportionalDeductedPoints}积分`,
                   },
                 });
               } else {
+                const actualDeduct = user ? Math.min(user.availablePoints, proportionalDeductedPoints) : 0;
+                if (actualDeduct > 0 && user) {
+                  await tx.user.update({
+                    where: { id: aftersaleWithRelations.userId },
+                    data: { availablePoints: { decrement: actualDeduct } },
+                  });
+                  await tx.pointsRecord.create({
+                    data: {
+                      userId: aftersaleWithRelations.userId,
+                      type: 2,
+                      points: actualDeduct,
+                      balance: user.availablePoints - actualDeduct,
+                      source: 'aftersale_refund_deduct_reward_partial',
+                      sourceId: aftersaleWithRelations.id,
+                      description: `售后退款扣回积分不足，部分扣回${actualDeduct}积分（应扣${proportionalDeductedPoints}）`,
+                    },
+                  });
+                }
                 this.businessEvent.emitWarn(
                   'aftersale_refund_deduct_points_insufficient',
                   'refund',
-                  `售后退款扣回奖励积分失败：用户可用积分不足`,
+                  `售后退款扣回奖励积分不足：应扣${proportionalDeductedPoints}，可用${user?.availablePoints ?? 0}`,
                   (aftersaleWithRelations.id || '').toString(),
                   {
                     userId: aftersaleWithRelations.userId?.toString?.() || aftersaleWithRelations.userId,
                     aftersaleId: aftersaleWithRelations.id?.toString?.() || aftersaleWithRelations.id,
                     refundId: refund.id.toString(),
-                    requiredDeductedPoints: deductedPoints,
+                    requiredDeductedPoints: proportionalDeductedPoints,
                     availablePoints: user?.availablePoints ?? null,
                   },
                 );

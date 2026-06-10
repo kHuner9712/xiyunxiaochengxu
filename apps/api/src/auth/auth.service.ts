@@ -361,11 +361,15 @@ export class AuthService {
     let isNewUser = false;
 
     if (!user) {
+      const defaultLevel = await this.prisma.memberLevel.findFirst({
+        where: { status: 1, minGrowthValue: 0 },
+        orderBy: { sortOrder: 'asc' },
+      });
       user = await this.prisma.user.create({
         data: {
           openid,
           unionId: unionid || null,
-          memberLevelId: 1n,
+          memberLevelId: defaultLevel?.id || null,
           status: 1,
           lastLoginAt: new Date(),
         },

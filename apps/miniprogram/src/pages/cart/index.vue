@@ -110,7 +110,7 @@ import PriceDisplay from '@/components/PriceDisplay.vue'
 const cartStore = useCartStore()
 const userStore = useUserStore()
 
-function goDetail(productId: number) {
+function goDetail(productId: string | number) {
   uni.navigateTo({ url: `/pages/product/detail?id=${productId}` })
 }
 

@@ -69,7 +69,7 @@ function formatTime(dateStr: string): string {
 
 onShareAppMessage(() => ({
   title: '禧孕优选好物推荐，快来看看吧！',
-  path: `/pages/home/index?inviter=${userStore.userInfo?.id || ''}`
+  path: `/pages/home/index?inviter=${encodeURIComponent(userStore.userInfo?.id || '')}`
 }))
 
 onMounted(() => {

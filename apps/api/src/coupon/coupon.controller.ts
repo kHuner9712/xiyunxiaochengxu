@@ -22,7 +22,6 @@ export class WeappCouponController {
     );
   }
 
-  @Public()
   @Get('available')
   async findAvailable(@CurrentUser('id') userId: string) {
     return this.couponService.findAvailable(userId);

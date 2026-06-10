@@ -24,6 +24,7 @@ export interface ProductDetail {
   name: string
   subtitle: string
   images: string[]
+  videoUrl?: string
   price: number
   originalPrice: number
   sales: number

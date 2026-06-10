@@ -27,10 +27,11 @@ export class AftersaleService {
       throw new BadRequestException('订单状态不允许申请售后');
     }
 
-    if (orderItem.order.status === OrderStatus.completed && orderItem.order.completedAt) {
-      const daysSinceComplete = Math.floor((Date.now() - orderItem.order.completedAt.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysSinceComplete > AFTERSALE_APPLY_DAYS) {
-        throw new BadRequestException(`确认收货${AFTERSALE_APPLY_DAYS}天后无法申请售后`);
+    const referenceTime = orderItem.order.completedAt || orderItem.order.deliveredAt;
+    if (referenceTime) {
+      const daysSince = Math.floor((Date.now() - referenceTime.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSince > AFTERSALE_APPLY_DAYS) {
+        throw new BadRequestException(`收货/发货${AFTERSALE_APPLY_DAYS}天后无法申请售后`);
       }
     }
 

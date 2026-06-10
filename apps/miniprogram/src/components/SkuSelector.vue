@@ -110,9 +110,23 @@ function initSelection() {
 
   const firstAvailable = props.skus.find((sku) => sku.stock > 0) || props.skus[0]
   if (firstAvailable?.specText) {
+    // 精确匹配：逐个 spec 从 specText 中解析对应值
     props.specs.forEach((spec, specIndex) => {
-      const hit = spec.values.findIndex((value) => firstAvailable.specText.includes(`${spec.name}：${value}`))
-      selectedSpecs[specIndex] = hit >= 0 ? hit : 0
+      const prefix = `${spec.name}：`
+      const remaining = firstAvailable.specText
+      let bestHit = -1
+      for (let vi = 0; vi < spec.values.length; vi++) {
+        // 构建完整候选 specText 并精确比较
+        const tempMap = { ...selectedSpecs, [specIndex]: vi }
+        const candidate = buildSpecTextByIndexes(tempMap)
+        if (candidate === firstAvailable.specText) {
+          bestHit = vi
+          break
+        }
+      }
+      if (bestHit >= 0) {
+        selectedSpecs[specIndex] = bestHit
+      }
     })
   }
   quantity.value = 1

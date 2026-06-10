@@ -55,7 +55,11 @@ export const useCartStore = defineStore('cart', () => {
     loading.value = true
     try {
       const data = await get<CartItem[]>('/weapp/cart/list')
-      items.value = data.map(item => ({ ...item, checked: true }))
+      const prevCheckedIds = new Set(items.value.filter(i => i.checked).map(i => i.id))
+      items.value = data.map(item => ({
+        ...item,
+        checked: prevCheckedIds.size > 0 ? prevCheckedIds.has(item.id) : true,
+      }))
       updateTabBadge()
     } catch {
       items.value = []
@@ -81,9 +85,7 @@ export const useCartStore = defineStore('cart', () => {
 
   async function removeSelected() {
     const selectedIds = checkedItems.value.map(item => item.id)
-    for (const id of selectedIds) {
-      await del(`/weapp/cart/delete/${id}`)
-    }
+    await Promise.all(selectedIds.map(id => del(`/weapp/cart/delete/${id}`)))
     await fetchCart()
   }
 

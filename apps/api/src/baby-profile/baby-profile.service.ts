@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { calculateBabyMonthAge, paginate } from '@baby-mall/shared';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -33,6 +33,11 @@ export class BabyProfileService {
     avatar?: string;
     isDefault?: number;
   }) {
+    const count = await this.prisma.babyProfile.count({
+      where: { userId: BigInt(userId), deletedAt: null },
+    });
+    if (count >= 5) throw new BadRequestException('最多添加5个宝宝档案');
+
     if (data.isDefault === 1) {
       await this.prisma.babyProfile.updateMany({
         where: { userId: BigInt(userId), deletedAt: null },

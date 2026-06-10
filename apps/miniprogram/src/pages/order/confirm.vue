@@ -76,10 +76,10 @@
       </view>
       <view v-for="item in orderItems" :key="item.skuId" class="product-item">
         <view class="product-image-wrap">
-          <image class="product-image" :src="item.productImage" mode="aspectFill" />
+          <image class="product-image" :src="item.productImage || '/static/placeholder.png'" mode="aspectFill" />
         </view>
         <view class="product-info">
-          <text class="product-name">{{ item.productName }}</text>
+          <text class="product-name">{{ item.productName || '商品信息加载中...' }}</text>
           <text class="product-sku">{{ item.skuName }}</text>
           <view class="product-bottom">
             <PriceDisplay :price="item.price" />
@@ -289,7 +289,7 @@ const pointsDeductDesc = computed(() => {
   if (availablePoints.value <= 0) return '暂无可用积分'
   if (maxPointsDeduct.value <= 0) return `可用 ${availablePoints.value} 积分，当前订单暂不支持抵扣`
   const rate = Math.max(1, pointsDeductRate.value)
-  return `可用 ${availablePoints.value} 积分，抵扣 ¥${formatPrice(Math.floor(requestedPointsDeduct.value / rate) * 100)}`
+  return `可用 ${availablePoints.value} 积分，抵扣 ¥${(requestedPointsDeduct.value / rate).toFixed(2)}`
 })
 
 const freightAmount = computed(() => {
@@ -380,7 +380,11 @@ function selectAddress() {
 
 function switchFulfillmentType(type: 'delivery' | 'pickup') {
   fulfillmentType.value = type
+  if (type === 'delivery') {
+    selectedPickupStore.value = null
+  }
   if (type === 'pickup') {
+    address.value = null
     if (!selectedPickupStore.value) {
       preview.value = null
       uni.showToast({ title: '请选择自提点', icon: 'none' })

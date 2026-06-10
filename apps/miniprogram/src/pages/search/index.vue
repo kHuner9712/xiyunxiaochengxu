@@ -53,6 +53,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { searchProducts, getHotKeywords, getSearchHistory, clearSearchHistory } from '@/api/search'
 import { useUserStore } from '@/stores/user'
 import ProductCard from '@/components/ProductCard.vue'
@@ -148,6 +149,12 @@ onMounted(() => {
   loadHotKeywords()
   if (userStore.isLoggedIn) {
     loadSearchHistory()
+  }
+})
+
+onReachBottom(() => {
+  if (hasSearched.value) {
+    loadProducts()
   }
 })
 

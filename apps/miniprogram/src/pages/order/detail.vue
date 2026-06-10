@@ -132,6 +132,7 @@
     <view class="bottom-bar bottom-action-bar" v-if="order.status">
       <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap="handleCancel">取消订单</view>
       <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap="handlePay">去支付</view>
+      <view v-if="order.status === 'pending_pickup'" class="action-hint">到店自提 · 请出示自提码</view>
       <view v-if="order.status === 'delivered'" class="action-btn primary" @tap="handleConfirm">确认收货</view>
       <view v-if="order.status === 'completed' || order.status === 'delivered' || order.status === 'aftersale'" class="action-hint">请选择要售后的商品</view>
       <view class="action-btn" @tap="goCustomerService">联系商家</view>

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { PointsQueryDto } from './dto/points-query.dto';
@@ -74,39 +74,72 @@ export class PointsService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const existing = await this.prisma.pointsRecord.findFirst({
-      where: {
-        userId: BigInt(userId),
-        source: 'sign_in',
-        type: 1,
-        createdAt: { gte: today, lt: tomorrow },
-      },
+    const result = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.pointsRecord.findFirst({
+        where: {
+          userId: BigInt(userId),
+          source: 'sign_in',
+          type: 1,
+          createdAt: { gte: today, lt: tomorrow },
+        },
+      });
+
+      if (existing) {
+        return { alreadySigned: true, points: 0 };
+      }
+
+      const consecutiveDays = await this.getConsecutiveSignInDays(userId);
+      const bonusPoints = Math.min(
+        POINTS_SIGN_IN_BASE + consecutiveDays * 2,
+        POINTS_SIGN_IN_MAX,
+      );
+
+      const user = await tx.user.findFirst({ where: { id: BigInt(userId) } });
+      if (!user) throw new BadRequestException('用户不存在');
+
+      const newBalance = user.availablePoints + bonusPoints;
+      const expireAt = new Date();
+      expireAt.setMonth(expireAt.getMonth() + POINTS_EXPIRE_MONTHS);
+      expireAt.setDate(expireAt.getDate() - 1);
+      expireAt.setHours(23, 59, 59, 0);
+
+      await tx.user.update({
+        where: { id: BigInt(userId) },
+        data: {
+          totalPoints: { increment: bonusPoints },
+          availablePoints: { increment: bonusPoints },
+        },
+      });
+
+      await tx.pointsRecord.create({
+        data: {
+          userId: BigInt(userId),
+          type: 1,
+          points: bonusPoints,
+          balance: newBalance,
+          source: 'sign_in',
+          description: `连续签到${consecutiveDays + 1}天，奖励${bonusPoints}积分`,
+          expireAt,
+        },
+      });
+
+      return { alreadySigned: false, points: bonusPoints, consecutiveDays: consecutiveDays + 1 };
     });
 
-    if (existing) {
-      return { alreadySigned: true, points: 0 };
+    if (!result.alreadySigned) {
+      await this.redisService.set(
+        `sign_in:${userId}:${today.toISOString().split('T')[0]}`,
+        '1',
+        86400,
+      );
+      this.logger.log(`用户${userId}签到，获得${result.points}积分，连续${result.consecutiveDays}天`);
     }
 
-    const consecutiveDays = await this.getConsecutiveSignInDays(userId);
-    const bonusPoints = Math.min(
-      POINTS_SIGN_IN_BASE + consecutiveDays * 2,
-      POINTS_SIGN_IN_MAX,
-    );
-
-    await this.earnPoints(userId, bonusPoints, 'sign_in', undefined, `连续签到${consecutiveDays + 1}天，奖励${bonusPoints}积分`);
-
-    await this.redisService.set(
-      `sign_in:${userId}:${today.toISOString().split('T')[0]}`,
-      '1',
-      86400,
-    );
-
-    this.logger.log(`用户${userId}签到，获得${bonusPoints}积分，连续${consecutiveDays + 1}天`);
     return {
-      alreadySigned: false,
-      points: bonusPoints,
-      continuous: consecutiveDays + 1,
-      consecutiveDays: consecutiveDays + 1,
+      alreadySigned: result.alreadySigned,
+      points: result.points,
+      continuous: result.consecutiveDays ?? 0,
+      consecutiveDays: result.consecutiveDays ?? 0,
     };
   }
 
@@ -198,7 +231,7 @@ export class PointsService {
     const newBalance = user.availablePoints + points;
     const expireAt = new Date();
     expireAt.setMonth(expireAt.getMonth() + expireMonths);
-    expireAt.setMonth(11, 31);
+    expireAt.setDate(expireAt.getDate() - 1);
     expireAt.setHours(23, 59, 59, 0);
 
     await this.prisma.$transaction([

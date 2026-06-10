@@ -449,6 +449,13 @@ export class OrderService {
         }
       }
 
+      await tx.cart.deleteMany({
+        where: {
+          userId: BigInt(userId),
+          skuId: { in: data.items.map((i) => BigInt(i.skuId)) },
+        },
+      });
+
       return createdOrder;
     });
 
@@ -458,6 +465,7 @@ export class OrderService {
         skuId: { in: data.items.map((i) => BigInt(i.skuId)) },
       },
     });
+
 
     this.logger.log(`用户${userId}创建订单：${order.orderNo}，实付${payAmount}分`);
     return {
@@ -528,8 +536,8 @@ export class OrderService {
 
       if (order.couponId) {
         await tx.userCoupon.updateMany({
-          where: { id: order.couponId, status: COUPON_STATUS.LOCKED },
-          data: { status: COUPON_STATUS.FREE, usedOrderId: null },
+          where: { id: order.couponId, status: { in: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED] } },
+          data: { status: COUPON_STATUS.FREE, usedOrderId: null, usedAt: null },
         });
       }
 
@@ -964,8 +972,8 @@ export class OrderService {
 
           if (order.couponId) {
             await tx.userCoupon.updateMany({
-              where: { id: order.couponId, status: COUPON_STATUS.LOCKED },
-              data: { status: COUPON_STATUS.FREE, usedOrderId: null },
+              where: { id: order.couponId, status: { in: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED] } },
+              data: { status: COUPON_STATUS.FREE, usedOrderId: null, usedAt: null },
             });
           }
 

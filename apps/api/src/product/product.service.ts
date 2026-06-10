@@ -450,6 +450,7 @@ export class ProductService {
       sortOrder: product.sortOrder ?? 0,
       image,
       mainImage: normalizedMainImage,
+      videoUrl: normalizeAssetUrl(product.videoUrl, assetBaseUrl),
       images: normalizedImages,
       originalPrice: defaultSku?.originalPrice ?? minPrice,
       sales,

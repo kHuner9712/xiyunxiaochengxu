@@ -133,7 +133,9 @@ async function handleSave() {
       freeShippingAmount: priceToFen(form.freeShippingAmount),
     })
     ElMessage.success('保存成功')
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
     saving.value = false
   }
 }

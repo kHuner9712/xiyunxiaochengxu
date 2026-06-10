@@ -41,8 +41,12 @@ export async function handleShareBindOnLogin() {
     await bindInvite(data)
     uni.removeStorageSync('pending_invite')
     return true
-  } catch (err) {
-    throw err
+  } catch (err: any) {
+    const msg = String(err?.message || err?.errMsg || '').toLowerCase()
+    if (msg.includes('already_invited') || msg.includes('已绑定') || msg.includes('不能邀请自己')) {
+      uni.removeStorageSync('pending_invite')
+    }
+    return false
   } finally {
     isBindingInvite = false
   }

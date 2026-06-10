@@ -300,10 +300,6 @@ function smartNavigate(url: string, options: NavOptions = {}) {
   const { requireLogin = false } = options
 
   if (!userStore.isLoggedIn) {
-    if (requireLogin) {
-      showLoginRequired()
-      return
-    }
     showLoginRequired()
     return
   }

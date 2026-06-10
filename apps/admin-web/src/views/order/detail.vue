@@ -98,6 +98,7 @@
           <template #header><span>订单操作</span></template>
           <div style="display: flex; flex-direction: column; gap: 10px">
             <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:delivery'" type="primary" @click="showDeliverDialog">发货</el-button>
+            <el-button v-if="order.status === 'pending_pickup'" v-permission="'order:delivery'" type="success" @click="showVerifyPickupDialog">核销自提</el-button>
             <el-button v-if="order.status === 'pending_payment'" v-permission="'order:detail'" type="danger" @click="handleCancelOrder">取消订单</el-button>
           </div>
         </el-card>
@@ -126,6 +127,18 @@
         <el-button type="primary" :loading="submitting" @click="handleDeliver">确认发货</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="verifyPickupVisible" title="核销自提" width="400px" destroy-on-close>
+      <el-form :model="verifyPickupForm" label-width="80px">
+        <el-form-item label="自提码">
+          <el-input v-model="verifyPickupForm.pickupCode" placeholder="请输入8位自提码" maxlength="8" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="verifyPickupVisible = false">取消</el-button>
+        <el-button type="success" :loading="submitting" @click="handleVerifyPickup">确认核销</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -134,6 +147,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { orderApi } from '@/api/order'
+import { pickupStoreApi } from '@/api/pickup-store'
 import { formatPrice, formatDate, formatOrderStatus, getOrderStatusTagType } from '@/utils/format'
 import { asArray } from '@/utils/response'
 
@@ -141,6 +155,7 @@ const router = useRouter()
 const route = useRoute()
 const submitting = ref(false)
 const deliverVisible = ref(false)
+const verifyPickupVisible = ref(false)
 const deliverFormRef = ref<FormInstance>()
 
 const order = ref<any>({})
@@ -149,6 +164,10 @@ const deliverForm = reactive({
   orderId: undefined as number | undefined,
   logisticsCompany: '',
   logisticsNo: '',
+})
+
+const verifyPickupForm = reactive({
+  pickupCode: '',
 })
 
 const deliverRules: FormRules = {
@@ -192,6 +211,29 @@ async function handleCancelOrder() {
     ElMessage.success('取消成功')
     fetchDetail()
   } catch {}
+}
+
+function showVerifyPickupDialog() {
+  verifyPickupForm.pickupCode = order.value.pickupCode || ''
+  verifyPickupVisible.value = true
+}
+
+async function handleVerifyPickup() {
+  if (!verifyPickupForm.pickupCode) {
+    ElMessage.warning('请输入自提码')
+    return
+  }
+  submitting.value = true
+  try {
+    await pickupStoreApi.verifyPickupCode(verifyPickupForm.pickupCode)
+    ElMessage.success('核销成功')
+    verifyPickupVisible.value = false
+    fetchDetail()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '核销失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
 onMounted(() => {

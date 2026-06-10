@@ -104,6 +104,10 @@ export class CreateProductDto {
   mainImage?: string;
 
   @IsOptional()
+  @IsString()
+  videoUrl?: string;
+
+  @IsOptional()
   images?: any;
 
   @IsOptional()
