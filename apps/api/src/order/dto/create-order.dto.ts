@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Max, Matches, IsIn, ArrayMinSize, ArrayMaxSize, MaxLength, ValidatorConstraint, ValidatorConstraintInterface, Validate } from 'class-validator';
+import { Allow, IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Max, Matches, IsIn, ArrayMinSize, ArrayMaxSize, MaxLength, ValidatorConstraint, ValidatorConstraintInterface, Validate } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CART_MAX_QUANTITY, CART_MAX_ITEMS } from '@baby-mall/shared';
 
@@ -16,6 +16,11 @@ class UniqueSkuIdsConstraint implements ValidatorConstraintInterface {
 }
 
 export class OrderItemDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+$/)
+  productId?: string;
+
   @IsString()
   @Matches(/^\d+$/)
   skuId!: string;

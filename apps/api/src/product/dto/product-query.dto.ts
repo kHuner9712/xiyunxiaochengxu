@@ -13,6 +13,15 @@ export class ProductQueryDto extends PaginationDto {
   categoryId?: number;
 
   @IsOptional()
+  @IsString()
+  sort?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  productId?: number;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   brandId?: number;

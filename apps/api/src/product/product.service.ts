@@ -24,6 +24,14 @@ export class ProductService {
     if (dto.keyword) where.name = { contains: dto.keyword };
     if (dto.isRecommend !== undefined) where.isRecommend = dto.isRecommend;
 
+    const orderBy: any[] = dto.sort === 'sales'
+      ? [{ totalSales: 'desc' }, { sortOrder: 'asc' }]
+      : dto.sort === 'new'
+        ? [{ createdAt: 'desc' }]
+        : dto.sort === 'price_asc'
+          ? [{ minPrice: 'asc' }, { sortOrder: 'asc' }]
+          : [{ sortOrder: 'asc' }];
+
     const [list, total] = await Promise.all([
       this.prisma.product.findMany({
         where,
@@ -63,6 +71,7 @@ export class ProductService {
   async findRecommend(dto: ProductQueryDto) {
     const where: any = { status: 1, deletedAt: null, isRecommend: 1 };
     if (dto.categoryId) where.categoryId = BigInt(dto.categoryId);
+    if ((dto as any).productId) where.id = { not: BigInt((dto as any).productId) };
 
     const [list, total] = await Promise.all([
       this.prisma.product.findMany({
