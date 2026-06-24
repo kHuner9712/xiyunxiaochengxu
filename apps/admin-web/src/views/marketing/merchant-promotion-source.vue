@@ -41,6 +41,14 @@
         <el-table-column prop="contactName" label="联系人" width="110" />
         <el-table-column prop="contactPhone" label="联系电话" width="130" />
         <el-table-column prop="scene" label="推广场景" width="130" show-overflow-tooltip />
+        <el-table-column label="推广路径" min-width="230">
+          <template #default="{ row }">
+            <el-space direction="vertical" alignment="flex-start" :size="2">
+              <el-button type="primary" link @click="copyPromotionPath(getHomePromotionPath(row))">复制首页路径</el-button>
+              <el-button type="primary" link @click="copyPromotionPath(getProductPromotionPath(row))">复制商品/卡项路径模板</el-button>
+            </el-space>
+          </template>
+        </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -76,6 +84,46 @@
           @current-change="fetchList"
         />
       </div>
+    </div>
+
+    <div class="table-card" style="margin-top: 16px">
+      <div style="margin-bottom: 16px">
+        <strong>推广效果统计</strong>
+        <el-alert
+          type="warning"
+          :closable="false"
+          style="margin-top: 8px"
+        >
+          第一版按 orders.source_code 聚合订单。表内订单金额为 SUM(pay_amount)；有效支付金额排除待付款和已取消订单，仅用于运营参考，不做佣金或结算依据。
+        </el-alert>
+      </div>
+
+      <el-table :data="statsData" stripe v-loading="statsLoading">
+        <el-table-column prop="name" label="商家名称" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="promotionCode" label="推广码" width="140">
+          <template #default="{ row }">
+            <el-tag type="warning">{{ row.promotionCode }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="订单数" width="90">
+          <template #default="{ row }">{{ row.orderCount || 0 }}</template>
+        </el-table-column>
+        <el-table-column label="表内订单金额" width="130">
+          <template #default="{ row }">¥{{ formatPrice(row.totalPayAmount) }}</template>
+        </el-table-column>
+        <el-table-column label="有效支付金额" width="130">
+          <template #default="{ row }">¥{{ formatPrice(row.effectivePayAmount) }}</template>
+        </el-table-column>
+        <el-table-column label="状态分布" min-width="260">
+          <template #default="{ row }">{{ formatStatusDistribution(row) }}</template>
+        </el-table-column>
+        <el-table-column label="首次下单" width="180">
+          <template #default="{ row }">{{ formatDate(row.firstOrderTime) }}</template>
+        </el-table-column>
+        <el-table-column label="最近下单" width="180">
+          <template #default="{ row }">{{ formatDate(row.lastOrderTime) }}</template>
+        </el-table-column>
+      </el-table>
     </div>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px" destroy-on-close>
@@ -117,13 +165,15 @@
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { merchantPromotionSourceApi } from '@/api/merchant-promotion-source'
-import { formatDate } from '@/utils/format'
+import { formatDate, formatPrice } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
+const statsLoading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const tableData = ref<any[]>([])
+const statsData = ref<any[]>([])
 const formRef = ref<FormInstance>()
 
 const searchForm = reactive({
@@ -169,9 +219,25 @@ async function fetchList() {
   }
 }
 
+async function fetchStats() {
+  statsLoading.value = true
+  try {
+    const res = await merchantPromotionSourceApi.getStats({
+      keyword: searchForm.keyword || undefined,
+      status: searchForm.status,
+    })
+    statsData.value = asArray(res.data)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '获取推广效果统计失败')
+  } finally {
+    statsLoading.value = false
+  }
+}
+
 function handleSearch() {
   pagination.page = 1
   fetchList()
+  fetchStats()
 }
 
 function resetSearch() {
@@ -212,6 +278,34 @@ function normalizePromotionCode() {
   form.promotionCode = String(form.promotionCode || '').trim().toUpperCase()
 }
 
+function getHomePromotionPath(row: any) {
+  return `pages/home/index?ref=${row.promotionCode || ''}`
+}
+
+function getProductPromotionPath(row: any) {
+  return `pages/product/detail?id=商品ID&ref=${row.promotionCode || ''}`
+}
+
+async function copyPromotionPath(text: string) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    ElMessage.success('推广路径已复制')
+  } catch {
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
+
 async function handleSubmit() {
   normalizePromotionCode()
   const valid = await formRef.value?.validate().catch(() => false)
@@ -239,6 +333,7 @@ async function handleSubmit() {
     ElMessage.success('保存成功')
     dialogVisible.value = false
     fetchList()
+    fetchStats()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || e?.message || '保存失败')
   } finally {
@@ -253,11 +348,30 @@ async function handleStatusChange(row: any) {
   try {
     await merchantPromotionSourceApi.updateStatus(row.id, nextStatus)
     ElMessage.success(nextStatus === 1 ? '已启用' : '已停用')
+    fetchStats()
   } catch (e: any) {
     row.status = oldStatus
     ElMessage.error(e?.response?.data?.message || e?.message || '状态更新失败')
   }
 }
 
+function formatStatusDistribution(row: any) {
+  const parts = [
+    ['待付款', row.pendingPaymentCount],
+    ['已付款', row.paidCount],
+    ['待发货', row.pendingDeliveryCount],
+    ['待自提', row.pendingPickupCount],
+    ['已发货', row.deliveredCount],
+    ['已完成', row.completedCount],
+    ['售后中', row.aftersaleCount],
+    ['已取消', row.cancelledCount],
+  ]
+    .filter(([, count]) => Number(count || 0) > 0)
+    .map(([label, count]) => `${label} ${count}`)
+
+  return parts.length ? parts.join(' / ') : '-'
+}
+
 fetchList()
+fetchStats()
 </script>
