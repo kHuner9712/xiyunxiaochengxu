@@ -220,6 +220,12 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '首页装修', permission: 'marketing:decor' },
           },
           {
+            path: 'merchant-promotion-source',
+            name: 'MerchantPromotionSource',
+            component: () => import('@/views/marketing/merchant-promotion-source.vue'),
+            meta: { title: '商家推广码', permission: 'marketing:activity' },
+          },
+          {
             path: 'share-campaign',
             name: 'ShareCampaign',
             component: () => import('@/views/share/campaign.vue'),
