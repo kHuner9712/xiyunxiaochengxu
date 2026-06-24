@@ -34,6 +34,15 @@ function inferSourceType(params: ShareParams): string | undefined {
   return undefined
 }
 
+function toShareApiParams(params: ShareParams): ShareParams {
+  return {
+    inviter: params.inviter,
+    shareRecordId: params.shareRecordId,
+    campaignId: params.campaignId,
+    sceneCode: params.sceneCode,
+  }
+}
+
 let isBindingInvite = false
 
 export function parseShareParams(query: Record<string, any>): ShareParams {
@@ -61,7 +70,7 @@ export function parseShareParams(query: Record<string, any>): ShareParams {
 
 export function handleShareVisit(params: ShareParams) {
   if (params.inviter || params.shareRecordId || params.sceneCode) {
-    recordVisit(params).catch(() => {})
+    recordVisit(toShareApiParams(params)).catch(() => {})
   }
   savePromotionSource(params)
 }
@@ -80,7 +89,7 @@ export async function handleShareBindOnLogin() {
 
   try {
     isBindingInvite = true
-    await bindInvite(data)
+    await bindInvite(toShareApiParams(data))
     uni.removeStorageSync('pending_invite')
     return true
   } catch (err: any) {
