@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onLaunch, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
-import { parseShareParams, handleShareVisit, handleShareBindOnLogin, savePendingInvite } from '@/utils/share'
+import { parseShareParams, handleShareVisit, handleShareBindOnLogin, savePendingInvite, savePromotionSource } from '@/utils/share'
 
 onLaunch((options: any) => {
   const userStore = useUserStore()
@@ -12,11 +12,19 @@ onLaunch((options: any) => {
     if (params.inviter || params.shareRecordId || params.sceneCode) {
       handleShareVisit(params)
       savePendingInvite(params)
+      savePromotionSource(params)
     }
   }
 })
 
-onShow(() => {
+onShow((options: any) => {
+  if (options?.query) {
+    const params = parseShareParams(options.query)
+    handleShareVisit(params)
+    savePendingInvite(params)
+    savePromotionSource(params)
+  }
+
   const userStore = useUserStore()
   if (userStore.isLoggedIn) {
     handleShareBindOnLogin().catch((err) => {

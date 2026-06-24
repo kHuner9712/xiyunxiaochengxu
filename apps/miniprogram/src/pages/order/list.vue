@@ -25,7 +25,7 @@
           <text class="order-status" :class="getStatusClass(order.status)">{{ formatOrderStatus(order.status) }}</text>
         </view>
         <view v-for="item in order.items" :key="item.skuId" class="order-product">
-          <image class="product-image" :src="item.productImage" mode="aspectFill" />
+          <image class="product-image" :src="item.productImage" mode="aspectFit" />
           <view class="product-info">
             <text class="product-name">{{ item.productName }}</text>
             <text class="product-sku">{{ item.skuName }}</text>

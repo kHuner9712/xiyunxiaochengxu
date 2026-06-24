@@ -3,10 +3,10 @@
     <view class="hero-stage">
       <swiper class="image-swiper" indicator-dots circular :interval="4000" @change="onImageChange">
         <swiper-item v-if="product.videoUrl">
-          <video class="product-video" :src="product.videoUrl" controls :show-center-play-btn="true" :show-play-btn="true" object-fit="cover" />
+          <video class="product-video" :src="product.videoUrl" controls :show-center-play-btn="true" :show-play-btn="true" object-fit="contain" />
         </swiper-item>
         <swiper-item v-for="(img, index) in product.images" :key="index">
-          <image class="product-image" :src="img" mode="aspectFill" @tap="previewImage(index)" />
+          <image class="product-image" :src="img" mode="aspectFit" @tap="previewImage(index)" />
         </swiper-item>
       </swiper>
       <view v-if="product.images.length || product.videoUrl" class="image-counter">
@@ -188,7 +188,7 @@
           <text class="popup-subtitle">确认后继续{{ skuAction === 'buy' ? '购买' : skuAction === 'cart' ? '加入购物车' : '查看规格' }}</text>
         </view>
         <view class="sku-header">
-          <image class="sku-image" :src="currentSku?.image || primaryImage" mode="aspectFill" />
+          <image class="sku-image" :src="currentSku?.image || primaryImage" mode="aspectFit" />
           <view class="sku-summary">
             <view class="sku-price">
               <PriceDisplay :price="currentSku?.price || product.price" />

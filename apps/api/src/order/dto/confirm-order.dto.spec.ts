@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { describe, it, expect } from '@jest/globals';
 import { plainToInstance } from 'class-transformer';
-import { validateSync } from 'class-validator';
+import { IsOptional, validateSync } from 'class-validator';
 import { ConfirmOrderDto } from './confirm-order.dto';
 import { CreateOrderDto } from './create-order.dto';
 

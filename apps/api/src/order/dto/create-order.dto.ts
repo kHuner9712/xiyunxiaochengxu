@@ -61,6 +61,31 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['direct', 'user_referral', 'merchant_referral', 'campaign'])
+  sourceType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  sourceCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+$/)
+  shareRecordId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+$/)
+  shareCampaignId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+$/)
+  referrerUserId?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(200)
   remark?: string;
 

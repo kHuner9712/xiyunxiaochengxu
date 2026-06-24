@@ -5,23 +5,65 @@ interface ShareParams {
   shareRecordId?: string
   campaignId?: string
   sceneCode?: string
+  sourceType?: string
+  sourceCode?: string
+  referrerUserId?: string
+}
+
+export interface PromotionSourcePayload {
+  sourceType?: string
+  sourceCode?: string
+  shareRecordId?: string
+  shareCampaignId?: string
+  referrerUserId?: string
+}
+
+const PROMOTION_SOURCE_STORAGE_KEY = 'xy_promotion_source'
+
+function normalizeString(value: any): string | undefined {
+  if (value === undefined || value === null) return undefined
+  const text = String(value).trim()
+  return text ? text : undefined
+}
+
+function inferSourceType(params: ShareParams): string | undefined {
+  if (params.sourceType) return params.sourceType
+  if (params.inviter || params.shareRecordId) return 'user_referral'
+  if (params.campaignId) return 'campaign'
+  if (params.sourceCode) return 'merchant_referral'
+  return undefined
 }
 
 let isBindingInvite = false
 
 export function parseShareParams(query: Record<string, any>): ShareParams {
-  return {
-    inviter: query.inviter || undefined,
-    shareRecordId: query.shareRecordId || undefined,
-    campaignId: query.campaignId || undefined,
-    sceneCode: query.scene || undefined,
+  const sourceCode = normalizeString(
+    query.sourceCode ||
+    query.ref ||
+    query.sceneCode ||
+    query.promotionCode ||
+    query.merchantCode
+  )
+  const inviter = normalizeString(query.inviter || query.referrerUserId)
+  const campaignId = normalizeString(query.campaignId || query.shareCampaignId)
+  const params: ShareParams = {
+    inviter,
+    shareRecordId: normalizeString(query.shareRecordId),
+    campaignId,
+    sceneCode: normalizeString(query.scene),
+    sourceType: normalizeString(query.sourceType),
+    sourceCode,
+    referrerUserId: inviter,
   }
+  params.sourceType = inferSourceType(params)
+  return params
 }
 
 export function handleShareVisit(params: ShareParams) {
   if (params.inviter || params.shareRecordId || params.sceneCode) {
     recordVisit(params).catch(() => {})
   }
+  savePromotionSource(params)
 }
 
 export async function handleShareBindOnLogin() {
@@ -55,5 +97,44 @@ export async function handleShareBindOnLogin() {
 export function savePendingInvite(params: ShareParams) {
   if (params.inviter || params.shareRecordId || params.campaignId) {
     uni.setStorageSync('pending_invite', JSON.stringify(params))
+  }
+  savePromotionSource(params)
+}
+
+export function savePromotionSource(params: ShareParams) {
+  const sourceType = inferSourceType(params)
+  const sourceCode = params.sourceCode
+  const shareRecordId = params.shareRecordId
+  const shareCampaignId = params.campaignId
+  const referrerUserId = params.referrerUserId || params.inviter
+
+  if (!sourceType && !sourceCode && !shareRecordId && !shareCampaignId && !referrerUserId) return
+
+  const payload: PromotionSourcePayload = {
+    sourceType: sourceType || 'direct',
+    sourceCode,
+    shareRecordId,
+    shareCampaignId,
+    referrerUserId,
+  }
+
+  uni.setStorageSync(PROMOTION_SOURCE_STORAGE_KEY, JSON.stringify(payload))
+}
+
+export function getPromotionSourceForOrder(): PromotionSourcePayload {
+  const raw = uni.getStorageSync(PROMOTION_SOURCE_STORAGE_KEY)
+  if (!raw) return {}
+  try {
+    const data = JSON.parse(raw)
+    return {
+      sourceType: normalizeString(data.sourceType),
+      sourceCode: normalizeString(data.sourceCode),
+      shareRecordId: normalizeString(data.shareRecordId),
+      shareCampaignId: normalizeString(data.shareCampaignId),
+      referrerUserId: normalizeString(data.referrerUserId),
+    }
+  } catch {
+    uni.removeStorageSync(PROMOTION_SOURCE_STORAGE_KEY)
+    return {}
   }
 }

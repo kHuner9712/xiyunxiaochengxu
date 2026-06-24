@@ -1,7 +1,7 @@
 <template>
   <view class="product-card" @tap="handleTap">
     <view class="product-image-wrap">
-      <image class="product-image" :src="imageSrc" mode="aspectFill" />
+      <image class="product-image" :src="imageSrc" mode="aspectFit" />
       <view class="image-glow"></view>
       <view v-if="displayTags.length" class="product-tag">{{ displayTags[0] }}</view>
     </view>

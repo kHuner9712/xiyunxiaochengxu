@@ -43,6 +43,11 @@ export function createOrder(data: {
   items: OrderItemInput[]
   couponId?: string
   pointsDeduct?: number
+  sourceType?: string
+  sourceCode?: string
+  shareRecordId?: string
+  shareCampaignId?: string
+  referrerUserId?: string
   remark?: string
 }) {
   return post<{

@@ -133,6 +133,9 @@ export class ProductService {
         data: {
           name: dto.name,
           categoryId: BigInt(dto.categoryId),
+          productType: dto.productType ?? 'physical',
+          fulfillmentType: dto.fulfillmentType ?? 'delivery',
+          businessCategory: dto.businessCategory ?? 'other',
           brandId: dto.brandId ? BigInt(dto.brandId) : null,
           supplierId: dto.supplierId ? BigInt(dto.supplierId) : null,
           mainImage: dto.mainImage,
@@ -191,6 +194,9 @@ export class ProductService {
       const updateData: any = {};
       if (dto.name !== undefined) updateData.name = dto.name;
       if (dto.categoryId !== undefined) updateData.categoryId = BigInt(dto.categoryId);
+      if (dto.productType !== undefined) updateData.productType = dto.productType;
+      if (dto.fulfillmentType !== undefined) updateData.fulfillmentType = dto.fulfillmentType;
+      if (dto.businessCategory !== undefined) updateData.businessCategory = dto.businessCategory;
       if (dto.brandId !== undefined) updateData.brandId = dto.brandId ? BigInt(dto.brandId) : null;
       if (dto.supplierId !== undefined) updateData.supplierId = dto.supplierId ? BigInt(dto.supplierId) : null;
       if (dto.mainImage !== undefined) updateData.mainImage = dto.mainImage;
@@ -314,13 +320,16 @@ export class ProductService {
     const categoryName = String(product.category?.name || '').trim();
     const categoryConfig = this.normalizeCategoryComplianceConfig(product.category?.complianceConfig);
     const inferred = this.inferComplianceFlagsByCategory(categoryName);
+    const isVirtualServiceProduct =
+      product.productType === 'virtual' &&
+      product.businessCategory !== 'food';
     const isFood = compliance.isFood === true || categoryConfig.isFood === true || inferred.isFood;
     const isHealthSupplement =
       compliance.isHealthSupplement === true || categoryConfig.isHealthSupplement === true || inferred.isHealthSupplement;
     const isInfantFormula =
       compliance.isInfantFormula === true || categoryConfig.isInfantFormula === true || inferred.isInfantFormula;
 
-    if (compliance.isRegulated === false && [isFood, isHealthSupplement, isInfantFormula].some(Boolean)) {
+    if (compliance.isRegulated === false && [isFood, isHealthSupplement, isInfantFormula].some(Boolean) && !isVirtualServiceProduct) {
       throw new BadRequestException(
         '类目疑似食品/保健食品/婴幼儿配方奶粉，不允许标记为普通非高合规商品，请按实际商品类型完善合规信息',
       );

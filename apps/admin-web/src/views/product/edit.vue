@@ -21,6 +21,35 @@
           />
         </el-form-item>
 
+        <el-form-item label="商品形态">
+          <el-select v-model="form.productType" placeholder="请选择商品形态">
+            <el-option label="实物" value="physical" />
+            <el-option label="非实物/服务/卡项" value="virtual" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="履约方式">
+          <el-select v-model="form.fulfillmentType" placeholder="请选择履约方式">
+            <el-option label="快递配送" value="delivery" />
+            <el-option label="到店/自提/到店服务" value="pickup" />
+            <el-option label="线上服务" value="online" />
+            <el-option label="无需履约/后台处理" value="none" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="业务分类">
+          <el-select v-model="form.businessCategory" placeholder="请选择业务分类">
+            <el-option label="食品类" value="food" />
+            <el-option label="衣服类" value="clothing" />
+            <el-option label="摄影" value="photography" />
+            <el-option label="月子中心" value="postpartum_center" />
+            <el-option label="普拉提" value="pilates" />
+            <el-option label="心理咨询" value="counseling" />
+            <el-option label="卡项包" value="card_package" />
+            <el-option label="其他" value="other" />
+          </el-select>
+        </el-form-item>
+
         <el-form-item label="品牌">
           <el-select v-model="form.brandId" clearable>
             <el-option v-for="b in brandList" :key="b.id" :label="b.name" :value="b.id" />
@@ -211,6 +240,9 @@ const form = reactive({
   id: undefined as number | undefined,
   name: '',
   categoryId: undefined as number | undefined,
+  productType: 'physical',
+  fulfillmentType: 'delivery',
+  businessCategory: 'other',
   brandId: undefined as number | undefined,
   supplierId: undefined as number | undefined,
   mainImage: '',
@@ -254,6 +286,26 @@ const rules: FormRules = {
 
 function sanitizeUrl(url: unknown): string {
   return typeof url === 'string' && url.trim() && url.trim() !== 'undefined' ? url.trim() : ''
+}
+
+
+function extractUploadUrl(res: any): string {
+  return sanitizeUrl(
+    res?.url ||
+    res?.data?.url ||
+    res?.data?.data?.url ||
+    res?.response?.url ||
+    res?.response?.data?.url ||
+    res?.response?.data?.data?.url ||
+    ''
+  )
+}
+
+function syncMainImageAfterImagesChanged() {
+  const firstImage = form.images[0] || ''
+  if (!form.mainImage || !form.images.includes(form.mainImage)) {
+    form.mainImage = firstImage
+  }
 }
 
 function sanitizeUrlList(values: unknown): string[] {
@@ -364,7 +416,11 @@ function validateComplianceBeforeSave(): boolean {
   const hitRiskCategoryByConfig = categoryConfig.isFood || categoryConfig.isHealthSupplement || categoryConfig.isInfantFormula
   const hitRiskCategoryByKeyword = /食品|辅食|零食|奶粉|营养|保健/i.test(currentCategoryName.value)
   const hitRiskCategory = hitRiskCategoryByConfig || hitRiskCategoryByKeyword
-  if (form.complianceType === 'normal' && hitRiskCategory) {
+  const isVirtualServiceProduct =
+    form.productType === 'virtual' &&
+    form.businessCategory !== 'food'
+
+  if (form.complianceType === 'normal' && hitRiskCategory && !isVirtualServiceProduct) {
     ElMessage.error('当前类目疑似高合规商品，不能选择“普通商品”，请改为食品/保健/奶粉或高级模式')
     return false
   }
@@ -453,21 +509,46 @@ async function handleUploadVideo(options: any) {
 }
 
 function handleRemoveImage(file: any) {
-  const idx = form.images.indexOf(file.url)
+  const targetUrl = sanitizeUrl(file.rawUrl || file.url || file.response?.url || file.response?.data?.url || file.response?.data?.data?.url)
+  const idx = form.images.indexOf(targetUrl)
   if (idx > -1) form.images.splice(idx, 1)
+  imageFileList.value = imageFileList.value.filter((item: any) => sanitizeUrl(item.rawUrl || item.url) !== targetUrl)
+  syncMainImageAfterImagesChanged()
 }
 
 async function handleUploadSkuImage(options: any, row: any) {
-  const res = await uploadApi.uploadImage(options.file)
-  row.image = sanitizeUrl(res?.data?.url)
+  try {
+    const res = await uploadApi.uploadImage(options.file, 'product')
+    const uploadedUrl = extractUploadUrl(res)
+    if (!uploadedUrl) {
+      ElMessage.error('上传成功但未返回图片地址')
+      options.onError?.(new Error('上传成功但未返回图片地址'))
+      return
+    }
+    row.image = uploadedUrl
+    options.onSuccess?.(res)
+  } catch (error) {
+    options.onError?.(error)
+    ElMessage.error('SKU图片上传失败')
+  }
 }
 
 async function handleUploadCertImage(options: any) {
-  const res = await uploadApi.uploadImage(options.file, 'cert')
-  const uploadedUrl = sanitizeUrl(res?.data?.url)
-  if (!uploadedUrl) return
-  form.compliance.certImages.push(uploadedUrl)
-  certImageFileList.value.push({ url: await resolvePrivateFileUrl(uploadedUrl), rawUrl: uploadedUrl })
+  try {
+    const res = await uploadApi.uploadImage(options.file, 'cert')
+    const uploadedUrl = extractUploadUrl(res)
+    if (!uploadedUrl) {
+      ElMessage.error('上传成功但未返回资质图片地址')
+      options.onError?.(new Error('上传成功但未返回资质图片地址'))
+      return
+    }
+    form.compliance.certImages.push(uploadedUrl)
+    certImageFileList.value.push({ url: await resolvePrivateFileUrl(uploadedUrl), rawUrl: uploadedUrl })
+    options.onSuccess?.(res)
+  } catch (error) {
+    options.onError?.(error)
+    ElMessage.error('资质图片上传失败')
+  }
 }
 
 function handleRemoveCertImage(file: any) {
@@ -487,6 +568,9 @@ async function fetchDetail(id: number) {
     id: Number(d.id),
     name: d.name || '',
     categoryId: d.categoryId ? Number(d.categoryId) : undefined,
+    productType: d.productType || 'physical',
+    fulfillmentType: d.fulfillmentType || 'delivery',
+    businessCategory: d.businessCategory || 'other',
     brandId: d.brandId ? Number(d.brandId) : undefined,
     supplierId: d.supplierId ? Number(d.supplierId) : undefined,
     mainImage: sanitizeUrl(d.mainImage),
@@ -541,6 +625,9 @@ async function handleSubmit() {
     const payload = {
       name: form.name,
       categoryId: form.categoryId,
+      productType: form.productType,
+      fulfillmentType: form.fulfillmentType,
+      businessCategory: form.businessCategory,
       brandId: form.brandId,
       supplierId: form.supplierId,
       mainImage: sanitizeUrl(form.mainImage),

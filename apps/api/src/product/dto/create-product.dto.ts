@@ -11,6 +11,7 @@ import {
   Max,
   ValidateIf,
   Validate,
+  IsIn,
   ValidatorConstraint,
   ValidatorConstraintInterface,
   ValidationArguments,
@@ -86,6 +87,21 @@ export class CreateProductDto {
   @IsInt()
   @Min(1)
   categoryId!: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['physical', 'virtual'])
+  productType?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['delivery', 'pickup', 'online', 'none'])
+  fulfillmentType?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['food', 'clothing', 'photography', 'postpartum_center', 'pilates', 'counseling', 'card_package', 'other'])
+  businessCategory?: string;
 
   @IsOptional()
   @Type(() => Number)

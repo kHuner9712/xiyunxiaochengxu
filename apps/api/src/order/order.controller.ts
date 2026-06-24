@@ -41,6 +41,11 @@ export class WeappOrderController {
       fulfillmentType: dto.fulfillmentType || undefined,
       couponId: dto.couponId || undefined,
       pointsDeduct: dto.pointsDeduct,
+      sourceType: dto.sourceType,
+      sourceCode: dto.sourceCode,
+      shareRecordId: dto.shareRecordId,
+      shareCampaignId: dto.shareCampaignId,
+      referrerUserId: dto.referrerUserId,
       remark: dto.remark,
       items: dto.items.map((i) => ({ skuId: i.skuId, quantity: i.quantity })),
     });

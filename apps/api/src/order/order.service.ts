@@ -24,6 +24,20 @@ import { COUPON_STATUS, PAYMENT_STATUS } from '../common/constants/payment';
 import { BusinessEventService } from '../common/business-event.service';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 
+const DEFAULT_COVER_MARKER = '/uploads/static/default-cover.png';
+
+function pickOrderProductImage(skuImage?: string | null, productMainImage?: string | null): string {
+  const cleanSkuImage = typeof skuImage === 'string' ? skuImage.trim() : '';
+  const cleanProductMainImage = typeof productMainImage === 'string' ? productMainImage.trim() : '';
+
+  const candidate =
+    cleanSkuImage && !cleanSkuImage.includes(DEFAULT_COVER_MARKER)
+      ? cleanSkuImage
+      : cleanProductMainImage;
+
+  return normalizeAssetUrl(candidate || '');
+}
+
 @Injectable()
 export class OrderService {
   private readonly logger = new Logger(OrderService.name);
@@ -84,7 +98,7 @@ export class OrderService {
         productName: sku.product.name,
         skuSpecs: sku.specs,
         skuSpecText: formatSkuSpecs(sku.specs),
-        productImage: normalizeAssetUrl(sku.image || sku.product.mainImage),
+        productImage: pickOrderProductImage(sku.image, sku.product.mainImage),
         price: sku.price,
         originalPrice: sku.originalPrice,
         quantity: item.quantity,
@@ -167,6 +181,11 @@ export class OrderService {
     fulfillmentType?: string;
     couponId?: string;
     pointsDeduct?: number;
+    sourceType?: string;
+    sourceCode?: string;
+    shareRecordId?: string;
+    shareCampaignId?: string;
+    referrerUserId?: string;
     remark?: string;
     items: { skuId: string; quantity: number }[];
   }) {
@@ -218,7 +237,7 @@ export class OrderService {
         skuId: sku.id,
         productName: sku.product.name,
         skuSpecs: sku.specs,
-        productImage: sku.image || sku.product.mainImage,
+        productImage: pickOrderProductImage(sku.image, sku.product.mainImage),
         price: sku.price,
         originalPrice: sku.originalPrice,
         quantity: item.quantity,
@@ -275,6 +294,12 @@ export class OrderService {
 
     const isZeroPay = payAmount === 0;
     const needPickupCode = isZeroPay && fulfillmentType === 'pickup';
+    const allowedSourceTypes = new Set(['direct', 'user_referral', 'merchant_referral', 'campaign']);
+    const sourceType = data.sourceType && allowedSourceTypes.has(data.sourceType) ? data.sourceType : 'direct';
+    const sourceCode = data.sourceCode?.trim() || null;
+    const shareRecordId = data.shareRecordId ? BigInt(data.shareRecordId) : null;
+    const shareCampaignId = data.shareCampaignId ? BigInt(data.shareCampaignId) : null;
+    const referrerUserId = data.referrerUserId ? BigInt(data.referrerUserId) : null;
 
     const order = await this.prisma.$transaction(async (tx) => {
       for (const check of skuStockChecks) {
@@ -363,6 +388,11 @@ export class OrderService {
           couponAmount,
           activityDiscountAmount,
           fulfillmentType,
+          sourceType,
+          sourceCode,
+          shareRecordId,
+          shareCampaignId,
+          referrerUserId,
           ...(fulfillmentType === 'delivery' ? {
             receiverName: address.receiverName,
             receiverPhone: address.receiverPhone,

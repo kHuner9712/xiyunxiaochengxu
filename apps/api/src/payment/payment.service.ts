@@ -1042,7 +1042,7 @@ export class PaymentService {
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const nonceStr = crypto.randomBytes(16).toString('hex');
-    const signMessage = `GET\n/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${mchId}\n${timestamp}\n${nonceStr}\n`;
+    const signMessage = `GET\n/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${mchId}\n${timestamp}\n${nonceStr}\n\n`;
     const signature = this.signRequest(signMessage);
 
     try {
@@ -1778,7 +1778,7 @@ export class PaymentService {
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const nonceStr = crypto.randomBytes(16).toString('hex');
-    const signMessage = `GET\n/v3/refund/domestic/refunds/${outRefundNo}?mchid=${mchId}\n${timestamp}\n${nonceStr}\n`;
+    const signMessage = `GET\n/v3/refund/domestic/refunds/${outRefundNo}?mchid=${mchId}\n${timestamp}\n${nonceStr}\n\n`;
     const signature = this.signRequest(signMessage);
 
     const response = await axios.get(`https://api.mch.weixin.qq.com/v3/refund/domestic/refunds/${outRefundNo}?mchid=${mchId}`, {

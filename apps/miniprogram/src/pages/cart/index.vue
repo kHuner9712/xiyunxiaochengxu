@@ -39,7 +39,7 @@
           </view>
         </view>
         <view class="item-image-wrap" @tap="goDetail(item.productId)">
-          <image class="item-image" :src="item.productImage" mode="aspectFill" />
+          <image class="item-image" :src="item.productImage" mode="aspectFit" />
           <text class="item-image-tag">自营</text>
         </view>
         <view class="item-info">

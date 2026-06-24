@@ -76,7 +76,7 @@
       </view>
       <view v-for="item in orderItems" :key="item.skuId" class="product-item">
         <view class="product-image-wrap">
-          <image class="product-image" :src="item.productImage || '/static/placeholder.png'" mode="aspectFill" />
+          <image class="product-image" :src="item.productImage || '/static/placeholder.png'" mode="aspectFit" />
         </view>
         <view class="product-info">
           <text class="product-name">{{ item.productName || '商品信息加载中...' }}</text>
@@ -225,6 +225,7 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { createOrder, previewOrder, type OrderPreview, type OrderPreviewItem } from '@/api/order'
+import { getPromotionSourceForOrder } from '@/utils/share'
 import { getPickupStoreList, type PickupStoreItem } from '@/api/pickup-store'
 import { getAddressList, type AddressItem } from '@/api/address'
 import { getAvailableCoupons, type MyCouponItem } from '@/api/coupon'
@@ -501,6 +502,7 @@ async function handleSubmit() {
   }
   try {
     submitting.value = true
+    const promotionSource = getPromotionSourceForOrder()
     const orderData = {
       fulfillmentType: fulfillmentType.value,
       addressId: fulfillmentType.value === 'delivery' ? address.value!.id : undefined,
@@ -512,6 +514,7 @@ async function handleSubmit() {
       })),
       couponId: selectedCoupon.value?.id,
       pointsDeduct: usePoints.value ? requestedPointsDeduct.value : 0,
+      ...promotionSource,
       remark: remark.value
     }
     const order = await createOrder(orderData)

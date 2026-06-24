@@ -244,6 +244,9 @@ model Product {
   id              BigInt    @id @default(autoincrement()) @map("id")
   name            String    @db.VarChar(200) @map("name")
   categoryId      BigInt    @map("category_id")
+  productType     String    @default("physical") @db.VarChar(20) @map("product_type")
+  fulfillmentType String    @default("delivery") @db.VarChar(20) @map("fulfillment_type")
+  businessCategory String   @default("other") @db.VarChar(50) @map("business_category")
   brandId         BigInt?   @map("brand_id")
   supplierId      BigInt?   @map("supplier_id")
   mainImage       String?   @db.VarChar(500) @map("main_image")
@@ -277,6 +280,9 @@ model Product {
   carts        Cart[]
 
   @@index([categoryId], name: "idx_category_id")
+  @@index([productType], name: "idx_product_type")
+  @@index([fulfillmentType], name: "idx_product_fulfillment_type")
+  @@index([businessCategory], name: "idx_business_category")
   @@index([brandId], name: "idx_brand_id")
   @@index([supplierId], name: "idx_supplier_id")
   @@index([status], name: "idx_status")
@@ -437,6 +443,11 @@ model Order {
   autoCloseAt          DateTime?   @map("auto_close_at")
   autoCompleteAt       DateTime?   @map("auto_complete_at")
   source               String?     @default("miniprogram") @db.VarChar(20) @map("source")
+  sourceType           String      @default("direct") @db.VarChar(30) @map("source_type")
+  sourceCode           String?     @db.VarChar(64) @map("source_code")
+  shareRecordId        BigInt?     @map("share_record_id")
+  shareCampaignId      BigInt?     @map("share_campaign_id")
+  referrerUserId       BigInt?     @map("referrer_user_id")
   fulfillmentType      String      @default("delivery") @db.VarChar(20) @map("fulfillment_type")
   pickupStoreId        BigInt?     @map("pickup_store_id")
   pickupStoreName      String?     @db.VarChar(100) @map("pickup_store_name")
@@ -462,6 +473,11 @@ model Order {
   @@index([status], name: "idx_status")
   @@index([createdAt], name: "idx_created_at")
   @@index([paidAt], name: "idx_paid_at")
+  @@index([sourceType], name: "idx_order_source_type")
+  @@index([sourceCode], name: "idx_order_source_code")
+  @@index([shareRecordId], name: "idx_order_share_record_id")
+  @@index([shareCampaignId], name: "idx_order_share_campaign_id")
+  @@index([referrerUserId], name: "idx_order_referrer_user_id")
   @@index([fulfillmentType], name: "idx_fulfillment_type")
   @@unique([pickupCode], name: "uk_pickup_code")
   @@map("orders")
@@ -698,6 +714,25 @@ model HomeSection {
   @@index([sortOrder], name: "idx_sort_order")
   @@index([status], name: "idx_status")
   @@map("home_sections")
+}
+
+model MerchantPromotionSource {
+  id            BigInt    @id @default(autoincrement()) @map("id")
+  name          String    @db.VarChar(100) @map("name")
+  promotionCode String   @db.VarChar(64) @map("promotion_code")
+  contactName   String?  @db.VarChar(50) @map("contact_name")
+  contactPhone  String?  @db.VarChar(20) @map("contact_phone")
+  scene         String?   @db.VarChar(50) @map("scene")
+  remark        String?   @db.VarChar(500) @map("remark")
+  status        Int       @default(1) @map("status")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  @@unique([promotionCode], name: "uk_merchant_promotion_code")
+  @@index([status], name: "idx_merchant_promotion_status")
+  @@index([scene], name: "idx_merchant_promotion_scene")
+  @@map("merchant_promotion_sources")
 }
 
 model ShareRecord {
