@@ -4,7 +4,7 @@
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center">
           <span>裂变活动</span>
-          <el-button type="primary" @click="showCreateDialog = true">创建活动</el-button>
+          <el-button type="primary" @click="openCreateDialog">创建活动</el-button>
         </div>
       </template>
 
@@ -78,7 +78,23 @@
               <el-input v-model.number="form.inviterPoints" placeholder="积分数量" style="margin-bottom: 8px" />
             </div>
             <div v-if="form.rewardType === 'coupon' || form.rewardType === 'both'">
-              <el-input v-model="form.inviterCouponId" placeholder="优惠券ID" style="margin-bottom: 8px" />
+              <el-select
+                v-model="form.inviterCouponId"
+                filterable
+                remote
+                reserve-keyword
+                :remote-method="searchCoupons"
+                :loading="couponLoading"
+                placeholder="请输入优惠券名称搜索"
+                style="width: 100%; margin-bottom: 8px"
+              >
+                <el-option
+                  v-for="item in couponOptions"
+                  :key="item.id"
+                  :label="`${item.name}（${item.type === 1 ? '满减' : '折扣'}·${item.value}${item.type === 1 ? '元' : '折'}）`"
+                  :value="String(item.id)"
+                />
+              </el-select>
             </div>
           </div>
         </el-form-item>
@@ -88,7 +104,23 @@
               <el-input v-model.number="form.inviteePoints" placeholder="积分数量" style="margin-bottom: 8px" />
             </div>
             <div v-if="form.rewardType === 'coupon' || form.rewardType === 'both'">
-              <el-input v-model="form.inviteeCouponId" placeholder="优惠券ID" style="margin-bottom: 8px" />
+              <el-select
+                v-model="form.inviteeCouponId"
+                filterable
+                remote
+                reserve-keyword
+                :remote-method="searchCoupons"
+                :loading="couponLoading"
+                placeholder="请输入优惠券名称搜索"
+                style="width: 100%; margin-bottom: 8px"
+              >
+                <el-option
+                  v-for="item in couponOptions"
+                  :key="item.id"
+                  :label="`${item.name}（${item.type === 1 ? '满减' : '折扣'}·${item.value}${item.type === 1 ? '元' : '折'}）`"
+                  :value="String(item.id)"
+                />
+              </el-select>
             </div>
           </div>
         </el-form-item>
@@ -111,6 +143,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { shareApi } from '@/api/share'
+import { couponApi } from '@/api/coupon'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -119,6 +152,10 @@ const total = ref(0)
 const page = ref(1)
 const showCreateDialog = ref(false)
 const editingId = ref('')
+
+// 优惠券下拉选项
+const couponOptions = ref<any[]>([])
+const couponLoading = ref(false)
 
 const typeMap: Record<string, string> = {
   invite_new_user: '邀新有礼',
@@ -145,6 +182,40 @@ const form = reactive({
   endTime: '',
 })
 
+// 加载优惠券列表（前 100 条），支持关键词搜索
+async function loadCoupons(keyword?: string) {
+  couponLoading.value = true
+  try {
+    const res = await couponApi.getList({ page: 1, pageSize: 100, name: keyword, status: 1 })
+    couponOptions.value = res.data?.list || []
+  } catch {
+    couponOptions.value = []
+  } finally {
+    couponLoading.value = false
+  }
+}
+
+async function searchCoupons(query: string) {
+  await loadCoupons(query || undefined)
+}
+
+function openCreateDialog() {
+  editingId.value = ''
+  Object.assign(form, {
+    name: '',
+    type: 'invite_new_user',
+    rewardType: 'points',
+    inviterPoints: 0,
+    inviterCouponId: '',
+    inviteePoints: 0,
+    inviteeCouponId: '',
+    startTime: '',
+    endTime: '',
+  })
+  loadCoupons()
+  showCreateDialog.value = true
+}
+
 async function fetchList() {
   loading.value = true
   try {
@@ -163,12 +234,14 @@ function handleEdit(row: any) {
     type: row.type,
     rewardType: row.rewardType,
     inviterPoints: row.inviterRewardConfig?.points || 0,
-    inviterCouponId: row.inviterRewardConfig?.couponId || '',
+    inviterCouponId: row.inviterRewardConfig?.couponId ? String(row.inviterRewardConfig.couponId) : '',
     inviteePoints: row.inviteeRewardConfig?.points || 0,
-    inviteeCouponId: row.inviteeRewardConfig?.couponId || '',
+    inviteeCouponId: row.inviteeRewardConfig?.couponId ? String(row.inviteeRewardConfig.couponId) : '',
     startTime: row.startTime,
     endTime: row.endTime,
   })
+  // 编辑时加载优惠券列表，确保已选优惠券能回显
+  loadCoupons()
   showCreateDialog.value = true
 }
 

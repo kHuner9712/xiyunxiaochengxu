@@ -55,12 +55,85 @@
         style="margin-top: 16px; justify-content: flex-end"
       />
     </el-card>
+
+    <el-card>
+      <template #header><span>奖励记录</span></template>
+      <div style="margin-bottom: 12px; display: flex; gap: 12px; flex-wrap: wrap">
+        <el-select v-model="rewardFilter.rewardType" placeholder="奖励类型" clearable style="width: 140px">
+          <el-option label="积分" value="points" />
+          <el-option label="优惠券" value="coupon" />
+          <el-option label="实物" value="physical" />
+        </el-select>
+        <el-select v-model="rewardFilter.status" placeholder="状态" clearable style="width: 140px">
+          <el-option label="待领取" value="pending" />
+          <el-option label="已发放" value="issued" />
+          <el-option label="已领取" value="claimed" />
+          <el-option label="已取消" value="cancelled" />
+        </el-select>
+        <el-select v-model="rewardFilter.sourceType" placeholder="来源" clearable style="width: 140px">
+          <el-option label="注册奖励" value="register" />
+          <el-option label="首单奖励" value="first_paid_order" />
+          <el-option label="邀请人数奖励" value="invite_count" />
+        </el-select>
+        <el-button type="primary" @click="fetchRewardList">查询</el-button>
+      </div>
+      <el-table :data="rewardList" v-loading="rewardLoading" size="small">
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column label="获奖用户" width="140">
+          <template #default="{ row }">
+            <div>{{ row.userName || row.userId }}</div>
+            <div style="font-size: 12px; color: #999">{{ row.userPhone }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="被邀请人" width="140">
+          <template #default="{ row }">
+            <span v-if="row.inviteeUserId">{{ row.inviteeName || row.inviteeUserId }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="奖励类型" width="100">
+          <template #default="{ row }">
+            <el-tag size="small">{{ rewardTypeMap[row.rewardType] || row.rewardType }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="rewardName" label="奖励名称" min-width="160" />
+        <el-table-column label="详情" width="140">
+          <template #default="{ row }">
+            <span v-if="row.rewardType === 'points'">{{ row.points }} 积分</span>
+            <span v-else-if="row.rewardType === 'coupon'">{{ row.couponName || row.couponId }}</span>
+            <span v-else>实物</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="rewardStatusTagType(row.status)" size="small">{{ rewardStatusMap[row.status] || row.status }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="来源" width="110">
+          <template #default="{ row }">{{ rewardSourceMap[row.sourceType] || row.sourceType }}</template>
+        </el-table-column>
+        <el-table-column label="发放时间" width="160">
+          <template #default="{ row }">{{ row.issuedAt?.replace('T', ' ').substring(0, 16) || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="领取时间" width="160">
+          <template #default="{ row }">{{ row.claimedAt?.replace('T', ' ').substring(0, 16) || '-' }}</template>
+        </el-table-column>
+      </el-table>
+      <el-pagination
+        v-model:current-page="rewardPage"
+        :page-size="10"
+        :total="rewardTotal"
+        layout="total, prev, pager, next"
+        @current-change="fetchRewardList"
+        style="margin-top: 16px; justify-content: flex-end"
+      />
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { shareApi } from '@/api/share'
+import { ref, reactive, onMounted } from 'vue'
+import { shareApi, type InviteRewardItem } from '@/api/share'
 
 const stats = ref({
   totalShares: 0,
@@ -93,8 +166,64 @@ async function fetchInviteList() {
   }
 }
 
+// 奖励记录
+const rewardLoading = ref(false)
+const rewardList = ref<InviteRewardItem[]>([])
+const rewardTotal = ref(0)
+const rewardPage = ref(1)
+const rewardFilter = reactive({
+  rewardType: '',
+  status: '',
+  sourceType: '',
+})
+
+const rewardTypeMap: Record<string, string> = {
+  points: '积分',
+  coupon: '优惠券',
+  physical: '实物',
+}
+
+const rewardStatusMap: Record<string, string> = {
+  pending: '待领取',
+  issued: '已发放',
+  claimed: '已领取',
+  cancelled: '已取消',
+}
+
+const rewardSourceMap: Record<string, string> = {
+  register: '注册奖励',
+  first_paid_order: '首单奖励',
+  invite_count: '邀请人数奖励',
+}
+
+function rewardStatusTagType(status: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
+  if (status === 'issued') return 'success'
+  if (status === 'pending') return 'warning'
+  if (status === 'claimed') return 'info'
+  if (status === 'cancelled') return 'danger'
+  return 'primary'
+}
+
+async function fetchRewardList() {
+  rewardLoading.value = true
+  try {
+    const res = await shareApi.getRewards({
+      page: rewardPage.value,
+      pageSize: 10,
+      rewardType: rewardFilter.rewardType || undefined,
+      status: rewardFilter.status || undefined,
+      sourceType: rewardFilter.sourceType || undefined,
+    })
+    rewardList.value = res.data?.list || []
+    rewardTotal.value = res.data?.total || 0
+  } catch {} finally {
+    rewardLoading.value = false
+  }
+}
+
 onMounted(() => {
   fetchStats()
   fetchInviteList()
+  fetchRewardList()
 })
 </script>

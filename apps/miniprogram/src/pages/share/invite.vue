@@ -19,6 +19,26 @@
 
     <view class="action-section">
       <button class="share-btn" open-type="share">邀请好友</button>
+      <view class="share-product-entry" @click="goProductList">
+        <text class="share-product-text">分享指定商品</text>
+        <text class="share-product-arrow">›</text>
+      </view>
+    </view>
+
+    <view v-if="rewards.length" class="rewards-section card">
+      <text class="section-title">我的奖励</text>
+      <view v-for="item in rewards" :key="item.id" class="reward-item">
+        <view class="reward-icon" :class="item.rewardType">
+          <text class="reward-icon-text">{{ rewardTypeIcon(item.rewardType) }}</text>
+        </view>
+        <view class="reward-info">
+          <text class="reward-name">{{ item.rewardName }}</text>
+          <text class="reward-source">{{ sourceTypeText(item.sourceType) }} · {{ formatTime(item.createdAt) }}</text>
+        </view>
+        <view class="reward-status" :class="item.status">
+          <text class="status-text">{{ rewardStatusText(item.status) }}</text>
+        </view>
+      </view>
     </view>
 
     <view v-if="stats.recentInvites.length" class="list-section card">
@@ -44,7 +64,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { onShareAppMessage } from '@dcloudio/uni-app'
-import { getMyShareStats, type MyShareStats } from '@/api/share'
+import { getMyShareStats, getMyRewards, type MyShareStats, type MyRewardItem } from '@/api/share'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
@@ -55,9 +75,18 @@ const stats = ref<MyShareStats>({
   recentInvites: []
 })
 
+const rewards = ref<MyRewardItem[]>([])
+
 async function loadStats() {
   try {
     stats.value = await getMyShareStats()
+  } catch {}
+}
+
+async function loadRewards() {
+  try {
+    const res = await getMyRewards({ page: 1, pageSize: 20 })
+    rewards.value = res.list || []
   } catch {}
 }
 
@@ -67,6 +96,31 @@ function formatTime(dateStr: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+function rewardTypeIcon(type: string): string {
+  if (type === 'points') return '分'
+  if (type === 'coupon') return '券'
+  return '礼'
+}
+
+function sourceTypeText(source: string): string {
+  if (source === 'register') return '注册奖励'
+  if (source === 'first_paid_order') return '首单奖励'
+  if (source === 'invite_count') return '邀请人数奖励'
+  return source
+}
+
+function rewardStatusText(status: string): string {
+  if (status === 'pending') return '待领取'
+  if (status === 'issued') return '已发放'
+  if (status === 'claimed') return '已领取'
+  if (status === 'cancelled') return '已取消'
+  return status
+}
+
+function goProductList() {
+  uni.navigateTo({ url: '/pages/product/list' })
+}
+
 onShareAppMessage(() => ({
   title: '禧孕优选好物推荐，快来看看吧！',
   path: `/pages/home/index?inviter=${encodeURIComponent(userStore.userInfo?.id || '')}`
@@ -74,6 +128,7 @@ onShareAppMessage(() => ({
 
 onMounted(() => {
   loadStats()
+  loadRewards()
 })
 </script>
 
@@ -154,6 +209,117 @@ onMounted(() => {
 
   &::after {
     border: none;
+  }
+}
+
+.share-product-entry {
+  @include flex-between;
+  margin-top: $spacing-sm;
+  padding: 24rpx $spacing-md;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: $radius-md;
+}
+
+.share-product-text {
+  font-size: $font-md;
+  color: $text-color;
+  font-weight: 500;
+}
+
+.share-product-arrow {
+  font-size: $font-xl;
+  color: $text-hint;
+}
+
+.rewards-section {
+  margin: 0 $spacing-md $spacing-md;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.reward-item {
+  @include flex-between;
+  padding: $spacing-sm 0;
+  border-bottom: 1rpx solid $divider-color;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.reward-icon {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  @include flex-center;
+  flex-shrink: 0;
+
+  &.points {
+    background: rgba($warning-color, 0.15);
+  }
+
+  &.coupon {
+    background: rgba($success-color, 0.15);
+  }
+
+  &.physical {
+    background: rgba($price-color, 0.15);
+  }
+}
+
+.reward-icon-text {
+  font-size: $font-sm;
+  font-weight: 700;
+
+  .points & {
+    color: $warning-color;
+  }
+
+  .coupon & {
+    color: $success-dark;
+  }
+
+  .physical & {
+    color: $price-color;
+  }
+}
+
+.reward-info {
+  flex: 1;
+  margin-left: $spacing-sm;
+}
+
+.reward-name {
+  font-size: $font-md;
+  color: $text-color;
+  display: block;
+}
+
+.reward-source {
+  font-size: $font-xs;
+  color: $text-hint;
+  margin-top: 4rpx;
+  display: block;
+}
+
+.reward-status {
+  padding: 4rpx 16rpx;
+  border-radius: $radius-round;
+  background: rgba($text-hint, 0.1);
+
+  &.issued {
+    background: rgba($success-color, 0.1);
+  }
+
+  &.pending {
+    background: rgba($warning-color, 0.1);
+  }
+
+  &.claimed {
+    background: rgba($text-hint, 0.1);
+  }
+
+  &.cancelled {
+    background: rgba($text-hint, 0.05);
   }
 }
 

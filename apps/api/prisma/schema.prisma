@@ -809,6 +809,37 @@ model UserInviteRelation {
   @@map("user_invite_relations")
 }
 
+/// 用户邀请奖励记录（积分/优惠券/实物奖励统一记录）
+model UserInviteReward {
+  id            BigInt    @id @default(autoincrement()) @map("id")
+  userId        BigInt    @map("user_id")
+  inviteeUserId BigInt?   @map("invitee_user_id")
+  campaignId    BigInt?   @map("campaign_id")
+  rewardType    String    @db.VarChar(20) @map("reward_type")
+  rewardName    String    @db.VarChar(200) @map("reward_name")
+  couponId      BigInt?   @map("coupon_id")
+  points        Int?      @map("points")
+  productId     BigInt?   @map("product_id")
+  status        String    @default("issued") @db.VarChar(20) @map("status")
+  sourceType    String    @db.VarChar(30) @map("source_type")
+  sourceId      BigInt?   @map("source_id")
+  dedupeKey     String    @unique @db.VarChar(100) @map("dedupe_key")
+  issuedAt      DateTime? @map("issued_at")
+  claimedAt     DateTime? @map("claimed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  @@index([userId], name: "idx_user_invite_reward_user_id")
+  @@index([inviteeUserId], name: "idx_user_invite_reward_invitee_user_id")
+  @@index([campaignId], name: "idx_user_invite_reward_campaign_id")
+  @@index([rewardType], name: "idx_user_invite_reward_reward_type")
+  @@index([status], name: "idx_user_invite_reward_status")
+  @@index([sourceType], name: "idx_user_invite_reward_source_type")
+  @@index([createdAt], name: "idx_user_invite_reward_created_at")
+  @@map("user_invite_rewards")
+}
+
 model AftersaleOrder {
   id                     BigInt         @id @default(autoincrement()) @map("id")
   aftersaleNo            String         @db.VarChar(32) @map("aftersale_no")

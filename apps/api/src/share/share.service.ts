@@ -204,6 +204,20 @@ export class ShareService {
             relationId.toString(),
             `被邀请注册奖励${points}积分`,
           );
+          // 写入统一奖励记录（幂等兜底）
+          await this.createRewardRecord({
+            userId: inviteeUserId,
+            inviteeUserId,
+            campaignId: campaignId.toString(),
+            rewardType: 'points',
+            rewardName: `注册奖励${points}积分`,
+            points,
+            sourceType: 'register',
+            sourceId: relationId.toString(),
+            dedupeKey: `register:points:${relationId}`,
+            status: 'issued',
+            issuedAt: new Date(),
+          });
         }
       }
     }
@@ -213,8 +227,68 @@ export class ShareService {
       if (couponId) {
         try {
           await this.couponService.receive(inviteeUserId, couponId);
+          // 写入统一奖励记录（幂等兜底）
+          await this.createRewardRecord({
+            userId: inviteeUserId,
+            inviteeUserId,
+            campaignId: campaignId.toString(),
+            rewardType: 'coupon',
+            rewardName: '注册优惠券奖励',
+            couponId: couponId.toString(),
+            sourceType: 'register',
+            sourceId: relationId.toString(),
+            dedupeKey: `register:coupon:${relationId}:${couponId}`,
+            status: 'issued',
+            issuedAt: new Date(),
+          });
         } catch {}
       }
+    }
+  }
+
+  /**
+   * 创建奖励记录，dedupeKey 唯一约束兜底，重复触发安全跳过
+   */
+  private async createRewardRecord(data: {
+    userId: string;
+    inviteeUserId?: string;
+    campaignId?: string;
+    rewardType: string;
+    rewardName: string;
+    couponId?: string;
+    points?: number;
+    productId?: string;
+    sourceType: string;
+    sourceId?: string;
+    dedupeKey: string;
+    status: string;
+    issuedAt?: Date;
+  }) {
+    try {
+      await this.prisma.userInviteReward.create({
+        data: {
+          userId: BigInt(data.userId),
+          inviteeUserId: data.inviteeUserId ? BigInt(data.inviteeUserId) : null,
+          campaignId: data.campaignId ? BigInt(data.campaignId) : null,
+          rewardType: data.rewardType,
+          rewardName: data.rewardName,
+          couponId: data.couponId ? BigInt(data.couponId) : null,
+          points: data.points ?? null,
+          productId: data.productId ? BigInt(data.productId) : null,
+          status: data.status,
+          sourceType: data.sourceType,
+          sourceId: data.sourceId ? BigInt(data.sourceId) : null,
+          dedupeKey: data.dedupeKey,
+          issuedAt: data.issuedAt ?? null,
+        },
+      });
+    } catch (e: any) {
+      // P2002 唯一冲突 = 已发放过，安全跳过
+      if (e?.code === 'P2002') {
+        this.logger.log(`奖励记录已存在，幂等跳过：dedupeKey=${data.dedupeKey}`);
+        return;
+      }
+      this.logger.warn(`写入奖励记录失败：${e?.message}`);
     }
   }
 
@@ -281,6 +355,20 @@ export class ShareService {
             `邀请好友首单奖励${points}积分`,
           );
           this.logger.log(`邀请人首单积分奖励：inviter=${inviterUserId}, points=${points}`);
+          // 写入统一奖励记录（幂等兜底）
+          await this.createRewardRecord({
+            userId: inviterUserId,
+            inviteeUserId,
+            campaignId: relation.sourceCampaignId?.toString(),
+            rewardType: 'points',
+            rewardName: `邀请好友首单奖励${points}积分`,
+            points,
+            sourceType: 'first_paid_order',
+            sourceId: orderId,
+            dedupeKey: `first_paid:points:${orderId}`,
+            status: 'issued',
+            issuedAt: new Date(),
+          });
         }
       }
     }
@@ -291,6 +379,20 @@ export class ShareService {
         try {
           await this.couponService.receive(inviterUserId, couponId);
           this.logger.log(`邀请人首单优惠券奖励：inviter=${inviterUserId}, couponId=${couponId}`);
+          // 写入统一奖励记录（幂等兜底）
+          await this.createRewardRecord({
+            userId: inviterUserId,
+            inviteeUserId,
+            campaignId: relation.sourceCampaignId?.toString(),
+            rewardType: 'coupon',
+            rewardName: '邀请好友首单优惠券奖励',
+            couponId: couponId.toString(),
+            sourceType: 'first_paid_order',
+            sourceId: orderId,
+            dedupeKey: `first_paid:coupon:${orderId}:${couponId}`,
+            status: 'issued',
+            issuedAt: new Date(),
+          });
         } catch {}
       }
     }
@@ -337,6 +439,157 @@ export class ShareService {
           id: r.invitee.id.toString(),
         } : null,
       })),
+    };
+  }
+
+  /**
+   * 我的奖励记录（小程序）
+   */
+  async getMyRewards(userId: string, page = 1, pageSize = 20) {
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+    const [items, total] = await Promise.all([
+      this.prisma.userInviteReward.findMany({
+        where: { userId: BigInt(userId), deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.userInviteReward.count({
+        where: { userId: BigInt(userId), deletedAt: null },
+      }),
+    ]);
+
+    const couponIds = items.map((i) => i.couponId).filter(Boolean) as bigint[];
+    const coupons = couponIds.length
+      ? await this.prisma.coupon.findMany({
+          where: { id: { in: couponIds } },
+          select: { id: true, name: true, type: true, value: true },
+        })
+      : [];
+    const couponMap = new Map(coupons.map((c) => [c.id.toString(), c]));
+
+    return {
+      list: items.map((r) => ({
+        id: r.id.toString(),
+        rewardType: r.rewardType,
+        rewardName: r.rewardName,
+        points: r.points,
+        couponId: r.couponId?.toString() || null,
+        couponName: r.couponId ? couponMap.get(r.couponId.toString())?.name || null : null,
+        productId: r.productId?.toString() || null,
+        status: r.status,
+        sourceType: r.sourceType,
+        createdAt: r.createdAt,
+        issuedAt: r.issuedAt,
+        claimedAt: r.claimedAt,
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  /**
+   * 后台奖励记录列表
+   */
+  async findAllRewards(params: {
+    page?: number;
+    pageSize?: number;
+    userId?: string;
+    campaignId?: string;
+    rewardType?: string;
+    status?: string;
+    sourceType?: string;
+  }) {
+    const page = params.page || 1;
+    const pageSize = params.pageSize || 10;
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+
+    const where: any = { deletedAt: null };
+    if (params.userId) where.userId = BigInt(params.userId);
+    if (params.campaignId) where.campaignId = BigInt(params.campaignId);
+    if (params.rewardType) where.rewardType = params.rewardType;
+    if (params.status) where.status = params.status;
+    if (params.sourceType) where.sourceType = params.sourceType;
+
+    const [items, total] = await Promise.all([
+      this.prisma.userInviteReward.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.userInviteReward.count({ where }),
+    ]);
+
+    // 手动查询关联数据（避免在 schema 中新增反向关联）
+    const userIds = Array.from(new Set([
+      ...items.map((i) => i.userId),
+      ...items.map((i) => i.inviteeUserId).filter(Boolean) as bigint[],
+    ]));
+    const campaignIds = items.map((i) => i.campaignId).filter(Boolean) as bigint[];
+    const couponIds = items.map((i) => i.couponId).filter(Boolean) as bigint[];
+
+    const [users, campaigns, coupons] = await Promise.all([
+      userIds.length
+        ? this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, nickname: true, phone: true },
+          })
+        : Promise.resolve([]),
+      campaignIds.length
+        ? this.prisma.shareCampaign.findMany({
+            where: { id: { in: campaignIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+      couponIds.length
+        ? this.prisma.coupon.findMany({
+            where: { id: { in: couponIds } },
+            select: { id: true, name: true, type: true, value: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const userMap = new Map(users.map((u) => [u.id.toString(), u]));
+    const campaignMap = new Map(campaigns.map((c) => [c.id.toString(), c]));
+    const couponMap = new Map(coupons.map((c) => [c.id.toString(), c]));
+
+    return {
+      list: items.map((r) => {
+        const user = userMap.get(r.userId.toString());
+        const invitee = r.inviteeUserId ? userMap.get(r.inviteeUserId.toString()) : null;
+        const campaign = r.campaignId ? campaignMap.get(r.campaignId.toString()) : null;
+        const coupon = r.couponId ? couponMap.get(r.couponId.toString()) : null;
+        return {
+          id: r.id.toString(),
+          userId: r.userId.toString(),
+          userName: user?.nickname || user?.phone || '',
+          userPhone: user?.phone || '',
+          inviteeUserId: r.inviteeUserId?.toString() || null,
+          inviteeName: invitee?.nickname || invitee?.phone || '',
+          inviteePhone: invitee?.phone || '',
+          campaignId: r.campaignId?.toString() || null,
+          campaignName: campaign?.name || '',
+          rewardType: r.rewardType,
+          rewardName: r.rewardName,
+          couponId: r.couponId?.toString() || null,
+          couponName: coupon?.name || '',
+          points: r.points,
+          productId: r.productId?.toString() || null,
+          status: r.status,
+          sourceType: r.sourceType,
+          sourceId: r.sourceId?.toString() || null,
+          issuedAt: r.issuedAt,
+          claimedAt: r.claimedAt,
+          createdAt: r.createdAt,
+        };
+      }),
+      total,
+      page,
+      pageSize,
     };
   }
 

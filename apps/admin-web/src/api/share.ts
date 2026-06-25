@@ -22,4 +22,31 @@ export const shareApi = {
   getShareStats() {
     return request.get('/admin/share/stats')
   },
+  getRewards(params?: any) {
+    return request.get('/admin/share/rewards', { params })
+  },
+}
+
+export interface InviteRewardItem {
+  id: string
+  userId: string
+  userName: string
+  userPhone: string
+  inviteeUserId: string | null
+  inviteeName: string
+  inviteePhone: string
+  campaignId: string | null
+  campaignName: string
+  rewardType: string
+  rewardName: string
+  couponId: string | null
+  couponName: string
+  points: number | null
+  productId: string | null
+  status: string
+  sourceType: string
+  sourceId: string | null
+  issuedAt: string | null
+  claimedAt: string | null
+  createdAt: string
 }

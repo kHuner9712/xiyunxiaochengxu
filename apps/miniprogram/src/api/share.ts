@@ -60,3 +60,22 @@ export function getSharePoster(params: { type: string; targetId?: string }) {
 export function getMyShareStats() {
   return get<MyShareStats>('/weapp/share/my-stats')
 }
+
+export interface MyRewardItem {
+  id: string
+  rewardType: 'points' | 'coupon' | 'physical'
+  rewardName: string
+  points: number | null
+  couponId: string | null
+  couponName: string | null
+  productId: string | null
+  status: 'pending' | 'issued' | 'claimed' | 'cancelled'
+  sourceType: 'register' | 'first_paid_order' | 'invite_count'
+  createdAt: string
+  issuedAt: string | null
+  claimedAt: string | null
+}
+
+export function getMyRewards(params?: { page?: number; pageSize?: number }) {
+  return get<{ list: MyRewardItem[]; total: number; page: number; pageSize: number }>('/weapp/share/my-rewards', params)
+}

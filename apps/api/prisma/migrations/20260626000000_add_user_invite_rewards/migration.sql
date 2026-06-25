@@ -1,0 +1,31 @@
+-- 新增用户邀请奖励记录表
+-- 用于记录邀请裂变系统的奖励发放（积分/优惠券/实物），支持幂等和实物 pending 待领取
+CREATE TABLE `user_invite_rewards` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `invitee_user_id` BIGINT NULL,
+  `campaign_id` BIGINT NULL,
+  `reward_type` VARCHAR(20) NOT NULL,
+  `reward_name` VARCHAR(200) NOT NULL,
+  `coupon_id` BIGINT NULL,
+  `points` INT NULL,
+  `product_id` BIGINT NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'issued',
+  `source_type` VARCHAR(30) NOT NULL,
+  `source_id` BIGINT NULL,
+  `dedupe_key` VARCHAR(100) NOT NULL,
+  `issued_at` DATETIME(3) NULL,
+  `claimed_at` DATETIME(3) NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL,
+  `deleted_at` DATETIME(3) NULL,
+  UNIQUE INDEX `user_invite_rewards_dedupe_key_key` (`dedupe_key`),
+  INDEX `idx_user_invite_reward_user_id` (`user_id`),
+  INDEX `idx_user_invite_reward_invitee_user_id` (`invitee_user_id`),
+  INDEX `idx_user_invite_reward_campaign_id` (`campaign_id`),
+  INDEX `idx_user_invite_reward_reward_type` (`reward_type`),
+  INDEX `idx_user_invite_reward_status` (`status`),
+  INDEX `idx_user_invite_reward_source_type` (`source_type`),
+  INDEX `idx_user_invite_reward_created_at` (`created_at`),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

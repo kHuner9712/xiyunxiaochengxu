@@ -140,6 +140,15 @@ export class WeappShareController {
   async getMyStats(@CurrentUser('id') userId: string) {
     return this.shareService.getMyStats(userId);
   }
+
+  @Get('my-rewards')
+  async getMyRewards(
+    @CurrentUser('id') userId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.shareService.getMyRewards(userId, page ? Number(page) : 1, pageSize ? Number(pageSize) : 20);
+  }
 }
 
 @Controller('admin/share')
@@ -204,5 +213,27 @@ export class AdminShareController {
   @RequirePermission('share:record')
   async getStats() {
     return this.shareService.getShareStats();
+  }
+
+  @Get('rewards')
+  @RequirePermission('share:record')
+  async findRewards(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('userId') userId?: string,
+    @Query('campaignId') campaignId?: string,
+    @Query('rewardType') rewardType?: string,
+    @Query('status') status?: string,
+    @Query('sourceType') sourceType?: string,
+  ) {
+    return this.shareService.findAllRewards({
+      page: page ? Number(page) : 1,
+      pageSize: pageSize ? Number(pageSize) : 10,
+      userId,
+      campaignId,
+      rewardType,
+      status,
+      sourceType,
+    });
   }
 }

@@ -28,9 +28,11 @@ function normalizeString(value: any): string | undefined {
 
 function inferSourceType(params: ShareParams): string | undefined {
   if (params.sourceType) return params.sourceType
+  // 商家码优先：sourceCode 存在时 sourceType 为 merchant_referral，
+  // 但 referrerUserId / shareRecordId / shareCampaignId 仍会保留，不影响邀请关系记录
+  if (params.sourceCode) return 'merchant_referral'
   if (params.inviter || params.shareRecordId) return 'user_referral'
   if (params.campaignId) return 'campaign'
-  if (params.sourceCode) return 'merchant_referral'
   return undefined
 }
 
