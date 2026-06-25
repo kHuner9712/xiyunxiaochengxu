@@ -123,8 +123,54 @@
         <el-table-column label="最近下单" width="180">
           <template #default="{ row }">{{ formatDate(row.lastOrderTime) }}</template>
         </el-table-column>
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link :disabled="!row.orderCount" @click="openPromotionOrders(row)">查看订单</el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </div>
+
+    <el-dialog
+      v-model="orderDialogVisible"
+      :title="`${selectedStats?.promotionCode || ''} 推广订单明细`"
+      width="960px"
+      destroy-on-close
+    >
+      <el-table :data="orderData" stripe v-loading="orderLoading">
+        <el-table-column prop="orderNo" label="订单号" min-width="190" />
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="getOrderStatusTagType(row.status) as any" size="small">
+              {{ formatOrderStatus(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="订单金额" width="110">
+          <template #default="{ row }">¥{{ formatPrice(row.payAmount) }}</template>
+        </el-table-column>
+        <el-table-column prop="userName" label="用户" width="130" show-overflow-tooltip />
+        <el-table-column prop="userPhone" label="用户手机号" width="130" />
+        <el-table-column label="下单时间" width="180">
+          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="支付时间" width="180">
+          <template #default="{ row }">{{ formatDate(row.paidAt) }}</template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination-wrapper">
+        <el-pagination
+          v-model:current-page="orderPagination.page"
+          v-model:page-size="orderPagination.pageSize"
+          :total="orderPagination.total"
+          :page-sizes="[10, 20, 50]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handlePromotionOrderSizeChange"
+          @current-change="handlePromotionOrderPageChange"
+        />
+      </div>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
@@ -165,15 +211,19 @@
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { merchantPromotionSourceApi } from '@/api/merchant-promotion-source'
-import { formatDate, formatPrice } from '@/utils/format'
+import { formatDate, formatPrice, formatOrderStatus, getOrderStatusTagType } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const statsLoading = ref(false)
+const orderLoading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
+const orderDialogVisible = ref(false)
 const tableData = ref<any[]>([])
 const statsData = ref<any[]>([])
+const orderData = ref<any[]>([])
+const selectedStats = ref<any>(null)
 const formRef = ref<FormInstance>()
 
 const searchForm = reactive({
@@ -182,6 +232,7 @@ const searchForm = reactive({
 })
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const orderPagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
   id: undefined as string | number | undefined,
@@ -353,6 +404,43 @@ async function handleStatusChange(row: any) {
     row.status = oldStatus
     ElMessage.error(e?.response?.data?.message || e?.message || '状态更新失败')
   }
+}
+
+async function fetchPromotionOrders() {
+  if (!selectedStats.value?.promotionCode) return
+
+  orderLoading.value = true
+  try {
+    const res = await merchantPromotionSourceApi.getOrders(selectedStats.value.promotionCode, {
+      page: orderPagination.page,
+      pageSize: orderPagination.pageSize,
+    })
+    orderData.value = asArray(res.data)
+    orderPagination.total = paginationTotal(res.data)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '获取推广订单明细失败')
+  } finally {
+    orderLoading.value = false
+  }
+}
+
+function openPromotionOrders(row: any) {
+  selectedStats.value = row
+  orderPagination.page = 1
+  orderPagination.pageSize = 10
+  orderPagination.total = 0
+  orderData.value = []
+  orderDialogVisible.value = true
+  fetchPromotionOrders()
+}
+
+function handlePromotionOrderSizeChange() {
+  orderPagination.page = 1
+  fetchPromotionOrders()
+}
+
+function handlePromotionOrderPageChange() {
+  fetchPromotionOrders()
 }
 
 function formatStatusDistribution(row: any) {

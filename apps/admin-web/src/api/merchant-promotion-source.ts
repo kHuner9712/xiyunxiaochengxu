@@ -12,6 +12,18 @@ export const merchantPromotionSourceApi = {
   }) {
     return request.get('/admin/merchant-promotion-source/list', { params })
   },
+  getStats(params: {
+    keyword?: string
+    name?: string
+    promotionCode?: string
+    scene?: string
+    status?: number
+  }) {
+    return request.get('/admin/merchant-promotion-source/stats', { params })
+  },
+  getOrders(promotionCode: string, params: { page: number; pageSize: number }) {
+    return request.get(`/admin/merchant-promotion-source/orders/${promotionCode}`, { params })
+  },
   getDetail(id: string | number) {
     return request.get(`/admin/merchant-promotion-source/detail/${id}`)
   },

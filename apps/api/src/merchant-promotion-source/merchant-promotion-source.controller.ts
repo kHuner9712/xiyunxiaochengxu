@@ -18,6 +18,18 @@ export class AdminMerchantPromotionSourceController {
     return this.merchantPromotionSourceService.findAll(dto);
   }
 
+  @Get('stats')
+  @RequirePermission('marketing:activity')
+  async stats(@Query() dto: MerchantPromotionSourceQueryDto) {
+    return this.merchantPromotionSourceService.findStats(dto);
+  }
+
+  @Get('orders/:promotionCode')
+  @RequirePermission('marketing:activity')
+  async orders(@Param('promotionCode') promotionCode: string, @Query() dto: MerchantPromotionSourceQueryDto) {
+    return this.merchantPromotionSourceService.findOrdersByPromotionCode(promotionCode, dto);
+  }
+
   @Get('detail/:id')
   @RequirePermission('marketing:activity')
   async detail(@Param('id') id: string) {
