@@ -39,6 +39,12 @@ export class AdminPickupStoreController {
     return this.service.findAllAdmin(Number(page), Number(pageSize), keyword, status ? Number(status) : undefined);
   }
 
+  @Get('preview')
+  @RequirePermission('pickup:verify')
+  async preview(@Query('pickupCode') pickupCode: string) {
+    return this.service.previewPickupOrder(pickupCode);
+  }
+
   @Post()
   @RequirePermission('pickup:store')
   async create(@Body() dto: any) {

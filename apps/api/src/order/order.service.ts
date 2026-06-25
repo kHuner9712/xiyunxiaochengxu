@@ -607,6 +607,39 @@ export class OrderService {
     return this.serializeOrderView(result);
   }
 
+  async findPickupOrderByCode(pickupCode: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { pickupCode },
+      include: {
+        orderItems: true,
+        user: { select: { id: true, nickname: true, phone: true } },
+      },
+    });
+    if (!order) throw new NotFoundException('自提码不存在');
+    if (order.fulfillmentType !== 'pickup') {
+      throw new BadRequestException('该订单不是自提订单');
+    }
+    const view = this.serializeOrderView(order);
+    return {
+      orderId: view.id,
+      orderNo: view.orderNo,
+      status: view.status,
+      fulfillmentType: view.fulfillmentType,
+      totalAmount: view.totalAmount,
+      payAmount: view.payAmount,
+      userName: view.user?.nickname || '',
+      userPhone: view.user?.phone || '',
+      items: view.items,
+      pickupStoreName: view.pickupStoreName,
+      pickupStoreAddress: view.pickupStoreAddress,
+      pickupContactPhone: view.pickupContactPhone,
+      pickupCode: view.pickupCode,
+      pickedUpAt: view.pickedUpAt,
+      createTime: view.createTime,
+      alreadyCompleted: order.status === OrderStatus.completed,
+    };
+  }
+
   async completePickupOrderByCode(pickupCode: string, verifiedBy: string) {
     const order = await this.prisma.order.findFirst({
       where: { pickupCode },

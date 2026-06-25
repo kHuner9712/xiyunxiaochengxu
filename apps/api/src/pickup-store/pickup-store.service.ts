@@ -105,6 +105,10 @@ export class PickupStoreService {
     return result;
   }
 
+  async previewPickupOrder(pickupCode: string) {
+    return this.orderService.findPickupOrderByCode(pickupCode);
+  }
+
   private serialize(store: any) {
     return {
       id: store.id.toString(),

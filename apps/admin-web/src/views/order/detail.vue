@@ -113,7 +113,7 @@
           <template #header><span>订单操作</span></template>
           <div style="display: flex; flex-direction: column; gap: 10px">
             <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:delivery'" type="primary" @click="showDeliverDialog">发货</el-button>
-            <el-button v-if="order.status === 'pending_pickup'" v-permission="'order:delivery'" type="success" @click="showVerifyPickupDialog">核销自提</el-button>
+            <el-button v-if="order.status === 'pending_pickup'" v-permission="'pickup:verify'" type="success" @click="showVerifyPickupDialog">核销自提</el-button>
             <el-button v-if="order.status === 'pending_payment'" v-permission="'order:detail'" type="danger" @click="handleCancelOrder">取消订单</el-button>
           </div>
         </el-card>
