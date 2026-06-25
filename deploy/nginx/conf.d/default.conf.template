@@ -24,6 +24,11 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
+    # Block sensitive hidden files before proxying to API or serving admin assets
+    location ~ /\.(git|svn|hg|env) {
+        return 404;
+    }
+
     location /api/ {
         proxy_pass http://api:3000;
         proxy_set_header Host $host;
@@ -83,6 +88,11 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # Block sensitive hidden files before proxying to API or serving admin assets
+    location ~ /\.(git|svn|hg|env) {
+        return 404;
+    }
 
     location /api/ {
         proxy_pass http://api:3000;
