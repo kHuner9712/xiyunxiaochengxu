@@ -81,6 +81,21 @@
         </el-card>
 
         <el-card style="margin-bottom: 20px">
+          <template #header><span>推广来源</span></template>
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="来源类型">
+              <el-tag :type="getOrderSourceTagType(order.sourceType) as any">
+                {{ formatOrderSourceType(order.sourceType) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="推广码">{{ order.sourceCode || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="推荐人ID">{{ order.referrerUserId || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="分享记录ID">{{ order.shareRecordId || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="分享活动ID">{{ order.shareCampaignId || '-' }}</el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <el-card style="margin-bottom: 20px">
           <template #header><span>操作日志</span></template>
           <el-timeline>
             <el-timeline-item
@@ -148,7 +163,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { orderApi } from '@/api/order'
 import { pickupStoreApi } from '@/api/pickup-store'
-import { formatPrice, formatDate, formatOrderStatus, getOrderStatusTagType } from '@/utils/format'
+import { formatPrice, formatDate, formatOrderStatus, getOrderStatusTagType, formatOrderSourceType, getOrderSourceTagType } from '@/utils/format'
 import { asArray } from '@/utils/response'
 
 const router = useRouter()

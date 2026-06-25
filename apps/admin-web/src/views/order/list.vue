@@ -40,6 +40,19 @@
         <el-table-column label="实付金额" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.payAmount) }}</template>
         </el-table-column>
+        <el-table-column label="推广来源" width="180">
+          <template #default="{ row }">
+            <el-space direction="vertical" alignment="flex-start" :size="2">
+              <el-tag :type="getOrderSourceTagType(row.sourceType) as any" size="small">
+                {{ formatOrderSourceType(row.sourceType) }}
+              </el-tag>
+              <span v-if="row.sourceCode">推广码：{{ row.sourceCode }}</span>
+              <span v-if="row.referrerUserId">推荐人：{{ row.referrerUserId }}</span>
+              <span v-if="row.shareRecordId">分享记录：{{ row.shareRecordId }}</span>
+              <span v-if="row.shareCampaignId">分享活动：{{ row.shareCampaignId }}</span>
+            </el-space>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="getOrderStatusTagType(row.status) as any" size="small">{{ formatOrderStatus(row.status) }}</el-tag>
@@ -76,7 +89,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { orderApi } from '@/api/order'
-import { formatPrice, formatDate, formatOrderStatus, getOrderStatusTagType, ORDER_STATUS_MAP } from '@/utils/format'
+import { formatPrice, formatDate, formatOrderStatus, getOrderStatusTagType, ORDER_STATUS_MAP, formatOrderSourceType, getOrderSourceTagType } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 const router = useRouter()

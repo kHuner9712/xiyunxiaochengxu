@@ -57,6 +57,28 @@ export function getOrderStatusTagType(status: string): string {
   return ORDER_STATUS_TAG_TYPE[status] || 'info'
 }
 
+export const ORDER_SOURCE_TYPE_MAP: Record<string, string> = {
+  direct: '普通进入',
+  user_referral: '用户推荐',
+  merchant_referral: '商家推广',
+  campaign: '活动推广',
+}
+
+export const ORDER_SOURCE_TAG_TYPE: Record<string, string> = {
+  direct: 'info',
+  user_referral: 'success',
+  merchant_referral: 'warning',
+  campaign: 'primary',
+}
+
+export function formatOrderSourceType(sourceType: string | null | undefined): string {
+  return ORDER_SOURCE_TYPE_MAP[sourceType || 'direct'] || '未知来源'
+}
+
+export function getOrderSourceTagType(sourceType: string | null | undefined): string {
+  return ORDER_SOURCE_TAG_TYPE[sourceType || 'direct'] || 'info'
+}
+
 export const AFTERSALE_STATUS_MAP: Record<string, string> = {
   pending_review: '待审核',
   approved: '审核通过',
