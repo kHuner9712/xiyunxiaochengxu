@@ -226,6 +226,12 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '商家推广码', permission: 'marketing:activity' },
           },
           {
+            path: 'activity-content',
+            name: 'ActivityContent',
+            component: () => import('@/views/marketing/activity-content.vue'),
+            meta: { title: '活动内容', permission: 'marketing:activity' },
+          },
+          {
             path: 'share-campaign',
             name: 'ShareCampaign',
             component: () => import('@/views/share/campaign.vue'),

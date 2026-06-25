@@ -123,6 +123,18 @@
       </scroll-view>
     </view>
 
+    <view class="section activity-content-entry-section">
+      <view class="activity-content-entry" @tap="goActivityContentList">
+        <view class="entry-info">
+          <text class="entry-title">活动专区</text>
+          <text class="entry-subtitle">图文 · 视频 · 商品推荐</text>
+        </view>
+        <view class="entry-arrow">
+          <text class="entry-arrow-text">进入 ›</text>
+        </view>
+      </view>
+    </view>
+
     <view class="section">
       <view class="section-header">
         <view>
@@ -242,6 +254,10 @@ function goActivityList() {
 
 function goActivityDetail(id: number) {
   uni.navigateTo({ url: `/pages/activity/detail?id=${id}` })
+}
+
+function goActivityContentList() {
+  uni.navigateTo({ url: '/pages/activity-content/list' })
 }
 
 onPullDownRefresh(async () => {
@@ -640,6 +656,58 @@ onMounted(() => {
   color: $text-hint;
   font-size: $font-xs;
   line-height: 40rpx;
+}
+
+.activity-content-entry-section {
+  margin-top: 24rpx;
+}
+
+.activity-content-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 $spacing-md;
+  padding: 28rpx $spacing-md;
+  border-radius: $radius-xxl;
+  background:
+    radial-gradient(circle at 90% 10%, rgba($secondary-color, 0.16), rgba($secondary-color, 0) 220rpx),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 240, 230, 0.92) 100%);
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-md;
+}
+
+.entry-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.entry-title {
+  display: block;
+  font-size: $font-lg;
+  font-weight: 900;
+  color: $text-color;
+  line-height: 1.28;
+}
+
+.entry-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-xs;
+  color: $text-secondary;
+}
+
+.entry-arrow {
+  padding: 12rpx 22rpx;
+  border-radius: $radius-round;
+  background: $gradient-coral;
+  box-shadow: $shadow-coral;
+  flex-shrink: 0;
+}
+
+.entry-arrow-text {
+  color: #FFFFFF;
+  font-size: $font-sm;
+  font-weight: 800;
 }
 
 .floating-cs {

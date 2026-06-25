@@ -16,6 +16,7 @@ import { OrderModule } from './order/order.module';
 import { PaymentModule } from './payment/payment.module';
 import { CouponModule } from './coupon/coupon.module';
 import { ActivityModule } from './activity/activity.module';
+import { ActivityContentModule } from './activity-content/activity-content.module';
 import { MemberModule } from './member/member.module';
 import { PointsModule } from './points/points.module';
 import { AftersaleModule } from './aftersale/aftersale.module';
@@ -65,6 +66,7 @@ import { validateEnv } from './config/env.validation';
     PaymentModule,
     CouponModule,
     ActivityModule,
+    ActivityContentModule,
     MemberModule,
     PointsModule,
     AftersaleModule,
