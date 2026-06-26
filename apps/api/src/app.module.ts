@@ -29,6 +29,7 @@ import { HomeModule } from './home/home.module';
 import { SearchModule } from './search/search.module';
 import { ShareModule } from './share/share.module';
 import { MerchantPromotionSourceModule } from './merchant-promotion-source/merchant-promotion-source.module';
+import { BenefitPackageModule } from './benefit-package/benefit-package.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { HealthModule } from './health/health.module';
 import { PickupStoreModule } from './pickup-store/pickup-store.module';
@@ -79,6 +80,7 @@ import { validateEnv } from './config/env.validation';
     SearchModule,
     ShareModule,
     MerchantPromotionSourceModule,
+    BenefitPackageModule,
     ScheduleModule,
     HealthModule,
     PickupStoreModule,

@@ -226,6 +226,24 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '商家推广码', permission: 'marketing:activity' },
           },
           {
+            path: 'benefit-package',
+            name: 'BenefitPackage',
+            component: () => import('@/views/marketing/benefit-package.vue'),
+            meta: { title: '权益卡管理', permission: 'marketing:activity' },
+          },
+          {
+            path: 'benefit-package-verify',
+            name: 'BenefitPackageVerify',
+            component: () => import('@/views/marketing/benefit-package-verify.vue'),
+            meta: { title: '权益核销', permission: 'pickup:verify' },
+          },
+          {
+            path: 'benefit-package-records',
+            name: 'BenefitPackageRecords',
+            component: () => import('@/views/marketing/benefit-package-records.vue'),
+            meta: { title: '权益记录', permission: 'marketing:activity' },
+          },
+          {
             path: 'activity-content',
             name: 'ActivityContent',
             component: () => import('@/views/marketing/activity-content.vue'),

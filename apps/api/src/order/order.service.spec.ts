@@ -46,7 +46,8 @@ function createMockPrisma() {
 function createService(mockPrisma?: any) {
   const prisma = mockPrisma || createMockPrisma();
   const businessEvent = createMockBusinessEventService();
-  const service = new OrderService(prisma as any, businessEvent as any);
+  const benefitPackageService = { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) };
+  const service = new OrderService(prisma as any, businessEvent as any, benefitPackageService as any);
   jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'error').mockImplementation(() => {});

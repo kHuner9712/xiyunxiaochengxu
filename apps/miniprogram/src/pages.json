@@ -34,7 +34,11 @@
     { "path": "pages/privacy/index", "style": { "navigationBarTitleText": "隐私政策" } },
     { "path": "pages/food-safety/index", "style": { "navigationBarTitleText": "食品安全与售后" } },
     { "path": "pages/activity-content/list", "style": { "navigationBarTitleText": "活动专区" } },
-    { "path": "pages/activity-content/detail", "style": { "navigationBarTitleText": "活动详情" } }
+    { "path": "pages/activity-content/detail", "style": { "navigationBarTitleText": "活动详情" } },
+    { "path": "pages/benefit-package/list", "style": { "navigationBarTitleText": "权益卡" } },
+    { "path": "pages/benefit-package/detail", "style": { "navigationBarTitleText": "权益卡详情" } },
+    { "path": "pages/benefit-package/my", "style": { "navigationBarTitleText": "我的权益" } },
+    { "path": "pages/benefit-package/entitlement", "style": { "navigationBarTitleText": "权益详情" } }
   ],
   "tabBar": {
     "color": "#A99B95",

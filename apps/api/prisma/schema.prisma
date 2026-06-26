@@ -1203,3 +1203,122 @@ model ActivityContent {
   @@index([linkedProductId], name: "idx_activity_content_linked_product_id")
   @@map("activity_contents")
 }
+
+/// 权益包 / 超级权益卡配置
+model BenefitPackage {
+  id           BigInt    @id @default(autoincrement()) @map("id")
+  productId    BigInt?   @unique @map("product_id")
+  name         String    @db.VarChar(100) @map("name")
+  subtitle     String?   @db.VarChar(200) @map("subtitle")
+  coverImage   String?   @db.VarChar(500) @map("cover_image")
+  description  String?   @db.Text @map("description")
+  price        Int?      @map("price")
+  validDays    Int?      @map("valid_days")
+  validStartAt DateTime? @map("valid_start_at")
+  validEndAt   DateTime? @map("valid_end_at")
+  status       Int       @default(0) @map("status")
+  sortOrder    Int       @default(0) @map("sort_order")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  @@index([status], name: "idx_benefit_package_status")
+  @@index([sortOrder], name: "idx_benefit_package_sort_order")
+  @@map("benefit_packages")
+}
+
+/// 权益包内的单项权益
+model BenefitPackageItem {
+  id                        BigInt    @id @default(autoincrement()) @map("id")
+  packageId                 BigInt    @map("package_id")
+  merchantPromotionSourceId BigInt?   @map("merchant_promotion_source_id")
+  pickupStoreId             BigInt?   @map("pickup_store_id")
+  name                      String    @db.VarChar(100) @map("name")
+  itemType                  String    @default("service") @db.VarChar(20) @map("item_type")
+  description               String?   @db.Text @map("description")
+  quantity                  Int       @default(1) @map("quantity")
+  originalValue             Int?      @map("original_value")
+  verifyRequired            Int       @default(1) @map("verify_required")
+  status                    Int       @default(1) @map("status")
+  sortOrder                 Int       @default(0) @map("sort_order")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+  deletedAt                 DateTime? @map("deleted_at")
+
+  @@index([packageId], name: "idx_benefit_package_item_package_id")
+  @@index([merchantPromotionSourceId], name: "idx_benefit_package_item_merchant")
+  @@index([pickupStoreId], name: "idx_benefit_package_item_store")
+  @@index([itemType], name: "idx_benefit_package_item_type")
+  @@index([status], name: "idx_benefit_package_item_status")
+  @@index([sortOrder], name: "idx_benefit_package_item_sort_order")
+  @@map("benefit_package_items")
+}
+
+/// 用户购买到账的权益包
+model UserBenefitPackage {
+  id                  BigInt    @id @default(autoincrement()) @map("id")
+  userId              BigInt    @map("user_id")
+  packageId           BigInt    @map("package_id")
+  orderId             BigInt    @map("order_id")
+  orderItemId         BigInt?   @map("order_item_id")
+  grantKey            String    @unique @db.VarChar(100) @map("grant_key")
+  status              String    @default("active") @db.VarChar(20) @map("status")
+  validFrom           DateTime  @map("valid_from")
+  validTo             DateTime? @map("valid_to")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+
+  @@index([userId], name: "idx_user_benefit_package_user_id")
+  @@index([packageId], name: "idx_user_benefit_package_package_id")
+  @@index([orderId], name: "idx_user_benefit_package_order_id")
+  @@index([status], name: "idx_user_benefit_package_status")
+  @@index([validTo], name: "idx_user_benefit_package_valid_to")
+  @@map("user_benefit_packages")
+}
+
+/// 用户拥有的单项权益（每个核销码一条）
+model UserBenefitEntitlement {
+  id                    BigInt    @id @default(autoincrement()) @map("id")
+  userBenefitPackageId  BigInt    @map("user_benefit_package_id")
+  userId                BigInt    @map("user_id")
+  packageItemId         BigInt    @map("package_item_id")
+  verifyCode            String    @unique @db.VarChar(16) @map("verify_code")
+  status                String    @default("unused") @db.VarChar(20) @map("status")
+  usedAt                DateTime? @map("used_at")
+  verifiedByAdminId     BigInt?   @map("verified_by_admin_id")
+  verifyRemark          String?   @db.VarChar(200) @map("verify_remark")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
+
+  @@index([userBenefitPackageId], name: "idx_user_benefit_entitlement_pkg_id")
+  @@index([userId], name: "idx_user_benefit_entitlement_user_id")
+  @@index([packageItemId], name: "idx_user_benefit_entitlement_item_id")
+  @@index([status], name: "idx_user_benefit_entitlement_status")
+  @@index([usedAt], name: "idx_user_benefit_entitlement_used_at")
+  @@map("user_benefit_entitlements")
+}
+
+/// 权益核销日志
+model UserBenefitVerificationLog {
+  id              BigInt   @id @default(autoincrement()) @map("id")
+  entitlementId   BigInt   @map("entitlement_id")
+  userId          BigInt   @map("user_id")
+  packageId       BigInt   @map("package_id")
+  packageItemId   BigInt   @map("package_item_id")
+  verifyCode      String   @db.VarChar(16) @map("verify_code")
+  verifierType    String   @default("admin") @db.VarChar(20) @map("verifier_type")
+  verifierId      BigInt?  @map("verifier_id")
+  action          String   @default("verify") @db.VarChar(20) @map("action")
+  remark          String?  @db.VarChar(200) @map("remark")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([entitlementId], name: "idx_benefit_verify_log_entitlement_id")
+  @@index([userId], name: "idx_benefit_verify_log_user_id")
+  @@index([packageId], name: "idx_benefit_verify_log_package_id")
+  @@index([packageItemId], name: "idx_benefit_verify_log_package_item_id")
+  @@index([verifyCode], name: "idx_benefit_verify_log_verify_code")
+  @@index([createdAt], name: "idx_benefit_verify_log_created_at")
+  @@map("user_benefit_verification_logs")
+}

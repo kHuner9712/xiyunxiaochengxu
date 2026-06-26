@@ -23,6 +23,7 @@ import { assertOrderTransition } from './order-state-machine';
 import { COUPON_STATUS, PAYMENT_STATUS } from '../common/constants/payment';
 import { BusinessEventService } from '../common/business-event.service';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
+import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 
 const DEFAULT_COVER_MARKER = '/uploads/static/default-cover.png';
 
@@ -45,6 +46,7 @@ export class OrderService {
   constructor(
     private prisma: PrismaService,
     private businessEvent: BusinessEventService,
+    private benefitPackageService: BenefitPackageService,
   ) {}
 
   async getOrderCountByUser(userId: string) {
@@ -494,6 +496,16 @@ export class OrderService {
     });
 
     this.logger.log(`用户${userId}创建订单：${order.orderNo}，实付${payAmount}分`);
+
+    // 零元支付即支付成功：发放绑定的权益卡，失败不影响主流程
+    if (isZeroPay) {
+      try {
+        await this.benefitPackageService.grantBenefitsForOrder(order.id, userId);
+      } catch (err) {
+        this.logger.error(`权益卡发放失败(零元支付): orderId=${order.id}`, (err as Error)?.message);
+      }
+    }
+
     return {
       orderId: order.id.toString(),
       orderNo: order.orderNo,

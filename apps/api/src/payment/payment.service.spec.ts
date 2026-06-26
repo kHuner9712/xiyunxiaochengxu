@@ -89,7 +89,8 @@ function createPaymentService(mockPrisma?: any, mockConfigService?: any, mockBus
   processFirstPaidReward.mockResolvedValue(null);
   const mockShareService = { processFirstPaidReward };
   const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')), assignUniquePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
-  const service = new PaymentService(prisma as any, configService as any, businessEvent as any, mockOrderService as any, mockShareService as any);
+  const mockBenefitPackageService = { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) };
+  const service = new PaymentService(prisma as any, configService as any, businessEvent as any, mockOrderService as any, mockShareService as any, mockBenefitPackageService as any);
   jest.spyOn(service as any, 'verifyWechatSignature').mockReturnValue(true);
   jest.spyOn(service as any, 'isWechatPaymentConfigured').mockReturnValue(true);
   jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
@@ -574,7 +575,7 @@ describe('PaymentService.createRefund', () => {
     processFirstPaidReward.mockResolvedValue(null);
     const mockShareService = { processFirstPaidReward };
     const mockOrderService = { generatePickupCode: jest.fn().mockImplementation(() => Promise.resolve('12345678')) };
-    const svc = new PaymentService(mockPrisma as any, configNoMock as any, mockBE as any, mockOrderService as any, mockShareService as any);
+    const svc = new PaymentService(mockPrisma as any, configNoMock as any, mockBE as any, mockOrderService as any, mockShareService as any, { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any);
     jest.spyOn(svc as any, 'isWechatPaymentConfigured').mockReturnValue(true);
     jest.spyOn(svc['logger'], 'log').mockImplementation(() => {});
     jest.spyOn(svc['logger'], 'warn').mockImplementation(() => {});
@@ -1199,7 +1200,7 @@ describe('PaymentService.processPaymentSuccess pickup code idempotency', () => {
     const processFirstPaidReward = jest.fn() as any;
     processFirstPaidReward.mockResolvedValue(null);
     const mockShareService = { processFirstPaidReward };
-    service = new PaymentService(prisma as any, configService as any, businessEvent as any, mockOrderService as any, mockShareService as any);
+    service = new PaymentService(prisma as any, configService as any, businessEvent as any, mockOrderService as any, mockShareService as any, { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any);
     jest.spyOn(service as any, 'verifyWechatSignature').mockReturnValue(true);
     jest.spyOn(service as any, 'isWechatPaymentConfigured').mockReturnValue(true);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
@@ -1244,6 +1245,7 @@ describe('PaymentService.processPaymentSuccess pickup code idempotency', () => {
       createMockBusinessEventService() as any,
       mockOrderService as any,
       { processFirstPaidReward } as any,
+      { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any,
     );
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
     jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
@@ -2503,7 +2505,7 @@ describe('PaymentService 生产环境配置校验', () => {
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
-    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any, { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any);
 
     expect(mockExit).toHaveBeenCalledWith(1);
     mockExit.mockRestore();
@@ -2530,7 +2532,7 @@ describe('PaymentService 生产环境配置校验', () => {
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
-    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any, { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any);
 
     expect(mockExit).toHaveBeenCalledWith(1);
     mockExit.mockRestore();
@@ -2550,7 +2552,7 @@ describe('PaymentService 生产环境配置校验', () => {
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
-    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any, { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any);
 
     expect(mockExit).toHaveBeenCalledWith(1);
     mockExit.mockRestore();
@@ -2570,7 +2572,7 @@ describe('PaymentService 生产环境配置校验', () => {
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
-    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any, { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any);
 
     expect(mockExit).toHaveBeenCalledWith(1);
     mockExit.mockRestore();
@@ -2591,7 +2593,7 @@ describe('PaymentService 生产环境配置校验', () => {
 
     const mockExit = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
-    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any);
+    new PaymentService(mockPrisma as any, config as any, mockBE as any, mockOrderService as any, mockShareService as any, { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any);
 
     expect(mockExit).not.toHaveBeenCalled();
     mockExit.mockRestore();
@@ -2676,7 +2678,7 @@ describe('PaymentService resolveCompensationTask 防御式校验', () => {
     mockPrisma = createMockPrisma();
     mockConfigService = createMockConfigService();
     mockBusinessEventService = { emit: jest.fn() };
-    service = new PaymentService(mockPrisma as any, mockConfigService as any, mockBusinessEventService as any, {} as any, {} as any);
+    service = new PaymentService(mockPrisma as any, mockConfigService as any, mockBusinessEventService as any, {} as any, {} as any, { grantBenefitsForOrder: (jest.fn() as any).mockResolvedValue(null) } as any);
   });
 
   it('非法 status 抛 BadRequestException', async () => {

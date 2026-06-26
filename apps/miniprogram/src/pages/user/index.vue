@@ -121,6 +121,13 @@
         </view>
         <text class="menu-arrow">›</text>
       </view>
+      <view class="menu-item" @tap="navigateTo('/pages/benefit-package/my')">
+        <view class="menu-left">
+          <text class="menu-icon mint">权</text>
+          <text class="menu-text">我的权益</text>
+        </view>
+        <text class="menu-arrow">›</text>
+      </view>
       <view class="menu-item" @tap="navigateTo('/pages/customer-service/index')">
         <view class="menu-left">
           <text class="menu-icon">客</text>
@@ -329,7 +336,7 @@ function showLoginRequired() {
 
 function navigateTo(url: string) {
   const publicPages = ['/pages/customer-service/index', '/pages/agreement/index', '/pages/privacy/index', '/pages/food-safety/index']
-  const loginRequiredPages = ['/pages/baby/list', '/pages/address/list', '/pages/coupon/my', '/pages/coupon/center', '/pages/member/index', '/pages/points/index', '/pages/share/invite']
+  const loginRequiredPages = ['/pages/baby/list', '/pages/address/list', '/pages/coupon/my', '/pages/coupon/center', '/pages/member/index', '/pages/points/index', '/pages/share/invite', '/pages/benefit-package/my']
 
   if (publicPages.some(p => url.startsWith(p))) {
     uni.navigateTo({ url })

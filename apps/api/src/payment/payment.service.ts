@@ -11,6 +11,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import axios from 'axios';
 import { ShareService } from '../share/share.service';
+import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { generatePaymentNo, generateRefundNo } from '@baby-mall/shared';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
 
@@ -27,6 +28,7 @@ export class PaymentService {
     private businessEvent: BusinessEventService,
     private orderService: OrderService,
     private shareService: ShareService,
+    private benefitPackageService: BenefitPackageService,
   ) {
     const keyPath = this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH', '');
     if (keyPath) {
@@ -797,6 +799,13 @@ export class PaymentService {
       );
     } catch (err) {
       this.logger.error(`首单邀请奖励发放失败: orderId=${orderId}`, (err as Error).message);
+    }
+
+    // 权益卡发放：订单商品绑定权益包时到账，失败不影响支付主流程
+    try {
+      await this.benefitPackageService.grantBenefitsForOrder(orderId, order.userId);
+    } catch (err) {
+      this.logger.error(`权益卡发放失败: orderId=${orderId}`, (err as Error).message);
     }
   }
 
