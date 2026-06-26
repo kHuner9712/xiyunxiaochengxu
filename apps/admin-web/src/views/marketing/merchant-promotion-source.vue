@@ -31,7 +31,7 @@
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column prop="name" label="商家名称" min-width="160" show-overflow-tooltip />
         <el-table-column prop="promotionCode" label="推广码" width="150">
           <template #default="{ row }">

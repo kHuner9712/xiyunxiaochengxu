@@ -46,39 +46,41 @@
       <el-button type="warning" @click="handleReleaseExpired">释放过期锁</el-button>
     </div>
 
-    <el-table v-loading="loading" :data="tableData" border>
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="activityId" label="活动ID" width="90" />
-      <el-table-column prop="userId" label="用户ID" width="90" />
-      <el-table-column prop="orderId" label="订单ID" width="100" />
-      <el-table-column prop="quantity" label="数量" width="70" />
-      <el-table-column label="秒杀价" width="100">
-        <template #default="{ row }">¥{{ formatPrice(row.flashPrice) }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="orderStatusTagType(row.status)">{{ orderStatusText(row.status) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="锁过期时间" width="170">
-        <template #default="{ row }">{{ formatDateShort(row.lockExpireAt) }}</template>
-      </el-table-column>
-      <el-table-column label="创建时间" width="170">
-        <template #default="{ row }">{{ formatDateShort(row.createdAt) }}</template>
-      </el-table-column>
-      <el-table-column label="支付时间" width="170">
-        <template #default="{ row }">{{ row.paidAt ? formatDateShort(row.paidAt) : '-' }}</template>
-      </el-table-column>
-    </el-table>
+    <div class="table-card">
+      <el-table v-loading="loading" :data="tableData" border>
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
+        <el-table-column prop="activityId" label="活动ID" width="110" show-overflow-tooltip />
+        <el-table-column prop="userId" label="用户ID" width="110" show-overflow-tooltip />
+        <el-table-column prop="orderId" label="订单ID" width="120" show-overflow-tooltip />
+        <el-table-column prop="quantity" label="数量" width="70" />
+        <el-table-column label="秒杀价" width="100">
+          <template #default="{ row }">¥{{ formatPrice(row.flashPrice) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="orderStatusTagType(row.status)">{{ orderStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="锁过期时间" width="170">
+          <template #default="{ row }">{{ formatDate(row.lockExpireAt) }}</template>
+        </el-table-column>
+        <el-table-column label="创建时间" width="170">
+          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="支付时间" width="170">
+          <template #default="{ row }">{{ row.paidAt ? formatDate(row.paidAt) : '-' }}</template>
+        </el-table-column>
+      </el-table>
 
-    <el-pagination
-      v-model:current-page="searchForm.page"
-      v-model:page-size="searchForm.pageSize"
-      :total="total"
-      layout="total, prev, pager, next"
-      @current-change="loadList"
-      style="margin-top: 16px"
-    />
+      <el-pagination
+        v-model:current-page="searchForm.page"
+        v-model:page-size="searchForm.pageSize"
+        :total="total"
+        layout="total, prev, pager, next"
+        @current-change="loadList"
+        style="margin-top: 16px"
+      />
+    </div>
   </div>
 </template>
 
@@ -86,7 +88,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { flashSaleApi } from '@/api/flash-sale'
-import { formatPrice, formatDateShort } from '@/utils/format'
+import { formatPrice, formatDate } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'

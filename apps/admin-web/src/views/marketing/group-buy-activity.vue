@@ -27,9 +27,9 @@
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column prop="name" label="活动名称" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="productId" label="商品ID" width="90" />
+        <el-table-column prop="productId" label="商品ID" width="110" show-overflow-tooltip />
         <el-table-column label="拼团价" width="100">
           <template #default="{ row }">¥{{ formatPrice(row.groupPrice) }}</template>
         </el-table-column>
@@ -44,10 +44,10 @@
             {{ row.stockLimit != null ? `${row.soldCount}/${row.stockLimit}` : `${row.soldCount}/∞` }}
           </template>
         </el-table-column>
-        <el-table-column label="活动时间" width="280">
+        <el-table-column label="活动时间" width="320">
           <template #default="{ row }">
-            <div>{{ formatDateShort(row.startTime) }} 至</div>
-            <div>{{ formatDateShort(row.endTime) }}</div>
+            <div>{{ formatDate(row.startTime) }} 至</div>
+            <div>{{ formatDate(row.endTime) }}</div>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -153,7 +153,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { groupBuyApi } from '@/api/group-buy'
-import { formatPrice, formatDateShort } from '@/utils/format'
+import { formatPrice } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)

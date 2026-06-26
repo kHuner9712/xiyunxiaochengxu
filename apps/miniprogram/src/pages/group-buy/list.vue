@@ -78,64 +78,79 @@ onReachBottom(() => loadList())
 <style lang="scss" scoped>
 .group-buy-list-page {
   min-height: 100vh;
-  padding: 16rpx;
+  padding: $spacing-sm $spacing-md $spacing-lg;
 }
+
 .act-card {
   display: flex;
-  margin-bottom: 16rpx;
-  padding: 16rpx;
-  background: #fff;
-  border-radius: 16rpx;
+  margin-bottom: $spacing-md;
+  padding: $spacing-sm;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-sm;
 }
+
 .act-cover {
   width: 200rpx;
   height: 200rpx;
-  border-radius: 12rpx;
-  background: #f5f5f5;
+  border-radius: $radius-lg;
+  background: $bg-ivory;
+  flex-shrink: 0;
 }
+
 .act-cover-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @include flex-center;
 }
+
 .placeholder-text {
-  color: #ccc;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
+
 .act-info {
   flex: 1;
-  margin-left: 16rpx;
+  min-width: 0;
+  margin-left: $spacing-sm;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
+
 .act-name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
+  font-size: $font-md;
+  font-weight: 700;
+  color: $text-color;
+  line-height: 1.4;
+  @include text-ellipsis-2;
 }
+
 .act-meta {
   display: flex;
   align-items: baseline;
-  gap: 8rpx;
+  gap: $spacing-xs;
 }
+
 .act-price {
-  color: #f56c6c;
-  font-size: 32rpx;
-  font-weight: 600;
+  color: $price-color;
+  font-size: $font-lg;
+  font-weight: 800;
 }
+
 .act-original {
-  color: #999;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
   text-decoration: line-through;
 }
+
 .act-size {
-  color: #e6a23c;
-  font-size: 24rpx;
-  margin-left: 8rpx;
+  color: $warning-color;
+  font-size: $font-sm;
+  margin-left: $spacing-xs;
 }
+
 .act-time {
-  color: #909399;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
 </style>

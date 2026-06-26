@@ -190,149 +190,202 @@ onShareAppMessage(() => ({
 <style lang="scss" scoped>
 .group-buy-detail-page {
   min-height: 100vh;
-  padding: 16rpx;
-  padding-bottom: 140rpx;
+  padding: $spacing-sm $spacing-md;
+  padding-bottom: 180rpx;
 }
+
 .detail-card {
-  background: #fff;
-  border-radius: 16rpx;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
   overflow: hidden;
-  margin-bottom: 16rpx;
+  margin-bottom: $spacing-md;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-md;
 }
+
 .cover {
   width: 100%;
   height: 400rpx;
-  background: #f5f5f5;
+  background: $bg-ivory;
 }
+
 .info {
-  padding: 24rpx;
+  padding: $spacing-md;
 }
+
 .name {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 12rpx;
+  font-size: $font-lg;
+  font-weight: 800;
+  color: $text-color;
+  margin-bottom: $spacing-sm;
+  line-height: 1.4;
 }
+
 .price-row {
   display: flex;
   align-items: baseline;
-  gap: 12rpx;
-  margin-bottom: 12rpx;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-sm;
   flex-wrap: wrap;
 }
+
 .price {
-  color: #f56c6c;
-  font-size: 40rpx;
-  font-weight: 600;
+  color: $price-color;
+  font-size: 44rpx;
+  font-weight: 800;
 }
+
 .original {
-  color: #999;
-  font-size: 28rpx;
+  color: $text-hint;
+  font-size: $font-md;
   text-decoration: line-through;
 }
+
 .size {
-  color: #e6a23c;
-  font-size: 26rpx;
+  color: $warning-color;
+  font-size: $font-sm;
 }
+
 .expire {
-  color: #909399;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
+
 .desc {
-  color: #666;
-  font-size: 26rpx;
-  margin: 12rpx 0;
-  line-height: 1.5;
+  color: $text-secondary;
+  font-size: $font-sm;
+  margin: $spacing-sm 0;
+  line-height: 1.55;
 }
+
 .meta {
-  color: #909399;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
+
 .limit {
-  margin-left: 16rpx;
-  color: #f56c6c;
+  margin-left: $spacing-sm;
+  color: $price-color;
 }
+
 .section {
-  margin-top: 16rpx;
+  margin-top: $spacing-md;
 }
+
 .section-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 12rpx;
-  padding: 0 8rpx;
+  font-size: $font-md;
+  font-weight: 700;
+  color: $text-color;
+  margin-bottom: $spacing-sm;
+  padding: 0 $spacing-xs;
 }
+
 .empty-tip {
-  color: #999;
-  font-size: 26rpx;
+  color: $text-hint;
+  font-size: $font-sm;
   text-align: center;
-  padding: 40rpx 0;
+  padding: 48rpx 0;
 }
+
 .group-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 24rpx;
-  margin-bottom: 12rpx;
+  background: $gradient-card;
+  border-radius: $radius-xl;
+  padding: $spacing-md;
+  margin-bottom: $spacing-sm;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-xs;
 }
+
 .group-info {
   flex: 1;
+  min-width: 0;
 }
+
 .group-leader {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-bottom: 8rpx;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-xs;
 }
+
 .avatar {
   width: 56rpx;
   height: 56rpx;
   border-radius: 50%;
-  background: #f5f5f5;
+  background: $bg-ivory;
 }
+
 .avatar-placeholder {
-  background: #ddd;
+  background: $bg-gray;
 }
+
 .leader-name {
-  font-size: 26rpx;
-  color: #333;
+  font-size: $font-sm;
+  color: $text-color;
+  @include text-ellipsis;
 }
+
 .group-progress {
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  gap: $spacing-md;
 }
+
 .progress-text {
-  color: #f56c6c;
-  font-size: 28rpx;
-  font-weight: 600;
+  color: $price-color;
+  font-size: $font-md;
+  font-weight: 700;
 }
+
 .remain {
-  color: #909399;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
+
 .join-btn {
   flex-shrink: 0;
-  background: #f56c6c;
-  color: #fff;
-  border-radius: 32rpx;
+  background: $gradient-coral;
+  color: #FFFFFF;
+  border-radius: $radius-round;
+  font-size: $font-sm;
+  font-weight: 700;
+  margin: 0;
+  padding: 0 28rpx;
+  line-height: 64rpx;
+  min-height: 64rpx;
+
+  &::after {
+    border: none;
+  }
 }
+
 .bottom-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 16rpx 24rpx;
-  background: #fff;
-  border-top: 1rpx solid #eee;
-  z-index: 10;
+  padding: $spacing-sm $spacing-md;
+  background: rgba(255, 252, 247, 0.96);
+  border-top: 1rpx solid rgba($border-color, 0.82);
+  box-shadow: 0 -12rpx 36rpx rgba(131, 91, 78, 0.08);
+  z-index: 20;
+  @include safe-bottom;
 }
+
 .start-btn {
   width: 100%;
-  border-radius: 48rpx;
-  background: #f56c6c;
-  color: #fff;
+  border-radius: $radius-round;
+  background: $gradient-coral;
+  color: #FFFFFF;
+  font-size: $font-md;
+  font-weight: 700;
+  box-shadow: $shadow-coral;
+
+  &::after {
+    border: none;
+  }
 }
 </style>

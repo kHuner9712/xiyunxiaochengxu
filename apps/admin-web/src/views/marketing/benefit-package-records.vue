@@ -43,11 +43,11 @@
             </el-form-item>
           </el-form>
           <el-table :data="pkgData" stripe v-loading="pkgLoading">
-            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
             <el-table-column prop="packageName" label="权益包" min-width="140" show-overflow-tooltip />
             <el-table-column prop="nickname" label="用户" width="100" />
             <el-table-column prop="phone" label="手机号" width="120" />
-            <el-table-column prop="orderId" label="订单ID" width="100" />
+            <el-table-column prop="orderId" label="订单ID" width="120" show-overflow-tooltip />
             <el-table-column label="使用情况" width="110">
               <template #default="{ row }">{{ row.entitlementUsed ?? 0 }} / {{ row.entitlementTotal ?? 0 }}</template>
             </el-table-column>
@@ -96,7 +96,7 @@
             </el-form-item>
           </el-form>
           <el-table :data="entData" stripe v-loading="entLoading">
-            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
             <el-table-column prop="verifyCode" label="核销码" width="120">
               <template #default="{ row }"><el-tag type="warning">{{ row.verifyCode }}</el-tag></template>
             </el-table-column>
@@ -140,7 +140,7 @@
             </el-form-item>
           </el-form>
           <el-table :data="logData" stripe v-loading="logLoading">
-            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
             <el-table-column prop="verifyCode" label="核销码" width="120" />
             <el-table-column prop="packageName" label="权益项" min-width="120" show-overflow-tooltip>
               <template #default="{ row }">{{ row.itemName || '-' }}</template>

@@ -42,8 +42,8 @@
         </el-table-column>
         <el-table-column label="周期" width="240">
           <template #default="{ row }">
-            <div>{{ formatDateShort(row.periodStart) }}</div>
-            <div>至 {{ formatDateShort(row.periodEnd) }}</div>
+            <div>{{ formatDate(row.periodStart) }}</div>
+            <div>至 {{ formatDate(row.periodEnd) }}</div>
           </template>
         </el-table-column>
         <el-table-column prop="recordCount" label="记录数" width="90" />
@@ -138,7 +138,7 @@
           </el-descriptions-item>
           <el-descriptions-item label="商家">{{ detailData.merchantName || '全部' }}</el-descriptions-item>
           <el-descriptions-item label="门店">{{ detailData.storeName || '全部' }}</el-descriptions-item>
-          <el-descriptions-item label="周期">{{ formatDateShort(detailData.periodStart) }} 至 {{ formatDateShort(detailData.periodEnd) }}</el-descriptions-item>
+          <el-descriptions-item label="周期">{{ formatDate(detailData.periodStart) }} 至 {{ formatDate(detailData.periodEnd) }}</el-descriptions-item>
           <el-descriptions-item label="记录数">{{ detailData.recordCount }}</el-descriptions-item>
           <el-descriptions-item label="基数合计">¥{{ formatPrice(detailData.totalSourceAmount) }}</el-descriptions-item>
           <el-descriptions-item label="应结合计">¥{{ formatPrice(detailData.totalCommissionAmount) }}</el-descriptions-item>
@@ -180,7 +180,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { merchantSettlementApi } from '@/api/merchant-settlement'
-import { formatPrice, formatDateShort } from '@/utils/format'
+import { formatPrice, formatDate } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
@@ -337,7 +337,7 @@ onMounted(() => loadList())
 
 <style scoped>
 .page-container { padding: 16px; }
-.search-bar { background: #fff; padding: 16px; border-radius: 4px; margin-bottom: 16px; }
-.table-card { background: #fff; padding: 16px; border-radius: 4px; }
+.search-bar { background: #fff; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+.table-card { background: #fff; padding: 16px; border-radius: 8px; }
 .pagination-wrap { margin-top: 16px; text-align: right; }
 </style>

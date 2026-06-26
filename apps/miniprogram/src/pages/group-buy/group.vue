@@ -174,202 +174,268 @@ onShareAppMessage(() => ({
 <style lang="scss" scoped>
 .group-detail-page {
   min-height: 100vh;
-  padding: 16rpx;
-  padding-bottom: 140rpx;
+  padding: $spacing-sm $spacing-md;
+  padding-bottom: 60rpx;
 }
+
 .group-detail-card {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 24rpx;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
+  padding: $spacing-md;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-md;
 }
+
 .status-banner {
   display: flex;
   align-items: baseline;
-  gap: 16rpx;
-  padding: 20rpx 24rpx;
-  border-radius: 12rpx;
-  margin-bottom: 24rpx;
+  gap: $spacing-sm;
+  padding: 20rpx $spacing-md;
+  border-radius: $radius-lg;
+  margin-bottom: $spacing-md;
 }
+
 .status-banner.status-forming {
-  background: rgba(245, 108, 108, 0.1);
+  background: $primary-soft;
 }
+
 .status-banner.status-success {
-  background: rgba(103, 194, 58, 0.1);
+  background: $success-soft;
 }
+
 .status-banner.status-failed,
 .status-banner.status-cancelled {
-  background: rgba(144, 147, 153, 0.1);
+  background: $info-soft;
 }
+
 .status-text {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #333;
+  font-size: $font-lg;
+  font-weight: 800;
+  color: $text-color;
 }
+
 .status-sub {
-  font-size: 24rpx;
-  color: #909399;
+  font-size: $font-sm;
+  color: $text-secondary;
 }
+
 .activity-info {
   display: flex;
-  margin-bottom: 24rpx;
+  margin-bottom: $spacing-md;
 }
+
 .cover {
   width: 160rpx;
   height: 160rpx;
-  border-radius: 12rpx;
-  background: #f5f5f5;
+  border-radius: $radius-lg;
+  background: $bg-ivory;
   flex-shrink: 0;
 }
+
 .cover-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @include flex-center;
 }
+
 .placeholder-text {
-  color: #ccc;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
+
 .info-right {
   flex: 1;
-  margin-left: 16rpx;
+  min-width: 0;
+  margin-left: $spacing-sm;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
+
 .act-name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 12rpx;
+  font-size: $font-md;
+  font-weight: 700;
+  color: $text-color;
+  margin-bottom: $spacing-sm;
+  line-height: 1.4;
+  @include text-ellipsis-2;
 }
+
 .price-row {
   display: flex;
   align-items: baseline;
-  gap: 12rpx;
+  gap: $spacing-sm;
 }
+
 .price {
-  color: #f56c6c;
-  font-size: 32rpx;
-  font-weight: 600;
+  color: $price-color;
+  font-size: $font-lg;
+  font-weight: 800;
 }
+
 .size {
-  color: #e6a23c;
-  font-size: 24rpx;
+  color: $warning-color;
+  font-size: $font-sm;
 }
+
 .progress-section {
-  margin-bottom: 24rpx;
+  margin-bottom: $spacing-md;
 }
+
 .progress-bar {
   width: 100%;
   height: 16rpx;
-  background: #f5f5f5;
-  border-radius: 8rpx;
+  background: $bg-gray;
+  border-radius: $radius-round;
   overflow: hidden;
-  margin-bottom: 12rpx;
+  margin-bottom: $spacing-sm;
 }
+
 .progress-inner {
   height: 100%;
-  background: linear-gradient(90deg, #f56c6c, #ff976a);
+  background: $gradient-coral;
   transition: width 0.3s;
 }
+
 .progress-text-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .progress-count {
-  color: #f56c6c;
-  font-size: 28rpx;
-  font-weight: 600;
+  color: $price-color;
+  font-size: $font-md;
+  font-weight: 700;
 }
+
 .group-no {
-  color: #909399;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
+  @include text-ellipsis;
 }
+
 .members-section {
-  margin-top: 16rpx;
+  margin-top: $spacing-md;
 }
+
 .section-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 16rpx;
+  font-size: $font-md;
+  font-weight: 700;
+  color: $text-color;
+  margin-bottom: $spacing-md;
 }
+
 .member-item {
   display: flex;
   align-items: center;
-  padding: 16rpx 0;
-  border-bottom: 1rpx solid #f5f5f5;
+  padding: $spacing-sm 0;
+  border-bottom: 1rpx solid $divider-color;
+
+  &:last-child {
+    border-bottom: none;
+  }
 }
+
 .avatar {
   width: 64rpx;
   height: 64rpx;
   border-radius: 50%;
-  background: #f5f5f5;
+  background: $bg-ivory;
   flex-shrink: 0;
 }
+
 .avatar-placeholder {
-  background: #ddd;
+  background: $bg-gray;
 }
+
 .member-info {
   flex: 1;
-  margin-left: 16rpx;
+  min-width: 0;
+  margin-left: $spacing-sm;
 }
+
 .member-top {
   display: flex;
   align-items: center;
-  gap: 8rpx;
+  gap: $spacing-xs;
   margin-bottom: 4rpx;
 }
+
 .member-name {
-  font-size: 26rpx;
-  color: #333;
+  font-size: $font-sm;
+  color: $text-color;
+  @include text-ellipsis;
 }
+
 .role-tag {
   font-size: 20rpx;
-  padding: 2rpx 10rpx;
-  border-radius: 4rpx;
+  padding: 2rpx 12rpx;
+  border-radius: $radius-round;
+  font-weight: 700;
 }
+
 .role-tag.leader {
-  background: rgba(245, 108, 108, 0.1);
-  color: #f56c6c;
+  background: $primary-soft;
+  color: $primary-dark;
 }
+
 .role-tag.member {
-  background: rgba(144, 147, 153, 0.1);
-  color: #909399;
+  background: $info-soft;
+  color: $text-hint;
 }
+
 .member-status {
-  font-size: 22rpx;
-  color: #909399;
+  font-size: $font-xs;
+  color: $text-hint;
 }
+
 .member-status.m-status-paid {
-  color: #67c23a;
+  color: $success-dark;
 }
+
 .member-status.m-status-pending_payment {
-  color: #e6a23c;
+  color: $warning-color;
 }
+
 .member-status.m-status-cancelled,
 .member-status.m-status-refunded {
-  color: #909399;
+  color: $text-hint;
 }
+
 .paid-time {
-  font-size: 22rpx;
-  color: #c0c4cc;
+  font-size: $font-xs;
+  color: $text-hint;
 }
+
 .bottom-bar {
-  margin-top: 32rpx;
+  margin-top: $spacing-lg;
 }
+
 .join-btn {
   width: 100%;
-  border-radius: 48rpx;
-  background: #f56c6c;
-  color: #fff;
+  border-radius: $radius-round;
+  background: $gradient-coral;
+  color: #FFFFFF;
+  font-size: $font-md;
+  font-weight: 700;
+  box-shadow: $shadow-coral;
+
+  &::after {
+    border: none;
+  }
 }
+
 .share-btn {
-  margin-top: 32rpx;
+  margin-top: $spacing-lg;
   width: 100%;
-  border-radius: 48rpx;
-  background: #f56c6c;
-  color: #fff;
+  border-radius: $radius-round;
+  background: $gradient-coral;
+  color: #FFFFFF;
+  font-size: $font-md;
+  font-weight: 700;
+  box-shadow: $shadow-coral;
+
+  &::after {
+    border: none;
+  }
 }
 </style>

@@ -33,7 +33,7 @@
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column prop="name" label="规则名称" min-width="140" show-overflow-tooltip />
         <el-table-column label="类型" width="110">
           <template #default="{ row }">
@@ -53,8 +53,8 @@
         <el-table-column label="生效时间" width="200">
           <template #default="{ row }">
             <div v-if="row.effectiveStartAt || row.effectiveEndAt">
-              <div>{{ row.effectiveStartAt ? formatDateShort(row.effectiveStartAt) : '不限' }}</div>
-              <div>至 {{ row.effectiveEndAt ? formatDateShort(row.effectiveEndAt) : '不限' }}</div>
+              <div>{{ row.effectiveStartAt ? formatDate(row.effectiveStartAt) : '不限' }}</div>
+              <div>至 {{ row.effectiveEndAt ? formatDate(row.effectiveEndAt) : '不限' }}</div>
             </div>
             <span v-else>长期</span>
           </template>
@@ -190,7 +190,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { merchantSettlementApi } from '@/api/merchant-settlement'
-import { formatPrice, formatDateShort, formatPercent } from '@/utils/format'
+import { formatPrice, formatDate, formatPercent } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
@@ -378,7 +378,7 @@ onMounted(() => loadList())
 
 <style scoped>
 .page-container { padding: 16px; }
-.search-bar { background: #fff; padding: 16px; border-radius: 4px; margin-bottom: 16px; }
-.table-card { background: #fff; padding: 16px; border-radius: 4px; }
+.search-bar { background: #fff; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+.table-card { background: #fff; padding: 16px; border-radius: 8px; }
 .pagination-wrap { margin-top: 16px; text-align: right; }
 </style>

@@ -101,90 +101,113 @@ onReachBottom(() => loadList())
 <style lang="scss" scoped>
 .my-group-page {
   min-height: 100vh;
-  padding: 16rpx;
+  padding: $spacing-sm $spacing-md $spacing-lg;
 }
+
 .group-card {
   display: flex;
-  margin-bottom: 16rpx;
-  padding: 16rpx;
-  background: #fff;
-  border-radius: 16rpx;
+  margin-bottom: $spacing-md;
+  padding: $spacing-sm;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-sm;
 }
+
 .cover-wrap {
   flex-shrink: 0;
 }
+
 .cover {
   width: 180rpx;
   height: 180rpx;
-  border-radius: 12rpx;
-  background: #f5f5f5;
+  border-radius: $radius-lg;
+  background: $bg-ivory;
 }
+
 .cover-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @include flex-center;
 }
+
 .placeholder-text {
-  color: #ccc;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
+
 .info {
   flex: 1;
-  margin-left: 16rpx;
+  min-width: 0;
+  margin-left: $spacing-sm;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
+
 .name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 12rpx;
+  font-size: $font-md;
+  font-weight: 700;
+  color: $text-color;
+  margin-bottom: $spacing-sm;
+  line-height: 1.4;
+  @include text-ellipsis-2;
 }
+
 .meta-row {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-bottom: 12rpx;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-sm;
 }
+
 .status-tag {
-  font-size: 22rpx;
-  padding: 4rpx 12rpx;
-  border-radius: 4rpx;
-  font-weight: 600;
+  font-size: $font-xs;
+  padding: 4rpx 16rpx;
+  border-radius: $radius-round;
+  font-weight: 700;
 }
+
 .status-tag.status-forming {
-  background: rgba(245, 108, 108, 0.1);
-  color: #f56c6c;
+  background: $primary-soft;
+  color: $primary-dark;
 }
+
 .status-tag.status-success {
-  background: rgba(103, 194, 58, 0.1);
-  color: #67c23a;
+  background: $success-soft;
+  color: $success-dark;
 }
+
 .status-tag.status-failed,
 .status-tag.status-cancelled {
-  background: rgba(144, 147, 153, 0.1);
-  color: #909399;
+  background: $info-soft;
+  color: $text-hint;
 }
+
 .progress {
-  color: #e6a23c;
-  font-size: 24rpx;
+  color: $warning-color;
+  font-size: $font-sm;
+  font-weight: 700;
 }
+
 .meta-bottom {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .group-no {
-  color: #909399;
-  font-size: 22rpx;
+  color: $text-hint;
+  font-size: $font-xs;
+  @include text-ellipsis;
 }
+
 .remain {
-  color: #f56c6c;
-  font-size: 22rpx;
+  color: $price-color;
+  font-size: $font-xs;
+  font-weight: 700;
 }
+
 .time {
-  color: #c0c4cc;
-  font-size: 22rpx;
+  color: $text-hint;
+  font-size: $font-xs;
 }
 </style>

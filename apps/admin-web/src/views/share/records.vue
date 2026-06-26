@@ -24,7 +24,7 @@
     <el-card style="margin-bottom: 16px">
       <template #header><span>邀请关系</span></template>
       <el-table :data="inviteList" v-loading="inviteLoading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column label="邀请人" width="140">
           <template #default="{ row }">{{ row.inviter?.nickname || row.inviterUserId }}</template>
         </el-table-column>
@@ -78,7 +78,7 @@
         <el-button type="primary" @click="fetchRewardList">查询</el-button>
       </div>
       <el-table :data="rewardList" v-loading="rewardLoading" size="small">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column label="获奖用户" width="140">
           <template #default="{ row }">
             <div>{{ row.userName || row.userId }}</div>

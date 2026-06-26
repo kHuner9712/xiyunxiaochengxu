@@ -108,91 +108,113 @@ onReachBottom(() => loadList())
 <style lang="scss" scoped>
 .flash-sale-list-page {
   min-height: 100vh;
-  padding: 16rpx;
+  padding: $spacing-sm $spacing-md $spacing-lg;
 }
+
 .activity-card {
   display: flex;
-  margin-bottom: 16rpx;
-  padding: 16rpx;
-  background: #fff;
-  border-radius: 16rpx;
+  margin-bottom: $spacing-md;
+  padding: $spacing-sm;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-sm;
 }
+
 .cover-wrap {
   flex-shrink: 0;
 }
+
 .cover {
   width: 200rpx;
   height: 200rpx;
-  border-radius: 12rpx;
-  background: #f5f5f5;
+  border-radius: $radius-lg;
+  background: $bg-ivory;
 }
+
 .cover-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @include flex-center;
 }
+
 .placeholder-text {
-  color: #ccc;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
+
 .info {
   flex: 1;
-  margin-left: 16rpx;
+  min-width: 0;
+  margin-left: $spacing-sm;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
+
 .name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8rpx;
+  font-size: $font-md;
+  font-weight: 700;
+  color: $text-color;
+  margin-bottom: $spacing-xs;
+  line-height: 1.4;
+  @include text-ellipsis-2;
 }
+
 .price-row {
   display: flex;
   align-items: baseline;
-  gap: 12rpx;
-  margin-bottom: 8rpx;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-xs;
 }
+
 .flash-price {
-  color: #f56c6c;
-  font-size: 36rpx;
-  font-weight: 700;
+  color: $price-color;
+  font-size: 38rpx;
+  font-weight: 800;
 }
+
 .origin-price {
-  color: #c0c4cc;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
   text-decoration: line-through;
 }
+
 .meta-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8rpx;
+  margin-bottom: $spacing-xs;
 }
+
 .stock {
-  color: #909399;
-  font-size: 22rpx;
+  color: $text-hint;
+  font-size: $font-xs;
 }
+
 .status-tag {
-  font-size: 22rpx;
-  padding: 4rpx 12rpx;
-  border-radius: 4rpx;
+  font-size: $font-xs;
+  padding: 4rpx 16rpx;
+  border-radius: $radius-round;
+  font-weight: 700;
 }
+
 .status-tag.status-running {
-  background: rgba(245, 108, 108, 0.1);
-  color: #f56c6c;
+  background: $primary-soft;
+  color: $primary-dark;
 }
+
 .status-tag.status-pending {
-  background: rgba(230, 162, 60, 0.1);
-  color: #e6a23c;
+  background: $warning-soft;
+  color: $warning-color;
 }
+
 .status-tag.status-end {
-  background: rgba(144, 147, 153, 0.1);
-  color: #909399;
+  background: $info-soft;
+  color: $text-hint;
 }
+
 .countdown {
-  font-size: 22rpx;
-  color: #f56c6c;
+  font-size: $font-xs;
+  color: $price-color;
+  font-weight: 700;
 }
 </style>

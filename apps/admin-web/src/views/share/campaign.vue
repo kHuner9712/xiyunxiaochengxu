@@ -9,8 +9,8 @@
       </template>
 
       <el-table :data="list" v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="name" label="活动名称" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
+        <el-table-column prop="name" label="活动名称" min-width="160" show-overflow-tooltip />
         <el-table-column prop="type" label="类型" width="140">
           <template #default="{ row }">
             <el-tag>{{ typeMap[row.type] || row.type }}</el-tag>

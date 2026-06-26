@@ -204,144 +204,182 @@ onShareAppMessage(() => ({
 <style lang="scss" scoped>
 .flash-sale-detail-page {
   min-height: 100vh;
-  padding: 16rpx;
-  padding-bottom: 140rpx;
+  padding: $spacing-sm $spacing-md;
+  padding-bottom: 180rpx;
 }
+
 .detail-card {
-  background: #fff;
-  border-radius: 16rpx;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
   overflow: hidden;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-md;
 }
+
 .cover-wrap {
   width: 100%;
 }
+
 .cover {
   width: 100%;
   height: 400rpx;
-  background: #f5f5f5;
+  background: $bg-ivory;
 }
+
 .cover-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @include flex-center;
 }
+
 .placeholder-text {
-  color: #ccc;
-  font-size: 32rpx;
+  color: $text-hint;
+  font-size: $font-lg;
 }
+
 .info-section {
-  padding: 24rpx;
+  padding: $spacing-md;
 }
+
 .name {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #333;
-  margin-bottom: 16rpx;
+  font-size: $font-lg;
+  font-weight: 800;
+  color: $text-color;
+  margin-bottom: $spacing-sm;
+  line-height: 1.4;
 }
+
 .price-row {
   display: flex;
   align-items: baseline;
-  gap: 16rpx;
-  margin-bottom: 24rpx;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-md;
 }
+
 .flash-price {
-  color: #f56c6c;
-  font-size: 48rpx;
+  color: $price-color;
+  font-size: 52rpx;
   font-weight: 800;
 }
+
 .origin-price {
-  color: #c0c4cc;
-  font-size: 28rpx;
+  color: $text-hint;
+  font-size: $font-md;
   text-decoration: line-through;
 }
+
 .meta-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 16rpx;
-  margin-bottom: 24rpx;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-md;
 }
+
 .meta-item {
   width: 48%;
   display: flex;
   justify-content: space-between;
-  padding: 12rpx 16rpx;
-  background: #f9f9f9;
-  border-radius: 8rpx;
+  padding: 12rpx $spacing-sm;
+  background: $bg-gray;
+  border-radius: $radius-md;
 }
+
 .meta-label {
-  font-size: 24rpx;
-  color: #909399;
+  font-size: $font-sm;
+  color: $text-hint;
 }
+
 .meta-value {
-  font-size: 24rpx;
-  color: #333;
-  font-weight: 600;
+  font-size: $font-sm;
+  color: $text-color;
+  font-weight: 700;
 }
+
 .meta-value.status-running {
-  color: #f56c6c;
+  color: $price-color;
 }
+
 .meta-value.status-pending {
-  color: #e6a23c;
+  color: $warning-color;
 }
+
 .meta-value.status-end {
-  color: #909399;
+  color: $text-hint;
 }
+
 .countdown-row {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  padding: 16rpx;
-  background: rgba(245, 108, 108, 0.08);
-  border-radius: 8rpx;
-  margin-bottom: 24rpx;
+  gap: $spacing-sm;
+  padding: $spacing-sm $spacing-md;
+  background: $primary-soft;
+  border-radius: $radius-md;
+  margin-bottom: $spacing-md;
 }
+
 .countdown-label {
-  font-size: 26rpx;
-  color: #f56c6c;
-}
-.countdown-value {
-  font-size: 32rpx;
-  color: #f56c6c;
+  font-size: $font-sm;
+  color: $primary-dark;
   font-weight: 700;
 }
-.desc-section {
-  margin-top: 16rpx;
+
+.countdown-value {
+  font-size: $font-lg;
+  color: $price-color;
+  font-weight: 800;
 }
+
+.desc-section {
+  margin-top: $spacing-sm;
+}
+
 .desc-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8rpx;
+  font-size: $font-md;
+  font-weight: 700;
+  color: $text-color;
+  margin-bottom: $spacing-xs;
   display: block;
 }
+
 .desc-content {
-  font-size: 26rpx;
-  color: #606266;
+  font-size: $font-sm;
+  color: $text-secondary;
   line-height: 1.6;
 }
+
 .bottom-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 16rpx 24rpx;
-  background: #fff;
-  border-top: 1rpx solid #eee;
-  z-index: 10;
+  padding: $spacing-sm $spacing-md;
+  background: rgba(255, 252, 247, 0.96);
+  border-top: 1rpx solid rgba($border-color, 0.82);
+  box-shadow: 0 -12rpx 36rpx rgba(131, 91, 78, 0.08);
+  z-index: 20;
+  @include safe-bottom;
 }
+
 .buy-btn {
   width: 100%;
-  border-radius: 48rpx;
-  background: #f56c6c;
-  color: #fff;
-  font-size: 32rpx;
-  font-weight: 700;
+  border-radius: $radius-round;
+  background: $gradient-coral;
+  color: #FFFFFF;
+  font-size: $font-lg;
+  font-weight: 800;
   padding: 20rpx 0;
+  box-shadow: $shadow-coral;
+
+  &::after {
+    border: none;
+  }
 }
+
 .buy-btn[disabled] {
-  background: #c0c4cc;
-  color: #fff;
+  background: $text-disabled;
+  color: #FFFFFF;
+  box-shadow: none;
+  opacity: 0.7;
 }
+
 .btn-text {
   color: inherit;
 }

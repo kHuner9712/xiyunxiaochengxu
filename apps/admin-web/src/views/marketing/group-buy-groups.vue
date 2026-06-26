@@ -69,10 +69,10 @@
 
     <div class="table-card">
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column prop="groupNo" label="团号" width="200" show-overflow-tooltip />
-        <el-table-column prop="activityId" label="活动ID" width="90" />
-        <el-table-column prop="leaderUserId" label="团长ID" width="90" />
+        <el-table-column prop="activityId" label="活动ID" width="110" show-overflow-tooltip />
+        <el-table-column prop="leaderUserId" label="团长ID" width="110" show-overflow-tooltip />
         <el-table-column label="人数" width="100">
           <template #default="{ row }">{{ row.currentCount }} / {{ row.targetCount }}</template>
         </el-table-column>
@@ -125,8 +125,8 @@
 
         <div style="font-weight: 600; margin-bottom: 8px">成员列表</div>
         <el-table :data="detail.members" stripe size="small">
-          <el-table-column prop="id" label="ID" width="70" />
-          <el-table-column prop="userId" label="用户ID" width="90" />
+          <el-table-column prop="id" label="ID" width="80" show-overflow-tooltip />
+          <el-table-column prop="userId" label="用户ID" width="100" show-overflow-tooltip />
           <el-table-column label="角色" width="80">
             <template #default="{ row }">
               <el-tag :type="row.role === 'leader' ? 'primary' : 'info'" size="small">
@@ -139,7 +139,7 @@
               <el-tag :type="memberStatusTagType(row.status)" size="small">{{ memberStatusText(row.status) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="orderId" label="订单ID" width="100" />
+          <el-table-column prop="orderId" label="订单ID" width="120" show-overflow-tooltip />
           <el-table-column label="支付时间" min-width="150">
             <template #default="{ row }">{{ row.paidAt ? formatDate(row.paidAt) : '-' }}</template>
           </el-table-column>

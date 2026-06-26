@@ -37,7 +37,7 @@
           <el-descriptions-item label="自提码">
             <span class="pickup-code-text">{{ preview.pickupCode }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="订单金额">{{ formatPrice(preview.payAmount) }}</el-descriptions-item>
+          <el-descriptions-item label="订单金额">¥{{ formatPrice(preview.payAmount) }}</el-descriptions-item>
           <el-descriptions-item v-if="preview.pickedUpAt" label="核销时间">{{ preview.pickedUpAt }}</el-descriptions-item>
         </el-descriptions>
 
@@ -54,11 +54,11 @@
             </el-table-column>
             <el-table-column label="规格" prop="skuName" min-width="120" />
             <el-table-column label="单价" width="100">
-              <template #default="{ row }">{{ formatPrice(row.price) }}</template>
+              <template #default="{ row }">¥{{ formatPrice(row.price) }}</template>
             </el-table-column>
             <el-table-column label="数量" prop="quantity" width="80" />
             <el-table-column label="小计" width="100">
-              <template #default="{ row }">{{ formatPrice(row.subtotal) }}</template>
+              <template #default="{ row }">¥{{ formatPrice(row.subtotal) }}</template>
             </el-table-column>
           </el-table>
         </div>

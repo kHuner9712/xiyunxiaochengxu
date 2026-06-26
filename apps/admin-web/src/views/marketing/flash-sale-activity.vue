@@ -10,43 +10,45 @@
       <el-button type="success" @click="openCreate">新增活动</el-button>
     </div>
 
-    <el-table v-loading="loading" :data="tableData" border>
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="name" label="活动名称" min-width="140" />
-      <el-table-column prop="productId" label="商品ID" width="90" />
-      <el-table-column prop="skuId" label="SKU ID" width="90" />
-      <el-table-column label="秒杀价" width="100">
-        <template #default="{ row }">¥{{ formatPrice(row.flashPrice) }}</template>
-      </el-table-column>
-      <el-table-column label="库存/已售/锁定" width="130">
-        <template #default="{ row }">{{ row.stockLimit }} / {{ row.soldCount }} / {{ row.lockedCount }}</template>
-      </el-table-column>
-      <el-table-column prop="limitPerUser" label="限购" width="70" />
-      <el-table-column prop="lockMinutes" label="锁库存(分)" width="100" />
-      <el-table-column label="活动时间" width="320">
-        <template #default="{ row }">{{ formatDateShort(row.startTime) }} ~ {{ formatDateShort(row.endTime) }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="100">
-        <template #default="{ row }">
-          <el-switch :model-value="row.status === 1" @change="(val: any) => handleStatusChange(row, val)" />
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-card">
+      <el-table v-loading="loading" :data="tableData" border>
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
+        <el-table-column prop="name" label="活动名称" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="productId" label="商品ID" width="110" show-overflow-tooltip />
+        <el-table-column prop="skuId" label="SKU ID" width="110" show-overflow-tooltip />
+        <el-table-column label="秒杀价" width="100">
+          <template #default="{ row }">¥{{ formatPrice(row.flashPrice) }}</template>
+        </el-table-column>
+        <el-table-column label="库存/已售/锁定" width="130">
+          <template #default="{ row }">{{ row.stockLimit }} / {{ row.soldCount }} / {{ row.lockedCount }}</template>
+        </el-table-column>
+        <el-table-column prop="limitPerUser" label="限购" width="70" />
+        <el-table-column prop="lockMinutes" label="锁库存(分)" width="100" />
+        <el-table-column label="活动时间" width="320">
+          <template #default="{ row }">{{ formatDateShort(row.startTime) }} ~ {{ formatDateShort(row.endTime) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-switch :model-value="row.status === 1" @change="(val: any) => handleStatusChange(row, val)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
-    <el-pagination
-      v-model:current-page="searchForm.page"
-      v-model:page-size="searchForm.pageSize"
-      :total="total"
-      layout="total, prev, pager, next"
-      @current-change="loadList"
-      style="margin-top: 16px"
-    />
+      <el-pagination
+        v-model:current-page="searchForm.page"
+        v-model:page-size="searchForm.pageSize"
+        :total="total"
+        layout="total, prev, pager, next"
+        @current-change="loadList"
+        style="margin-top: 16px"
+      />
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="editing.id ? '编辑秒杀活动' : '新增秒杀活动'" width="640px">
       <el-form :model="editing" label-width="120px">
@@ -258,5 +260,15 @@ onMounted(() => loadList())
   margin-bottom: 16px;
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+}
+.table-card {
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
 }
 </style>

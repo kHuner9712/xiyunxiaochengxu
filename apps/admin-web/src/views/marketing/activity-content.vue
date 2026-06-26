@@ -38,7 +38,7 @@
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column label="封面" width="100">
           <template #default="{ row }">
             <el-image
@@ -58,7 +58,7 @@
             <el-tag :type="getTypeTagType(row.type)" size="small">{{ formatType(row.type) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="关联商品" width="120">
+        <el-table-column label="关联商品" width="140" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.linkedProductId">{{ row.linkedProductId }}</span>
             <span v-else style="color: #999">-</span>

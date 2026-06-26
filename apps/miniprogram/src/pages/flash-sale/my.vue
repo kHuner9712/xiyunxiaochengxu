@@ -104,81 +104,99 @@ onReachBottom(() => loadList())
 <style lang="scss" scoped>
 .my-flash-page {
   min-height: 100vh;
-  padding: 16rpx;
+  padding: $spacing-sm $spacing-md $spacing-lg;
 }
+
 .order-card {
-  margin-bottom: 16rpx;
-  padding: 24rpx;
-  background: #fff;
-  border-radius: 16rpx;
+  margin-bottom: $spacing-md;
+  padding: $spacing-md;
+  background: $gradient-card;
+  border-radius: $radius-xxl;
+  border: 1rpx solid rgba($border-color, 0.78);
+  box-shadow: $shadow-sm;
 }
+
 .info {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: $spacing-sm;
 }
+
 .row-1 {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
+  font-size: $font-md;
+  font-weight: 700;
+  color: $text-color;
+  @include text-ellipsis;
 }
+
 .status-tag {
-  font-size: 22rpx;
+  font-size: $font-xs;
   padding: 4rpx 16rpx;
-  border-radius: 4rpx;
-  font-weight: 600;
+  border-radius: $radius-round;
+  font-weight: 700;
 }
+
 .status-tag.status-pending_payment {
-  background: rgba(245, 108, 108, 0.1);
-  color: #f56c6c;
+  background: $warning-soft;
+  color: $warning-color;
 }
+
 .status-tag.status-paid {
-  background: rgba(103, 194, 58, 0.1);
-  color: #67c23a;
+  background: $success-soft;
+  color: $success-dark;
 }
+
 .status-tag.status-cancelled,
 .status-tag.status-expired,
 .status-tag.status-refunded {
-  background: rgba(144, 147, 153, 0.1);
-  color: #909399;
+  background: $info-soft;
+  color: $text-hint;
 }
+
 .row-2 {
   display: flex;
   align-items: baseline;
-  gap: 16rpx;
+  gap: $spacing-sm;
 }
+
 .price {
-  color: #f56c6c;
-  font-size: 32rpx;
-  font-weight: 700;
+  color: $price-color;
+  font-size: $font-lg;
+  font-weight: 800;
 }
+
 .qty {
-  color: #909399;
-  font-size: 24rpx;
+  color: $text-hint;
+  font-size: $font-sm;
 }
+
 .amount {
   margin-left: auto;
-  color: #333;
-  font-size: 26rpx;
-  font-weight: 600;
+  color: $text-color;
+  font-size: $font-sm;
+  font-weight: 700;
 }
+
 .row-3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .time {
-  color: #c0c4cc;
-  font-size: 22rpx;
+  color: $text-hint;
+  font-size: $font-xs;
 }
+
 .remain {
-  color: #f56c6c;
-  font-size: 22rpx;
-  font-weight: 600;
+  color: $price-color;
+  font-size: $font-xs;
+  font-weight: 700;
 }
 </style>

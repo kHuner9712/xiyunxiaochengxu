@@ -27,9 +27,9 @@
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column prop="name" label="权益包名称" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="productId" label="绑定商品ID" width="120" />
+        <el-table-column prop="productId" label="绑定商品ID" width="130" show-overflow-tooltip />
         <el-table-column label="展示价" width="100">
           <template #default="{ row }">{{ row.price != null ? '¥' + formatPrice(row.price) : '-' }}</template>
         </el-table-column>

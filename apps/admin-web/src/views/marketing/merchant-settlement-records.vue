@@ -75,7 +75,7 @@
 
     <div class="table-card">
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column label="来源类型" width="110">
           <template #default="{ row }">
             <el-tag :type="row.sourceType === 'sales_referral' ? 'primary' : 'success'" size="small">
@@ -268,7 +268,7 @@ onMounted(() => {
 .stat-label { color: #909399; font-size: 13px; }
 .stat-value { color: #f56c6c; font-weight: 700; font-size: 20px; margin-top: 4px; }
 .stat-sub { color: #909399; font-size: 12px; margin-top: 4px; }
-.search-bar { background: #fff; padding: 16px; border-radius: 4px; margin-bottom: 16px; }
-.table-card { background: #fff; padding: 16px; border-radius: 4px; }
+.search-bar { background: #fff; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+.table-card { background: #fff; padding: 16px; border-radius: 8px; }
 .pagination-wrap { margin-top: 16px; text-align: right; }
 </style>
