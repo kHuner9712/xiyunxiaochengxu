@@ -7,9 +7,10 @@ import { OrderModule } from '../order/order.module';
 import { ShareModule } from '../share/share.module';
 import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
 import { MerchantSettlementModule } from '../merchant-settlement/merchant-settlement.module';
+import { GroupBuyModule } from '../group-buy/group-buy.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => OrderModule), ShareModule, BenefitPackageModule, MerchantSettlementModule],
+  imports: [PrismaModule, forwardRef(() => OrderModule), ShareModule, BenefitPackageModule, MerchantSettlementModule, GroupBuyModule],
   controllers: [PaymentController, RefundController, PaymentReconcileController, RefundReconcileController, PaymentCompensationController],
   providers: [PaymentService, PaymentReconcileService],
   exports: [PaymentService, PaymentReconcileService],

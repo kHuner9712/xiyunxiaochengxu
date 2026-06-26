@@ -31,6 +31,7 @@ import { ShareModule } from './share/share.module';
 import { MerchantPromotionSourceModule } from './merchant-promotion-source/merchant-promotion-source.module';
 import { BenefitPackageModule } from './benefit-package/benefit-package.module';
 import { MerchantSettlementModule } from './merchant-settlement/merchant-settlement.module';
+import { GroupBuyModule } from './group-buy/group-buy.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { HealthModule } from './health/health.module';
 import { PickupStoreModule } from './pickup-store/pickup-store.module';
@@ -83,6 +84,7 @@ import { validateEnv } from './config/env.validation';
     MerchantPromotionSourceModule,
     BenefitPackageModule,
     MerchantSettlementModule,
+    GroupBuyModule,
     ScheduleModule,
     HealthModule,
     PickupStoreModule,

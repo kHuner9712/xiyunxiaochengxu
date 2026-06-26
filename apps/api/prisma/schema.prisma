@@ -1440,3 +1440,81 @@ model MerchantSettlementItem {
   @@index([status], name: "idx_settlement_item_status")
   @@map("merchant_settlement_items")
 }
+
+/// 拼团活动
+model GroupBuyActivity {
+  id              BigInt    @id @default(autoincrement()) @map("id")
+  name            String    @db.VarChar(100)
+  productId       BigInt    @map("product_id")
+  skuId           BigInt?   @map("sku_id")
+  groupPrice      Int       @map("group_price")
+  originalPrice   Int?      @map("original_price")
+  groupSize       Int       @map("group_size")
+  groupExpireHours Int      @default(24) @map("group_expire_hours")
+  stockLimit      Int?      @map("stock_limit")
+  soldCount       Int       @default(0) @map("sold_count")
+  limitPerUser    Int       @default(0) @map("limit_per_user")
+  startTime       DateTime  @map("start_time")
+  endTime         DateTime  @map("end_time")
+  status          Int       @default(1) // 0 下架 / 1 上架
+  sortOrder       Int       @default(0) @map("sort_order")
+  description     String?   @db.Text
+  coverImage      String?   @db.VarChar(500) @map("cover_image")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  @@index([productId], name: "idx_group_buy_activity_product")
+  @@index([skuId], name: "idx_group_buy_activity_sku")
+  @@index([status], name: "idx_group_buy_activity_status")
+  @@index([startTime], name: "idx_group_buy_activity_start")
+  @@index([endTime], name: "idx_group_buy_activity_end")
+  @@index([sortOrder], name: "idx_group_buy_activity_sort")
+  @@map("group_buy_activities")
+}
+
+/// 拼团团单
+model GroupBuyGroup {
+  id            BigInt    @id @default(autoincrement()) @map("id")
+  activityId    BigInt    @map("activity_id")
+  leaderUserId  BigInt    @map("leader_user_id")
+  status        String    @default("forming") @db.VarChar(20) // forming / success / failed / cancelled
+  groupNo       String    @unique @db.VarChar(32) @map("group_no")
+  currentCount  Int       @default(0) @map("current_count")
+  targetCount   Int       @map("target_count")
+  expiresAt     DateTime  @map("expires_at")
+  successAt     DateTime? @map("success_at")
+  failedAt      DateTime? @map("failed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  @@index([activityId], name: "idx_group_buy_group_activity")
+  @@index([leaderUserId], name: "idx_group_buy_group_leader")
+  @@index([status], name: "idx_group_buy_group_status")
+  @@index([expiresAt], name: "idx_group_buy_group_expires")
+  @@map("group_buy_groups")
+}
+
+/// 拼团成员
+model GroupBuyMember {
+  id          BigInt    @id @default(autoincrement()) @map("id")
+  groupId     BigInt    @map("group_id")
+  activityId  BigInt    @map("activity_id")
+  userId      BigInt    @map("user_id")
+  orderId     BigInt    @unique @map("order_id")
+  orderItemId BigInt?   @map("order_item_id")
+  role        String    @db.VarChar(20) // leader / member
+  status      String    @default("pending_payment") @db.VarChar(20) // pending_payment / paid / cancelled / refunded
+  paidAt      DateTime? @map("paid_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  @@unique([groupId, userId], name: "uk_group_buy_member_group_user")
+  @@index([groupId], name: "idx_group_buy_member_group")
+  @@index([activityId], name: "idx_group_buy_member_activity")
+  @@index([userId], name: "idx_group_buy_member_user")
+  @@index([status], name: "idx_group_buy_member_status")
+  @@map("group_buy_members")
+}

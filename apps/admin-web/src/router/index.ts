@@ -262,6 +262,18 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '结算批次', permission: 'marketing:activity' },
           },
           {
+            path: 'group-buy-activity',
+            name: 'GroupBuyActivity',
+            component: () => import('@/views/marketing/group-buy-activity.vue'),
+            meta: { title: '拼团活动', permission: 'marketing:activity' },
+          },
+          {
+            path: 'group-buy-groups',
+            name: 'GroupBuyGroups',
+            component: () => import('@/views/marketing/group-buy-groups.vue'),
+            meta: { title: '拼团团单', permission: 'marketing:activity' },
+          },
+          {
             path: 'activity-content',
             name: 'ActivityContent',
             component: () => import('@/views/marketing/activity-content.vue'),

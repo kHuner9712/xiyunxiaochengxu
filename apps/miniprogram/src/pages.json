@@ -38,7 +38,11 @@
     { "path": "pages/benefit-package/list", "style": { "navigationBarTitleText": "权益卡" } },
     { "path": "pages/benefit-package/detail", "style": { "navigationBarTitleText": "权益卡详情" } },
     { "path": "pages/benefit-package/my", "style": { "navigationBarTitleText": "我的权益" } },
-    { "path": "pages/benefit-package/entitlement", "style": { "navigationBarTitleText": "权益详情" } }
+    { "path": "pages/benefit-package/entitlement", "style": { "navigationBarTitleText": "权益详情" } },
+    { "path": "pages/group-buy/list", "style": { "navigationBarTitleText": "拼团" } },
+    { "path": "pages/group-buy/detail", "style": { "navigationBarTitleText": "拼团详情" } },
+    { "path": "pages/group-buy/group", "style": { "navigationBarTitleText": "团详情" } },
+    { "path": "pages/group-buy/my", "style": { "navigationBarTitleText": "我的拼团" } }
   ],
   "tabBar": {
     "color": "#A99B95",

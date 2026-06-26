@@ -13,6 +13,7 @@ import axios from 'axios';
 import { ShareService } from '../share/share.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
+import { GroupBuyService } from '../group-buy/group-buy.service';
 import { generatePaymentNo, generateRefundNo } from '@baby-mall/shared';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
 
@@ -31,6 +32,7 @@ export class PaymentService {
     private shareService: ShareService,
     private benefitPackageService: BenefitPackageService,
     private merchantSettlementService: MerchantSettlementService,
+    private groupBuyService: GroupBuyService,
   ) {
     const keyPath = this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH', '');
     if (keyPath) {
@@ -821,6 +823,13 @@ export class PaymentService {
       );
     } catch (err) {
       this.logger.error(`销售分佣生成失败: orderId=${orderId}`, (err as Error).message);
+    }
+
+    // 拼团成团处理：订单支付成功后更新 member 状态、currentCount，达成则成团
+    try {
+      await this.groupBuyService.handlePaymentSuccess(orderId);
+    } catch (err) {
+      this.logger.error(`拼团成团处理失败: orderId=${orderId}`, (err as Error).message);
     }
   }
 

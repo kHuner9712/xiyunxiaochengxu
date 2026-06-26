@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger, Inject, forwardRef } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { OrderQueryDto } from './dto/order-query.dto';
@@ -24,6 +24,7 @@ import { COUPON_STATUS, PAYMENT_STATUS } from '../common/constants/payment';
 import { BusinessEventService } from '../common/business-event.service';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
+import { GroupBuyService } from '../group-buy/group-buy.service';
 
 const DEFAULT_COVER_MARKER = '/uploads/static/default-cover.png';
 
@@ -47,6 +48,8 @@ export class OrderService {
     private prisma: PrismaService,
     private businessEvent: BusinessEventService,
     private benefitPackageService: BenefitPackageService,
+    @Inject(forwardRef(() => GroupBuyService))
+    private groupBuyService: GroupBuyService,
   ) {}
 
   async getOrderCountByUser(userId: string) {
@@ -593,6 +596,14 @@ export class OrderService {
     });
 
     this.logger.log(`用户${userId}取消订单：${id}`);
+
+    // 拼团成员取消：将对应 member 标记为 cancelled，失败不影响订单取消主流程
+    try {
+      await this.groupBuyService.handleOrderCancel(id);
+    } catch (err) {
+      this.logger.error(`拼团成员取消失败: orderId=${id}`, (err as Error).message);
+    }
+
     return this.serializeOrderView(result);
   }
 
