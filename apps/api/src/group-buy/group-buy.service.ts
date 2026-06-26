@@ -1,5 +1,7 @@
 import {
   Injectable,
+  Inject,
+  forwardRef,
   NotFoundException,
   BadRequestException,
   Logger,
@@ -39,6 +41,7 @@ export class GroupBuyService {
 
   constructor(
     private prisma: PrismaService,
+    @Inject(forwardRef(() => OrderService))
     private orderService: OrderService,
   ) {}
 
