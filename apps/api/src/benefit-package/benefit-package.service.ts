@@ -8,6 +8,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { paginate } from '@baby-mall/shared';
+import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
 
 const VERIFY_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const VERIFY_CODE_LENGTH = 8;
@@ -27,7 +28,10 @@ function toInt(v: any): number | undefined {
 export class BenefitPackageService {
   private readonly logger = new Logger(BenefitPackageService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private merchantSettlementService: MerchantSettlementService,
+  ) {}
 
   // ============ 后台：权益包配置 ============
 
@@ -510,7 +514,7 @@ export class BenefitPackageService {
       throw new BadRequestException('核销失败：该权益可能已被核销');
     }
 
-    await this.prisma.userBenefitVerificationLog.create({
+    const verificationLog = await this.prisma.userBenefitVerificationLog.create({
       data: {
         entitlementId: entitlement.id,
         userId: entitlement.userId,
@@ -524,6 +528,24 @@ export class BenefitPackageService {
       },
     });
     this.logger.log(`权益核销成功：code=${code}, admin=${adminId}`);
+
+    // 服务结算生成：根据权益项/商家/门店规则入账，失败不影响核销主流程
+    try {
+      await this.merchantSettlementService.generateServiceCommission(
+        verificationLog.id,
+        entitlement.id,
+        entitlement.packageItemId,
+        userPkg.packageId,
+        item.pickupStoreId,
+        item.merchantPromotionSourceId,
+      );
+    } catch (err) {
+      this.logger.error(
+        `服务结算生成失败: verificationLogId=${verificationLog.id}`,
+        (err as Error).message,
+      );
+    }
+
     return {
       entitlementId: entitlement.id,
       verifyCode: code,

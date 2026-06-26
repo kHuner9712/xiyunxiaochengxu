@@ -244,6 +244,24 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '权益记录', permission: 'marketing:activity' },
           },
           {
+            path: 'merchant-settlement-rules',
+            name: 'MerchantSettlementRules',
+            component: () => import('@/views/marketing/merchant-settlement-rules.vue'),
+            meta: { title: '分佣规则', permission: 'marketing:activity' },
+          },
+          {
+            path: 'merchant-settlement-records',
+            name: 'MerchantSettlementRecords',
+            component: () => import('@/views/marketing/merchant-settlement-records.vue'),
+            meta: { title: '分佣明细', permission: 'marketing:activity' },
+          },
+          {
+            path: 'merchant-settlement-batches',
+            name: 'MerchantSettlementBatches',
+            component: () => import('@/views/marketing/merchant-settlement-batches.vue'),
+            meta: { title: '结算批次', permission: 'marketing:activity' },
+          },
+          {
             path: 'activity-content',
             name: 'ActivityContent',
             component: () => import('@/views/marketing/activity-content.vue'),

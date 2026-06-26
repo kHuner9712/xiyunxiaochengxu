@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import axios from 'axios';
 import { ShareService } from '../share/share.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
+import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
 import { generatePaymentNo, generateRefundNo } from '@baby-mall/shared';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
 
@@ -29,6 +30,7 @@ export class PaymentService {
     private orderService: OrderService,
     private shareService: ShareService,
     private benefitPackageService: BenefitPackageService,
+    private merchantSettlementService: MerchantSettlementService,
   ) {
     const keyPath = this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH', '');
     if (keyPath) {
@@ -806,6 +808,19 @@ export class PaymentService {
       await this.benefitPackageService.grantBenefitsForOrder(orderId, order.userId);
     } catch (err) {
       this.logger.error(`权益卡发放失败: orderId=${orderId}`, (err as Error).message);
+    }
+
+    // 销售分佣：商家推广订单支付成功后入账，失败不影响支付主流程
+    try {
+      await this.merchantSettlementService.generateSalesCommission(
+        orderId,
+        order.userId,
+        order.payAmount || 0,
+        order.sourceType,
+        order.sourceCode || '',
+      );
+    } catch (err) {
+      this.logger.error(`销售分佣生成失败: orderId=${orderId}`, (err as Error).message);
     }
   }
 

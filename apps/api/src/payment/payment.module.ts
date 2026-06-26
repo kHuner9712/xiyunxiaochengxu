@@ -6,9 +6,10 @@ import { PrismaModule } from '../common/prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
 import { ShareModule } from '../share/share.module';
 import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
+import { MerchantSettlementModule } from '../merchant-settlement/merchant-settlement.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => OrderModule), ShareModule, BenefitPackageModule],
+  imports: [PrismaModule, forwardRef(() => OrderModule), ShareModule, BenefitPackageModule, MerchantSettlementModule],
   controllers: [PaymentController, RefundController, PaymentReconcileController, RefundReconcileController, PaymentCompensationController],
   providers: [PaymentService, PaymentReconcileService],
   exports: [PaymentService, PaymentReconcileService],

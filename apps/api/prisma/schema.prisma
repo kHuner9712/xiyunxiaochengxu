@@ -1322,3 +1322,121 @@ model UserBenefitVerificationLog {
   @@index([createdAt], name: "idx_benefit_verify_log_created_at")
   @@map("user_benefit_verification_logs")
 }
+
+/// 商家分佣/服务结算规则
+model MerchantCommissionRule {
+  id                          BigInt    @id @default(autoincrement()) @map("id")
+  name                        String    @db.VarChar(100)
+  ruleType                    String    @db.VarChar(30) @map("rule_type") // sales_referral / service_verification
+  merchantPromotionSourceId   BigInt?   @map("merchant_promotion_source_id")
+  pickupStoreId               BigInt?   @map("pickup_store_id")
+  benefitPackageId            BigInt?   @map("benefit_package_id")
+  benefitPackageItemId        BigInt?   @map("benefit_package_item_id")
+  calculationType             String    @db.VarChar(20) @map("calculation_type") // fixed_amount / percent
+  commissionRate              Int?      @map("commission_rate") // basis points, 1000 = 10%
+  commissionAmount            Int?      @map("commission_amount") // 固定金额，单位分
+  minCommissionAmount         Int?      @map("min_commission_amount")
+  maxCommissionAmount         Int?      @map("max_commission_amount")
+  effectiveStartAt            DateTime? @map("effective_start_at")
+  effectiveEndAt              DateTime? @map("effective_end_at")
+  status                      Int       @default(1) // 0 停用 / 1 启用
+  priority                    Int       @default(0)
+  remark                      String?   @db.VarChar(500)
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  deletedAt                   DateTime? @map("deleted_at")
+
+  @@index([ruleType], name: "idx_commission_rule_rule_type")
+  @@index([merchantPromotionSourceId], name: "idx_commission_rule_merchant")
+  @@index([pickupStoreId], name: "idx_commission_rule_store")
+  @@index([benefitPackageId], name: "idx_commission_rule_package")
+  @@index([benefitPackageItemId], name: "idx_commission_rule_package_item")
+  @@index([status], name: "idx_commission_rule_status")
+  @@index([priority], name: "idx_commission_rule_priority")
+  @@map("merchant_commission_rules")
+}
+
+/// 商家分佣/服务结算明细
+model MerchantCommissionRecord {
+  id                          BigInt    @id @default(autoincrement()) @map("id")
+  ruleId                      BigInt?   @map("rule_id")
+  merchantPromotionSourceId   BigInt?   @map("merchant_promotion_source_id")
+  pickupStoreId               BigInt?   @map("pickup_store_id")
+  userId                      BigInt?   @map("user_id")
+  orderId                     BigInt?   @map("order_id")
+  orderItemId                 BigInt?   @map("order_item_id")
+  benefitPackageId            BigInt?   @map("benefit_package_id")
+  benefitPackageItemId        BigInt?   @map("benefit_package_item_id")
+  entitlementId               BigInt?   @map("entitlement_id")
+  verificationLogId           BigInt?   @map("verification_log_id")
+  sourceType                  String    @db.VarChar(30) @map("source_type") // sales_referral / service_verification
+  sourceAmount                Int       @default(0) @map("source_amount") // 计算基数，单位分
+  commissionAmount            Int       @default(0) @map("commission_amount") // 应结算金额，单位分
+  calculationSnapshot         Json?     @map("calculation_snapshot")
+  status                      String    @default("pending") @db.VarChar(20) // pending / confirmed / settled / cancelled
+  dedupeKey                   String    @unique @db.VarChar(150) @map("dedupe_key")
+  occurredAt                  DateTime  @map("occurred_at")
+  confirmedAt                 DateTime? @map("confirmed_at")
+  settledAt                   DateTime? @map("settled_at")
+  cancelledAt                 DateTime? @map("cancelled_at")
+  remark                      String?   @db.VarChar(500)
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  deletedAt                   DateTime? @map("deleted_at")
+
+  @@index([ruleId], name: "idx_commission_record_rule_id")
+  @@index([merchantPromotionSourceId], name: "idx_commission_record_merchant")
+  @@index([pickupStoreId], name: "idx_commission_record_store")
+  @@index([orderId], name: "idx_commission_record_order_id")
+  @@index([verificationLogId], name: "idx_commission_record_verify_log_id")
+  @@index([sourceType], name: "idx_commission_record_source_type")
+  @@index([status], name: "idx_commission_record_status")
+  @@index([occurredAt], name: "idx_commission_record_occurred_at")
+  @@map("merchant_commission_records")
+}
+
+/// 结算批次
+model MerchantSettlementBatch {
+  id                          BigInt    @id @default(autoincrement()) @map("id")
+  settlementNo                String    @unique @db.VarChar(32) @map("settlement_no")
+  merchantPromotionSourceId   BigInt?   @map("merchant_promotion_source_id")
+  pickupStoreId               BigInt?   @map("pickup_store_id")
+  periodStart                 DateTime  @map("period_start")
+  periodEnd                   DateTime  @map("period_end")
+  recordCount                 Int       @default(0) @map("record_count")
+  totalSourceAmount           Int       @default(0) @map("total_source_amount")
+  totalCommissionAmount       Int       @default(0) @map("total_commission_amount")
+  status                      String    @default("draft") @db.VarChar(20) // draft / confirmed / paid / cancelled
+  generatedAt                 DateTime  @default(now()) @map("generated_at")
+  confirmedAt                 DateTime? @map("confirmed_at")
+  paidAt                      DateTime? @map("paid_at")
+  cancelledAt                 DateTime? @map("cancelled_at")
+  remark                      String?   @db.VarChar(500)
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  deletedAt                   DateTime? @map("deleted_at")
+
+  @@index([settlementNo], name: "uk_settlement_no")
+  @@index([merchantPromotionSourceId], name: "idx_settlement_batch_merchant")
+  @@index([pickupStoreId], name: "idx_settlement_batch_store")
+  @@index([periodStart], name: "idx_settlement_batch_period_start")
+  @@index([periodEnd], name: "idx_settlement_batch_period_end")
+  @@index([status], name: "idx_settlement_batch_status")
+  @@map("merchant_settlement_batches")
+}
+
+/// 结算批次明细关联
+model MerchantSettlementItem {
+  id                  BigInt   @id @default(autoincrement()) @map("id")
+  batchId             BigInt   @map("batch_id")
+  commissionRecordId  BigInt   @unique @map("commission_record_id")
+  amount              Int      @default(0)
+  status              String   @default("included") @db.VarChar(20) // included / removed / settled
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([batchId], name: "idx_settlement_item_batch_id")
+  @@index([commissionRecordId], name: "uk_settlement_item_record")
+  @@index([status], name: "idx_settlement_item_status")
+  @@map("merchant_settlement_items")
+}
