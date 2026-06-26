@@ -1518,3 +1518,61 @@ model GroupBuyMember {
   @@index([status], name: "idx_group_buy_member_status")
   @@map("group_buy_members")
 }
+
+/// 限时秒杀活动配置
+model FlashSaleActivity {
+  id            BigInt    @id @default(autoincrement()) @map("id")
+  name          String    @db.VarChar(100)
+  productId     BigInt    @map("product_id")
+  skuId         BigInt?   @map("sku_id")
+  flashPrice    Int       @map("flash_price")
+  originalPrice Int?      @map("original_price")
+  stockLimit    Int       @map("stock_limit")
+  soldCount     Int       @default(0) @map("sold_count")
+  lockedCount   Int       @default(0) @map("locked_count")
+  limitPerUser  Int       @default(1) @map("limit_per_user")
+  lockMinutes   Int       @default(15) @map("lock_minutes")
+  startTime     DateTime  @map("start_time")
+  endTime       DateTime  @map("end_time")
+  status        Int       @default(1) // 0 下架 / 1 上架
+  sortOrder     Int       @default(0) @map("sort_order")
+  description   String?   @db.Text
+  coverImage    String?   @db.VarChar(500) @map("cover_image")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  @@index([productId], name: "idx_flash_sale_activity_product")
+  @@index([skuId], name: "idx_flash_sale_activity_sku")
+  @@index([status], name: "idx_flash_sale_activity_status")
+  @@index([startTime], name: "idx_flash_sale_activity_start")
+  @@index([endTime], name: "idx_flash_sale_activity_end")
+  @@index([sortOrder], name: "idx_flash_sale_activity_sort")
+  @@map("flash_sale_activities")
+}
+
+/// 秒杀订单关联与库存锁记录
+model FlashSaleOrder {
+  id           BigInt    @id @default(autoincrement()) @map("id")
+  activityId   BigInt    @map("activity_id")
+  userId       BigInt    @map("user_id")
+  orderId      BigInt    @unique @map("order_id")
+  orderItemId  BigInt?   @map("order_item_id")
+  quantity     Int
+  flashPrice   Int       @map("flash_price")
+  status       String    @default("pending_payment") @db.VarChar(20) // pending_payment / paid / cancelled / expired / refunded
+  lockExpireAt DateTime  @map("lock_expire_at")
+  paidAt       DateTime? @map("paid_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+  expiredAt    DateTime? @map("expired_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  @@unique([activityId, userId, orderId], name: "uk_flash_sale_order_activity_user_order")
+  @@index([activityId], name: "idx_flash_sale_order_activity")
+  @@index([userId], name: "idx_flash_sale_order_user")
+  @@index([status], name: "idx_flash_sale_order_status")
+  @@index([lockExpireAt], name: "idx_flash_sale_order_lock_expire")
+  @@map("flash_sale_orders")
+}

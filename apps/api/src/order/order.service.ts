@@ -25,6 +25,7 @@ import { BusinessEventService } from '../common/business-event.service';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
+import { FlashSaleService } from '../flash-sale/flash-sale.service';
 
 const DEFAULT_COVER_MARKER = '/uploads/static/default-cover.png';
 
@@ -50,6 +51,8 @@ export class OrderService {
     private benefitPackageService: BenefitPackageService,
     @Inject(forwardRef(() => GroupBuyService))
     private groupBuyService: GroupBuyService,
+    @Inject(forwardRef(() => FlashSaleService))
+    private flashSaleService: FlashSaleService,
   ) {}
 
   async getOrderCountByUser(userId: string) {
@@ -192,7 +195,7 @@ export class OrderService {
     shareCampaignId?: string;
     referrerUserId?: string;
     remark?: string;
-    items: { skuId: string; quantity: number }[];
+    items: { skuId: string; quantity: number; priceOverride?: number }[];
   }) {
     const fulfillmentType = data.fulfillmentType || 'delivery';
 
@@ -602,6 +605,13 @@ export class OrderService {
       await this.groupBuyService.handleOrderCancel(id);
     } catch (err) {
       this.logger.error(`拼团成员取消失败: orderId=${id}`, (err as Error).message);
+    }
+
+    // 秒杀订单取消：释放秒杀库存锁，失败不影响订单取消主流程
+    try {
+      await this.flashSaleService.handleOrderCancel(id);
+    } catch (err) {
+      this.logger.error(`秒杀订单取消失败: orderId=${id}`, (err as Error).message);
     }
 
     return this.serializeOrderView(result);

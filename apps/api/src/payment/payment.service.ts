@@ -14,6 +14,7 @@ import { ShareService } from '../share/share.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
+import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { generatePaymentNo, generateRefundNo } from '@baby-mall/shared';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
 
@@ -33,6 +34,7 @@ export class PaymentService {
     private benefitPackageService: BenefitPackageService,
     private merchantSettlementService: MerchantSettlementService,
     private groupBuyService: GroupBuyService,
+    private flashSaleService: FlashSaleService,
   ) {
     const keyPath = this.configService.get<string>('WECHAT_PRIVATE_KEY_PATH', '');
     if (keyPath) {
@@ -826,11 +828,18 @@ export class PaymentService {
     }
 
     // 拼团成团处理：订单支付成功后更新 member 状态、currentCount，达成则成团
-    try {
-      await this.groupBuyService.handlePaymentSuccess(orderId);
-    } catch (err) {
-      this.logger.error(`拼团成团处理失败: orderId=${orderId}`, (err as Error).message);
-    }
+try {
+  await this.groupBuyService.handlePaymentSuccess(orderId);
+} catch (err) {
+  this.logger.error(`拼团成团处理失败: orderId=${orderId}`, (err as Error).message);
+}
+
+// 秒杀成交处理：订单支付成功后更新秒杀订单状态、释放锁、计入成交，失败不影响支付主流程
+try {
+  await this.flashSaleService.handlePaymentSuccess(orderId);
+} catch (err) {
+  this.logger.error(`秒杀成交处理失败: orderId=${orderId}`, (err as Error).message);
+}
   }
 
   async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {

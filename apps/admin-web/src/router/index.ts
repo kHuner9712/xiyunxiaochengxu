@@ -274,6 +274,18 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '拼团团单', permission: 'marketing:activity' },
           },
           {
+            path: 'flash-sale-activity',
+            name: 'FlashSaleActivity',
+            component: () => import('@/views/marketing/flash-sale-activity.vue'),
+            meta: { title: '秒杀活动', permission: 'marketing:activity' },
+          },
+          {
+            path: 'flash-sale-orders',
+            name: 'FlashSaleOrders',
+            component: () => import('@/views/marketing/flash-sale-orders.vue'),
+            meta: { title: '秒杀订单', permission: 'marketing:activity' },
+          },
+          {
             path: 'activity-content',
             name: 'ActivityContent',
             component: () => import('@/views/marketing/activity-content.vue'),

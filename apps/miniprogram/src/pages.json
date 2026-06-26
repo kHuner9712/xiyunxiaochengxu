@@ -42,7 +42,10 @@
     { "path": "pages/group-buy/list", "style": { "navigationBarTitleText": "拼团" } },
     { "path": "pages/group-buy/detail", "style": { "navigationBarTitleText": "拼团详情" } },
     { "path": "pages/group-buy/group", "style": { "navigationBarTitleText": "团详情" } },
-    { "path": "pages/group-buy/my", "style": { "navigationBarTitleText": "我的拼团" } }
+    { "path": "pages/group-buy/my", "style": { "navigationBarTitleText": "我的拼团" } },
+    { "path": "pages/flash-sale/list", "style": { "navigationBarTitleText": "限时秒杀" } },
+    { "path": "pages/flash-sale/detail", "style": { "navigationBarTitleText": "秒杀详情" } },
+    { "path": "pages/flash-sale/my", "style": { "navigationBarTitleText": "我的秒杀" } }
   ],
   "tabBar": {
     "color": "#A99B95",
