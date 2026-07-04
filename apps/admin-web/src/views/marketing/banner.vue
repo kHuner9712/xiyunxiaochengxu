@@ -17,10 +17,10 @@
         </el-table-column>
         <el-table-column prop="title" label="标题" min-width="150" />
         <el-table-column label="位置" width="100">
-          <template #default="{ row }">{{ BANNER_POSITION_MAP[row.position] || '-' }}</template>
+          <template #default="{ row }">{{ BANNER_LINK_TYPE_MAP[row.linkType] || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="linkUrl" label="跳转链接" show-overflow-tooltip min-width="200" />
-        <el-table-column prop="sort" label="排序" width="80" />
+        <el-table-column prop="linkValue" label="跳转链接" show-overflow-tooltip min-width="200" />
+        <el-table-column prop="sortOrder" label="排序" width="80" />
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '禁用' }}</el-tag>
@@ -46,18 +46,18 @@
             <el-button v-else size="small">上传图片</el-button>
           </el-upload>
         </el-form-item>
-        <el-form-item label="位置" prop="position">
-          <el-select v-model="form.position" placeholder="请选择位置">
+        <el-form-item label="位置" prop="linkType">
+          <el-select v-model="form.linkType" placeholder="请选择位置">
             <el-option label="首页" :value="1" />
             <el-option label="分类页" :value="2" />
             <el-option label="活动页" :value="3" />
           </el-select>
         </el-form-item>
-        <el-form-item label="跳转链接" prop="linkUrl">
-          <el-input v-model="form.linkUrl" placeholder="请输入跳转链接" />
+        <el-form-item label="跳转链接" prop="linkValue">
+          <el-input v-model="form.linkValue" placeholder="请输入跳转链接" />
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="form.sort" :min="0" />
+          <el-input-number v-model="form.sortOrder" :min="0" />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
@@ -81,7 +81,7 @@ import { bannerApi } from '@/api/banner'
 import { uploadApi } from '@/api/upload'
 import { asArray } from '@/utils/response'
 
-const BANNER_POSITION_MAP: Record<number, string> = { 1: '首页', 2: '分类页', 3: '活动页' }
+const BANNER_LINK_TYPE_MAP: Record<number, string> = { 1: '首页', 2: '分类页', 3: '活动页' }
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
@@ -89,19 +89,19 @@ const tableData = ref<any[]>([])
 const formRef = ref<FormInstance>()
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: undefined as string | number | undefined,
   title: '',
   image: '',
-  position: 1,
-  linkUrl: '',
-  sort: 0,
+  linkType: 1,
+  linkValue: '',
+  sortOrder: 0,
   status: 1,
 })
 
 const rules: FormRules = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
   image: [{ required: true, message: '请上传图片', trigger: 'change' }],
-  position: [{ required: true, message: '请选择位置', trigger: 'change' }],
+  linkType: [{ required: true, message: '请选择位置', trigger: 'change' }],
 }
 
 const dialogTitle = computed(() => (form.id ? '编辑Banner' : '新增Banner'))
@@ -122,9 +122,9 @@ function handleAdd() {
   form.id = undefined
   form.title = ''
   form.image = ''
-  form.position = 1
-  form.linkUrl = ''
-  form.sort = 0
+  form.linkType = 1
+  form.linkValue = ''
+  form.sortOrder = 0
   form.status = 1
   dialogVisible.value = true
 }
@@ -133,9 +133,9 @@ function handleEdit(row: any) {
   form.id = row.id
   form.title = row.title
   form.image = row.image
-  form.position = row.position
-  form.linkUrl = row.linkUrl || ''
-  form.sort = row.sort
+  form.linkType = row.linkType ?? 1
+  form.linkValue = row.linkValue || ''
+  form.sortOrder = row.sortOrder ?? 0
   form.status = row.status
   dialogVisible.value = true
 }
@@ -162,12 +162,21 @@ async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
+  const payload = {
+    title: form.title,
+    image: form.image,
+    linkType: Number(form.linkType ?? 1),
+    linkValue: form.linkValue || '',
+    sortOrder: Number(form.sortOrder ?? 0),
+    status: Number(form.status ?? 1),
+  }
+
   submitting.value = true
   try {
     if (form.id) {
-      await bannerApi.update({ ...form })
+      await bannerApi.update({ id: form.id, ...payload })
     } else {
-      await bannerApi.create({ ...form })
+      await bannerApi.create(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false

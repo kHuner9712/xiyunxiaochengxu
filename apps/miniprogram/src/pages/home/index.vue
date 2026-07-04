@@ -37,7 +37,7 @@
       <text class="announcement-text">{{ homeData.announcement }}</text>
     </view>
 
-    <view class="quick-entries surface-card">
+    <view v-if="homeData.quickEntries.length" class="quick-entries surface-card">
       <view v-for="entry in homeData.quickEntries" :key="entry.id" class="entry-item" @tap="handleEntryTap(entry)">
         <view class="entry-icon-wrap">
           <image class="entry-icon" :src="entry.icon" mode="aspectFit" />
