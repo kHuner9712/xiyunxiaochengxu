@@ -1,4 +1,4 @@
-name: Apply CI Baseline Fixes
+name: Cleanup CI Diagnostics
 
 on:
   pull_request:
@@ -8,41 +8,30 @@ permissions:
   contents: write
 
 jobs:
-  apply-fixes:
+  cleanup:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    env:
-      PRISMA_SKIP_POSTINSTALL_GENERATE: true
     steps:
       - uses: actions/checkout@v4
         with:
           ref: agent/polish-miniapp-ui
           fetch-depth: 0
 
-      - name: Apply precise source fixes
-        run: python3 deploy/scripts/apply-ci-baseline-fixes.py
+      - name: Restore release workflow and remove temporary diagnostics
+        shell: bash
+        run: |
+          git fetch origin main
+          git checkout origin/main -- .github/workflows/release-check.yml
+          rm -f .github/workflows/api-lint-diagnostic.yml
+          rm -f .github/workflows/source-snapshot-diagnostic.yml
+          rm -f .github/workflows/apply-ci-baseline-fixes.yml
+          rm -f deploy/scripts/apply-ci-baseline-fixes.py
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.2.2
-          run_install: false
-          standalone: true
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.13.0
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @baby-mall/api lint
-      - run: node deploy/scripts/audit-api-permissions.mjs
-
-      - name: Commit verified fixes
+      - name: Commit cleanup
         shell: bash
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add apps/api/src deploy/scripts/audit-api-permissions.mjs
-          git commit -m "fix(ci): resolve API lint and permission audit"
+          git add -A
+          git commit -m "chore(ci): remove temporary diagnostics"
           git push origin HEAD:agent/polish-miniapp-ui
