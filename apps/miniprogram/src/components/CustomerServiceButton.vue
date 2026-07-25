@@ -1,15 +1,12 @@
 <template>
   <view class="cs-btn" @tap="handleTap">
-    <text class="cs-icon">讯</text>
+    <view class="cs-icon" aria-hidden="true"></view>
     <text v-if="showText" class="cs-text">{{ text || '客服' }}</text>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { getCustomerServiceConfig, type CustomerServiceConfig } from '@/api/customer-service'
-
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   showText?: boolean
   text?: string
 }>(), {
@@ -17,53 +14,64 @@ const props = withDefaults(defineProps<{
   text: '客服'
 })
 
-const config = ref<CustomerServiceConfig>({
-  enabled: false,
-  type: 'phone',
-  phone: '',
-  wechatQrCode: '',
-  serviceTime: '',
-  autoReplyText: '',
-  faqContent: '',
-  notice: ''
-})
-
-async function loadConfig() {
-  try {
-    config.value = await getCustomerServiceConfig()
-  } catch {}
-}
-
 function handleTap() {
   uni.navigateTo({ url: '/pages/customer-service/index' })
 }
-
-onMounted(() => {
-  loadConfig()
-})
 </script>
 
 <style lang="scss" scoped>
 .cs-btn {
   @include flex-center;
   @include flex-column;
-  width: 92rpx;
-  height: 92rpx;
+  width: 88rpx;
+  height: 88rpx;
+  border: 1rpx solid rgba($border-color, 0.72);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1rpx solid rgba($border-color, 0.78);
-  box-shadow: $shadow-md;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10rpx 28rpx rgba(119, 82, 74, 0.1);
+
+  &:active {
+    transform: scale(0.96);
+  }
 }
 
 .cs-icon {
-  font-size: $font-md;
-  font-weight: 800;
-  color: $primary-dark;
+  position: relative;
+  width: 38rpx;
+  height: 38rpx;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    box-sizing: border-box;
+  }
+
+  &::before {
+    left: 4rpx;
+    top: 4rpx;
+    width: 30rpx;
+    height: 25rpx;
+    border: 4rpx solid $primary-dark;
+    border-bottom: 0;
+    border-radius: 20rpx 20rpx 0 0;
+  }
+
+  &::after {
+    left: 1rpx;
+    top: 20rpx;
+    width: 7rpx;
+    height: 14rpx;
+    border-radius: 5rpx;
+    background: $primary-dark;
+    box-shadow: 29rpx 0 $primary-dark;
+  }
 }
 
 .cs-text {
-  font-size: $font-xs;
+  margin-top: 2rpx;
   color: $text-hint;
-  margin-top: 4rpx;
+  font-size: 19rpx;
+  line-height: 1.1;
 }
 </style>
