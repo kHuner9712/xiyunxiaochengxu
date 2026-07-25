@@ -5,9 +5,17 @@ import { PrismaModule } from '../common/prisma/prisma.module';
 import { RedisModule } from '../common/redis/redis.module';
 import { OrderModule } from '../order/order.module';
 import { PaymentModule } from '../payment/payment.module';
+import { FlashSaleModule } from '../flash-sale/flash-sale.module';
 
 @Module({
-  imports: [NestScheduleModule.forRoot(), PrismaModule, RedisModule, OrderModule, forwardRef(() => PaymentModule)],
+  imports: [
+    NestScheduleModule.forRoot(),
+    PrismaModule,
+    RedisModule,
+    OrderModule,
+    FlashSaleModule,
+    forwardRef(() => PaymentModule),
+  ],
   providers: [ScheduleService],
 })
 export class ScheduleModule {}
