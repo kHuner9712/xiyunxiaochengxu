@@ -2,25 +2,32 @@
   <view class="product-list-page page-shell">
     <view class="list-top sticky-glass">
       <view class="list-title-row">
-        <view>
+        <view class="title-copy">
           <text class="list-title">严选好物</text>
           <text class="list-subtitle">自营母婴精品 · 安心选购</text>
         </view>
-        <view class="filter-entry">
-          <text class="filter-entry-icon">筛选</text>
+        <view class="result-count">
+          <text class="result-count-main">{{ total }}</text>
+          <text class="result-count-unit">件好物</text>
         </view>
       </view>
       <view class="search-box" @tap="goSearch">
-        <text class="search-icon">⌕</text>
-        <text class="search-placeholder">{{ keyword || '搜索奶粉/纸尿裤/洗护用品' }}</text>
+        <view class="search-icon"></view>
+        <text class="search-placeholder">{{ keyword || '搜索奶粉、纸尿裤、洗护用品' }}</text>
       </view>
       <view class="list-assurance">
-        <text class="assurance-dot"></text>
-        <text class="assurance-text">自营正品</text>
-        <text class="assurance-dot peach"></text>
-        <text class="assurance-text">严选品质</text>
-        <text class="assurance-dot sage"></text>
-        <text class="assurance-text">安心售后</text>
+        <view class="assurance-item">
+          <text class="assurance-dot"></text>
+          <text class="assurance-text">自营正品</text>
+        </view>
+        <view class="assurance-item">
+          <text class="assurance-dot peach"></text>
+          <text class="assurance-text">严选品质</text>
+        </view>
+        <view class="assurance-item">
+          <text class="assurance-dot sage"></text>
+          <text class="assurance-text">安心售后</text>
+        </view>
       </view>
       <view class="filter-bar pill-tab-bar">
         <view
@@ -40,14 +47,18 @@
     </view>
 
     <Loading v-if="loading" />
-    <Empty v-if="!loading && products.length === 0" text="暂无商品" />
+    <Empty
+      v-if="!loading && products.length === 0"
+      text="暂无商品"
+      hint="换个分类或关键词再试试"
+    />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { onLoad, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
-import { getProductList, type ProductDetail } from '@/api/product'
+import { getProductList } from '@/api/product'
 import ProductCard from '@/components/ProductCard.vue'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -61,6 +72,7 @@ const filters = [
 
 const currentSort = ref('default')
 const products = ref<any[]>([])
+const total = ref(0)
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
@@ -74,6 +86,7 @@ async function loadProducts(reset = false) {
     page.value = 1
     finished.value = false
     products.value = []
+    total.value = 0
   }
   loading.value = true
   try {
@@ -86,6 +99,7 @@ async function loadProducts(reset = false) {
     if (keyword.value) params.keyword = keyword.value
     const data = await getProductList(params)
     products.value.push(...data.list)
+    total.value = data.total
     finished.value = products.value.length >= data.total
     page.value++
   } catch {
@@ -96,6 +110,7 @@ async function loadProducts(reset = false) {
 }
 
 function switchSort(value: string) {
+  if (currentSort.value === value) return
   currentSort.value = value
   loadProducts(true)
 }
@@ -127,110 +142,147 @@ onReachBottom(() => {
 }
 
 .list-top {
-  padding: 28rpx $spacing-md 18rpx;
-  border-radius: 0 0 $radius-xxl $radius-xxl;
-  background:
-    linear-gradient(180deg, rgba(255, 252, 247, 0.96) 0%, rgba(255, 248, 242, 0.9) 100%);
-  border-bottom: 1rpx solid rgba($border-color, 0.72);
-  box-shadow: 0 12rpx 34rpx rgba(131, 91, 78, 0.07);
+  padding: 22rpx $spacing-md 16rpx;
+  border-bottom: 1rpx solid rgba($border-color, 0.68);
+  border-radius: 0 0 30rpx 30rpx;
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.97), rgba(255, 248, 242, 0.93));
+  box-shadow: 0 10rpx 28rpx rgba(131, 91, 78, 0.06);
 }
 
 .list-title-row {
   @include flex-between;
-  align-items: flex-start;
-  margin-bottom: $spacing-md;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.title-copy {
+  min-width: 0;
 }
 
 .list-title {
   display: block;
-  font-size: 42rpx;
-  line-height: 1.16;
   color: $text-color;
+  font-size: 38rpx;
   font-weight: 900;
+  line-height: 1.16;
 }
 
 .list-subtitle {
   display: block;
-  margin-top: 8rpx;
-  font-size: $font-xs;
+  margin-top: 5rpx;
   color: $text-hint;
+  font-size: 21rpx;
 }
 
-.filter-entry {
-  @include flex-center;
-  min-width: 88rpx;
-  height: 58rpx;
-  padding: 0 18rpx;
+.result-count {
+  display: inline-flex;
+  align-items: baseline;
+  flex-shrink: 0;
+  min-height: 52rpx;
+  margin-left: 18rpx;
+  padding: 0 16rpx;
+  border: 1rpx solid rgba($success-color, 0.16);
   border-radius: $radius-round;
-  background: rgba($success-color, 0.12);
-  border: 1rpx solid rgba($success-color, 0.2);
+  background: rgba($success-color, 0.09);
 }
 
-.filter-entry-icon {
-  font-size: $font-xs;
+.result-count-main {
   color: $success-dark;
-  font-weight: 800;
+  font-size: 25rpx;
+  font-weight: 900;
+}
+
+.result-count-unit {
+  margin-left: 4rpx;
+  color: $success-dark;
+  font-size: 18rpx;
 }
 
 .search-box {
   display: flex;
   align-items: center;
-  min-height: 82rpx;
-  padding: 0 28rpx;
-  margin-bottom: 14rpx;
+  min-height: 72rpx;
+  padding: 0 24rpx;
+  margin-bottom: 12rpx;
+  border: 1rpx solid rgba($border-color, 0.62);
   border-radius: $radius-round;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1rpx solid rgba(255, 255, 255, 0.9);
-  box-shadow: $shadow-xs;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .search-icon {
-  margin-right: 10rpx;
-  color: $primary-color;
-  font-size: $font-lg;
+  position: relative;
+  width: 28rpx;
+  height: 28rpx;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 1rpx;
+    top: 1rpx;
+    width: 18rpx;
+    height: 18rpx;
+    border: 3rpx solid $primary-color;
+    border-radius: 50%;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 1rpx;
+    bottom: 2rpx;
+    width: 10rpx;
+    height: 3rpx;
+    border-radius: 2rpx;
+    background: $primary-color;
+    transform: rotate(45deg);
+  }
 }
 
 .search-placeholder {
   flex: 1;
-  font-size: $font-sm;
   color: $text-hint;
+  font-size: 24rpx;
   @include text-ellipsis;
 }
 
 .list-assurance {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8rpx;
-  margin-bottom: 14rpx;
-  padding: 0 4rpx;
+  gap: 10rpx;
+  margin-bottom: 12rpx;
+}
+
+.assurance-item {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .assurance-dot {
-  width: 12rpx;
-  height: 12rpx;
+  width: 9rpx;
+  height: 9rpx;
+  margin-right: 6rpx;
+  flex-shrink: 0;
   border-radius: 50%;
   background: $primary-color;
 
-  &.peach {
-    background: $secondary-color;
-  }
-
-  &.sage {
-    background: $success-color;
-  }
+  &.peach { background: $secondary-color; }
+  &.sage { background: $success-color; }
 }
 
 .assurance-text {
-  margin-right: 10rpx;
-  font-size: $font-xs;
   color: $text-secondary;
+  font-size: 20rpx;
+  white-space: nowrap;
 }
 
 .filter-bar {
+  min-height: 66rpx;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.62);
-  border-color: rgba($border-color, 0.58);
+  border-color: rgba($border-color, 0.54);
+  background: rgba(255, 255, 255, 0.66);
 }
 
 .filter-item {
@@ -249,15 +301,15 @@ onReachBottom(() => {
 }
 
 .filter-text {
-  font-size: $font-sm;
   color: $text-secondary;
+  font-size: 23rpx;
   white-space: nowrap;
 }
 
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 24rpx;
-  padding: 26rpx $spacing-md $spacing-xl;
+  gap: 18rpx;
+  padding: 22rpx $spacing-md $spacing-xl;
 }
 </style>
