@@ -1,53 +1,95 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEPLOY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-BACKUP_DIR="$DEPLOY_DIR/backups"
-RETENTION_DAYS=7
+PROJECT_DIR="$(cd "$DEPLOY_DIR/.." && pwd)"
+ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env.production}"
+BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_DIR/backups}"
+RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "备份失败：环境文件不存在：$ENV_FILE" >&2
+  exit 1
+fi
+if ! [[ "$RETENTION_DAYS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "备份失败：BACKUP_RETENTION_DAYS 必须为正整数" >&2
+  exit 1
+fi
 
 mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-DB_NAME="${DB_NAME:-baby_mall}"
-DB_PASSWORD="${DB_PASSWORD:-baby_mall_2024}"
+LOCK_DIR="$BACKUP_DIR/.backup.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "备份失败：已有备份任务正在运行" >&2
+  exit 1
+fi
 
-echo "========================================="
-echo "  Baby Mall 备份脚本"
-echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
-echo "========================================="
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+DB_FILE="$BACKUP_DIR/db_${TIMESTAMP}.sql.gz"
+UPLOAD_FILE="$BACKUP_DIR/uploads_${TIMESTAMP}.tar.gz"
+DB_TMP="${DB_FILE}.tmp"
+UPLOAD_TMP="${UPLOAD_FILE}.tmp"
+
+cleanup() {
+  rm -f "$DB_TMP" "$UPLOAD_TMP"
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$DEPLOY_DIR/docker-compose.yml")
+"${COMPOSE[@]}" config >/dev/null
+
+if ! "${COMPOSE[@]}" ps --status running --services | grep -qx mysql; then
+  echo "备份失败：MySQL 容器未运行" >&2
+  exit 1
+fi
+
+printf '%s\n' "========================================="
+printf '%s\n' "  禧孕优选生产备份"
+printf '%s\n' "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
+printf '%s\n' "  目录: $BACKUP_DIR"
+printf '%s\n' "========================================="
 
 echo "[1/3] 备份 MySQL 数据库..."
-docker-compose -f "$DEPLOY_DIR/docker-compose.yml" exec -T mysql mysqldump \
-    -uroot -p"$DB_PASSWORD" \
+"${COMPOSE[@]}" exec -T mysql sh -lc '
+  exec mysqldump \
+    -uroot -p"$MYSQL_ROOT_PASSWORD" \
     --single-transaction \
+    --quick \
     --routines \
     --triggers \
     --events \
     --set-gtid-purged=OFF \
-    "$DB_NAME" | gzip > "$BACKUP_DIR/db_${DB_NAME}_${TIMESTAMP}.sql.gz"
+    "$MYSQL_DATABASE"
+' | gzip -c > "$DB_TMP"
 
-if [ $? -eq 0 ]; then
-    echo "数据库备份成功: db_${DB_NAME}_${TIMESTAMP}.sql.gz"
-else
-    echo "数据库备份失败！"
-    exit 1
-fi
+gzip -t "$DB_TMP"
+test -s "$DB_TMP"
+mv "$DB_TMP" "$DB_FILE"
+chmod 600 "$DB_FILE"
+echo "数据库备份成功: $(basename "$DB_FILE")"
 
 echo "[2/3] 备份上传文件..."
-tar -czf "$BACKUP_DIR/uploads_${TIMESTAMP}.tar.gz" -C /var/lib/docker/volumes/deploy_upload_data/_data . 2>/dev/null || \
-    docker run --rm -v deploy_upload_data:/data -v "$BACKUP_DIR":/backup alpine tar -czf /backup/uploads_${TIMESTAMP}.tar.gz -C /data .
+"${COMPOSE[@]}" run --rm --no-deps --entrypoint sh api -lc '
+  cd /app/apps/api/uploads
+  exec tar -czf - .
+' > "$UPLOAD_TMP"
 
-echo "文件备份成功: uploads_${TIMESTAMP}.tar.gz"
+tar -tzf "$UPLOAD_TMP" >/dev/null
+test -s "$UPLOAD_TMP"
+mv "$UPLOAD_TMP" "$UPLOAD_FILE"
+chmod 600 "$UPLOAD_FILE"
+echo "上传文件备份成功: $(basename "$UPLOAD_FILE")"
+
+sha256sum "$DB_FILE" "$UPLOAD_FILE" > "$BACKUP_DIR/checksums_${TIMESTAMP}.sha256"
+chmod 600 "$BACKUP_DIR/checksums_${TIMESTAMP}.sha256"
 
 echo "[3/3] 清理 ${RETENTION_DAYS} 天前的备份..."
-find "$BACKUP_DIR" -name "db_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
-find "$BACKUP_DIR" -name "uploads_*.tar.gz" -mtime +${RETENTION_DAYS} -delete
-echo "清理完成"
+find "$BACKUP_DIR" -maxdepth 1 -type f \
+  \( -name 'db_*.sql.gz' -o -name 'uploads_*.tar.gz' -o -name 'checksums_*.sha256' \) \
+  -mtime "+$RETENTION_DAYS" -delete
 
-echo ""
-echo "========================================="
-echo "  备份完成！"
-echo "  备份目录: $BACKUP_DIR"
-echo "========================================="
-ls -lh "$BACKUP_DIR" | tail -5
+echo "备份完成："
+ls -lh "$DB_FILE" "$UPLOAD_FILE" "$BACKUP_DIR/checksums_${TIMESTAMP}.sha256"
