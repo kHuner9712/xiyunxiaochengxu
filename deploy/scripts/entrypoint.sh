@@ -32,4 +32,4 @@ else
 fi
 
 echo "启动服务: node dist/main.js"
-node dist/main.js
+exec node dist/main.js
