@@ -36,4 +36,5 @@ onShow((options: any) => {
 
 <style lang="scss">
 @import '@/styles/common.scss';
+@import '@/styles/ui-polish.scss';
 </style>
