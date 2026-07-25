@@ -7,7 +7,6 @@ import {
   Body,
   Param,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { GroupBuyService } from './group-buy.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';

@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { RedisService } from '../common/redis/redis.service';
 import { OrderService } from '../order/order.service';
 import { PaymentReconcileService } from '../payment/payment-reconcile.service';
+import { FlashSaleService } from '../flash-sale/flash-sale.service';
 
 @Injectable()
 export class ScheduleService {
@@ -12,6 +13,7 @@ export class ScheduleService {
     private readonly redisService: RedisService,
     private readonly orderService: OrderService,
     private readonly paymentReconcileService: PaymentReconcileService,
+    private readonly flashSaleService: FlashSaleService,
   ) {}
 
   private async acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
@@ -42,6 +44,25 @@ export class ScheduleService {
     } catch (error) {
       const err = error as Error;
       this.logger.error(`关闭超时订单任务失败：${err.message}`, err.stack);
+    } finally {
+      await this.releaseLock(lockKey, lockValue);
+    }
+  }
+
+  @Cron('30 * * * * *')
+  async handleReleaseExpiredFlashSaleLocks() {
+    const lockKey = 'schedule:release_expired_flash_sale_locks';
+    const lockValue = await this.acquireLock(lockKey, 120);
+    if (!lockValue) return;
+
+    try {
+      const result = await this.flashSaleService.releaseExpiredLocks();
+      if (result.released > 0) {
+        this.logger.log(`秒杀过期库存锁自动释放完成，共释放 ${result.released} 条`);
+      }
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(`秒杀过期库存锁自动释放失败：${err.message}`, err.stack);
     } finally {
       await this.releaseLock(lockKey, lockValue);
     }

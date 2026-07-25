@@ -5,18 +5,21 @@ interface ApiResponse<T = any> {
   requestId?: string
 }
 
+type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
+
 interface RequestConfig {
   url: string
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method?: RequestMethod
   data?: any
   header?: Record<string, string>
   showLoading?: boolean
   showError?: boolean
+  timeout?: number
 }
 
 function normalizeApiBaseUrl(raw: string): string {
   if (!raw) return ''
-  let url = raw.replace(/\/+$/, '')
+  const url = raw.replace(/\/+$/, '')
   if (import.meta.env.PROD) {
     if (!url.startsWith('https://')) {
       console.error('[baby-mall] 生产环境 VITE_API_BASE_URL 必须以 https:// 开头，当前值:', raw)
@@ -41,8 +44,10 @@ const TAB_BAR_ROUTES = new Set([
   'pages/cart/index',
   'pages/user/index'
 ])
-const AUTH_ERROR_CODES = [40101, 40102, 40103]
+const AUTH_ERROR_CODES = new Set([40101, 40102, 40103])
+const DEFAULT_TIMEOUT = 15000
 let isHandlingAuthError = false
+let loadingRequestCount = 0
 
 if (!BASE_URL) {
   console.error('[baby-mall] VITE_API_BASE_URL 未配置，所有 API 请求将失败')
@@ -83,6 +88,41 @@ function navigateToUrl(url: string) {
   } else {
     uni.navigateTo({ url })
   }
+}
+
+function beginLoading() {
+  loadingRequestCount += 1
+  if (loadingRequestCount === 1) {
+    uni.showLoading({ title: '加载中...', mask: true })
+  }
+}
+
+function endLoading() {
+  if (loadingRequestCount <= 0) return
+  loadingRequestCount -= 1
+  if (loadingRequestCount === 0) {
+    uni.hideLoading()
+  }
+}
+
+function normalizeMessage(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const text = value.trim()
+    return text || undefined
+  }
+  if (Array.isArray(value)) {
+    const text = value.map(item => String(item).trim()).filter(Boolean).join('；')
+    return text || undefined
+  }
+  return undefined
+}
+
+function fallbackMessageForStatus(statusCode: number): string {
+  if (statusCode === 403) return '暂无权限执行此操作'
+  if (statusCode === 404) return '请求的内容不存在'
+  if (statusCode === 429) return '操作过于频繁，请稍后再试'
+  if (statusCode >= 500) return '服务暂时不可用，请稍后重试'
+  return '请求失败，请稍后重试'
 }
 
 export function consumeRedirectAfterLogin() {
@@ -130,23 +170,23 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
     data,
     header = {},
     showLoading = false,
-    showError = true
+    showError = true,
+    timeout = DEFAULT_TIMEOUT
   } = config
 
   if (!BASE_URL) {
-    const errMsg = 'API 地址未配置，请在 .env.production 中设置 VITE_API_BASE_URL'
-    console.error(`[baby-mall] ${errMsg}`)
+    const errMsg = 'API 地址未配置，请联系管理员'
+    console.error('[baby-mall] VITE_API_BASE_URL 未配置')
     uni.showToast({ title: errMsg, icon: 'none', duration: 3000 })
     return Promise.reject(new Error(errMsg))
   }
 
-  if (showLoading) {
-    uni.showLoading({ title: '加载中...', mask: true })
-  }
+  if (showLoading) beginLoading()
 
+  const requestHeader: Record<string, string> = { ...header }
   const token = getToken()
   if (token) {
-    header['Authorization'] = `Bearer ${token}`
+    requestHeader.Authorization = `Bearer ${token}`
   }
 
   const fullUrl = `${BASE_URL}${url}`
@@ -156,51 +196,51 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
       url: fullUrl,
       method,
       data,
+      timeout,
       header: {
         'Content-Type': 'application/json',
-        ...header
+        ...requestHeader
       },
       success: (res) => {
-        if (showLoading) {
-          uni.hideLoading()
-        }
+        const statusCode = Number(res.statusCode || 0)
+        const payload = res.data && typeof res.data === 'object'
+          ? res.data as Partial<ApiResponse<T>>
+          : null
+        const responseCode = typeof payload?.code === 'number' ? payload.code : undefined
+        const requestId = payload?.requestId || (res.header as any)?.['X-Request-Id'] || (res.header as any)?.['x-request-id']
 
-        const response = res.data as ApiResponse<T>
-
-        const requestId = response.requestId || (res.header as any)?.['X-Request-Id'] || (res.header as any)?.['x-request-id']
-
-        if (response.code === 0) {
-          resolve(response.data)
-        } else if (AUTH_ERROR_CODES.includes(response.code)) {
+        if (statusCode === 401 || (responseCode !== undefined && AUTH_ERROR_CODES.has(responseCode))) {
           removeToken()
           redirectToLoginTab('登录已过期，请重新登录')
           reject(new Error('登录已过期，请重新登录'))
-        } else {
-          const errMsg = response.message || '请求失败'
-          console.error(`[baby-mall] API error: ${method} ${fullUrl} code=${response.code} requestId=${requestId || '-'} message=${errMsg}`)
-          if (showError) {
-            uni.showToast({
-              title: errMsg,
-              icon: 'none',
-              duration: 2000
-            })
-          }
-          reject(new Error(errMsg))
+          return
         }
+
+        if (statusCode >= 200 && statusCode < 300 && responseCode === 0) {
+          resolve(payload?.data as T)
+          return
+        }
+
+        const errMsg = normalizeMessage(payload?.message) || fallbackMessageForStatus(statusCode)
+        console.error(
+          `[baby-mall] API error: ${method} ${fullUrl} status=${statusCode || '-'} code=${responseCode ?? '-'} requestId=${requestId || '-'} message=${errMsg}`
+        )
+        if (showError) {
+          uni.showToast({ title: errMsg, icon: 'none', duration: 2000 })
+        }
+        reject(new Error(errMsg))
       },
       fail: (err) => {
-        if (showLoading) {
-          uni.hideLoading()
-        }
-        console.error(`[baby-mall] Network error: ${method} ${fullUrl}`, err.errMsg || err)
+        const detail = String((err as any)?.errMsg || err || '')
+        const errMsg = /timeout/i.test(detail) ? '请求超时，请稍后重试' : '网络异常，请稍后重试'
+        console.error(`[baby-mall] Network error: ${method} ${fullUrl}`, detail)
         if (showError) {
-          uni.showToast({
-            title: '网络异常，请稍后重试',
-            icon: 'none',
-            duration: 2000
-          })
+          uni.showToast({ title: errMsg, icon: 'none', duration: 2000 })
         }
-        reject(err)
+        reject(new Error(errMsg))
+      },
+      complete: () => {
+        if (showLoading) endLoading()
       }
     })
   })

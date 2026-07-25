@@ -1,4 +1,4 @@
-import { Allow, IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Max, Matches, IsIn, ArrayMinSize, ArrayMaxSize, MaxLength, ValidatorConstraint, ValidatorConstraintInterface, Validate } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsArray, ValidateNested, Min, Max, Matches, IsIn, ArrayMinSize, ArrayMaxSize, MaxLength, ValidatorConstraint, ValidatorConstraintInterface, Validate } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CART_MAX_QUANTITY, CART_MAX_ITEMS } from '@baby-mall/shared';
 

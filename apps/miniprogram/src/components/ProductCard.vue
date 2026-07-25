@@ -1,14 +1,19 @@
 <template>
   <view class="product-card" @tap="handleTap">
     <view class="product-image-wrap">
-      <image class="product-image" :src="imageSrc" mode="aspectFit" />
-      <view class="image-glow"></view>
-      <view v-if="displayTags.length" class="product-tag">{{ displayTags[0] }}</view>
+      <image
+        v-if="imageSrc"
+        class="product-image"
+        :src="imageSrc"
+        mode="aspectFit"
+        lazy-load
+      />
+      <view v-else class="product-image-placeholder">
+        <text class="placeholder-mark">禧</text>
+      </view>
+      <text class="product-tag">{{ primaryTag }}</text>
     </view>
     <view class="product-info">
-      <view class="tag-row">
-        <text v-for="tag in displayTags.slice(0, 2)" :key="tag" class="soft-tag">{{ tag }}</text>
-      </view>
       <text class="product-name">{{ product.name }}</text>
       <view class="product-price-row">
         <PriceDisplay :price="product.price" size="small" />
@@ -17,9 +22,10 @@
         </text>
       </view>
       <view class="product-meta">
-        <text class="product-sales">已售{{ product.sales || 0 }}件</text>
-        <view class="visual-cart-btn" @tap.stop="handleTap">
-          <text class="visual-cart-icon">+</text>
+        <text class="product-sales">已售 {{ product.sales || 0 }} 件</text>
+        <view class="card-more" @tap.stop="handleTap">
+          <text class="card-more-text">查看</text>
+          <view class="card-more-arrow"></view>
         </view>
       </view>
     </view>
@@ -48,13 +54,9 @@ const props = defineProps<{
 }>()
 
 const imageSrc = computed(() => props.product.image || props.product.images?.[0] || '')
-const displayTags = computed(() => {
-  const tags = [
-    props.product.tag,
-    ...(props.product.tags || [])
-  ].filter(Boolean) as string[]
-  const uniqueTags = Array.from(new Set(tags))
-  return uniqueTags.length ? uniqueTags : ['自营正品']
+const primaryTag = computed(() => {
+  const tag = props.product.tag || props.product.tags?.find(Boolean)
+  return tag || '自营'
 })
 
 function handleTap() {
@@ -64,11 +66,11 @@ function handleTap() {
 
 <style lang="scss" scoped>
 .product-card {
-  background: $gradient-card;
-  border-radius: $radius-xxl;
   overflow: hidden;
-  border: 1rpx solid rgba($border-color, 0.76);
-  box-shadow: $shadow-sm;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1rpx solid rgba($border-color, 0.68);
+  border-radius: 28rpx;
+  box-shadow: 0 8rpx 24rpx rgba(119, 82, 74, 0.06);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
 
   &:active {
@@ -80,111 +82,113 @@ function handleTap() {
 .product-image-wrap {
   position: relative;
   width: 100%;
-  padding-top: 104%;
-  background: linear-gradient(180deg, $bg-ivory 0%, $bg-soft 100%);
+  padding-top: 100%;
+  background: #FFFFFF;
+  border-bottom: 1rpx solid rgba($divider-color, 0.62);
+}
 
-  .product-image {
-    position: absolute;
-    top: 12rpx;
-    left: 12rpx;
-    width: calc(100% - 24rpx);
-    height: calc(100% - 20rpx);
-    background: $bg-gray;
-    border-radius: 28rpx;
-  }
+.product-image,
+.product-image-placeholder {
+  position: absolute;
+  top: 10rpx;
+  left: 10rpx;
+  width: calc(100% - 20rpx);
+  height: calc(100% - 20rpx);
+  border-radius: 22rpx;
+  background: linear-gradient(180deg, #FFFFFF, $bg-ivory);
+}
 
-  .image-glow {
-    position: absolute;
-    left: 18rpx;
-    right: 18rpx;
-    bottom: 8rpx;
-    height: 46rpx;
-    border-radius: 50%;
-    background: rgba($primary-color, 0.08);
-  }
+.product-image-placeholder {
+  @include flex-center;
+}
 
-  .product-tag {
-    position: absolute;
-    top: 20rpx;
-    left: 20rpx;
-    background: rgba(255, 255, 255, 0.94);
-    color: $primary-dark;
-    font-size: $font-xs;
-    padding: 6rpx 14rpx;
-    border-radius: $radius-round;
-    box-shadow: $shadow-sm;
-  }
+.placeholder-mark {
+  color: rgba($primary-color, 0.42);
+  font-size: 52rpx;
+  font-weight: 900;
+}
+
+.product-tag {
+  position: absolute;
+  top: 18rpx;
+  left: 18rpx;
+  max-width: calc(100% - 36rpx);
+  padding: 5rpx 13rpx;
+  overflow: hidden;
+  color: $success-dark;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border: 1rpx solid rgba($success-color, 0.16);
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .product-info {
-  padding: 18rpx 20rpx 20rpx;
-}
-
-.tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-  min-height: 34rpx;
-  margin-bottom: 8rpx;
-}
-
-.soft-tag {
-  max-width: 142rpx;
-  padding: 4rpx 12rpx;
-  border-radius: $radius-round;
-  background: rgba($success-color, 0.11);
-  color: $success-dark;
-  font-size: 18rpx;
-  line-height: 1.35;
-  @include text-ellipsis;
+  padding: 16rpx 18rpx 18rpx;
 }
 
 .product-name {
-  font-size: $font-md;
+  display: block;
+  min-height: 78rpx;
   color: $text-color;
-  font-weight: 600;
+  font-size: 27rpx;
+  font-weight: 650;
+  line-height: 1.44;
   @include text-ellipsis-2;
-  line-height: 1.46;
-  min-height: 82rpx;
 }
 
 .product-price-row {
   display: flex;
   align-items: baseline;
-  margin-top: 12rpx;
+  min-width: 0;
+  margin-top: 10rpx;
 }
 
 .product-original-price {
-  font-size: $font-xs;
+  margin-left: 7rpx;
+  overflow: hidden;
   color: $text-hint;
+  font-size: 19rpx;
+  white-space: nowrap;
   text-decoration: line-through;
-  margin-left: 8rpx;
-}
-
-.product-sales {
-  font-size: $font-xs;
-  color: $text-hint;
+  text-overflow: ellipsis;
 }
 
 .product-meta {
-  margin-top: 12rpx;
   @include flex-between;
+  min-height: 46rpx;
+  margin-top: 9rpx;
 }
 
-.visual-cart-btn {
-  @include flex-center;
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 50%;
-  background: $gradient-coral;
-  box-shadow: $shadow-coral;
-  flex-shrink: 0;
+.product-sales {
+  color: $text-hint;
+  font-size: 20rpx;
 }
 
-.visual-cart-icon {
-  color: #FFFFFF;
-  font-size: 34rpx;
-  line-height: 1;
-  font-weight: 500;
+.card-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42rpx;
+  padding: 0 13rpx;
+  border-radius: $radius-round;
+  background: rgba($primary-color, 0.09);
+}
+
+.card-more-text {
+  color: $primary-dark;
+  font-size: 19rpx;
+  font-weight: 700;
+}
+
+.card-more-arrow {
+  width: 8rpx;
+  height: 8rpx;
+  margin-left: 7rpx;
+  border-top: 2rpx solid $primary-dark;
+  border-right: 2rpx solid $primary-dark;
+  transform: rotate(45deg);
 }
 </style>

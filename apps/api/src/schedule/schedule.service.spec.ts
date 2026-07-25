@@ -24,24 +24,38 @@ function createPaymentReconcileService() {
   };
 }
 
+function createFlashSaleService() {
+  return {
+    releaseExpiredLocks: jest.fn(),
+  };
+}
+
 describe('ScheduleService', () => {
   let service: ScheduleService;
   let redisService: ReturnType<typeof createRedisService>;
   let orderService: ReturnType<typeof createOrderService>;
   let paymentReconcileService: ReturnType<typeof createPaymentReconcileService>;
+  let flashSaleService: ReturnType<typeof createFlashSaleService>;
 
   beforeEach(() => {
     redisService = createRedisService();
     orderService = createOrderService();
     paymentReconcileService = createPaymentReconcileService();
+    flashSaleService = createFlashSaleService();
     redisService.setNX.mockImplementation(async () => true);
     redisService.releaseLockWithLua.mockImplementation(async () => true);
     orderService.closeTimeoutOrders.mockImplementation(async () => ({ closedCount: 0 }));
     paymentReconcileService.confirmTimeoutOrdersBeforeClose.mockImplementation(async () => ({ total: 0, fixed: 0, delayed: 0, closable: 0, failed: 0 }));
     paymentReconcileService.reconcilePendingPayments.mockImplementation(async () => ({ total: 0, fixed: 0, skipped: 0, failed: 0 }));
     paymentReconcileService.reconcilePendingRefunds.mockImplementation(async () => ({ total: 0, fixed: 0, skipped: 0, failed: 0 }));
+    flashSaleService.releaseExpiredLocks.mockImplementation(async () => ({ released: 0 }));
 
-    service = new ScheduleService(redisService as any, orderService as any, paymentReconcileService as any);
+    service = new ScheduleService(
+      redisService as any,
+      orderService as any,
+      paymentReconcileService as any,
+      flashSaleService as any,
+    );
     jest.spyOn((service as any).logger, 'log').mockImplementation(() => {});
     jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
   });
@@ -60,5 +74,17 @@ describe('ScheduleService', () => {
     await service.handleCloseTimeoutOrders();
     expect(paymentReconcileService.confirmTimeoutOrdersBeforeClose).toHaveBeenCalled();
     expect(orderService.closeTimeoutOrders).toHaveBeenCalled();
+  });
+
+  it('自动释放过期秒杀库存锁', async () => {
+    flashSaleService.releaseExpiredLocks.mockImplementation(async () => ({ released: 2 }));
+
+    await service.handleReleaseExpiredFlashSaleLocks();
+
+    expect(flashSaleService.releaseExpiredLocks).toHaveBeenCalled();
+    expect(redisService.releaseLockWithLua).toHaveBeenCalledWith(
+      'schedule:release_expired_flash_sale_locks',
+      expect.any(String),
+    );
   });
 });
