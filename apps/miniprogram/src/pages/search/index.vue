@@ -64,7 +64,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { onReachBottom } from '@dcloudio/uni-app'
+import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { searchProducts, getHotKeywords, getSearchHistory, clearSearchHistory } from '@/api/search'
 import { useUserStore } from '@/stores/user'
 import ProductCard from '@/components/ProductCard.vue'
@@ -171,6 +171,19 @@ onReachBottom(() => {
   if (hasSearched.value) {
     loadProducts()
   }
+})
+
+onPullDownRefresh(async () => {
+  if (hasSearched.value) {
+    page.value = 1
+    total.value = 0
+    finished.value = false
+    products.value = []
+    await loadProducts()
+  } else {
+    await Promise.all([loadHotKeywords(), loadSearchHistory()])
+  }
+  uni.stopPullDownRefresh()
 })
 
 defineExpose({
