@@ -6,20 +6,23 @@
     </view>
     <view class="search-header">
       <view class="search-input-wrap">
+        <view class="search-leading-icon"></view>
         <input
           class="search-input"
           v-model="keyword"
-          placeholder="搜索母婴好物"
+          placeholder="输入商品名称或品类"
           confirm-type="search"
           @confirm="doSearch"
           focus
         />
       </view>
-      <text class="search-btn" @tap="doSearch">搜索</text>
+      <view class="search-btn" @tap="doSearch">
+        <text class="search-btn-text">搜索</text>
+      </view>
     </view>
 
     <view v-if="!hasSearched" class="search-suggest">
-      <view v-if="hotKeywords.length" class="section">
+      <view v-if="hotKeywords.length" class="section suggest-card">
         <text class="section-title">热门搜索</text>
         <view class="keyword-list">
           <view v-for="kw in hotKeywords" :key="kw" class="keyword-tag" @tap="searchByKeyword(kw)">
@@ -28,13 +31,13 @@
         </view>
       </view>
 
-      <view v-if="searchHistory.length" class="section">
+      <view v-if="searchHistory.length" class="section suggest-card">
         <view class="section-header">
           <text class="section-title">搜索历史</text>
           <text class="clear-btn" @tap="clearHistory">清空</text>
         </view>
         <view class="keyword-list">
-          <view v-for="kw in searchHistory" :key="kw" class="keyword-tag" @tap="searchByKeyword(kw)">
+          <view v-for="kw in searchHistory" :key="kw" class="keyword-tag history-tag" @tap="searchByKeyword(kw)">
             <text class="keyword-text">{{ kw }}</text>
           </view>
         </view>
@@ -42,18 +45,26 @@
     </view>
 
     <view v-else class="search-result">
+      <view class="result-summary">
+        <text class="result-keyword">“{{ keyword.trim() }}”</text>
+        <text class="result-count">{{ total }} 件结果</text>
+      </view>
       <view class="product-grid">
         <ProductCard v-for="item in products" :key="item.id" :product="item" />
       </view>
       <Loading v-if="loading" />
-      <Empty v-if="!loading && products.length === 0" text="未找到相关商品" />
+      <Empty
+        v-if="!loading && products.length === 0"
+        text="未找到相关商品"
+        hint="换个关键词，或从热门搜索中选择"
+      />
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
+import { onReachBottom } from '@dcloudio/uni-app'
 import { searchProducts, getHotKeywords, getSearchHistory, clearSearchHistory } from '@/api/search'
 import { useUserStore } from '@/stores/user'
 import ProductCard from '@/components/ProductCard.vue'
@@ -66,6 +77,7 @@ const hasSearched = ref(false)
 const hotKeywords = ref<string[]>([])
 const searchHistory = ref<string[]>([])
 const products = ref<any[]>([])
+const total = ref(0)
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
@@ -74,7 +86,7 @@ async function loadHotKeywords() {
   try {
     hotKeywords.value = await getHotKeywords()
   } catch {
-    uni.showToast({ title: '热门搜索加载失败', icon: 'none' })
+    hotKeywords.value = []
   }
 }
 
@@ -87,17 +99,19 @@ async function loadSearchHistory() {
   try {
     searchHistory.value = await getSearchHistory()
   } catch {
-    uni.showToast({ title: '搜索历史加载失败', icon: 'none' })
+    searchHistory.value = []
   }
 }
 
 async function doSearch() {
-  if (!keyword.value.trim()) {
+  keyword.value = keyword.value.trim()
+  if (!keyword.value) {
     uni.showToast({ title: '请输入搜索关键词', icon: 'none' })
     return
   }
   hasSearched.value = true
   page.value = 1
+  total.value = 0
   finished.value = false
   products.value = []
   await loadProducts()
@@ -121,6 +135,7 @@ async function loadProducts() {
       pageSize: 10
     })
     products.value.push(...data.list)
+    total.value = data.total
     finished.value = products.value.length >= data.total
     page.value++
   } catch {
@@ -170,106 +185,185 @@ defineExpose({
 }
 
 .search-hero {
-  padding: 34rpx $spacing-md 10rpx;
+  padding: 24rpx $spacing-md 8rpx;
 }
 
 .hero-title {
   display: block;
-  font-size: $font-xl;
   color: $text-color;
+  font-size: 38rpx;
   font-weight: 900;
   line-height: 1.18;
 }
 
 .hero-subtitle {
   display: block;
-  margin-top: 8rpx;
-  font-size: $font-sm;
+  margin-top: 5rpx;
   color: $text-secondary;
+  font-size: 22rpx;
 }
 
 .search-header {
   display: flex;
   align-items: center;
-  padding: $spacing-sm $spacing-md $spacing-md;
-  background: transparent;
+  padding: 10rpx $spacing-md 18rpx;
 }
 
 .search-input-wrap {
+  display: flex;
+  align-items: center;
   flex: 1;
-  background: rgba(255, 255, 255, 0.92);
+  min-width: 0;
+  min-height: 74rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid rgba($border-color, 0.68);
   border-radius: $radius-round;
-  padding: 18rpx 26rpx;
-  border: 1rpx solid rgba($border-color, 0.78);
-  box-shadow: $shadow-sm;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.search-leading-icon {
+  position: relative;
+  width: 28rpx;
+  height: 28rpx;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 1rpx;
+    top: 1rpx;
+    width: 18rpx;
+    height: 18rpx;
+    border: 3rpx solid $primary-color;
+    border-radius: 50%;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 1rpx;
+    bottom: 2rpx;
+    width: 10rpx;
+    height: 3rpx;
+    border-radius: 2rpx;
+    background: $primary-color;
+    transform: rotate(45deg);
+  }
 }
 
 .search-input {
-  font-size: $font-md;
+  flex: 1;
+  min-width: 0;
   width: 100%;
+  font-size: 25rpx;
 }
 
 .search-btn {
-  margin-left: $spacing-sm;
-  color: #FFFFFF;
-  font-size: $font-md;
-  padding: 18rpx 28rpx;
+  @include flex-center;
+  min-width: 104rpx;
+  min-height: 72rpx;
+  margin-left: 12rpx;
+  padding: 0 24rpx;
   border-radius: $radius-round;
   background: $gradient-coral;
   box-shadow: $shadow-coral;
-  font-weight: 700;
+}
+
+.search-btn-text {
+  color: #FFFFFF;
+  font-size: 25rpx;
+  font-weight: 800;
 }
 
 .search-suggest {
-  padding: $spacing-md;
+  padding: 4rpx $spacing-md $spacing-lg;
 }
 
 .section {
-  margin-bottom: $spacing-lg;
+  margin-bottom: 18rpx;
+}
+
+.suggest-card {
+  padding: 22rpx;
+  border: 1rpx solid rgba($border-color, 0.64);
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .section-header {
   @include flex-between;
-  margin-bottom: $spacing-sm;
+  margin-bottom: 16rpx;
 }
 
 .section-title {
-  font-size: $font-lg;
-  font-weight: 800;
+  display: block;
+  margin-bottom: 16rpx;
   color: $text-color;
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.section-header .section-title {
+  margin-bottom: 0;
 }
 
 .clear-btn {
-  font-size: $font-sm;
+  padding: 8rpx 4rpx;
   color: $text-hint;
+  font-size: 22rpx;
 }
 
 .keyword-list {
   display: flex;
   flex-wrap: wrap;
-  gap: $spacing-sm;
+  gap: 10rpx;
 }
 
 .keyword-tag {
-  background: rgba(255, 255, 255, 0.88);
+  padding: 11rpx 20rpx;
+  border: 1rpx solid rgba($primary-color, 0.12);
   border-radius: $radius-round;
-  padding: 14rpx 26rpx;
-  border: 1rpx solid rgba($border-color, 0.78);
-  box-shadow: $shadow-xs;
+  background: rgba($primary-color, 0.07);
+}
+
+.history-tag {
+  border-color: rgba($border-color, 0.62);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .keyword-text {
-  font-size: $font-sm;
   color: $text-secondary;
+  font-size: 23rpx;
 }
 
 .search-result {
-  padding: $spacing-sm $spacing-md;
+  padding: 4rpx $spacing-md $spacing-xl;
+}
+
+.result-summary {
+  @include flex-between;
+  min-height: 54rpx;
+  margin-bottom: 12rpx;
+  padding: 0 4rpx;
+}
+
+.result-keyword {
+  max-width: 500rpx;
+  color: $text-color;
+  font-size: 25rpx;
+  font-weight: 700;
+  @include text-ellipsis;
+}
+
+.result-count {
+  color: $text-hint;
+  font-size: 21rpx;
 }
 
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 22rpx;
+  gap: 18rpx;
 }
 </style>
