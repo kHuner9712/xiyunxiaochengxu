@@ -7,8 +7,11 @@
           <text class="list-subtitle">自营母婴精品 · 安心选购</text>
         </view>
         <view class="result-count">
-          <text class="result-count-main">{{ total }}</text>
-          <text class="result-count-unit">件好物</text>
+          <text v-if="loading && total === 0" class="result-count-main">严选</text>
+          <template v-else>
+            <text class="result-count-main">{{ total }}</text>
+            <text class="result-count-unit">件好物</text>
+          </template>
         </view>
       </view>
       <view class="search-box" @tap="goSearch">
