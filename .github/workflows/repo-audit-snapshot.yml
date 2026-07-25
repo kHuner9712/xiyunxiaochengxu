@@ -1,4 +1,4 @@
-name: Repository Audit Snapshot
+name: Repository Audit Validation
 
 on:
   pull_request:
@@ -8,26 +8,17 @@ permissions:
   contents: read
 
 jobs:
-  snapshot:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
-      - name: Upload source snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: repository-audit-source
-          retention-days: 1
-          if-no-files-found: error
-          path: |
-            apps/api/src
-            apps/api/package.json
-            apps/miniprogram/src
-            apps/miniprogram/package.json
-            apps/admin-web/src
-            apps/admin-web/package.json
-            deploy
-            .github/workflows
-            package.json
-            pnpm-workspace.yaml
-            pnpm-lock.yaml
+      - name: Validate shell syntax
+        run: |
+          bash -n deploy/scripts/backup.sh
+          bash -n deploy/scripts/deploy.sh
+          bash -n deploy/scripts/production-smoke.sh
+
+      - name: Run production smoke check
+        run: bash deploy/scripts/production-smoke.sh
