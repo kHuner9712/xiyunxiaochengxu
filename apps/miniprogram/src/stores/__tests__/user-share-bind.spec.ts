@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '../user'
 import { wxLogin as wxLoginApi } from '@/api/auth'
-import { get, setToken } from '@/utils/request'
+import { get, getToken, setToken, removeToken } from '@/utils/request'
 import { handleShareBindOnLogin } from '@/utils/share'
 
 vi.mock('@/api/auth', () => ({
@@ -13,6 +13,7 @@ vi.mock('@/api/auth', () => ({
 
 vi.mock('@/utils/request', () => ({
   get: vi.fn(),
+  getToken: vi.fn(),
   setToken: vi.fn(),
   removeToken: vi.fn(),
   redirectToLoginTab: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/utils/share', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   setActivePinia(createPinia())
+  vi.mocked(getToken).mockReturnValue('')
   vi.mocked(wxLoginApi).mockResolvedValue({ token: 'token-1', isNewUser: false })
   vi.mocked(get).mockResolvedValue({
     id: '100',
@@ -67,6 +69,39 @@ describe('用户登录后的分享邀请绑定', () => {
       '[baby-mall] bind invite after login failed:',
       expect.any(Error),
     )
+    warnSpy.mockRestore()
+  })
+})
+
+describe('启动时恢复登录状态', () => {
+  it('临时网络错误不会误清本地登录态', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(getToken).mockReturnValue('saved-token')
+    vi.mocked(get).mockRejectedValueOnce(new Error('network error'))
+    const store = useUserStore()
+
+    await expect(store.checkLogin()).resolves.toBe(false)
+
+    expect(store.isLoggedIn).toBe(true)
+    expect(removeToken).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
+    warnSpy.mockRestore()
+  })
+
+  it('请求层已清除过期 token 时同步清理 Store 状态', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(getToken)
+      .mockReturnValueOnce('expired-token')
+      .mockReturnValueOnce('')
+    vi.mocked(get).mockRejectedValueOnce(new Error('登录已过期'))
+    const store = useUserStore()
+
+    await expect(store.checkLogin()).resolves.toBe(false)
+
+    expect(store.isLoggedIn).toBe(false)
+    errorSpy.mockRestore()
     warnSpy.mockRestore()
   })
 })
