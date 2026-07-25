@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { get, setToken, removeToken, redirectToLoginTab } from '@/utils/request'
+import { get, getToken, setToken, removeToken, redirectToLoginTab } from '@/utils/request'
 import { wxLogin as wxLoginApi, bindPhone as bindPhoneApi, updateProfile as updateProfileApi } from '@/api/auth'
 import { handleShareBindOnLogin } from '@/utils/share'
 
@@ -22,7 +22,7 @@ export const useUserStore = defineStore('user', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const nickname = computed(() => userInfo.value?.nickname || (token.value ? '微信用户' : '未登录'))
-  const avatar = computed(() => userInfo.value?.avatar || '')
+  const avatar = computed(() => userInfo.value?.avatar || userInfo.value?.avatarUrl || '')
   const phone = computed(() => userInfo.value?.phone || '')
   const isProfileComplete = computed(() => {
     const rawNickname = userInfo.value?.nickname?.trim()
@@ -33,11 +33,18 @@ export const useUserStore = defineStore('user', () => {
   const memberLevelName = computed(() => userInfo.value?.memberLevelName || '普通用户')
   const points = computed(() => userInfo.value?.points || 0)
 
-  function checkLogin() {
-    const savedToken = uni.getStorageSync('baby_mall_token')
-    if (savedToken) {
-      token.value = savedToken
-      fetchUserInfo()
+  async function checkLogin() {
+    const savedToken = getToken()
+    if (!savedToken) return false
+
+    token.value = savedToken
+    try {
+      await fetchUserInfo()
+      return true
+    } catch (err) {
+      // 401 会由请求层清除持久化 token；临时网络错误则保留登录态，避免误登出。
+      console.warn('[baby-mall] restore login session failed:', err)
+      return false
     }
   }
 
@@ -45,11 +52,13 @@ export const useUserStore = defineStore('user', () => {
     try {
       const data = await get<UserInfo>('/weapp/user/info')
       userInfo.value = data
+      return data
     } catch (err) {
       console.error('[baby-mall] fetchUserInfo failed after auth:', err)
-      token.value = ''
-      userInfo.value = null
-      removeToken()
+      if (!getToken()) {
+        token.value = ''
+        userInfo.value = null
+      }
       throw err
     }
   }
