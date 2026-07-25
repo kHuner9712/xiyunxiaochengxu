@@ -73,4 +73,23 @@ jobs:
         run: pnpm --filter @baby-mall/shared build
 
       - name: Run Release Gate Check
-        run: bash deploy/scripts/release-check.sh
+        id: gate
+        shell: bash
+        run: |
+          set +e
+          bash deploy/scripts/release-check.sh 2>&1 | tee release-check.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload release gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-diagnostics
+          retention-days: 1
+          path: release-check.log
+
+      - name: Fail when release gate fails
+        if: steps.gate.outputs.status != '0'
+        run: exit 1
