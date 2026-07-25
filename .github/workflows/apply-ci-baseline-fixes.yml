@@ -1,8 +1,8 @@
 name: Apply CI Baseline Fixes
 
 on:
-  push:
-    branches: [agent/polish-miniapp-ui]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
