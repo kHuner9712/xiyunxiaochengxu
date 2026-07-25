@@ -5,7 +5,7 @@ interface ApiResponse<T = any> {
   requestId?: string
 }
 
-type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
 
 interface RequestConfig {
   url: string
@@ -256,10 +256,6 @@ export function post<T = any>(url: string, data?: any, config?: Partial<RequestC
 
 export function put<T = any>(url: string, data?: any, config?: Partial<RequestConfig>): Promise<T> {
   return request<T>({ url, method: 'PUT', data, ...config })
-}
-
-export function patch<T = any>(url: string, data?: any, config?: Partial<RequestConfig>): Promise<T> {
-  return request<T>({ url, method: 'PATCH', data, ...config })
 }
 
 export function del<T = any>(url: string, data?: any, config?: Partial<RequestConfig>): Promise<T> {
