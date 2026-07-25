@@ -1,83 +1,50 @@
-/*
- * User-center polish overrides.
- * Keep the profile hero compact, readable and visually connected to orders.
- */
-
 .user-page {
-  background: linear-gradient(180deg, #fffaf6 0%, #fff7f2 44%, #fffaf7 100%) !important;
+  background: linear-gradient(180deg, #fffaf6, #fff7f2 44%, #fffaf7) !important;
   padding-bottom: 54rpx !important;
 }
 
 .user-page .user-header {
-  position: relative;
   padding: 26rpx 24rpx 42rpx !important;
   border-radius: 0 0 42rpx 42rpx !important;
   background:
-    radial-gradient(circle at 92% 12%, rgba(131, 185, 148, 0.18) 0%, rgba(131, 185, 148, 0) 210rpx),
-    radial-gradient(circle at 8% 2%, rgba(255, 121, 128, 0.12) 0%, rgba(255, 121, 128, 0) 220rpx),
-    linear-gradient(135deg, #fff8ef 0%, #ffebe3 54%, #f6f6e9 100%) !important;
-  box-shadow: 0 12rpx 34rpx rgba(112, 79, 68, 0.07) !important;
+    radial-gradient(circle at 92% 12%, rgba(131,185,148,.18), transparent 210rpx),
+    linear-gradient(135deg, #fff8ef, #ffebe3 54%, #f6f6e9) !important;
 }
 
-.user-page .header-brand-row {
-  margin-bottom: 18rpx !important;
-}
-
+.user-page .header-brand-row { margin-bottom: 18rpx !important; }
 .user-page .brand-pill {
   min-height: 34rpx !important;
   padding: 0 14rpx !important;
   line-height: 34rpx !important;
   font-size: 20rpx !important;
   box-shadow: none !important;
-  border: 1rpx solid rgba(255, 255, 255, 0.82);
 }
-
-.user-page .brand-copy {
-  font-size: 20rpx !important;
-  color: rgba(83, 72, 67, 0.72) !important;
-}
+.user-page .brand-copy { font-size: 20rpx !important; }
 
 .user-page .user-info {
   min-height: 118rpx;
   padding: 18rpx 20rpx !important;
   box-sizing: border-box;
   border-radius: 30rpx;
-  background: rgba(255, 255, 255, 0.68);
-  border: 1rpx solid rgba(255, 255, 255, 0.88);
-  box-shadow: 0 10rpx 28rpx rgba(111, 76, 65, 0.06);
+  background: rgba(255,255,255,.68);
+  border: 1rpx solid rgba(255,255,255,.88);
 }
 
 .user-page .user-avatar {
   width: 98rpx !important;
   height: 98rpx !important;
   border-width: 3rpx !important;
-  box-shadow: 0 8rpx 22rpx rgba(93, 66, 57, 0.1) !important;
 }
-
-.user-page .user-detail {
-  margin-left: 18rpx !important;
-  flex: 1;
-}
-
-.user-page .user-name {
-  max-width: 100% !important;
-  font-size: 34rpx !important;
-  line-height: 1.25 !important;
-  letter-spacing: -0.5rpx;
-}
+.user-page .user-detail { margin-left: 18rpx !important; flex: 1; }
+.user-page .user-name { max-width: 100% !important; font-size: 34rpx !important; line-height: 1.25 !important; }
 
 .user-page .member-badge {
   min-height: 34rpx !important;
   margin-top: 7rpx !important;
   padding: 0 12rpx !important;
-  border-color: rgba(245, 110, 116, 0.12) !important;
-  background: rgba(255, 244, 239, 0.9) !important;
+  background: rgba(255,244,239,.9) !important;
 }
-
-.user-page .member-text {
-  font-size: 20rpx !important;
-  line-height: 34rpx !important;
-}
+.user-page .member-text { font-size: 20rpx !important; line-height: 34rpx !important; }
 
 .user-page .login-btn,
 .user-page .phone-btn,
@@ -85,91 +52,46 @@
   width: 100% !important;
   min-height: 64rpx !important;
   margin-top: 14rpx !important;
-  box-sizing: border-box;
   border-radius: 32rpx !important;
+  box-sizing: border-box;
 }
-
-.user-page .login-btn {
-  box-shadow: 0 10rpx 22rpx rgba(255, 111, 115, 0.2) !important;
-}
-
 .user-page .login-text,
 .user-page .phone-btn,
-.user-page .profile-text {
-  font-size: 25rpx !important;
-  line-height: 64rpx !important;
-}
+.user-page .profile-text { font-size: 25rpx !important; line-height: 64rpx !important; }
 
-.user-page .login-btn:active,
-.user-page .phone-btn:active,
-.user-page .profile-btn:active {
-  transform: scale(0.99);
-  opacity: 0.92;
-}
-
-.user-page .login-agreement {
-  margin-top: 10rpx !important;
-  line-height: 1.55;
-  text-align: center;
-}
-
+.user-page .login-agreement { margin-top: 10rpx !important; line-height: 1.55; text-align: center; }
 .user-page .agreement-prefix,
-.user-page .agreement-link {
-  font-size: 20rpx !important;
-}
+.user-page .agreement-link { font-size: 20rpx !important; }
 
 .user-page .header-trust {
   gap: 8rpx !important;
   margin-top: 14rpx !important;
   justify-content: center;
 }
-
 .user-page .header-trust text {
   min-height: 32rpx !important;
   padding: 0 12rpx !important;
   line-height: 32rpx !important;
   font-size: 19rpx !important;
-  background: rgba(116, 174, 135, 0.1) !important;
 }
 
 .user-page .order-section {
   margin: -20rpx 24rpx 16rpx !important;
   padding: 22rpx !important;
   border-radius: 32rpx !important;
-  box-shadow: 0 12rpx 30rpx rgba(107, 76, 65, 0.08) !important;
 }
-
-.user-page .section-header {
-  margin-bottom: 16rpx !important;
-  align-items: center !important;
-}
-
-.user-page .section-title {
-  font-size: 29rpx !important;
-}
-
-.user-page .section-subtitle {
-  margin-top: 3rpx !important;
-  font-size: 20rpx !important;
-}
-
-.user-page .section-more {
-  font-size: 22rpx !important;
-  padding: 10rpx 0 10rpx 16rpx;
-}
-
-.user-page .order-shortcuts {
-  gap: 8rpx !important;
-}
+.user-page .section-header { margin-bottom: 16rpx !important; align-items: center !important; }
+.user-page .section-title { font-size: 29rpx !important; }
+.user-page .section-subtitle { margin-top: 3rpx !important; font-size: 20rpx !important; }
+.user-page .section-more { font-size: 22rpx !important; }
+.user-page .order-shortcuts { gap: 8rpx !important; }
 
 .user-page .shortcut-item {
   min-height: 104rpx !important;
   padding: 8rpx 2rpx;
   box-sizing: border-box;
   border-radius: 20rpx !important;
-  background: rgba(255, 249, 246, 0.84) !important;
 }
-
 .user-page .shortcut-icon {
   width: 46rpx !important;
   height: 46rpx !important;
@@ -177,13 +99,7 @@
   border-radius: 16rpx !important;
   font-size: 23rpx !important;
 }
-
-.user-page .shortcut-text {
-  font-size: 19rpx !important;
-  line-height: 1.25;
-  white-space: nowrap;
-}
-
+.user-page .shortcut-text { font-size: 19rpx !important; line-height: 1.25; white-space: nowrap; }
 .user-page .shortcut-badge {
   top: 4rpx !important;
   right: 4rpx !important;
@@ -192,29 +108,4 @@
   padding: 0 6rpx !important;
   font-size: 18rpx !important;
 }
-
-.user-page .menu-section {
-  margin-top: 0 !important;
-  border-radius: 32rpx !important;
-  box-shadow: 0 10rpx 26rpx rgba(107, 76, 65, 0.05) !important;
-}
-
-@media screen and (max-width: 360px) {
-  .user-page .user-header {
-    padding-left: 20rpx !important;
-    padding-right: 20rpx !important;
-  }
-
-  .user-page .user-avatar {
-    width: 90rpx !important;
-    height: 90rpx !important;
-  }
-
-  .user-page .user-name {
-    font-size: 31rpx !important;
-  }
-
-  .user-page .shortcut-text {
-    font-size: 18rpx !important;
-  }
-}
+.user-page .menu-section { margin-top: 0 !important; border-radius: 32rpx !important; }
