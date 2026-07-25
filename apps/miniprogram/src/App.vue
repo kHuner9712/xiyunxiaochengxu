@@ -38,4 +38,5 @@ onShow((options: any) => {
 @import '@/styles/common.scss';
 @import '@/styles/ui-polish.scss';
 @import '@/styles/user-polish.scss';
+@import '@/styles/commerce-polish.scss';
 </style>
