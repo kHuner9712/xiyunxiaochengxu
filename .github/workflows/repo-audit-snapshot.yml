@@ -1,0 +1,33 @@
+name: Repository Audit Snapshot
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-audit-source
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            apps/api/src
+            apps/api/package.json
+            apps/miniprogram/src
+            apps/miniprogram/package.json
+            apps/admin-web/src
+            apps/admin-web/package.json
+            deploy
+            .github/workflows
+            package.json
+            pnpm-workspace.yaml
+            pnpm-lock.yaml
