@@ -1,0 +1,125 @@
+name: Apply CI Baseline Fixes
+
+on:
+  push:
+    branches: [agent/polish-miniapp-ui]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fixes:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      PRISMA_SKIP_POSTINSTALL_GENERATE: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/polish-miniapp-ui
+          fetch-depth: 0
+
+      - name: Apply precise source fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f'pattern not found in {path}: {old!r}')
+              file.write_text(text.replace(old, new, 1))
+
+          replace(
+              'apps/api/src/activity-content/activity-content.service.ts',
+              'const data = this.buildUpdateData(dto, existing);',
+              'const data = this.buildUpdateData(dto);',
+          )
+          replace(
+              'apps/api/src/activity-content/activity-content.service.ts',
+              'private buildUpdateData(dto: UpdateActivityContentDto, existing: any): any {',
+              'private buildUpdateData(dto: UpdateActivityContentDto): any {',
+          )
+          replace(
+              'apps/api/src/flash-sale/flash-sale.service.ts',
+              "\nfunction parseDate(v: string | undefined): Date | undefined {\n  if (!v) return undefined;\n  const d = new Date(v);\n  return isNaN(d.getTime()) ? undefined : d;\n}\n",
+              '',
+          )
+          replace(
+              'apps/api/src/group-buy/group-buy.controller.ts',
+              '  UseGuards,\n',
+              '',
+          )
+          replace(
+              'apps/api/src/group-buy/group-buy.service.ts',
+              """    // 创建订单
+    let orderId: bigint;
+    try {
+      const order = await this.orderService.create(userId, {
+        items: [{ skuId: skuId.toString(), quantity }],
+        addressId: dto.addressId,
+        pickupStoreId: dto.pickupStoreId,
+        fulfillmentType: dto.fulfillmentType,
+        remark: dto.remark,
+        sourceType: 'direct',
+      });
+      orderId = BigInt(order.orderId);
+    } catch (err) {
+      throw err;
+    }
+""",
+              """    // 创建订单
+    const order = await this.orderService.create(userId, {
+      items: [{ skuId: skuId.toString(), quantity }],
+      addressId: dto.addressId,
+      pickupStoreId: dto.pickupStoreId,
+      fulfillmentType: dto.fulfillmentType,
+      remark: dto.remark,
+      sourceType: 'direct',
+    });
+    const orderId = BigInt(order.orderId);
+""",
+          )
+          replace(
+              'apps/api/src/order/dto/confirm-order.dto.spec.ts',
+              "import { IsOptional, validateSync } from 'class-validator';",
+              "import { validateSync } from 'class-validator';",
+          )
+          replace(
+              'apps/api/src/order/dto/create-order.dto.ts',
+              'import { Allow, IsInt,',
+              'import { IsInt,',
+          )
+          replace(
+              'apps/api/src/product/product.service.ts',
+              "        orderBy: { sortOrder: 'asc' },",
+              '        orderBy,',
+          )
+          PY
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.2.2
+          run_install: false
+          standalone: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @baby-mall/api lint
+      - run: node deploy/scripts/audit-api-permissions.mjs
+
+      - name: Commit verified fixes
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add apps/api/src deploy/scripts/audit-api-permissions.mjs
+          git commit -m "fix(ci): resolve API lint and permission audit"
+          git push origin HEAD:agent/polish-miniapp-ui
