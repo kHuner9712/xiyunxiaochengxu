@@ -18,12 +18,6 @@ import {
   FlashSaleBuyDto,
 } from './dto/flash-sale.dto';
 
-function parseDate(v: string | undefined): Date | undefined {
-  if (!v) return undefined;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? undefined : d;
-}
-
 @Injectable()
 export class FlashSaleService {
   private readonly logger = new Logger(FlashSaleService.name);

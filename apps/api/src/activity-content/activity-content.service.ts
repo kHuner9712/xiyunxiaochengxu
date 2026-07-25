@@ -56,7 +56,7 @@ export class ActivityContentService {
     if (!existing) throw new NotFoundException('活动内容不存在');
 
     this.validateBusinessRules(dto, existing);
-    const data = this.buildUpdateData(dto, existing);
+    const data = this.buildUpdateData(dto);
 
     const result = await this.prisma.activityContent.update({
       where: { id: BigInt(id) },
@@ -241,7 +241,7 @@ export class ActivityContentService {
     return data;
   }
 
-  private buildUpdateData(dto: UpdateActivityContentDto, existing: any): any {
+  private buildUpdateData(dto: UpdateActivityContentDto): any {
     const data: any = {};
 
     if (dto.title !== undefined) {

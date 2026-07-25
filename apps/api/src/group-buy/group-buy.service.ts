@@ -557,20 +557,15 @@ export class GroupBuyService {
     }
 
     // 创建订单
-    let orderId: bigint;
-    try {
-      const order = await this.orderService.create(userId, {
-        items: [{ skuId: skuId.toString(), quantity }],
-        addressId: dto.addressId,
-        pickupStoreId: dto.pickupStoreId,
-        fulfillmentType: dto.fulfillmentType,
-        remark: dto.remark,
-        sourceType: 'direct',
-      });
-      orderId = BigInt(order.orderId);
-    } catch (err) {
-      throw err;
-    }
+    const order = await this.orderService.create(userId, {
+      items: [{ skuId: skuId.toString(), quantity }],
+      addressId: dto.addressId,
+      pickupStoreId: dto.pickupStoreId,
+      fulfillmentType: dto.fulfillmentType,
+      remark: dto.remark,
+      sourceType: 'direct',
+    });
+    const orderId = BigInt(order.orderId);
 
     // 创建 member 记录
     try {

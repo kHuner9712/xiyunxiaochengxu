@@ -37,7 +37,7 @@ export class ProductService {
         where,
         skip: dto.skip,
         take: dto.take,
-        orderBy: { sortOrder: 'asc' },
+        orderBy,
         include: {
           skus: { where: { status: 1 } },
           category: true,
