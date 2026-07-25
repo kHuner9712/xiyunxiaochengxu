@@ -1,0 +1,107 @@
+.flash-sale-detail-page,
+.group-buy-detail-page {
+  padding-bottom: calc(136rpx + env(safe-area-inset-bottom)) !important;
+}
+
+.flash-sale-detail-page .bottom-bar,
+.group-buy-detail-page .bottom-bar {
+  min-height: 102rpx;
+  padding: 10rpx 18rpx calc(10rpx + env(safe-area-inset-bottom)) !important;
+  box-sizing: border-box;
+  background: rgba(255, 253, 251, 0.97) !important;
+  box-shadow: 0 -8rpx 24rpx rgba(119, 82, 74, 0.06) !important;
+}
+
+.flash-sale-detail-page .buy-btn,
+.group-buy-detail-page .start-btn {
+  min-height: 76rpx !important;
+  padding: 0 !important;
+  border-radius: 38rpx !important;
+  font-size: 26rpx !important;
+  line-height: 76rpx !important;
+}
+
+.flash-sale-detail-page .detail-card,
+.group-buy-detail-page .detail-card {
+  border-radius: 28rpx !important;
+  box-shadow: 0 8rpx 26rpx rgba(119, 82, 74, 0.06) !important;
+}
+
+.flash-sale-detail-page .cover,
+.group-buy-detail-page .cover {
+  background: #fff !important;
+}
+
+.benefit-detail-page {
+  padding-bottom: calc(132rpx + env(safe-area-inset-bottom)) !important;
+}
+
+.benefit-detail-page .detail-body {
+  gap: 14rpx !important;
+}
+
+.benefit-detail-page .hero,
+.benefit-detail-page .section {
+  border-radius: 26rpx !important;
+  box-shadow: 0 8rpx 24rpx rgba(119, 82, 74, 0.055) !important;
+}
+
+.benefit-detail-page .buy-btn {
+  left: 24rpx !important;
+  right: 24rpx !important;
+  bottom: calc(14rpx + env(safe-area-inset-bottom)) !important;
+  height: 76rpx !important;
+  border-radius: 38rpx !important;
+  box-shadow: 0 8rpx 24rpx rgba(255, 112, 114, 0.2) !important;
+}
+
+.confirm-page {
+  padding-bottom: calc(150rpx + env(safe-area-inset-bottom)) !important;
+}
+
+.confirm-page .confirm-head {
+  padding: 24rpx 24rpx 12rpx !important;
+}
+
+.confirm-page .confirm-title {
+  font-size: 38rpx !important;
+  line-height: 1.16 !important;
+}
+
+.confirm-page .confirm-subtitle {
+  margin-top: 5rpx !important;
+  font-size: 21rpx !important;
+}
+
+.confirm-page .bottom-bar {
+  min-height: 120rpx !important;
+  padding-top: 10rpx !important;
+  padding-bottom: calc(10rpx + env(safe-area-inset-bottom)) !important;
+}
+
+.confirm-page .submit-btn {
+  min-width: 204rpx !important;
+  min-height: 76rpx !important;
+  padding: 0 24rpx !important;
+  border-radius: 38rpx !important;
+}
+
+.confirm-page .submit-text {
+  font-size: 25rpx !important;
+}
+
+.confirm-page .bottom-note {
+  margin-top: 3rpx !important;
+  font-size: 17rpx !important;
+}
+
+@media (max-width: 350px) {
+  .confirm-page .bottom-note {
+    display: none !important;
+  }
+
+  .confirm-page .submit-btn {
+    min-width: 184rpx !important;
+    padding: 0 18rpx !important;
+  }
+}
