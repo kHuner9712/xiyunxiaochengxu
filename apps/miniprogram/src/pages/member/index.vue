@@ -57,7 +57,7 @@ function normalizeRightCopy(right: MemberRight): MemberRight {
     name: right.name === '生日/孕产期关怀' ? '生日/孕产期福利' : right.name,
     description: right.description
       .replace('普通会员可查看会员专享价与活动价', '会员可查看会员专享价与活动价')
-      .replace('按宝宝生日或孕产阶段推送关怀福利', '按宝宝生日或孕产期阶段推送福利')
+      .replace('按宝宝生日或孕产阶段推送关怀福利', '按宝宝生日或孕产阶段推送福利')
   }
 }
 
