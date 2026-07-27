@@ -7,7 +7,12 @@
     <view class="form-section card">
       <view class="form-item">
         <text class="form-label">昵称</text>
-        <input class="form-input" v-model="form.nickname" placeholder="请输入宝宝昵称" />
+        <input
+          class="form-input"
+          v-model="form.nickname"
+          placeholder="请输入宝宝昵称"
+          placeholder-class="form-input-placeholder"
+        />
       </view>
       <view class="form-item">
         <text class="form-label">性别</text>
@@ -178,10 +183,17 @@ defineExpose({
 
 .form-input {
   flex: 1;
+  height: 72rpx;
+  line-height: 72rpx;
   font-size: $font-md;
   background: $bg-soft;
   border-radius: $radius-lg;
-  padding: 16rpx 20rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+}
+
+.form-input-placeholder {
+  line-height: 72rpx;
 }
 
 .form-value {
