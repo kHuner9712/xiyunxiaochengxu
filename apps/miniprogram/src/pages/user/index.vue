@@ -14,7 +14,12 @@
           </view>
         </view>
       </view>
-      <view v-if="!userStore.isLoggedIn" class="login-btn" @tap="handleLogin">
+      <view
+        v-if="!userStore.isLoggedIn"
+        class="login-btn"
+        :class="{ disabled: !hasAgreedToPolicies }"
+        @tap="handleLogin"
+      >
         <text class="login-text">微信快捷登录</text>
       </view>
       <button
@@ -28,8 +33,11 @@
       <view v-if="userStore.isLoggedIn && !userStore.isProfileComplete" class="profile-btn" @tap="goProfile">
         <text class="profile-text">完善资料</text>
       </view>
-      <view v-if="!userStore.isLoggedIn" class="login-agreement">
-        <text class="agreement-prefix">登录即视为同意</text>
+      <view v-if="!userStore.isLoggedIn" class="login-agreement" @tap="togglePolicyAgreement">
+        <view class="agreement-checkbox" :class="{ checked: hasAgreedToPolicies }">
+          <text v-if="hasAgreedToPolicies" class="agreement-checkmark">✓</text>
+        </view>
+        <text class="agreement-prefix">我已阅读并同意</text>
         <text class="agreement-link" @tap.stop="openPolicy('/pages/agreement/index')">《用户协议》</text>
         <text class="agreement-prefix">与</text>
         <text class="agreement-link" @tap.stop="openPolicy('/pages/privacy/index')">《隐私政策》</text>
@@ -172,6 +180,7 @@ import { getOrderCount, normalizeOrderStatus, type OrderCount, type OrderStatus 
 import { navigateToStoredRedirect } from '@/utils/request'
 
 const userStore = useUserStore()
+const hasAgreedToPolicies = ref(false)
 const orderCount = ref<OrderCount>({
   unpaid: 0,
   unshipped: 0,
@@ -191,6 +200,15 @@ async function loadOrderCount() {
 }
 
 async function handleLogin() {
+  if (!hasAgreedToPolicies.value) {
+    uni.showToast({
+      title: '请先阅读并勾选用户协议与隐私政策',
+      icon: 'none',
+      duration: 2500
+    })
+    return
+  }
+
   try {
     await userStore.wxLogin()
     await loadOrderCount()
@@ -347,6 +365,10 @@ function navigateTo(url: string) {
   }
 }
 
+function togglePolicyAgreement() {
+  hasAgreedToPolicies.value = !hasAgreedToPolicies.value
+}
+
 function openPolicy(url: string) {
   uni.navigateTo({ url })
 }
@@ -450,6 +472,11 @@ onShow(() => {
   background: $gradient-coral;
   border-radius: $radius-round;
   box-shadow: $shadow-coral;
+
+  &.disabled {
+    opacity: 0.56;
+    box-shadow: none;
+  }
 }
 
 .login-text {
@@ -494,7 +521,35 @@ onShow(() => {
 }
 
 .login-agreement {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 48rpx;
   margin-top: 14rpx;
+}
+
+.agreement-checkbox {
+  @include flex-center;
+  width: 30rpx;
+  height: 30rpx;
+  margin-right: 8rpx;
+  border: 2rpx solid rgba($text-secondary, 0.72);
+  border-radius: 8rpx;
+  background: rgba(255, 255, 255, 0.9);
+  box-sizing: border-box;
+  flex-shrink: 0;
+
+  &.checked {
+    border-color: $primary-color;
+    background: $primary-color;
+  }
+}
+
+.agreement-checkmark {
+  color: #FFFFFF;
+  font-size: 22rpx;
+  line-height: 1;
+  font-weight: 800;
 }
 
 .agreement-prefix {
