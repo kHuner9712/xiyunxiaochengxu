@@ -72,6 +72,10 @@ export function getOrderDetail(id: string | number) {
   return get<OrderDetail>(`/weapp/order/detail/${id}`)
 }
 
+export function getOrderDetailByNo(orderNo: string) {
+  return get<OrderDetail>(`/weapp/order/detail-by-no/${encodeURIComponent(orderNo)}`)
+}
+
 export function cancelOrder(id: string | number) {
   return put(`/weapp/order/cancel/${id}`)
 }

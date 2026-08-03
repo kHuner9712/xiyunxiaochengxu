@@ -139,6 +139,7 @@ export class ProductService {
           brandId: dto.brandId ? BigInt(dto.brandId) : null,
           supplierId: dto.supplierId ? BigInt(dto.supplierId) : null,
           mainImage: dto.mainImage,
+          videoUrl: dto.videoUrl,
           images: dto.images,
           description: dto.description,
           attributes: dto.attributes,
@@ -200,6 +201,7 @@ export class ProductService {
       if (dto.brandId !== undefined) updateData.brandId = dto.brandId ? BigInt(dto.brandId) : null;
       if (dto.supplierId !== undefined) updateData.supplierId = dto.supplierId ? BigInt(dto.supplierId) : null;
       if (dto.mainImage !== undefined) updateData.mainImage = dto.mainImage;
+      if (dto.videoUrl !== undefined) updateData.videoUrl = dto.videoUrl;
       if (dto.images !== undefined) updateData.images = dto.images;
       if (dto.description !== undefined) updateData.description = dto.description;
       if (dto.attributes !== undefined) updateData.attributes = dto.attributes;

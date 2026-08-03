@@ -11,7 +11,7 @@
           class="form-input"
           v-model="form.nickname"
           placeholder="请输入宝宝昵称"
-          placeholder-class="form-input-placeholder"
+          placeholder-class="native-input-placeholder"
         />
       </view>
       <view class="form-item">
@@ -184,6 +184,7 @@ defineExpose({
 .form-input {
   flex: 1;
   height: 72rpx;
+  min-height: 72rpx;
   line-height: 72rpx;
   font-size: $font-md;
   background: $bg-soft;
@@ -192,9 +193,6 @@ defineExpose({
   box-sizing: border-box;
 }
 
-.form-input-placeholder {
-  line-height: 72rpx;
-}
 
 .form-value {
   flex: 1;

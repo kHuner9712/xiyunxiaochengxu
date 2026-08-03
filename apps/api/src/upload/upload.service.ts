@@ -140,7 +140,7 @@ export class UploadService {
     if (!file || !file.originalname) {
       throw new BadRequestException('请选择要上传的文件');
     }
-    const maxFileSize = parseInt(process.env.UPLOAD_MAX_SIZE || '10485760', 10);
+    const maxFileSize = parseInt(process.env.UPLOAD_MAX_SIZE || '52428800', 10);
     if (file.size > maxFileSize) {
       throw new BadRequestException(`文件大小超过限制（最大 ${Math.round(maxFileSize / 1024 / 1024)}MB）`);
     }

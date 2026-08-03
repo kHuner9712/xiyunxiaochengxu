@@ -17,6 +17,7 @@ import { GroupBuyService } from '../group-buy/group-buy.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { generatePaymentNo, generateRefundNo } from '@baby-mall/shared';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
+import { buildWechatPaymentDescription } from './payment-description';
 
 @Injectable()
 export class PaymentService {
@@ -204,7 +205,10 @@ export class PaymentService {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findFirst({
         where: { id: BigInt(orderId), userId: BigInt(userId) },
-        include: { user: { select: { id: true, openid: true } } },
+        include: {
+          user: { select: { id: true, openid: true } },
+          orderItems: { select: { productName: true, quantity: true } },
+        },
       });
       if (!order) throw new NotFoundException('订单不存在');
       if (order.status !== OrderStatus.pending_payment) {
@@ -228,7 +232,10 @@ export class PaymentService {
         return await this.prisma.$transaction(async (tx) => {
           const order = await tx.order.findFirst({
             where: { id: BigInt(orderId), userId: BigInt(userId) },
-            include: { user: { select: { id: true, openid: true } } },
+            include: {
+          user: { select: { id: true, openid: true } },
+          orderItems: { select: { productName: true, quantity: true } },
+        },
           });
           if (!order) throw new NotFoundException('订单不存在');
           if (order.status !== OrderStatus.pending_payment) {
@@ -1035,7 +1042,7 @@ try {
     }
 
     const notifyUrl = this.configService.get<string>('WECHAT_NOTIFY_URL')!;
-    const description = order.orderItems?.[0]?.productName || `订单${order.orderNo}`;
+    const description = buildWechatPaymentDescription(order);
 
     // 微信商户订单号必须使用业务订单号；orderPayment.paymentNo 仅作内部支付记录编号。
     const body = {

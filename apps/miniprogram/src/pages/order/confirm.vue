@@ -118,7 +118,7 @@
           <text class="section-label">订单备注</text>
           <text class="section-desc">选填，请先和商家协商一致</text>
         </view>
-        <input class="remark-input" v-model="remark" placeholder="填写备注" />
+        <input class="remark-input" v-model="remark" placeholder="填写备注" placeholder-class="native-input-placeholder" />
       </view>
     </view>
 
@@ -1026,6 +1026,9 @@ onLoad(async (options) => {
 
 .remark-input {
   width: 260rpx;
+  height: 64rpx;
+  min-height: 64rpx;
+  line-height: 64rpx;
   font-size: $font-sm;
   text-align: right;
   color: $text-color;

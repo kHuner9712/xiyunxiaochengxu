@@ -11,6 +11,7 @@
           class="search-input"
           v-model="keyword"
           placeholder="输入商品名称或品类"
+          placeholder-class="native-input-placeholder"
           confirm-type="search"
           @confirm="doSearch"
           focus
@@ -269,6 +270,9 @@ defineExpose({
   flex: 1;
   min-width: 0;
   width: 100%;
+  height: 72rpx;
+  min-height: 72rpx;
+  line-height: 72rpx;
   font-size: 25rpx;
 }
 

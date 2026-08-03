@@ -761,6 +761,22 @@ export class OrderService {
     return this.serializeOrderView(order);
   }
 
+  async findByOrderNo(userId: string, orderNo: string) {
+    const normalizedOrderNo = String(orderNo || '').trim();
+    if (!normalizedOrderNo) throw new BadRequestException('订单号不能为空');
+    const order = await this.prisma.order.findFirst({
+      where: { orderNo: normalizedOrderNo, userId: BigInt(userId) },
+      include: {
+        orderItems: { include: { aftersaleOrders: true } },
+        payment: true,
+        delivery: true,
+        orderLogs: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    return this.serializeOrderView(order);
+  }
+
   async findAllAdmin(dto: OrderQueryDto) {
     const where = this.buildAdminOrderWhere(dto);
 
