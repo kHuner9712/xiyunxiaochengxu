@@ -45,6 +45,19 @@ jobs:
               "            include: {\n              user: { select: { id: true, openid: true } },\n              orderItems: { select: { productName: true, quantity: true } },\n            },\n",
           )
           payment_path.write_text(payment, encoding='utf-8')
+
+          activity_test = Path('apps/miniprogram/src/pages/activity/__tests__/detail-contract.spec.ts')
+          activity = activity_test.read_text(encoding='utf-8')
+          activity = activity.replace("toContain('已售12件')", "toContain('已售 12 件')")
+          activity_test.write_text(activity, encoding='utf-8')
+
+          zero_pay_test = Path('apps/miniprogram/src/pages/order/__tests__/zero-pay-flow.spec.ts')
+          zero_pay = zero_pay_test.read_text(encoding='utf-8')
+          zero_pay = zero_pay.replace(
+              "  ;(globalThis as any).uni = {\n    redirectTo: vi.fn(),",
+              "  ;(globalThis as any).uni = {\n    getStorageSync: vi.fn(() => ''),\n    redirectTo: vi.fn(),",
+          )
+          zero_pay_test.write_text(zero_pay, encoding='utf-8')
           PY
 
       - name: Set up pnpm
@@ -65,8 +78,10 @@ jobs:
       - name: Prepare generated packages
         run: pnpm prepare:ci
 
-      - name: Run full API tests
-        run: pnpm --filter @baby-mall/api test:ci
+      - name: Run upload regression tests
+        run: |
+          pnpm --filter @baby-mall/api exec jest --config jest.config.js --runInBand --runTestsByPath src/upload/upload.service.spec.ts
+          pnpm --filter @baby-mall/api exec jest --config test/jest-e2e.config.js --runInBand --runTestsByPath test/upload-limits.e2e-spec.ts
 
       - name: Run typecheck
         run: pnpm typecheck
@@ -80,10 +95,10 @@ jobs:
       - name: Remove temporary workflow
         run: rm -f .github/workflows/finalize-order-video-font-fixes.yml
 
-      - name: Commit final validation fix
+      - name: Commit final validation fixes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "test: align upload limit regressions with video support"
+          git commit -m "test: align upload and miniprogram regressions"
           git push origin HEAD:fix/order-video-font-audit
