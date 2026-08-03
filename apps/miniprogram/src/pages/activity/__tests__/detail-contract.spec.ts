@@ -93,7 +93,7 @@ describe('活动详情字段契约', () => {
     expect(wrapper.text()).toContain('活动奶粉')
     expect(wrapper.text()).toContain('¥89.00')
     expect(wrapper.text()).toContain('¥99.00')
-    expect(wrapper.text()).toContain('已售12件')
+    expect(wrapper.text()).toContain('已售 12 件')
     expect(wrapper.find('.product-image').attributes('src')).toBe('https://api.example.com/product.jpg')
 
     expect((wrapper.vm as any).activityProducts[0]).toMatchObject({

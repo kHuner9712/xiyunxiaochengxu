@@ -233,9 +233,9 @@ export class PaymentService {
           const order = await tx.order.findFirst({
             where: { id: BigInt(orderId), userId: BigInt(userId) },
             include: {
-          user: { select: { id: true, openid: true } },
-          orderItems: { select: { productName: true, quantity: true } },
-        },
+              user: { select: { id: true, openid: true } },
+              orderItems: { select: { productName: true, quantity: true } },
+            },
           });
           if (!order) throw new NotFoundException('订单不存在');
           if (order.status !== OrderStatus.pending_payment) {
