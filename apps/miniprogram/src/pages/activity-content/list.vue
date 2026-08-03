@@ -24,6 +24,7 @@
         class="search-input"
         v-model="keyword"
         placeholder="搜索活动标题"
+        placeholder-class="native-input-placeholder"
         confirm-type="search"
         @confirm="handleSearch"
       />
@@ -233,7 +234,9 @@ loadList()
 
 .search-input {
   width: 100%;
+  height: 76rpx;
   min-height: 76rpx;
+  line-height: 76rpx;
   padding: 0 28rpx;
   background: rgba(255, 255, 255, 0.9);
   border-radius: $radius-round;

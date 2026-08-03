@@ -76,7 +76,7 @@ describe('Upload limits and MIME guard (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/common/file/upload')
       .set('Authorization', `Bearer ${token()}`)
-      .attach('file', Buffer.alloc(10485761), { filename: 'big.jpg', contentType: 'image/jpeg' });
+      .attach('file', Buffer.alloc(52428801), { filename: 'big.jpg', contentType: 'image/jpeg' });
 
     expect(res.status).toBe(413);
     expect(res.body.message).toContain('File too large');

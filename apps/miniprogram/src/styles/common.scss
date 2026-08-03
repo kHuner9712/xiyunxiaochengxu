@@ -209,13 +209,35 @@ button {
   font-weight: 600;
 }
 
-.form-input,
-.form-textarea {
+.form-input {
+  height: 72rpx;
+  min-height: 72rpx;
+  line-height: 72rpx;
+  padding: 0 22rpx;
   background: rgba($bg-gray, 0.8);
   border-radius: $radius-lg;
-  padding: 18rpx 22rpx;
   color: $text-color;
   font-size: $font-md;
+}
+
+.form-textarea {
+  min-height: 160rpx;
+  padding: 18rpx 22rpx;
+  background: rgba($bg-gray, 0.8);
+  border-radius: $radius-lg;
+  color: $text-color;
+  font-size: $font-md;
+  line-height: 1.6;
+}
+
+.native-input-placeholder {
+  color: $text-hint;
+  line-height: inherit;
+}
+
+.native-textarea-placeholder {
+  color: $text-hint;
+  line-height: 1.6;
 }
 
 .status-badge,

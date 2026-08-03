@@ -121,6 +121,7 @@ beforeEach(() => {
   uniAppMock.onHideCallbacks = []
   uniAppMock.onShowCallbacks = []
   ;(globalThis as any).uni = {
+    getStorageSync: vi.fn(() => ''),
     redirectTo: vi.fn(),
     showToast: vi.fn(),
     showModal: vi.fn(),

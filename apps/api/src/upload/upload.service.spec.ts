@@ -569,10 +569,10 @@ describe('UploadService 双层防线：扩展名伪装但 magic number 不匹配
 });
 
 describe('Multer interceptor 层 fileSize 限制', () => {
-  it('UPLOAD_MAX_SIZE 默认值为 10MB', () => {
+  it('UPLOAD_MAX_SIZE 默认值为 50MB', () => {
     const originalEnv = process.env.UPLOAD_MAX_SIZE;
     delete process.env.UPLOAD_MAX_SIZE;
-    expect(getUploadMaxSize()).toBe(10485760);
+    expect(getUploadMaxSize()).toBe(52428800);
     process.env.UPLOAD_MAX_SIZE = originalEnv;
   });
 

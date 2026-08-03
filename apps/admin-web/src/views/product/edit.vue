@@ -76,9 +76,19 @@
         </el-form-item>
 
         <el-form-item label="商品视频">
-          <el-upload action="" :http-request="handleUploadVideo" :show-file-list="false" accept="video/*" :limit="1">
-            <video v-if="form.videoUrl" :src="form.videoUrl" style="width: 240px; height: 160px; object-fit: cover; border-radius: 6px" controls />
-            <el-button v-else size="small">上传视频</el-button>
+          <el-upload
+            action=""
+            :http-request="handleUploadVideo"
+            :show-file-list="false"
+            :before-upload="validateVideoFile"
+            :disabled="videoUploading"
+            accept="video/mp4,.mp4"
+            :limit="1"
+          >
+            <video v-if="form.videoUrl" :src="form.videoUrl" style="width: 240px; height: 160px; object-fit: contain; border-radius: 6px; background: #000" controls />
+            <el-button v-else size="small" :loading="videoUploading">
+              {{ videoUploading ? `上传中 ${videoUploadProgress}%` : '上传视频' }}
+            </el-button>
           </el-upload>
           <div style="margin-top: 8px; color: #909399; font-size: 12px">支持 mp4 格式，建议不超过 50MB，视频将展示在商品详情页顶部</div>
           <el-button v-if="form.videoUrl" type="danger" link style="margin-top: 4px" @click="form.videoUrl = ''">移除视频</el-button>
@@ -225,6 +235,8 @@ const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const videoUploading = ref(false)
+const videoUploadProgress = ref(0)
 const categoryTree = ref<any[]>([])
 const brandList = ref<any[]>([])
 const supplierList = ref<any[]>([])
@@ -498,13 +510,36 @@ async function handleUploadImage(options: any) {
   }
 }
 
+function validateVideoFile(file: File): boolean {
+  const isMp4 = file.type === 'video/mp4' || file.name.toLowerCase().endsWith('.mp4')
+  if (!isMp4) {
+    ElMessage.error('仅支持 MP4 视频')
+    return false
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.error('视频不能超过 50MB')
+    return false
+  }
+  return true
+}
+
 async function handleUploadVideo(options: any) {
+  if (!validateVideoFile(options.file)) return
+  videoUploading.value = true
+  videoUploadProgress.value = 0
   try {
-    const res = await uploadApi.uploadImage(options.file, 'product-video')
-    const uploadedUrl = sanitizeUrl(res?.data?.url)
-    if (uploadedUrl) form.videoUrl = uploadedUrl
-  } catch {
+    const res = await uploadApi.uploadVideo(options.file, 'product-video', (percent) => {
+      videoUploadProgress.value = percent
+    })
+    const uploadedUrl = extractUploadUrl(res)
+    if (!uploadedUrl) throw new Error('上传成功但未返回视频地址')
+    form.videoUrl = uploadedUrl
+    options.onSuccess?.(res)
+  } catch (error) {
+    options.onError?.(error)
     ElMessage.error('视频上传失败')
+  } finally {
+    videoUploading.value = false
   }
 }
 

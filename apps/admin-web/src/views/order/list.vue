@@ -22,7 +22,7 @@
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="resetSearch">重置</el-button>
-          <el-button v-permission="'order:export'" @click="handleExport">导出</el-button>
+          <el-button v-permission="'order:export'" :loading="exporting" @click="handleExport">导出</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -94,6 +94,7 @@ import { asArray, paginationTotal } from '@/utils/response'
 
 const router = useRouter()
 const loading = ref(false)
+const exporting = ref(false)
 const tableData = ref<any[]>([])
 const dateRange = ref<string[]>([])
 
@@ -157,6 +158,8 @@ async function handleCancel(row: any) {
 }
 
 async function handleExport() {
+  if (exporting.value) return
+  exporting.value = true
   try {
     const res = await orderApi.export(buildQueryParams())
     const contentType = String(res.headers?.['content-type'] || '').toLowerCase()
@@ -175,10 +178,15 @@ async function handleExport() {
     const a = document.createElement('a')
     a.href = url
     a.download = getFileNameFromDisposition(res.headers['content-disposition']) || `orders-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+    document.body.appendChild(a)
     a.click()
+    a.remove()
     window.URL.revokeObjectURL(url)
+    ElMessage.success('订单导出成功')
   } catch (e: any) {
     ElMessage.error(e?.message || '导出失败')
+  } finally {
+    exporting.value = false
   }
 }
 

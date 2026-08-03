@@ -3,11 +3,11 @@
     <view class="form-section card">
       <view class="form-item">
         <text class="form-label">收货人</text>
-        <input class="form-input" v-model="form.name" placeholder="请输入收货人姓名" />
+        <input class="form-input" v-model="form.name" placeholder="请输入收货人姓名" placeholder-class="native-input-placeholder" />
       </view>
       <view class="form-item">
         <text class="form-label">手机号</text>
-        <input class="form-input" v-model="form.phone" placeholder="请输入手机号" type="number" maxlength="11" />
+        <input class="form-input" v-model="form.phone" placeholder="请输入手机号" placeholder-class="native-input-placeholder" type="number" maxlength="11" />
       </view>
       <picker mode="region" @change="onRegionChange" :value="regionValue">
         <view class="form-item">
@@ -18,7 +18,7 @@
       </picker>
       <view class="form-item">
         <text class="form-label">详细地址</text>
-        <textarea class="form-textarea" v-model="form.detail" placeholder="请输入详细地址" />
+        <textarea class="form-textarea" v-model="form.detail" placeholder="请输入详细地址" placeholder-class="native-textarea-placeholder" />
       </view>
       <view class="form-item switch-item">
         <text class="form-label">设为默认地址</text>
@@ -167,6 +167,11 @@ onLoad((options) => {
 
   &.switch-item {
     justify-content: space-between;
+
+    .form-label {
+      width: auto;
+      white-space: nowrap;
+    }
   }
 }
 
@@ -180,11 +185,14 @@ onLoad((options) => {
 
 .form-input {
   flex: 1;
-  font-size: $font-md;
   min-width: 0;
+  height: 72rpx;
+  min-height: 72rpx;
+  line-height: 72rpx;
+  padding: 0 20rpx;
   background: $bg-soft;
   border-radius: $radius-lg;
-  padding: 16rpx 20rpx;
+  font-size: $font-md;
 }
 
 .form-value {
@@ -203,12 +211,14 @@ onLoad((options) => {
 
 .form-textarea {
   flex: 1;
-  font-size: $font-md;
-  min-height: 120rpx;
   min-width: 0;
+  height: 260rpx;
+  min-height: 260rpx;
+  padding: 18rpx 20rpx;
   background: $bg-soft;
   border-radius: $radius-lg;
-  padding: 16rpx 20rpx;
+  font-size: $font-md;
+  line-height: 1.6;
 }
 
 .submit-btn {

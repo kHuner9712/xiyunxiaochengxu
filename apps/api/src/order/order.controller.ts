@@ -62,6 +62,14 @@ export class WeappOrderController {
     return this.orderService.findByUser(userId, dto);
   }
 
+  @Get('detail-by-no/:orderNo')
+  async detailByOrderNo(
+    @CurrentUser('id') userId: string,
+    @Param('orderNo') orderNo: string,
+  ) {
+    return this.orderService.findByOrderNo(userId, orderNo);
+  }
+
   @Get('detail/:id')
   async detail(@CurrentUser('id') userId: string, @Param('id') id: string) {
     return this.orderService.findById(userId, id);

@@ -17,6 +17,7 @@
           class="nickname-input"
           type="nickname"
           placeholder="请输入昵称"
+          placeholder-class="native-input-placeholder"
           maxlength="20"
         />
       </view>
@@ -224,7 +225,9 @@ function goBaby() {
 .nickname-input {
   flex: 1;
   min-width: 0;
-  height: 56rpx;
+  height: 64rpx;
+  min-height: 64rpx;
+  line-height: 64rpx;
   color: $text-color;
   font-size: $font-md;
   text-align: right;

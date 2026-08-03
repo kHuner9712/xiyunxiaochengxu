@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 import { parseAllowedMimeTypes } from './upload.service';
 
-const DEFAULT_UPLOAD_MAX_SIZE = 10485760;
+const DEFAULT_UPLOAD_MAX_SIZE = 52428800;
 
 export function getUploadMaxSize(): number {
   const maxFileSize = parseInt(process.env.UPLOAD_MAX_SIZE || String(DEFAULT_UPLOAD_MAX_SIZE), 10);

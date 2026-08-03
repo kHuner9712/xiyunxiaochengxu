@@ -26,7 +26,7 @@
 
       <view class="form-item vertical">
         <text class="form-label">问题描述</text>
-        <textarea class="form-textarea" v-model="form.description" placeholder="请描述具体问题" />
+        <textarea class="form-textarea" v-model="form.description" placeholder="请描述具体问题" placeholder-class="native-textarea-placeholder" />
       </view>
 
       <view class="form-item vertical">

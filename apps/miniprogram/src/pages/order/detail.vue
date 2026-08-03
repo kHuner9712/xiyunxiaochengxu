@@ -143,7 +143,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getOrderDetail, cancelOrder, confirmReceive, type OrderDetail, type OrderProductItem } from '@/api/order'
+import { getOrderDetail, getOrderDetailByNo, cancelOrder, confirmReceive, type OrderDetail, type OrderProductItem } from '@/api/order'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatOrderStatus, formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
@@ -163,12 +163,23 @@ const shouldSelectAftersale = ref(false)
 async function loadOrder(id: string) {
   try {
     order.value = await getOrderDetail(id)
-    if (shouldSelectAftersale.value) {
-      guideAftersaleSelection()
-    }
+    if (shouldSelectAftersale.value) guideAftersaleSelection()
   } catch {
     uni.showToast({ title: '订单加载失败', icon: 'none' })
   }
+}
+
+async function loadOrderByNo(orderNo: string) {
+  try {
+    order.value = await getOrderDetailByNo(orderNo)
+    if (shouldSelectAftersale.value) guideAftersaleSelection()
+  } catch {
+    uni.showToast({ title: '订单加载失败', icon: 'none' })
+  }
+}
+
+function getOptionValue(value: unknown): string {
+  return Array.isArray(value) ? String(value[0] || '') : String(value || '')
 }
 
 function guideAftersaleSelection() {
@@ -303,8 +314,18 @@ function callPhone(phone: string) {
 }
 
 onLoad((options) => {
-  shouldSelectAftersale.value = options?.selectAftersale === '1'
-  if (options?.id) loadOrder(options.id)
+  shouldSelectAftersale.value = getOptionValue(options?.selectAftersale) === '1'
+  const id = getOptionValue(options?.id)
+  const orderNo = getOptionValue(
+    options?.orderNo || options?.out_trade_no || options?.outTradeNo || options?.order_no
+  )
+  if (orderNo) {
+    loadOrderByNo(orderNo)
+  } else if (id) {
+    loadOrder(id)
+  } else {
+    uni.redirectTo({ url: '/pages/order/list' })
+  }
 })
 
 defineExpose({

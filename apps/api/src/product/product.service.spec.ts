@@ -274,6 +274,38 @@ describe('ProductService', () => {
     });
   });
 
+  describe('ProductService.update 商品视频', () => {
+    it('编辑商品时应持久化 videoUrl', async () => {
+      const tx = {
+        product: {
+          update: jest.fn<any>().mockResolvedValue({
+            id: BigInt(1),
+            name: '测试商品',
+            categoryId: BigInt(10),
+            videoUrl: '/uploads/public/product.mp4',
+            attributes: { compliance: { isRegulated: false } },
+            skus: [],
+          }) as any,
+        },
+        productSku: {
+          findMany: jest.fn() as any,
+          updateMany: jest.fn() as any,
+          update: jest.fn() as any,
+          create: jest.fn() as any,
+        },
+      };
+      prisma.product.findFirst.mockResolvedValue({ id: BigInt(1), deletedAt: null });
+      prisma.$transaction.mockImplementationOnce((fn: any) => fn(tx));
+
+      await service.update('1', { videoUrl: '/uploads/public/product.mp4' } as any);
+
+      expect(tx.product.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: BigInt(1) },
+        data: expect.objectContaining({ videoUrl: '/uploads/public/product.mp4' }),
+      }));
+    });
+  });
+
   describe('ProductService.update SKU 兼容', () => {
     it('编辑商品时复用同商品相同 skuCode 的 SKU，避免唯一索引冲突和购物车引用失效', async () => {
       const tx = {

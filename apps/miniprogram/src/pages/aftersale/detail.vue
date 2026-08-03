@@ -65,19 +65,19 @@
         <text class="modal-title">填写退货物流</text>
         <view class="modal-field">
           <text class="modal-label">物流公司</text>
-          <input class="modal-input return-company-input" v-model="returnLogisticsForm.returnLogisticsCompany" placeholder="请输入物流公司" />
+          <input class="modal-input return-company-input" v-model="returnLogisticsForm.returnLogisticsCompany" placeholder="请输入物流公司" placeholder-class="native-input-placeholder" />
         </view>
         <view class="modal-field">
           <text class="modal-label">物流单号</text>
-          <input class="modal-input return-no-input" v-model="returnLogisticsForm.returnLogisticsNo" placeholder="请输入物流单号" />
+          <input class="modal-input return-no-input" v-model="returnLogisticsForm.returnLogisticsNo" placeholder="请输入物流单号" placeholder-class="native-input-placeholder" />
         </view>
         <view class="modal-field">
           <text class="modal-label">联系电话</text>
-          <input class="modal-input return-phone-input" v-model="returnLogisticsForm.contactPhone" placeholder="选填" />
+          <input class="modal-input return-phone-input" v-model="returnLogisticsForm.contactPhone" placeholder="选填" placeholder-class="native-input-placeholder" />
         </view>
         <view class="modal-field">
           <text class="modal-label">备注</text>
-          <textarea class="modal-textarea return-remark-input" v-model="returnLogisticsForm.remark" placeholder="选填" />
+          <textarea class="modal-textarea return-remark-input" v-model="returnLogisticsForm.remark" placeholder="选填" placeholder-class="native-textarea-placeholder" />
         </view>
         <view class="modal-actions">
           <view class="modal-cancel-btn" @tap="closeReturnLogisticsForm">取消</view>
@@ -506,19 +506,27 @@ defineExpose({
   font-weight: 700;
 }
 
-.modal-input,
-.modal-textarea {
+.modal-input {
   width: 100%;
-  box-sizing: border-box;
+  height: 72rpx;
+  min-height: 72rpx;
+  line-height: 72rpx;
+  padding: 0 20rpx;
   border-radius: $radius-lg;
   background: $bg-soft;
-  padding: 18rpx 20rpx;
   font-size: $font-sm;
   color: $text-color;
 }
 
 .modal-textarea {
+  width: 100%;
   min-height: 132rpx;
+  padding: 18rpx 20rpx;
+  border-radius: $radius-lg;
+  background: $bg-soft;
+  font-size: $font-sm;
+  color: $text-color;
+  line-height: 1.6;
 }
 
 .modal-actions {
