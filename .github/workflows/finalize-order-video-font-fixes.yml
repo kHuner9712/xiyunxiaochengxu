@@ -1,0 +1,84 @@
+name: Finalize Order Video Font Fixes
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'fix/order-video-font-audit'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/order-video-font-audit
+          fetch-depth: 0
+
+      - name: Update regression expectation and formatting
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          test_path = Path('apps/api/src/upload/upload.service.spec.ts')
+          text = test_path.read_text(encoding='utf-8')
+          text = text.replace('UPLOAD_MAX_SIZE 默认值为 10MB', 'UPLOAD_MAX_SIZE 默认值为 50MB')
+          text = text.replace('expect(getUploadMaxSize()).toBe(10485760);', 'expect(getUploadMaxSize()).toBe(52428800);')
+          test_path.write_text(text, encoding='utf-8')
+
+          payment_path = Path('apps/api/src/payment/payment.service.ts')
+          payment = payment_path.read_text(encoding='utf-8')
+          payment = payment.replace(
+              "            include: {\n          user: { select: { id: true, openid: true } },\n          orderItems: { select: { productName: true, quantity: true } },\n        },\n",
+              "            include: {\n              user: { select: { id: true, openid: true } },\n              orderItems: { select: { productName: true, quantity: true } },\n            },\n",
+          )
+          payment_path.write_text(payment, encoding='utf-8')
+          PY
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare generated packages
+        run: pnpm prepare:ci
+
+      - name: Run full API tests
+        run: pnpm --filter @baby-mall/api test:ci
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+      - name: Run miniprogram tests
+        run: pnpm --filter @baby-mall/miniprogram test
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Remove temporary workflow
+        run: rm -f .github/workflows/finalize-order-video-font-fixes.yml
+
+      - name: Commit final validation fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "test: align upload limit regression with video support"
+          git push origin HEAD:fix/order-video-font-audit
