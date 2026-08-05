@@ -169,16 +169,12 @@ export class ContentService {
     const changingToVideo = nextContentType === 'video' && content.contentType !== 'video';
     let nextContent = data.content !== undefined ? data.content : content.content;
     let nextVideoUrl = data.videoUrl !== undefined ? data.videoUrl : content.videoUrl;
-    let nextVideoCover = data.videoCover !== undefined ? data.videoCover : content.videoCover;
-    let nextVideoDuration = data.videoDuration !== undefined ? data.videoDuration : content.videoDuration;
 
     if (changingToVideo && data.content === undefined) {
       nextContent = '';
     }
     if (nextContentType === 'article') {
       nextVideoUrl = null;
-      nextVideoCover = null;
-      nextVideoDuration = null;
     }
 
     const nextState = {
