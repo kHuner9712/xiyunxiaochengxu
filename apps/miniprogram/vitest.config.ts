@@ -39,5 +39,9 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     globals: true,
+    pool: 'threads',
+    minWorkers: 1,
+    maxWorkers: 1,
+    fileParallelism: false,
   },
 })
