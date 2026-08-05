@@ -158,30 +158,39 @@ export class UploadService {
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
     const stored = await this.storageProvider.save(file, fileName, visibility);
 
-    const fileType = file.mimetype.startsWith('image/')
-      ? 'image'
-      : file.mimetype.startsWith('video/')
-        ? 'video'
-        : 'document';
+    try {
+      const fileType = file.mimetype.startsWith('image/')
+        ? 'image'
+        : file.mimetype.startsWith('video/')
+          ? 'video'
+          : 'document';
 
-    const fileAsset = await this.prisma.fileAsset.create({
-      data: {
-        fileName,
-        originalName: file.originalname,
-        filePath: stored.filePath,
-        fileSize: BigInt(file.size),
-        fileType,
-        mimeType: file.mimetype,
-        storageType: 1,
-        url: stored.url,
-        groupName: normalizedGroupName,
-        uploaderId: BigInt(uploaderId),
-        uploaderType,
-      },
-    });
+      const fileAsset = await this.prisma.fileAsset.create({
+        data: {
+          fileName,
+          originalName: file.originalname,
+          filePath: stored.filePath,
+          fileSize: BigInt(file.size),
+          fileType,
+          mimeType: file.mimetype,
+          storageType: 1,
+          url: stored.url,
+          groupName: normalizedGroupName,
+          uploaderId: BigInt(uploaderId),
+          uploaderType,
+        },
+      });
 
-    this.logger.log(`上传文件：${fileName}，类型：${fileType}`);
-    return this.serializeFileAsset(fileAsset);
+      this.logger.log(`上传文件：${fileName}，类型：${fileType}`);
+      return this.serializeFileAsset(fileAsset);
+    } catch (error) {
+      try {
+        await this.storageProvider.remove(stored.filePath);
+      } catch (cleanupError) {
+        this.logger.error(`上传记录写入失败且文件回滚失败：${stored.filePath}`, cleanupError as Error);
+      }
+      throw error;
+    }
   }
 
   async findById(id: string) {
