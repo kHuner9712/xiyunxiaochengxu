@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Query, UploadedFile, UseInterceptors, Body, BadRequestException, StreamableFile, Res } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Query, UploadedFile, UseInterceptors, Body, BadRequestException, StreamableFile, Res } from '@nestjs/common';
 import { UploadService } from './upload.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -81,5 +81,11 @@ export class AdminUploadController {
   ) {
     if (!file) throw new BadRequestException('请选择要上传的文件');
     return this.uploadService.uploadFile(file, userId, 'admin', groupName);
+  }
+
+  @Delete(':id')
+  @RequirePermission('system:file')
+  async delete(@Param('id') id: string) {
+    return this.uploadService.delete(id);
   }
 }
