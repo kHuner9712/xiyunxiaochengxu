@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ThrottlerException } from '@nestjs/throttler';
-import { Prisma } from '@prisma/client';
 import {
   ERROR_CODE,
 } from '../constants';
@@ -18,6 +17,11 @@ interface MappedException {
   code: number;
   message: string;
   httpStatus: number;
+}
+
+interface PrismaLikeError extends Error {
+  code?: unknown;
+  clientVersion?: unknown;
 }
 
 @Catch()
@@ -95,8 +99,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
   }
 
   private mapPrismaException(exception: unknown): MappedException | null {
-    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      switch (exception.code) {
+    if (!exception || typeof exception !== 'object') return null;
+
+    const prismaError = exception as PrismaLikeError;
+    const prismaCode = typeof prismaError.code === 'string' ? prismaError.code : '';
+    if (/^P\d{4}$/.test(prismaCode)) {
+      switch (prismaCode) {
         case 'P2000':
           return {
             code: ERROR_CODE.PARAM_ERROR,
@@ -138,7 +146,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
-    if (exception instanceof Prisma.PrismaClientValidationError) {
+    const errorName = prismaError.constructor?.name || prismaError.name || '';
+    if (errorName === 'PrismaClientValidationError') {
       return {
         code: ERROR_CODE.PARAM_ERROR,
         message: '请求数据格式无效',
@@ -146,11 +155,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
       };
     }
 
-    if (
-      exception instanceof Prisma.PrismaClientInitializationError
-      || exception instanceof Prisma.PrismaClientRustPanicError
-      || exception instanceof Prisma.PrismaClientUnknownRequestError
-    ) {
+    if ([
+      'PrismaClientInitializationError',
+      'PrismaClientRustPanicError',
+      'PrismaClientUnknownRequestError',
+    ].includes(errorName)) {
       return {
         code: ERROR_CODE.DB_ERROR,
         message: '数据库服务暂时不可用',
