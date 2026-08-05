@@ -38,11 +38,11 @@ describe('UploadService pending content cleanup', () => {
 
     prisma = {
       fileAsset: {
-        findFirst: jest.fn().mockResolvedValue(createFileAsset()),
-        delete: jest.fn().mockResolvedValue(createFileAsset()),
+        findFirst: jest.fn(async () => createFileAsset()),
+        delete: jest.fn(async () => createFileAsset()),
       },
       content: {
-        findFirst: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn(async () => null as { id: bigint } | null),
       },
     };
     service = new UploadService(prisma);
