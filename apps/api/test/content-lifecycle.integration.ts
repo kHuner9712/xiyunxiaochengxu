@@ -2,6 +2,30 @@ import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { ContentService } from '../src/content/content.service';
 
+function assertSafeIntegrationDatabase() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required for the real database integration test');
+  }
+
+  let databaseName = '';
+  try {
+    databaseName = decodeURIComponent(new URL(databaseUrl).pathname.replace(/^\//, ''));
+  } catch {
+    throw new Error('DATABASE_URL is invalid');
+  }
+
+  const explicitlyAllowed = process.env.ALLOW_DESTRUCTIVE_INTEGRATION_TESTS === 'true';
+  const clearlyTestDatabase = /(^|[_-])test($|[_-])/i.test(databaseName);
+  if (!clearlyTestDatabase && !explicitlyAllowed) {
+    throw new Error(
+      `Refusing destructive integration test against database "${databaseName || '(unknown)'}". `
+      + 'Use a database name containing "test" or explicitly set ALLOW_DESTRUCTIVE_INTEGRATION_TESTS=true.',
+    );
+  }
+}
+
+assertSafeIntegrationDatabase();
 const prisma = new PrismaClient();
 
 async function main() {
