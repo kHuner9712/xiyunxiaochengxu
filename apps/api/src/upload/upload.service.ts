@@ -35,6 +35,8 @@ const DEFAULT_ALLOWED_MIME_TYPES = [
 const DEFAULT_UPLOAD_MAX_SIZE = 52428800;
 const MP4_SCAN_LIMIT = 1024 * 1024;
 const MP4_MAX_BOXES_TO_SCAN = 64;
+const MAX_SIGNED_BIGINT = 9223372036854775807n;
+const CONTENT_ASSET_GROUPS = new Set(['content-cover', 'content-video', 'content-video-cover']);
 
 export function parseAllowedMimeTypes(): string[] {
   const envValue = process.env.UPLOAD_ALLOWED_TYPES;
@@ -248,10 +250,41 @@ export class UploadService {
     if (!file) throw new NotFoundException('文件不存在');
 
     await this.storageProvider.remove(file.filePath);
-
     await this.prisma.fileAsset.delete({ where: { id: fileId } });
     this.logger.log(`删除文件：${file.fileName}`);
     return { success: true };
+  }
+
+  async deletePendingContentAsset(id: string, currentAdminId: string) {
+    const fileId = this.parsePositiveId(id, '文件');
+    const adminId = this.parsePositiveId(currentAdminId, '管理员');
+    const file = await this.prisma.fileAsset.findFirst({ where: { id: fileId } });
+    if (!file) throw new NotFoundException('文件不存在');
+
+    const normalizedGroupName = normalizeGroupName(file.groupName);
+    const ownedByCurrentAdmin = file.uploaderType === 'admin' && file.uploaderId === adminId;
+    const isContentAsset = !!normalizedGroupName && CONTENT_ASSET_GROUPS.has(normalizedGroupName);
+    const isPublicUpload = !this.isPrivateFile(file) && String(file.filePath || '').startsWith('/uploads/public/');
+    if (!ownedByCurrentAdmin || !isContentAsset || !isPublicUpload) {
+      throw new ForbiddenException('只能清理当前管理员本人上传且尚未提交的内容素材');
+    }
+
+    const referenced = await this.prisma.content.findFirst({
+      where: {
+        deletedAt: null,
+        OR: [
+          { coverImage: { endsWith: file.filePath } },
+          { videoUrl: { endsWith: file.filePath } },
+          { videoCover: { endsWith: file.filePath } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (referenced) {
+      throw new BadRequestException('文件已被内容引用，不能删除');
+    }
+
+    return this.delete(fileId.toString());
   }
 
   async findPrivateById(id: string, currentUser: { id?: string; roleType?: string }) {
@@ -314,12 +347,17 @@ export class UploadService {
     let offset = 0;
 
     for (let boxCount = 0; boxCount < MP4_MAX_BOXES_TO_SCAN && offset + 8 <= scanLimit; boxCount += 1) {
+      const size32 = buffer.readUInt32BE(offset);
       const boxSize = this.readIsoBoxSize(buffer, offset);
       if (boxSize === null || offset + boxSize > buffer.length) return false;
 
       const boxType = buffer.toString('ascii', offset + 4, offset + 8);
       if (boxType === 'ftyp') {
-        return boxSize >= 12;
+        const headerSize = size32 === 1 ? 16 : 8;
+        const payloadOffset = offset + headerSize;
+        if (boxSize < headerSize + 8 || payloadOffset + 8 > buffer.length) return false;
+        const majorBrand = buffer.subarray(payloadOffset, payloadOffset + 4);
+        return majorBrand.some(byte => byte !== 0);
       }
 
       offset += boxSize;
@@ -349,7 +387,11 @@ export class UploadService {
     if (!/^[1-9]\d*$/.test(normalized)) {
       throw new BadRequestException(`${label}ID无效`);
     }
-    return BigInt(normalized);
+    const id = BigInt(normalized);
+    if (id > MAX_SIGNED_BIGINT) {
+      throw new BadRequestException(`${label}ID超出范围`);
+    }
+    return id;
   }
 
   private isPrivateFile(file: any): boolean {
