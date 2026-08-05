@@ -72,4 +72,30 @@ describe('CreateContentDto', () => {
 
     expect(errors.some((error) => error.property === 'contentType')).toBe(true);
   });
+
+  it('rejects unsupported placement values and invalid publishing states', async () => {
+    const errors = await validateDto({
+      title: '错误投放配置',
+      contentType: 'article',
+      content: '正文',
+      placement: ['activity', 'unknown'],
+      status: 9,
+    });
+
+    expect(errors.some((error) => error.property === 'placement')).toBe(true);
+    expect(errors.some((error) => error.property === 'status')).toBe(true);
+  });
+
+  it('rejects non-positive related identifiers', async () => {
+    const errors = await validateDto({
+      title: '错误关联配置',
+      contentType: 'article',
+      content: '正文',
+      relatedProductIds: [1, 0],
+      relatedActivityId: 0,
+    });
+
+    expect(errors.some((error) => error.property === 'relatedProductIds')).toBe(true);
+    expect(errors.some((error) => error.property === 'relatedActivityId')).toBe(true);
+  });
 });
