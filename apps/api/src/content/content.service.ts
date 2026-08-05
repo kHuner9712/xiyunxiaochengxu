@@ -6,6 +6,8 @@ import { UpdateContentDto } from './dto/update-content.dto';
 import { paginate } from '@baby-mall/shared';
 import { getAssetBaseUrl, normalizeAssetUrl } from '../common/utils/asset-url';
 
+const MAX_SIGNED_BIGINT = 9223372036854775807n;
+
 @Injectable()
 export class ContentService {
   private readonly logger = new Logger(ContentService.name);
@@ -145,7 +147,9 @@ export class ContentService {
       placement: data.placement,
       tags: data.tags,
       relatedProductIds: data.relatedProductIds,
-      relatedActivityId: data.relatedActivityId ? BigInt(data.relatedActivityId) : null,
+      relatedActivityId: data.relatedActivityId
+        ? this.parsePositiveId(data.relatedActivityId, '关联活动')
+        : null,
       isFeatured: data.isFeatured ?? 0,
       sortOrder: data.sortOrder ?? 0,
       status,
@@ -167,7 +171,7 @@ export class ContentService {
 
     const nextContentType = data.contentType ?? content.contentType ?? 'article';
     const changingToVideo = nextContentType === 'video' && content.contentType !== 'video';
-    let nextContent = data.content !== undefined ? data.content : content.content;
+    let nextContent = data.content !== undefined ? (data.content ?? '') : content.content;
     let nextVideoUrl = data.videoUrl !== undefined ? data.videoUrl : content.videoUrl;
 
     if (changingToVideo && data.content === undefined) {
@@ -196,12 +200,33 @@ export class ContentService {
     if (data.tags !== undefined) updateData.tags = data.tags;
     if (data.relatedProductIds !== undefined) updateData.relatedProductIds = data.relatedProductIds;
     if (data.relatedActivityId !== undefined) {
-      updateData.relatedActivityId = data.relatedActivityId ? BigInt(data.relatedActivityId) : null;
+      updateData.relatedActivityId = data.relatedActivityId
+        ? this.parsePositiveId(data.relatedActivityId, '关联活动')
+        : null;
     }
-    if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured;
-    if (data.sortOrder !== undefined) updateData.sortOrder = data.sortOrder;
+    if (data.isFeatured !== undefined) {
+      if (data.isFeatured !== 0 && data.isFeatured !== 1) {
+        throw new BadRequestException('推荐状态必须为0或1');
+      }
+      updateData.isFeatured = data.isFeatured;
+    }
+    if (data.sortOrder !== undefined) {
+      if (!Number.isInteger(data.sortOrder) || data.sortOrder < 0) {
+        throw new BadRequestException('排序值必须为非负整数');
+      }
+      updateData.sortOrder = data.sortOrder;
+    }
     if (data.status !== undefined) updateData.status = data.status;
-    if (data.categoryId !== undefined) updateData.categoryId = await this.resolveCategoryId(data.categoryId);
+    if (data.categoryId !== undefined) {
+      if (data.categoryId === null || data.categoryId === '') {
+        updateData.categoryId = null;
+      } else {
+        const requestedCategoryId = this.parsePositiveId(data.categoryId, '内容分类');
+        updateData.categoryId = content.categoryId === requestedCategoryId
+          ? requestedCategoryId
+          : await this.resolveCategoryId(data.categoryId);
+      }
+    }
 
     if (nextContentType === 'article') {
       updateData.videoUrl = null;
@@ -459,7 +484,11 @@ export class ContentService {
     if (!/^[1-9]\d*$/.test(normalized)) {
       throw new BadRequestException(`${label}ID无效`);
     }
-    return BigInt(normalized);
+    const id = BigInt(normalized);
+    if (id > MAX_SIGNED_BIGINT) {
+      throw new BadRequestException(`${label}ID超出范围`);
+    }
+    return id;
   }
 
   private hasText(value: unknown): value is string {
