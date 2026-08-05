@@ -30,7 +30,7 @@ export class CreateContentDto {
   @ValidateIf((dto: CreateContentDto) => dto.contentType !== 'video')
   @IsString({ message: '文章正文必须为字符串' })
   @IsNotEmpty({ message: '文章类型内容必须填写正文内容' })
-  content?: string;
+  content = '';
 
   @IsOptional()
   @IsString()
