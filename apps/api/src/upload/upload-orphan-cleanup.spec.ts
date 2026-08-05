@@ -23,7 +23,9 @@ describe('UploadService orphan cleanup', () => {
   it('removes the stored file when the FileAsset database insert fails', async () => {
     const prisma = {
       fileAsset: {
-        create: jest.fn().mockRejectedValue(new Error('database unavailable')),
+        create: async () => {
+          throw new Error('database unavailable');
+        },
       },
     };
     const service = new UploadService(prisma as any);
