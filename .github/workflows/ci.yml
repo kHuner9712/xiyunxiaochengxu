@@ -51,6 +51,9 @@ jobs:
       - name: Audit frontend-backend API contracts
         run: pnpm audit:api-contracts
 
+      - name: Validate deployment shell scripts
+        run: bash -n deploy/scripts/deploy-production.sh deploy/scripts/deploy-prod-check.sh deploy/scripts/smoke-runtime.sh
+
       - name: Run API tests (unit + e2e)
         run: pnpm --filter @baby-mall/api test:ci
 
