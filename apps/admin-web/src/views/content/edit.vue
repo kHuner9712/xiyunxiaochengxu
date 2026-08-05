@@ -576,19 +576,25 @@ watch(
     if (hydrating.value || next === previous) return
     if (next === 'article') {
       const videoDeleted = await deletePendingAsset('videoUrl', false)
+      if (videoDeleted) {
+        form.videoUrl = ''
+        form.videoDuration = undefined
+        videoUploadProgress.value = 0
+      }
+
       const coverDeleted = await deletePendingAsset('videoCover', false)
+      if (coverDeleted) {
+        form.videoCover = ''
+      }
+
       if (!videoDeleted || !coverDeleted) {
         hydrating.value = true
         form.contentType = previous
         await nextTick()
         hydrating.value = false
-        ElMessage.warning('视频素材清理失败，已保留视频类型，请稍后重试')
+        ElMessage.warning('部分视频素材清理失败，已保留视频类型，请稍后重试')
         return
       }
-      form.videoUrl = ''
-      form.videoCover = ''
-      form.videoDuration = undefined
-      videoUploadProgress.value = 0
     } else if (previous === 'article') {
       form.content = ''
     }
