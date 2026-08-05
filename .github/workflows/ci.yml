@@ -9,8 +9,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: baby_mall_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     env:
       PRISMA_SKIP_POSTINSTALL_GENERATE: true
+      DATABASE_URL: mysql://root:root@127.0.0.1:3306/baby_mall_test
 
     strategy:
       matrix:
@@ -45,6 +59,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @baby-mall/api prisma:generate
 
+      - name: Apply migrations to CI MySQL
+        run: pnpm --filter @baby-mall/api prisma:migrate:deploy
+
       - name: Audit runtime configuration contracts
         run: pnpm audit:runtime
 
@@ -54,8 +71,11 @@ jobs:
       - name: Validate deployment shell scripts
         run: bash -n deploy/scripts/deploy-production.sh deploy/scripts/deploy-prod-check.sh deploy/scripts/smoke-runtime.sh
 
-      - name: Run API tests (unit + e2e)
+      - name: Run API tests (unit + mocked HTTP e2e)
         run: pnpm --filter @baby-mall/api test:ci
+
+      - name: Run API integration tests against real MySQL
+        run: pnpm --filter @baby-mall/api test:integration
 
       - name: Build API
         run: pnpm build:api
