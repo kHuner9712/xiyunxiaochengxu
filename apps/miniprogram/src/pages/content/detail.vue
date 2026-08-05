@@ -34,14 +34,28 @@ import { ref } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { getContentDetail, type ContentDetail } from '@/api/content'
 
+const MAX_SIGNED_BIGINT = BigInt('9223372036854775807')
 const content = ref<ContentDetail>({
   id: '', title: '', coverImage: '', content: '', categoryId: '',
   contentType: 'article', summary: '', viewCount: 0, publishedAt: ''
 })
 
-async function loadContent(id: string) {
+function isValidContentId(id: string) {
+  if (!/^[1-9]\d*$/.test(id)) return false
   try {
-    content.value = await getContentDetail(Number(id))
+    return BigInt(id) <= MAX_SIGNED_BIGINT
+  } catch {
+    return false
+  }
+}
+
+async function loadContent(id: string) {
+  if (!isValidContentId(id)) {
+    uni.showToast({ title: '内容ID无效', icon: 'none' })
+    return
+  }
+  try {
+    content.value = await getContentDetail(id)
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
   }
@@ -53,7 +67,7 @@ onShareAppMessage(() => ({
 }))
 
 onLoad((options) => {
-  if (options?.id) loadContent(options.id)
+  if (options?.id) loadContent(String(options.id))
 })
 </script>
 
