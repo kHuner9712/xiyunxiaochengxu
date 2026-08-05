@@ -1,5 +1,4 @@
 import { Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { ERROR_CODE } from '../constants';
 import { HttpExceptionFilter } from './http-exception.filter';
 
@@ -29,11 +28,10 @@ function createHost(url = '/api/admin/content') {
 }
 
 function knownPrismaError(code: string) {
-  return new Prisma.PrismaClientKnownRequestError('database error', {
-    code,
-    clientVersion: '5.22.0',
-    meta: { field_name: 'category_id' },
-  });
+  const error = new Error('database error') as Error & { code: string; clientVersion: string };
+  error.code = code;
+  error.clientVersion = '5.22.0';
+  return error;
 }
 
 describe('HttpExceptionFilter Prisma mapping', () => {
