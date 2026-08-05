@@ -11,9 +11,7 @@ const FILE_MAGIC_NUMBERS: Record<string, number[][]> = {
   'image/jpeg': [[0xFF, 0xD8, 0xFF]],
   'image/png': [[0x89, 0x50, 0x4E, 0x47]],
   'image/gif': [[0x47, 0x49, 0x46]],
-  'image/webp': [[0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]],
   'image/bmp': [[0x42, 0x4D]],
-  'video/mp4': [[0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], [0x00, 0x00, 0x00, 0x1C, 0x66, 0x74, 0x79, 0x70], [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70]],
   'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
 };
 
@@ -34,6 +32,9 @@ const DEFAULT_ALLOWED_MIME_TYPES = [
   'image/webp',
   'video/mp4',
 ];
+const DEFAULT_UPLOAD_MAX_SIZE = 52428800;
+const MP4_SCAN_LIMIT = 1024 * 1024;
+const MP4_MAX_BOXES_TO_SCAN = 64;
 
 export function parseAllowedMimeTypes(): string[] {
   const envValue = process.env.UPLOAD_ALLOWED_TYPES;
@@ -140,7 +141,10 @@ export class UploadService {
     if (!file || !file.originalname) {
       throw new BadRequestException('请选择要上传的文件');
     }
-    const maxFileSize = parseInt(process.env.UPLOAD_MAX_SIZE || '52428800', 10);
+    const configuredMaxSize = Number.parseInt(process.env.UPLOAD_MAX_SIZE || String(DEFAULT_UPLOAD_MAX_SIZE), 10);
+    const maxFileSize = Number.isFinite(configuredMaxSize) && configuredMaxSize > 0
+      ? configuredMaxSize
+      : DEFAULT_UPLOAD_MAX_SIZE;
     if (file.size > maxFileSize) {
       throw new BadRequestException(`文件大小超过限制（最大 ${Math.round(maxFileSize / 1024 / 1024)}MB）`);
     }
@@ -152,6 +156,7 @@ export class UploadService {
       throw new BadRequestException(`不支持的MIME类型: ${file.mimetype}`);
     }
     this.validateFileMagic(file);
+    const parsedUploaderId = this.parsePositiveId(uploaderId, '上传者');
 
     const normalizedGroupName = normalizeGroupName(groupName);
     const visibility: UploadVisibility = isSensitiveGroup(normalizedGroupName) ? 'private' : 'public';
@@ -176,7 +181,7 @@ export class UploadService {
           storageType: 1,
           url: stored.url,
           groupName: normalizedGroupName,
-          uploaderId: BigInt(uploaderId),
+          uploaderId: parsedUploaderId,
           uploaderType,
         },
       });
@@ -194,16 +199,18 @@ export class UploadService {
   }
 
   async findById(id: string) {
+    const fileId = this.parsePositiveId(id, '文件');
     const file = await this.prisma.fileAsset.findFirst({
-      where: { id: BigInt(id) },
+      where: { id: fileId },
     });
     if (!file) throw new NotFoundException('文件不存在');
     return this.serializeFileAsset(file);
   }
 
   async findPublicById(id: string) {
+    const fileId = this.parsePositiveId(id, '文件');
     const file = await this.prisma.fileAsset.findFirst({
-      where: { id: BigInt(id) },
+      where: { id: fileId },
     });
     if (!file) throw new NotFoundException('文件不存在');
     if (this.isPrivateFile(file)) {
@@ -236,19 +243,21 @@ export class UploadService {
   }
 
   async delete(id: string) {
-    const file = await this.prisma.fileAsset.findFirst({ where: { id: BigInt(id) } });
+    const fileId = this.parsePositiveId(id, '文件');
+    const file = await this.prisma.fileAsset.findFirst({ where: { id: fileId } });
     if (!file) throw new NotFoundException('文件不存在');
 
     await this.storageProvider.remove(file.filePath);
 
-    await this.prisma.fileAsset.delete({ where: { id: BigInt(id) } });
+    await this.prisma.fileAsset.delete({ where: { id: fileId } });
     this.logger.log(`删除文件：${file.fileName}`);
     return { success: true };
   }
 
   async findPrivateById(id: string, currentUser: { id?: string; roleType?: string }) {
+    const fileId = this.parsePositiveId(id, '文件');
     const file = await this.prisma.fileAsset.findFirst({
-      where: { id: BigInt(id) },
+      where: { id: fileId },
     });
     if (!file) throw new NotFoundException('文件不存在');
     if (!this.isPrivateFile(file)) {
@@ -271,18 +280,76 @@ export class UploadService {
   }
 
   private validateFileMagic(file: Express.Multer.File): void {
-    const magicNumbers = FILE_MAGIC_NUMBERS[file.mimetype];
-    if (!magicNumbers || !file.buffer || file.buffer.length < 12) return;
-    const header = Array.from(file.buffer.slice(0, 12));
-    const isValid = magicNumbers.some(magic =>
-      magic.every((byte, index) => {
-        if (byte === 0x00) return true;
-        return header[index] === byte;
-      })
-    );
+    if (!file.buffer || file.buffer.length === 0) {
+      throw new BadRequestException('上传文件内容为空');
+    }
+
+    let isValid: boolean;
+    if (file.mimetype === 'video/mp4') {
+      isValid = this.isIsoBaseMediaFile(file.buffer);
+    } else if (file.mimetype === 'image/webp') {
+      isValid = this.isWebpFile(file.buffer);
+    } else {
+      const magicNumbers = FILE_MAGIC_NUMBERS[file.mimetype];
+      if (!magicNumbers) return;
+      isValid = magicNumbers.some(magic =>
+        file.buffer.length >= magic.length
+        && magic.every((byte, index) => file.buffer[index] === byte)
+      );
+    }
+
     if (!isValid) {
       throw new BadRequestException(`文件内容与声明类型 ${file.mimetype} 不匹配`);
     }
+  }
+
+  private isWebpFile(buffer: Buffer): boolean {
+    return buffer.length >= 12
+      && buffer.toString('ascii', 0, 4) === 'RIFF'
+      && buffer.toString('ascii', 8, 12) === 'WEBP';
+  }
+
+  private isIsoBaseMediaFile(buffer: Buffer): boolean {
+    const scanLimit = Math.min(buffer.length, MP4_SCAN_LIMIT);
+    let offset = 0;
+
+    for (let boxCount = 0; boxCount < MP4_MAX_BOXES_TO_SCAN && offset + 8 <= scanLimit; boxCount += 1) {
+      const boxSize = this.readIsoBoxSize(buffer, offset);
+      if (boxSize === null || offset + boxSize > buffer.length) return false;
+
+      const boxType = buffer.toString('ascii', offset + 4, offset + 8);
+      if (boxType === 'ftyp') {
+        return boxSize >= 12;
+      }
+
+      offset += boxSize;
+      if (offset > scanLimit) return false;
+    }
+
+    return false;
+  }
+
+  private readIsoBoxSize(buffer: Buffer, offset: number): number | null {
+    const size32 = buffer.readUInt32BE(offset);
+    if (size32 === 0) {
+      return buffer.length - offset;
+    }
+    if (size32 === 1) {
+      if (offset + 16 > buffer.length) return null;
+      const extendedSize = buffer.readBigUInt64BE(offset + 8);
+      if (extendedSize > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+      const boxSize = Number(extendedSize);
+      return boxSize >= 16 ? boxSize : null;
+    }
+    return size32 >= 8 ? size32 : null;
+  }
+
+  private parsePositiveId(value: unknown, label: string): bigint {
+    const normalized = String(value ?? '').trim();
+    if (!/^[1-9]\d*$/.test(normalized)) {
+      throw new BadRequestException(`${label}ID无效`);
+    }
+    return BigInt(normalized);
   }
 
   private isPrivateFile(file: any): boolean {
