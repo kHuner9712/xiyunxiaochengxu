@@ -13,6 +13,16 @@ function createMp4Buffer(boxSize: number): Buffer {
   return buffer;
 }
 
+function createExtendedMp4Buffer(boxSize = 24): Buffer {
+  const buffer = Buffer.alloc(Math.max(boxSize, 24));
+  buffer.writeUInt32BE(1, 0);
+  buffer.write('ftyp', 4, 'ascii');
+  buffer.writeBigUInt64BE(BigInt(boxSize), 8);
+  buffer.write('isom', 16, 'ascii');
+  buffer.writeUInt32BE(0x200, 20);
+  return buffer;
+}
+
 function createFile(originalname: string, mimetype: string, buffer: Buffer): Express.Multer.File {
   return {
     originalname,
@@ -66,7 +76,7 @@ describe('UploadService validation', () => {
     fs.rmSync(uploadDir, { recursive: true, force: true });
   });
 
-  it.each([20, 24, 28, 32, 36])(
+  it.each([16, 20, 24, 28, 32, 36])(
     'accepts a valid MP4 ftyp box with size %i',
     async (boxSize) => {
       const prisma = createPrismaMock();
@@ -84,6 +94,18 @@ describe('UploadService validation', () => {
     },
   );
 
+  it('accepts a valid extended-size MP4 ftyp box', async () => {
+    const prisma = createPrismaMock();
+    const service = new UploadService(prisma as any);
+
+    await expect(service.uploadFile(
+      createFile('extended.mp4', 'video/mp4', createExtendedMp4Buffer()),
+      '1',
+      'admin',
+      'content-video',
+    )).resolves.toMatchObject({ id: '1', fileType: 'video' });
+  });
+
   it('accepts a valid MP4 when a free box precedes ftyp', async () => {
     const freeBox = Buffer.alloc(8);
     freeBox.writeUInt32BE(8, 0);
@@ -98,6 +120,32 @@ describe('UploadService validation', () => {
       'admin',
       'content-video',
     )).resolves.toMatchObject({ id: '1', fileType: 'video' });
+  });
+
+  it('rejects an undersized ftyp box', async () => {
+    const prisma = createPrismaMock();
+    const service = new UploadService(prisma as any);
+
+    await expect(service.uploadFile(
+      createFile('undersized.mp4', 'video/mp4', createMp4Buffer(12)),
+      '1',
+      'admin',
+      'content-video',
+    )).rejects.toThrow('文件内容与声明类型 video/mp4 不匹配');
+    expect(prisma.fileAsset.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an undersized extended ftyp box', async () => {
+    const prisma = createPrismaMock();
+    const service = new UploadService(prisma as any);
+
+    await expect(service.uploadFile(
+      createFile('undersized-extended.mp4', 'video/mp4', createExtendedMp4Buffer(20)),
+      '1',
+      'admin',
+      'content-video',
+    )).rejects.toThrow('文件内容与声明类型 video/mp4 不匹配');
+    expect(prisma.fileAsset.create).not.toHaveBeenCalled();
   });
 
   it('rejects an MP4 declaration when no valid ftyp box exists', async () => {
@@ -139,6 +187,14 @@ describe('UploadService validation', () => {
     const service = new UploadService(prisma as any);
 
     await expect(service.findPublicById('../1')).rejects.toThrow('文件ID无效');
+    expect(prisma.fileAsset.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('rejects file identifiers outside signed BIGINT range', async () => {
+    const prisma = createPrismaMock();
+    const service = new UploadService(prisma as any);
+
+    await expect(service.findPublicById('9223372036854775808')).rejects.toThrow('文件ID超出范围');
     expect(prisma.fileAsset.findFirst).not.toHaveBeenCalled();
   });
 

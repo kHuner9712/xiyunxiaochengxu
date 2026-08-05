@@ -51,7 +51,7 @@ describe('ContentService content category validation', () => {
     prisma.contentCategory.findFirst.mockResolvedValue({ id: 42n });
     prisma.content.create.mockResolvedValue(createContentRecord({ categoryId: 42n }));
 
-    await service.create({ title: '测试内容', content: '正文', categoryId: 42 });
+    await service.create({ title: '测试内容', content: '正文', categoryId: '42' });
 
     expect(prisma.contentCategory.findFirst).toHaveBeenCalledWith({
       where: { id: 42n, status: 1 },
@@ -76,7 +76,7 @@ describe('ContentService content category validation', () => {
   it('rejects a missing or disabled category before Prisma hits the foreign key', async () => {
     prisma.contentCategory.findFirst.mockResolvedValue(null);
 
-    await expect(service.create({ title: '测试内容', content: '正文', categoryId: 999 }))
+    await expect(service.create({ title: '测试内容', content: '正文', categoryId: '999' }))
       .rejects.toEqual(new BadRequestException('内容分类不存在或已停用'));
 
     expect(prisma.content.create).not.toHaveBeenCalled();
@@ -87,7 +87,18 @@ describe('ContentService content category validation', () => {
       title: '测试内容',
       content: '正文',
       categoryId: 'not-a-number',
-    } as any)).rejects.toEqual(new BadRequestException('内容分类ID无效'));
+    })).rejects.toEqual(new BadRequestException('内容分类ID无效'));
+
+    expect(prisma.contentCategory.findFirst).not.toHaveBeenCalled();
+    expect(prisma.content.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects category identifiers outside signed BIGINT range', async () => {
+    await expect(service.create({
+      title: '测试内容',
+      content: '正文',
+      categoryId: '9223372036854775808',
+    })).rejects.toEqual(new BadRequestException('内容分类ID超出范围'));
 
     expect(prisma.contentCategory.findFirst).not.toHaveBeenCalled();
     expect(prisma.content.create).not.toHaveBeenCalled();
@@ -97,9 +108,23 @@ describe('ContentService content category validation', () => {
     prisma.content.findFirst.mockResolvedValue(createContentRecord());
     prisma.contentCategory.findFirst.mockResolvedValue(null);
 
-    await expect(service.update('1', { categoryId: 404 }))
+    await expect(service.update('1', { categoryId: '404' }))
       .rejects.toEqual(new BadRequestException('内容分类不存在或已停用'));
 
     expect(prisma.content.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps an existing category even when it has since been disabled', async () => {
+    const existing = createContentRecord({ categoryId: 42n });
+    prisma.content.findFirst.mockResolvedValue(existing);
+    prisma.content.update.mockImplementation(({ data }: any) => ({ ...existing, ...data }));
+
+    await service.update('1', { categoryId: '42', title: '更新标题' });
+
+    expect(prisma.contentCategory.findFirst).not.toHaveBeenCalled();
+    expect(prisma.content.update).toHaveBeenCalledWith({
+      where: { id: 1n },
+      data: expect.objectContaining({ categoryId: 42n, title: '更新标题' }),
+    });
   });
 });

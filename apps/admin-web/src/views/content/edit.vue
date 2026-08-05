@@ -7,7 +7,7 @@
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" style="max-width: 800px">
         <el-form-item label="标题" prop="title">
-          <el-input v-model="form.title" placeholder="请输入标题" maxlength="100" show-word-limit />
+          <el-input v-model="form.title" placeholder="请输入标题" maxlength="200" show-word-limit />
         </el-form-item>
 
         <el-form-item label="内容类型" prop="contentType">
@@ -117,11 +117,17 @@
         </el-form-item>
 
         <el-form-item label="关联活动">
-          <el-input-number v-model="form.relatedActivityId" :min="1" placeholder="活动ID" />
+          <el-input
+            v-model="form.relatedActivityId"
+            inputmode="numeric"
+            maxlength="19"
+            clearable
+            placeholder="活动ID"
+          />
         </el-form-item>
 
         <el-form-item label="摘要">
-          <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="请输入摘要" maxlength="200" show-word-limit />
+          <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="请输入摘要" maxlength="500" show-word-limit />
         </el-form-item>
 
         <el-form-item
@@ -173,12 +179,13 @@ import { contentApi } from '@/api/content'
 import { uploadApi } from '@/api/upload'
 
 interface ContentCategoryOption {
-  id: number
+  id: string
   name: string
 }
 
 type UploadField = 'coverImage' | 'videoUrl' | 'videoCover'
 
+const MAX_SIGNED_BIGINT_ID = '9223372036854775807'
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
@@ -202,14 +209,14 @@ const form = reactive({
   title: '',
   contentType: 'article',
   coverImage: '',
-  categoryId: undefined as number | undefined,
+  categoryId: undefined as string | undefined,
   videoUrl: '',
   videoCover: '',
   videoDuration: undefined as number | undefined,
   placementList: [] as string[],
   tagList: [] as string[],
   relatedProductIdsStr: '',
-  relatedActivityId: undefined as number | undefined,
+  relatedActivityId: '',
   summary: '',
   content: '',
   isFeatured: 0,
@@ -228,22 +235,45 @@ const rules = computed<FormRules>(() => ({
     : [],
 }))
 
+function isPositiveBigIntId(value: unknown): boolean {
+  const normalized = String(value ?? '').trim()
+  if (!/^[1-9]\d*$/.test(normalized)) return false
+  return normalized.length < MAX_SIGNED_BIGINT_ID.length
+    || (normalized.length === MAX_SIGNED_BIGINT_ID.length && normalized <= MAX_SIGNED_BIGINT_ID)
+}
+
+function parseRelatedProductIds(value: string): number[] | null {
+  const normalized = value.trim()
+  if (!normalized) return null
+  const tokens = normalized.split(',').map(item => item.trim())
+  if (tokens.length > 10) throw new Error('最多关联10个商品')
+  if (tokens.some(item => !/^[1-9]\d*$/.test(item))) {
+    throw new Error('关联商品ID必须为正整数，多个ID请使用英文逗号分隔')
+  }
+  const ids = tokens.map(item => Number(item))
+  if (ids.some(item => !Number.isSafeInteger(item))) {
+    throw new Error('关联商品ID超出前端可安全处理的范围')
+  }
+  return ids
+}
+
 function extractUploadedAsset(response: any) {
   const data = response?.data?.data || response?.data || response
   const id = String(data?.id || '')
   const url = String(data?.url || '')
-  if (!id || !url) throw new Error('上传成功但未返回文件ID或地址')
+  if (!isPositiveBigIntId(id) || !url) throw new Error('上传成功但未返回有效的文件ID或地址')
   return { id, url }
 }
 
-async function deletePendingAsset(field: UploadField, clearField = false) {
+async function deletePendingAsset(field: UploadField, clearField = false): Promise<boolean> {
   const id = pendingAssetIds.get(field)
-  pendingAssetIds.delete(field)
   if (id) {
     try {
       await uploadApi.deleteFile(id)
+      pendingAssetIds.delete(field)
     } catch (error) {
       console.error(`[content-edit] cleanup ${field} failed`, error)
+      return false
     }
   }
   if (clearField) {
@@ -253,6 +283,7 @@ async function deletePendingAsset(field: UploadField, clearField = false) {
       videoUploadProgress.value = 0
     }
   }
+  return true
 }
 
 async function registerPendingAsset(field: UploadField, id: string) {
@@ -260,16 +291,24 @@ async function registerPendingAsset(field: UploadField, id: string) {
   if (previousId && previousId !== id) {
     try {
       await uploadApi.deleteFile(previousId)
+      pendingAssetIds.delete(field)
     } catch (error) {
       console.error(`[content-edit] replace ${field} cleanup failed`, error)
+      try {
+        await uploadApi.deleteFile(id)
+      } catch (rollbackError) {
+        console.error(`[content-edit] rollback new ${field} failed`, rollbackError)
+      }
+      throw new Error('旧上传文件清理失败，请稍后重试')
     }
   }
   pendingAssetIds.set(field, id)
 }
 
-async function cleanupPendingAssets(clearFields: boolean) {
+async function cleanupPendingAssets(clearFields: boolean): Promise<boolean> {
   const fields = [...pendingAssetIds.keys()]
-  await Promise.all(fields.map((field) => deletePendingAsset(field, clearFields)))
+  const results = await Promise.all(fields.map((field) => deletePendingAsset(field, clearFields)))
+  return results.every(Boolean)
 }
 
 async function fetchCategories() {
@@ -279,8 +318,8 @@ async function fetchCategories() {
     const data = res.data || res
     contentCategories.value = Array.isArray(data)
       ? data
-        .map((category: any) => ({ id: Number(category.id), name: String(category.name || '') }))
-        .filter((category: ContentCategoryOption) => Number.isSafeInteger(category.id) && category.id > 0 && category.name)
+        .map((category: any) => ({ id: String(category.id || '').trim(), name: String(category.name || '') }))
+        .filter((category: ContentCategoryOption) => isPositiveBigIntId(category.id) && category.name)
       : []
   } catch (error) {
     contentCategories.value = []
@@ -318,7 +357,8 @@ async function fetchDetail(id: string) {
   try {
     const res = await contentApi.getDetail(id)
     const data = res.data || res
-    const categoryId = data.categoryId ? Number(data.categoryId) : undefined
+    const rawCategoryId = String(data.categoryId || '').trim()
+    const categoryId = isPositiveBigIntId(rawCategoryId) ? rawCategoryId : undefined
     if (
       categoryId
       && data.categoryName
@@ -326,6 +366,7 @@ async function fetchDetail(id: string) {
     ) {
       contentCategories.value.push({ id: categoryId, name: String(data.categoryName) })
     }
+    const rawActivityId = String(data.relatedActivityId || '').trim()
     Object.assign(form, {
       id: String(data.id),
       title: data.title,
@@ -338,7 +379,7 @@ async function fetchDetail(id: string) {
       placementList: Array.isArray(data.placement) ? data.placement : [],
       tagList: Array.isArray(data.tags) ? data.tags : [],
       relatedProductIdsStr: Array.isArray(data.relatedProductIds) ? data.relatedProductIds.join(',') : '',
-      relatedActivityId: data.relatedActivityId ? Number(data.relatedActivityId) : undefined,
+      relatedActivityId: isPositiveBigIntId(rawActivityId) ? rawActivityId : '',
       summary: data.summary || '',
       content: data.content || '',
       isFeatured: data.isFeatured ?? 0,
@@ -437,7 +478,11 @@ async function handleUploadVideo(options: any) {
 }
 
 async function removeVideo() {
-  await deletePendingAsset('videoUrl', true)
+  const deleted = await deletePendingAsset('videoUrl', true)
+  if (!deleted) {
+    ElMessage.warning('视频文件清理失败，已保留当前视频，请稍后重试')
+    return
+  }
   form.videoUrl = ''
   form.videoDuration = undefined
   videoUploadProgress.value = 0
@@ -447,30 +492,36 @@ async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
+  let relatedProductIds: number[] | null
+  try {
+    relatedProductIds = parseRelatedProductIds(form.relatedProductIdsStr)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '关联商品ID无效')
+    return
+  }
+
+  const relatedActivityId = form.relatedActivityId.trim()
+  if (relatedActivityId && !isPositiveBigIntId(relatedActivityId)) {
+    ElMessage.error('关联活动ID必须是有效的正整数')
+    return
+  }
+
   submitting.value = true
   preservePendingAssetsOnUnmount = false
   try {
-    const relatedProductIds = form.relatedProductIdsStr
-      ? form.relatedProductIdsStr
-        .split(',')
-        .map(value => Number(value.trim()))
-        .filter(value => Number.isSafeInteger(value) && value > 0)
-        .slice(0, 10)
-      : null
-
     const payload = {
       id: form.id,
       title: form.title.trim(),
       contentType: form.contentType,
       coverImage: form.coverImage || null,
-      categoryId: form.categoryId,
+      categoryId: form.categoryId || null,
       videoUrl: form.contentType === 'video' ? form.videoUrl : null,
       videoCover: form.contentType === 'video' ? (form.videoCover || null) : null,
       videoDuration: form.contentType === 'video' ? (form.videoDuration ?? null) : null,
       placement: form.placementList.length ? form.placementList : null,
       tags: form.tagList.length ? form.tagList : null,
       relatedProductIds,
-      relatedActivityId: form.relatedActivityId,
+      relatedActivityId: relatedActivityId || null,
       summary: form.summary,
       content: form.content,
       isFeatured: form.isFeatured,
@@ -493,8 +544,7 @@ async function handleSubmit() {
     const confirmedRejected = status >= 400 && status < 500
 
     if (confirmedRejected && pendingAssetIds.size > 0) {
-      await cleanupPendingAssets(true)
-      ElMessage.warning('保存请求已被拒绝，本次新上传文件已清理，请修正后重新上传')
+      ElMessage.warning('保存请求已被拒绝，本次新上传文件已保留，请修正后重试或点击取消清理')
     } else if (pendingAssetIds.size > 0) {
       preservePendingAssetsOnUnmount = true
       pendingAssetIds.clear()
@@ -507,7 +557,10 @@ async function handleSubmit() {
 }
 
 async function handleCancel() {
-  await cleanupPendingAssets(false)
+  const cleanupComplete = await cleanupPendingAssets(false)
+  if (!cleanupComplete) {
+    ElMessage.warning('部分新上传文件清理失败；将离开编辑页，并在卸载时再次尝试清理失败项')
+  }
   router.back()
 }
 
@@ -516,12 +569,26 @@ watch(
   async (next, previous) => {
     if (hydrating.value || next === previous) return
     if (next === 'article') {
-      await deletePendingAsset('videoUrl', false)
-      await deletePendingAsset('videoCover', false)
-      form.videoUrl = ''
-      form.videoCover = ''
-      form.videoDuration = undefined
-      videoUploadProgress.value = 0
+      const videoDeleted = await deletePendingAsset('videoUrl', false)
+      if (videoDeleted) {
+        form.videoUrl = ''
+        form.videoDuration = undefined
+        videoUploadProgress.value = 0
+      }
+
+      const coverDeleted = await deletePendingAsset('videoCover', false)
+      if (coverDeleted) {
+        form.videoCover = ''
+      }
+
+      if (!videoDeleted || !coverDeleted) {
+        hydrating.value = true
+        form.contentType = previous
+        await nextTick()
+        hydrating.value = false
+        ElMessage.warning('部分视频素材清理失败，已保留视频类型，请稍后重试')
+        return
+      }
     } else if (previous === 'article') {
       form.content = ''
     }
@@ -533,7 +600,7 @@ onMounted(async () => {
   await fetchCategories()
   if (route.params.id) {
     const id = String(route.params.id)
-    if (!/^[1-9]\d*$/.test(id)) {
+    if (!isPositiveBigIntId(id)) {
       ElMessage.error('内容ID无效')
       return
     }

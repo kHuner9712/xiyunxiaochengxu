@@ -98,4 +98,48 @@ describe('CreateContentDto', () => {
     expect(errors.some((error) => error.property === 'relatedProductIds')).toBe(true);
     expect(errors.some((error) => error.property === 'relatedActivityId')).toBe(true);
   });
+
+  it('preserves category and activity IDs beyond JavaScript safe integer precision', async () => {
+    const dto = toDto({
+      title: '大ID内容',
+      contentType: 'article',
+      content: '正文',
+      categoryId: '9007199254740993',
+      relatedActivityId: '9007199254740995',
+    });
+
+    expect(dto.categoryId).toBe('9007199254740993');
+    expect(dto.relatedActivityId).toBe('9007199254740995');
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('normalizes safe numeric ID input to strings without retaining a number type', async () => {
+    const dto = toDto({
+      title: '数字ID输入',
+      contentType: 'article',
+      content: '正文',
+      categoryId: 42,
+      relatedActivityId: 88,
+    });
+
+    expect(dto.categoryId).toBe('42');
+    expect(dto.relatedActivityId).toBe('88');
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rejects numeric bigint IDs that have already exceeded safe integer precision', async () => {
+    const unsafeNumericId = Number('9007199254740993');
+    expect(Number.isSafeInteger(unsafeNumericId)).toBe(false);
+
+    const errors = await validateDto({
+      title: '危险数字ID',
+      contentType: 'article',
+      content: '正文',
+      categoryId: unsafeNumericId,
+      relatedActivityId: unsafeNumericId,
+    });
+
+    expect(errors.some((error) => error.property === 'categoryId')).toBe(true);
+    expect(errors.some((error) => error.property === 'relatedActivityId')).toBe(true);
+  });
 });

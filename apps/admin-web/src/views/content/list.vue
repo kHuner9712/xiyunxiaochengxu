@@ -55,7 +55,7 @@
           </template>
         </el-table-column>
         <el-table-column label="发布时间" width="180">
-          <template #default="{ row }">{{ formatDate(row.publishTime || row.createTime) }}</template>
+          <template #default="{ row }">{{ formatDate(row.publishedAt || row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">

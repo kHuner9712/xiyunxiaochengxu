@@ -85,7 +85,10 @@ export class AdminUploadController {
 
   @Delete(':id')
   @RequirePermission('system:file')
-  async delete(@Param('id') id: string) {
-    return this.uploadService.delete(id);
+  async delete(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.uploadService.deletePendingContentAsset(id, userId);
   }
 }

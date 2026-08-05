@@ -4,7 +4,7 @@ export function getContentList(params: { categoryId?: string; contentType?: stri
   return get<{ list: ContentItem[]; total: number }>('/weapp/content/list', params)
 }
 
-export function getContentDetail(id: number) {
+export function getContentDetail(id: string | number) {
   return get<ContentDetail>(`/weapp/content/${id}`)
 }
 
