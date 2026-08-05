@@ -51,11 +51,32 @@ describe('content detail page', () => {
     mocks.loadHandler?.({ id: '123' })
     await flushPromises()
 
-    expect(mocks.getContentDetail).toHaveBeenCalledWith(123)
+    expect(mocks.getContentDetail).toHaveBeenCalledWith('123')
     const video = wrapper.find('video')
     expect(video.exists()).toBe(true)
     expect(video.attributes('src')).toBe('https://api.example.com/uploads/public/video.mp4')
     expect(video.attributes('poster')).toBe('https://api.example.com/uploads/public/poster.jpg')
+  })
+
+  it('preserves identifiers beyond JavaScript safe integer precision', async () => {
+    const id = '9007199254740993'
+    mocks.getContentDetail.mockResolvedValue({
+      id,
+      title: '大ID内容',
+      coverImage: '',
+      content: '正文',
+      categoryId: '',
+      contentType: 'article',
+      summary: '',
+      viewCount: 0,
+      publishedAt: '',
+    })
+
+    mount(ContentDetailPage)
+    mocks.loadHandler?.({ id })
+    await flushPromises()
+
+    expect(mocks.getContentDetail).toHaveBeenCalledWith(id)
   })
 
   it('does not render a video element for article content', async () => {
@@ -75,7 +96,7 @@ describe('content detail page', () => {
     mocks.loadHandler?.({ id: '124' })
     await flushPromises()
 
-    expect(mocks.getContentDetail).toHaveBeenCalledWith(124)
+    expect(mocks.getContentDetail).toHaveBeenCalledWith('124')
     expect(wrapper.find('video').exists()).toBe(false)
   })
 
