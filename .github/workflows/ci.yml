@@ -77,6 +77,9 @@ jobs:
       - name: Run API integration tests against real MySQL
         run: pnpm --filter @baby-mall/api test:integration
 
+      - name: Run Miniprogram unit/component tests
+        run: pnpm --filter @baby-mall/miniprogram test
+
       - name: Build API
         run: pnpm build:api
 
