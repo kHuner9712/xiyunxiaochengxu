@@ -7,7 +7,7 @@
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" style="max-width: 800px">
         <el-form-item label="标题" prop="title">
-          <el-input v-model="form.title" placeholder="请输入标题" maxlength="100" show-word-limit />
+          <el-input v-model="form.title" placeholder="请输入标题" maxlength="200" show-word-limit />
         </el-form-item>
 
         <el-form-item label="内容类型" prop="contentType">
@@ -117,11 +117,17 @@
         </el-form-item>
 
         <el-form-item label="关联活动">
-          <el-input-number v-model="form.relatedActivityId" :min="1" placeholder="活动ID" />
+          <el-input
+            v-model="form.relatedActivityId"
+            inputmode="numeric"
+            maxlength="19"
+            clearable
+            placeholder="活动ID"
+          />
         </el-form-item>
 
         <el-form-item label="摘要">
-          <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="请输入摘要" maxlength="200" show-word-limit />
+          <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="请输入摘要" maxlength="500" show-word-limit />
         </el-form-item>
 
         <el-form-item
@@ -173,12 +179,13 @@ import { contentApi } from '@/api/content'
 import { uploadApi } from '@/api/upload'
 
 interface ContentCategoryOption {
-  id: number
+  id: string
   name: string
 }
 
 type UploadField = 'coverImage' | 'videoUrl' | 'videoCover'
 
+const MAX_SIGNED_BIGINT = BigInt('9223372036854775807')
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
@@ -202,14 +209,14 @@ const form = reactive({
   title: '',
   contentType: 'article',
   coverImage: '',
-  categoryId: undefined as number | undefined,
+  categoryId: undefined as string | undefined,
   videoUrl: '',
   videoCover: '',
   videoDuration: undefined as number | undefined,
   placementList: [] as string[],
   tagList: [] as string[],
   relatedProductIdsStr: '',
-  relatedActivityId: undefined as number | undefined,
+  relatedActivityId: '',
   summary: '',
   content: '',
   isFeatured: 0,
@@ -228,11 +235,36 @@ const rules = computed<FormRules>(() => ({
     : [],
 }))
 
+function isPositiveBigIntId(value: unknown): value is string {
+  const normalized = String(value ?? '').trim()
+  if (!/^[1-9]\d*$/.test(normalized)) return false
+  try {
+    return BigInt(normalized) <= MAX_SIGNED_BIGINT
+  } catch {
+    return false
+  }
+}
+
+function parseRelatedProductIds(value: string): number[] | null {
+  const normalized = value.trim()
+  if (!normalized) return null
+  const tokens = normalized.split(',').map(item => item.trim())
+  if (tokens.length > 10) throw new Error('最多关联10个商品')
+  if (tokens.some(item => !/^[1-9]\d*$/.test(item))) {
+    throw new Error('关联商品ID必须为正整数，多个ID请使用英文逗号分隔')
+  }
+  const ids = tokens.map(item => Number(item))
+  if (ids.some(item => !Number.isSafeInteger(item))) {
+    throw new Error('关联商品ID超出前端可安全处理的范围')
+  }
+  return ids
+}
+
 function extractUploadedAsset(response: any) {
   const data = response?.data?.data || response?.data || response
   const id = String(data?.id || '')
   const url = String(data?.url || '')
-  if (!id || !url) throw new Error('上传成功但未返回文件ID或地址')
+  if (!isPositiveBigIntId(id) || !url) throw new Error('上传成功但未返回有效的文件ID或地址')
   return { id, url }
 }
 
@@ -279,8 +311,8 @@ async function fetchCategories() {
     const data = res.data || res
     contentCategories.value = Array.isArray(data)
       ? data
-        .map((category: any) => ({ id: Number(category.id), name: String(category.name || '') }))
-        .filter((category: ContentCategoryOption) => Number.isSafeInteger(category.id) && category.id > 0 && category.name)
+        .map((category: any) => ({ id: String(category.id || '').trim(), name: String(category.name || '') }))
+        .filter((category: ContentCategoryOption) => isPositiveBigIntId(category.id) && category.name)
       : []
   } catch (error) {
     contentCategories.value = []
@@ -318,7 +350,8 @@ async function fetchDetail(id: string) {
   try {
     const res = await contentApi.getDetail(id)
     const data = res.data || res
-    const categoryId = data.categoryId ? Number(data.categoryId) : undefined
+    const rawCategoryId = String(data.categoryId || '').trim()
+    const categoryId = isPositiveBigIntId(rawCategoryId) ? rawCategoryId : undefined
     if (
       categoryId
       && data.categoryName
@@ -326,6 +359,7 @@ async function fetchDetail(id: string) {
     ) {
       contentCategories.value.push({ id: categoryId, name: String(data.categoryName) })
     }
+    const rawActivityId = String(data.relatedActivityId || '').trim()
     Object.assign(form, {
       id: String(data.id),
       title: data.title,
@@ -338,7 +372,7 @@ async function fetchDetail(id: string) {
       placementList: Array.isArray(data.placement) ? data.placement : [],
       tagList: Array.isArray(data.tags) ? data.tags : [],
       relatedProductIdsStr: Array.isArray(data.relatedProductIds) ? data.relatedProductIds.join(',') : '',
-      relatedActivityId: data.relatedActivityId ? Number(data.relatedActivityId) : undefined,
+      relatedActivityId: isPositiveBigIntId(rawActivityId) ? rawActivityId : '',
       summary: data.summary || '',
       content: data.content || '',
       isFeatured: data.isFeatured ?? 0,
@@ -447,30 +481,36 @@ async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
+  let relatedProductIds: number[] | null
+  try {
+    relatedProductIds = parseRelatedProductIds(form.relatedProductIdsStr)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '关联商品ID无效')
+    return
+  }
+
+  const relatedActivityId = form.relatedActivityId.trim()
+  if (relatedActivityId && !isPositiveBigIntId(relatedActivityId)) {
+    ElMessage.error('关联活动ID必须是有效的正整数')
+    return
+  }
+
   submitting.value = true
   preservePendingAssetsOnUnmount = false
   try {
-    const relatedProductIds = form.relatedProductIdsStr
-      ? form.relatedProductIdsStr
-        .split(',')
-        .map(value => Number(value.trim()))
-        .filter(value => Number.isSafeInteger(value) && value > 0)
-        .slice(0, 10)
-      : null
-
     const payload = {
       id: form.id,
       title: form.title.trim(),
       contentType: form.contentType,
       coverImage: form.coverImage || null,
-      categoryId: form.categoryId,
+      categoryId: form.categoryId || null,
       videoUrl: form.contentType === 'video' ? form.videoUrl : null,
       videoCover: form.contentType === 'video' ? (form.videoCover || null) : null,
       videoDuration: form.contentType === 'video' ? (form.videoDuration ?? null) : null,
       placement: form.placementList.length ? form.placementList : null,
       tags: form.tagList.length ? form.tagList : null,
       relatedProductIds,
-      relatedActivityId: form.relatedActivityId,
+      relatedActivityId: relatedActivityId || null,
       summary: form.summary,
       content: form.content,
       isFeatured: form.isFeatured,
@@ -533,7 +573,7 @@ onMounted(async () => {
   await fetchCategories()
   if (route.params.id) {
     const id = String(route.params.id)
-    if (!/^[1-9]\d*$/.test(id)) {
+    if (!isPositiveBigIntId(id)) {
       ElMessage.error('内容ID无效')
       return
     }
