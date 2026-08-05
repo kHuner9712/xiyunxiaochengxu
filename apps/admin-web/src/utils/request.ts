@@ -45,6 +45,37 @@ interface ApiResponse<T = any> {
   code: number
   message: string
   data: T
+  requestId?: string
+}
+
+interface ApiRequestError extends Error {
+  apiCode: number
+  requestId?: string
+  response: AxiosResponse<ApiResponse>
+}
+
+function inferHttpStatusFromApiCode(code: number): number {
+  if (code >= 50000 && code < 60000) return 500
+  if (code >= 40900 && code < 41000) return 409
+  if (code === 40501) return 429
+  if (code >= 40400 && code < 40500) return 404
+  if (code >= 40300 && code < 40400) return 403
+  if (code >= 40100 && code < 40200) return 401
+  if (code >= 40000 && code < 40100) return 400
+  return 400
+}
+
+function createApiRequestError(response: AxiosResponse<ApiResponse>): ApiRequestError {
+  const apiResponse = response.data
+  const error = new Error(apiResponse.message || '请求失败') as ApiRequestError
+  error.name = 'ApiRequestError'
+  error.apiCode = apiResponse.code
+  error.requestId = apiResponse.requestId
+  error.response = {
+    ...response,
+    status: inferHttpStatusFromApiCode(apiResponse.code),
+  }
+  return error
 }
 
 async function handleUnauthorized() {
@@ -95,6 +126,7 @@ request.interceptors.response.use(
     }
     const res = response.data
     if (res.code !== 0) {
+      const apiError = createApiRequestError(response)
       if (res.code === 40101 || res.code === 40102 || res.code === 40103) {
         const originalRequest = response.config as RetryableRequestConfig
         if (originalRequest && !originalRequest._retry) {
@@ -109,11 +141,11 @@ request.interceptors.response.use(
         const userStore = useUserStore()
         userStore.clearTokens()
         router.push('/login')
-        return Promise.reject(new Error('登录已过期，请重新登录'))
+        return Promise.reject(apiError)
       } else {
         ElMessage.error(res.message || '请求失败')
       }
-      return Promise.reject(new Error(res.message || '请求失败'))
+      return Promise.reject(apiError)
     }
     return res as any
   },
@@ -159,4 +191,4 @@ request.interceptors.response.use(
 )
 
 export default request
-export type { ApiResponse }
+export type { ApiResponse, ApiRequestError }

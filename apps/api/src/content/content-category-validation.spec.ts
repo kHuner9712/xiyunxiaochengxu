@@ -8,7 +8,7 @@ function createContentRecord(overrides: Record<string, unknown> = {}) {
     title: '测试内容',
     contentType: 'article',
     coverImage: null,
-    content: null,
+    content: '正文',
     summary: null,
     videoUrl: null,
     videoCover: null,
@@ -51,7 +51,7 @@ describe('ContentService content category validation', () => {
     prisma.contentCategory.findFirst.mockResolvedValue({ id: 42n });
     prisma.content.create.mockResolvedValue(createContentRecord({ categoryId: 42n }));
 
-    await service.create({ title: '测试内容', categoryId: '42' });
+    await service.create({ title: '测试内容', content: '正文', categoryId: 42 });
 
     expect(prisma.contentCategory.findFirst).toHaveBeenCalledWith({
       where: { id: 42n, status: 1 },
@@ -65,7 +65,7 @@ describe('ContentService content category validation', () => {
   it('allows content without a category', async () => {
     prisma.content.create.mockResolvedValue(createContentRecord());
 
-    await service.create({ title: '未分类内容' });
+    await service.create({ title: '未分类内容', content: '正文' });
 
     expect(prisma.contentCategory.findFirst).not.toHaveBeenCalled();
     expect(prisma.content.create).toHaveBeenCalledWith({
@@ -76,15 +76,18 @@ describe('ContentService content category validation', () => {
   it('rejects a missing or disabled category before Prisma hits the foreign key', async () => {
     prisma.contentCategory.findFirst.mockResolvedValue(null);
 
-    await expect(service.create({ title: '测试内容', categoryId: 999 }))
+    await expect(service.create({ title: '测试内容', content: '正文', categoryId: 999 }))
       .rejects.toEqual(new BadRequestException('内容分类不存在或已停用'));
 
     expect(prisma.content.create).not.toHaveBeenCalled();
   });
 
-  it('rejects malformed category identifiers', async () => {
-    await expect(service.create({ title: '测试内容', categoryId: 'not-a-number' }))
-      .rejects.toEqual(new BadRequestException('内容分类参数无效'));
+  it('rejects malformed category identifiers even when called outside the HTTP DTO pipeline', async () => {
+    await expect(service.create({
+      title: '测试内容',
+      content: '正文',
+      categoryId: 'not-a-number',
+    } as any)).rejects.toEqual(new BadRequestException('内容分类ID无效'));
 
     expect(prisma.contentCategory.findFirst).not.toHaveBeenCalled();
     expect(prisma.content.create).not.toHaveBeenCalled();
@@ -94,7 +97,7 @@ describe('ContentService content category validation', () => {
     prisma.content.findFirst.mockResolvedValue(createContentRecord());
     prisma.contentCategory.findFirst.mockResolvedValue(null);
 
-    await expect(service.update('1', { categoryId: '404' }))
+    await expect(service.update('1', { categoryId: 404 }))
       .rejects.toEqual(new BadRequestException('内容分类不存在或已停用'));
 
     expect(prisma.content.update).not.toHaveBeenCalled();

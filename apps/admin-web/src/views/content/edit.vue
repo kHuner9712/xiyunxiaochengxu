@@ -117,7 +117,7 @@
         </el-form-item>
 
         <el-form-item label="关联活动">
-          <el-input-number v-model="form.relatedActivityId" :min="0" placeholder="活动ID" />
+          <el-input-number v-model="form.relatedActivityId" :min="1" placeholder="活动ID" />
         </el-form-item>
 
         <el-form-item label="摘要">
@@ -158,7 +158,7 @@
 
         <el-form-item>
           <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
-          <el-button @click="router.back()">取消</el-button>
+          <el-button :disabled="submitting" @click="handleCancel">取消</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -166,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { contentApi } from '@/api/content'
@@ -176,6 +176,8 @@ interface ContentCategoryOption {
   id: number
   name: string
 }
+
+type UploadField = 'coverImage' | 'videoUrl' | 'videoCover'
 
 const router = useRouter()
 const route = useRoute()
@@ -188,11 +190,15 @@ const videoUploadProgress = ref(0)
 const tagInputVisible = ref(false)
 const tagInputValue = ref('')
 const tagInputRef = ref<any>(null)
+const hydrating = ref(false)
+const pendingAssetIds = new Map<UploadField, string>()
+let committed = false
+let preservePendingAssetsOnUnmount = false
 
 const isEdit = computed(() => !!route.params.id)
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: undefined as string | undefined,
   title: '',
   contentType: 'article',
   coverImage: '',
@@ -222,6 +228,50 @@ const rules = computed<FormRules>(() => ({
     : [],
 }))
 
+function extractUploadedAsset(response: any) {
+  const data = response?.data?.data || response?.data || response
+  const id = String(data?.id || '')
+  const url = String(data?.url || '')
+  if (!id || !url) throw new Error('上传成功但未返回文件ID或地址')
+  return { id, url }
+}
+
+async function deletePendingAsset(field: UploadField, clearField = false) {
+  const id = pendingAssetIds.get(field)
+  pendingAssetIds.delete(field)
+  if (id) {
+    try {
+      await uploadApi.deleteFile(id)
+    } catch (error) {
+      console.error(`[content-edit] cleanup ${field} failed`, error)
+    }
+  }
+  if (clearField) {
+    form[field] = ''
+    if (field === 'videoUrl') {
+      form.videoDuration = undefined
+      videoUploadProgress.value = 0
+    }
+  }
+}
+
+async function registerPendingAsset(field: UploadField, id: string) {
+  const previousId = pendingAssetIds.get(field)
+  if (previousId && previousId !== id) {
+    try {
+      await uploadApi.deleteFile(previousId)
+    } catch (error) {
+      console.error(`[content-edit] replace ${field} cleanup failed`, error)
+    }
+  }
+  pendingAssetIds.set(field, id)
+}
+
+async function cleanupPendingAssets(clearFields: boolean) {
+  const fields = [...pendingAssetIds.keys()]
+  await Promise.all(fields.map((field) => deletePendingAsset(field, clearFields)))
+}
+
 async function fetchCategories() {
   categoriesLoading.value = true
   try {
@@ -232,8 +282,10 @@ async function fetchCategories() {
         .map((category: any) => ({ id: Number(category.id), name: String(category.name || '') }))
         .filter((category: ContentCategoryOption) => Number.isSafeInteger(category.id) && category.id > 0 && category.name)
       : []
-  } catch {
+  } catch (error) {
     contentCategories.value = []
+    console.error('[content-edit] category loading failed', error)
+    ElMessage.warning('内容分类加载失败，仍可不选择分类继续编辑')
   } finally {
     categoriesLoading.value = false
   }
@@ -261,7 +313,8 @@ function removeTag(tag: string) {
   form.tagList = form.tagList.filter(t => t !== tag)
 }
 
-async function fetchDetail(id: number) {
+async function fetchDetail(id: string) {
+  hydrating.value = true
   try {
     const res = await contentApi.getDetail(id)
     const data = res.data || res
@@ -274,7 +327,7 @@ async function fetchDetail(id: number) {
       contentCategories.value.push({ id: categoryId, name: String(data.categoryName) })
     }
     Object.assign(form, {
-      id: data.id,
+      id: String(data.id),
       title: data.title,
       contentType: data.contentType || 'article',
       coverImage: data.coverImage || '',
@@ -292,21 +345,41 @@ async function fetchDetail(id: number) {
       sortOrder: data.sortOrder ?? 0,
       status: data.status ?? 2,
     })
-  } catch {}
+  } catch (error) {
+    console.error('[content-edit] detail loading failed', error)
+    ElMessage.error('内容详情加载失败，请返回列表重试')
+  } finally {
+    await nextTick()
+    hydrating.value = false
+  }
 }
 
 async function handleUploadCover(options: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
-    form.coverImage = res.data.url
-  } catch {}
+    const res = await uploadApi.uploadImage(options.file, 'content-cover')
+    const asset = extractUploadedAsset(res)
+    await registerPendingAsset('coverImage', asset.id)
+    form.coverImage = asset.url
+    options.onSuccess?.(res)
+  } catch (error) {
+    options.onError?.(error)
+    console.error('[content-edit] cover upload failed', error)
+    ElMessage.error('封面上传失败')
+  }
 }
 
 async function handleUploadVideoCover(options: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
-    form.videoCover = res.data.url
-  } catch {}
+    const res = await uploadApi.uploadImage(options.file, 'content-video-cover')
+    const asset = extractUploadedAsset(res)
+    await registerPendingAsset('videoCover', asset.id)
+    form.videoCover = asset.url
+    options.onSuccess?.(res)
+  } catch (error) {
+    options.onError?.(error)
+    console.error('[content-edit] video cover upload failed', error)
+    ElMessage.error('视频封面上传失败')
+  }
 }
 
 function validateVideoFile(file: File): boolean {
@@ -348,21 +421,23 @@ async function handleUploadVideo(options: any) {
     const res = await uploadApi.uploadVideo(options.file, 'content-video', (percent) => {
       videoUploadProgress.value = percent
     })
-    const url = res?.data?.url || res?.data?.data?.url || ''
-    if (!url) throw new Error('上传成功但未返回视频地址')
-    form.videoUrl = url
+    const asset = extractUploadedAsset(res)
+    await registerPendingAsset('videoUrl', asset.id)
+    form.videoUrl = asset.url
     form.videoDuration = await readVideoDuration(options.file)
     options.onSuccess?.(res)
     ElMessage.success('视频上传成功')
   } catch (error) {
     options.onError?.(error)
+    console.error('[content-edit] video upload failed', error)
     ElMessage.error('视频上传失败')
   } finally {
     videoUploading.value = false
   }
 }
 
-function removeVideo() {
+async function removeVideo() {
+  await deletePendingAsset('videoUrl', true)
   form.videoUrl = ''
   form.videoDuration = undefined
   videoUploadProgress.value = 0
@@ -373,20 +448,25 @@ async function handleSubmit() {
   if (!valid) return
 
   submitting.value = true
+  preservePendingAssetsOnUnmount = false
   try {
     const relatedProductIds = form.relatedProductIdsStr
-      ? form.relatedProductIdsStr.split(',').map(Number).filter(n => !isNaN(n)).slice(0, 10)
+      ? form.relatedProductIdsStr
+        .split(',')
+        .map(value => Number(value.trim()))
+        .filter(value => Number.isSafeInteger(value) && value > 0)
+        .slice(0, 10)
       : null
 
     const payload = {
       id: form.id,
-      title: form.title,
+      title: form.title.trim(),
       contentType: form.contentType,
-      coverImage: form.coverImage,
+      coverImage: form.coverImage || null,
       categoryId: form.categoryId,
-      videoUrl: form.videoUrl || undefined,
-      videoCover: form.videoCover || undefined,
-      videoDuration: form.videoDuration,
+      videoUrl: form.contentType === 'video' ? form.videoUrl : null,
+      videoCover: form.contentType === 'video' ? (form.videoCover || null) : null,
+      videoDuration: form.contentType === 'video' ? (form.videoDuration ?? null) : null,
       placement: form.placementList.length ? form.placementList : null,
       tags: form.tagList.length ? form.tagList : null,
       relatedProductIds,
@@ -403,17 +483,67 @@ async function handleSubmit() {
     } else {
       await contentApi.create(payload)
     }
+    committed = true
+    pendingAssetIds.clear()
     ElMessage.success('保存成功')
-    router.push('/content/list')
-  } catch {} finally {
+    await router.push('/content/list')
+  } catch (error: any) {
+    console.error('[content-edit] save failed', error)
+    const status = Number(error?.response?.status || 0)
+    const confirmedRejected = status >= 400 && status < 500
+
+    if (confirmedRejected && pendingAssetIds.size > 0) {
+      await cleanupPendingAssets(true)
+      ElMessage.warning('保存请求已被拒绝，本次新上传文件已清理，请修正后重新上传')
+    } else if (pendingAssetIds.size > 0) {
+      preservePendingAssetsOnUnmount = true
+      pendingAssetIds.clear()
+      ElMessage.warning('保存结果无法确认。为避免删除可能已被引用的文件，已保留上传文件，请返回列表核实')
+      await router.push('/content/list')
+    }
+  } finally {
     submitting.value = false
   }
 }
 
+async function handleCancel() {
+  await cleanupPendingAssets(false)
+  router.back()
+}
+
+watch(
+  () => form.contentType,
+  async (next, previous) => {
+    if (hydrating.value || next === previous) return
+    if (next === 'article') {
+      await deletePendingAsset('videoUrl', false)
+      await deletePendingAsset('videoCover', false)
+      form.videoUrl = ''
+      form.videoCover = ''
+      form.videoDuration = undefined
+      videoUploadProgress.value = 0
+    } else if (previous === 'article') {
+      form.content = ''
+    }
+    formRef.value?.clearValidate(['content', 'videoUrl'])
+  },
+)
+
 onMounted(async () => {
   await fetchCategories()
   if (route.params.id) {
-    await fetchDetail(Number(route.params.id))
+    const id = String(route.params.id)
+    if (!/^[1-9]\d*$/.test(id)) {
+      ElMessage.error('内容ID无效')
+      return
+    }
+    await fetchDetail(id)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (!committed && !preservePendingAssetsOnUnmount && pendingAssetIds.size > 0) {
+    void cleanupPendingAssets(false)
   }
 })
 </script>
