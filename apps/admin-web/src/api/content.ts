@@ -4,6 +4,9 @@ export const contentApi = {
   getList(params: { page: number; pageSize: number; title?: string; type?: number; status?: number }) {
     return request.get('/admin/content/list', { params })
   },
+  getCategories() {
+    return request.get('/weapp/content/categories')
+  },
   getDetail(id: number) {
     return request.get(`/admin/content/${id}`)
   },

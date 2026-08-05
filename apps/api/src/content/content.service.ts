@@ -96,6 +96,7 @@ export class ContentService {
       throw new BadRequestException('视频类型内容必须填写视频链接');
     }
 
+    const categoryId = await this.resolveCategoryId(data.categoryId);
     const createData: any = {
       title: data.title,
       contentType: data.contentType || 'article',
@@ -112,7 +113,7 @@ export class ContentService {
       isFeatured: data.isFeatured ?? 0,
       sortOrder: data.sortOrder ?? 0,
       status: data.status ?? 2,
-      categoryId: data.categoryId ? BigInt(data.categoryId) : null,
+      categoryId,
       publishedAt: data.status === 1 ? new Date() : null,
     };
 
@@ -145,7 +146,7 @@ export class ContentService {
     if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured;
     if (data.sortOrder !== undefined) updateData.sortOrder = data.sortOrder;
     if (data.status !== undefined) updateData.status = data.status;
-    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId ? BigInt(data.categoryId) : null;
+    if (data.categoryId !== undefined) updateData.categoryId = await this.resolveCategoryId(data.categoryId);
 
     if (data.status === 1 && !content.publishedAt) {
       updateData.publishedAt = new Date();
@@ -367,6 +368,27 @@ export class ContentService {
       })),
       total, page, pageSize,
     );
+  }
+
+  private async resolveCategoryId(categoryId: unknown): Promise<bigint | null> {
+    if (categoryId === undefined || categoryId === null || categoryId === '') {
+      return null;
+    }
+
+    const normalizedId = String(categoryId).trim();
+    if (!/^[1-9]\d*$/.test(normalizedId)) {
+      throw new BadRequestException('内容分类参数无效');
+    }
+
+    const id = BigInt(normalizedId);
+    const category = await this.prisma.contentCategory.findFirst({
+      where: { id, status: 1 },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new BadRequestException('内容分类不存在或已停用');
+    }
+    return id;
   }
 
   private serializeContent(c: any) {
