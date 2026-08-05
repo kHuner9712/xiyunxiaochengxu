@@ -61,4 +61,17 @@ describe('UpdateContentDto', () => {
     expect(errors.some(error => error.property === 'categoryId')).toBe(true);
     expect(errors.some(error => error.property === 'relatedActivityId')).toBe(true);
   });
+
+  it('rejects numeric bigint IDs that have already exceeded safe integer precision', async () => {
+    const unsafeNumericId = Number('9007199254740993');
+    expect(Number.isSafeInteger(unsafeNumericId)).toBe(false);
+
+    const errors = await validateDto({
+      categoryId: unsafeNumericId,
+      relatedActivityId: unsafeNumericId,
+    });
+
+    expect(errors.some(error => error.property === 'categoryId')).toBe(true);
+    expect(errors.some(error => error.property === 'relatedActivityId')).toBe(true);
+  });
 });
