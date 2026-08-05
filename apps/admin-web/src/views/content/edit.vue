@@ -134,7 +134,7 @@
             :rows="10"
             :placeholder="form.contentType === 'video'
               ? '可选：填写视频补充说明（支持HTML）'
-              : '请输入正文内容（支持HTML)'"
+              : '请输入正文内容（支持HTML）'"
           />
           <div v-if="form.contentType === 'video'" class="content-hint">
             视频正文为选填项；上传视频文件后可直接保存。
