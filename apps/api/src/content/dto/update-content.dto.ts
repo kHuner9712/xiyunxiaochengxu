@@ -18,6 +18,9 @@ const POSITIVE_ID_PATTERN = /^[1-9]\d*$/;
 
 function normalizeOptionalId(value: unknown): unknown {
   if (value === undefined || value === null) return value;
+  if (typeof value === 'number' && !Number.isSafeInteger(value)) {
+    return '__unsafe_numeric_id__';
+  }
   return String(value).trim();
 }
 
