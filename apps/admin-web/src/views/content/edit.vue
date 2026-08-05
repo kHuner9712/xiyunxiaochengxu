@@ -559,8 +559,7 @@ async function handleSubmit() {
 async function handleCancel() {
   const cleanupComplete = await cleanupPendingAssets(false)
   if (!cleanupComplete) {
-    ElMessage.warning('部分新上传文件清理失败，请稍后重试后再离开')
-    return
+    ElMessage.warning('部分新上传文件清理失败；将离开编辑页，并在卸载时再次尝试清理失败项')
   }
   router.back()
 }
