@@ -3,8 +3,12 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CreateContentDto } from './create-content.dto';
 
+function toDto(input: Record<string, unknown>) {
+  return plainToInstance(CreateContentDto, input);
+}
+
 async function validateDto(input: Record<string, unknown>) {
-  return validate(plainToInstance(CreateContentDto, input));
+  return validate(toDto(input));
 }
 
 describe('CreateContentDto', () => {
@@ -17,6 +21,17 @@ describe('CreateContentDto', () => {
     });
 
     expect(errors).toHaveLength(0);
+  });
+
+  it('normalizes an omitted video body to empty text', async () => {
+    const dto = toDto({
+      title: '测试视频',
+      contentType: 'video',
+      videoUrl: 'https://api.example.com/uploads/video.mp4',
+    });
+
+    expect(dto.content).toBe('');
+    await expect(validate(dto)).resolves.toHaveLength(0);
   });
 
   it('rejects video content without a video URL', async () => {
