@@ -24,4 +24,7 @@ export const uploadApi = {
   uploadVideo(file: File, groupName = 'video', onProgress?: UploadProgressHandler) {
     return uploadFile(file, groupName, onProgress)
   },
+  deleteFile(id: string | number) {
+    return request.delete(`/admin/file/${id}`)
+  },
 }
