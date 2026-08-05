@@ -121,6 +121,23 @@ describe('Content lifecycle HTTP contract (e2e)', () => {
     expect(mockPrisma.content.update).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['title', null],
+    ['content', null],
+    ['contentType', null],
+    ['isFeatured', null],
+    ['sortOrder', null],
+    ['status', null],
+  ])('rejects null for non-null update field %s', async (field, value) => {
+    const response = await request(app.getHttpServer())
+      .put('/api/admin/content/1')
+      .send({ [field]: value });
+
+    expect(response.status).toBe(400);
+    expect(mockPrisma.content.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.content.update).not.toHaveBeenCalled();
+  });
+
   it('uses UpdateContentDto at runtime and rejects unknown fields', async () => {
     mockPrisma.content.findFirst.mockResolvedValue(makeContent());
 
@@ -130,6 +147,28 @@ describe('Content lifecycle HTTP contract (e2e)', () => {
 
     expect(response.status).toBe(400);
     expect(mockPrisma.content.update).not.toHaveBeenCalled();
+  });
+
+  it('preserves a category ID beyond JavaScript safe integer precision', async () => {
+    const categoryId = '9007199254740993';
+    const existing = makeContent();
+    mockPrisma.content.findFirst.mockResolvedValue(existing);
+    mockPrisma.contentCategory.findFirst.mockResolvedValue({ id: BigInt(categoryId) });
+    mockPrisma.content.update.mockImplementation(({ data }: any) => ({ ...existing, ...data }));
+
+    const response = await request(app.getHttpServer())
+      .put('/api/admin/content/1')
+      .send({ categoryId });
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.contentCategory.findFirst).toHaveBeenCalledWith({
+      where: { id: BigInt(categoryId), status: 1 },
+      select: { id: true },
+    });
+    expect(mockPrisma.content.update).toHaveBeenCalledWith({
+      where: { id: 1n },
+      data: expect.objectContaining({ categoryId: BigInt(categoryId) }),
+    });
   });
 
   it('clears video-only fields when changing to an article', async () => {
