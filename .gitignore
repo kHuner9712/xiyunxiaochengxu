@@ -86,6 +86,7 @@ coverage/
 # prisma/migrations/
 
 # Local deployment backups
+/deploy/backups/
 *.bak.*
 .env*.bak*
 
