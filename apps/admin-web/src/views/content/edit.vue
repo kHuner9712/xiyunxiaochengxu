@@ -265,14 +265,15 @@ function extractUploadedAsset(response: any) {
   return { id, url }
 }
 
-async function deletePendingAsset(field: UploadField, clearField = false) {
+async function deletePendingAsset(field: UploadField, clearField = false): Promise<boolean> {
   const id = pendingAssetIds.get(field)
-  pendingAssetIds.delete(field)
   if (id) {
     try {
       await uploadApi.deleteFile(id)
+      pendingAssetIds.delete(field)
     } catch (error) {
       console.error(`[content-edit] cleanup ${field} failed`, error)
+      return false
     }
   }
   if (clearField) {
@@ -282,6 +283,7 @@ async function deletePendingAsset(field: UploadField, clearField = false) {
       videoUploadProgress.value = 0
     }
   }
+  return true
 }
 
 async function registerPendingAsset(field: UploadField, id: string) {
@@ -289,16 +291,24 @@ async function registerPendingAsset(field: UploadField, id: string) {
   if (previousId && previousId !== id) {
     try {
       await uploadApi.deleteFile(previousId)
+      pendingAssetIds.delete(field)
     } catch (error) {
       console.error(`[content-edit] replace ${field} cleanup failed`, error)
+      try {
+        await uploadApi.deleteFile(id)
+      } catch (rollbackError) {
+        console.error(`[content-edit] rollback new ${field} failed`, rollbackError)
+      }
+      throw new Error('旧上传文件清理失败，请稍后重试')
     }
   }
   pendingAssetIds.set(field, id)
 }
 
-async function cleanupPendingAssets(clearFields: boolean) {
+async function cleanupPendingAssets(clearFields: boolean): Promise<boolean> {
   const fields = [...pendingAssetIds.keys()]
-  await Promise.all(fields.map((field) => deletePendingAsset(field, clearFields)))
+  const results = await Promise.all(fields.map((field) => deletePendingAsset(field, clearFields)))
+  return results.every(Boolean)
 }
 
 async function fetchCategories() {
@@ -468,7 +478,11 @@ async function handleUploadVideo(options: any) {
 }
 
 async function removeVideo() {
-  await deletePendingAsset('videoUrl', true)
+  const deleted = await deletePendingAsset('videoUrl', true)
+  if (!deleted) {
+    ElMessage.warning('视频文件清理失败，已保留当前视频，请稍后重试')
+    return
+  }
   form.videoUrl = ''
   form.videoDuration = undefined
   videoUploadProgress.value = 0
@@ -530,8 +544,12 @@ async function handleSubmit() {
     const confirmedRejected = status >= 400 && status < 500
 
     if (confirmedRejected && pendingAssetIds.size > 0) {
-      await cleanupPendingAssets(true)
-      ElMessage.warning('保存请求已被拒绝，本次新上传文件已清理，请修正后重新上传')
+      const cleanupComplete = await cleanupPendingAssets(true)
+      if (cleanupComplete) {
+        ElMessage.warning('保存请求已被拒绝，本次新上传文件已清理，请修正后重新上传')
+      } else {
+        ElMessage.warning('保存请求已被拒绝，但部分上传文件清理失败，已保留在表单中，请稍后重试')
+      }
     } else if (pendingAssetIds.size > 0) {
       preservePendingAssetsOnUnmount = true
       pendingAssetIds.clear()
@@ -544,7 +562,11 @@ async function handleSubmit() {
 }
 
 async function handleCancel() {
-  await cleanupPendingAssets(false)
+  const cleanupComplete = await cleanupPendingAssets(false)
+  if (!cleanupComplete) {
+    ElMessage.warning('部分新上传文件清理失败，请稍后重试后再离开')
+    return
+  }
   router.back()
 }
 
@@ -553,8 +575,16 @@ watch(
   async (next, previous) => {
     if (hydrating.value || next === previous) return
     if (next === 'article') {
-      await deletePendingAsset('videoUrl', false)
-      await deletePendingAsset('videoCover', false)
+      const videoDeleted = await deletePendingAsset('videoUrl', false)
+      const coverDeleted = await deletePendingAsset('videoCover', false)
+      if (!videoDeleted || !coverDeleted) {
+        hydrating.value = true
+        form.contentType = previous
+        await nextTick()
+        hydrating.value = false
+        ElMessage.warning('视频素材清理失败，已保留视频类型，请稍后重试')
+        return
+      }
       form.videoUrl = ''
       form.videoCover = ''
       form.videoDuration = undefined
