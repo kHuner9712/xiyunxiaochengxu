@@ -55,6 +55,15 @@ if (miniprogramTestStatus !== 0) {
 
 console.log('\n━━━ Supplemental gate B: Real MySQL content lifecycle integration ━━━')
 if (isClearlyTestDatabase(env.DATABASE_URL)) {
+  const migrationStatus = run(
+    pnpmCommand,
+    ['--filter', '@baby-mall/api', 'prisma:migrate:deploy'],
+  )
+  if (migrationStatus !== 0) {
+    console.error('[run-release-check] test database migrations failed')
+    process.exit(migrationStatus)
+  }
+
   const integrationStatus = run(
     pnpmCommand,
     ['--filter', '@baby-mall/api', 'test:integration'],
