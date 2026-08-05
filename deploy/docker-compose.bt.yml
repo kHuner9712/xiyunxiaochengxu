@@ -39,7 +39,7 @@ services:
       - ./scripts/redis-entrypoint.sh:/usr/local/bin/redis-entrypoint.sh:ro
     entrypoint: ["sh", "/usr/local/bin/redis-entrypoint.sh"]
     healthcheck:
-      test: ["CMD", "sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG; else redis-cli ping | grep PONG; fi"]
+      test: ["CMD", "sh", "-c", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -qx PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
