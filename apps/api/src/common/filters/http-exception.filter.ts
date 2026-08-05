@@ -8,10 +8,17 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ThrottlerException } from '@nestjs/throttler';
+import { Prisma } from '@prisma/client';
 import {
   ERROR_CODE,
 } from '../constants';
 import { randomUUID } from 'crypto';
+
+interface MappedException {
+  code: number;
+  message: string;
+  httpStatus: number;
+}
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -54,8 +61,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
         code = ERROR_CODE.FORBIDDEN;
       } else if (httpStatus === HttpStatus.NOT_FOUND) {
         code = ERROR_CODE.NOT_FOUND;
+      } else if (httpStatus === HttpStatus.CONFLICT) {
+        code = ERROR_CODE.CONFLICT;
       } else {
         code = ERROR_CODE.INTERNAL_ERROR;
+      }
+    } else {
+      const mappedPrismaError = this.mapPrismaException(exception);
+      if (mappedPrismaError) {
+        code = mappedPrismaError.code;
+        message = mappedPrismaError.message;
+        httpStatus = mappedPrismaError.httpStatus;
       }
     }
 
@@ -76,6 +92,73 @@ export class HttpExceptionFilter implements ExceptionFilter {
       data: null,
       requestId,
     });
+  }
+
+  private mapPrismaException(exception: unknown): MappedException | null {
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      switch (exception.code) {
+        case 'P2000':
+          return {
+            code: ERROR_CODE.PARAM_ERROR,
+            message: '提交的数据超过字段长度限制',
+            httpStatus: HttpStatus.BAD_REQUEST,
+          };
+        case 'P2002':
+          return {
+            code: ERROR_CODE.CONFLICT,
+            message: '数据已存在，请勿重复提交',
+            httpStatus: HttpStatus.CONFLICT,
+          };
+        case 'P2003':
+          return {
+            code: ERROR_CODE.PARAM_ERROR,
+            message: '关联数据不存在或已失效',
+            httpStatus: HttpStatus.BAD_REQUEST,
+          };
+        case 'P2011':
+        case 'P2012':
+        case 'P2013':
+          return {
+            code: ERROR_CODE.PARAM_ERROR,
+            message: '缺少必填数据或字段值无效',
+            httpStatus: HttpStatus.BAD_REQUEST,
+          };
+        case 'P2025':
+          return {
+            code: ERROR_CODE.NOT_FOUND,
+            message: '数据不存在或已被删除',
+            httpStatus: HttpStatus.NOT_FOUND,
+          };
+        default:
+          return {
+            code: ERROR_CODE.DB_ERROR,
+            message: '数据库操作失败，请稍后重试',
+            httpStatus: HttpStatus.INTERNAL_SERVER_ERROR,
+          };
+      }
+    }
+
+    if (exception instanceof Prisma.PrismaClientValidationError) {
+      return {
+        code: ERROR_CODE.PARAM_ERROR,
+        message: '请求数据格式无效',
+        httpStatus: HttpStatus.BAD_REQUEST,
+      };
+    }
+
+    if (
+      exception instanceof Prisma.PrismaClientInitializationError
+      || exception instanceof Prisma.PrismaClientRustPanicError
+      || exception instanceof Prisma.PrismaClientUnknownRequestError
+    ) {
+      return {
+        code: ERROR_CODE.DB_ERROR,
+        message: '数据库服务暂时不可用',
+        httpStatus: HttpStatus.SERVICE_UNAVAILABLE,
+      };
+    }
+
+    return null;
   }
 
   private mapUnauthorizedCode(message: string): number {
