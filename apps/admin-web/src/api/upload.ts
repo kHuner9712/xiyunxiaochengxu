@@ -6,15 +6,29 @@ import {
 
 type UploadProgressHandler = (percent: number) => void
 
-const cleanupStorage = typeof window !== 'undefined' ? window.sessionStorage : undefined
+function resolveCleanupStorage() {
+  if (typeof window === 'undefined') return undefined
+  try {
+    return window.localStorage
+  } catch {
+    return undefined
+  }
+}
+
 const cleanupQueue = new PendingContentAssetCleanupQueue({
-  storage: cleanupStorage,
+  storage: resolveCleanupStorage(),
   shouldRetry: isRetryableCleanupError,
   deleteAsset: (id: string) => request.delete(`/admin/file/${id}`),
 })
 
 async function flushPendingCleanup() {
   return cleanupQueue.flush()
+}
+
+// Importing this module means an authenticated content/upload screen is active.
+// Retry previously persisted, known-unreferenced assets without requiring another upload.
+if (cleanupQueue.size > 0) {
+  void flushPendingCleanup()
 }
 
 async function uploadFile(file: File, groupName?: string, onProgress?: UploadProgressHandler) {
