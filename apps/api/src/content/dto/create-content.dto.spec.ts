@@ -113,7 +113,7 @@ describe('CreateContentDto', () => {
     await expect(validate(dto)).resolves.toHaveLength(0);
   });
 
-  it('normalizes numeric ID input to strings without retaining a number type', async () => {
+  it('normalizes safe numeric ID input to strings without retaining a number type', async () => {
     const dto = toDto({
       title: '数字ID输入',
       contentType: 'article',
@@ -125,5 +125,21 @@ describe('CreateContentDto', () => {
     expect(dto.categoryId).toBe('42');
     expect(dto.relatedActivityId).toBe('88');
     await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rejects numeric bigint IDs that have already exceeded safe integer precision', async () => {
+    const unsafeNumericId = Number('9007199254740993');
+    expect(Number.isSafeInteger(unsafeNumericId)).toBe(false);
+
+    const errors = await validateDto({
+      title: '危险数字ID',
+      contentType: 'article',
+      content: '正文',
+      categoryId: unsafeNumericId,
+      relatedActivityId: unsafeNumericId,
+    });
+
+    expect(errors.some((error) => error.property === 'categoryId')).toBe(true);
+    expect(errors.some((error) => error.property === 'relatedActivityId')).toBe(true);
   });
 });
