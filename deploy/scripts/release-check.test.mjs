@@ -21,12 +21,17 @@ test('package.json exposes audited freeze and production gates', () => {
   assert.match(production, /--require-real-wx-appid/)
 })
 
-test('release gate wrapper preserves explicit env and supplies the 50MB default', () => {
+test('release gate wrapper preserves env, reports boundaries and runs supplemental tests safely', () => {
   const wrapper = readFileSync(resolve(root, 'deploy/scripts/run-release-check.mjs'), 'utf8')
 
   assert.match(wrapper, /process\.env\.UPLOAD_MAX_SIZE \|\| '52428800'/)
-  assert.match(wrapper, /spawnSync\('bash', \['deploy\/scripts\/release-check\.sh', \.\.\.args\]/)
-  assert.match(wrapper, /env,/)
+  assert.match(wrapper, /run\('bash', \['deploy\/scripts\/release-check\.sh', \.\.\.args\]\)/)
+  assert.match(wrapper, /env: \{ \.\.\.env, \.\.\.extraEnv \}/)
+  assert.match(wrapper, /unit tests and mocked HTTP tests/)
+  assert.match(wrapper, /@baby-mall\/miniprogram', 'test'/)
+  assert.match(wrapper, /@baby-mall\/api', 'test:integration'/)
+  assert.match(wrapper, /isClearlyTestDatabase\(env\.DATABASE_URL\)/)
+  assert.match(wrapper, /does not constitute production runtime or real-device acceptance/)
 })
 
 test('release-check.sh recognizes freeze mode and prints both gate conclusions', () => {
