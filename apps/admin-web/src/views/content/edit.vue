@@ -124,8 +124,21 @@
           <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="请输入摘要" maxlength="200" show-word-limit />
         </el-form-item>
 
-        <el-form-item label="正文内容">
-          <el-input v-model="form.content" type="textarea" :rows="10" placeholder="请输入正文内容（支持HTML）" />
+        <el-form-item
+          :label="form.contentType === 'video' ? '补充说明' : '正文内容'"
+          prop="content"
+        >
+          <el-input
+            v-model="form.content"
+            type="textarea"
+            :rows="10"
+            :placeholder="form.contentType === 'video'
+              ? '可选：填写视频补充说明（支持HTML）'
+              : '请输入正文内容（支持HTML）'"
+          />
+          <div v-if="form.contentType === 'video'" class="content-hint">
+            视频正文为选填项；上传视频文件后可直接保存。
+          </div>
         </el-form-item>
 
         <el-form-item label="推荐">
@@ -198,20 +211,16 @@ const form = reactive({
   status: 2,
 })
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
   contentType: [{ required: true, message: '请选择内容类型', trigger: 'change' }],
-  videoUrl: [{
-    validator: (_rule: any, value: any, callback: any) => {
-      if (form.contentType === 'video' && !value) {
-        callback(new Error('视频类型内容必须上传视频文件'))
-      } else {
-        callback()
-      }
-    },
-    trigger: 'blur'
-  }],
-}
+  content: form.contentType === 'article'
+    ? [{ required: true, message: '文章类型内容必须填写正文内容', trigger: 'blur' }]
+    : [],
+  videoUrl: form.contentType === 'video'
+    ? [{ required: true, message: '视频类型内容必须上传视频文件', trigger: 'change' }]
+    : [],
+}))
 
 async function fetchCategories() {
   categoriesLoading.value = true
@@ -418,7 +427,8 @@ onMounted(async () => {
 }
 
 .category-hint,
-.video-upload-hint {
+.video-upload-hint,
+.content-hint {
   margin-top: 8px;
   color: #909399;
   font-size: 12px;
