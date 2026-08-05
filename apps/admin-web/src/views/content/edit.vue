@@ -544,12 +544,7 @@ async function handleSubmit() {
     const confirmedRejected = status >= 400 && status < 500
 
     if (confirmedRejected && pendingAssetIds.size > 0) {
-      const cleanupComplete = await cleanupPendingAssets(true)
-      if (cleanupComplete) {
-        ElMessage.warning('保存请求已被拒绝，本次新上传文件已清理，请修正后重新上传')
-      } else {
-        ElMessage.warning('保存请求已被拒绝，但部分上传文件清理失败，已保留在表单中，请稍后重试')
-      }
+      ElMessage.warning('保存请求已被拒绝，本次新上传文件已保留，请修正后重试或点击取消清理')
     } else if (pendingAssetIds.size > 0) {
       preservePendingAssetsOnUnmount = true
       pendingAssetIds.clear()
