@@ -1,9 +1,12 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Min,
   ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -12,7 +15,8 @@ export class CreateContentDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  categoryId?: number;
+  @Min(1)
+  categoryId?: number | null;
 
   @IsString()
   @IsNotEmpty({ message: '标题不能为空' })
@@ -25,7 +29,7 @@ export class CreateContentDto {
 
   @IsOptional()
   @IsString()
-  coverImage?: string;
+  coverImage?: string | null;
 
   @ValidateIf((dto: CreateContentDto) => dto.contentType !== 'video')
   @IsString({ message: '文章正文必须为字符串' })
@@ -34,48 +38,63 @@ export class CreateContentDto {
 
   @IsOptional()
   @IsString()
-  summary?: string;
+  summary?: string | null;
 
   @ValidateIf((dto: CreateContentDto) => dto.contentType === 'video')
   @IsString({ message: '视频地址必须为字符串' })
   @IsNotEmpty({ message: '视频类型内容必须上传视频文件' })
-  videoUrl?: string;
+  videoUrl?: string | null;
 
   @IsOptional()
   @IsString()
-  videoCover?: string;
+  videoCover?: string | null;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  videoDuration?: number;
+  @Min(0)
+  videoDuration?: number | null;
 
   @IsOptional()
-  placement?: any;
+  @IsArray()
+  @IsIn(['activity', 'home', 'user_help'], { each: true })
+  placement?: string[] | null;
 
   @IsOptional()
-  tags?: any;
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsString({ each: true })
+  tags?: string[] | null;
 
   @IsOptional()
-  relatedProductIds?: any;
+  @IsArray()
+  @ArrayMaxSize(10)
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  relatedProductIds?: number[] | null;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  relatedActivityId?: number;
+  @Min(1)
+  relatedActivityId?: number | null;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @IsIn([0, 1])
   isFeatured?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   sortOrder?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @IsIn([1, 2])
   status?: number;
 }
