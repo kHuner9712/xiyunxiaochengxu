@@ -22,6 +22,11 @@ function expectText(file, text, description) {
   if (!read(file).includes(text)) failures.push(`${file}: ${description}`)
 }
 
+function expectCount(file, text, count, description) {
+  const occurrences = read(file).split(text).length - 1
+  if (occurrences !== count) failures.push(`${file}: ${description} (expected ${count}, found ${occurrences})`)
+}
+
 function expectRegex(file, pattern, description) {
   if (!pattern.test(read(file))) failures.push(`${file}: ${description}`)
 }
@@ -85,6 +90,13 @@ if (nodeStages.length !== 3 || nodeStages.some(line => line !== 'FROM node:22.13
   failures.push('deploy/Dockerfile.api: every Node stage must be pinned to node:22.13.0-alpine')
 }
 expectText('deploy/Dockerfile.api', 'ARG BUILD_SHA=unknown', 'Dockerfile must accept BUILD_SHA')
+expectText('deploy/Dockerfile.api', 'ARG COREPACK_VERSION=0.34.7', 'Dockerfile must pin a Corepack release compatible with Node 22.13.0')
+expectText('deploy/Dockerfile.api', 'ARG PNPM_VERSION=11.2.2', 'Dockerfile pnpm version must match the repository package manager')
+expectCount('deploy/Dockerfile.api', 'npm install --global corepack@${COREPACK_VERSION}', 2, 'both build stages must install the pinned Corepack release')
+expectCount('deploy/Dockerfile.api', 'COREPACK_NPM_REGISTRY=${NPM_REGISTRY} corepack install --global pnpm@${PNPM_VERSION}', 2, 'both build stages must install pnpm through updated Corepack')
+expectCount('deploy/Dockerfile.api', 'test "$(pnpm --version)" = "${PNPM_VERSION}"', 2, 'both build stages must verify the exact pnpm version')
+rejectRegex('deploy/Dockerfile.api', /corepack\s+prepare\b/, 'deprecated Corepack prepare bootstrap is forbidden')
+rejectRegex('deploy/Dockerfile.api', /COREPACK_INTEGRITY_KEYS=(?:0|['"]?['"]?)/, 'Corepack signature verification must not be disabled')
 expectText('deploy/Dockerfile.api', 'printf \'%s\\n\' "$BUILD_SHA" > /app/admin-dist/.build-hash', 'admin build hash must come from BUILD_SHA')
 rejectRegex('deploy/Dockerfile.api', /git rev-parse/, 'Docker builds cannot depend on an unavailable .git directory')
 expectText('deploy/scripts/entrypoint.sh', 'cp -a /app/admin-dist/. /usr/share/nginx/admin/', 'entrypoint must refresh the shared admin volume')
