@@ -1,8 +1,27 @@
 import request from '@/utils/request'
+import {
+  PendingContentAssetCleanupQueue,
+  isRetryableCleanupError,
+} from '@/utils/pending-content-asset-cleanup.js'
 
 type UploadProgressHandler = (percent: number) => void
 
-function uploadFile(file: File, groupName?: string, onProgress?: UploadProgressHandler) {
+const cleanupStorage = typeof window !== 'undefined' ? window.sessionStorage : undefined
+const cleanupQueue = new PendingContentAssetCleanupQueue({
+  storage: cleanupStorage,
+  shouldRetry: isRetryableCleanupError,
+  deleteAsset: (id: string) => request.delete(`/admin/file/${id}`),
+})
+
+async function flushPendingCleanup() {
+  return cleanupQueue.flush()
+}
+
+async function uploadFile(file: File, groupName?: string, onProgress?: UploadProgressHandler) {
+  // A previous page unload or rollback can fail because of a transient network/server error.
+  // Retry those known-unreferenced content assets before accepting another upload.
+  await flushPendingCleanup()
+
   const formData = new FormData()
   formData.append('file', file)
   if (groupName) formData.append('groupName', groupName)
@@ -25,6 +44,7 @@ export const uploadApi = {
     return uploadFile(file, groupName, onProgress)
   },
   deleteFile(id: string | number) {
-    return request.delete(`/admin/file/${id}`)
+    return cleanupQueue.deleteNow(id)
   },
+  flushPendingCleanup,
 }
