@@ -19,6 +19,7 @@ test('package.json exposes audited freeze and production gates', () => {
   assert.match(production, /node deploy\/scripts\/run-release-check\.mjs/)
   assert.match(production, /--strict-prod-gate/)
   assert.match(production, /--require-real-wx-appid/)
+  assert.equal(pkg.scripts['test:admin'], 'node --test apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs')
 })
 
 test('release gate wrapper preserves env, reports boundaries and runs supplemental tests safely', () => {
@@ -28,6 +29,7 @@ test('release gate wrapper preserves env, reports boundaries and runs supplement
   assert.match(wrapper, /run\('bash', \['deploy\/scripts\/release-check\.sh', \.\.\.args\]\)/)
   assert.match(wrapper, /env: \{ \.\.\.env, \.\.\.extraEnv \}/)
   assert.match(wrapper, /unit tests and mocked HTTP tests/)
+  assert.match(wrapper, /run\(pnpmCommand, \['test:admin'\]\)/)
   assert.match(wrapper, /@baby-mall\/miniprogram', 'test'/)
   assert.match(wrapper, /@baby-mall\/api', 'test:integration'/)
   assert.match(wrapper, /isClearlyTestDatabase\(env\.DATABASE_URL\)/)

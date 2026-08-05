@@ -46,14 +46,21 @@ if (repositoryGateStatus !== 0) {
   process.exit(repositoryGateStatus)
 }
 
-console.log('\n━━━ Supplemental gate A: Miniprogram unit/component tests ━━━')
+console.log('\n━━━ Supplemental gate A: Admin pending content asset cleanup tests ━━━')
+const adminCleanupTestStatus = run(pnpmCommand, ['test:admin'])
+if (adminCleanupTestStatus !== 0) {
+  console.error('[run-release-check] admin pending content asset cleanup tests failed')
+  process.exit(adminCleanupTestStatus)
+}
+
+console.log('\n━━━ Supplemental gate B: Miniprogram unit/component tests ━━━')
 const miniprogramTestStatus = run(pnpmCommand, ['--filter', '@baby-mall/miniprogram', 'test'])
 if (miniprogramTestStatus !== 0) {
   console.error('[run-release-check] miniprogram unit/component tests failed')
   process.exit(miniprogramTestStatus)
 }
 
-console.log('\n━━━ Supplemental gate B: Real MySQL content lifecycle integration ━━━')
+console.log('\n━━━ Supplemental gate C: Real MySQL content lifecycle integration ━━━')
 if (isClearlyTestDatabase(env.DATABASE_URL)) {
   const migrationStatus = run(
     pnpmCommand,
