@@ -43,6 +43,7 @@ jobs:
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
       VITE_API_BASE_URL: https://example.invalid/api
+      UPLOAD_MAX_SIZE: 52428800
       PRISMA_SKIP_POSTINSTALL_GENERATE: true
 
     steps:
@@ -72,5 +73,5 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @baby-mall/shared build
 
-      - name: Run Release Gate Check
-        run: bash deploy/scripts/release-check.sh
+      - name: Run audited Release Gate
+        run: pnpm release:check
