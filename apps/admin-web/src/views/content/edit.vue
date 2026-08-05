@@ -25,12 +25,25 @@
         </el-form-item>
 
         <el-form-item label="分类">
-          <el-select v-model="form.categoryId" placeholder="请选择分类" clearable>
-            <el-option label="孕育知识" :value="1" />
-            <el-option label="母婴好物" :value="2" />
-            <el-option label="成长记录" :value="3" />
-            <el-option label="专家问答" :value="4" />
-          </el-select>
+          <div class="category-field">
+            <el-select
+              v-model="form.categoryId"
+              placeholder="请选择分类"
+              clearable
+              filterable
+              :loading="categoriesLoading"
+            >
+              <el-option
+                v-for="category in contentCategories"
+                :key="category.id"
+                :label="category.name"
+                :value="category.id"
+              />
+            </el-select>
+            <div v-if="!categoriesLoading && contentCategories.length === 0" class="category-hint">
+              暂无可用内容分类，可留空保存
+            </div>
+          </div>
         </el-form-item>
 
         <el-form-item v-if="form.contentType === 'video'" label="视频文件" prop="videoUrl">
@@ -146,10 +159,17 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { contentApi } from '@/api/content'
 import { uploadApi } from '@/api/upload'
 
+interface ContentCategoryOption {
+  id: number
+  name: string
+}
+
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const categoriesLoading = ref(false)
+const contentCategories = ref<ContentCategoryOption[]>([])
 const videoUploading = ref(false)
 const videoUploadProgress = ref(0)
 const tagInputVisible = ref(false)
@@ -193,6 +213,21 @@ const rules: FormRules = {
   }],
 }
 
+async function fetchCategories() {
+  categoriesLoading.value = true
+  try {
+    const res = await contentApi.getCategories()
+    const data = res.data || res
+    contentCategories.value = Array.isArray(data)
+      ? data
+        .map((category: any) => ({ id: Number(category.id), name: String(category.name || '') }))
+        .filter((category: ContentCategoryOption) => Number.isSafeInteger(category.id) && category.id > 0 && category.name)
+      : []
+  } finally {
+    categoriesLoading.value = false
+  }
+}
+
 function showTagInput() {
   if (form.tagList.length >= 5) {
     ElMessage.warning('最多5个标签')
@@ -219,12 +254,20 @@ async function fetchDetail(id: number) {
   try {
     const res = await contentApi.getDetail(id)
     const data = res.data || res
+    const categoryId = data.categoryId ? Number(data.categoryId) : undefined
+    if (
+      categoryId
+      && data.categoryName
+      && !contentCategories.value.some(category => category.id === categoryId)
+    ) {
+      contentCategories.value.push({ id: categoryId, name: String(data.categoryName) })
+    }
     Object.assign(form, {
       id: data.id,
       title: data.title,
       contentType: data.contentType || 'article',
       coverImage: data.coverImage || '',
-      categoryId: data.categoryId ? Number(data.categoryId) : undefined,
+      categoryId,
       videoUrl: data.videoUrl || '',
       videoCover: data.videoCover || '',
       videoDuration: data.videoDuration,
@@ -356,18 +399,27 @@ async function handleSubmit() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchCategories()
   if (route.params.id) {
-    fetchDetail(Number(route.params.id))
+    await fetchDetail(Number(route.params.id))
   }
 })
 </script>
 
 <style scoped>
+.category-field,
 .video-upload-field {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.category-hint,
+.video-upload-hint {
+  margin-top: 8px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .video-preview {
@@ -377,12 +429,6 @@ onMounted(() => {
   object-fit: contain;
   border-radius: 8px;
   background: #000;
-}
-
-.video-upload-hint {
-  margin-top: 8px;
-  color: #909399;
-  font-size: 12px;
 }
 
 .tags-input {
