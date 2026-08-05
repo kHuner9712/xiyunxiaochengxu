@@ -32,9 +32,9 @@
     "validate:api": "pnpm --filter @baby-mall/api prisma:validate && pnpm --filter @baby-mall/api test:ci && pnpm build:api",
     "prisma:migrate:dry-run": "bash deploy/scripts/prisma-migrate-dry-run.sh",
     "uploads:migrate-visibility": "node deploy/scripts/migrate-upload-visibility.mjs",
-    "release:check": "pnpm audit:project && bash deploy/scripts/release-check.sh",
-    "release:check:freeze": "pnpm audit:project && bash deploy/scripts/release-check.sh --code-freeze-gate",
-    "release:check:prod": "pnpm audit:project && cross-env NODE_ENV=production bash deploy/scripts/release-check.sh --require-real-wx-appid --strict-prod-gate"
+    "release:check": "pnpm audit:project && node deploy/scripts/run-release-check.mjs",
+    "release:check:freeze": "pnpm audit:project && node deploy/scripts/run-release-check.mjs --code-freeze-gate",
+    "release:check:prod": "pnpm audit:project && cross-env NODE_ENV=production node deploy/scripts/run-release-check.mjs --require-real-wx-appid --strict-prod-gate"
   },
   "packageManager": "pnpm@11.2.2",
   "engines": {
