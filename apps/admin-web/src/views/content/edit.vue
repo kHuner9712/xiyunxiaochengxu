@@ -223,6 +223,8 @@ async function fetchCategories() {
         .map((category: any) => ({ id: Number(category.id), name: String(category.name || '') }))
         .filter((category: ContentCategoryOption) => Number.isSafeInteger(category.id) && category.id > 0 && category.name)
       : []
+  } catch {
+    contentCategories.value = []
   } finally {
     categoriesLoading.value = false
   }
