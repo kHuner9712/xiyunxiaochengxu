@@ -185,7 +185,7 @@ interface ContentCategoryOption {
 
 type UploadField = 'coverImage' | 'videoUrl' | 'videoCover'
 
-const MAX_SIGNED_BIGINT = BigInt('9223372036854775807')
+const MAX_SIGNED_BIGINT_ID = '9223372036854775807'
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
@@ -235,14 +235,11 @@ const rules = computed<FormRules>(() => ({
     : [],
 }))
 
-function isPositiveBigIntId(value: unknown): value is string {
+function isPositiveBigIntId(value: unknown): boolean {
   const normalized = String(value ?? '').trim()
   if (!/^[1-9]\d*$/.test(normalized)) return false
-  try {
-    return BigInt(normalized) <= MAX_SIGNED_BIGINT
-  } catch {
-    return false
-  }
+  return normalized.length < MAX_SIGNED_BIGINT_ID.length
+    || (normalized.length === MAX_SIGNED_BIGINT_ID.length && normalized <= MAX_SIGNED_BIGINT_ID)
 }
 
 function parseRelatedProductIds(value: string): number[] | null {
