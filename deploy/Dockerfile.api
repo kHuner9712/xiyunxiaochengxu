@@ -1,6 +1,7 @@
 ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG BUILD_SHA=unknown
 
-FROM node:22-alpine AS builder
+FROM node:22.13.0-alpine AS builder
 
 ARG NPM_REGISTRY
 
@@ -24,7 +25,7 @@ RUN cd packages/shared && pnpm build
 COPY apps/api/ ./apps/api/
 RUN cd apps/api && npx prisma generate && pnpm build
 
-FROM node:22-alpine AS admin-builder
+FROM node:22.13.0-alpine AS admin-builder
 
 ARG NPM_REGISTRY
 
@@ -46,7 +47,9 @@ RUN cd packages/shared && pnpm build
 COPY apps/admin-web/ ./apps/admin-web/
 RUN cd apps/admin-web && pnpm build
 
-FROM node:22-alpine
+FROM node:22.13.0-alpine
+
+ARG BUILD_SHA=unknown
 
 RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
   && apk add --no-cache openssl libc6-compat
@@ -67,7 +70,7 @@ COPY --from=builder /app/apps/api/node_modules/ts-node ./node_modules/ts-node
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
 COPY --from=admin-builder /app/apps/admin-web/dist /app/admin-dist
-RUN echo "$(git rev-parse --short HEAD 2>/dev/null || echo unknown-$(date +%s))" > /app/admin-dist/.build-hash
+RUN printf '%s\n' "$BUILD_SHA" > /app/admin-dist/.build-hash
 COPY deploy/scripts/entrypoint.sh ./entrypoint.sh
 
 RUN mkdir -p /app/apps/api/uploads /app/apps/api/logs /app/apps/api/certs && chmod +x ./entrypoint.sh

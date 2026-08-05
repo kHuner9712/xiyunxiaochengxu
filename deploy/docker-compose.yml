@@ -9,7 +9,7 @@ services:
       MYSQL_CHARSET: utf8mb4
       TZ: Asia/Shanghai
     ports:
-      - "127.0.0.1:3307:3306"
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
@@ -28,7 +28,7 @@ services:
     container_name: baby-mall-redis
     restart: always
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD required}
     volumes:
@@ -48,12 +48,15 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+        BUILD_SHA: ${BUILD_SHA:-unknown}
     container_name: baby-mall-api
     restart: always
     init: true
     stop_grace_period: 30s
     ports:
-      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:${API_HOST_PORT:-3001}:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -124,8 +127,8 @@ services:
     container_name: baby-mall-nginx
     restart: always
     ports:
-      - "80:80"
-      - "443:443"
+      - "${HTTP_HOST_PORT:-80}:80"
+      - "${HTTPS_HOST_PORT:-443}:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro

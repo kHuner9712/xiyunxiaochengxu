@@ -6,12 +6,27 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 
-test('package.json exposes code freeze gate without weakening prod gate', () => {
+test('package.json exposes audited freeze and production gates', () => {
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  const freeze = pkg.scripts['release:check:freeze']
+  const production = pkg.scripts['release:check:prod']
 
-  assert.equal(pkg.scripts['release:check:freeze'], 'bash deploy/scripts/release-check.sh --code-freeze-gate')
-  assert.match(pkg.scripts['release:check:prod'], /--strict-prod-gate/)
-  assert.match(pkg.scripts['release:check:prod'], /--require-real-wx-appid/)
+  assert.match(freeze, /^pnpm audit:project && /)
+  assert.match(freeze, /node deploy\/scripts\/run-release-check\.mjs/)
+  assert.match(freeze, /--code-freeze-gate/)
+
+  assert.match(production, /^pnpm audit:project && /)
+  assert.match(production, /node deploy\/scripts\/run-release-check\.mjs/)
+  assert.match(production, /--strict-prod-gate/)
+  assert.match(production, /--require-real-wx-appid/)
+})
+
+test('release gate wrapper preserves explicit env and supplies the 50MB default', () => {
+  const wrapper = readFileSync(resolve(root, 'deploy/scripts/run-release-check.mjs'), 'utf8')
+
+  assert.match(wrapper, /process\.env\.UPLOAD_MAX_SIZE \|\| '52428800'/)
+  assert.match(wrapper, /spawnSync\('bash', \['deploy\/scripts\/release-check\.sh', \.\.\.args\]/)
+  assert.match(wrapper, /env,/)
 })
 
 test('release-check.sh recognizes freeze mode and prints both gate conclusions', () => {
