@@ -58,9 +58,10 @@ for (const file of composeFiles) {
   expectText(file, 'UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}', 'Compose upload default must be 50MB')
   expectRegex(file, /UPLOAD_ALLOWED_TYPES:.*video\/mp4/, 'Compose must allow MP4 uploads')
   expectText(file, "http://localhost:3000/api/health", 'API container healthcheck must use internal port 3000')
-  expectText(file, 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -qx PONG', 'Redis healthcheck must expand the password only inside the container')
-  rejectRegex(file, /REDISCLI_AUTH="\$REDIS_PASSWORD"/, 'Redis healthcheck must not interpolate the secret into Compose config')
-  rejectRegex(file, /redis-cli\s+-a\s+["']?\$+REDIS_PASSWORD/, 'Redis healthcheck must not expose the password as a command argument')
+  expectText(file, 'REDISCLI_AUTH=', 'Redis healthcheck must authenticate without a command-line password argument')
+  expectText(file, '$$REDIS_PASSWORD', 'Redis healthcheck must defer password expansion to the container')
+  rejectRegex(file, /(?<!\$)\$REDIS_PASSWORD/, 'Redis healthcheck must not interpolate the secret into Compose config')
+  rejectRegex(file, /redis-cli\s+-a\b/, 'Redis healthcheck must not expose the password as a command argument')
   rejectRegex(file, /127\.0\.0\.1:3000:3000/, 'stale host API port 3000 is forbidden')
 }
 
