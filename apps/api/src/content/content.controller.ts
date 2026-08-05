@@ -3,6 +3,7 @@ import { ContentService } from './content.service';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateContentDto } from './dto/create-content.dto';
+import { UpdateContentDto } from './dto/update-content.dto';
 import { ContentQueryDto } from './dto/content-query.dto';
 
 @Controller('weapp/content')
@@ -24,7 +25,7 @@ export class WeappContentController {
   @Public()
   @Get(':id')
   async findById(@Param('id') id: string) {
-    return this.contentService.findById(id);
+    return this.contentService.findPublishedById(id);
   }
 }
 
@@ -41,7 +42,7 @@ export class AdminContentController {
   @Get(':id')
   @RequirePermission('content')
   async detail(@Param('id') id: string) {
-    return this.contentService.findById(id);
+    return this.contentService.findAdminById(id);
   }
 
   @Post()
@@ -52,7 +53,7 @@ export class AdminContentController {
 
   @Put(':id')
   @RequirePermission('content')
-  async update(@Param('id') id: string, @Body() dto: Partial<CreateContentDto>) {
+  async update(@Param('id') id: string, @Body() dto: UpdateContentDto) {
     return this.contentService.update(id, dto);
   }
 
