@@ -111,14 +111,17 @@ async function fetchList() {
     const res = await contentApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
-  } catch {} finally {
+  } catch (error) {
+    console.error('[content-list] loading failed', error)
+    ElMessage.error('内容列表加载失败')
+  } finally {
     loading.value = false
   }
 }
 
 function handleSearch() {
   pagination.page = 1
-  fetchList()
+  void fetchList()
 }
 
 function resetSearch() {
@@ -130,11 +133,15 @@ function resetSearch() {
 }
 
 async function handleToggleStatus(row: any) {
+  const action = row.status === 1 ? '下架' : '发布'
   try {
     await contentApi.update({ id: row.id, status: row.status === 1 ? 2 : 1 })
-    ElMessage.success('操作成功')
-    fetchList()
-  } catch {}
+    ElMessage.success(`${action}成功`)
+    await fetchList()
+  } catch (error) {
+    console.error(`[content-list] ${action} failed`, error)
+    ElMessage.error(`${action}失败，请检查内容完整性后重试`)
+  }
 }
 
 async function handleDelete(row: any) {
@@ -142,9 +149,13 @@ async function handleDelete(row: any) {
     await ElMessageBox.confirm('确定删除该内容吗？', '提示', { type: 'warning' })
     await contentApi.delete(row.id)
     ElMessage.success('删除成功')
-    fetchList()
-  } catch {}
+    await fetchList()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error('[content-list] delete failed', error)
+    ElMessage.error('删除失败，请稍后重试')
+  }
 }
 
-fetchList()
+void fetchList()
 </script>
