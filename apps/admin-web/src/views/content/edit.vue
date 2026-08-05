@@ -193,6 +193,7 @@ const tagInputRef = ref<any>(null)
 const hydrating = ref(false)
 const pendingAssetIds = new Map<UploadField, string>()
 let committed = false
+let preservePendingAssetsOnUnmount = false
 
 const isEdit = computed(() => !!route.params.id)
 
@@ -284,6 +285,7 @@ async function fetchCategories() {
   } catch (error) {
     contentCategories.value = []
     console.error('[content-edit] category loading failed', error)
+    ElMessage.warning('内容分类加载失败，仍可不选择分类继续编辑')
   } finally {
     categoriesLoading.value = false
   }
@@ -347,6 +349,7 @@ async function fetchDetail(id: string) {
     console.error('[content-edit] detail loading failed', error)
     ElMessage.error('内容详情加载失败，请返回列表重试')
   } finally {
+    await nextTick()
     hydrating.value = false
   }
 }
@@ -361,6 +364,7 @@ async function handleUploadCover(options: any) {
   } catch (error) {
     options.onError?.(error)
     console.error('[content-edit] cover upload failed', error)
+    ElMessage.error('封面上传失败')
   }
 }
 
@@ -374,6 +378,7 @@ async function handleUploadVideoCover(options: any) {
   } catch (error) {
     options.onError?.(error)
     console.error('[content-edit] video cover upload failed', error)
+    ElMessage.error('视频封面上传失败')
   }
 }
 
@@ -433,11 +438,9 @@ async function handleUploadVideo(options: any) {
 
 async function removeVideo() {
   await deletePendingAsset('videoUrl', true)
-  if (!pendingAssetIds.has('videoUrl')) {
-    form.videoUrl = ''
-    form.videoDuration = undefined
-    videoUploadProgress.value = 0
-  }
+  form.videoUrl = ''
+  form.videoDuration = undefined
+  videoUploadProgress.value = 0
 }
 
 async function handleSubmit() {
@@ -445,6 +448,7 @@ async function handleSubmit() {
   if (!valid) return
 
   submitting.value = true
+  preservePendingAssetsOnUnmount = false
   try {
     const relatedProductIds = form.relatedProductIdsStr
       ? form.relatedProductIdsStr
@@ -483,11 +487,19 @@ async function handleSubmit() {
     pendingAssetIds.clear()
     ElMessage.success('保存成功')
     await router.push('/content/list')
-  } catch (error) {
+  } catch (error: any) {
     console.error('[content-edit] save failed', error)
-    if (pendingAssetIds.size > 0) {
+    const status = Number(error?.response?.status || 0)
+    const confirmedRejected = status >= 400 && status < 500
+
+    if (confirmedRejected && pendingAssetIds.size > 0) {
       await cleanupPendingAssets(true)
-      ElMessage.warning('保存未完成，本次新上传文件已清理，请修正后重新上传')
+      ElMessage.warning('保存请求已被拒绝，本次新上传文件已清理，请修正后重新上传')
+    } else if (pendingAssetIds.size > 0) {
+      preservePendingAssetsOnUnmount = true
+      pendingAssetIds.clear()
+      ElMessage.warning('保存结果无法确认。为避免删除可能已被引用的文件，已保留上传文件，请返回列表核实')
+      await router.push('/content/list')
     }
   } finally {
     submitting.value = false
@@ -496,7 +508,7 @@ async function handleSubmit() {
 
 async function handleCancel() {
   await cleanupPendingAssets(false)
-  await router.back()
+  router.back()
 }
 
 watch(
@@ -530,7 +542,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (!committed && pendingAssetIds.size > 0) {
+  if (!committed && !preservePendingAssetsOnUnmount && pendingAssetIds.size > 0) {
     void cleanupPendingAssets(false)
   }
 })
