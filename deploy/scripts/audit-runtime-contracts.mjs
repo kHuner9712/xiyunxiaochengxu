@@ -39,6 +39,7 @@ function walk(dir, predicate, output = []) {
   return output
 }
 
+// API prefix and client-side base URL contract.
 expectText('apps/api/src/main.ts', "app.setGlobalPrefix('api')", 'global API prefix must remain /api')
 expectRegex('apps/api/src/main.ts', /configService\.get<number>\('PORT',\s*3000\)/, 'API default port must be 3000')
 expectText('.env.example', 'PORT=3000', 'development API port must be 3000')
@@ -47,12 +48,20 @@ expectText('apps/admin-web/vite.config.ts', "'http://localhost:3000'", 'admin de
 rejectRegex('apps/admin-web/vite.config.ts', /localhost:8080/, 'stale localhost:8080 API proxy is forbidden')
 expectText('apps/miniprogram/src/utils/request.ts', "url.endsWith('/api')", 'production miniprogram API URL must end with /api')
 
-expectText('deploy/docker-compose.yml', '127.0.0.1:${API_HOST_PORT:-3001}:3000', 'API must bind host loopback 3001 to container 3000')
-expectText('deploy/docker-compose.yml', '127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306', 'MySQL must remain loopback-only')
-expectText('deploy/docker-compose.yml', '127.0.0.1:${REDIS_HOST_PORT:-6379}:6379', 'Redis must remain loopback-only')
-expectText('deploy/docker-compose.yml', 'BUILD_SHA: ${BUILD_SHA:-unknown}', 'Compose must pass BUILD_SHA into the image')
-expectText('deploy/docker-compose.yml', 'UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}', 'Compose upload default must be 50MB')
+// Every supported Compose entrypoint must expose the same internal and host ports.
+const composeFiles = ['deploy/docker-compose.yml', 'deploy/docker-compose.bt.yml']
+for (const file of composeFiles) {
+  expectText(file, '127.0.0.1:${API_HOST_PORT:-3001}:3000', 'API must bind host loopback 3001 to container 3000')
+  expectText(file, '127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306', 'MySQL must remain loopback-only')
+  expectText(file, '127.0.0.1:${REDIS_HOST_PORT:-6379}:6379', 'Redis must remain loopback-only')
+  expectText(file, 'BUILD_SHA: ${BUILD_SHA:-unknown}', 'Compose must pass BUILD_SHA into the image')
+  expectText(file, 'UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}', 'Compose upload default must be 50MB')
+  expectRegex(file, /UPLOAD_ALLOWED_TYPES:.*video\/mp4/, 'Compose must allow MP4 uploads')
+  expectText(file, "http://localhost:3000/api/health", 'API container healthcheck must use internal port 3000')
+  rejectRegex(file, /127\.0\.0\.1:3000:3000/, 'stale host API port 3000 is forbidden')
+}
 
+// Nginx reverse proxy, request-size and TLS contract.
 for (const file of ['deploy/nginx/conf.d/default.conf', 'deploy/nginx/conf.d/default.conf.template']) {
   expectText(file, 'proxy_pass http://api:3000;', 'Nginx must proxy to api:3000')
 }
@@ -65,6 +74,7 @@ expectText('deploy/nginx/conf.d/default.conf.template', '/etc/nginx/ssl/admin/fu
 expectText('deploy/nginx/conf.d/default.conf.template', 'proxy_set_header X-Request-Id $request_id;', 'template must preserve request IDs')
 expectText('deploy/nginx/conf.d/default.conf.template', 'proxy_set_header Connection $connection_upgrade;', 'template must use the upgrade map')
 
+// Deterministic, pinned Docker build and admin static-volume refresh.
 const dockerfile = read('deploy/Dockerfile.api')
 const nodeStages = dockerfile.match(/^FROM node:[^\s]+/gm) || []
 if (nodeStages.length !== 3 || nodeStages.some(line => line !== 'FROM node:22.13.0-alpine')) {
@@ -75,6 +85,7 @@ expectText('deploy/Dockerfile.api', 'printf \'%s\\n\' "$BUILD_SHA" > /app/admin-
 rejectRegex('deploy/Dockerfile.api', /git rev-parse/, 'Docker builds cannot depend on an unavailable .git directory')
 expectText('deploy/scripts/entrypoint.sh', 'cp -a /app/admin-dist/. /usr/share/nginx/admin/', 'entrypoint must refresh the shared admin volume')
 
+// Upload, callback and certificate examples must match production behavior.
 for (const file of ['.env.example', '.env.production.example']) {
   expectText(file, 'UPLOAD_MAX_SIZE=52428800', 'upload example must be 50MB')
   expectRegex(file, /UPLOAD_ALLOWED_TYPES=.*video\/mp4/, 'MP4 must remain allowed')
@@ -85,9 +96,23 @@ expectText('.env.production.example', 'CORS_ORIGINS=https://admin.yunxixiaocheng
 expectText('.env.production.example', 'deploy/nginx/ssl/api/fullchain.pem', 'production template must document the API certificate')
 expectText('.env.production.example', 'deploy/nginx/ssl/admin/fullchain.pem', 'production template must document the admin certificate')
 
+// Production deploy and smoke must be the only canonical operational path.
+expectText('deploy/scripts/deploy-production.sh', 'BUILD_SHA="$(git rev-parse --short HEAD)"', 'deployment must inject the current Git SHA')
+expectText('deploy/scripts/deploy-production.sh', 'mysqldump', 'deployment must create a database backup')
+expectText('deploy/scripts/deploy-production.sh', 'npx prisma migrate deploy', 'deployment must execute Prisma migrations')
+expectText('deploy/scripts/deploy-production.sh', 'bash "$SCRIPT_DIR/smoke-runtime.sh"', 'deployment must run the runtime smoke suite')
+expectText('deploy/scripts/deploy-production.sh', 'deploy/nginx/ssl/api/fullchain.pem', 'deployment must validate the API certificate')
+expectText('deploy/scripts/deploy-production.sh', 'deploy/nginx/ssl/admin/fullchain.pem', 'deployment must validate the admin certificate')
+rejectRegex('deploy/scripts/deploy-production.sh', /62\.234\.69\.19/, 'deployment must not contain a hard-coded server IP')
+expectText('deploy/scripts/deploy-prod-check.sh', 'deploy-production.sh', 'legacy deploy entrypoint must delegate to the audited deployment')
+expectText('package.json', '"deploy:prod": "bash deploy/scripts/deploy-production.sh"', 'package scripts must expose the audited production deploy command')
+expectText('package.json', '"smoke": "bash deploy/scripts/smoke-runtime.sh"', 'package scripts must expose the runtime smoke command')
+
+// Local test stability: prevent high-core hosts from spawning many Vitest workers.
 expectText('apps/miniprogram/vitest.config.ts', 'maxWorkers: 1', 'miniprogram tests must cap workers')
 expectText('apps/miniprogram/vitest.config.ts', 'fileParallelism: false', 'miniprogram test files must not run in parallel')
 
+// Prevent database relation controls from silently hard-coding primary keys again.
 const vueFiles = walk(join(root, 'apps/admin-web/src/views'), file => file.endsWith('.vue'))
 for (const file of vueFiles) {
   const source = readFileSync(file, 'utf8')
