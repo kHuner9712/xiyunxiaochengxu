@@ -1,3 +1,5 @@
+# 宝塔/外部 Nginx 模式：仅运行 MySQL、Redis 和 API。
+# API 内部端口、宿主机回环端口、上传限制和构建参数必须与主 Compose 保持一致。
 services:
   mysql:
     image: mysql:8.0
@@ -8,10 +10,12 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-baby_mall}
       MYSQL_CHARSET: utf8mb4
       TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
@@ -25,11 +29,13 @@ services:
     image: redis:7-alpine
     container_name: baby-mall-redis
     restart: always
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD required}
     volumes:
       - redis_data:/data
-      - ./redis/redis.conf:/etc/redis/redis.conf
+      - ./redis/redis.conf:/etc/redis/redis.conf:ro
       - ./scripts/redis-entrypoint.sh:/usr/local/bin/redis-entrypoint.sh:ro
     entrypoint: ["sh", "/usr/local/bin/redis-entrypoint.sh"]
     healthcheck:
@@ -44,10 +50,15 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+        BUILD_SHA: ${BUILD_SHA:-unknown}
     container_name: baby-mall-api
     restart: always
+    init: true
+    stop_grace_period: 30s
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${API_HOST_PORT:-3001}:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -61,13 +72,17 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_ADMIN_EXPIRES_IN: ${JWT_ADMIN_EXPIRES_IN:-2h}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET required}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-30d}
       WECHAT_APP_ID: ${WECHAT_APP_ID:?WECHAT_APP_ID required}
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:?WECHAT_APP_SECRET required}
       WECHAT_MCH_ID: ${WECHAT_MCH_ID:?WECHAT_MCH_ID required}
       WECHAT_MCH_SERIAL_NO: ${WECHAT_MCH_SERIAL_NO:-}
       WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY:?WECHAT_API_V3_KEY required}
-      WECHAT_PRIVATE_KEY_PATH: /app/apps/api/certs/apiclient_key.pem
-      WECHAT_PLATFORM_CERT_PATH: /app/apps/api/certs/wechatpay_platform.pem
+      WECHAT_PRIVATE_KEY_PATH: ${WECHAT_PRIVATE_KEY_PATH:-/app/apps/api/certs/apiclient_key.pem}
+      WECHAT_PLATFORM_CERT_PATH: ${WECHAT_PLATFORM_CERT_PATH:-/app/apps/api/certs/wechatpay_platform.pem}
       WECHAT_PLATFORM_CERT_SERIAL_NO: ${WECHAT_PLATFORM_CERT_SERIAL_NO:-}
       WECHAT_SKIP_VERIFY: ${WECHAT_SKIP_VERIFY:-false}
       WECHAT_NOTIFY_URL: ${WECHAT_NOTIFY_URL:?WECHAT_NOTIFY_URL required}
@@ -75,11 +90,21 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS required}
       UPLOAD_DIR: /app/apps/api/uploads
       UPLOAD_PUBLIC_URL: ${UPLOAD_PUBLIC_URL:?UPLOAD_PUBLIC_URL required}
+      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}
+      UPLOAD_ALLOWED_TYPES: ${UPLOAD_ALLOWED_TYPES:-image/jpeg,image/png,image/gif,image/webp,video/mp4}
       RUN_SEED: ${RUN_SEED:-false}
+      SKIP_MIGRATE: ${SKIP_MIGRATE:-false}
       ADMIN_DEFAULT_USERNAME: ${ADMIN_DEFAULT_USERNAME:-admin}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:?ADMIN_DEFAULT_PASSWORD required}
-      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET required}
-      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-30d}
+      SMOKE_TEST_BYPASS_CAPTCHA: ${SMOKE_TEST_BYPASS_CAPTCHA:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ORDER_AUTO_CLOSE_MINUTES: ${ORDER_AUTO_CLOSE_MINUTES:-30}
+      ORDER_AUTO_COMPLETE_DAYS: ${ORDER_AUTO_COMPLETE_DAYS:-15}
+      FREIGHT_FREE_AMOUNT: ${FREIGHT_FREE_AMOUNT:-99}
+      FREIGHT_DEFAULT_FEE: ${FREIGHT_DEFAULT_FEE:-10}
+      FREIGHT_REMOTE_FEE: ${FREIGHT_REMOTE_FEE:-20}
+      POINTS_DEDUCT_RATE: ${POINTS_DEDUCT_RATE:-100}
+      POINTS_DEDUCT_MAX_PERCENT: ${POINTS_DEDUCT_MAX_PERCENT:-30}
     volumes:
       - upload_data:/app/apps/api/uploads
       - log_data:/app/apps/api/logs
