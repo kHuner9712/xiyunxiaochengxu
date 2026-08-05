@@ -66,5 +66,13 @@ jobs:
       - name: Build Miniprogram
         run: VITE_API_BASE_URL=https://example.invalid/api pnpm build:mini
 
+      - name: Build production Docker image
+        run: >-
+          docker build --pull
+          --file deploy/Dockerfile.api
+          --tag baby-mall-api:ci
+          --build-arg BUILD_SHA=${{ github.sha }}
+          .
+
       - name: Release Gate Check (non-strict)
         run: pnpm release:check
