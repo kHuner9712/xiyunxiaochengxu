@@ -34,7 +34,7 @@ import { ref } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { getContentDetail, type ContentDetail } from '@/api/content'
 
-const MAX_SIGNED_BIGINT = BigInt('9223372036854775807')
+const MAX_SIGNED_BIGINT_ID = '9223372036854775807'
 const content = ref<ContentDetail>({
   id: '', title: '', coverImage: '', content: '', categoryId: '',
   contentType: 'article', summary: '', viewCount: 0, publishedAt: ''
@@ -42,11 +42,8 @@ const content = ref<ContentDetail>({
 
 function isValidContentId(id: string) {
   if (!/^[1-9]\d*$/.test(id)) return false
-  try {
-    return BigInt(id) <= MAX_SIGNED_BIGINT
-  } catch {
-    return false
-  }
+  return id.length < MAX_SIGNED_BIGINT_ID.length
+    || (id.length === MAX_SIGNED_BIGINT_ID.length && id <= MAX_SIGNED_BIGINT_ID)
 }
 
 async function loadContent(id: string) {
