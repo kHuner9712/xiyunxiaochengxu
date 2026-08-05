@@ -45,6 +45,12 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @baby-mall/api prisma:generate
 
+      - name: Audit runtime configuration contracts
+        run: pnpm audit:runtime
+
+      - name: Audit frontend-backend API contracts
+        run: pnpm audit:api-contracts
+
       - name: Run API tests (unit + e2e)
         run: pnpm --filter @baby-mall/api test:ci
 
