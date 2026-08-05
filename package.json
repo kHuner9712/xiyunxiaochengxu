@@ -17,24 +17,28 @@
     "typecheck": "pnpm prepare:ci && pnpm --filter @baby-mall/api build && pnpm --filter @baby-mall/admin-web typecheck && pnpm --filter @baby-mall/miniprogram typecheck",
     "lint": "pnpm --filter @baby-mall/api lint && pnpm --filter @baby-mall/admin-web lint",
     "test:ci": "pnpm prepare:ci && pnpm --filter @baby-mall/api test:ci && pnpm --filter @baby-mall/miniprogram test",
+    "audit:runtime": "node deploy/scripts/audit-runtime-contracts.mjs",
+    "audit:api-contracts": "node deploy/scripts/audit-api-contracts.mjs",
+    "audit:project": "pnpm audit:runtime && pnpm audit:api-contracts",
     "clean": "pnpm -r clean",
     "docker:up": "cd deploy && docker compose up -d --build",
     "docker:down": "cd deploy && docker compose down",
     "smoke": "cd deploy && bash scripts/smoke-test.sh",
     "smoke:public": "cd deploy && bash scripts/smoke-public.sh",
     "smoke:login": "cd deploy && bash scripts/smoke-admin-login.sh",
-    "smoke:all": "cd deploy && bash scripts/smoke-all.sh",
+    "smoke:runtime": "bash deploy/scripts/smoke-runtime.sh",
+    "smoke:all": "bash deploy/scripts/smoke-runtime.sh",
     "validate:api": "pnpm --filter @baby-mall/api prisma:validate && pnpm --filter @baby-mall/api test:ci && pnpm build:api",
     "prisma:migrate:dry-run": "bash deploy/scripts/prisma-migrate-dry-run.sh",
     "uploads:migrate-visibility": "node deploy/scripts/migrate-upload-visibility.mjs",
-    "release:check": "bash deploy/scripts/release-check.sh",
-    "release:check:freeze": "bash deploy/scripts/release-check.sh --code-freeze-gate",
-    "release:check:prod": "cross-env NODE_ENV=production bash deploy/scripts/release-check.sh --require-real-wx-appid --strict-prod-gate"
+    "release:check": "pnpm audit:project && bash deploy/scripts/release-check.sh",
+    "release:check:freeze": "pnpm audit:project && bash deploy/scripts/release-check.sh --code-freeze-gate",
+    "release:check:prod": "pnpm audit:project && cross-env NODE_ENV=production bash deploy/scripts/release-check.sh --require-real-wx-appid --strict-prod-gate"
   },
   "packageManager": "pnpm@11.2.2",
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=11.2.2"
+    "node": ">=22.13.0 <25",
+    "pnpm": ">=11.2.2 <12"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
