@@ -96,3 +96,31 @@ test('admin aftersale UI matches the existing API and string status model', () =
 
   assert.match(format, /pending_refund: '退款处理中'/)
 })
+
+test('stock adjustment and pickup verification keep the selected operation target stable', () => {
+  const stockPage = read('apps/admin-web/src/views/product/stock.vue')
+  const stockDto = read('apps/api/src/stock/dto/stock-adjust.dto.ts')
+  const pickupVerify = read('apps/admin-web/src/views/pickup-store/verify.vue')
+  const pickupController = read('apps/api/src/pickup-store/pickup-store.controller.ts')
+  const pickupCodeDto = read('apps/api/src/pickup-store/dto/pickup-code.dto.ts')
+
+  assert.match(stockPage, /productId:\s*undefined as string \| undefined/)
+  assert.match(stockPage, /skuId:\s*undefined as string \| undefined/)
+  assert.match(stockPage, /adjustForm\.productId\s*=\s*String\(row\.productId\)/)
+  assert.match(stockPage, /adjustForm\.skuId\s*=\s*String\(row\.skuId\)/)
+  assert.match(stockDto, /productId\?: string/)
+  assert.match(stockDto, /skuId!:\s*string/)
+  assert.equal((stockDto.match(/@Matches\(\/\^\\d\+\$\//g) || []).length, 2)
+  assert.doesNotMatch(stockDto, /@Type\(\(\) => Number\)/)
+
+  assert.match(pickupVerify, /const previewedPickupCode = ref\(''\)/)
+  assert.match(pickupVerify, /@input="handleCodeInput"/)
+  assert.match(pickupVerify, /pickupStoreApi\.verifyPickupCode\(code\)/)
+  assert.doesNotMatch(pickupVerify, /verifyPickupCode\(pickupCode\.value\)/)
+  assert.match(pickupVerify, /pickupCode\.value !== code/)
+  assert.match(pickupVerify, /ElMessageBox\.confirm/)
+
+  assert.match(pickupController, /@Query\(\) dto: PickupCodeDto/)
+  assert.match(pickupController, /@Body\(\) dto: PickupCodeDto/)
+  assert.match(pickupCodeDto, /@Matches\(\/\^\\d\{8\}\$\//)
+})
