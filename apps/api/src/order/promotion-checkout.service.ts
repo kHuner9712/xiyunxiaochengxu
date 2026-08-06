@@ -246,7 +246,10 @@ export class PromotionCheckoutService {
             productId: sku.productId,
             skuId: sku.id,
             productName: sku.product.name,
-            skuSpecs: sku.specs,
+            skuSpecs:
+              sku.specs === null
+                ? Prisma.JsonNull
+                : (sku.specs as Prisma.InputJsonValue),
             productImage: pickOrderProductImage(
               sku.image,
               sku.product.mainImage,
