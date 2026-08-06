@@ -63,8 +63,8 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleDetail(row)">查看</el-button>
-            <el-button v-permission="'order:detail'" v-if="row.status === 'pending_payment'" type="danger" link @click="handleCancel(row)">取消</el-button>
+            <el-button v-permission="'order:detail'" type="primary" link @click="handleDetail(row)">查看</el-button>
+            <el-button v-if="row.status === 'pending_payment'" v-permission="'order:cancel'" type="danger" link @click="handleCancel(row)">取消</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -136,20 +136,25 @@ function resetSearch() {
 }
 
 function handleDetail(row: any) {
-  router.push(`/order/detail/${row.id}`)
+  router.push(`/order/detail/${String(row.id)}`)
 }
 
 async function handleCancel(row: any) {
   let reason = ''
   try {
-    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /.+/, inputErrorMessage: '请输入取消原因' })
-    reason = value
+    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /\S+/, inputErrorMessage: '请输入取消原因' })
+    reason = String(value || '').trim()
   } catch {
     return
   }
 
+  if (!reason) {
+    ElMessage.warning('请输入取消原因')
+    return
+  }
+
   try {
-    await orderApi.cancel(row.id, reason)
+    await orderApi.cancel(String(row.id), reason)
     ElMessage.success('取消成功')
     fetchList()
   } catch (e: any) {
