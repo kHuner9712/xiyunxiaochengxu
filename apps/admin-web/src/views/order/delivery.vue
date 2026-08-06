@@ -21,7 +21,9 @@
       <el-table :data="tableData" stripe v-loading="loading" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" />
         <el-table-column prop="orderNo" label="订单号" width="200" />
-        <el-table-column prop="userName" label="用户" width="120" />
+        <el-table-column label="用户" width="140">
+          <template #default="{ row }">{{ row.user?.nickname || row.user?.phone || '-' }}</template>
+        </el-table-column>
         <el-table-column label="订单金额" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.totalAmount) }}</template>
         </el-table-column>
@@ -141,24 +143,37 @@ function handleSelectionChange(rows: any[]) {
   selectedOrders.value = rows
 }
 
-function handleDeliver(row: any) {
-  batchMode.value = false
-  deliverForm.orderId = String(row.id)
+function resetDeliverForm() {
+  deliverForm.orderId = undefined
   deliverForm.logisticsCompany = ''
   deliverForm.logisticsNo = ''
+  deliverFormRef.value?.clearValidate()
+}
+
+function handleDeliver(row: any) {
+  batchMode.value = false
+  resetDeliverForm()
+  deliverForm.orderId = String(row.id)
   deliverVisible.value = true
 }
 
 function handleBatchDeliver() {
+  if (!selectedOrders.value.length) return
   batchMode.value = true
-  deliverForm.logisticsCompany = ''
-  deliverForm.logisticsNo = ''
+  resetDeliverForm()
   deliverVisible.value = true
 }
 
 async function handleSubmitDeliver() {
   const valid = await deliverFormRef.value?.validate().catch(() => false)
   if (!valid) return
+
+  const logisticsCompany = deliverForm.logisticsCompany.trim()
+  const logisticsNo = deliverForm.logisticsNo.trim()
+  if (!logisticsCompany || !logisticsNo) {
+    ElMessage.warning('请完整填写发货信息')
+    return
+  }
 
   try {
     const actionText = batchMode.value ? `确认为 ${selectedOrders.value.length} 个订单批量发货？` : '确认发货？'
@@ -172,15 +187,39 @@ async function handleSubmitDeliver() {
     if (batchMode.value) {
       const orders = selectedOrders.value.map((o) => ({
         orderId: String(o.id),
-        logisticsCompany: deliverForm.logisticsCompany,
-        logisticsNo: deliverForm.logisticsNo,
+        logisticsCompany,
+        logisticsNo,
       }))
-      await orderApi.batchDeliver({ orders })
+      const res = await orderApi.batchDeliver({ orders })
+      const result = res.data || {}
+      const successCount = Number(result.successCount || 0)
+      const failCount = Number(result.failCount || 0)
+
+      if (failCount > 0) {
+        const firstError = Array.isArray(result.errors) ? result.errors[0]?.message : ''
+        const message = `批量发货完成：成功 ${successCount} 单，失败 ${failCount} 单${firstError ? `；首个失败原因：${firstError}` : ''}`
+        if (successCount > 0) {
+          deliverVisible.value = false
+          selectedOrders.value = []
+          fetchList()
+        }
+        ElMessage.warning(message)
+        return
+      }
+
+      ElMessage.success(`批量发货成功，共 ${successCount} 单`)
     } else {
-      await orderApi.deliver(deliverForm as { orderId: string; logisticsCompany: string; logisticsNo: string })
+      const orderId = deliverForm.orderId
+      if (!orderId) {
+        ElMessage.warning('订单ID无效，请刷新后重试')
+        return
+      }
+      await orderApi.deliver({ orderId, logisticsCompany, logisticsNo })
+      ElMessage.success('发货成功')
     }
-    ElMessage.success('发货成功')
+
     deliverVisible.value = false
+    selectedOrders.value = []
     fetchList()
   } catch (e: any) {
     ElMessage.error(e?.message || '发货失败')
