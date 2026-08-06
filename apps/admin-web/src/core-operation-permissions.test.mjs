@@ -55,7 +55,7 @@ test('core order identifiers remain bigint-safe in delivery and aftersale operat
   const aftersaleDetail = read('apps/admin-web/src/views/order/aftersale-detail.vue')
 
   assert.match(delivery, /orderId:\s*undefined as string \| undefined/)
-  assert.match(delivery, /orderId:\s*String\(row\.id\)/)
+  assert.match(delivery, /deliverForm\.orderId\s*=\s*String\(row\.id\)/)
   assert.match(delivery, /orderId:\s*String\(o\.id\)/)
   assert.match(orderApi, /orderId: string; logisticsCompany: string; logisticsNo: string/)
 
