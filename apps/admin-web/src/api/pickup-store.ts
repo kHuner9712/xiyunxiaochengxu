@@ -1,22 +1,24 @@
 import request from '@/utils/request'
 
+type Id = string | number
+
 export const pickupStoreApi = {
   getList(params: { page: number; pageSize: number; keyword?: string; status?: number }) {
     return request.get('/admin/pickup-store/list', { params })
   },
-  getDetail(id: number) {
+  getDetail(id: Id) {
     return request.get(`/admin/pickup-store/${id}`)
   },
   create(data: any) {
     return request.post('/admin/pickup-store', data)
   },
-  update(id: number, data: any) {
+  update(id: Id, data: any) {
     return request.put(`/admin/pickup-store/${id}`, data)
   },
-  delete(id: number) {
+  delete(id: Id) {
     return request.delete(`/admin/pickup-store/${id}`)
   },
-  updateStatus(id: number, status: number) {
+  updateStatus(id: Id, status: number) {
     return request.put(`/admin/pickup-store/${id}/status`, { status })
   },
   verifyPickupCode(pickupCode: string) {
