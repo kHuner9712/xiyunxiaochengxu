@@ -33,6 +33,7 @@ test('core admin operation buttons use defined permission codes', () => {
     'product:publish',
     'product:delete',
     'order:detail',
+    'order:remark',
     'order:deliver',
     'order:cancel',
     'order:aftersale:review',
@@ -49,6 +50,7 @@ test('core admin operation buttons use defined permission codes', () => {
 
   assert.match(orderList, /v-permission="'order:detail'"[^>]*>查看/)
   assert.match(orderList, /v-permission="'order:cancel'"[^>]*>取消/)
+  assert.match(orderDetail, /v-permission="'order:remark'"/)
   assert.match(orderDetail, /v-permission="'order:deliver'"/)
   assert.match(orderDetail, /v-permission="'order:cancel'"/)
   assert.match(orderDetail, /v-permission="'pickup:verify'"/)
@@ -227,4 +229,32 @@ test('order list and delivery views use real user fields and truthful operation 
   assert.match(delivery, /const failCount = Number\(result\.failCount \|\| 0\)/)
   assert.match(delivery, /if \(failCount > 0\)/)
   assert.match(delivery, /批量发货完成：成功 \$\{successCount\} 单，失败 \$\{failCount\} 单/)
+})
+
+test('admin order remarks can be saved, cleared and reloaded', () => {
+  const controller = read('apps/api/src/order/order.controller.ts')
+  const service = read('apps/api/src/order/order.service.ts')
+  const remarkDto = read('apps/api/src/order/dto/admin-remark.dto.ts')
+  const orderApi = read('apps/admin-web/src/api/order.ts')
+  const orderDetail = read('apps/admin-web/src/views/order/detail.vue')
+
+  assert.match(controller, /@RequirePermission\('order:remark'\)/)
+  assert.match(controller, /@Body\(\) dto: AdminRemarkDto/)
+  assert.match(controller, /select: \{ adminRemark: true \}/)
+  assert.match(controller, /adminRemark: order\?\.adminRemark \|\| ''/)
+  assert.match(controller, /const adminRemark = dto\.remark\.trim\(\)/)
+
+  assert.match(service, /data: \{ adminRemark: remark \}/)
+  assert.match(remarkDto, /@IsString\(\)/)
+  assert.match(remarkDto, /@MaxLength\(500/)
+
+  assert.match(orderApi, /remark\(id: string \| number, remark: string\)/)
+  assert.match(orderApi, /request\.put\(`\/admin\/order\/remark\/\$\{id\}`, \{ remark \}\)/)
+
+  assert.match(orderDetail, /label="运营备注"[^>]*>\{\{ order\.adminRemark \|\| '-' \}\}/)
+  assert.match(orderDetail, /v-permission="'order:remark'"[^>]*@click="showRemarkDialog"/)
+  assert.match(orderDetail, /maxlength="500"/)
+  assert.match(orderDetail, /adminRemarkInput\.value = String\(order\.value\.adminRemark \|\| ''\)/)
+  assert.match(orderDetail, /await orderApi\.remark\(orderId, remark\)/)
+  assert.match(orderDetail, /await fetchDetail\(\)/)
 })
