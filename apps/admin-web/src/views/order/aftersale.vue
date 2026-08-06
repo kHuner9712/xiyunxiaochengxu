@@ -2,15 +2,6 @@
   <div class="page-container">
     <div class="search-bar">
       <el-form :model="searchForm" inline>
-        <el-form-item label="订单号">
-          <el-input v-model="searchForm.orderNo" placeholder="请输入订单号" clearable />
-        </el-form-item>
-        <el-form-item label="售后类型">
-          <el-select v-model="searchForm.type" placeholder="请选择" clearable>
-            <el-option label="仅退款" :value="1" />
-            <el-option label="退货退款" :value="2" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="请选择" clearable>
             <el-option v-for="(label, key) in AFTERSALE_STATUS_MAP" :key="key" :label="label" :value="key" />
@@ -88,8 +79,6 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 
 const searchForm = reactive({
-  orderNo: '',
-  type: undefined as number | undefined,
   status: undefined as string | undefined,
 })
 
@@ -114,8 +103,6 @@ function handleSearch() {
 }
 
 function resetSearch() {
-  searchForm.orderNo = ''
-  searchForm.type = undefined
   searchForm.status = undefined
   handleSearch()
 }
