@@ -12,11 +12,14 @@ import {
   ValidateIf,
   Validate,
   IsIn,
+  Matches,
   ValidatorConstraint,
   ValidatorConstraintInterface,
   ValidationArguments,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+type EntityId = string | number;
 
 @ValidatorConstraint({ name: 'recommendAgeRange', async: false })
 export class RecommendAgeRangeConstraint implements ValidatorConstraintInterface {
@@ -83,10 +86,9 @@ export class CreateProductDto {
   @MaxLength(120)
   name!: string;
 
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  categoryId!: number;
+  @IsString()
+  @Matches(/^\d+$/, { message: '分类ID格式不正确' })
+  categoryId!: EntityId;
 
   @IsOptional()
   @IsString()
@@ -104,16 +106,14 @@ export class CreateProductDto {
   businessCategory?: string;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  brandId?: number;
+  @IsString()
+  @Matches(/^\d+$/, { message: '品牌ID格式不正确' })
+  brandId?: EntityId;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  supplierId?: number;
+  @IsString()
+  @Matches(/^\d+$/, { message: '供应商ID格式不正确' })
+  supplierId?: EntityId;
 
   @IsOptional()
   @IsString()
