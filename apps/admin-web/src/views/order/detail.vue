@@ -20,6 +20,7 @@
             <el-descriptions-item label="运费">¥{{ formatPrice(order.freightAmount) }}</el-descriptions-item>
             <el-descriptions-item label="优惠金额">¥{{ formatPrice(order.discountAmount) }}</el-descriptions-item>
             <el-descriptions-item label="买家备注" :span="2">{{ order.remark || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="运营备注" :span="2">{{ order.adminRemark || '-' }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
 
@@ -112,6 +113,7 @@
         <el-card>
           <template #header><span>订单操作</span></template>
           <div style="display: flex; flex-direction: column; gap: 10px">
+            <el-button v-permission="'order:remark'" @click="showRemarkDialog">编辑运营备注</el-button>
             <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:deliver'" type="primary" @click="showDeliverDialog">发货</el-button>
             <el-button v-if="order.status === 'pending_pickup'" v-permission="'pickup:verify'" type="success" @click="showVerifyPickupDialog">核销自提</el-button>
             <el-button v-if="order.status === 'pending_payment'" v-permission="'order:cancel'" type="danger" @click="handleCancelOrder">取消订单</el-button>
@@ -160,6 +162,21 @@
         <el-button type="success" :loading="submitting" @click="handleVerifyPickup">确认核销</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="remarkVisible" title="运营备注" width="520px" destroy-on-close>
+      <el-input
+        v-model="adminRemarkInput"
+        type="textarea"
+        :rows="5"
+        maxlength="500"
+        show-word-limit
+        placeholder="填写订单处理、沟通或异常情况；留空保存可清除备注"
+      />
+      <template #footer>
+        <el-button @click="remarkVisible = false">取消</el-button>
+        <el-button type="primary" :loading="remarkSubmitting" @click="handleSaveRemark">保存备注</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -175,10 +192,13 @@ import { asArray } from '@/utils/response'
 const router = useRouter()
 const route = useRoute()
 const submitting = ref(false)
+const remarkSubmitting = ref(false)
 const deliverVisible = ref(false)
 const verifyPickupVisible = ref(false)
+const remarkVisible = ref(false)
 const deliverFormRef = ref<FormInstance>()
 const verifyPickupCode = ref('')
+const adminRemarkInput = ref('')
 
 const order = ref<any>({})
 
@@ -198,6 +218,43 @@ async function fetchDetail() {
     const res = await orderApi.getDetail(String(route.params.id))
     order.value = res.data || {}
   } catch {}
+}
+
+function showRemarkDialog() {
+  const orderId = String(order.value.id || '')
+  if (!/^\d+$/.test(orderId)) {
+    ElMessage.warning('订单ID无效，请刷新后重试')
+    return
+  }
+
+  adminRemarkInput.value = String(order.value.adminRemark || '')
+  remarkVisible.value = true
+}
+
+async function handleSaveRemark() {
+  const orderId = String(order.value.id || '')
+  if (!/^\d+$/.test(orderId)) {
+    ElMessage.warning('订单ID无效，请刷新后重试')
+    return
+  }
+
+  const remark = adminRemarkInput.value.trim()
+  if (remark.length > 500) {
+    ElMessage.warning('订单备注不能超过500个字符')
+    return
+  }
+
+  remarkSubmitting.value = true
+  try {
+    await orderApi.remark(orderId, remark)
+    ElMessage.success(remark ? '运营备注已保存' : '运营备注已清除')
+    remarkVisible.value = false
+    await fetchDetail()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '保存运营备注失败')
+  } finally {
+    remarkSubmitting.value = false
+  }
 }
 
 function showDeliverDialog() {
