@@ -40,7 +40,7 @@
           <template #default="{ row }">{{ formatDeliveryAddress(row) }}</template>
         </el-table-column>
         <el-table-column label="下单时间" width="180">
-          <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
+          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
