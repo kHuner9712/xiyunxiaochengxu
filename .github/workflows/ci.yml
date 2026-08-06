@@ -92,6 +92,9 @@ jobs:
       - name: Build Admin Web
         run: pnpm build:admin
 
+      - name: Run Admin browser operation flow
+        run: pnpm test:admin:browser
+
       - name: Build Miniprogram
         run: VITE_API_BASE_URL=https://example.invalid/api pnpm build:mini
 
