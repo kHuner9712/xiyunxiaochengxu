@@ -34,7 +34,7 @@
           <template #default="{ row }">{{ row.user?.nickname || row.user?.phone || '-' }}</template>
         </el-table-column>
         <el-table-column label="商品数量" width="80">
-          <template #default="{ row }">{{ row.items?.length || 0 }}</template>
+          <template #default="{ row }">{{ getOrderItemQuantity(row.items) }}</template>
         </el-table-column>
         <el-table-column label="订单金额" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.totalAmount) }}</template>
@@ -195,6 +195,13 @@ async function handleExport() {
   } finally {
     exporting.value = false
   }
+}
+
+function getOrderItemQuantity(items: unknown) {
+  return asArray(items).reduce((total, item: any) => {
+    const quantity = Number(item?.quantity)
+    return total + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0)
+  }, 0)
 }
 
 function toLocalDayIso(value: string, endOfDay: boolean) {
