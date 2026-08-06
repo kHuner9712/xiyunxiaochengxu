@@ -24,17 +24,20 @@
         <el-table-column label="用户" width="140">
           <template #default="{ row }">{{ row.user?.nickname || row.user?.phone || '-' }}</template>
         </el-table-column>
-        <el-table-column label="订单金额" width="120">
+        <el-table-column label="商品数量" width="90">
+          <template #default="{ row }">{{ getDeliveryItemQuantity(row.orderItems) }}</template>
+        </el-table-column>
+        <el-table-column label="商品金额" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.totalAmount) }}</template>
         </el-table-column>
         <el-table-column label="收货人" width="100">
-          <template #default="{ row }">{{ row.consignee }}</template>
+          <template #default="{ row }">{{ row.receiverName || '-' }}</template>
         </el-table-column>
         <el-table-column label="收货电话" width="130">
-          <template #default="{ row }">{{ row.phone }}</template>
+          <template #default="{ row }">{{ row.receiverPhone || '-' }}</template>
         </el-table-column>
         <el-table-column label="收货地址" show-overflow-tooltip min-width="200">
-          <template #default="{ row }">{{ row.address }}</template>
+          <template #default="{ row }">{{ formatDeliveryAddress(row) }}</template>
         </el-table-column>
         <el-table-column label="下单时间" width="180">
           <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
@@ -142,6 +145,21 @@ const deliverRules: FormRules = {
   logisticsNo: [{ required: true, message: '请输入物流单号', trigger: 'blur' }],
 }
 
+function getDeliveryItemQuantity(orderItems: unknown) {
+  return asArray(orderItems).reduce((total, item: any) => {
+    const quantity = Number(item?.quantity)
+    return total + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0)
+  }, 0)
+}
+
+function formatDeliveryAddress(row: any) {
+  const address = [row?.province, row?.city, row?.district, row?.detailAddress]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' ')
+  return address || '-'
+}
+
 async function fetchList() {
   loading.value = true
   try {
@@ -191,7 +209,7 @@ function handleBatchDeliver() {
   batchRows.value = selectedOrders.value.map((o) => ({
     orderId: String(o.id),
     orderNo: String(o.orderNo || '-'),
-    consignee: String(o.consignee || ''),
+    consignee: String(o.receiverName || ''),
     logisticsNo: '',
   }))
   deliverVisible.value = true
