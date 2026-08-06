@@ -62,6 +62,9 @@ jobs:
       - name: Apply migrations to CI MySQL
         run: pnpm --filter @baby-mall/api prisma:migrate:deploy
 
+      - name: Verify migration-built database matches Prisma schema
+        run: pnpm --filter @baby-mall/api prisma:migrate:drift-check
+
       - name: Audit runtime configuration contracts
         run: pnpm audit:runtime
 
