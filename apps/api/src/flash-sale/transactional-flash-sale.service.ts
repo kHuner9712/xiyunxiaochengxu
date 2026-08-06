@@ -52,6 +52,9 @@ export class TransactionalFlashSaleService extends FlashSaleService {
         if (!activity.skuId) {
           throw new BadRequestException('该活动未指定规格，请联系客服');
         }
+        const lockExpireAt = new Date(
+          now.getTime() + activity.lockMinutes * 60 * 1000,
+        );
 
         if (activity.limitPerUser > 0) {
           const bought = await tx.flashSaleOrder.aggregate({
@@ -99,11 +102,9 @@ export class TransactionalFlashSaleService extends FlashSaleService {
           sourceCode: dto.sourceCode,
           referrerUserId: dto.referrerUserId,
           remark: dto.remark,
+          autoCloseAt: lockExpireAt,
         });
 
-        const lockExpireAt = new Date(
-          now.getTime() + activity.lockMinutes * 60 * 1000,
-        );
         const status = order.isZeroPay ? 'paid' : 'pending_payment';
         const flashSaleOrder = await tx.flashSaleOrder.create({
           data: {
