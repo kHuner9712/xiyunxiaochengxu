@@ -3,7 +3,17 @@ import { AdminOrderController } from './order.controller';
 
 function createMockOrderService() {
   return {
+    findAdminById: jest.fn(),
+    adminRemark: jest.fn(),
     exportOrders: jest.fn(),
+  };
+}
+
+function createMockPrisma() {
+  return {
+    order: {
+      findUnique: jest.fn(),
+    },
   };
 }
 
@@ -27,13 +37,40 @@ function createMockResponse() {
   };
 }
 
-describe('AdminOrderController.export CSV 导出', () => {
+describe('AdminOrderController', () => {
   let controller: AdminOrderController;
   let mockOrderService: any;
+  let mockPrisma: any;
 
   beforeEach(() => {
     mockOrderService = createMockOrderService();
-    controller = new AdminOrderController(mockOrderService);
+    mockPrisma = createMockPrisma();
+    controller = new AdminOrderController(mockOrderService, mockPrisma);
+  });
+
+  it('订单详情返回已保存的运营备注', async () => {
+    mockOrderService.findAdminById.mockResolvedValue({ id: '1', orderNo: 'XY202605280001' });
+    mockPrisma.order.findUnique.mockResolvedValue({ adminRemark: '已电话确认收货时间' });
+
+    await expect(controller.detail('1')).resolves.toEqual({
+      id: '1',
+      orderNo: 'XY202605280001',
+      adminRemark: '已电话确认收货时间',
+    });
+    expect(mockPrisma.order.findUnique).toHaveBeenCalledWith({
+      where: { id: 1n },
+      select: { adminRemark: true },
+    });
+  });
+
+  it('运营备注保存前清理首尾空格并返回最新值', async () => {
+    mockOrderService.adminRemark.mockResolvedValue({ id: '1' });
+
+    await expect(controller.remark('1', { remark: '  等待客户回复  ' })).resolves.toEqual({
+      id: '1',
+      adminRemark: '等待客户回复',
+    });
+    expect(mockOrderService.adminRemark).toHaveBeenCalledWith('1', '等待客户回复');
   });
 
   it('返回 text/csv content-type 且包含 UTF-8 BOM', async () => {
