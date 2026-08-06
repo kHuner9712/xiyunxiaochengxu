@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { WeappOrderController, AdminOrderController } from './order.controller';
 import { OrderService } from './order.service';
+import { TransactionalOrderService } from './transactional-order.service';
 import { PromotionCheckoutService } from './promotion-checkout.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
@@ -15,7 +16,14 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
     forwardRef(() => FlashSaleModule),
   ],
   controllers: [WeappOrderController, AdminOrderController],
-  providers: [OrderService, PromotionCheckoutService],
+  providers: [
+    PromotionCheckoutService,
+    TransactionalOrderService,
+    {
+      provide: OrderService,
+      useExisting: TransactionalOrderService,
+    },
+  ],
   exports: [OrderService, PromotionCheckoutService],
 })
 export class OrderModule {}
