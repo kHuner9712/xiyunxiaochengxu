@@ -39,7 +39,7 @@ function isClearlyTestDatabase(databaseUrl) {
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 console.log('[release-gate-boundary] API test:ci covers unit tests and mocked HTTP tests; it is not a real-database end-to-end test.')
-console.log('[release-gate-boundary] Production runtime, admin browser flows, WeChat DevTools, real-device and payment acceptance remain separate evidence gates.')
+console.log('[release-gate-boundary] Admin browser E2E uses a built frontend and controlled mock API; production runtime, WeChat DevTools, real-device and payment acceptance remain separate evidence gates.')
 
 const repositoryGateStatus = run('bash', ['deploy/scripts/release-check.sh', ...args])
 if (repositoryGateStatus !== 0) {
@@ -53,14 +53,21 @@ if (adminCleanupTestStatus !== 0) {
   process.exit(adminCleanupTestStatus)
 }
 
-console.log('\n━━━ Supplemental gate B: Miniprogram unit/component tests ━━━')
+console.log('\n━━━ Supplemental gate B: Admin built-browser operation flow ━━━')
+const adminBrowserTestStatus = run(pnpmCommand, ['test:admin:browser'])
+if (adminBrowserTestStatus !== 0) {
+  console.error('[run-release-check] admin browser operation flow failed')
+  process.exit(adminBrowserTestStatus)
+}
+
+console.log('\n━━━ Supplemental gate C: Miniprogram unit/component tests ━━━')
 const miniprogramTestStatus = run(pnpmCommand, ['--filter', '@baby-mall/miniprogram', 'test'])
 if (miniprogramTestStatus !== 0) {
   console.error('[run-release-check] miniprogram unit/component tests failed')
   process.exit(miniprogramTestStatus)
 }
 
-console.log('\n━━━ Supplemental gate C: Real MySQL schema and operation lifecycle integrations ━━━')
+console.log('\n━━━ Supplemental gate D: Real MySQL schema and operation lifecycle integrations ━━━')
 if (isClearlyTestDatabase(env.DATABASE_URL)) {
   const migrationStatus = run(
     pnpmCommand,
