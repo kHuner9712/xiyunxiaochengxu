@@ -6,6 +6,7 @@ import { generateAftersaleNo, paginate, AFTERSALE_APPLY_DAYS } from '@baby-mall/
 import { AftersaleStatus, OrderStatus } from '@prisma/client';
 import { PaymentService } from '../payment/payment.service';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
+import { REFUND_STATUS } from '../common/constants';
 
 @Injectable()
 export class AftersaleService {
@@ -345,14 +346,28 @@ export class AftersaleService {
     });
     if (!aftersale) throw new NotFoundException('售后单不存在');
 
-    if (aftersale.status === AftersaleStatus.pending_refund || aftersale.status === AftersaleStatus.refunded) {
+    if (aftersale.status === AftersaleStatus.refunded) {
       throw new BadRequestException('退款已在处理中或已完成');
     }
 
-    if (aftersale.type === 1 && aftersale.status !== AftersaleStatus.approved) {
+    let retryingTerminalRefund = false;
+    if (aftersale.status === AftersaleStatus.pending_refund) {
+      const latestRefund = await this.prisma.orderRefund?.findFirst({
+        where: { aftersaleId: BigInt(id) },
+        orderBy: { createdAt: 'desc' },
+      });
+      const retryableStatuses = [REFUND_STATUS.FAILED, REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL] as string[];
+      if (!latestRefund || !retryableStatuses.includes(latestRefund.status)) {
+        throw new BadRequestException('退款已在处理中或已完成');
+      }
+      retryingTerminalRefund = true;
+      this.logger.warn(`售后单${id}最近退款状态为${latestRefund.status}，允许管理员重新发起退款`);
+    }
+
+    if (!retryingTerminalRefund && aftersale.type === 1 && aftersale.status !== AftersaleStatus.approved) {
       throw new BadRequestException('仅退款类型需审核通过后才能退款');
     }
-    if (aftersale.type === 2 && aftersale.status !== AftersaleStatus.returned) {
+    if (!retryingTerminalRefund && aftersale.type === 2 && aftersale.status !== AftersaleStatus.returned) {
       throw new BadRequestException('退货退款类型需用户填写退货物流后才能退款');
     }
     if (!aftersale.refundAmount) {
