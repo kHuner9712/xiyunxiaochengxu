@@ -35,6 +35,8 @@ test('delivery list uses serialized receiver fields and actual purchased units',
   assert.doesNotMatch(delivery, /consignee:\s*String\(o\.consignee \|\| ''\)/)
   assert.match(delivery, /<el-table-column label="商品金额" width="120">[\s\S]*?formatPrice\(row\.totalAmount\)/)
   assert.doesNotMatch(delivery, /<el-table-column label="订单金额"/)
+  assert.match(delivery, /\{\{ formatDate\(row\.createdAt\) \}\}/)
+  assert.doesNotMatch(delivery, /formatDate\(row\.createTime\)/)
 })
 
 test('order list displays purchased units and truthful product amount labels', () => {
