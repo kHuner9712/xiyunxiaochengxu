@@ -1,15 +1,23 @@
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { OrderService } from '../src/order/order.service';
-import { FlashSaleService } from '../src/flash-sale/flash-sale.service';
-import { GroupBuyService } from '../src/group-buy/group-buy.service';
+import { PromotionCheckoutService } from '../src/order/promotion-checkout.service';
+import { TransactionalFlashSaleService } from '../src/flash-sale/transactional-flash-sale.service';
+import { TransactionalGroupBuyService } from '../src/group-buy/transactional-group-buy.service';
 
 function assertSafeIntegrationDatabase() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error('DATABASE_URL is required');
-  const databaseName = decodeURIComponent(new URL(databaseUrl).pathname.replace(/^\//, ''));
-  if (!/(^|[_-])test($|[_-])/i.test(databaseName) && process.env.ALLOW_DESTRUCTIVE_INTEGRATION_TESTS !== 'true') {
-    throw new Error(`Refusing destructive integration test against database "${databaseName}"`);
+  const databaseName = decodeURIComponent(
+    new URL(databaseUrl).pathname.replace(/^\//, ''),
+  );
+  if (
+    !/(^|[_-])test($|[_-])/i.test(databaseName) &&
+    process.env.ALLOW_DESTRUCTIVE_INTEGRATION_TESTS !== 'true'
+  ) {
+    throw new Error(
+      `Refusing destructive integration test against database "${databaseName}"`,
+    );
   }
 }
 
@@ -49,11 +57,22 @@ async function main() {
     promotionHooks as any,
     promotionHooks as any,
   );
-  const flashSaleService = new FlashSaleService(prisma as any, orderService);
-  const groupBuyService = new GroupBuyService(prisma as any, orderService);
+  const promotionCheckout = new PromotionCheckoutService();
+  const flashSaleService = new TransactionalFlashSaleService(
+    prisma as any,
+    orderService,
+    promotionCheckout,
+  );
+  const groupBuyService = new TransactionalGroupBuyService(
+    prisma as any,
+    orderService,
+    promotionCheckout,
+  );
 
   try {
-    const user = await prisma.user.create({ data: { openid: 'promotion-integration-user' } });
+    const user = await prisma.user.create({
+      data: { openid: 'promotion-integration-user' },
+    });
     const address = await prisma.userAddress.create({
       data: {
         userId: user.id,
@@ -66,12 +85,20 @@ async function main() {
         isDefault: 1,
       },
     });
-    const category = await prisma.productCategory.create({ data: { name: '集成测试分类' } });
+    const category = await prisma.productCategory.create({
+      data: { name: '集成测试分类' },
+    });
     const product = await prisma.product.create({
       data: { name: '促销测试商品', categoryId: category.id, status: 1 },
     });
     const sku = await prisma.productSku.create({
-      data: { productId: product.id, skuCode: 'PROMO-INTEGRATION-SKU', price: 100000, stock: 100, status: 1 },
+      data: {
+        productId: product.id,
+        skuCode: 'PROMO-INTEGRATION-SKU',
+        price: 100000,
+        stock: 100,
+        status: 1,
+      },
     });
 
     const now = Date.now();
@@ -99,13 +126,34 @@ async function main() {
     });
     const flashOrder = await prisma.order.findUniqueOrThrow({
       where: { id: BigInt(flashResult.orderId) },
-      include: { orderItems: true },
+      include: { orderItems: true, payment: true },
     });
-    assert.equal(flashOrder.payAmount, 5000, '秒杀订单实付必须使用服务端活动价');
-    assert.equal(flashOrder.activityDiscountAmount, 95000, '秒杀优惠金额必须真实落库');
-    assert.equal(flashOrder.orderItems[0]?.price, 5000, '秒杀订单项单价必须是活动价');
+    assert.equal(
+      flashOrder.payAmount,
+      5000,
+      '秒杀订单实付必须使用服务端活动价',
+    );
+    assert.equal(
+      flashOrder.activityDiscountAmount,
+      95000,
+      '秒杀优惠金额必须真实落库',
+    );
+    assert.equal(
+      flashOrder.orderItems[0]?.price,
+      5000,
+      '秒杀订单项单价必须是活动价',
+    );
+    assert.equal(flashOrder.orderItems[0]?.originalPrice, 100000);
+    assert.equal(flashOrder.orderItems[0]?.activityDiscount, 95000);
     assert.equal(flashOrder.orderItems[0]?.activityType, 'flash_sale');
     assert.equal(flashOrder.orderItems[0]?.activityId, flashActivity.id);
+    assert.equal(flashOrder.payment?.amount, 5000, '秒杀支付单金额必须同步');
+
+    const flashLink = await prisma.flashSaleOrder.findUniqueOrThrow({
+      where: { orderId: flashOrder.id },
+    });
+    assert.equal(flashLink.orderItemId, flashOrder.orderItems[0]?.id);
+    assert.equal(flashLink.status, 'pending_payment');
 
     const groupActivity = await prisma.groupBuyActivity.create({
       data: {
@@ -124,24 +172,50 @@ async function main() {
       },
     });
 
-    const groupResult = await groupBuyService.startGroupBuy(user.id.toString(), {
-      activityId: groupActivity.id.toString() as any,
-      skuId: sku.id.toString() as any,
-      quantity: 1,
-      addressId: address.id.toString(),
-      fulfillmentType: 'delivery',
-    });
+    const groupResult = await groupBuyService.startGroupBuy(
+      user.id.toString(),
+      {
+        activityId: groupActivity.id.toString() as any,
+        skuId: sku.id.toString() as any,
+        quantity: 1,
+        addressId: address.id.toString(),
+        fulfillmentType: 'delivery',
+      },
+    );
     const groupOrder = await prisma.order.findUniqueOrThrow({
       where: { id: BigInt(groupResult.orderId) },
-      include: { orderItems: true },
+      include: { orderItems: true, payment: true },
     });
-    assert.equal(groupOrder.payAmount, 4000, '拼团订单实付必须使用服务端活动价');
-    assert.equal(groupOrder.activityDiscountAmount, 96000, '拼团优惠金额必须真实落库');
-    assert.equal(groupOrder.orderItems[0]?.price, 4000, '拼团订单项单价必须是活动价');
+    assert.equal(
+      groupOrder.payAmount,
+      4000,
+      '拼团订单实付必须使用服务端活动价',
+    );
+    assert.equal(
+      groupOrder.activityDiscountAmount,
+      96000,
+      '拼团优惠金额必须真实落库',
+    );
+    assert.equal(
+      groupOrder.orderItems[0]?.price,
+      4000,
+      '拼团订单项单价必须是活动价',
+    );
+    assert.equal(groupOrder.orderItems[0]?.originalPrice, 100000);
+    assert.equal(groupOrder.orderItems[0]?.activityDiscount, 96000);
     assert.equal(groupOrder.orderItems[0]?.activityType, 'group_buy');
     assert.equal(groupOrder.orderItems[0]?.activityId, groupActivity.id);
+    assert.equal(groupOrder.payment?.amount, 4000, '拼团支付单金额必须同步');
 
-    const leader2 = await prisma.user.create({ data: { openid: 'promotion-integration-leader-2' } });
+    const groupMember = await prisma.groupBuyMember.findUniqueOrThrow({
+      where: { orderId: groupOrder.id },
+    });
+    assert.equal(groupMember.orderItemId, groupOrder.orderItems[0]?.id);
+    assert.equal(groupMember.status, 'pending_payment');
+
+    const leader2 = await prisma.user.create({
+      data: { openid: 'promotion-integration-leader-2' },
+    });
     const highIdA = 9007199254740992n;
     const highIdB = 9007199254740993n;
     const highGroupA = await prisma.groupBuyGroup.create({
@@ -168,14 +242,24 @@ async function main() {
         expiresAt: new Date(now + 3_600_000),
       },
     });
-    const orderIds = [flashOrder.id, groupOrder.id];
+    const secondMemberOrder = await prisma.order.create({
+      data: {
+        orderNo: 'BIGINT-MEMBER-ORDER-B',
+        userId: leader2.id,
+        status: 'pending_payment',
+        totalAmount: 0,
+        payAmount: 0,
+        receiverName: '',
+        receiverPhone: '',
+      },
+    });
     await prisma.groupBuyMember.createMany({
       data: [
         {
           groupId: highGroupA.id,
           activityId: groupActivity.id,
           userId: user.id,
-          orderId: orderIds[0],
+          orderId: flashOrder.id,
           role: 'leader',
           status: 'paid',
         },
@@ -183,14 +267,16 @@ async function main() {
           groupId: highGroupB.id,
           activityId: groupActivity.id,
           userId: leader2.id,
-          orderId: orderIds[1],
+          orderId: secondMemberOrder.id,
           role: 'leader',
           status: 'paid',
         },
       ],
     });
 
-    const available = await groupBuyService.weappFindAvailableGroups(groupActivity.id.toString());
+    const available = await groupBuyService.weappFindAvailableGroups(
+      groupActivity.id.toString(),
+    );
     const a = available.find((item: any) => item.id === highIdA);
     const b = available.find((item: any) => item.id === highIdB);
     assert.equal(a?.members.length, 1, 'BIGINT 团 A 只能包含自己的成员');
