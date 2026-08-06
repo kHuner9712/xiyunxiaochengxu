@@ -258,3 +258,15 @@ test('admin order remarks can be saved, cleared and reloaded', () => {
   assert.match(orderDetail, /await orderApi\.remark\(orderId, remark\)/)
   assert.match(orderDetail, /await fetchDetail\(\)/)
 })
+
+test('order detail displays the complete discount and deduction breakdown', () => {
+  const orderDetail = read('apps/admin-web/src/views/order/detail.vue')
+
+  assert.match(orderDetail, /label="普通优惠">¥\{\{ formatPrice\(order\.discountAmount\) \}\}/)
+  assert.match(orderDetail, /label="优惠券优惠">¥\{\{ formatPrice\(order\.couponAmount\) \}\}/)
+  assert.match(orderDetail, /label="活动优惠">¥\{\{ formatPrice\(order\.activityDiscountAmount\) \}\}/)
+  assert.match(orderDetail, /label="积分抵扣">¥\{\{ formatPrice\(order\.pointsAmount\) \}\}/)
+  assert.match(orderDetail, /label="优惠及抵扣合计"/)
+  assert.match(orderDetail, /Number\(order\.discountAmount \|\| 0\) \+ Number\(order\.couponAmount \|\| 0\) \+ Number\(order\.activityDiscountAmount \|\| 0\) \+ Number\(order\.pointsAmount \|\| 0\)/)
+  assert.doesNotMatch(orderDetail, /label="优惠金额">¥\{\{ formatPrice\(order\.discountAmount\) \}\}/)
+})
