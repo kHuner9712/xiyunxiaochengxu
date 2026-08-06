@@ -90,6 +90,15 @@
           </el-form>
         </el-card>
 
+        <el-alert
+          v-if="needsRefundSync"
+          title="退款请求结果待核实，请先同步微信退款状态，确认已关闭或异常后再重试"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 20px"
+        />
+
         <el-card v-if="canRefund" v-permission="'order:aftersale:refund'">
           <template #header><span>{{ isRefundRetry ? '退款重试' : '退款操作' }}</span></template>
           <el-descriptions :column="1" border style="margin-bottom: 16px">
@@ -130,12 +139,11 @@ const refundAmountYuan = ref(0)
 const displayImages = ref<string[]>([])
 
 const orderItems = computed(() => (detail.value.orderItem ? [detail.value.orderItem] : []))
-const latestAftersaleAction = computed(() => asArray(detail.value.aftersaleLogs)[0]?.action || '')
 const isRefundRetry = computed(() => {
-  return (
-    detail.value.status === 'pending_refund' &&
-    ['refund_failed', 'sync_refund_failed'].includes(latestAftersaleAction.value)
-  )
+  return detail.value.status === 'pending_refund' && detail.value.refundRetryable === true
+})
+const needsRefundSync = computed(() => {
+  return detail.value.status === 'pending_refund' && detail.value.latestRefundStatus === 'failed'
 })
 const canRefund = computed(() => {
   return (
