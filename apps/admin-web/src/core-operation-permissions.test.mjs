@@ -21,17 +21,24 @@ function assertPermissionExists(permission) {
 
 test('core admin operation buttons use defined permission codes', () => {
   const productList = read('apps/admin-web/src/views/product/list.vue')
+  const orderList = read('apps/admin-web/src/views/order/list.vue')
+  const orderDetail = read('apps/admin-web/src/views/order/detail.vue')
   const delivery = read('apps/admin-web/src/views/order/delivery.vue')
   const aftersaleDetail = read('apps/admin-web/src/views/order/aftersale-detail.vue')
+  const pickupList = read('apps/admin-web/src/views/pickup-store/list.vue')
 
   for (const permission of [
     'product:create',
     'product:edit',
     'product:publish',
     'product:delete',
+    'order:detail',
     'order:deliver',
+    'order:cancel',
     'order:aftersale:review',
     'order:aftersale:refund',
+    'pickup:store',
+    'pickup:verify',
   ]) {
     assertPermissionExists(permission)
   }
@@ -40,15 +47,25 @@ test('core admin operation buttons use defined permission codes', () => {
   assert.match(productList, /v-permission="'product:publish'"/)
   assert.match(productList, /v-permission="'product:delete'"[^>]*>删除/)
 
+  assert.match(orderList, /v-permission="'order:detail'"[^>]*>查看/)
+  assert.match(orderList, /v-permission="'order:cancel'"[^>]*>取消/)
+  assert.match(orderDetail, /v-permission="'order:deliver'"/)
+  assert.match(orderDetail, /v-permission="'order:cancel'"/)
+  assert.match(orderDetail, /v-permission="'pickup:verify'"/)
+  assert.doesNotMatch(orderDetail, /order:delivery/)
+
   assert.equal((delivery.match(/v-permission="'order:deliver'"/g) || []).length, 2)
   assert.doesNotMatch(delivery, /order:delivery/)
 
   assert.match(aftersaleDetail, /v-permission="'order:aftersale:review'"/)
   assert.match(aftersaleDetail, /v-permission="'order:aftersale:refund'"/)
+
+  assert.equal((pickupList.match(/v-permission="'pickup:store'"/g) || []).length, 4)
 })
 
 test('core order identifiers remain bigint-safe in delivery and aftersale operations', () => {
   const delivery = read('apps/admin-web/src/views/order/delivery.vue')
+  const orderDetail = read('apps/admin-web/src/views/order/detail.vue')
   const orderApi = read('apps/admin-web/src/api/order.ts')
   const deliverDto = read('apps/api/src/order/dto/deliver.dto.ts')
   const aftersaleApi = read('apps/admin-web/src/api/aftersale.ts')
@@ -58,6 +75,12 @@ test('core order identifiers remain bigint-safe in delivery and aftersale operat
   assert.match(delivery, /deliverForm\.orderId\s*=\s*String\(row\.id\)/)
   assert.match(delivery, /orderId:\s*String\(o\.id\)/)
   assert.match(orderApi, /orderId: string; logisticsCompany: string; logisticsNo: string/)
+
+  assert.match(orderDetail, /orderId:\s*undefined as string \| undefined/)
+  assert.match(orderDetail, /orderApi\.getDetail\(String\(route\.params\.id\)\)/)
+  assert.match(orderDetail, /deliverForm\.orderId\s*=\s*orderId/)
+  assert.match(orderDetail, /orderApi\.deliver\(\{ orderId, logisticsCompany, logisticsNo \}\)/)
+  assert.doesNotMatch(orderDetail, /orderId:\s*undefined as number \| undefined/)
 
   assert.match(deliverDto, /type DeliveryOrderId = string \| number/)
   assert.equal((deliverDto.match(/orderId!:\s*DeliveryOrderId/g) || []).length, 2)
@@ -101,6 +124,7 @@ test('stock adjustment and pickup verification keep the selected operation targe
   const stockPage = read('apps/admin-web/src/views/product/stock.vue')
   const stockDto = read('apps/api/src/stock/dto/stock-adjust.dto.ts')
   const pickupVerify = read('apps/admin-web/src/views/pickup-store/verify.vue')
+  const orderDetail = read('apps/admin-web/src/views/order/detail.vue')
   const pickupController = read('apps/api/src/pickup-store/pickup-store.controller.ts')
   const pickupCodeDto = read('apps/api/src/pickup-store/dto/pickup-code.dto.ts')
 
@@ -120,9 +144,36 @@ test('stock adjustment and pickup verification keep the selected operation targe
   assert.match(pickupVerify, /pickupCode\.value !== code/)
   assert.match(pickupVerify, /ElMessageBox\.confirm/)
 
+  assert.match(orderDetail, /const verifyPickupCode = ref\(''\)/)
+  assert.match(orderDetail, /:model-value="verifyPickupCode" disabled/)
+  assert.match(orderDetail, /pickupStoreApi\.verifyPickupCode\(code\)/)
+  assert.match(orderDetail, /code !== currentCode/)
+  assert.doesNotMatch(orderDetail, /v-model="verifyPickupForm\.pickupCode"/)
+
   assert.match(pickupController, /@Query\(\) dto: PickupCodeDto/)
   assert.match(pickupController, /@Body\(\) dto: PickupCodeDto/)
   assert.match(pickupCodeDto, /@Matches\(\/\^\\d\{8\}\$\//)
+})
+
+test('pickup store editing submits only supported fields and preserves ids', () => {
+  const pickupApi = read('apps/admin-web/src/api/pickup-store.ts')
+  const pickupList = read('apps/admin-web/src/views/pickup-store/list.vue')
+
+  assert.match(pickupApi, /type Id = string \| number/)
+  assert.match(pickupApi, /update\(id: Id, data: any\)/)
+  assert.match(pickupApi, /delete\(id: Id\)/)
+  assert.match(pickupApi, /updateStatus\(id: Id, status: number\)/)
+
+  assert.match(pickupList, /id:\s*undefined as string \| undefined/)
+  assert.match(pickupList, /id:\s*String\(row\.id\)/)
+  assert.match(pickupList, /function buildPayload\(\)/)
+  assert.match(pickupList, /pickupStoreApi\.update\(form\.id as string, payload\)/)
+  assert.match(pickupList, /pickupStoreApi\.create\(payload\)/)
+  assert.match(pickupList, /updateStatus\(String\(row\.id\), newStatus\)/)
+  assert.match(pickupList, /delete\(String\(row\.id\)\)/)
+  assert.doesNotMatch(pickupList, /Object\.assign\(form, row\)/)
+  assert.doesNotMatch(pickupList, /pickupStoreApi\.update\(form\.id, form\)/)
+  assert.doesNotMatch(pickupList, /pickupStoreApi\.create\(form\)/)
 })
 
 test('product editing and filtering preserve bigint identifiers', () => {
