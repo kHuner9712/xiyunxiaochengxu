@@ -20,7 +20,9 @@
     "test:cov": "jest --coverage",
     "test:unit": "jest --config jest.config.js",
     "test:e2e": "jest --config test/jest-e2e.config.js",
-    "test:integration": "ts-node --transpile-only -P tsconfig.json test/content-lifecycle.integration.ts",
+    "test:integration:content": "ts-node --transpile-only -P tsconfig.json test/content-lifecycle.integration.ts",
+    "test:integration:promotion": "ts-node --transpile-only -P tsconfig.json test/promotion-order-lifecycle.integration.ts",
+    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion",
     "test:ci": "jest --config jest.config.js && jest --config test/jest-e2e.config.js"
   },
   "dependencies": {
@@ -58,7 +60,6 @@
     "@types/multer": "^1.4.11",
     "@types/node": "^20.10.0",
     "@types/passport-jwt": "^4.0.0",
-    "@types/supertest": "^7.2.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.57.1",
