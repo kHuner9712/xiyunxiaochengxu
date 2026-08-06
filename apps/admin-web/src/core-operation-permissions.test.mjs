@@ -206,3 +206,25 @@ test('product editing and filtering preserve bigint identifiers', () => {
   assert.match(productQueryDto, /supplierId\?:\s*EntityId/)
   assert.equal((productQueryDto.match(/@Matches\(\/\^\\d\+\$\//g) || []).length, 4)
 })
+
+test('order list and delivery views use real user fields and truthful operation results', () => {
+  const orderList = read('apps/admin-web/src/views/order/list.vue')
+  const delivery = read('apps/admin-web/src/views/order/delivery.vue')
+
+  assert.match(orderList, /row\.user\?\.nickname \|\| row\.user\?\.phone \|\| '-'/)
+  assert.match(delivery, /row\.user\?\.nickname \|\| row\.user\?\.phone \|\| '-'/)
+  assert.doesNotMatch(orderList, /prop="userName"/)
+  assert.doesNotMatch(delivery, /prop="userName"/)
+
+  assert.match(orderList, /function toLocalDayIso\(value: string, endOfDay: boolean\)/)
+  assert.match(orderList, /endOfDay \? 23 : 0/)
+  assert.match(orderList, /endOfDay \? 999 : 0/)
+  assert.match(orderList, /params\.startDate = toLocalDayIso\(dateRange\.value\[0\], false\)/)
+  assert.match(orderList, /params\.endDate = toLocalDayIso\(dateRange\.value\[1\], true\)/)
+
+  assert.match(delivery, /const result = res\.data \|\| \{\}/)
+  assert.match(delivery, /const successCount = Number\(result\.successCount \|\| 0\)/)
+  assert.match(delivery, /const failCount = Number\(result\.failCount \|\| 0\)/)
+  assert.match(delivery, /if \(failCount > 0\)/)
+  assert.match(delivery, /批量发货完成：成功 \$\{successCount\} 单，失败 \$\{failCount\} 单/)
+})
