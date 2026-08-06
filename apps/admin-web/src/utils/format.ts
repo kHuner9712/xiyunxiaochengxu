@@ -89,7 +89,9 @@ export const AFTERSALE_STATUS_MAP: Record<string, string> = {
   closed: '已关闭',
 }
 
-export const AFTERSALE_STATUS_TAG_TYPE: Record<string, string> = {
+type ElementTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+
+export const AFTERSALE_STATUS_TAG_TYPE: Record<string, ElementTagType> = {
   pending_review: 'warning',
   approved: 'primary',
   rejected: 'danger',
@@ -103,7 +105,7 @@ export function formatAftersaleStatus(status: string): string {
   return AFTERSALE_STATUS_MAP[status] || '未知'
 }
 
-export function getAftersaleStatusTagType(status: string): string {
+export function getAftersaleStatusTagType(status: string): ElementTagType {
   return AFTERSALE_STATUS_TAG_TYPE[status] || 'info'
 }
 
