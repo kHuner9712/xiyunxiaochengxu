@@ -91,11 +91,13 @@
         </el-card>
 
         <el-card v-if="canRefund" v-permission="'order:aftersale:refund'">
-          <template #header><span>退款操作</span></template>
+          <template #header><span>{{ isRefundRetry ? '退款重试' : '退款操作' }}</span></template>
           <el-descriptions :column="1" border style="margin-bottom: 16px">
             <el-descriptions-item label="确认退款金额">¥{{ formatPrice(detail.refundAmount) }}</el-descriptions-item>
           </el-descriptions>
-          <el-button type="primary" :loading="submitting" @click="handleRefund">确认退款</el-button>
+          <el-button type="primary" :loading="submitting" @click="handleRefund">
+            {{ isRefundRetry ? '重新发起退款' : '确认退款' }}
+          </el-button>
         </el-card>
       </el-col>
     </el-row>
@@ -128,10 +130,18 @@ const refundAmountYuan = ref(0)
 const displayImages = ref<string[]>([])
 
 const orderItems = computed(() => (detail.value.orderItem ? [detail.value.orderItem] : []))
+const latestAftersaleAction = computed(() => asArray(detail.value.aftersaleLogs)[0]?.action || '')
+const isRefundRetry = computed(() => {
+  return (
+    detail.value.status === 'pending_refund' &&
+    ['refund_failed', 'sync_refund_failed'].includes(latestAftersaleAction.value)
+  )
+})
 const canRefund = computed(() => {
   return (
     (detail.value.type === 1 && detail.value.status === 'approved') ||
-    (detail.value.type === 2 && detail.value.status === 'returned')
+    (detail.value.type === 2 && detail.value.status === 'returned') ||
+    isRefundRetry.value
   )
 })
 
@@ -204,9 +214,10 @@ async function handleRefund() {
     return
   }
 
+  const actionLabel = isRefundRetry.value ? '重新发起退款' : '确认退款'
   try {
-    await ElMessageBox.confirm(`确认退款 ¥${formatPrice(refundAmount)}？此操作将发起微信退款，请谨慎操作。`, '退款确认', {
-      confirmButtonText: '确认退款',
+    await ElMessageBox.confirm(`${actionLabel} ¥${formatPrice(refundAmount)}？此操作将发起微信退款，请谨慎操作。`, '退款确认', {
+      confirmButtonText: isRefundRetry.value ? '重新发起' : '确认退款',
       cancelButtonText: '取消',
       type: 'warning',
     })
@@ -217,7 +228,7 @@ async function handleRefund() {
   submitting.value = true
   try {
     await aftersaleApi.refund(String(detail.value.id))
-    ElMessage.success('退款已发起')
+    ElMessage.success(isRefundRetry.value ? '退款已重新发起' : '退款已发起')
     await fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.message || '退款失败')
