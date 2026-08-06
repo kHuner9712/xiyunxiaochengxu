@@ -12,10 +12,9 @@ import { OrderModule } from '../order/order.module';
   imports: [PrismaModule, forwardRef(() => OrderModule)],
   controllers: [AdminGroupBuyController, WeappGroupBuyController],
   providers: [
-    TransactionalGroupBuyService,
     {
       provide: GroupBuyService,
-      useExisting: TransactionalGroupBuyService,
+      useClass: TransactionalGroupBuyService,
     },
   ],
   exports: [GroupBuyService],
