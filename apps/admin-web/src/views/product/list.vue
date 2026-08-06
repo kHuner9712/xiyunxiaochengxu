@@ -37,7 +37,7 @@
     <div class="table-card">
       <div style="margin-bottom: 16px; display: flex; justify-content: space-between">
         <div>
-          <el-button v-permission="'product:edit'" type="primary" @click="handleAdd">新增商品</el-button>
+          <el-button v-permission="'product:create'" type="primary" @click="handleAdd">新增商品</el-button>
         </div>
       </div>
 
@@ -70,14 +70,14 @@
           <template #default="{ row }">
             <el-button v-permission="'product:edit'" type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button
-              v-permission="'product:edit'"
+              v-permission="'product:publish'"
               :type="row.status === 1 ? 'warning' : 'success'"
               link
               @click="handleToggleStatus(row)"
             >
               {{ row.status === 1 ? '下架' : '上架' }}
             </el-button>
-            <el-button v-permission="'product:edit'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'product:delete'" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
