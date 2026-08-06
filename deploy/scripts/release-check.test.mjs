@@ -31,6 +31,7 @@ test('release gate wrapper preserves env, reports boundaries and runs supplement
   assert.match(wrapper, /unit tests and mocked HTTP tests/)
   assert.match(wrapper, /run\(pnpmCommand, \['test:admin'\]\)/)
   assert.match(wrapper, /@baby-mall\/miniprogram', 'test'/)
+  assert.match(wrapper, /@baby-mall\/api', 'prisma:migrate:drift-check'/)
   assert.match(wrapper, /@baby-mall\/api', 'test:integration'/)
   assert.match(wrapper, /isClearlyTestDatabase\(env\.DATABASE_URL\)/)
   assert.match(wrapper, /does not constitute production runtime or real-device acceptance/)
