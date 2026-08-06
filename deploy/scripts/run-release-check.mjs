@@ -60,7 +60,7 @@ if (miniprogramTestStatus !== 0) {
   process.exit(miniprogramTestStatus)
 }
 
-console.log('\n━━━ Supplemental gate C: Real MySQL content lifecycle integration ━━━')
+console.log('\n━━━ Supplemental gate C: Real MySQL schema and operation lifecycle integrations ━━━')
 if (isClearlyTestDatabase(env.DATABASE_URL)) {
   const migrationStatus = run(
     pnpmCommand,
@@ -71,13 +71,22 @@ if (isClearlyTestDatabase(env.DATABASE_URL)) {
     process.exit(migrationStatus)
   }
 
+  const driftStatus = run(
+    pnpmCommand,
+    ['--filter', '@baby-mall/api', 'prisma:migrate:drift-check'],
+  )
+  if (driftStatus !== 0) {
+    console.error('[run-release-check] migration-built database differs from Prisma schema')
+    process.exit(driftStatus)
+  }
+
   const integrationStatus = run(
     pnpmCommand,
     ['--filter', '@baby-mall/api', 'test:integration'],
     { ALLOW_DESTRUCTIVE_INTEGRATION_TESTS: 'false' },
   )
   if (integrationStatus !== 0) {
-    console.error('[run-release-check] real MySQL content lifecycle integration failed')
+    console.error('[run-release-check] real MySQL operation lifecycle integration failed')
     process.exit(integrationStatus)
   }
 } else {
@@ -85,7 +94,7 @@ if (isClearlyTestDatabase(env.DATABASE_URL)) {
   console.warn(
     `[run-release-check] SKIP real MySQL integration: DATABASE_URL database "${databaseName || '(missing/invalid)'}" is not an explicit test database.`,
   )
-  console.warn('[run-release-check] CI must provide a dedicated test database and run test:integration before merge.')
+  console.warn('[run-release-check] CI must provide a dedicated test database, migration drift check and test:integration before merge.')
 }
 
 console.log('\n[release-gate-boundary] Repository checks passed. This does not constitute production runtime or real-device acceptance.')
