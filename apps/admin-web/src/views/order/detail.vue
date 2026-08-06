@@ -15,10 +15,16 @@
             <el-descriptions-item label="付款时间">{{ formatDate(order.payTime) }}</el-descriptions-item>
             <el-descriptions-item label="发货时间">{{ formatDate(order.deliveryTime) }}</el-descriptions-item>
             <el-descriptions-item label="完成时间">{{ formatDate(order.finishTime) }}</el-descriptions-item>
-            <el-descriptions-item label="订单金额">¥{{ formatPrice(order.totalAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="实付金额">¥{{ formatPrice(order.payAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="商品金额">¥{{ formatPrice(order.totalAmount) }}</el-descriptions-item>
             <el-descriptions-item label="运费">¥{{ formatPrice(order.freightAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="优惠金额">¥{{ formatPrice(order.discountAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="普通优惠">¥{{ formatPrice(order.discountAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="优惠券优惠">¥{{ formatPrice(order.couponAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="活动优惠">¥{{ formatPrice(order.activityDiscountAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="积分抵扣">¥{{ formatPrice(order.pointsAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="优惠及抵扣合计">
+              ¥{{ formatPrice(Number(order.discountAmount || 0) + Number(order.couponAmount || 0) + Number(order.activityDiscountAmount || 0) + Number(order.pointsAmount || 0)) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="实付金额">¥{{ formatPrice(order.payAmount) }}</el-descriptions-item>
             <el-descriptions-item label="买家备注" :span="2">{{ order.remark || '-' }}</el-descriptions-item>
             <el-descriptions-item label="运营备注" :span="2">{{ order.adminRemark || '-' }}</el-descriptions-item>
           </el-descriptions>
