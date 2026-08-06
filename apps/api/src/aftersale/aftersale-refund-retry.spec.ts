@@ -145,6 +145,7 @@ describe('AftersaleService refund retry', () => {
         latestRefundStatus: REFUND_STATUS.CLOSED,
         latestOutRefundNo: 'RF70',
         refundRetryable: true,
+        refundSyncRequired: false,
       }),
     );
     expect(prisma.orderRefund.findFirst).toHaveBeenCalledWith({
@@ -154,13 +155,26 @@ describe('AftersaleService refund retry', () => {
     });
   });
 
-  it('后台详情对 failed 只提示同步，不开放重试', async () => {
+  it('后台详情对 failed 要求同步且不开放重试', async () => {
     const { service } = createService(REFUND_STATUS.FAILED);
 
     await expect(service.findAdminDetail('50')).resolves.toEqual(
       expect.objectContaining({
         latestRefundStatus: REFUND_STATUS.FAILED,
         refundRetryable: false,
+        refundSyncRequired: true,
+      }),
+    );
+  });
+
+  it('后台详情对 initiating 要求同步且不开放重试', async () => {
+    const { service } = createService(REFUND_STATUS.INITIATING);
+
+    await expect(service.findAdminDetail('50')).resolves.toEqual(
+      expect.objectContaining({
+        latestRefundStatus: REFUND_STATUS.INITIATING,
+        refundRetryable: false,
+        refundSyncRequired: true,
       }),
     );
   });
