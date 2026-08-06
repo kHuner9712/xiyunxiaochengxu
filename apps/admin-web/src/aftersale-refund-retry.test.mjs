@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const detail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/aftersale-detail.vue'), 'utf8')
+const refundApi = readFileSync(resolve(root, 'apps/admin-web/src/api/refund.ts'), 'utf8')
 const service = readFileSync(resolve(root, 'apps/api/src/aftersale/aftersale.service.ts'), 'utf8')
 
 test('refund retry requires confirmed WeChat terminal status', () => {
@@ -38,4 +39,17 @@ test('refund initiation is serialized and uncertain requests require sync', () =
   assert.match(service, /REFUND_STATUS\.PROCESSING/)
   assert.match(service, /data: \{ status: AftersaleStatus\.pending_refund \}/)
   assert.match(service, /退款请求结果待核实:[\s\S]*请先同步微信退款状态/)
+})
+
+test('admin can sync an uncertain refund from aftersale detail', () => {
+  assert.match(refundApi, /sync\(outRefundNo: string\)/)
+  assert.match(refundApi, /request\.post\(`\/admin\/refund\/sync\/\$\{encodeURIComponent\(outRefundNo\)\}`\)/)
+  assert.match(detail, /import \{ refundApi \} from '@\/api\/refund'/)
+  assert.match(detail, /:disabled="!detail\.latestOutRefundNo"/)
+  assert.match(detail, /同步微信退款状态/)
+  assert.match(detail, /const outRefundNo = String\(detail\.value\.latestOutRefundNo \|\| ''\)\.trim\(\)/)
+  assert.match(detail, /await refundApi\.sync\(outRefundNo\)/)
+  assert.match(detail, /if \(result\.synced === false\)/)
+  assert.match(detail, /await fetchDetail\(\)/)
+  assert.match(detail, /catch \{\s*\/\/ 请求错误由全局拦截器统一提示。\s*\}/)
 })
