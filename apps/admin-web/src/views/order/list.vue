@@ -36,7 +36,7 @@
         <el-table-column label="商品数量" width="80">
           <template #default="{ row }">{{ getOrderItemQuantity(row.items) }}</template>
         </el-table-column>
-        <el-table-column label="订单金额" width="120">
+        <el-table-column label="商品金额" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.totalAmount) }}</template>
         </el-table-column>
         <el-table-column label="实付金额" width="120">
