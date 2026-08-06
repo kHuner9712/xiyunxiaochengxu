@@ -11,6 +11,7 @@
     "prisma:validate": "node scripts/prisma-validate.mjs",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:drift-check": "node scripts/prisma-migration-drift-check.mjs",
     "prisma:seed": "ts-node -P prisma/tsconfig.seed.json prisma/seed.ts",
     "prisma:seed:demo": "ts-node --transpile-only -P prisma/tsconfig.seed.json prisma/seed-demo.ts",
     "prisma:seed:demo:clean": "ts-node --transpile-only -P prisma/tsconfig.seed.json prisma/seed-demo-clean.ts",
