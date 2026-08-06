@@ -30,7 +30,9 @@
     <div class="table-card">
       <el-table :data="tableData" stripe v-loading="loading">
         <el-table-column prop="orderNo" label="订单号" width="200" />
-        <el-table-column prop="userName" label="用户" width="120" />
+        <el-table-column label="用户" width="140">
+          <template #default="{ row }">{{ row.user?.nickname || row.user?.phone || '-' }}</template>
+        </el-table-column>
         <el-table-column label="商品数量" width="80">
           <template #default="{ row }">{{ row.items?.length || 0 }}</template>
         </el-table-column>
@@ -195,6 +197,23 @@ async function handleExport() {
   }
 }
 
+function toLocalDayIso(value: string, endOfDay: boolean) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return value
+
+  const [, year, month, day] = match
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    endOfDay ? 23 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 999 : 0,
+  )
+  return date.toISOString()
+}
+
 function buildQueryParams() {
   const params: any = {
     orderNo: searchForm.orderNo || undefined,
@@ -202,8 +221,8 @@ function buildQueryParams() {
     fulfillmentType: searchForm.fulfillmentType,
   }
   if (dateRange.value?.length === 2) {
-    params.startDate = dateRange.value[0]
-    params.endDate = dateRange.value[1]
+    params.startDate = toLocalDayIso(dateRange.value[0], false)
+    params.endDate = toLocalDayIso(dateRange.value[1], true)
   }
   return params
 }
