@@ -47,13 +47,50 @@ test('core admin operation buttons use defined permission codes', () => {
   assert.match(aftersaleDetail, /v-permission="'order:aftersale:refund'"/)
 })
 
-test('core order identifiers remain bigint-safe in the admin client', () => {
+test('core order identifiers remain bigint-safe in delivery and aftersale operations', () => {
   const delivery = read('apps/admin-web/src/views/order/delivery.vue')
+  const orderApi = read('apps/admin-web/src/api/order.ts')
+  const deliverDto = read('apps/api/src/order/dto/deliver.dto.ts')
   const aftersaleApi = read('apps/admin-web/src/api/aftersale.ts')
   const aftersaleDetail = read('apps/admin-web/src/views/order/aftersale-detail.vue')
 
-  assert.match(delivery, /orderId:\s*undefined as string \| number \| undefined/)
+  assert.match(delivery, /orderId:\s*undefined as string \| undefined/)
+  assert.match(delivery, /orderId:\s*String\(row\.id\)/)
+  assert.match(delivery, /orderId:\s*String\(o\.id\)/)
+  assert.match(orderApi, /orderId: string; logisticsCompany: string; logisticsNo: string/)
+
+  assert.equal((deliverDto.match(/orderId!:\s*string/g) || []).length, 2)
+  assert.doesNotMatch(deliverDto, /orderId!:\s*number/)
+  assert.doesNotMatch(deliverDto, /@Type\(\(\) => Number\)/)
+
   assert.match(aftersaleApi, /type Id = string \| number/)
   assert.match(aftersaleDetail, /getDetail\(String\(route\.params\.id\)\)/)
   assert.doesNotMatch(aftersaleDetail, /Number\(route\.params\.id\)/)
+})
+
+test('admin aftersale UI matches the existing API and string status model', () => {
+  const aftersaleApi = read('apps/admin-web/src/api/aftersale.ts')
+  const aftersaleList = read('apps/admin-web/src/views/order/aftersale.vue')
+  const aftersaleDetail = read('apps/admin-web/src/views/order/aftersale-detail.vue')
+  const format = read('apps/admin-web/src/utils/format.ts')
+
+  assert.match(aftersaleApi, /approve\(id: Id, refundAmount: number\)/)
+  assert.match(aftersaleApi, /approve`, \{ refundAmount \}\)/)
+  assert.match(aftersaleApi, /reject\(id: Id, rejectReason: string\)/)
+  assert.match(aftersaleApi, /reject`, \{ rejectReason \}\)/)
+  assert.match(aftersaleApi, /refund\(id: Id\)[\s\S]*request\.put\(`\/admin\/aftersale\/\$\{id\}\/refund`\)/)
+
+  assert.match(aftersaleList, /:value="key"/)
+  assert.doesNotMatch(aftersaleList, /Number\(key\)/)
+  assert.match(aftersaleList, /row\.order\?\.orderNo/)
+  assert.match(aftersaleList, /row\.createdAt/)
+
+  assert.match(aftersaleDetail, /detail\.status === 'pending_review'/)
+  assert.match(aftersaleDetail, /detail\.value\.status === 'approved'/)
+  assert.match(aftersaleDetail, /detail\.value\.status === 'returned'/)
+  assert.match(aftersaleDetail, /aftersaleApi\.approve\(String\(detail\.value\.id\), refundAmount\)/)
+  assert.match(aftersaleDetail, /aftersaleApi\.reject\(String\(detail\.value\.id\), rejectReason\.value\.trim\(\)\)/)
+  assert.match(aftersaleDetail, /aftersaleApi\.refund\(String\(detail\.value\.id\)\)/)
+
+  assert.match(format, /pending_refund: '退款处理中'/)
 })
