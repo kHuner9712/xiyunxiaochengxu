@@ -1,6 +1,5 @@
 import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
-import { Type } from 'class-transformer';
-import { IsEnum, IsIn, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional } from 'class-validator';
 import { AftersaleStatus } from '@prisma/client';
 import { AftersaleService } from './aftersale.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -12,16 +11,6 @@ import { ReturnLogisticsDto } from './dto/return-logistics.dto';
 import { ApproveAftersaleDto } from './dto/approve-aftersale.dto';
 
 class AdminAftersaleQueryDto extends PaginationDto {
-  @IsOptional()
-  @IsString()
-  orderNo?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @IsIn([1, 2])
-  type?: number;
-
   @IsOptional()
   @IsEnum(AftersaleStatus)
   status?: AftersaleStatus;
