@@ -42,6 +42,7 @@ export interface PromotionCheckoutInput {
   sourceCode?: string;
   referrerUserId?: string;
   remark?: string;
+  autoCloseAt?: Date;
 }
 
 export interface PromotionCheckoutResult {
@@ -192,6 +193,10 @@ export class PromotionCheckoutService {
         ? OrderStatus.pending_pickup
         : OrderStatus.pending_delivery
       : OrderStatus.pending_payment;
+    const autoCloseAt = input.autoCloseAt ?? new Date(Date.now() + 30 * 60 * 1000);
+    if (!isZeroPay && autoCloseAt.getTime() <= Date.now()) {
+      throw new BadRequestException('活动支付时限已结束');
+    }
 
     const sourceType =
       input.sourceType && ALLOWED_SOURCE_TYPES.has(input.sourceType)
@@ -238,9 +243,7 @@ export class PromotionCheckoutService {
         pickupContactPhone: pickupStore?.contactPhone ?? null,
         pickupCode,
         remark: input.remark,
-        ...(isZeroPay
-          ? { paidAt: new Date() }
-          : { autoCloseAt: new Date(Date.now() + 30 * 60 * 1000) }),
+        ...(isZeroPay ? { paidAt: new Date() } : { autoCloseAt }),
         orderItems: {
           create: {
             productId: sku.productId,
