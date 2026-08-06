@@ -7,4 +7,7 @@ export const refundApi = {
   getDetail(id: string) {
     return request.get(`/admin/refund/detail/${id}`)
   },
+  sync(outRefundNo: string) {
+    return request.post(`/admin/refund/sync/${encodeURIComponent(outRefundNo)}`)
+  },
 }
