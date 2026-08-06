@@ -232,7 +232,22 @@ export class AftersaleService {
       },
     });
     if (!aftersale) throw new NotFoundException('售后单不存在');
-    return this.serializeAftersale(aftersale);
+
+    const latestRefund = aftersale.status === AftersaleStatus.pending_refund
+      ? await (this.prisma as any).orderRefund?.findFirst({
+          where: { aftersaleId: aftersale.id },
+          orderBy: { createdAt: 'desc' },
+          select: { status: true, outRefundNo: true },
+        })
+      : null;
+    const retryableStatuses = [REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL] as string[];
+
+    return {
+      ...this.serializeAftersale(aftersale),
+      latestRefundStatus: latestRefund?.status || null,
+      latestOutRefundNo: latestRefund?.outRefundNo || null,
+      refundRetryable: !!latestRefund && retryableStatuses.includes(latestRefund.status),
+    };
   }
 
   async approve(id: string, adminId: string, refundAmount: number) {
@@ -352,11 +367,14 @@ export class AftersaleService {
 
     let retryingTerminalRefund = false;
     if (aftersale.status === AftersaleStatus.pending_refund) {
-      const latestRefund = await this.prisma.orderRefund?.findFirst({
+      const latestRefund = await (this.prisma as any).orderRefund?.findFirst({
         where: { aftersaleId: BigInt(id) },
         orderBy: { createdAt: 'desc' },
       });
-      const retryableStatuses = [REFUND_STATUS.FAILED, REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL] as string[];
+      if (latestRefund?.status === REFUND_STATUS.FAILED) {
+        throw new BadRequestException('退款请求结果待核实，请先同步微信退款状态');
+      }
+      const retryableStatuses = [REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL] as string[];
       if (!latestRefund || !retryableStatuses.includes(latestRefund.status)) {
         throw new BadRequestException('退款已在处理中或已完成');
       }
