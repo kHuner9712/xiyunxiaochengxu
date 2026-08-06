@@ -1,9 +1,5 @@
-import {
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger, Type } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BusinessEventService } from '../common/business-event.service';
@@ -13,6 +9,29 @@ import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
 import { OrderService } from './order.service';
 
+function createLazyService<T extends object>(
+  moduleRef: ModuleRef,
+  token: Type<T>,
+): T {
+  return new Proxy({} as T, {
+    get: (_target, property) =>
+      async (...args: unknown[]) => {
+        let service: T;
+        try {
+          service = moduleRef.get(token, { strict: false });
+        } catch {
+          return undefined;
+        }
+
+        const candidate = Reflect.get(service, property);
+        if (typeof candidate !== 'function') {
+          return candidate;
+        }
+        return candidate.apply(service, args);
+      },
+  });
+}
+
 @Injectable()
 export class TransactionalOrderService extends OrderService {
   private readonly timeoutLogger = new Logger(TransactionalOrderService.name);
@@ -21,17 +40,14 @@ export class TransactionalOrderService extends OrderService {
     private readonly transactionalPrisma: PrismaService,
     businessEvent: BusinessEventService,
     benefitPackageService: BenefitPackageService,
-    @Inject(forwardRef(() => GroupBuyService))
-    groupBuyService: GroupBuyService,
-    @Inject(forwardRef(() => FlashSaleService))
-    flashSaleService: FlashSaleService,
+    moduleRef: ModuleRef,
   ) {
     super(
       transactionalPrisma,
       businessEvent,
       benefitPackageService,
-      groupBuyService,
-      flashSaleService,
+      createLazyService(moduleRef, GroupBuyService),
+      createLazyService(moduleRef, FlashSaleService),
     );
   }
 
