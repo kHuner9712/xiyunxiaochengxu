@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const delivery = readFileSync(resolve(root, 'apps/admin-web/src/views/order/delivery.vue'), 'utf8')
+const orderList = readFileSync(resolve(root, 'apps/admin-web/src/views/order/list.vue'), 'utf8')
 
 test('batch delivery requires a tracking number for every selected order', () => {
   assert.match(delivery, /const batchRows = ref<BatchDeliveryRow\[\]>\(\[\]\)/)
@@ -19,4 +20,12 @@ test('batch delivery requires a tracking number for every selected order', () =>
     delivery,
     /const orders = selectedOrders\.value\.map\([\s\S]*?logisticsNo,\s*\}\)\)/,
   )
+})
+
+test('order list displays purchased units instead of SKU row count', () => {
+  assert.match(orderList, /\{\{ getOrderItemQuantity\(row\.items\) \}\}/)
+  assert.match(orderList, /function getOrderItemQuantity\(items: unknown\)/)
+  assert.match(orderList, /const quantity = Number\(item\?\.quantity\)/)
+  assert.match(orderList, /Number\.isFinite\(quantity\) && quantity > 0 \? quantity : 0/)
+  assert.doesNotMatch(orderList, /row\.items\?\.length \|\| 0/)
 })
