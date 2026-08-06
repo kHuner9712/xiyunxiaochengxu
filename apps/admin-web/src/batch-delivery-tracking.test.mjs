@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const delivery = readFileSync(resolve(root, 'apps/admin-web/src/views/order/delivery.vue'), 'utf8')
 const orderList = readFileSync(resolve(root, 'apps/admin-web/src/views/order/list.vue'), 'utf8')
+const orderDetail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/detail.vue'), 'utf8')
 
 test('batch delivery requires a tracking number for every selected order', () => {
   assert.match(delivery, /const batchRows = ref<BatchDeliveryRow\[\]>\(\[\]\)/)
@@ -28,4 +29,13 @@ test('order list displays purchased units instead of SKU row count', () => {
   assert.match(orderList, /const quantity = Number\(item\?\.quantity\)/)
   assert.match(orderList, /Number\.isFinite\(quantity\) && quantity > 0 \? quantity : 0/)
   assert.doesNotMatch(orderList, /row\.items\?\.length \|\| 0/)
+})
+
+test('order detail distinguishes system logs from user operations', () => {
+  assert.match(orderDetail, /\{\{ formatOrderLogOperator\(log\) \}\}/)
+  assert.match(orderDetail, /if \(log\?\.operatorType === 'admin'\) return '管理员'/)
+  assert.match(orderDetail, /if \(log\?\.operatorType === 'system'\) return '系统'/)
+  assert.match(orderDetail, /if \(log\?\.operatorType === 'user'\) return '用户'/)
+  assert.match(orderDetail, /return String\(log\?\.operator \|\| '未知'\)/)
+  assert.doesNotMatch(orderDetail, /\{\{ log\.operator \}\}/)
 })
