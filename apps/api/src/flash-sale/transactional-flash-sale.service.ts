@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,6 +15,7 @@ import { FlashSaleBuyDto } from './dto/flash-sale.dto';
 export class TransactionalFlashSaleService extends FlashSaleService {
   constructor(
     private readonly transactionalPrisma: PrismaService,
+    @Inject(forwardRef(() => OrderService))
     orderService: OrderService,
     private readonly promotionCheckout: PromotionCheckoutService,
   ) {
