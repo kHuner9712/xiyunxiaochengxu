@@ -196,6 +196,17 @@ export class AdminOrderController {
       return `"${safeText.replace(/"/g, '""')}"`;
     };
     const typeLabel = (value: string) => (value === 'pickup' ? '到店自提' : '快递配送');
+    const statusLabels: Record<string, string> = {
+      pending_payment: '待付款',
+      paid: '已付款',
+      pending_delivery: '待发货',
+      pending_pickup: '待自提',
+      delivered: '已发货',
+      completed: '已完成',
+      cancelled: '已取消',
+      aftersale: '售后中',
+    };
+    const statusLabel = (value: string) => statusLabels[value] || value || '未知';
 
     const lines = [
       headers.map(esc).join(','),
@@ -204,7 +215,7 @@ export class AdminOrderController {
           row.orderNo,
           row.userNickname,
           row.userPhone,
-          row.status,
+          statusLabel(row.status),
           typeLabel(row.fulfillmentType),
           row.itemCount,
           row.itemDetails,
