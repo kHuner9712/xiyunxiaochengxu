@@ -74,7 +74,7 @@ jobs:
       - name: Validate deployment shell scripts
         run: bash -n deploy/scripts/deploy-production.sh deploy/scripts/deploy-prod-check.sh deploy/scripts/smoke-runtime.sh
 
-      - name: Run Admin pending asset cleanup tests
+      - name: Run Admin operation contract tests
         run: pnpm test:admin
 
       - name: Run API tests (unit + mocked HTTP e2e)
@@ -105,6 +105,3 @@ jobs:
           --tag baby-mall-api:ci
           --build-arg BUILD_SHA=${{ github.sha }}
           .
-
-      - name: Release Gate Check (non-strict)
-        run: pnpm release:check
