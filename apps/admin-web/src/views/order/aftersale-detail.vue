@@ -61,7 +61,7 @@
           </el-descriptions>
         </el-card>
 
-        <el-card v-if="detail.status === 0">
+        <el-card v-if="detail.status === 0" v-permission="'order:aftersale:review'">
           <template #header><span>审核操作</span></template>
           <el-form label-width="100px">
             <el-form-item label="审核结果">
@@ -79,7 +79,7 @@
           </el-form>
         </el-card>
 
-        <el-card v-if="detail.status === 1">
+        <el-card v-if="detail.status === 1" v-permission="'order:aftersale:refund'">
           <template #header><span>退款操作</span></template>
           <el-form label-width="100px">
             <el-form-item label="退款金额(元)">
@@ -118,7 +118,7 @@ async function fetchDetail() {
   try {
     revokePrivateObjectUrls(displayImages.value)
     displayImages.value = []
-    const res = await aftersaleApi.getDetail(Number(route.params.id))
+    const res = await aftersaleApi.getDetail(String(route.params.id))
     detail.value = res.data || {}
     refundAmountYuan.value = (res.data?.refundAmount || 0) / 100
     displayImages.value = await resolvePrivateFileUrls(asArray(detail.value.images))
