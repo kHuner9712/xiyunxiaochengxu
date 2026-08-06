@@ -73,7 +73,7 @@ describe('AdminOrderController', () => {
     expect(mockOrderService.adminRemark).toHaveBeenCalledWith('1', '等待客户回复');
   });
 
-  it('返回 text/csv content-type、UTF-8 BOM 和真实商品金额表头', async () => {
+  it('返回 text/csv content-type、UTF-8 BOM、中文状态和真实商品金额表头', async () => {
     mockOrderService.exportOrders.mockResolvedValue([
       {
         orderNo: 'XY202605280001',
@@ -107,6 +107,8 @@ describe('AdminOrderController', () => {
     expect(res.body.startsWith('\uFEFF')).toBe(true);
     expect(res.body).toContain('"商品金额"');
     expect(res.body).not.toContain('"订单金额"');
+    expect(res.body).toContain('"待发货"');
+    expect(res.body).not.toContain('"pending_delivery"');
   });
 
   it('以 = 开头的字段会被 CSV 注入防护', async () => {
