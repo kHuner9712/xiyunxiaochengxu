@@ -23,12 +23,14 @@ test('batch delivery requires a tracking number for every selected order', () =>
   )
 })
 
-test('order list displays purchased units instead of SKU row count', () => {
+test('order list displays purchased units and truthful product amount labels', () => {
   assert.match(orderList, /\{\{ getOrderItemQuantity\(row\.items\) \}\}/)
   assert.match(orderList, /function getOrderItemQuantity\(items: unknown\)/)
   assert.match(orderList, /const quantity = Number\(item\?\.quantity\)/)
   assert.match(orderList, /Number\.isFinite\(quantity\) && quantity > 0 \? quantity : 0/)
   assert.doesNotMatch(orderList, /row\.items\?\.length \|\| 0/)
+  assert.match(orderList, /<el-table-column label="商品金额" width="120">[\s\S]*?formatPrice\(row\.totalAmount\)/)
+  assert.doesNotMatch(orderList, /<el-table-column label="订单金额"/)
 })
 
 test('order detail distinguishes system logs from user operations', () => {
