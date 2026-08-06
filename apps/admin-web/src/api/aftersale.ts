@@ -3,7 +3,7 @@ import request from '@/utils/request'
 type Id = string | number
 
 export const aftersaleApi = {
-  getList(params: { page: number; pageSize: number; orderNo?: string; status?: string; type?: number }) {
+  getList(params: { page: number; pageSize: number; status?: string }) {
     return request.get('/admin/aftersale/list', { params })
   },
   getDetail(id: Id) {
