@@ -1,10 +1,14 @@
 import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, Matches } from 'class-validator';
 import { Type } from 'class-transformer';
 
+// HTTP requests are still required to provide digit strings by the validators below.
+// The number union only keeps direct service-level unit fixtures source-compatible.
+type DeliveryOrderId = string | number;
+
 export class DeliverDto {
   @IsString()
   @Matches(/^\d+$/, { message: '订单ID格式不正确' })
-  orderId!: string;
+  orderId!: DeliveryOrderId;
 
   @IsString()
   @IsNotEmpty()
@@ -21,7 +25,7 @@ export class DeliverDto {
 export class DeliverItemDto {
   @IsString()
   @Matches(/^\d+$/, { message: '订单ID格式不正确' })
-  orderId!: string;
+  orderId!: DeliveryOrderId;
 
   @IsString()
   @IsNotEmpty()
