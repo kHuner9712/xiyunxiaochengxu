@@ -3,6 +3,7 @@ import { PickupStoreService } from './pickup-store.service';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PickupCodeDto } from './dto/pickup-code.dto';
 
 @Controller('weapp/pickup-store')
 export class WeappPickupStoreController {
@@ -41,8 +42,8 @@ export class AdminPickupStoreController {
 
   @Get('preview')
   @RequirePermission('pickup:verify')
-  async preview(@Query('pickupCode') pickupCode: string) {
-    return this.service.previewPickupOrder(pickupCode);
+  async preview(@Query() dto: PickupCodeDto) {
+    return this.service.previewPickupOrder(dto.pickupCode);
   }
 
   @Post()
@@ -72,7 +73,7 @@ export class AdminPickupStoreController {
   @Post('verify')
   @RequirePermission('pickup:verify')
   async verifyPickup(
-    @Body() dto: { pickupCode: string },
+    @Body() dto: PickupCodeDto,
     @CurrentUser('id') userId: string,
   ) {
     return this.service.verifyPickupCode(dto.pickupCode, userId);
