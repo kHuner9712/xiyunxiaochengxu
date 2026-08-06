@@ -112,9 +112,9 @@
         <el-card>
           <template #header><span>订单操作</span></template>
           <div style="display: flex; flex-direction: column; gap: 10px">
-            <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:delivery'" type="primary" @click="showDeliverDialog">发货</el-button>
+            <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:deliver'" type="primary" @click="showDeliverDialog">发货</el-button>
             <el-button v-if="order.status === 'pending_pickup'" v-permission="'pickup:verify'" type="success" @click="showVerifyPickupDialog">核销自提</el-button>
-            <el-button v-if="order.status === 'pending_payment'" v-permission="'order:detail'" type="danger" @click="handleCancelOrder">取消订单</el-button>
+            <el-button v-if="order.status === 'pending_payment'" v-permission="'order:cancel'" type="danger" @click="handleCancelOrder">取消订单</el-button>
           </div>
         </el-card>
       </el-col>
@@ -143,10 +143,16 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="verifyPickupVisible" title="核销自提" width="400px" destroy-on-close>
-      <el-form :model="verifyPickupForm" label-width="80px">
+    <el-dialog v-model="verifyPickupVisible" title="核销自提" width="420px" destroy-on-close>
+      <el-alert
+        :title="`即将核销订单 ${order.orderNo || '-'}`"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+      <el-form label-width="80px">
         <el-form-item label="自提码">
-          <el-input v-model="verifyPickupForm.pickupCode" placeholder="请输入8位自提码" maxlength="8" />
+          <el-input :model-value="verifyPickupCode" disabled />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -172,17 +178,14 @@ const submitting = ref(false)
 const deliverVisible = ref(false)
 const verifyPickupVisible = ref(false)
 const deliverFormRef = ref<FormInstance>()
+const verifyPickupCode = ref('')
 
 const order = ref<any>({})
 
 const deliverForm = reactive({
-  orderId: undefined as number | undefined,
+  orderId: undefined as string | undefined,
   logisticsCompany: '',
   logisticsNo: '',
-})
-
-const verifyPickupForm = reactive({
-  pickupCode: '',
 })
 
 const deliverRules: FormRules = {
@@ -192,15 +195,22 @@ const deliverRules: FormRules = {
 
 async function fetchDetail() {
   try {
-    const res = await orderApi.getDetail(route.params.id as string)
+    const res = await orderApi.getDetail(String(route.params.id))
     order.value = res.data || {}
   } catch {}
 }
 
 function showDeliverDialog() {
-  deliverForm.orderId = order.value.id
+  const orderId = String(order.value.id || '')
+  if (!/^\d+$/.test(orderId)) {
+    ElMessage.warning('订单ID无效，请刷新后重试')
+    return
+  }
+
+  deliverForm.orderId = orderId
   deliverForm.logisticsCompany = ''
   deliverForm.logisticsNo = ''
+  deliverFormRef.value?.clearValidate()
   deliverVisible.value = true
 }
 
@@ -208,9 +218,17 @@ async function handleDeliver() {
   const valid = await deliverFormRef.value?.validate().catch(() => false)
   if (!valid) return
 
+  const orderId = deliverForm.orderId
+  const logisticsCompany = deliverForm.logisticsCompany.trim()
+  const logisticsNo = deliverForm.logisticsNo.trim()
+  if (!orderId || !logisticsCompany || !logisticsNo) {
+    ElMessage.warning('请完整填写发货信息')
+    return
+  }
+
   submitting.value = true
   try {
-    await orderApi.deliver(deliverForm as any)
+    await orderApi.deliver({ orderId, logisticsCompany, logisticsNo })
     ElMessage.success('发货成功')
     deliverVisible.value = false
     fetchDetail()
@@ -221,28 +239,49 @@ async function handleDeliver() {
 
 async function handleCancelOrder() {
   try {
-    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /.+/, inputErrorMessage: '请输入取消原因' })
-    await orderApi.cancel(order.value.id, value)
+    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /\S+/, inputErrorMessage: '请输入取消原因' })
+    const reason = String(value || '').trim()
+    if (!reason) {
+      ElMessage.warning('请输入取消原因')
+      return
+    }
+    await orderApi.cancel(String(order.value.id), reason)
     ElMessage.success('取消成功')
     fetchDetail()
   } catch {}
 }
 
 function showVerifyPickupDialog() {
-  verifyPickupForm.pickupCode = order.value.pickupCode || ''
+  if (order.value.status !== 'pending_pickup') {
+    ElMessage.warning('当前订单状态不可核销')
+    return
+  }
+
+  const code = String(order.value.pickupCode || '').trim()
+  if (!/^\d{8}$/.test(code)) {
+    ElMessage.warning('当前订单自提码无效，请刷新后重试')
+    return
+  }
+
+  verifyPickupCode.value = code
   verifyPickupVisible.value = true
 }
 
 async function handleVerifyPickup() {
-  if (!verifyPickupForm.pickupCode) {
-    ElMessage.warning('请输入自提码')
+  const code = verifyPickupCode.value
+  const currentCode = String(order.value.pickupCode || '').trim()
+  if (order.value.status !== 'pending_pickup' || !/^\d{8}$/.test(code) || code !== currentCode) {
+    ElMessage.warning('订单或自提码已变化，请刷新后重试')
+    verifyPickupVisible.value = false
     return
   }
+
   submitting.value = true
   try {
-    await pickupStoreApi.verifyPickupCode(verifyPickupForm.pickupCode)
+    await pickupStoreApi.verifyPickupCode(code)
     ElMessage.success('核销成功')
     verifyPickupVisible.value = false
+    verifyPickupCode.value = ''
     fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '核销失败')
