@@ -59,10 +59,15 @@
       </div>
     </div>
 
-    <el-dialog v-model="deliverVisible" :title="batchMode ? '批量发货' : '发货'" width="500px" destroy-on-close>
-      <div v-if="batchMode">
-        <p style="margin-bottom: 10px">已选择 {{ selectedOrders.length }} 个订单</p>
-      </div>
+    <el-dialog v-model="deliverVisible" :title="batchMode ? '批量发货' : '发货'" :width="batchMode ? '760px' : '500px'" destroy-on-close>
+      <el-alert
+        v-if="batchMode"
+        :title="`已选择 ${batchRows.length} 个订单，请逐单填写对应物流单号`"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+
       <el-form ref="deliverFormRef" :model="deliverForm" :rules="deliverRules" label-width="100px">
         <el-form-item label="物流公司" prop="logisticsCompany">
           <el-select v-model="deliverForm.logisticsCompany" placeholder="请选择物流公司" filterable>
@@ -75,10 +80,23 @@
             <el-option label="京东物流" value="京东物流" />
           </el-select>
         </el-form-item>
-        <el-form-item label="物流单号" prop="logisticsNo">
+        <el-form-item v-if="!batchMode" label="物流单号" prop="logisticsNo">
           <el-input v-model="deliverForm.logisticsNo" placeholder="请输入物流单号" />
         </el-form-item>
       </el-form>
+
+      <el-table v-if="batchMode" :data="batchRows" border max-height="420">
+        <el-table-column prop="orderNo" label="订单号" min-width="210" />
+        <el-table-column label="收货人" width="110">
+          <template #default="{ row }">{{ row.consignee || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="物流单号" min-width="260">
+          <template #default="{ row }">
+            <el-input v-model="row.logisticsNo" placeholder="填写该订单物流单号" maxlength="80" />
+          </template>
+        </el-table-column>
+      </el-table>
+
       <template #footer>
         <el-button @click="deliverVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmitDeliver">确认发货</el-button>
@@ -94,12 +112,20 @@ import { orderApi } from '@/api/order'
 import { formatPrice, formatDate } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
+type BatchDeliveryRow = {
+  orderId: string
+  orderNo: string
+  consignee: string
+  logisticsNo: string
+}
+
 const loading = ref(false)
 const submitting = ref(false)
 const deliverVisible = ref(false)
 const batchMode = ref(false)
 const tableData = ref<any[]>([])
 const selectedOrders = ref<any[]>([])
+const batchRows = ref<BatchDeliveryRow[]>([])
 const deliverFormRef = ref<FormInstance>()
 
 const searchForm = reactive({ orderNo: '' })
@@ -147,6 +173,7 @@ function resetDeliverForm() {
   deliverForm.orderId = undefined
   deliverForm.logisticsCompany = ''
   deliverForm.logisticsNo = ''
+  batchRows.value = []
   deliverFormRef.value?.clearValidate()
 }
 
@@ -161,6 +188,12 @@ function handleBatchDeliver() {
   if (!selectedOrders.value.length) return
   batchMode.value = true
   resetDeliverForm()
+  batchRows.value = selectedOrders.value.map((o) => ({
+    orderId: String(o.id),
+    orderNo: String(o.orderNo || '-'),
+    consignee: String(o.consignee || ''),
+    logisticsNo: '',
+  }))
   deliverVisible.value = true
 }
 
@@ -169,14 +202,24 @@ async function handleSubmitDeliver() {
   if (!valid) return
 
   const logisticsCompany = deliverForm.logisticsCompany.trim()
-  const logisticsNo = deliverForm.logisticsNo.trim()
-  if (!logisticsCompany || !logisticsNo) {
-    ElMessage.warning('请完整填写发货信息')
+  if (!logisticsCompany) {
+    ElMessage.warning('请选择物流公司')
+    return
+  }
+
+  if (batchMode.value) {
+    const missingTrackingOrder = batchRows.value.find((row) => !row.logisticsNo.trim())
+    if (missingTrackingOrder) {
+      ElMessage.warning(`请填写订单 ${missingTrackingOrder.orderNo} 的物流单号`)
+      return
+    }
+  } else if (!deliverForm.logisticsNo.trim()) {
+    ElMessage.warning('请输入物流单号')
     return
   }
 
   try {
-    const actionText = batchMode.value ? `确认为 ${selectedOrders.value.length} 个订单批量发货？` : '确认发货？'
+    const actionText = batchMode.value ? `确认为 ${batchRows.value.length} 个订单批量发货？` : '确认发货？'
     await ElMessageBox.confirm(actionText, '发货确认', { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' })
   } catch {
     return
@@ -185,10 +228,10 @@ async function handleSubmitDeliver() {
   submitting.value = true
   try {
     if (batchMode.value) {
-      const orders = selectedOrders.value.map((o) => ({
-        orderId: String(o.id),
+      const orders = batchRows.value.map((row) => ({
+        orderId: row.orderId,
         logisticsCompany,
-        logisticsNo,
+        logisticsNo: row.logisticsNo.trim(),
       }))
       const res = await orderApi.batchDeliver({ orders })
       const result = res.data || {}
@@ -201,6 +244,7 @@ async function handleSubmitDeliver() {
         if (successCount > 0) {
           deliverVisible.value = false
           selectedOrders.value = []
+          batchRows.value = []
           fetchList()
         }
         ElMessage.warning(message)
@@ -210,6 +254,7 @@ async function handleSubmitDeliver() {
       ElMessage.success(`批量发货成功，共 ${successCount} 单`)
     } else {
       const orderId = deliverForm.orderId
+      const logisticsNo = deliverForm.logisticsNo.trim()
       if (!orderId) {
         ElMessage.warning('订单ID无效，请刷新后重试')
         return
@@ -220,6 +265,7 @@ async function handleSubmitDeliver() {
 
     deliverVisible.value = false
     selectedOrders.value = []
+    batchRows.value = []
     fetchList()
   } catch (e: any) {
     ElMessage.error(e?.message || '发货失败')
