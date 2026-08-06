@@ -59,8 +59,10 @@ test('core order identifiers remain bigint-safe in delivery and aftersale operat
   assert.match(delivery, /orderId:\s*String\(o\.id\)/)
   assert.match(orderApi, /orderId: string; logisticsCompany: string; logisticsNo: string/)
 
-  assert.equal((deliverDto.match(/orderId!:\s*string/g) || []).length, 2)
-  assert.doesNotMatch(deliverDto, /orderId!:\s*number/)
+  assert.match(deliverDto, /type DeliveryOrderId = string \| number/)
+  assert.equal((deliverDto.match(/orderId!:\s*DeliveryOrderId/g) || []).length, 2)
+  assert.equal((deliverDto.match(/@IsString\(\)/g) || []).length, 6)
+  assert.equal((deliverDto.match(/@Matches\(\/\^\\d\+\$\//g) || []).length, 2)
   assert.doesNotMatch(deliverDto, /@Type\(\(\) => Number\)/)
 
   assert.match(aftersaleApi, /type Id = string \| number/)
