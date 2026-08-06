@@ -7,16 +7,16 @@
         <el-card style="margin-bottom: 20px">
           <template #header><span>售后信息</span></template>
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="售后单号">{{ detail.id }}</el-descriptions-item>
-            <el-descriptions-item label="订单号">{{ detail.orderNo }}</el-descriptions-item>
+            <el-descriptions-item label="售后单号">{{ detail.aftersaleNo || detail.id || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="订单号">{{ detail.order?.orderNo || '-' }}</el-descriptions-item>
             <el-descriptions-item label="售后类型">{{ AFTERSALE_TYPE_MAP[detail.type] || '-' }}</el-descriptions-item>
             <el-descriptions-item label="状态">
-              <el-tag :type="detail.status === 0 ? 'warning' : detail.status === 4 ? 'success' : detail.status === 2 ? 'danger' : 'info'">
+              <el-tag :type="getAftersaleStatusTagType(detail.status)">
                 {{ formatAftersaleStatus(detail.status) }}
               </el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="退款金额">¥{{ formatPrice(detail.refundAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="申请时间">{{ formatDate(detail.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="申请时间">{{ formatDate(detail.createdAt) }}</el-descriptions-item>
             <el-descriptions-item label="售后原因" :span="2">{{ detail.reason || '-' }}</el-descriptions-item>
             <el-descriptions-item label="售后描述" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
           </el-descriptions>
@@ -36,18 +36,23 @@
 
         <el-card>
           <template #header><span>商品信息</span></template>
-          <el-table :data="asArray(detail.items)" stripe>
+          <el-table :data="orderItems" stripe>
             <el-table-column label="商品图片" width="80">
               <template #default="{ row }">
                 <el-image :src="row.productImage" style="width: 50px; height: 50px" fit="cover" />
               </template>
             </el-table-column>
             <el-table-column prop="productName" label="商品名称" show-overflow-tooltip />
-            <el-table-column prop="skuName" label="规格" width="120" />
+            <el-table-column label="规格" width="160">
+              <template #default="{ row }">{{ formatSkuSpecs(row.skuSpecs) }}</template>
+            </el-table-column>
             <el-table-column label="单价" width="100">
               <template #default="{ row }">¥{{ formatPrice(row.price) }}</template>
             </el-table-column>
             <el-table-column prop="quantity" label="数量" width="80" />
+            <el-table-column label="小计" width="100">
+              <template #default="{ row }">¥{{ formatPrice(row.subtotal) }}</template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-col>
@@ -56,19 +61,25 @@
         <el-card style="margin-bottom: 20px">
           <template #header><span>用户信息</span></template>
           <el-descriptions :column="1" border>
-            <el-descriptions-item label="用户">{{ detail.userName }}</el-descriptions-item>
-            <el-descriptions-item label="联系电话">{{ detail.userPhone }}</el-descriptions-item>
+            <el-descriptions-item label="用户">{{ detail.user?.nickname || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="联系电话">{{ detail.user?.phone || '-' }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
 
-        <el-card v-if="detail.status === 0" v-permission="'order:aftersale:review'">
+        <el-card v-if="detail.status === 'pending_review'" v-permission="'order:aftersale:review'">
           <template #header><span>审核操作</span></template>
-          <el-form label-width="100px">
+          <el-form label-width="110px">
             <el-form-item label="审核结果">
               <el-radio-group v-model="auditResult">
                 <el-radio value="approve">通过</el-radio>
                 <el-radio value="reject">拒绝</el-radio>
               </el-radio-group>
+            </el-form-item>
+            <el-form-item v-if="auditResult === 'approve'" label="退款金额(元)">
+              <el-input-number v-model="refundAmountYuan" :min="0.01" :precision="2" style="width: 180px" />
+              <div style="width: 100%; margin-top: 6px; color: #909399; font-size: 12px">
+                系统会校验可退金额上限
+              </div>
             </el-form-item>
             <el-form-item v-if="auditResult === 'reject'" label="拒绝原因">
               <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝原因" />
@@ -79,16 +90,12 @@
           </el-form>
         </el-card>
 
-        <el-card v-if="detail.status === 1" v-permission="'order:aftersale:refund'">
+        <el-card v-if="canRefund" v-permission="'order:aftersale:refund'">
           <template #header><span>退款操作</span></template>
-          <el-form label-width="100px">
-            <el-form-item label="退款金额(元)">
-              <el-input-number v-model="refundAmountYuan" :min="0" :precision="2" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="submitting" @click="handleRefund">确认退款</el-button>
-            </el-form-item>
-          </el-form>
+          <el-descriptions :column="1" border style="margin-bottom: 16px">
+            <el-descriptions-item label="确认退款金额">¥{{ formatPrice(detail.refundAmount) }}</el-descriptions-item>
+          </el-descriptions>
+          <el-button type="primary" :loading="submitting" @click="handleRefund">确认退款</el-button>
         </el-card>
       </el-col>
     </el-row>
@@ -96,15 +103,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
-import { formatPrice, formatDate, formatAftersaleStatus, priceToFen } from '@/utils/format'
+import {
+  formatPrice,
+  formatDate,
+  formatAftersaleStatus,
+  getAftersaleStatusTagType,
+  priceToFen,
+} from '@/utils/format'
 import { resolvePrivateFileUrls, revokePrivateObjectUrls } from '@/utils/private-file'
 import { asArray } from '@/utils/response'
 
-const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款', 3: '换货' }
+const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款' }
 const router = useRouter()
 const route = useRoute()
 const submitting = ref(false)
@@ -114,13 +127,30 @@ const rejectReason = ref('')
 const refundAmountYuan = ref(0)
 const displayImages = ref<string[]>([])
 
+const orderItems = computed(() => (detail.value.orderItem ? [detail.value.orderItem] : []))
+const canRefund = computed(() => {
+  return (
+    (detail.value.type === 1 && detail.value.status === 'approved') ||
+    (detail.value.type === 2 && detail.value.status === 'returned')
+  )
+})
+
+function formatSkuSpecs(specs: unknown) {
+  if (!specs) return '-'
+  if (typeof specs === 'string') return specs
+  if (Array.isArray(specs)) return specs.join(' / ')
+  if (typeof specs === 'object') return Object.values(specs as Record<string, unknown>).join(' / ')
+  return String(specs)
+}
+
 async function fetchDetail() {
   try {
     revokePrivateObjectUrls(displayImages.value)
     displayImages.value = []
     const res = await aftersaleApi.getDetail(String(route.params.id))
     detail.value = res.data || {}
-    refundAmountYuan.value = (res.data?.refundAmount || 0) / 100
+    const defaultRefundAmount = detail.value.refundAmount || detail.value.orderItem?.subtotal || 0
+    refundAmountYuan.value = defaultRefundAmount / 100
     displayImages.value = await resolvePrivateFileUrls(asArray(detail.value.images))
   } catch (e: any) {
     ElMessage.error(e?.message || '获取售后详情失败')
@@ -128,9 +158,24 @@ async function fetchDetail() {
 }
 
 async function handleAudit() {
-  const actionLabel = auditResult.value === 'approve' ? '通过' : '拒绝'
+  if (auditResult.value === 'reject' && !rejectReason.value.trim()) {
+    ElMessage.warning('请输入拒绝原因')
+    return
+  }
+
+  const refundAmount = priceToFen(refundAmountYuan.value)
+  if (auditResult.value === 'approve' && refundAmount <= 0) {
+    ElMessage.warning('请输入正确的退款金额')
+    return
+  }
+
+  const actionLabel = auditResult.value === 'approve' ? `通过并确认退款 ¥${refundAmountYuan.value.toFixed(2)}` : '拒绝'
   try {
-    await ElMessageBox.confirm(`确认${actionLabel}该售后申请？`, '审核确认', { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' })
+    await ElMessageBox.confirm(`确认${actionLabel}该售后申请？`, '审核确认', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
   } catch {
     return
   }
@@ -138,17 +183,13 @@ async function handleAudit() {
   submitting.value = true
   try {
     if (auditResult.value === 'approve') {
-      await aftersaleApi.approve(detail.value.id)
+      await aftersaleApi.approve(String(detail.value.id), refundAmount)
       ElMessage.success('审核通过')
     } else {
-      if (!rejectReason.value) {
-        ElMessage.warning('请输入拒绝原因')
-        return
-      }
-      await aftersaleApi.reject(detail.value.id, rejectReason.value)
+      await aftersaleApi.reject(String(detail.value.id), rejectReason.value.trim())
       ElMessage.success('已拒绝')
     }
-    fetchDetail()
+    await fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.message || '审核操作失败')
   } finally {
@@ -157,17 +198,27 @@ async function handleAudit() {
 }
 
 async function handleRefund() {
+  const refundAmount = Number(detail.value.refundAmount || 0)
+  if (refundAmount <= 0) {
+    ElMessage.warning('退款金额未设置')
+    return
+  }
+
   try {
-    await ElMessageBox.confirm(`确认退款 ¥${refundAmountYuan.value.toFixed(2)}？此操作将发起微信退款，请谨慎操作。`, '退款确认', { confirmButtonText: '确认退款', cancelButtonText: '取消', type: 'warning' })
+    await ElMessageBox.confirm(`确认退款 ¥${formatPrice(refundAmount)}？此操作将发起微信退款，请谨慎操作。`, '退款确认', {
+      confirmButtonText: '确认退款',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
   } catch {
     return
   }
 
   submitting.value = true
   try {
-    await aftersaleApi.refund(detail.value.id, priceToFen(refundAmountYuan.value))
-    ElMessage.success('退款成功')
-    fetchDetail()
+    await aftersaleApi.refund(String(detail.value.id))
+    ElMessage.success('退款已发起')
+    await fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.message || '退款失败')
   } finally {
