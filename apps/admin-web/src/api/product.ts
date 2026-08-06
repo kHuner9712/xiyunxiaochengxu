@@ -1,22 +1,24 @@
 import request from '@/utils/request'
 
+type Id = string | number
+
 export const productApi = {
-  getList(params: { page: number; pageSize: number; keyword?: string; categoryId?: number; status?: number; brandId?: number }) {
+  getList(params: { page: number; pageSize: number; keyword?: string; categoryId?: Id; status?: number; brandId?: Id }) {
     return request.get('/admin/product/list', { params })
   },
-  getDetail(id: number) {
+  getDetail(id: Id) {
     return request.get(`/admin/product/detail/${id}`)
   },
   create(data: any) {
     return request.post('/admin/product/create', data)
   },
-  update(id: number, data: any) {
+  update(id: Id, data: any) {
     return request.put(`/admin/product/update/${id}`, data)
   },
-  delete(id: number) {
+  delete(id: Id) {
     return request.delete(`/admin/product/delete/${id}`)
   },
-  updateStatus(id: number, status: number) {
+  updateStatus(id: Id, status: number) {
     return request.put(`/admin/product/status/${id}`, { status })
   },
 }
