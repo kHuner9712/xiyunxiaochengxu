@@ -3,6 +3,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -13,13 +14,17 @@ import { FlashSaleBuyDto } from './dto/flash-sale.dto';
 
 @Injectable()
 export class TransactionalFlashSaleService extends FlashSaleService {
+  private readonly transactionalLogger = new Logger(
+    TransactionalFlashSaleService.name,
+  );
+
   constructor(
     private readonly transactionalPrisma: PrismaService,
     @Inject(forwardRef(() => OrderService))
-    orderService: OrderService,
+    private readonly transactionalOrderService: OrderService,
     private readonly promotionCheckout: PromotionCheckoutService,
   ) {
-    super(transactionalPrisma, orderService);
+    super(transactionalPrisma, transactionalOrderService);
   }
 
   override async weappBuy(userId: string, dto: FlashSaleBuyDto) {
@@ -140,5 +145,36 @@ export class TransactionalFlashSaleService extends FlashSaleService {
       },
       { timeout: 15_000 },
     );
+  }
+
+  override async releaseExpiredLocks() {
+    const expiredBefore = await this.transactionalPrisma.flashSaleOrder.findMany({
+      where: {
+        status: 'pending_payment',
+        lockExpireAt: { lt: new Date() },
+        deletedAt: null,
+      },
+      select: { id: true, orderId: true },
+      take: 200,
+    });
+    if (expiredBefore.length === 0) return { released: 0 };
+
+    await this.transactionalOrderService.closeTimeoutOrders();
+
+    const remaining = await this.transactionalPrisma.flashSaleOrder.count({
+      where: {
+        id: { in: expiredBefore.map((item) => item.id) },
+        status: 'pending_payment',
+        deletedAt: null,
+      },
+    });
+    const released = expiredBefore.length - remaining;
+
+    if (remaining > 0) {
+      this.transactionalLogger.warn(
+        `仍有 ${remaining} 条过期秒杀订单未完成整单关闭，保留库存锁并等待下一轮重试`,
+      );
+    }
+    return { released };
   }
 }
