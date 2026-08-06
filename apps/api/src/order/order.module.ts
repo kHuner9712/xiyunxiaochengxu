@@ -20,10 +20,9 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
   controllers: [WeappOrderController, AdminOrderController],
   providers: [
     PromotionCheckoutService,
-    TransactionalOrderService,
     {
       provide: OrderService,
-      useExisting: TransactionalOrderService,
+      useClass: TransactionalOrderService,
     },
   ],
   exports: [OrderService, PromotionCheckoutService],
