@@ -17,6 +17,7 @@
     "typecheck": "pnpm prepare:ci && pnpm --filter @baby-mall/api build && pnpm --filter @baby-mall/admin-web typecheck && pnpm --filter @baby-mall/miniprogram typecheck",
     "lint": "pnpm --filter @baby-mall/api lint && pnpm --filter @baby-mall/admin-web lint",
     "test:admin": "node --test apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs",
+    "test:admin:browser": "node deploy/scripts/admin-browser-e2e.mjs",
     "test:ci": "pnpm prepare:ci && pnpm test:admin && pnpm --filter @baby-mall/api test:ci && pnpm --filter @baby-mall/miniprogram test",
     "audit:runtime": "node deploy/scripts/audit-runtime-contracts.mjs",
     "audit:api-contracts": "node deploy/scripts/audit-api-contracts.mjs",
