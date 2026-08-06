@@ -12,10 +12,9 @@ import { OrderModule } from '../order/order.module';
   imports: [PrismaModule, forwardRef(() => OrderModule)],
   controllers: [AdminFlashSaleController, WeappFlashSaleController],
   providers: [
-    TransactionalFlashSaleService,
     {
       provide: FlashSaleService,
-      useExisting: TransactionalFlashSaleService,
+      useClass: TransactionalFlashSaleService,
     },
   ],
   exports: [FlashSaleService],
