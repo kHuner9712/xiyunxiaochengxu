@@ -23,6 +23,20 @@ test('batch delivery requires a tracking number for every selected order', () =>
   )
 })
 
+test('delivery list uses serialized receiver fields and actual purchased units', () => {
+  assert.match(delivery, /\{\{ getDeliveryItemQuantity\(row\.orderItems\) \}\}/)
+  assert.match(delivery, /function getDeliveryItemQuantity\(orderItems: unknown\)/)
+  assert.match(delivery, /const quantity = Number\(item\?\.quantity\)/)
+  assert.match(delivery, /row\.receiverName \|\| '-'/)
+  assert.match(delivery, /row\.receiverPhone \|\| '-'/)
+  assert.match(delivery, /\{\{ formatDeliveryAddress\(row\) \}\}/)
+  assert.match(delivery, /\[row\?\.province, row\?\.city, row\?\.district, row\?\.detailAddress\]/)
+  assert.match(delivery, /consignee:\s*String\(o\.receiverName \|\| ''\)/)
+  assert.doesNotMatch(delivery, /consignee:\s*String\(o\.consignee \|\| ''\)/)
+  assert.match(delivery, /<el-table-column label="商品金额" width="120">[\s\S]*?formatPrice\(row\.totalAmount\)/)
+  assert.doesNotMatch(delivery, /<el-table-column label="订单金额"/)
+})
+
 test('order list displays purchased units and truthful product amount labels', () => {
   assert.match(orderList, /\{\{ getOrderItemQuantity\(row\.items\) \}\}/)
   assert.match(orderList, /function getOrderItemQuantity\(items: unknown\)/)
