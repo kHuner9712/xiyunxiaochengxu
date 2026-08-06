@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -26,6 +28,7 @@ function generateGroupNo(): string {
 export class TransactionalGroupBuyService extends GroupBuyService {
   constructor(
     private readonly transactionalPrisma: PrismaService,
+    @Inject(forwardRef(() => OrderService))
     orderService: OrderService,
     private readonly promotionCheckout: PromotionCheckoutService,
   ) {
@@ -42,7 +45,7 @@ export class TransactionalGroupBuyService extends GroupBuyService {
         const activity = await tx.groupBuyActivity.findFirst({
           where: { id: activityId, deletedAt: null },
         });
-        this.assertActivityValid(activity);
+        this.assertTransactionalActivityValid(activity);
         await this.assertActivityCapacity(tx, activity!, userIdValue, quantity);
 
         const skuId = activity!.skuId ?? (dto.skuId ? BigInt(dto.skuId) : null);
@@ -161,7 +164,7 @@ export class TransactionalGroupBuyService extends GroupBuyService {
         const activity = await tx.groupBuyActivity.findFirst({
           where: { id: group.activityId, deletedAt: null },
         });
-        this.assertActivityValid(activity);
+        this.assertTransactionalActivityValid(activity);
         await this.assertActivityCapacity(tx, activity!, userIdValue, quantity);
 
         const existed = await tx.groupBuyMember.findFirst({
@@ -240,7 +243,7 @@ export class TransactionalGroupBuyService extends GroupBuyService {
     const activity = await this.transactionalPrisma.groupBuyActivity.findFirst({
       where: { id: BigInt(activityId), deletedAt: null },
     });
-    this.assertActivityValid(activity);
+    this.assertTransactionalActivityValid(activity);
 
     const now = new Date();
     const groups = await this.transactionalPrisma.groupBuyGroup.findMany({
@@ -309,7 +312,7 @@ export class TransactionalGroupBuyService extends GroupBuyService {
     return quantity;
   }
 
-  private assertActivityValid(activity: {
+  private assertTransactionalActivityValid(activity: {
     status: number;
     startTime: Date;
     endTime: Date;
