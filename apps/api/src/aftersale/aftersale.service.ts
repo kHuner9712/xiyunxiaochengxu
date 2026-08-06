@@ -241,12 +241,14 @@ export class AftersaleService {
         })
       : null;
     const retryableStatuses = [REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL] as string[];
+    const syncRequiredStatuses = [REFUND_STATUS.INITIATING, REFUND_STATUS.FAILED] as string[];
 
     return {
       ...this.serializeAftersale(aftersale),
       latestRefundStatus: latestRefund?.status || null,
       latestOutRefundNo: latestRefund?.outRefundNo || null,
       refundRetryable: !!latestRefund && retryableStatuses.includes(latestRefund.status),
+      refundSyncRequired: !!latestRefund && syncRequiredStatuses.includes(latestRefund.status),
     };
   }
 
