@@ -90,14 +90,23 @@
           </el-form>
         </el-card>
 
-        <el-alert
-          v-if="needsRefundSync"
-          title="退款请求结果待核实，请先同步微信退款状态，确认已关闭或异常后再重试"
-          type="warning"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 20px"
-        />
+        <el-card v-if="needsRefundSync" style="margin-bottom: 20px">
+          <el-alert
+            title="退款请求结果待核实，请先同步微信退款状态，确认已关闭或异常后再重试"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px"
+          />
+          <el-button
+            v-permission="'order:aftersale:refund'"
+            :loading="syncingRefund"
+            :disabled="!detail.latestOutRefundNo"
+            @click="handleSyncRefund"
+          >
+            同步微信退款状态
+          </el-button>
+        </el-card>
 
         <el-card v-if="canRefund" v-permission="'order:aftersale:refund'">
           <template #header><span>{{ isRefundRetry ? '退款重试' : '退款操作' }}</span></template>
@@ -118,6 +127,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
+import { refundApi } from '@/api/refund'
 import {
   formatPrice,
   formatDate,
@@ -132,6 +142,7 @@ const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货�
 const router = useRouter()
 const route = useRoute()
 const submitting = ref(false)
+const syncingRefund = ref(false)
 const detail = ref<any>({})
 const auditResult = ref('approve')
 const rejectReason = ref('')
@@ -212,6 +223,30 @@ async function handleAudit() {
     ElMessage.error(e?.message || '审核操作失败')
   } finally {
     submitting.value = false
+  }
+}
+
+async function handleSyncRefund() {
+  const outRefundNo = String(detail.value.latestOutRefundNo || '').trim()
+  if (!outRefundNo) {
+    ElMessage.warning('退款单号缺失，无法同步')
+    return
+  }
+
+  syncingRefund.value = true
+  try {
+    const res = await refundApi.sync(outRefundNo)
+    const result = res.data || {}
+    if (result.synced === false) {
+      ElMessage.warning(result.message || '退款状态暂未完成同步')
+    } else {
+      ElMessage.success(result.message || '退款状态已同步')
+    }
+    await fetchDetail()
+  } catch {
+    // 请求错误由全局拦截器统一提示。
+  } finally {
+    syncingRefund.value = false
   }
 }
 
