@@ -104,7 +104,7 @@ const searchForm = reactive({ orderNo: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const deliverForm = reactive({
-  orderId: undefined as string | number | undefined,
+  orderId: undefined as string | undefined,
   logisticsCompany: '',
   logisticsNo: '',
 })
@@ -143,7 +143,7 @@ function handleSelectionChange(rows: any[]) {
 
 function handleDeliver(row: any) {
   batchMode.value = false
-  deliverForm.orderId = row.id
+  deliverForm.orderId = String(row.id)
   deliverForm.logisticsCompany = ''
   deliverForm.logisticsNo = ''
   deliverVisible.value = true
@@ -171,13 +171,13 @@ async function handleSubmitDeliver() {
   try {
     if (batchMode.value) {
       const orders = selectedOrders.value.map((o) => ({
-        orderId: o.id,
+        orderId: String(o.id),
         logisticsCompany: deliverForm.logisticsCompany,
         logisticsNo: deliverForm.logisticsNo,
       }))
       await orderApi.batchDeliver({ orders })
     } else {
-      await orderApi.deliver(deliverForm as any)
+      await orderApi.deliver(deliverForm as { orderId: string; logisticsCompany: string; logisticsNo: string })
     }
     ElMessage.success('发货成功')
     deliverVisible.value = false
