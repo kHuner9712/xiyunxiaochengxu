@@ -25,19 +25,44 @@ const PENDING_REFUND_AFTERSALE = {
   },
 };
 
-function createService(latestRefundStatus: string | null) {
+const APPROVED_AFTERSALE = {
+  ...PENDING_REFUND_AFTERSALE,
+  status: AftersaleStatus.approved,
+};
+
+function refundRecord(status: string, id = 70n) {
+  return { id, status, outRefundNo: `RF${id}`, createdAt: new Date() };
+}
+
+function createService(
+  latestRefundStatus: string | null,
+  options: {
+    aftersale?: any;
+    lockAcquired?: boolean;
+    refundSequence?: any[];
+  } = {},
+) {
+  const rawQuery = jest.fn()
+    .mockResolvedValueOnce([{ acquired: options.lockAcquired === false ? 0 : 1 }])
+    .mockResolvedValueOnce([{ released: 1 }]);
+  const tx = { $queryRawUnsafe: rawQuery };
+  const findRefund = jest.fn();
+  if (options.refundSequence) {
+    for (const value of options.refundSequence) findRefund.mockResolvedValueOnce(value);
+  } else {
+    findRefund.mockResolvedValue(
+      latestRefundStatus ? refundRecord(latestRefundStatus) : null,
+    );
+  }
+
   const prisma = {
+    $transaction: jest.fn(async (callback: any) => callback(tx)),
     aftersaleOrder: {
-      findFirst: jest.fn().mockResolvedValue(PENDING_REFUND_AFTERSALE),
+      findFirst: jest.fn().mockResolvedValue(options.aftersale || PENDING_REFUND_AFTERSALE),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    orderRefund: {
-      findFirst: jest.fn().mockResolvedValue(
-        latestRefundStatus
-          ? { id: 70n, status: latestRefundStatus, outRefundNo: 'RF202608070000', createdAt: new Date() }
-          : null,
-      ),
-    },
-    aftersaleLog: { create: jest.fn() },
+    orderRefund: { findFirst: findRefund },
+    aftersaleLog: { create: jest.fn().mockResolvedValue({}) },
   };
   const paymentService = {
     createRefund: jest.fn().mockResolvedValue({
@@ -50,7 +75,7 @@ function createService(latestRefundStatus: string | null) {
   jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
-  return { service, prisma, paymentService };
+  return { service, prisma, paymentService, rawQuery };
 }
 
 describe('AftersaleService refund retry', () => {
@@ -103,7 +128,7 @@ describe('AftersaleService refund retry', () => {
     await expect(service.findAdminDetail('50')).resolves.toEqual(
       expect.objectContaining({
         latestRefundStatus: REFUND_STATUS.CLOSED,
-        latestOutRefundNo: 'RF202608070000',
+        latestOutRefundNo: 'RF70',
         refundRetryable: true,
       }),
     );
@@ -121,6 +146,90 @@ describe('AftersaleService refund retry', () => {
       expect.objectContaining({
         latestRefundStatus: REFUND_STATUS.FAILED,
         refundRetryable: false,
+      }),
+    );
+  });
+});
+
+describe('AftersaleService refund initiation lock', () => {
+  it('获取数据库锁后调用退款，并在成功后释放锁', async () => {
+    const { service, paymentService, rawQuery } = createService(null, {
+      aftersale: APPROVED_AFTERSALE,
+    });
+
+    await service.refund('50', '1');
+
+    expect(rawQuery).toHaveBeenNthCalledWith(
+      1,
+      'SELECT GET_LOCK(?, 0) AS acquired',
+      'aftersale_refund:50',
+    );
+    expect(paymentService.createRefund).toHaveBeenCalledTimes(1);
+    expect(rawQuery).toHaveBeenNthCalledWith(
+      2,
+      'SELECT RELEASE_LOCK(?) AS released',
+      'aftersale_refund:50',
+    );
+  });
+
+  it('数据库锁已被占用时拒绝重复退款且不写失败日志', async () => {
+    const { service, prisma, paymentService, rawQuery } = createService(null, {
+      aftersale: APPROVED_AFTERSALE,
+      lockAcquired: false,
+    });
+
+    await expect(service.refund('50', '1'))
+      .rejects.toThrow('退款操作正在处理中，请勿重复提交');
+
+    expect(paymentService.createRefund).not.toHaveBeenCalled();
+    expect(prisma.aftersaleLog.create).not.toHaveBeenCalled();
+    expect(rawQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('网络错误但已生成新退款记录时转为 pending_refund 并要求同步', async () => {
+    const newFailedRefund = refundRecord(REFUND_STATUS.FAILED, 71n);
+    const { service, prisma, paymentService, rawQuery } = createService(null, {
+      aftersale: APPROVED_AFTERSALE,
+      refundSequence: [null, newFailedRefund],
+    });
+    paymentService.createRefund.mockRejectedValue(new Error('socket timeout'));
+
+    await expect(service.refund('50', '1')).rejects.toThrow('socket timeout');
+
+    expect(prisma.aftersaleOrder.updateMany).toHaveBeenCalledWith({
+      where: { id: 50n, status: AftersaleStatus.approved },
+      data: { status: AftersaleStatus.pending_refund },
+    });
+    expect(prisma.aftersaleLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'refund_failed',
+          content: expect.stringContaining('请先同步微信退款状态'),
+        }),
+      }),
+    );
+    expect(rawQuery).toHaveBeenNthCalledWith(
+      2,
+      'SELECT RELEASE_LOCK(?) AS released',
+      'aftersale_refund:50',
+    );
+  });
+
+  it('支付服务在创建退款记录前失败时保持原售后状态', async () => {
+    const { service, prisma, paymentService } = createService(null, {
+      aftersale: APPROVED_AFTERSALE,
+      refundSequence: [null, null],
+    });
+    paymentService.createRefund.mockRejectedValue(new Error('支付配置缺失'));
+
+    await expect(service.refund('50', '1')).rejects.toThrow('支付配置缺失');
+
+    expect(prisma.aftersaleOrder.updateMany).not.toHaveBeenCalled();
+    expect(prisma.aftersaleLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          content: expect.stringContaining('售后单保持原状态'),
+        }),
       }),
     );
   });
