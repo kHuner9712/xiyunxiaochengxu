@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
-import { OrderService } from '../src/order/order.service';
+import { TransactionalOrderService } from '../src/order/transactional-order.service';
 import { PromotionCheckoutService } from '../src/order/promotion-checkout.service';
 import { TransactionalFlashSaleService } from '../src/flash-sale/transactional-flash-sale.service';
 import { TransactionalGroupBuyService } from '../src/group-buy/transactional-group-buy.service';
@@ -58,7 +58,7 @@ async function main() {
     handleOrderCancel: (orderId: bigint | string) =>
       groupBuyService.handleOrderCancel(orderId),
   };
-  const orderService = new OrderService(
+  const orderService = new TransactionalOrderService(
     prisma as any,
     businessEvent as any,
     benefitPackage as any,
