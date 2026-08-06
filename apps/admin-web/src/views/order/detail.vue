@@ -111,7 +111,7 @@
               :timestamp="formatDate(log.createTime)"
               placement="top"
             >
-              {{ log.content }} <span v-if="log.operator">（{{ log.operator }}）</span>
+              {{ log.content }} <span>（{{ formatOrderLogOperator(log) }}）</span>
             </el-timeline-item>
           </el-timeline>
         </el-card>
@@ -224,6 +224,13 @@ async function fetchDetail() {
     const res = await orderApi.getDetail(String(route.params.id))
     order.value = res.data || {}
   } catch {}
+}
+
+function formatOrderLogOperator(log: any) {
+  if (log?.operatorType === 'admin') return '管理员'
+  if (log?.operatorType === 'system') return '系统'
+  if (log?.operatorType === 'user') return '用户'
+  return String(log?.operator || '未知')
 }
 
 function showRemarkDialog() {
