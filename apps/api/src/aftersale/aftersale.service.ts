@@ -352,7 +352,7 @@ export class AftersaleService {
 
     let retryingTerminalRefund = false;
     if (aftersale.status === AftersaleStatus.pending_refund) {
-      const latestRefund = await this.prisma.orderRefund.findFirst({
+      const latestRefund = await this.prisma.orderRefund?.findFirst({
         where: { aftersaleId: BigInt(id) },
         orderBy: { createdAt: 'desc' },
       });
