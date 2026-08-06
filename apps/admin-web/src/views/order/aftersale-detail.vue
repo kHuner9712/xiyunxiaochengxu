@@ -154,7 +154,7 @@ const isRefundRetry = computed(() => {
   return detail.value.status === 'pending_refund' && detail.value.refundRetryable === true
 })
 const needsRefundSync = computed(() => {
-  return detail.value.status === 'pending_refund' && detail.value.latestRefundStatus === 'failed'
+  return detail.value.status === 'pending_refund' && detail.value.refundSyncRequired === true
 })
 const canRefund = computed(() => {
   return (
