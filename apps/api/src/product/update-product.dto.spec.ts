@@ -12,9 +12,9 @@ describe('UpdateProductDto 白名单校验', () => {
   it('合法字段应通过校验', async () => {
     const payload = {
       name: '测试商品',
-      categoryId: 1,
-      brandId: 2,
-      supplierId: 3,
+      categoryId: '1',
+      brandId: '2',
+      supplierId: '3',
       recommendAgeMin: 0,
       recommendAgeMax: 36,
       isPeriodPurchase: 1,
