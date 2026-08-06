@@ -7,6 +7,9 @@ export const orderApi = {
   getDetail(id: string | number) {
     return request.get(`/admin/order/detail/${id}`)
   },
+  remark(id: string | number, remark: string) {
+    return request.put(`/admin/order/remark/${id}`, { remark })
+  },
   cancel(id: string | number, reason: string) {
     return request.put(`/admin/order/cancel/${id}`, { reason })
   },
