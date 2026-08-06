@@ -15,7 +15,7 @@
     <div class="table-card">
       <div style="margin-bottom: 16px; display: flex; justify-content: space-between">
         <span style="font-size: 14px; color: #909399">待发货订单列表</span>
-        <el-button v-permission="'order:delivery'" type="primary" :disabled="!selectedOrders.length" @click="handleBatchDeliver">批量发货</el-button>
+        <el-button v-permission="'order:deliver'" type="primary" :disabled="!selectedOrders.length" @click="handleBatchDeliver">批量发货</el-button>
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading" @selection-change="handleSelectionChange">
@@ -39,7 +39,7 @@
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'order:delivery'" type="primary" link @click="handleDeliver(row)">发货</el-button>
+            <el-button v-permission="'order:deliver'" type="primary" link @click="handleDeliver(row)">发货</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -104,7 +104,7 @@ const searchForm = reactive({ orderNo: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const deliverForm = reactive({
-  orderId: undefined as number | undefined,
+  orderId: undefined as string | number | undefined,
   logisticsCompany: '',
   logisticsNo: '',
 })
