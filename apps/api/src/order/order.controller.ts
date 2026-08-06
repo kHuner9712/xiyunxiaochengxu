@@ -3,10 +3,12 @@ import { OrderService } from './order.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
+import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { DeliverDto, BatchDeliverDto } from './dto/deliver.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { AdminRemarkDto } from './dto/admin-remark.dto';
 import { Response } from 'express';
 
 @Controller('weapp/order')
@@ -88,7 +90,10 @@ export class WeappOrderController {
 
 @Controller('admin/order')
 export class AdminOrderController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(
+    private readonly orderService: OrderService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('list')
   @RequirePermission('order:list')
@@ -99,13 +104,26 @@ export class AdminOrderController {
   @Get('detail/:id')
   @RequirePermission('order:detail')
   async detail(@Param('id') id: string) {
-    return this.orderService.findAdminById(id);
+    const [detail, order] = await Promise.all([
+      this.orderService.findAdminById(id),
+      this.prisma.order.findUnique({
+        where: { id: BigInt(id) },
+        select: { adminRemark: true },
+      }),
+    ]);
+
+    return {
+      ...detail,
+      adminRemark: order?.adminRemark || '',
+    };
   }
 
   @Put('remark/:id')
   @RequirePermission('order:remark')
-  async remark(@Param('id') id: string, @Body() body: { remark: string }) {
-    return this.orderService.adminRemark(id, body.remark);
+  async remark(@Param('id') id: string, @Body() dto: AdminRemarkDto) {
+    const adminRemark = dto.remark.trim();
+    const result = await this.orderService.adminRemark(id, adminRemark);
+    return { ...result, adminRemark };
   }
 
   @Put('cancel/:id')
