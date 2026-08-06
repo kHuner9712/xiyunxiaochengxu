@@ -20,7 +20,7 @@ test('package.json exposes audited freeze and production gates', () => {
   assert.match(production, /--strict-prod-gate/)
   assert.match(production, /--require-real-wx-appid/)
   assert.equal(pkg.scripts['test:admin'], 'node --test apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs')
-  assert.equal(pkg.scripts['test:admin:browser'], 'node deploy/scripts/admin-browser-e2e.mjs')
+  assert.equal(pkg.scripts['test:admin:browser'], 'node deploy/scripts/run-admin-browser-e2e.mjs')
 })
 
 test('release gate wrapper preserves env, reports boundaries and runs supplemental tests safely', () => {
@@ -42,6 +42,7 @@ test('release gate wrapper preserves env, reports boundaries and runs supplement
 
 test('admin browser gate uses a built SPA, Chrome DevTools and refresh persistence evidence', () => {
   const browserGate = readFileSync(resolve(root, 'deploy/scripts/admin-browser-e2e.mjs'), 'utf8')
+  const browserRunner = readFileSync(resolve(root, 'deploy/scripts/run-admin-browser-e2e.mjs'), 'utf8')
 
   assert.match(browserGate, /apps\/admin-web\/dist/)
   assert.match(browserGate, /remote-debugging-port=0/)
@@ -50,6 +51,12 @@ test('admin browser gate uses a built SPA, Chrome DevTools and refresh persisten
   assert.match(browserGate, /Page\.reload/)
   assert.match(browserGate, /reload persistence/)
   assert.doesNotMatch(browserGate, /puppeteer|playwright|selenium/i)
+
+  assert.match(browserRunner, /spawnSync\(process\.execPath/)
+  assert.match(browserRunner, /PASS login → permission menu → config save → reload persistence/)
+  assert.match(browserRunner, /ENOTEMPTY: directory not empty/)
+  assert.match(browserRunner, /maxRetries: 10/)
+  assert.match(browserRunner, /retryDelay: 100/)
 })
 
 test('release-check.sh recognizes freeze mode and prints both gate conclusions', () => {
