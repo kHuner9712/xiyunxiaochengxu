@@ -44,8 +44,22 @@ docker compose version >/dev/null 2>&1 || fail 'docker compose is unavailable'
 cd "$ROOT_DIR"
 [ -z "$(git status --porcelain)" ] || fail 'Git worktree is not clean; stop before production deployment'
 
-BUILD_SHA="$(git rev-parse --short HEAD)"
+CURRENT_BRANCH="$(git branch --show-current)"
+[ "$CURRENT_BRANCH" = 'main' ] || fail "production deployment must run from main; current branch is '${CURRENT_BRANCH:-detached}'"
+
 FULL_SHA="$(git rev-parse HEAD)"
+BUILD_SHA="$(git rev-parse --short HEAD)"
+EXPECTED_DEPLOY_SHA="${EXPECTED_DEPLOY_SHA:-}"
+[[ "$EXPECTED_DEPLOY_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || fail 'EXPECTED_DEPLOY_SHA is required and must be the exact 40-character commit SHA approved for deployment'
+EXPECTED_DEPLOY_SHA="$(printf '%s' "$EXPECTED_DEPLOY_SHA" | tr 'A-F' 'a-f')"
+[ "$FULL_SHA" = "$EXPECTED_DEPLOY_SHA" ] || fail "HEAD $FULL_SHA does not match EXPECTED_DEPLOY_SHA $EXPECTED_DEPLOY_SHA"
+
+# A production deploy must use the current remote main tip, not an arbitrary local checkout.
+git fetch --quiet origin main || fail 'failed to refresh origin/main before production deployment'
+REMOTE_MAIN_SHA="$(git rev-parse origin/main)"
+[ "$FULL_SHA" = "$REMOTE_MAIN_SHA" ] || fail "HEAD $FULL_SHA is not the current origin/main tip $REMOTE_MAIN_SHA"
+pass "release identity verified: main@$FULL_SHA"
+
 export BUILD_SHA
 DEPLOY_TIME="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$ROOT_DIR/deploy/backups"
@@ -107,8 +121,59 @@ pass "database backup created: $BACKUP_FILE"
 "${COMPOSE[@]}" build --pull api
 pass "API and admin image built with BUILD_SHA=$BUILD_SHA"
 
+# Before touching the live schema, restore the actual production backup into a disposable
+# MySQL clone and run migrations with the exact image that will be deployed.
+API_IMAGE_ID="$("${COMPOSE[@]}" images -q api | head -n 1)"
+[ -n "$API_IMAGE_ID" ] || fail 'cannot resolve newly built API image for migration clone verification'
+
+DRY_RUN_NETWORK="baby-mall-migrate-check-${BUILD_SHA}-${DEPLOY_TIME}"
+DRY_RUN_DB_CONTAINER="baby-mall-migrate-db-${BUILD_SHA}-${DEPLOY_TIME}"
+DRY_RUN_DB_NAME="baby_mall_migrate_verify"
+DRY_RUN_DB_PASSWORD="verify${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
+DRY_RUN_DATABASE_URL="mysql://root:${DRY_RUN_DB_PASSWORD}@mysql-check:3306/${DRY_RUN_DB_NAME}"
+
+cleanup_migration_clone() {
+  docker rm -f "$DRY_RUN_DB_CONTAINER" >/dev/null 2>&1 || true
+  docker network rm "$DRY_RUN_NETWORK" >/dev/null 2>&1 || true
+}
+trap cleanup_migration_clone EXIT
+cleanup_migration_clone
+
+docker network create "$DRY_RUN_NETWORK" >/dev/null
+docker run -d \
+  --name "$DRY_RUN_DB_CONTAINER" \
+  --network "$DRY_RUN_NETWORK" \
+  --network-alias mysql-check \
+  -e MYSQL_ROOT_PASSWORD="$DRY_RUN_DB_PASSWORD" \
+  -e MYSQL_DATABASE="$DRY_RUN_DB_NAME" \
+  --health-cmd='mysqladmin ping -h 127.0.0.1 -p"$MYSQL_ROOT_PASSWORD"' \
+  --health-interval=5s \
+  --health-timeout=5s \
+  --health-retries=20 \
+  mysql:8.0 >/dev/null
+wait_healthy "$DRY_RUN_DB_CONTAINER" 60 || fail 'migration verification MySQL clone did not become healthy'
+
+gzip -dc "$BACKUP_FILE" | docker exec -i "$DRY_RUN_DB_CONTAINER" \
+  mysql -uroot -p"$DRY_RUN_DB_PASSWORD" "$DRY_RUN_DB_NAME"
+pass 'production backup restored into disposable migration clone'
+
+docker run --rm \
+  --network "$DRY_RUN_NETWORK" \
+  -e DATABASE_URL="$DRY_RUN_DATABASE_URL" \
+  "$API_IMAGE_ID" npx prisma migrate deploy
+
+docker run --rm \
+  --network "$DRY_RUN_NETWORK" \
+  -e DATABASE_URL="$DRY_RUN_DATABASE_URL" \
+  "$API_IMAGE_ID" npx prisma migrate status
+pass 'production-backup migration clone passed with the deployment image'
+
+cleanup_migration_clone
+trap - EXIT
+
+# Only after the production-backup clone passes do we migrate the live database.
 "${COMPOSE[@]}" run --rm --no-deps api npx prisma migrate deploy
-pass 'Prisma migrations completed'
+pass 'Prisma migrations completed on live database'
 
 SKIP_MIGRATE=true "${COMPOSE[@]}" up -d --no-deps api
 if ! wait_healthy baby-mall-api 60; then
