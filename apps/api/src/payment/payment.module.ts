@@ -3,7 +3,7 @@ import { PaymentController, RefundController, PaymentReconcileController, Refund
 import { PaymentService } from './payment.service';
 import { CancellationSafeStockSafePaymentService } from './cancellation-safe-stock-safe-payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
-import { ProductionPaymentReconcileService } from './production-payment-reconcile.service';
+import { HistoricalAnomalyPaymentReconcileService } from './historical-anomaly-payment-reconcile.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
 import { ShareModule } from '../share/share.module';
@@ -22,7 +22,7 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
     },
     {
       provide: PaymentReconcileService,
-      useClass: ProductionPaymentReconcileService,
+      useClass: HistoricalAnomalyPaymentReconcileService,
     },
   ],
   exports: [PaymentService, PaymentReconcileService],
