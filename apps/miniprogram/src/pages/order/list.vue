@@ -6,15 +6,15 @@
     </view>
     <scroll-view scroll-x class="tab-scroll">
       <view class="tab-bar pill-tab-bar">
-      <view
-        v-for="tab in tabs"
-        :key="tab.value"
-        class="tab-item pill-tab-item"
-        :class="{ active: currentTab === tab.value }"
-        @tap="switchTab(tab.value)"
-      >
-        <text class="tab-text">{{ tab.label }}</text>
-      </view>
+        <view
+          v-for="tab in tabs"
+          :key="tab.value"
+          class="tab-item pill-tab-item"
+          :class="{ active: currentTab === tab.value }"
+          @tap="switchTab(tab.value)"
+        >
+          <text class="tab-text">{{ tab.label }}</text>
+        </view>
       </view>
     </scroll-view>
 
@@ -48,7 +48,7 @@
         <view class="order-actions">
           <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
           <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap.stop="handlePay(order)">去支付</view>
-          <view v-if="order.status === 'paid'" class="action-btn primary" @tap.stop="goDetail(order.id)">查看拼团进度</view>
+          <view v-if="order.status === 'paid'" class="action-btn primary" @tap.stop="goGroupProgress(order)">查看拼团进度</view>
           <view v-if="order.status === 'pending_pickup'" class="action-btn primary" @tap.stop="goDetail(order.id)">查看自提码</view>
           <view v-if="order.status === 'delivered'" class="action-btn primary" @tap.stop="handleConfirm(order.id)">确认收货</view>
           <view v-if="order.status === 'completed' || order.status === 'delivered'" class="action-btn" @tap.stop="handleAftersale(order)">申请售后</view>
@@ -121,6 +121,15 @@ function switchTab(value: OrderTabValue) {
 
 function goDetail(id: string) {
   uni.navigateTo({ url: `/pages/order/detail?id=${id}` })
+}
+
+function goGroupProgress(order: OrderItem) {
+  if (order.groupBuyGroupId) {
+    uni.navigateTo({ url: `/pages/group-buy/group?id=${order.groupBuyGroupId}` })
+    return
+  }
+  uni.showToast({ title: '拼团信息加载中，请进入订单详情查看', icon: 'none' })
+  goDetail(order.id)
 }
 
 function goAftersaleWithItem(orderId: string, orderItemId: string) {
