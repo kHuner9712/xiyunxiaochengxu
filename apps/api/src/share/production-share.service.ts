@@ -141,6 +141,118 @@ export class ProductionShareService extends ShareService {
     return { total: relations.length, issued, skipped, failed };
   }
 
+  /**
+   * 退款成功后反向修正分享首单归因报表。
+   * 每笔退款按 refundId 幂等扣减 paidOrderAmount；累计全额退款时 orderCount 只减一次。
+   */
+  async reverseFirstPaidAttributionAfterRefund(
+    orderId: bigint | string,
+    refundId: bigint | string,
+  ) {
+    const orderIdValue = BigInt(orderId);
+    const refundIdValue = BigInt(refundId);
+    const relation = await this.productionPrisma.userInviteRelation.findFirst({
+      where: {
+        firstPaidOrderId: orderIdValue,
+        status: 1,
+        sourceShareRecordId: { not: null },
+      },
+      select: {
+        inviterUserId: true,
+        inviteeUserId: true,
+        sourceCampaignId: true,
+        sourceShareRecordId: true,
+      },
+    });
+    if (!relation?.sourceShareRecordId) return { adjusted: false, fullReversed: false };
+
+    const attribution = await this.productionPrisma.userInviteReward.findUnique({
+      where: { dedupeKey: `first_paid:attribution:${orderIdValue}` },
+      select: { id: true },
+    });
+    if (!attribution) return { adjusted: false, fullReversed: false };
+
+    const [order, refund] = await Promise.all([
+      this.productionPrisma.order.findUnique({
+        where: { id: orderIdValue },
+        select: { payAmount: true },
+      }),
+      this.productionPrisma.orderRefund.findUnique({
+        where: { id: refundIdValue },
+        select: { status: true, refundAmount: true },
+      }),
+    ]);
+    if (!order || !refund || refund.status !== 'success' || refund.refundAmount <= 0) {
+      return { adjusted: false, fullReversed: false };
+    }
+
+    const cumulativeRefunds = await this.productionPrisma.orderRefund.aggregate({
+      where: { orderId: orderIdValue, status: 'success' },
+      _sum: { refundAmount: true },
+    });
+    const grossPaid = Math.max(0, order.payAmount ?? 0);
+    const totalRefunded = Math.min(
+      grossPaid,
+      Math.max(0, cumulativeRefunds._sum.refundAmount ?? 0),
+    );
+
+    return this.productionPrisma.$transaction(async (tx) => {
+      const refundMarker = await tx.userInviteReward.createMany({
+        data: [{
+          userId: relation.inviterUserId,
+          inviteeUserId: relation.inviteeUserId,
+          campaignId: relation.sourceCampaignId,
+          rewardType: 'attribution_adjustment',
+          rewardName: '首单退款归因金额冲减',
+          status: 'issued',
+          sourceType: 'first_paid_refund_attribution',
+          sourceId: refundIdValue,
+          dedupeKey: `first_paid:refund_attribution:${refundIdValue}`,
+          issuedAt: new Date(),
+        }],
+        skipDuplicates: true,
+      });
+      if (refundMarker.count === 0) {
+        return { adjusted: false, fullReversed: false };
+      }
+
+      await tx.$executeRaw`
+        UPDATE share_records
+        SET paid_order_amount = GREATEST(paid_order_amount - ${refund.refundAmount}, 0)
+        WHERE id = ${relation.sourceShareRecordId}
+      `;
+
+      let fullReversed = false;
+      if (grossPaid > 0 && totalRefunded >= grossPaid) {
+        const fullMarker = await tx.userInviteReward.createMany({
+          data: [{
+            userId: relation.inviterUserId,
+            inviteeUserId: relation.inviteeUserId,
+            campaignId: relation.sourceCampaignId,
+            rewardType: 'attribution_adjustment',
+            rewardName: '首单全额退款归因订单数冲减',
+            status: 'issued',
+            sourceType: 'first_paid_full_refund_attribution',
+            sourceId: orderIdValue,
+            dedupeKey: `first_paid:full_refund_attribution:${orderIdValue}`,
+            issuedAt: new Date(),
+          }],
+          skipDuplicates: true,
+        });
+        if (fullMarker.count === 1) {
+          await tx.$executeRaw`
+            UPDATE share_records
+            SET order_count = GREATEST(order_count - 1, 0)
+            WHERE id = ${relation.sourceShareRecordId}
+          `;
+          fullReversed = true;
+        }
+      }
+
+      return { adjusted: true, fullReversed };
+    });
+  }
+
   private async recordFirstPaidAttribution(
     relationId: bigint,
     orderId: string,
