@@ -358,14 +358,14 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
         const expected = item.quantity > 0 ? item.quantity : 1;
         const actual = await tx.userBenefitEntitlement.count({
           where: {
-            userBenefitPackageId,
+            userBenefitPackageId: userPackageId,
             packageItemId: item.id,
             deletedAt: null,
           },
         });
         const missing = Math.max(0, expected - actual);
         for (let index = 0; index < missing; index++) {
-          await this.createRepairEntitlementWithRetry(tx, userBenefitPackageId, userId, item.id);
+          await this.createRepairEntitlementWithRetry(tx, userPackageId, userId, item.id);
         }
       }
     });
