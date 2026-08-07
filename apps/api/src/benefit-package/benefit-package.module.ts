@@ -4,7 +4,7 @@ import {
   AdminBenefitPackageController,
 } from './benefit-package.controller';
 import { BenefitPackageService } from './benefit-package.service';
-import { ProductionBenefitPackageService } from './production-benefit-package.service';
+import { SnapshotGuardedProductionBenefitPackageService } from './snapshot-guarded-production-benefit-package.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { MerchantSettlementModule } from '../merchant-settlement/merchant-settlement.module';
 
@@ -14,7 +14,7 @@ import { MerchantSettlementModule } from '../merchant-settlement/merchant-settle
   providers: [
     {
       provide: BenefitPackageService,
-      useClass: ProductionBenefitPackageService,
+      useClass: SnapshotGuardedProductionBenefitPackageService,
     },
   ],
   exports: [BenefitPackageService],
