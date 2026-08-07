@@ -57,6 +57,58 @@ export class ProductionPaymentService extends PaymentService {
     );
   }
 
+  override async getPaymentStatus(orderId: string, userId: string) {
+    const result = await super.getPaymentStatus(orderId, userId);
+    if (result.orderStatus === OrderStatus.paid) {
+      return {
+        ...result,
+        confirming: false,
+        displayStatus: 'success' as const,
+        canRetryPay: false,
+        message: '支付成功，等待拼团成团',
+      };
+    }
+    return result;
+  }
+
+  override async createRefund(params: {
+    orderId: string;
+    aftersaleId?: string;
+    refundAmount: number;
+    reason?: string;
+  }) {
+    const benefitService = this.productionBenefitPackageService as any;
+    await benefitService.assertRefundable?.(params.orderId, params.aftersaleId ?? null);
+    await benefitService.freezeForRefund?.(params.orderId, params.aftersaleId ?? null);
+
+    try {
+      return await super.createRefund(params);
+    } catch (error) {
+      const latestRefund = params.aftersaleId
+        ? await this.productionPrisma.orderRefund.findFirst({
+            where: {
+              orderId: BigInt(params.orderId),
+              aftersaleId: BigInt(params.aftersaleId),
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { status: true },
+          })
+        : await this.productionPrisma.orderRefund.findFirst({
+            where: { orderId: BigInt(params.orderId), aftersaleId: null },
+            orderBy: { createdAt: 'desc' },
+            select: { status: true },
+          });
+
+      if (!latestRefund || latestRefund.status === REFUND_STATUS.CLOSED) {
+        await benefitService.restoreAfterRefundClosed?.(
+          params.orderId,
+          params.aftersaleId ?? null,
+        );
+      }
+      throw error;
+    }
+  }
+
   override async processPaymentSuccess(
     paymentId: bigint,
     orderId: bigint,
@@ -303,7 +355,7 @@ export class ProductionPaymentService extends PaymentService {
     }
 
     try {
-      const result = await super.createRefund({
+      const result = await this.createRefund({
         orderId: normalizedOrderId.toString(),
         refundAmount: order.payAmount!,
         reason,
@@ -330,6 +382,13 @@ export class ProductionPaymentService extends PaymentService {
 
   override async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {
     await super.processWechatRefundSuccess(refund, refundId, wechatData);
+
+    const benefitService = this.productionBenefitPackageService as any;
+    await benefitService.revokeAfterRefundSuccess?.(
+      refund.orderId,
+      refund.aftersaleId ?? null,
+    );
+
     try {
       await (this.productionGroupBuyService as any).handleRefundSuccess(refund.orderId);
     } catch (error) {
