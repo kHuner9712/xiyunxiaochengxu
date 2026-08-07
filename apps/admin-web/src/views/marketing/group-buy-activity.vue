@@ -22,7 +22,7 @@
       <div style="margin-bottom: 16px">
         <el-button type="primary" @click="handleAdd">新增活动</el-button>
         <el-alert type="info" :closable="false" style="margin-top: 8px">
-          拼团活动绑定商品后，用户在小程序发起或参与拼团，支付成功后计入成团人数；达到目标人数自动成团。活动库存独立于商品 SKU 库存。
+          拼团活动必须绑定一个真实可售 SKU。活动库存是额外活动上限，最终成交仍同时受 SKU 实际库存约束；支付成功后计入成团人数，达到目标人数才进入履约。
         </el-alert>
       </div>
 
@@ -30,6 +30,7 @@
         <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column prop="name" label="活动名称" min-width="140" show-overflow-tooltip />
         <el-table-column prop="productId" label="商品ID" width="110" show-overflow-tooltip />
+        <el-table-column prop="skuId" label="SKU ID" width="110" show-overflow-tooltip />
         <el-table-column label="拼团价" width="100">
           <template #default="{ row }">¥{{ formatPrice(row.groupPrice) }}</template>
         </el-table-column>
@@ -90,10 +91,30 @@
           <el-input v-model="editing.name" placeholder="如：3人拼团特惠" />
         </el-form-item>
         <el-form-item label="商品ID" required>
-          <el-input v-model="editing.productId" placeholder="绑定的商品ID" />
+          <div class="inline-field">
+            <el-input
+              v-model="editing.productId"
+              placeholder="输入商品ID后加载SKU"
+              @change="handleProductChanged"
+            />
+            <el-button :loading="productLoading" @click="loadProductSkus(true)">加载SKU</el-button>
+          </div>
         </el-form-item>
-        <el-form-item label="SKU ID">
-          <el-input v-model="editing.skuId" placeholder="可选，留空则需用户选择规格" />
+        <el-form-item label="SKU" required>
+          <el-select
+            v-model="editing.skuId"
+            filterable
+            placeholder="请先加载商品并选择SKU"
+            style="width: 100%"
+            :disabled="availableSkus.length === 0"
+          >
+            <el-option
+              v-for="sku in availableSkus"
+              :key="sku.id"
+              :value="sku.id"
+              :label="`${sku.name}｜ID ${sku.id}｜¥${formatPrice(sku.price)}｜库存 ${sku.stock}`"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="拼团价(分)" required>
           <el-input-number v-model="editing.groupPrice" :min="0" controls-position="right" />
@@ -112,7 +133,7 @@
         </el-form-item>
         <el-form-item label="活动库存">
           <el-input-number v-model="editing.stockLimit" :min="0" controls-position="right" />
-          <span style="margin-left: 8px; color: #909399">留空表示不限</span>
+          <span style="margin-left: 8px; color: #909399">留空表示不限，但仍受SKU实际库存约束</span>
         </el-form-item>
         <el-form-item label="每人限购">
           <el-input-number v-model="editing.limitPerUser" :min="0" controls-position="right" />
@@ -153,11 +174,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { groupBuyApi } from '@/api/group-buy'
+import { productApi } from '@/api/product'
 import { formatPrice } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
+const POSITIVE_ID = /^[1-9]\d*$/
 const loading = ref(false)
+const productLoading = ref(false)
 const tableData = ref<any[]>([])
+const availableSkus = ref<Array<{ id: string; name: string; price: number; stock: number }>>([])
 const total = ref(0)
 const dialogVisible = ref(false)
 
@@ -188,6 +213,7 @@ const editing = reactive<any>({
 })
 
 function resetEditing() {
+  availableSkus.value = []
   Object.assign(editing, {
     id: null,
     name: '',
@@ -206,6 +232,54 @@ function resetEditing() {
     coverImage: '',
     description: '',
   })
+}
+
+async function loadProductSkus(showMessage = false): Promise<boolean> {
+  const productId = String(editing.productId || '').trim()
+  if (!POSITIVE_ID.test(productId)) {
+    availableSkus.value = []
+    editing.skuId = ''
+    if (showMessage) ElMessage.warning('请输入有效的商品ID')
+    return false
+  }
+
+  productLoading.value = true
+  try {
+    const res: any = await productApi.getDetail(productId)
+    const product = res.data || {}
+    const skus = asArray(product.skus)
+      .filter((sku: any) => sku?.id != null && (sku.status === 1 || sku.status === undefined))
+      .map((sku: any) => ({
+        id: String(sku.id),
+        name: Object.values(sku.specs || {}).join('/') || sku.skuCode || `SKU ${sku.id}`,
+        price: Number(sku.price || 0),
+        stock: Number(sku.stock || 0),
+      }))
+
+    availableSkus.value = skus
+    if (skus.length === 0) {
+      editing.skuId = ''
+      if (showMessage) ElMessage.warning('该商品没有可售SKU，无法创建拼团活动')
+      return false
+    }
+    if (!skus.some((sku) => sku.id === String(editing.skuId || ''))) {
+      editing.skuId = skus.length === 1 ? skus[0].id : ''
+    }
+    if (showMessage) ElMessage.success(`已加载 ${skus.length} 个可售SKU`)
+    return true
+  } catch {
+    availableSkus.value = []
+    editing.skuId = ''
+    return false
+  } finally {
+    productLoading.value = false
+  }
+}
+
+function handleProductChanged() {
+  editing.productId = String(editing.productId || '').trim()
+  editing.skuId = ''
+  availableSkus.value = []
 }
 
 async function loadList() {
@@ -248,8 +322,8 @@ async function handleEdit(row: any) {
   Object.assign(editing, {
     id: d.id,
     name: d.name || '',
-    productId: d.productId ?? '',
-    skuId: d.skuId ?? '',
+    productId: d.productId != null ? String(d.productId) : '',
+    skuId: d.skuId != null ? String(d.skuId) : '',
     groupPrice: d.groupPrice ?? 0,
     originalPrice: d.originalPrice,
     groupSize: d.groupSize ?? 2,
@@ -263,6 +337,7 @@ async function handleEdit(row: any) {
     coverImage: d.coverImage || '',
     description: d.description || '',
   })
+  await loadProductSkus(false)
   dialogVisible.value = true
 }
 
@@ -272,32 +347,57 @@ function formatDate(d: string): string {
 }
 
 async function handleSubmit() {
-  if (!editing.name) {
+  if (!editing.name?.trim()) {
     ElMessage.warning('请填写活动名称')
     return
   }
-  if (!editing.productId) {
-    ElMessage.warning('请填写商品ID')
+  const productId = String(editing.productId || '').trim()
+  if (!POSITIVE_ID.test(productId)) {
+    ElMessage.warning('请输入有效的商品ID')
+    return
+  }
+  const loaded = await loadProductSkus(false)
+  if (!loaded) {
+    ElMessage.warning('商品或SKU不可用，请重新加载')
+    return
+  }
+  const skuId = String(editing.skuId || '').trim()
+  const selectedSku = availableSkus.value.find((sku) => sku.id === skuId)
+  if (!POSITIVE_ID.test(skuId) || !selectedSku) {
+    ElMessage.warning('请选择该商品的有效SKU')
     return
   }
   if (!editing.startTime || !editing.endTime) {
     ElMessage.warning('请选择活动时间')
     return
   }
-  const payload: any = { ...editing }
-  if (!payload.skuId) delete payload.skuId
+  if (new Date(editing.startTime).getTime() >= new Date(editing.endTime).getTime()) {
+    ElMessage.warning('活动结束时间必须晚于开始时间')
+    return
+  }
+  if (Number(editing.groupPrice) > selectedSku.price) {
+    ElMessage.warning(`拼团价不能高于当前SKU售价 ¥${formatPrice(selectedSku.price)}`)
+    return
+  }
+
+  const { id: _id, ...rest } = editing
+  const payload: any = {
+    ...rest,
+    productId,
+    skuId,
+  }
   if (payload.originalPrice === null || payload.originalPrice === '') delete payload.originalPrice
   if (payload.stockLimit === null || payload.stockLimit === '') delete payload.stockLimit
   try {
     if (editing.id) {
-      await groupBuyApi.updateActivity(editing.id, payload)
+      await groupBuyApi.updateActivity(String(editing.id), payload)
     } else {
       await groupBuyApi.createActivity(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
     loadList()
-  } catch (e) {
+  } catch {
     // 错误已由拦截器处理
   }
 }
@@ -305,9 +405,9 @@ async function handleSubmit() {
 async function handleStatusChange(row: any, val: string | number | boolean) {
   const numVal = Number(val)
   try {
-    await groupBuyApi.updateActivityStatus(row.id, numVal)
+    await groupBuyApi.updateActivityStatus(String(row.id), numVal)
     ElMessage.success(numVal === 1 ? '已上架' : '已下架')
-  } catch (e) {
+  } catch {
     row.status = numVal === 1 ? 0 : 1
   }
 }
@@ -315,10 +415,10 @@ async function handleStatusChange(row: any, val: string | number | boolean) {
 async function handleDelete(row: any) {
   try {
     await ElMessageBox.confirm(`确认删除活动「${row.name}」吗？`, '提示', { type: 'warning' })
-    await groupBuyApi.deleteActivity(row.id)
+    await groupBuyApi.deleteActivity(String(row.id))
     ElMessage.success('删除成功')
     loadList()
-  } catch (e) {
+  } catch {
     // 取消或错误
   }
 }
@@ -331,4 +431,6 @@ onMounted(() => loadList())
 .search-bar { margin-bottom: 16px; }
 .table-card { background: #fff; padding: 16px; border-radius: 8px; }
 .pagination-wrap { margin-top: 16px; text-align: right; }
+.inline-field { display: flex; gap: 8px; width: 100%; }
+.inline-field .el-input { flex: 1; }
 </style>
