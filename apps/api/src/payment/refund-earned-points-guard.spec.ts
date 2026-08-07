@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { PaymentService } from './payment.service';
-import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
+import { REFUND_STATUS } from '../common/constants';
 
 function createServiceWithRefundFixture(completionReward: { points: number } | null) {
   const aftersale = {
