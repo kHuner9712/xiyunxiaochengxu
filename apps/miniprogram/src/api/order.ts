@@ -112,6 +112,7 @@ export interface OrderItem {
   status: OrderStatus
   totalAmount: number
   payAmount: number
+  groupBuyGroupId?: string
   items: OrderProductItem[]
   createTime: string
 }
@@ -139,6 +140,7 @@ export interface OrderDetail {
   freightAmount: number
   couponAmount: number
   pointsAmount: number
+  groupBuyGroupId?: string
   addressName: string
   addressPhone: string
   addressDetail: string
