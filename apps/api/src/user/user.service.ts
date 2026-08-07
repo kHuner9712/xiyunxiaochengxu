@@ -1,28 +1,24 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { UserQueryDto } from './dto/user-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { getMemberLevelByGrowth, MEMBER_LEVELS } from '@baby-mall/shared';
 
 @Injectable()
 export class UserService {
   constructor(private prisma: PrismaService) {}
 
   async getUserInfo(userId: string) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
     const user = await this.prisma.user.findFirst({
-      where: { id: BigInt(userId), deletedAt: null },
+      where: { id: userIdValue, deletedAt: null },
       include: {
         profile: true,
         memberLevel: true,
-        _count: {
-          select: { babyProfiles: { where: { deletedAt: null } } },
-        },
+        _count: { select: { babyProfiles: { where: { deletedAt: null } } } },
       },
     });
-
-    if (!user) {
-      throw new NotFoundException('用户不存在');
-    }
+    if (!user) throw new NotFoundException('用户不存在');
 
     return {
       id: user.id.toString(),
@@ -42,10 +38,7 @@ export class UserService {
             pointsRate: user.memberLevel.pointsRate,
           }
         : null,
-      memberLevelName: (() => {
-        const levelCode = getMemberLevelByGrowth(user.growthValue || 0);
-        return MEMBER_LEVELS[levelCode]?.name || '普通会员';
-      })(),
+      memberLevelName: user.memberLevel?.name || '普通会员',
       points: user.availablePoints,
       growthValue: user.growthValue,
       totalPoints: user.totalPoints,
@@ -68,56 +61,29 @@ export class UserService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: BigInt(userId), deletedAt: null },
-    });
-
-    if (!user) {
-      throw new NotFoundException('用户不存在');
-    }
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const user = await this.prisma.user.findFirst({ where: { id: userIdValue, deletedAt: null } });
+    if (!user) throw new NotFoundException('用户不存在');
 
     const updateData: any = {};
     if (dto.nickname !== undefined) updateData.nickname = dto.nickname;
     const avatarUrl = dto.avatarUrl ?? dto.avatar;
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
     if (dto.gender !== undefined) updateData.gender = dto.gender;
-
     if (Object.keys(updateData).length > 0) {
-      await this.prisma.user.update({
-        where: { id: BigInt(userId) },
-        data: updateData,
-      });
+      await this.prisma.user.update({ where: { id: userIdValue }, data: updateData });
     }
-
     return this.getUserInfo(userId);
   }
 
   async findAll(dto: UserQueryDto) {
     const where: any = { deletedAt: null };
-
-    if (dto.keyword) {
-      where.OR = [
-        { nickname: { contains: dto.keyword } },
-        { phone: { contains: dto.keyword } },
-      ];
-    }
-
-    if (dto.nickname) {
-      where.nickname = { contains: dto.nickname };
-    }
-
-    if (dto.phone) {
-      where.phone = { contains: dto.phone };
-    }
-
+    if (dto.keyword) where.OR = [{ nickname: { contains: dto.keyword } }, { phone: { contains: dto.keyword } }];
+    if (dto.nickname) where.nickname = { contains: dto.nickname };
+    if (dto.phone) where.phone = { contains: dto.phone };
     const memberLevelId = dto.memberLevelId ?? dto.memberLevel;
-    if (memberLevelId) {
-      where.memberLevelId = BigInt(memberLevelId);
-    }
-
-    if (dto.status !== undefined) {
-      where.status = dto.status;
-    }
+    if (memberLevelId) where.memberLevelId = parsePositiveBigIntId(memberLevelId, '会员等级');
+    if (dto.status !== undefined) where.status = dto.status;
 
     const [list, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -128,144 +94,96 @@ export class UserService {
         include: {
           profile: true,
           memberLevel: true,
-          _count: {
-            select: {
-              orders: true,
-              babyProfiles: { where: { deletedAt: null } },
-            },
-          },
+          _count: { select: { orders: true, babyProfiles: { where: { deletedAt: null } } } },
         },
       }),
       this.prisma.user.count({ where }),
     ]);
-
-    return {
-      list: list.map((u) => this.serializeUser(u)),
-      total,
-      page: dto.page,
-      pageSize: dto.pageSize,
-    };
+    return { list: list.map((u) => this.serializeUser(u)), total, page: dto.page, pageSize: dto.pageSize };
   }
 
   async findOne(id: string) {
+    const userId = parsePositiveBigIntId(id, '用户');
     const user = await this.prisma.user.findFirst({
-      where: { id: BigInt(id), deletedAt: null },
+      where: { id: userId, deletedAt: null },
       include: {
         profile: true,
         memberLevel: true,
         babyProfiles: { where: { deletedAt: null } },
-        _count: {
-          select: {
-            orders: true,
-            pointsRecords: true,
-          },
-        },
+        _count: { select: { orders: true, pointsRecords: true } },
       },
     });
-
-    if (!user) {
-      throw new NotFoundException('用户不存在');
-    }
+    if (!user) throw new NotFoundException('用户不存在');
 
     const [orderStats, recentPoints] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { userId: BigInt(id), status: { in: ['paid', 'pending_delivery', 'pending_pickup', 'delivered', 'completed'] } },
+        where: { userId, status: { in: ['paid', 'pending_delivery', 'pending_pickup', 'delivered', 'completed'] } },
         _sum: { payAmount: true },
         _count: true,
       }),
-      this.prisma.pointsRecord.findMany({
-        where: { userId: BigInt(id) },
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-      }),
+      this.prisma.pointsRecord.findMany({ where: { userId }, take: 10, orderBy: { createdAt: 'desc' } }),
     ]);
 
     return {
       ...this.serializeUser(user),
-      orderStats: {
-        totalOrders: orderStats._count,
-        totalAmount: orderStats._sum.payAmount || 0,
-      },
+      orderStats: { totalOrders: orderStats._count, totalAmount: orderStats._sum.payAmount || 0 },
       babyProfiles: user.babyProfiles.map((b) => ({
-        id: b.id.toString(),
-        userId: b.userId.toString(),
-        nickname: b.nickname,
-        gender: b.gender,
-        birthday: b.birthday,
-        currentMonthAge: b.currentMonthAge,
-        avatarUrl: b.avatarUrl,
-        isDefault: b.isDefault,
+        id: b.id.toString(), userId: b.userId.toString(), nickname: b.nickname, gender: b.gender,
+        birthday: b.birthday, currentMonthAge: b.currentMonthAge, avatarUrl: b.avatarUrl, isDefault: b.isDefault,
       })),
       recentPoints: recentPoints.map((p) => ({
-        id: p.id.toString(),
-        type: p.type,
-        points: p.points,
-        balance: p.balance,
-        source: p.source,
-        description: p.description,
-        createdAt: p.createdAt,
+        id: p.id.toString(), type: p.type, points: p.points, balance: p.balance,
+        source: p.source, description: p.description, createdAt: p.createdAt,
       })),
     };
   }
 
-  async adjustLevel(id: string, memberLevelId: number, reason?: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: BigInt(id), deletedAt: null },
-    });
+  async adjustLevel(id: string, memberLevelId: string, reason?: string) {
+    const userId = parsePositiveBigIntId(id, '用户');
+    const levelId = parsePositiveBigIntId(memberLevelId, '会员等级');
 
-    if (!user) {
-      throw new NotFoundException('用户不存在');
-    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} AND deleted_at IS NULL FOR UPDATE`;
+      const [user, level] = await Promise.all([
+        tx.user.findFirst({ where: { id: userId, deletedAt: null } }),
+        tx.memberLevel.findFirst({ where: { id: levelId, status: 1 } }),
+      ]);
+      if (!user) throw new NotFoundException('用户不存在');
+      if (!level) throw new BadRequestException('会员等级不存在或已停用');
 
-    const level = await this.prisma.memberLevel.findFirst({
-      where: { id: BigInt(memberLevelId), status: 1 },
-    });
+      const growthInTargetRange = user.growthValue >= level.minGrowthValue
+        && (level.maxGrowthValue === null || user.growthValue <= level.maxGrowthValue);
+      const nextGrowthValue = growthInTargetRange ? user.growthValue : level.minGrowthValue;
+      if (user.memberLevelId === level.id && user.growthValue === nextGrowthValue) return;
 
-    if (!level) {
-      throw new BadRequestException('会员等级不存在');
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: BigInt(id) },
-        data: { memberLevelId: BigInt(memberLevelId) },
-      }),
-      this.prisma.userMemberRecord.create({
+      await tx.user.update({
+        where: { id: userId },
+        data: { memberLevelId: level.id, growthValue: nextGrowthValue },
+      });
+      await tx.userMemberRecord.create({
         data: {
-          userId: BigInt(id),
+          userId,
           oldLevelId: user.memberLevelId,
-          newLevelId: BigInt(memberLevelId),
-          changeReason: reason || '管理员手动调整',
+          newLevelId: level.id,
+          changeReason: `${reason?.trim() || '管理员手动调整'}；成长值同步为${nextGrowthValue}以保持等级规则一致`,
         },
-      }),
-    ]);
-
+      });
+    });
     return this.findOne(id);
   }
 
   async toggleStatus(id: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: BigInt(id), deletedAt: null },
-    });
-
-    if (!user) {
-      throw new NotFoundException('用户不存在');
-    }
-
+    const userId = parsePositiveBigIntId(id, '用户');
+    const user = await this.prisma.user.findFirst({ where: { id: userId, deletedAt: null } });
+    if (!user) throw new NotFoundException('用户不存在');
     const newStatus = user.status === 1 ? 0 : 1;
-
-    await this.prisma.user.update({
-      where: { id: BigInt(id) },
-      data: { status: newStatus },
-    });
-
-    return { id: id, status: newStatus };
+    await this.prisma.user.update({ where: { id: userId }, data: { status: newStatus } });
+    return { id: userId.toString(), status: newStatus };
   }
 
   private serializeUser(user: any) {
     const orderCount = user._count?.orders ?? 0;
     const babyCount = user._count?.babyProfiles ?? 0;
-
     return {
       id: user.id.toString(),
       openid: user.openid,
@@ -280,28 +198,17 @@ export class UserService {
       gender: user.gender,
       memberLevelId: user.memberLevelId?.toString(),
       memberLevel: user.memberLevel
-        ? {
-            id: user.memberLevel.id.toString(),
-            name: user.memberLevel.name,
-            icon: user.memberLevel.icon,
-          }
+        ? { id: user.memberLevel.id.toString(), name: user.memberLevel.name, icon: user.memberLevel.icon }
         : null,
-      memberLevelName: (() => {
-        const levelCode = getMemberLevelByGrowth(user.growthValue || 0);
-        return MEMBER_LEVELS[levelCode]?.name || '普通会员';
-      })(),
+      memberLevelName: user.memberLevel?.name || '普通会员',
       points: user.availablePoints,
       growthValue: user.growthValue,
       totalPoints: user.totalPoints,
       availablePoints: user.availablePoints,
       profile: user.profile
         ? {
-            id: user.profile.id.toString(),
-            userId: user.profile.userId.toString(),
-            realName: user.profile.realName,
-            birthday: user.profile.birthday,
-            babyCount: user.profile.babyCount,
-            source: user.profile.source,
+            id: user.profile.id.toString(), userId: user.profile.userId.toString(), realName: user.profile.realName,
+            birthday: user.profile.birthday, babyCount: user.profile.babyCount, source: user.profile.source,
           }
         : null,
       status: user.status,
@@ -311,20 +218,13 @@ export class UserService {
       createTime: user.createdAt,
       orderCount,
       babyCount,
-      _count: user._count
-        ? {
-            orders: orderCount,
-            babyProfiles: babyCount,
-          }
-        : undefined,
+      _count: user._count ? { orders: orderCount, babyProfiles: babyCount } : undefined,
     };
   }
 
   private maskIdentifier(value?: string | null) {
     if (!value) return '';
-    if (value.length <= 8) {
-      return `${value.slice(0, 2)}****${value.slice(-2)}`;
-    }
+    if (value.length <= 8) return `${value.slice(0, 2)}****${value.slice(-2)}`;
     return `${value.slice(0, 4)}****${value.slice(-4)}`;
   }
 }
