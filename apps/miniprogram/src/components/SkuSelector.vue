@@ -37,7 +37,7 @@ interface SpecGroup {
 }
 
 interface SkuItem {
-  id: number
+  id: string
   specs: Record<string, string> | string
   specText: string
   price: number
@@ -52,7 +52,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  change: [skuId: number, quantity: number]
+  change: [skuId: string, quantity: number]
 }>()
 
 const selectedSpecs = reactive<Record<number, number>>({})
