@@ -12,6 +12,9 @@ function createRedisService() {
 function createPrismaService() {
   return {
     $queryRaw: jest.fn(),
+    merchantCommissionRecord: {
+      findFirst: jest.fn(),
+    },
   };
 }
 
@@ -54,7 +57,7 @@ function createGroupBuyService() {
 
 function createMerchantSettlementService() {
   return {
-    generateMatureSalesCommissions: jest.fn(),
+    generateSalesCommission: jest.fn(),
     reconcileMissingServiceCommissions: jest.fn(),
   };
 }
@@ -99,6 +102,7 @@ describe('ScheduleService', () => {
     redisService.setNX.mockImplementation(async () => true);
     redisService.releaseLockWithLua.mockImplementation(async () => true);
     prismaService.$queryRaw.mockImplementation(async () => []);
+    prismaService.merchantCommissionRecord.findFirst.mockImplementation(async () => null);
     orderService.closeTimeoutOrders.mockImplementation(async () => ({ closedCount: 0 }));
     orderService.autoCompleteOrders.mockImplementation(async () => ({ completedCount: 0 }));
     paymentService.createGroupBuyFailureRefund.mockImplementation(async () => ({ status: 'pending' }));
@@ -111,7 +115,7 @@ describe('ScheduleService', () => {
     flashSaleService.handleOrderCancel.mockImplementation(async () => undefined);
     groupBuyService.markExpiredGroups.mockImplementation(async () => ({ affected: 0, refundOrderIds: [] }));
     groupBuyService.handleOrderCancel.mockImplementation(async () => undefined);
-    merchantSettlementService.generateMatureSalesCommissions.mockImplementation(async () => ({ total: 0, generated: 0, skipped: 0, failed: 0 }));
+    merchantSettlementService.generateSalesCommission.mockImplementation(async () => undefined);
     merchantSettlementService.reconcileMissingServiceCommissions.mockImplementation(async () => ({ total: 0, created: 0, skipped: 0, failed: 0 }));
     shareService.reconcileMatureFirstPaidRewards.mockImplementation(async () => ({ total: 0, issued: 0, skipped: 0, failed: 0 }));
     benefitPackageService.reconcileTerminalRefundFreezes.mockImplementation(async () => ({ orders: 0, restored: 0, skipped: 0 }));
@@ -244,17 +248,25 @@ describe('ScheduleService', () => {
     );
   });
 
-  it('按小时生成超过售后窗口的销售分佣', async () => {
-    merchantSettlementService.generateMatureSalesCommissions.mockImplementation(async () => ({
-      total: 2,
-      generated: 2,
-      skipped: 0,
-      failed: 0,
-    }));
+  it('成熟销售分佣只处理数据库扫描出的缺口订单，不会被已处理前200条饿死', async () => {
+    prismaService.$queryRaw.mockImplementationOnce(async () => [{
+      id: 301n,
+      userId: 9n,
+      payAmount: 1200,
+      sourceType: 'merchant_referral',
+      sourceCode: 'M001',
+    }]);
+    prismaService.merchantCommissionRecord.findFirst.mockImplementation(async () => ({ id: 77n }));
 
     await service.handleMatureSalesCommissions();
 
-    expect(merchantSettlementService.generateMatureSalesCommissions).toHaveBeenCalled();
+    expect(merchantSettlementService.generateSalesCommission).toHaveBeenCalledWith(
+      301n,
+      9n,
+      1200,
+      'merchant_referral',
+      'M001',
+    );
     expect(redisService.releaseLockWithLua).toHaveBeenCalledWith(
       'schedule:mature_sales_commissions',
       expect.any(String),
