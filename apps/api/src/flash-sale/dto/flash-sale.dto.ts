@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -105,13 +106,33 @@ export class FlashSaleBuyDto {
   activityId!: string;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) quantity?: number;
-  @IsOptional() @IsString() addressId?: string;
-  @IsOptional() @IsString() pickupStoreId?: string;
-  @IsOptional() @IsString() fulfillmentType?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeId(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '收货地址ID无效' })
+  @MaxLength(19, { message: '收货地址ID超出范围' })
+  addressId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeId(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '自提点ID无效' })
+  @MaxLength(19, { message: '自提点ID超出范围' })
+  pickupStoreId?: string;
+
+  @IsOptional() @IsString() @IsIn(['delivery', 'pickup']) fulfillmentType?: string;
   @IsOptional() @IsString() couponId?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) pointsDeduct?: number;
-  @IsOptional() @IsString() sourceType?: string;
-  @IsOptional() @IsString() sourceCode?: string;
-  @IsOptional() @IsString() referrerUserId?: string;
-  @IsOptional() @IsString() remark?: string;
+  @IsOptional() @IsString() @IsIn(['direct', 'user_referral', 'merchant_referral', 'campaign']) sourceType?: string;
+  @IsOptional() @IsString() @MaxLength(64) sourceCode?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeId(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '推荐人用户ID无效' })
+  @MaxLength(19, { message: '推荐人用户ID超出范围' })
+  referrerUserId?: string;
+
+  @IsOptional() @IsString() @MaxLength(200) remark?: string;
 }
