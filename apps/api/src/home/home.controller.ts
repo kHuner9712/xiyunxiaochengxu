@@ -3,6 +3,7 @@ import { HomeService } from './home.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { OptionalAuth } from '../common/decorators/optional-auth.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Controller('weapp/home')
 export class WeappHomeController {
@@ -16,13 +17,7 @@ export class WeappHomeController {
 
   @Public()
   @Get('guess')
-  async getGuessProducts(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-  ) {
-    return this.homeService.getGuessProducts(
-      page ? Number(page) : 1,
-      pageSize ? Number(pageSize) : 10,
-    );
+  async getGuessProducts(@Query() query: PaginationDto) {
+    return this.homeService.getGuessProducts(query.page, query.pageSize);
   }
 }
