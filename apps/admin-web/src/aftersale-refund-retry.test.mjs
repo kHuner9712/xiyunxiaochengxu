@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const detail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/aftersale-detail.vue'), 'utf8')
+const refundList = readFileSync(resolve(root, 'apps/admin-web/src/views/order/refund-list.vue'), 'utf8')
+const refundDetail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/refund-detail.vue'), 'utf8')
 const refundApi = readFileSync(resolve(root, 'apps/admin-web/src/api/refund.ts'), 'utf8')
 const service = readFileSync(resolve(root, 'apps/api/src/aftersale/aftersale.service.ts'), 'utf8')
 const paymentConstants = readFileSync(resolve(root, 'apps/api/src/common/constants/payment.ts'), 'utf8')
@@ -72,4 +74,15 @@ test('admin can sync an uncertain refund before retrying', () => {
   assert.match(detail, /result\.synced === false/)
   assert.match(detail, /await fetchDetail\(\)/)
   assert.match(detail, /请求错误由全局拦截器统一提示/)
+})
+
+test('refund list and detail label initiating and retrying states for operators', () => {
+  for (const source of [refundList, refundDetail]) {
+    assert.match(source, /initiating: '提交中'/)
+    assert.match(source, /retrying: '重试核实中'/)
+    assert.match(source, /initiating: 'warning'/)
+    assert.match(source, /retrying: 'warning'/)
+  }
+
+  assert.match(refundList, /v-for="\(label, key\) in REFUND_STATUS_MAP"/)
 })
