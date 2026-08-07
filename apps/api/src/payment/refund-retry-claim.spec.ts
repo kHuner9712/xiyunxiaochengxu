@@ -74,8 +74,20 @@ describe('refund retry claim safety', () => {
       }),
     ).rejects.toThrow(`退款状态异常: ${REFUND_STATUS.RETRYING}`);
 
-    const claimWhere = tx.orderRefund.updateMany.mock.calls[0][0].where;
-    expect(claimWhere.status.in).not.toContain(REFUND_STATUS.RETRYING);
+    expect(tx.orderRefund.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 70n,
+        status: {
+          in: [
+            REFUND_STATUS.INITIATING,
+            REFUND_STATUS.PENDING,
+            REFUND_STATUS.PROCESSING,
+            REFUND_STATUS.FAILED,
+          ],
+        },
+      },
+      data: expect.objectContaining({ status: REFUND_STATUS.PROCESSING }),
+    });
   });
 
   it('syncRefund does not auto-apply SUCCESS side effects while retry claim is active', async () => {
