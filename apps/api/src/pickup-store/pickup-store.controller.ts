@@ -4,6 +4,13 @@ import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PickupCodeDto } from './dto/pickup-code.dto';
+import {
+  CreatePickupStoreDto,
+  PickupStoreQueryDto,
+  PickupStoreStatusDto,
+  UpdatePickupStoreDto,
+} from './dto/pickup-store.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Controller('weapp/pickup-store')
 export class WeappPickupStoreController {
@@ -11,11 +18,8 @@ export class WeappPickupStoreController {
 
   @Public()
   @Get('list')
-  async list(
-    @Query('page') page: string = '1',
-    @Query('pageSize') pageSize: string = '10',
-  ) {
-    return this.service.findPublished(Number(page), Number(pageSize));
+  async list(@Query() query: PaginationDto) {
+    return this.service.findPublished(query.page, query.pageSize);
   }
 
   @Public()
@@ -31,13 +35,8 @@ export class AdminPickupStoreController {
 
   @Get('list')
   @RequirePermission('pickup:store')
-  async list(
-    @Query('page') page: string = '1',
-    @Query('pageSize') pageSize: string = '10',
-    @Query('keyword') keyword?: string,
-    @Query('status') status?: string,
-  ) {
-    return this.service.findAllAdmin(Number(page), Number(pageSize), keyword, status ? Number(status) : undefined);
+  async list(@Query() query: PickupStoreQueryDto) {
+    return this.service.findAllAdmin(query.page, query.pageSize, query.keyword, query.status);
   }
 
   @Get('preview')
@@ -48,13 +47,13 @@ export class AdminPickupStoreController {
 
   @Post()
   @RequirePermission('pickup:store')
-  async create(@Body() dto: any) {
+  async create(@Body() dto: CreatePickupStoreDto) {
     return this.service.create(dto);
   }
 
   @Put(':id')
   @RequirePermission('pickup:store')
-  async update(@Param('id') id: string, @Body() dto: any) {
+  async update(@Param('id') id: string, @Body() dto: UpdatePickupStoreDto) {
     return this.service.update(id, dto);
   }
 
@@ -66,7 +65,7 @@ export class AdminPickupStoreController {
 
   @Put(':id/status')
   @RequirePermission('pickup:store')
-  async updateStatus(@Param('id') id: string, @Body() dto: { status: number }) {
+  async updateStatus(@Param('id') id: string, @Body() dto: PickupStoreStatusDto) {
     return this.service.updateStatus(id, dto.status);
   }
 
