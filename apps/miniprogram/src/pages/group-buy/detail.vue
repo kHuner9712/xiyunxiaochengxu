@@ -59,7 +59,7 @@ import { ref } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { groupBuyApi, type GroupBuyActivity, type GroupBuyGroup, type StartGroupBuyResult } from '@/api/group-buy'
 import { useUserStore } from '@/stores/user'
-import { resolvePromotionDeliveryAddressId } from '@/utils/promotion-address'
+import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
 import { createPayment, wxPay } from '@/api/payment'
 
 const userStore = useUserStore()
@@ -103,10 +103,9 @@ async function payOrder(orderId: string) {
   try {
     const payment = await createPayment({ orderId })
     await wxPay(payment)
-    uni.showToast({ title: '支付成功，等待成团', icon: 'success' })
-    setTimeout(() => {
-      uni.redirectTo({ url: `/pages/group-buy/group?id=${lastGroupId.value}` })
-    }, 800)
+    uni.redirectTo({
+      url: `/pages/order/pay-result?orderId=${orderId}&payScene=group&groupId=${lastGroupId.value}&payIntent=success`,
+    })
   } catch (err: any) {
     const msg = String(err?.errMsg || err?.message || '')
     if (msg.toLowerCase().includes('cancel')) {
@@ -136,10 +135,9 @@ async function payOrder(orderId: string) {
 async function handleCheckoutResult(result: StartGroupBuyResult) {
   lastGroupId.value = result.groupId
   if (result.isZeroPay) {
-    uni.showToast({ title: '参团成功，等待成团', icon: 'success' })
-    setTimeout(() => {
-      uni.redirectTo({ url: `/pages/group-buy/group?id=${result.groupId}` })
-    }, 500)
+    uni.redirectTo({
+      url: `/pages/order/pay-result?orderId=${result.orderId}&payScene=group&groupId=${result.groupId}&zeroPay=1&payIntent=success`,
+    })
     return
   }
 
@@ -160,15 +158,14 @@ async function handleStart() {
 
   submitting.value = true
   try {
-    const addressId = await resolvePromotionDeliveryAddressId('拼团')
-    if (!addressId) return
+    const fulfillment = await resolvePromotionFulfillment(activity.value.productId, '拼团')
+    if (!fulfillment) return
 
     const result = await groupBuyApi.start({
       activityId: activity.value.id,
       skuId: activity.value.skuId,
       quantity: 1,
-      addressId,
-      fulfillmentType: 'delivery',
+      ...fulfillment,
     })
     await handleCheckoutResult(result)
   } catch (err: any) {
@@ -187,14 +184,13 @@ async function handleJoin(groupId: string) {
 
   submitting.value = true
   try {
-    const addressId = await resolvePromotionDeliveryAddressId('拼团')
-    if (!addressId) return
+    const fulfillment = await resolvePromotionFulfillment(activity.value.productId, '拼团')
+    if (!fulfillment) return
 
     const result = await groupBuyApi.join({
       groupId,
       quantity: 1,
-      addressId,
-      fulfillmentType: 'delivery',
+      ...fulfillment,
     })
     await handleCheckoutResult(result)
   } catch (err: any) {
