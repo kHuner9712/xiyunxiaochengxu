@@ -222,13 +222,13 @@ import { ensureSellableSkuSelection } from './sku-popup.logic'
 type SkuAction = 'select' | 'cart' | 'buy'
 
 const product = ref<ProductDetail>({
-  id: 0, name: '', subtitle: '', images: [], price: 0, originalPrice: 0,
+  id: '', name: '', subtitle: '', images: [], price: 0, originalPrice: 0,
   sales: 0, stock: 0, description: '', skus: [], specs: [], tags: []
 })
 const recommendProducts = ref<any[]>([])
 const showSkuPopup = ref(false)
 const currentSku = ref<SkuItem | null>(null)
-const selectedSkuId = ref(0)
+const selectedSkuId = ref('')
 const selectedQuantity = ref(1)
 const skuAction = ref<SkuAction>('select')
 const currentImageIndex = ref(0)
@@ -242,7 +242,7 @@ const canPurchase = computed(() => {
 })
 const primaryImage = computed(() => product.value.images?.[0] || '')
 
-async function loadProduct(id: number) {
+async function loadProduct(id: string) {
   try {
     const data = await getProductDetail(id)
     product.value = {
@@ -260,7 +260,7 @@ async function loadProduct(id: number) {
   }
 }
 
-async function loadRecommend(id: number) {
+async function loadRecommend(id: string) {
   try {
     const data = await getProductRecommend({ productId: id, page: 1, pageSize: 6 })
     recommendProducts.value = data.list
@@ -281,7 +281,7 @@ function previewCertImage(index: number) {
   uni.previewImage({ urls: product.value.compliance?.certImages || [], current: index })
 }
 
-function onSkuChange(skuId: number, quantity: number) {
+function onSkuChange(skuId: string, quantity: number) {
   selectedSkuId.value = skuId
   selectedQuantity.value = quantity
   currentSku.value = product.value.skus.find(s => s.id === skuId) || null
@@ -370,7 +370,7 @@ onShareAppMessage(() => ({
 
 onLoad((options) => {
   if (options?.id) {
-    const id = Number(options.id)
+    const id = String(options.id)
     loadProduct(id)
     loadRecommend(id)
   }
