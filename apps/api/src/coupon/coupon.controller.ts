@@ -4,7 +4,13 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateCouponDto } from './dto/create-coupon.dto';
-import { CouponQueryDto } from './dto/coupon-query.dto';
+import { UpdateCouponDto } from './dto/update-coupon.dto';
+import {
+  CouponQueryDto,
+  CouponListQueryDto,
+  UserCouponListQueryDto,
+  UsableCouponQueryDto,
+} from './dto/coupon-query.dto';
 
 @Controller('weapp/coupon')
 export class WeappCouponController {
@@ -12,14 +18,8 @@ export class WeappCouponController {
 
   @Public()
   @Get('center')
-  async findCenterList(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-  ) {
-    return this.couponService.findCenterList(
-      page ? Math.max(1, Number(page)) : 1,
-      Math.min(100, Math.max(1, pageSize ? Number(pageSize) : 10)),
-    );
+  async findCenterList(@Query() query: CouponListQueryDto) {
+    return this.couponService.findCenterList(query.page, query.pageSize);
   }
 
   @Get('available')
@@ -30,16 +30,9 @@ export class WeappCouponController {
   @Get('my')
   async findMyCoupons(
     @CurrentUser('id') userId: string,
-    @Query('status') status?: string,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
+    @Query() query: UserCouponListQueryDto,
   ) {
-    return this.couponService.findMyCoupons(
-      userId,
-      status ? Number(status) : undefined,
-      page ? Math.max(1, Number(page)) : 1,
-      Math.min(100, Math.max(1, pageSize ? Number(pageSize) : 10)),
-    );
+    return this.couponService.findMyCoupons(userId, query.status, query.page, query.pageSize);
   }
 
   @Post('receive/:couponId')
@@ -53,9 +46,9 @@ export class WeappCouponController {
   @Get('usable')
   async findUsable(
     @CurrentUser('id') userId: string,
-    @Query('amount') amount?: number,
+    @Query() query: UsableCouponQueryDto,
   ) {
-    return this.couponService.findUsable(userId, amount ? Number(amount) : 0);
+    return this.couponService.findUsable(userId, query.amount);
   }
 }
 
@@ -78,22 +71,13 @@ export class AdminCouponController {
   @Post()
   @RequirePermission('marketing:coupon')
   async create(@Body() dto: CreateCouponDto) {
-    return this.couponService.create({
-      ...dto,
-      startTime: new Date(dto.startTime),
-      endTime: new Date(dto.endTime),
-      applicableIds: dto.applicableIds ? JSON.stringify(dto.applicableIds) : null,
-    });
+    return this.couponService.create(dto);
   }
 
   @Put(':id')
   @RequirePermission('marketing:coupon')
-  async update(@Param('id') id: string, @Body() dto: Partial<CreateCouponDto>) {
-    const data: any = { ...dto };
-    if (dto.startTime) data.startTime = new Date(dto.startTime);
-    if (dto.endTime) data.endTime = new Date(dto.endTime);
-    if (dto.applicableIds) data.applicableIds = JSON.stringify(dto.applicableIds);
-    return this.couponService.update(id, data);
+  async update(@Param('id') id: string, @Body() dto: UpdateCouponDto) {
+    return this.couponService.update(id, dto);
   }
 
   @Delete(':id')
