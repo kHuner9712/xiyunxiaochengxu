@@ -44,6 +44,8 @@ async function main() {
         status: OrderStatus.cancelled,
         totalAmount: 1000,
         payAmount: 1000,
+        receiverName: '集成测试用户',
+        receiverPhone: '13800000000',
         cancelledAt: new Date(),
         cancelReason: 'integration historical race fixture',
       },
