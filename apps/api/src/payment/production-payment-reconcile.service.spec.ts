@@ -1,7 +1,8 @@
-import { PAYMENT_STATUS } from '../common/constants';
+import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
+import { PaymentReconcileService } from './payment-reconcile.service';
 import { ProductionPaymentReconcileService } from './production-payment-reconcile.service';
 
-describe('ProductionPaymentReconcileService timeout close safety', () => {
+describe('ProductionPaymentReconcileService', () => {
   function createService() {
     const order = {
       id: 42n,
@@ -22,6 +23,9 @@ describe('ProductionPaymentReconcileService timeout close safety', () => {
       orderPayment: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      orderRefund: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       orderLog: {
         create: jest.fn().mockResolvedValue({}),
       },
@@ -31,11 +35,14 @@ describe('ProductionPaymentReconcileService timeout close safety', () => {
       queryWechatOrder: jest.fn(),
       processPaymentSuccess: jest.fn().mockResolvedValue(undefined),
       closeWechatOrderForCancellation: jest.fn().mockResolvedValue(undefined),
+      syncRefund: jest.fn(),
     };
     const event: any = { emitWarn: jest.fn() };
     const service = new ProductionPaymentReconcileService(prisma, paymentService, event);
     return { service, prisma, paymentService, order };
   }
+
+  afterEach(() => jest.restoreAllMocks());
 
   it('closes the remote WeChat NOTPAY transaction before declaring the order locally closable', async () => {
     const { service, prisma, paymentService } = createService();
@@ -108,5 +115,70 @@ describe('ProductionPaymentReconcileService timeout close safety', () => {
       data: expect.objectContaining({ status: PAYMENT_STATUS.FAILED }),
     });
     expect(result.closable).toBe(1);
+  });
+
+  it('automatically observes stale abnormal refunds and counts recovered terminal states', async () => {
+    const { service, prisma, paymentService } = createService();
+    jest.spyOn(PaymentReconcileService.prototype, 'reconcilePendingRefunds').mockResolvedValue({
+      total: 2,
+      fixed: 1,
+      failed: 0,
+      skipped: 1,
+    });
+    prisma.orderRefund.findMany.mockResolvedValue([
+      { id: 1n, outRefundNo: 'OR-A' },
+      { id: 2n, outRefundNo: 'OR-B' },
+      { id: 3n, outRefundNo: 'OR-C' },
+    ]);
+    paymentService.syncRefund
+      .mockResolvedValueOnce({ synced: true, status: REFUND_STATUS.SUCCESS })
+      .mockResolvedValueOnce({ synced: false, status: REFUND_STATUS.ABNORMAL })
+      .mockResolvedValueOnce({ synced: true, status: REFUND_STATUS.CLOSED });
+
+    const result = await service.reconcilePendingRefunds();
+
+    expect(prisma.orderRefund.findMany).toHaveBeenCalledWith({
+      where: {
+        status: REFUND_STATUS.ABNORMAL,
+        updatedAt: { lt: expect.any(Date) },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: 100,
+      select: { id: true, outRefundNo: true },
+    });
+    expect(paymentService.syncRefund).toHaveBeenNthCalledWith(1, 'OR-A');
+    expect(paymentService.syncRefund).toHaveBeenNthCalledWith(2, 'OR-B');
+    expect(paymentService.syncRefund).toHaveBeenNthCalledWith(3, 'OR-C');
+    expect(result).toEqual(expect.objectContaining({
+      total: 2,
+      fixed: 1,
+      abnormalTotal: 3,
+      abnormalRecovered: 2,
+      abnormalStillAbnormal: 1,
+      abnormalFailed: 0,
+    }));
+  });
+
+  it('isolates a failed abnormal-refund observation instead of aborting the whole batch', async () => {
+    const { service, prisma, paymentService } = createService();
+    jest.spyOn(PaymentReconcileService.prototype, 'reconcilePendingRefunds').mockResolvedValue({
+      total: 0,
+      fixed: 0,
+      failed: 0,
+      skipped: 0,
+    });
+    prisma.orderRefund.findMany.mockResolvedValue([
+      { id: 1n, outRefundNo: 'OR-A' },
+      { id: 2n, outRefundNo: 'OR-B' },
+    ]);
+    paymentService.syncRefund
+      .mockRejectedValueOnce(new Error('wechat unavailable'))
+      .mockResolvedValueOnce({ synced: true, status: REFUND_STATUS.PENDING });
+
+    const result = await service.reconcilePendingRefunds();
+
+    expect(paymentService.syncRefund).toHaveBeenCalledTimes(2);
+    expect(result.abnormalFailed).toBe(1);
+    expect(result.abnormalRecovered).toBe(1);
   });
 });
