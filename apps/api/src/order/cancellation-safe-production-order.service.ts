@@ -3,7 +3,7 @@ import { OrderStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { BusinessEventService } from '../common/business-event.service';
-import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
+import { COUPON_STATUS, PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
@@ -149,8 +149,43 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
             });
           }
 
-          await (this as any).restoreUserPoints(tx, currentOrder);
-          await (this as any).releaseCouponAfterCancel(tx, currentOrder);
+          if (currentOrder.pointsDeducted > 0) {
+            const user = await tx.user.findUnique({
+              where: { id: currentOrder.userId },
+              select: { availablePoints: true },
+            });
+            if (user) {
+              await tx.user.update({
+                where: { id: currentOrder.userId },
+                data: { availablePoints: { increment: currentOrder.pointsDeducted } },
+              });
+              await tx.pointsRecord.create({
+                data: {
+                  userId: currentOrder.userId,
+                  type: 1,
+                  points: currentOrder.pointsDeducted,
+                  balance: user.availablePoints + currentOrder.pointsDeducted,
+                  source: 'order_auto_close',
+                  sourceId: currentOrder.id,
+                  description: `超时自动关闭归还积分${currentOrder.pointsDeducted}`,
+                },
+              });
+            }
+          }
+
+          if (currentOrder.couponId) {
+            await tx.userCoupon.updateMany({
+              where: {
+                id: currentOrder.couponId,
+                status: { in: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED] },
+              },
+              data: {
+                status: COUPON_STATUS.FREE,
+                usedOrderId: null,
+                usedAt: null,
+              },
+            });
+          }
 
           // Promotion reservations must close in the same database transaction as the order.
           // Otherwise the order can be cancelled while a group member still occupies a seat or
