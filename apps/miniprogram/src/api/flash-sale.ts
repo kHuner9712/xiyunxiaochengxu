@@ -27,6 +27,8 @@ export interface FlashSaleBuyResult {
   flashPrice: number
   quantity: number
   lockExpireAt: string
+  isZeroPay: boolean
+  orderStatus?: string | null
 }
 
 export interface FlashSaleOrder {
