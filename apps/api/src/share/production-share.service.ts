@@ -67,29 +67,48 @@ export class ProductionShareService extends ShareService {
   }
 
   async reconcileMatureFirstPaidRewards(limit = 200) {
-    // 先补齐已成功退款的首单归因反向流水。这里故意与成熟奖励共用定时任务，
-    // 即使退款回调某次副作用失败，后续扫描仍能依靠 dedupeKey 自动补偿。
     await this.reconcileSuccessfulRefundAttributions(limit);
 
     const cutoff = new Date(
       Date.now() - AFTERSALE_APPLY_DAYS * 24 * 60 * 60 * 1000,
     );
-    const relations = await this.productionPrisma.userInviteRelation.findMany({
-      where: {
-        status: 1,
-        firstPaidOrderId: { not: null },
-      },
-      orderBy: { firstPaidAt: 'asc' },
-      take: limit,
-    });
+
+    // Only select relations that are currently eligible and have not completed reconciliation.
+    // A fixed `take` over all historical relations would repeatedly scan the same successful
+    // first page forever and starve later users once the table grows beyond the limit.
+    const candidateRows = await this.productionPrisma.$queryRaw<Array<{ relationId: bigint }>>`
+      SELECT r.id AS relationId
+      FROM user_invite_relations r
+      INNER JOIN orders o ON o.id = r.first_paid_order_id
+      WHERE r.status = 1
+        AND r.first_paid_order_id IS NOT NULL
+        AND o.status = 'completed'
+        AND o.completed_at IS NOT NULL
+        AND o.completed_at <= ${cutoff}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_invite_rewards marker
+          WHERE marker.dedupe_key = CONCAT('first_paid:complete:', r.first_paid_order_id)
+            AND marker.deleted_at IS NULL
+        )
+      ORDER BY COALESCE(r.first_paid_at, r.created_at) ASC
+      LIMIT ${limit}
+    `;
 
     let issued = 0;
     let skipped = 0;
     let failed = 0;
-    for (const relation of relations) {
+    for (const candidate of candidateRows) {
       try {
+        const relation = await this.productionPrisma.userInviteRelation.findUnique({
+          where: { id: candidate.relationId },
+        });
+        if (!relation?.firstPaidOrderId) {
+          skipped += 1;
+          continue;
+        }
         const order = await this.productionPrisma.order.findUnique({
-          where: { id: relation.firstPaidOrderId! },
+          where: { id: relation.firstPaidOrderId },
           select: {
             id: true,
             status: true,
@@ -98,8 +117,6 @@ export class ProductionShareService extends ShareService {
             payAmount: true,
           },
         });
-        // 只允许真正处于 completed 的订单成熟。用户在售后窗口最后一天发起售后时，
-        // Order.status 会切到 aftersale；即使 completedAt 已经过窗口，也不能先发奖励。
         if (!order?.completedAt || order.status !== 'completed' || order.completedAt > cutoff) {
           skipped += 1;
           continue;
@@ -116,6 +133,7 @@ export class ProductionShareService extends ShareService {
         );
         const netPaidAmount = Math.max(0, grossPaid - refundedAmount);
         if (netPaidAmount <= 0) {
+          await this.markFirstPaidRewardReconciled(relation, order.id, '订单已全额退款，无成熟首单奖励');
           skipped += 1;
           continue;
         }
@@ -135,25 +153,45 @@ export class ProductionShareService extends ShareService {
             status: 'issued',
           },
         });
+        await this.markFirstPaidRewardReconciled(relation, order.id, '成熟首单奖励已完成幂等核对');
         if (after > before) issued += 1;
         else skipped += 1;
       } catch (error) {
         failed += 1;
         this.productionLogger.error(
-          `首单奖励补偿失败: relationId=${relation.id}, error=${(error as Error).message}`,
+          `首单奖励补偿失败: relationId=${candidate.relationId}, error=${(error as Error).message}`,
         );
       }
     }
-    return { total: relations.length, issued, skipped, failed };
+    return { total: candidateRows.length, issued, skipped, failed };
   }
 
   async reconcileSuccessfulRefundAttributions(limit = 200) {
-    const refunds = await this.productionPrisma.orderRefund.findMany({
-      where: { status: 'success' },
-      select: { id: true, orderId: true },
-      orderBy: { updatedAt: 'desc' },
-      take: limit,
-    });
+    // Only scan successful refunds whose attribution adjustment marker is still missing.
+    // This guarantees progress through the entire history instead of revisiting the newest 200.
+    const refunds = await this.productionPrisma.$queryRaw<Array<{ id: bigint; orderId: bigint }>>`
+      SELECT DISTINCT r.id AS id, r.order_id AS orderId
+      FROM order_refunds r
+      INNER JOIN user_invite_relations rel
+        ON rel.first_paid_order_id = r.order_id
+       AND rel.status = 1
+       AND rel.source_share_record_id IS NOT NULL
+      WHERE r.status = 'success'
+        AND EXISTS (
+          SELECT 1
+          FROM user_invite_rewards attribution
+          WHERE attribution.dedupe_key = CONCAT('first_paid:attribution:', r.order_id)
+            AND attribution.deleted_at IS NULL
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_invite_rewards marker
+          WHERE marker.dedupe_key = CONCAT('first_paid:refund_attribution:', r.id)
+            AND marker.deleted_at IS NULL
+        )
+      ORDER BY r.id ASC
+      LIMIT ${limit}
+    `;
 
     let adjusted = 0;
     let skipped = 0;
@@ -412,6 +450,32 @@ export class ProductionShareService extends ShareService {
           dedupeKey: `first_paid:coupon:${orderId}:${couponId}`,
         });
       }
+    }
+  }
+
+  private async markFirstPaidRewardReconciled(
+    relation: any,
+    orderId: bigint,
+    reason: string,
+  ) {
+    try {
+      await this.productionPrisma.userInviteReward.create({
+        data: {
+          userId: relation.inviterUserId,
+          inviteeUserId: relation.inviteeUserId,
+          campaignId: relation.sourceCampaignId,
+          rewardType: 'reconcile_marker',
+          rewardName: reason,
+          status: 'issued',
+          sourceType: 'first_paid_reconcile_complete',
+          sourceId: orderId,
+          dedupeKey: `first_paid:complete:${orderId}`,
+          issuedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
+      throw error;
     }
   }
 
