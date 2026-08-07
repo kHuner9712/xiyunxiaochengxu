@@ -162,8 +162,15 @@ async function handleBuy() {
       sourceCode: promo.sourceCode,
       referrerUserId: promo.referrerUserId,
     })
-    uni.showToast({ title: '抢购成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 500)
+
+    if (result.isZeroPay) {
+      uni.redirectTo({
+        url: `/pages/order/pay-result?orderId=${result.orderId}&payScene=flash&zeroPay=1&payIntent=success`,
+      })
+      return
+    }
+
+    await payOrder(result.orderId)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '秒杀失败', icon: 'none' })
   } finally {
@@ -175,16 +182,15 @@ async function payOrder(orderId: string) {
   try {
     const payment = await createPayment({ orderId })
     await wxPay(payment)
-    uni.showToast({ title: '支付成功', icon: 'success' })
-    setTimeout(() => {
-      uni.redirectTo({ url: `/pages/order/detail?id=${orderId}` })
-    }, 1200)
+    uni.redirectTo({
+      url: `/pages/order/pay-result?orderId=${orderId}&payScene=flash&payIntent=success`,
+    })
   } catch (err: any) {
-    const msg = err?.errMsg || err?.message || ''
-    if (msg.includes('cancel')) {
+    const msg = String(err?.errMsg || err?.message || '')
+    if (msg.toLowerCase().includes('cancel')) {
       uni.showModal({
         title: '支付未完成',
-        content: '请在订单列表中尽快完成支付，否则锁库存将过期',
+        content: '请在订单列表中尽快完成支付，否则锁库存将过期。',
         showCancel: false,
         confirmText: '查看订单',
         success: () => {
@@ -193,7 +199,15 @@ async function payOrder(orderId: string) {
       })
       return
     }
-    uni.showToast({ title: '支付失败', icon: 'none' })
+    uni.showModal({
+      title: '支付发起失败',
+      content: err?.message || '支付功能暂时不可用，请进入订单详情稍后重试。',
+      showCancel: false,
+      confirmText: '查看订单',
+      success: () => {
+        uni.redirectTo({ url: `/pages/order/detail?id=${orderId}` })
+      },
+    })
   }
 }
 
@@ -224,171 +238,31 @@ onShareAppMessage(() => ({
   box-shadow: $shadow-md;
 }
 
-.cover-wrap {
-  width: 100%;
-}
-
-.cover {
-  width: 100%;
-  height: 400rpx;
-  background: $bg-ivory;
-}
-
-.cover-placeholder {
-  @include flex-center;
-}
-
-.placeholder-text {
-  color: $text-hint;
-  font-size: $font-lg;
-}
-
-.info-section {
-  padding: $spacing-md;
-}
-
-.name {
-  font-size: $font-lg;
-  font-weight: 800;
-  color: $text-color;
-  margin-bottom: $spacing-sm;
-  line-height: 1.4;
-}
-
-.price-row {
-  display: flex;
-  align-items: baseline;
-  gap: $spacing-sm;
-  margin-bottom: $spacing-md;
-}
-
-.flash-price {
-  color: $price-color;
-  font-size: 52rpx;
-  font-weight: 800;
-}
-
-.origin-price {
-  color: $text-hint;
-  font-size: $font-md;
-  text-decoration: line-through;
-}
-
-.meta-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: $spacing-sm;
-  margin-bottom: $spacing-md;
-}
-
-.meta-item {
-  width: 48%;
-  display: flex;
-  justify-content: space-between;
-  padding: 12rpx $spacing-sm;
-  background: $bg-gray;
-  border-radius: $radius-md;
-}
-
-.meta-label {
-  font-size: $font-sm;
-  color: $text-hint;
-}
-
-.meta-value {
-  font-size: $font-sm;
-  color: $text-color;
-  font-weight: 700;
-}
-
-.meta-value.status-running {
-  color: $price-color;
-}
-
-.meta-value.status-pending {
-  color: $warning-color;
-}
-
-.meta-value.status-end {
-  color: $text-hint;
-}
-
-.countdown-row {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-sm $spacing-md;
-  background: $primary-soft;
-  border-radius: $radius-md;
-  margin-bottom: $spacing-md;
-}
-
-.countdown-label {
-  font-size: $font-sm;
-  color: $primary-dark;
-  font-weight: 700;
-}
-
-.countdown-value {
-  font-size: $font-lg;
-  color: $price-color;
-  font-weight: 800;
-}
-
-.desc-section {
-  margin-top: $spacing-sm;
-}
-
-.desc-title {
-  font-size: $font-md;
-  font-weight: 700;
-  color: $text-color;
-  margin-bottom: $spacing-xs;
-  display: block;
-}
-
-.desc-content {
-  font-size: $font-sm;
-  color: $text-secondary;
-  line-height: 1.6;
-}
-
-.bottom-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: $spacing-sm $spacing-md;
-  background: rgba(255, 252, 247, 0.96);
-  border-top: 1rpx solid rgba($border-color, 0.82);
-  box-shadow: 0 -12rpx 36rpx rgba(131, 91, 78, 0.08);
-  z-index: 20;
-  @include safe-bottom;
-}
-
-.buy-btn {
-  width: 100%;
-  border-radius: $radius-round;
-  background: $gradient-coral;
-  color: #FFFFFF;
-  font-size: $font-lg;
-  font-weight: 800;
-  padding: 20rpx 0;
-  box-shadow: $shadow-coral;
-
-  &::after {
-    border: none;
-  }
-}
-
-.buy-btn[disabled] {
-  background: $text-disabled;
-  color: #FFFFFF;
-  box-shadow: none;
-  opacity: 0.7;
-}
-
-.btn-text {
-  color: inherit;
-}
+.cover-wrap { width: 100%; }
+.cover { width: 100%; height: 400rpx; background: $bg-ivory; }
+.cover-placeholder { @include flex-center; }
+.placeholder-text { color: $text-hint; font-size: $font-lg; }
+.info-section { padding: $spacing-md; }
+.name { font-size: $font-lg; font-weight: 800; color: $text-color; margin-bottom: $spacing-sm; line-height: 1.4; }
+.price-row { display: flex; align-items: baseline; gap: $spacing-sm; margin-bottom: $spacing-md; }
+.flash-price { color: $price-color; font-size: 52rpx; font-weight: 800; }
+.origin-price { color: $text-hint; font-size: $font-md; text-decoration: line-through; }
+.meta-grid { display: flex; flex-wrap: wrap; gap: $spacing-sm; margin-bottom: $spacing-md; }
+.meta-item { width: 48%; display: flex; justify-content: space-between; padding: 12rpx $spacing-sm; background: $bg-gray; border-radius: $radius-md; }
+.meta-label { font-size: $font-sm; color: $text-hint; }
+.meta-value { font-size: $font-sm; color: $text-color; font-weight: 700; }
+.meta-value.status-running { color: $price-color; }
+.meta-value.status-pending { color: $warning-color; }
+.meta-value.status-end { color: $text-hint; }
+.countdown-row { display: flex; align-items: center; gap: $spacing-sm; padding: $spacing-sm $spacing-md; background: $primary-soft; border-radius: $radius-md; margin-bottom: $spacing-md; }
+.countdown-label { font-size: $font-sm; color: $primary-dark; font-weight: 700; }
+.countdown-value { font-size: $font-lg; color: $price-color; font-weight: 800; }
+.desc-section { margin-top: $spacing-sm; }
+.desc-title { font-size: $font-md; font-weight: 700; color: $text-color; margin-bottom: $spacing-xs; display: block; }
+.desc-content { font-size: $font-sm; color: $text-secondary; line-height: 1.6; }
+.bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: $spacing-sm $spacing-md; background: rgba(255, 252, 247, 0.96); border-top: 1rpx solid rgba($border-color, 0.82); box-shadow: 0 -12rpx 36rpx rgba(131, 91, 78, 0.08); z-index: 20; @include safe-bottom; }
+.buy-btn { width: 100%; border-radius: $radius-round; background: $gradient-coral; color: #FFFFFF; font-size: $font-lg; font-weight: 800; padding: 20rpx 0; box-shadow: $shadow-coral; }
+.buy-btn::after { border: none; }
+.buy-btn[disabled] { background: $text-disabled; color: #FFFFFF; box-shadow: none; opacity: 0.7; }
+.btn-text { color: inherit; }
 </style>
