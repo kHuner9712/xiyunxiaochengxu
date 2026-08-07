@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { BusinessEventService } from '../common/business-event.service';
+import { REFUND_STATUS, WECHAT_REFUND_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
@@ -21,7 +22,7 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   private readonly cancellationPrivateKey: string | null;
 
   constructor(
-    prisma: PrismaService,
+    private readonly cancellationPrisma: PrismaService,
     private readonly cancellationConfig: ConfigService,
     businessEvent: BusinessEventService,
     orderService: OrderService,
@@ -33,7 +34,7 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
     private readonly cancellationRedis: RedisService,
   ) {
     super(
-      prisma,
+      cancellationPrisma,
       cancellationConfig,
       businessEvent,
       orderService,
@@ -56,6 +57,122 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
 
   override async createPayment(orderId: string, userId: string) {
     return this.withPaymentCancelLock(orderId, async () => super.createPayment(orderId, userId));
+  }
+
+  /**
+   * ABNORMAL is not retryable, but it is observable: after an operator resolves the refund in
+   * the WeChat merchant platform, the authoritative query may move to PROCESSING/CLOSED/SUCCESS.
+   * Re-open only that ABNORMAL record into a state the existing refund state machine already
+   * knows how to reconcile. CLOSED records remain immutable and are never re-opened here.
+   */
+  override async syncRefund(outRefundNo: string) {
+    const refund = await this.cancellationPrisma.orderRefund.findFirst({
+      where: { outRefundNo },
+    });
+    if (!refund || refund.status !== REFUND_STATUS.ABNORMAL) {
+      return super.syncRefund(outRefundNo);
+    }
+
+    const wechatResult = await this.queryRefund(outRefundNo);
+    const wechatStatus = wechatResult?.status;
+
+    if (wechatStatus === 'PROCESSING') {
+      await this.cancellationPrisma.orderRefund.updateMany({
+        where: { id: refund.id, status: REFUND_STATUS.ABNORMAL },
+        data: {
+          status: REFUND_STATUS.PENDING,
+          refundId: wechatResult.refund_id || refund.refundId,
+          rawResponse: wechatResult,
+        },
+      });
+      return {
+        synced: true,
+        status: REFUND_STATUS.PENDING,
+        wechatStatus,
+        recoveredFrom: REFUND_STATUS.ABNORMAL,
+      };
+    }
+
+    if (wechatStatus === WECHAT_REFUND_STATUS.CLOSED) {
+      await this.cancellationPrisma.orderRefund.updateMany({
+        where: { id: refund.id, status: REFUND_STATUS.ABNORMAL },
+        data: {
+          status: REFUND_STATUS.CLOSED,
+          refundId: wechatResult.refund_id || refund.refundId,
+          rawResponse: wechatResult,
+        },
+      });
+      return {
+        synced: true,
+        status: REFUND_STATUS.CLOSED,
+        wechatStatus,
+        recoveredFrom: REFUND_STATUS.ABNORMAL,
+      };
+    }
+
+    if (wechatStatus !== WECHAT_REFUND_STATUS.SUCCESS) {
+      return {
+        synced: false,
+        status: REFUND_STATUS.ABNORMAL,
+        wechatStatus,
+        message: '微信退款仍未形成可自动收敛的终态',
+      };
+    }
+
+    const successAmount = wechatResult.amount?.refund;
+    const totalAmount = wechatResult.amount?.total;
+    if (successAmount !== undefined && successAmount !== refund.refundAmount) {
+      throw new BadRequestException(
+        `微信退款金额与本地不一致：expected=${refund.refundAmount}, actual=${successAmount}`,
+      );
+    }
+    if (totalAmount !== undefined && totalAmount !== refund.totalAmount) {
+      throw new BadRequestException(
+        `微信订单总金额与本地退款记录不一致：expected=${refund.totalAmount}, actual=${totalAmount}`,
+      );
+    }
+
+    const reopened = await this.cancellationPrisma.orderRefund.updateMany({
+      where: { id: refund.id, status: REFUND_STATUS.ABNORMAL },
+      data: {
+        status: REFUND_STATUS.PENDING,
+        refundId: wechatResult.refund_id || refund.refundId,
+        rawResponse: wechatResult,
+      },
+    });
+    if (reopened.count === 0) {
+      return super.syncRefund(outRefundNo);
+    }
+
+    try {
+      await this.processWechatRefundSuccess(
+        refund,
+        wechatResult.refund_id || refund.refundId || '',
+        wechatResult,
+      );
+      return {
+        synced: true,
+        status: REFUND_STATUS.SUCCESS,
+        wechatStatus,
+        recoveredFrom: REFUND_STATUS.ABNORMAL,
+      };
+    } catch (error) {
+      const current = await this.cancellationPrisma.orderRefund.findUnique({
+        where: { id: refund.id },
+        select: { status: true },
+      });
+      if (current?.status === REFUND_STATUS.SUCCESS) {
+        return {
+          synced: true,
+          status: REFUND_STATUS.SUCCESS,
+          wechatStatus,
+          recoveredFrom: REFUND_STATUS.ABNORMAL,
+          sideEffectsPending: true,
+          message: `退款核心已同步成功，外围副作用等待自动补偿：${(error as Error).message}`,
+        };
+      }
+      throw error;
+    }
   }
 
   async closeWechatOrderForCancellation(outTradeNo: string): Promise<void> {
