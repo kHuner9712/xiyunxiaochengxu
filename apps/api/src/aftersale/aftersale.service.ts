@@ -240,8 +240,9 @@ export class AftersaleService {
           select: { status: true, outRefundNo: true },
         })
       : null;
-    const retryableStatuses = [REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL] as string[];
+    const retryableStatuses = [REFUND_STATUS.CLOSED] as string[];
     const syncRequiredStatuses = [REFUND_STATUS.INITIATING, REFUND_STATUS.FAILED, REFUND_STATUS.RETRYING] as string[];
+    const manualRequiredStatuses = [REFUND_STATUS.ABNORMAL] as string[];
 
     return {
       ...this.serializeAftersale(aftersale),
@@ -249,6 +250,7 @@ export class AftersaleService {
       latestOutRefundNo: latestRefund?.outRefundNo || null,
       refundRetryable: !!latestRefund && retryableStatuses.includes(latestRefund.status),
       refundSyncRequired: !!latestRefund && syncRequiredStatuses.includes(latestRefund.status),
+      refundManualRequired: !!latestRefund && manualRequiredStatuses.includes(latestRefund.status),
     };
   }
 
@@ -377,7 +379,10 @@ export class AftersaleService {
       if (latestRefundBefore?.status === REFUND_STATUS.FAILED) {
         throw new BadRequestException('退款请求结果待核实，请先同步微信退款状态');
       }
-      const retryableStatuses = [REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL] as string[];
+      if (latestRefundBefore?.status === REFUND_STATUS.ABNORMAL) {
+        throw new BadRequestException('微信退款异常，请前往微信支付商户平台处理异常退款，不能重新发起普通退款');
+      }
+      const retryableStatuses = [REFUND_STATUS.CLOSED] as string[];
       if (!latestRefundBefore || !retryableStatuses.includes(latestRefundBefore.status)) {
         throw new BadRequestException('退款已在处理中或已完成');
       }
