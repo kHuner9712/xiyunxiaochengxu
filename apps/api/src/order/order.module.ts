@@ -1,7 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { WeappOrderController, AdminOrderController } from './order.controller';
 import { OrderService } from './order.service';
-import { TransactionalOrderService } from './transactional-order.service';
+import { ProductionOrderService } from './production-order.service';
 import { PromotionCheckoutService } from './promotion-checkout.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { BusinessEventModule } from '../common/business-event.module';
@@ -22,7 +22,7 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
     PromotionCheckoutService,
     {
       provide: OrderService,
-      useClass: TransactionalOrderService,
+      useClass: ProductionOrderService,
     },
   ],
   exports: [OrderService, PromotionCheckoutService],
