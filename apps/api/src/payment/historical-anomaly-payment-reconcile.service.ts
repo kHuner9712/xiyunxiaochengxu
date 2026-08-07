@@ -70,7 +70,7 @@ export class HistoricalAnomalyPaymentReconcileService extends ProductionPaymentR
 
     for (const task of tasks) {
       try {
-        const order = await this.historicalPrisma.order.findUnique({
+        const order = await this.historicalPrisma.order.findFirst({
           where: { orderNo: task.orderNo },
           include: {
             payment: true,
