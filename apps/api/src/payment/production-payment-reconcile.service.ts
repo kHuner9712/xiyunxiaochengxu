@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { BusinessEventService } from '../common/business-event.service';
-import { PAYMENT_STATUS } from '../common/constants';
+import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { PaymentService } from './payment.service';
@@ -40,8 +40,6 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
     for (const order of timeoutOrders) {
       const payment = order.payment;
       if (!payment) {
-        // Payment initialization and cancellation use the same Redis lock. With no payment
-        // record there is no remote WeChat transaction that can race the local close.
         closable += 1;
         continue;
       }
@@ -100,8 +98,6 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
             closable += 1;
             continue;
           } catch (closeError) {
-            // The user may have completed payment between the NOTPAY query and the close call.
-            // Never cancel locally on the basis of the stale query; re-query the authoritative state.
             const resolved = await this.resolveAfterCloseFailure(order, payment, closeError);
             fixed += resolved.fixed;
             closable += resolved.closable;
@@ -128,6 +124,66 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
     }
 
     return { total: timeoutOrders.length, fixed, delayed, closable, failed };
+  }
+
+  /**
+   * Base reconciliation owns initiating/pending/processing refunds. ABNORMAL is intentionally
+   * excluded there because it cannot be retried safely. This production extension only observes
+   * old ABNORMAL records through syncRefund: if a merchant has resolved the refund in WeChat,
+   * the outer PaymentService can move it into PROCESSING/CLOSED/SUCCESS safely. Still-abnormal
+   * records are merely observed and rotated; they are never re-submitted as new refunds.
+   */
+  override async reconcilePendingRefunds() {
+    const base = await super.reconcilePendingRefunds();
+    const staleBefore = new Date(Date.now() - 5 * 60 * 1000);
+    const abnormalRefunds = await this.productionPrisma.orderRefund.findMany({
+      where: {
+        status: REFUND_STATUS.ABNORMAL,
+        updatedAt: { lt: staleBefore },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: 100,
+      select: {
+        id: true,
+        outRefundNo: true,
+      },
+    });
+
+    let abnormalRecovered = 0;
+    let abnormalStillAbnormal = 0;
+    let abnormalFailed = 0;
+
+    for (const refund of abnormalRefunds) {
+      try {
+        const result = await this.productionPaymentService.syncRefund(refund.outRefundNo);
+        const status = (result as any)?.status;
+        if (
+          status === REFUND_STATUS.SUCCESS ||
+          status === REFUND_STATUS.PENDING ||
+          status === REFUND_STATUS.CLOSED
+        ) {
+          abnormalRecovered += 1;
+          this.productionLogger.log(
+            `异常退款自动同步收敛: outRefundNo=${refund.outRefundNo}, status=${status}`,
+          );
+        } else {
+          abnormalStillAbnormal += 1;
+        }
+      } catch (error) {
+        abnormalFailed += 1;
+        this.productionLogger.error(
+          `异常退款自动同步失败: outRefundNo=${refund.outRefundNo}, error=${(error as Error).message}`,
+        );
+      }
+    }
+
+    return {
+      ...base,
+      abnormalTotal: abnormalRefunds.length,
+      abnormalRecovered,
+      abnormalStillAbnormal,
+      abnormalFailed,
+    };
   }
 
   private async resolveAfterCloseFailure(order: any, payment: any, closeError: unknown) {
