@@ -85,7 +85,7 @@ echo "$api_health" | grep -q '"status":"ok"' || fail "API health response is not
 echo "$api_health" | grep -q '"database":"ok"' || fail "API health does not report database=ok: $api_health"
 echo "$api_health" | grep -q '"redis":"ok"' || fail "API health does not report redis=ok: $api_health"
 api_build_sha="$(printf '%s' "$api_health" | sed -n 's/.*"buildSha":"\([^"]*\)".*/\1/p')"
-[[ "$api_build_sha" =~ ^[0-9a-fA-F]{7,40}$ ]] || fail "API health buildSha is missing or invalid: ${api_build_sha:-empty}"
+[[ "$api_build_sha" =~ ^[0-9a-fA-F]{40}$ ]] || fail "API health buildSha must be the exact 40-character Git commit SHA: ${api_build_sha:-empty}"
 if [ -n "${BUILD_SHA:-}" ]; then
   [ "$api_build_sha" = "$BUILD_SHA" ] || fail "API runtime build SHA mismatch: expected=$BUILD_SHA actual=$api_build_sha"
 fi
@@ -131,7 +131,7 @@ served_hash="$(curl --fail --silent --show-error --insecure \
 [ -n "$image_hash" ] || fail 'API image does not contain /app/admin-dist/.build-hash'
 [ "$image_hash" = "$served_hash" ] || fail "admin build hash mismatch: image=$image_hash served=$served_hash"
 [ "$image_hash" = "$api_build_sha" ] || fail "API/admin build identity mismatch: api=$api_build_sha admin=$image_hash"
-[[ "$served_hash" != unknown* ]] || fail "admin build hash is not deterministic: $served_hash"
+[[ "$served_hash" =~ ^[0-9a-fA-F]{40}$ ]] || fail "admin build hash must be the exact 40-character Git commit SHA: ${served_hash:-empty}"
 pass "API and admin static volume match image build $served_hash"
 
 printf 'RUNTIME SMOKE PASS (%d checks)\n' "$PASS_COUNT"
