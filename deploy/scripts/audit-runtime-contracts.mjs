@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const root = resolve(dirname(fileURLToPath(new URL('../..', import.meta.url)))
 const failures = []
 
 function rel(file) {
@@ -114,10 +114,16 @@ expectText('.env.production.example', 'deploy/nginx/ssl/admin/fullchain.pem', 'p
 
 // Production deploy and smoke must be the only canonical operational path.
 expectText('.gitignore', '/deploy/backups/', 'generated production database backups must be ignored by Git')
-expectText('deploy/scripts/deploy-production.sh', 'BUILD_SHA="$(git rev-parse --short HEAD)"', 'deployment must inject the current Git SHA')
+expectText('deploy/scripts/deploy-production.sh', 'FULL_SHA="$(git rev-parse HEAD)"', 'deployment must resolve the exact current Git commit')
+expectText('deploy/scripts/deploy-production.sh', 'SHORT_SHA="$(git rev-parse --short HEAD)"', 'deployment may retain a short SHA only for local operational names')
+expectText('deploy/scripts/deploy-production.sh', 'BUILD_SHA="$FULL_SHA"', 'deployment must inject the exact 40-character Git SHA as BUILD_SHA')
+rejectRegex('deploy/scripts/deploy-production.sh', /BUILD_SHA="\$\(git rev-parse --short HEAD\)"/, 'runtime BUILD_SHA must never come from a short Git hash')
+expectText('deploy/scripts/deploy-production.sh', 'mysql-before-${SHORT_SHA}-${DEPLOY_TIME}.sql.gz', 'backup names should use the short operational SHA')
+expectText('deploy/scripts/deploy-production.sh', 'rollback-${SHORT_SHA}-${DEPLOY_TIME}', 'rollback image names should use the short operational SHA')
 expectText('deploy/scripts/deploy-production.sh', 'mysqldump', 'deployment must create a database backup')
 expectText('deploy/scripts/deploy-production.sh', 'npx prisma migrate deploy', 'deployment must execute Prisma migrations')
 expectText('deploy/scripts/deploy-production.sh', 'bash "$SCRIPT_DIR/smoke-runtime.sh"', 'deployment must run the runtime smoke suite')
+expectText('deploy/scripts/smoke-runtime.sh', '^[0-9a-fA-F]{40}$', 'runtime smoke must require the exact 40-character Git commit identity')
 expectText('deploy/scripts/deploy-production.sh', 'deploy/nginx/ssl/api/fullchain.pem', 'deployment must validate the API certificate')
 expectText('deploy/scripts/deploy-production.sh', 'deploy/nginx/ssl/admin/fullchain.pem', 'deployment must validate the admin certificate')
 rejectRegex('deploy/scripts/deploy-production.sh', /62\.234\.69\.19/, 'deployment must not contain a hard-coded server IP')
