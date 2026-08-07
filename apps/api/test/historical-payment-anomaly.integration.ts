@@ -79,8 +79,8 @@ async function main() {
       where: { orderNo, reason: HISTORICAL_REASON, transactionId },
     });
     assert.equal(task.amount, 1000, '首次资金敞口应为完整实付金额');
+    assert.equal(task.status, 'pending');
 
-    await prisma.paymentCompensationTask.delete({ where: { id: task.id } });
     const refund1 = await prisma.orderRefund.create({
       data: {
         refundNo: `R1${suffix}`.slice(0, 64),
@@ -91,19 +91,40 @@ async function main() {
         outRefundNo: `OR1${suffix}`.slice(0, 64),
         refundAmount: 400,
         totalAmount: 1000,
-        status: REFUND_STATUS.SUCCESS,
-        reason: 'integration partial refund',
+        status: REFUND_STATUS.PROCESSING,
+        reason: 'integration processing refund',
       },
     });
 
-    const partial = await (detector as any).seedCancelledPaidAnomalies();
-    assert.equal(partial.cancelledPaidDetected, 1, '部分退款后仍应保留资金敞口');
+    await (detector as any).reconcileExistingCancelledPaidTasks();
     task = await prisma.paymentCompensationTask.findFirstOrThrow({
-      where: { orderNo, reason: HISTORICAL_REASON, transactionId },
+      where: { id: task.id },
     });
-    assert.equal(task.amount, 600, '部分退款后只记录剩余未覆盖金额');
+    assert.equal(task.status, 'pending', 'PROCESSING 退款不能自动关闭资金任务');
+    assert.equal(task.amount, 1000, 'PROCESSING 退款不能减少尚未证明退回的资金敞口');
+    assert.equal((task.callbackPayload as any)?.reconciliation?.activeRefundAmount, 400);
+    assert.equal((task.callbackPayload as any)?.reconciliation?.successfulRefundAmount, 0);
 
-    await prisma.paymentCompensationTask.delete({ where: { id: task.id } });
+    await prisma.orderRefund.update({
+      where: { id: refund1.id },
+      data: { status: REFUND_STATUS.CLOSED },
+    });
+    await (detector as any).reconcileExistingCancelledPaidTasks();
+    task = await prisma.paymentCompensationTask.findFirstOrThrow({ where: { id: task.id } });
+    assert.equal(task.status, 'pending', 'CLOSED 退款后任务必须继续待处理');
+    assert.equal(task.amount, 1000, 'CLOSED 退款不能被当成用户已收到退款');
+    assert.equal((task.callbackPayload as any)?.reconciliation?.activeRefundAmount, 0);
+
+    await prisma.orderRefund.update({
+      where: { id: refund1.id },
+      data: { status: REFUND_STATUS.SUCCESS },
+    });
+    await (detector as any).reconcileExistingCancelledPaidTasks();
+    task = await prisma.paymentCompensationTask.findFirstOrThrow({ where: { id: task.id } });
+    assert.equal(task.status, 'pending', '部分成功退款后仍有敞口，任务不能关闭');
+    assert.equal(task.amount, 600, '400分 SUCCESS 后剩余资金敞口应为600分');
+    assert.equal((task.callbackPayload as any)?.reconciliation?.successfulRefundAmount, 400);
+
     const refund2 = await prisma.orderRefund.create({
       data: {
         refundNo: `R2${suffix}`.slice(0, 64),
@@ -119,14 +140,24 @@ async function main() {
       },
     });
 
-    const fullyCovered = await (detector as any).seedCancelledPaidAnomalies();
-    assert.equal(fullyCovered.cancelledPaidDetected, 0, '有效退款已覆盖全部实付时不应再告警');
-    assert.equal(
-      await prisma.paymentCompensationTask.count({ where: { orderNo, reason: HISTORICAL_REASON } }),
-      0,
-      '全额退款覆盖后不得创建历史异常任务',
-    );
+    await (detector as any).reconcileExistingCancelledPaidTasks();
+    task = await prisma.paymentCompensationTask.findFirstOrThrow({ where: { id: task.id } });
+    assert.equal(task.status, 'pending', '剩余600分仅 PROCESSING 时仍不能关闭任务');
+    assert.equal(task.amount, 600, '处理中退款不能进一步减少现金敞口');
+    assert.equal((task.callbackPayload as any)?.reconciliation?.activeRefundAmount, 600);
 
+    await prisma.orderRefund.update({
+      where: { id: refund2.id },
+      data: { status: REFUND_STATUS.SUCCESS },
+    });
+    await (detector as any).reconcileExistingCancelledPaidTasks();
+    task = await prisma.paymentCompensationTask.findFirstOrThrow({ where: { id: task.id } });
+    assert.equal(task.status, 'resolved', 'SUCCESS 退款覆盖全部实付后任务应自动闭环');
+    assert.equal(task.amount, 0);
+    assert.equal(task.handledBy, 'system:historical-cancelled-paid-reconcile');
+    assert.ok(task.handledAt, '系统自动闭环应记录 handledAt');
+
+    await prisma.paymentCompensationTask.delete({ where: { id: task.id } });
     await prisma.orderRefund.deleteMany({ where: { id: { in: [refund1.id, refund2.id] } } });
     await prisma.paymentCompensationTask.create({
       data: {
