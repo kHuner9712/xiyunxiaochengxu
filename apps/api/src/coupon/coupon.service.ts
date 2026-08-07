@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { COUPON_STATUS } from '../common/constants/payment';
@@ -17,6 +17,8 @@ const DISPLAY_COUPON_STATUS = {
 
 @Injectable()
 export class CouponService {
+  private readonly logger = new Logger(CouponService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async findCenterList(page = 1, pageSize = 20) {
@@ -33,16 +35,20 @@ export class CouponService {
       (coupon) => coupon.totalCount === 0 || coupon.receivedCount < coupon.totalCount,
     );
     const start = (page - 1) * pageSize;
-    const list = available.slice(start, start + pageSize).map((coupon) =>
-      this.serializeCoupon(coupon, { received: false }),
+    return paginate(
+      available.slice(start, start + pageSize).map((coupon) =>
+        this.serializeCoupon(coupon, { received: false }),
+      ),
+      available.length,
+      page,
+      pageSize,
     );
-    return paginate(list, available.length, page, pageSize);
   }
 
   async findAvailable(userId: string) {
     const userIdValue = parsePositiveBigIntId(userId, '用户');
     const now = new Date();
-    const [user, coupons] = await Promise.all([
+    const [user, coupons, isNewCustomer] = await Promise.all([
       this.prisma.user.findFirst({
         where: { id: userIdValue, deletedAt: null },
         select: { id: true, memberLevelId: true },
@@ -55,10 +61,10 @@ export class CouponService {
         },
         orderBy: { createdAt: 'desc' },
       }),
+      this.isNewCustomer(userIdValue),
     ]);
     if (!user) throw new NotFoundException('用户不存在');
 
-    const isNewCustomer = await this.isNewCustomer(userIdValue);
     const result: any[] = [];
     for (const coupon of coupons) {
       if (coupon.totalCount > 0 && coupon.receivedCount >= coupon.totalCount) continue;
@@ -94,12 +100,7 @@ export class CouponService {
       }),
       this.prisma.userCoupon.count({ where }),
     ]);
-    return paginate(
-      list.map((item) => this.serializeUserCoupon(item)),
-      total,
-      page,
-      pageSize,
-    );
+    return paginate(list.map((item) => this.serializeUserCoupon(item)), total, page, pageSize);
   }
 
   async findUsable(userId: string, amount = 0, productIds: string[] = []) {
@@ -116,7 +117,6 @@ export class CouponService {
         status: COUPON_STATUS.FREE,
         OR: [{ expireAt: null }, { expireAt: { gte: now } }],
         coupon: {
-          status: 1,
           startTime: { lte: now },
           endTime: { gte: now },
           minAmount: { lte: amount },
@@ -126,9 +126,7 @@ export class CouponService {
       orderBy: { expireAt: 'asc' },
     });
 
-    const scopes = productIds.length > 0
-      ? await this.loadProductScopes(productIds)
-      : [];
+    const scopes = productIds.length > 0 ? await this.loadProductScopes(productIds) : [];
     return list
       .filter((item) => this.couponScopeMatches(item.coupon, scopes))
       .map((item) => this.serializeUserCoupon(item));
@@ -147,9 +145,7 @@ export class CouponService {
       if (userRows.length === 0) throw new NotFoundException('用户不存在');
 
       const couponRows = await tx.$queryRaw<Array<{ id: bigint }>>`
-        SELECT id FROM coupons
-        WHERE id = ${couponIdValue}
-        FOR UPDATE
+        SELECT id FROM coupons WHERE id = ${couponIdValue} FOR UPDATE
       `;
       if (couponRows.length === 0) throw new NotFoundException('优惠券不存在');
 
@@ -157,7 +153,7 @@ export class CouponService {
       if (!coupon) throw new NotFoundException('优惠券不存在');
 
       const now = new Date();
-      if (coupon.status !== 1) throw new BadRequestException('优惠券已停用');
+      if (coupon.status !== 1) throw new BadRequestException('优惠券已停止领取');
       if (now < coupon.startTime) throw new BadRequestException('优惠券尚未开始领取');
       if (now > coupon.endTime) throw new BadRequestException('优惠券已结束');
       if (coupon.totalCount > 0 && coupon.receivedCount >= coupon.totalCount) {
@@ -174,10 +170,7 @@ export class CouponService {
       }
       if (coupon.isNewUser === 1) {
         const paidOrFulfilledOrders = await tx.order.count({
-          where: {
-            userId: userIdValue,
-            status: { notIn: ['pending_payment', 'cancelled'] },
-          },
+          where: { userId: userIdValue, status: { notIn: ['pending_payment', 'cancelled'] } },
         });
         if (paidOrFulfilledOrders > 0) throw new BadRequestException('该优惠券仅限新用户领取');
       }
@@ -210,6 +203,7 @@ export class CouponService {
       return userCoupon;
     });
 
+    this.logger.log(`用户${userIdValue}领取优惠券${couponIdValue}`);
     return this.serializeUserCoupon(result);
   }
 
@@ -241,14 +235,19 @@ export class CouponService {
   async create(dto: CreateCouponDto) {
     const data = this.normalizeCreateInput(dto);
     this.assertCouponFinalState(data);
-    await this.assertApplicableTargetsExist(data.applicableType, this.parseApplicableIds(data.applicableIds));
+    const applicableType = Number((data as any).applicableType ?? 0);
+    await this.assertApplicableTargetsExist(
+      applicableType,
+      this.parseApplicableIds((data as any).applicableIds),
+    );
     const coupon = await this.prisma.coupon.create({ data });
+    this.logger.log(`创建优惠券${coupon.id}`);
     return this.serializeCoupon(coupon);
   }
 
   async update(id: string, dto: UpdateCouponDto) {
     const couponId = parsePositiveBigIntId(id, '优惠券');
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM coupons WHERE id = ${couponId} FOR UPDATE`;
       const current = await tx.coupon.findUnique({ where: { id: couponId } });
       if (!current) throw new NotFoundException('优惠券不存在');
@@ -256,11 +255,13 @@ export class CouponService {
       const currentMeta = this.parseApplicableMeta(current.applicableIds);
       const nextIds = dto.applicableIds ?? currentMeta.ids;
       const nextDescription = dto.description ?? currentMeta.description;
-      const patch: Prisma.CouponUpdateInput = {};
+      const patch: any = {};
       if (dto.name !== undefined) patch.name = dto.name.trim();
       if (dto.type !== undefined) patch.type = dto.type;
       if (dto.value !== undefined) patch.value = dto.value;
-      if (dto.minAmount !== undefined) patch.minAmount = dto.type === 3 ? 0 : dto.minAmount;
+      if (dto.minAmount !== undefined || dto.type === 3) {
+        patch.minAmount = dto.type === 3 ? 0 : dto.minAmount;
+      }
       if (dto.discountLimit !== undefined) patch.discountLimit = dto.discountLimit;
       if (dto.totalCount !== undefined) patch.totalCount = dto.totalCount;
       if (dto.perLimit !== undefined) patch.perLimit = dto.perLimit;
@@ -270,8 +271,8 @@ export class CouponService {
       if (dto.applicableType !== undefined) patch.applicableType = dto.applicableType;
       if (dto.memberLevelId !== undefined) {
         patch.memberLevelId = dto.memberLevelId === 0
-          ? { disconnect: true }
-          : { connect: { id: parsePositiveBigIntId(dto.memberLevelId, '会员等级') } };
+          ? null
+          : parsePositiveBigIntId(dto.memberLevelId, '会员等级');
       }
       if (dto.isNewUser !== undefined) patch.isNewUser = dto.isNewUser;
       if (dto.status !== undefined) patch.status = dto.status;
@@ -293,37 +294,47 @@ export class CouponService {
         validDays: dto.validDays ?? current.validDays,
         applicableType: dto.applicableType ?? current.applicableType,
         applicableIds: this.buildApplicableMeta(nextIds, nextDescription),
+        memberLevelId: dto.memberLevelId === undefined
+          ? current.memberLevelId
+          : dto.memberLevelId === 0
+            ? null
+            : parsePositiveBigIntId(dto.memberLevelId, '会员等级'),
         isNewUser: dto.isNewUser ?? current.isNewUser,
         status: dto.status ?? current.status,
       };
+
       this.assertCouponFinalState(finalState);
+      if (finalState.totalCount > 0 && finalState.totalCount < current.receivedCount) {
+        throw new BadRequestException(`发行量不能低于已领取数量${current.receivedCount}`);
+      }
       await this.assertApplicableTargetsExist(finalState.applicableType, nextIds, tx);
       if (current.receivedCount > 0) {
         this.assertIssuedCouponEconomicTermsUnchanged(current, finalState);
       }
 
-      const updated = await tx.coupon.update({ where: { id: couponId }, data: patch });
-      return this.serializeCoupon(updated);
+      return tx.coupon.update({ where: { id: couponId }, data: patch });
     });
+
+    this.logger.log(`更新优惠券${couponId}`);
+    return this.serializeCoupon(result);
   }
 
   async delete(id: string) {
     const couponId = parsePositiveBigIntId(id, '优惠券');
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM coupons WHERE id = ${couponId} FOR UPDATE`;
       const coupon = await tx.coupon.findUnique({ where: { id: couponId } });
       if (!coupon) throw new NotFoundException('优惠券不存在');
       const issuedCount = await tx.userCoupon.count({ where: { couponId } });
       if (issuedCount > 0) {
-        const disabled = await tx.coupon.update({
-          where: { id: couponId },
-          data: { status: 0 },
-        });
-        return this.serializeCoupon(disabled);
+        const disabled = await tx.coupon.update({ where: { id: couponId }, data: { status: 0 } });
+        return { coupon: disabled, deleted: false };
       }
       await tx.coupon.delete({ where: { id: couponId } });
-      return { ...this.serializeCoupon(coupon), deleted: true };
+      return { coupon, deleted: true };
     });
+    this.logger.log(`${result.deleted ? '删除' : '停止发放'}优惠券${couponId}`);
+    return { ...this.serializeCoupon(result.coupon), deleted: result.deleted };
   }
 
   parseApplicableIds(raw: unknown): string[] {
@@ -353,19 +364,20 @@ export class CouponService {
 
   private buildApplicableMeta(ids: string[], description = ''): Prisma.InputJsonValue {
     return {
-      ids: Array.from(new Set(ids.map((item) => parsePositiveBigIntId(item, '优惠券适用范围').toString()))),
+      ids: Array.from(new Set(ids.map((item) =>
+        parsePositiveBigIntId(item, '优惠券适用范围').toString(),
+      ))),
       description: String(description || '').trim(),
     };
   }
 
   private normalizeCreateInput(dto: CreateCouponDto): Prisma.CouponCreateInput {
-    const type = dto.type;
     const ids = dto.applicableIds ?? [];
-    return {
+    const data: any = {
       name: dto.name.trim(),
-      type,
+      type: dto.type,
       value: dto.value,
-      minAmount: type === 3 ? 0 : (dto.minAmount ?? 0),
+      minAmount: dto.type === 3 ? 0 : (dto.minAmount ?? 0),
       discountLimit: dto.discountLimit ?? 0,
       totalCount: dto.totalCount ?? 0,
       receivedCount: 0,
@@ -376,12 +388,13 @@ export class CouponService {
       validDays: dto.validDays ?? 0,
       applicableType: dto.applicableType ?? 0,
       applicableIds: this.buildApplicableMeta(ids, dto.description ?? ''),
-      ...(dto.memberLevelId && dto.memberLevelId > 0
-        ? { memberLevel: { connect: { id: parsePositiveBigIntId(dto.memberLevelId, '会员等级') } } }
-        : {}),
+      memberLevelId: dto.memberLevelId && dto.memberLevelId > 0
+        ? parsePositiveBigIntId(dto.memberLevelId, '会员等级')
+        : null,
       isNewUser: dto.isNewUser ?? 0,
       status: dto.status ?? 1,
-    } as Prisma.CouponCreateInput;
+    };
+    return data as Prisma.CouponCreateInput;
   }
 
   private assertCouponFinalState(coupon: any) {
@@ -394,9 +407,7 @@ export class CouponService {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
       throw new BadRequestException('优惠券结束时间必须晚于开始时间');
     }
-    if (![1, 2, 3].includes(Number(coupon.type))) {
-      throw new BadRequestException('优惠券类型无效');
-    }
+    if (![1, 2, 3].includes(Number(coupon.type))) throw new BadRequestException('优惠券类型无效');
     if (!Number.isSafeInteger(Number(coupon.value)) || Number(coupon.value) <= 0) {
       throw new BadRequestException('优惠券优惠值必须为正整数');
     }
@@ -444,11 +455,7 @@ export class CouponService {
     }
   }
 
-  private async assertApplicableTargetsExist(
-    applicableType: number,
-    ids: string[],
-    client: any = this.prisma,
-  ) {
+  private async assertApplicableTargetsExist(applicableType: number, ids: string[], client: any = this.prisma) {
     if (applicableType === 0) return;
     const bigintIds = ids.map((id) => parsePositiveBigIntId(id, '优惠券适用范围'));
     if (applicableType === 1) {
@@ -458,15 +465,18 @@ export class CouponService {
       if (count !== bigintIds.length) throw new BadRequestException('优惠券包含不存在的商品分类');
       return;
     }
-    const count = await client.product.count({
-      where: { id: { in: bigintIds }, deletedAt: null },
-    });
-    if (count !== bigintIds.length) throw new BadRequestException('优惠券包含不存在的商品');
+    if (applicableType === 2) {
+      const count = await client.product.count({ where: { id: { in: bigintIds }, deletedAt: null } });
+      if (count !== bigintIds.length) throw new BadRequestException('优惠券包含不存在的商品');
+      return;
+    }
+    throw new BadRequestException('优惠券适用范围类型无效');
   }
 
   private async loadProductScopes(productIds: string[]) {
-    const ids = Array.from(new Set(productIds.map((id) => parsePositiveBigIntId(id, '商品').toString())))
-      .map((id) => BigInt(id));
+    const ids = Array.from(new Set(productIds.map((id) =>
+      parsePositiveBigIntId(id, '商品').toString(),
+    ))).map((id) => BigInt(id));
     const rows = await this.prisma.product.findMany({
       where: { id: { in: ids }, deletedAt: null, status: 1 },
       select: { id: true, categoryId: true },
@@ -491,11 +501,7 @@ export class CouponService {
   private async expireUserCoupons(userId: bigint) {
     const now = new Date();
     await this.prisma.userCoupon.updateMany({
-      where: {
-        userId,
-        status: COUPON_STATUS.FREE,
-        expireAt: { lt: now },
-      },
+      where: { userId, status: COUPON_STATUS.FREE, expireAt: { lt: now } },
       data: { status: COUPON_STATUS.EXPIRED },
     });
 
