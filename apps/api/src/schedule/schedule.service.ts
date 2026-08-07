@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { PAYMENT_STATUS } from '../common/constants';
+import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { OrderService } from '../order/order.service';
 import { PaymentService } from '../payment/payment.service';
@@ -16,6 +18,7 @@ export class ScheduleService {
 
   constructor(
     private readonly redisService: RedisService,
+    private readonly prismaService: PrismaService,
     private readonly orderService: OrderService,
     private readonly paymentService: PaymentService,
     private readonly paymentReconcileService: PaymentReconcileService,
@@ -83,9 +86,20 @@ export class ScheduleService {
         affected: number;
         refundOrderIds?: string[];
       };
+
+      // Do not rely on the one transition that changes a group from forming -> failed.
+      // A process/database failure can happen after the group is marked failed but before
+      // createRefund persists its INITIATING record. In that case a transition-only scanner
+      // would never see the paid member again. Re-discover every financially exposed member
+      // from durable business state on every run so the next scheduler pass can retry safely.
+      const durableCandidates = await this.findFailedGroupRefundCandidates();
+      const refundOrderIds = Array.from(
+        new Set([...(result.refundOrderIds ?? []), ...durableCandidates]),
+      );
+
       let refundSubmitted = 0;
       let refundFailed = 0;
-      for (const orderId of result.refundOrderIds ?? []) {
+      for (const orderId of refundOrderIds) {
         try {
           const refundResult = await (this.paymentService as any).createGroupBuyFailureRefund(
             orderId,
@@ -101,9 +115,9 @@ export class ScheduleService {
           );
         }
       }
-      if (result.affected > 0 || refundSubmitted > 0 || refundFailed > 0) {
+      if (result.affected > 0 || refundOrderIds.length > 0 || refundSubmitted > 0 || refundFailed > 0) {
         this.logger.log(
-          `拼团过期任务完成: failedGroups=${result.affected}, refundSubmitted=${refundSubmitted}, refundFailed=${refundFailed}`,
+          `拼团过期任务完成: failedGroups=${result.affected}, refundCandidates=${refundOrderIds.length}, refundSubmitted=${refundSubmitted}, refundFailed=${refundFailed}`,
         );
       }
     } catch (error) {
@@ -204,5 +218,23 @@ export class ScheduleService {
     } finally {
       await this.releaseLock(lockKey, lockValue);
     }
+  }
+
+  private async findFailedGroupRefundCandidates(limit = 200): Promise<string[]> {
+    const rows = await this.prismaService.$queryRaw<Array<{ orderId: bigint }>>`
+      SELECT DISTINCT m.order_id AS orderId
+      FROM group_buy_members m
+      INNER JOIN group_buy_groups g ON g.id = m.group_id
+      INNER JOIN orders o ON o.id = m.order_id
+      LEFT JOIN order_payments p ON p.order_id = o.id
+      WHERE g.deleted_at IS NULL
+        AND g.status IN ('failed', 'cancelled')
+        AND m.deleted_at IS NULL
+        AND m.status = 'paid'
+        AND (COALESCE(o.pay_amount, 0) = 0 OR p.status = ${PAYMENT_STATUS.SUCCESS})
+      ORDER BY m.order_id ASC
+      LIMIT ${limit}
+    `;
+    return rows.map((row) => row.orderId.toString());
   }
 }
