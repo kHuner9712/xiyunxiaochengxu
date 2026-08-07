@@ -6,7 +6,6 @@ import {
   IsString,
   Matches,
   MaxLength,
-  ValidateIf,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) =>
@@ -14,28 +13,28 @@ const trim = ({ value }: { value: unknown }) =>
 const PHONE_PATTERN = /^[0-9+()\-\s]{6,20}$/;
 
 export class CreateAddressDto {
-  @ValidateIf((o) => !o.name)
+  @IsOptional()
   @Transform(trim)
   @IsString()
-  @IsNotEmpty({ message: '收货人姓名不能为空' })
+  @IsNotEmpty()
   @MaxLength(50)
   receiverName?: string;
 
-  @ValidateIf((o) => !o.receiverName)
+  @IsOptional()
   @Transform(trim)
   @IsString()
-  @IsNotEmpty({ message: '收货人姓名不能为空' })
+  @IsNotEmpty()
   @MaxLength(50)
   name?: string;
 
-  @ValidateIf((o) => !o.phone)
+  @IsOptional()
   @Transform(trim)
   @IsString()
   @Matches(PHONE_PATTERN, { message: '收货人联系电话格式无效' })
   @MaxLength(20)
   receiverPhone?: string;
 
-  @ValidateIf((o) => !o.receiverPhone)
+  @IsOptional()
   @Transform(trim)
   @IsString()
   @Matches(PHONE_PATTERN, { message: '收货人联系电话格式无效' })
@@ -60,17 +59,17 @@ export class CreateAddressDto {
   @MaxLength(20)
   district!: string;
 
-  @ValidateIf((o) => !o.detail)
+  @IsOptional()
   @Transform(trim)
   @IsString()
-  @IsNotEmpty({ message: '详细地址不能为空' })
+  @IsNotEmpty()
   @MaxLength(200)
   detailAddress?: string;
 
-  @ValidateIf((o) => !o.detailAddress)
+  @IsOptional()
   @Transform(trim)
   @IsString()
-  @IsNotEmpty({ message: '详细地址不能为空' })
+  @IsNotEmpty()
   @MaxLength(200)
   detail?: string;
 
