@@ -101,6 +101,8 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       });
       return {
         synced: true,
+        reason: 'abnormal_recovered_processing',
+        message: '微信退款异常已恢复为处理中，本地已恢复对账',
         status: REFUND_STATUS.PENDING,
         wechatStatus,
         recoveredFrom: REFUND_STATUS.ABNORMAL,
@@ -118,6 +120,8 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       });
       return {
         synced: true,
+        reason: 'abnormal_recovered_closed',
+        message: '微信退款异常已确认关闭，本地已同步为 CLOSED',
         status: REFUND_STATUS.CLOSED,
         wechatStatus,
         recoveredFrom: REFUND_STATUS.ABNORMAL,
@@ -136,9 +140,10 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       });
       return {
         synced: false,
+        reason: 'wechat_still_abnormal',
+        message: '微信退款仍未形成可自动收敛的终态',
         status: REFUND_STATUS.ABNORMAL,
         wechatStatus,
-        message: '微信退款仍未形成可自动收敛的终态',
       };
     }
 
@@ -175,6 +180,8 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       );
       return {
         synced: true,
+        reason: 'abnormal_recovered_success',
+        message: '微信退款异常已确认成功，本地退款及副作用已收敛',
         status: REFUND_STATUS.SUCCESS,
         wechatStatus,
         recoveredFrom: REFUND_STATUS.ABNORMAL,
@@ -187,11 +194,12 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       if (current?.status === REFUND_STATUS.SUCCESS) {
         return {
           synced: true,
+          reason: 'abnormal_core_success_side_effects_pending',
+          message: `退款核心已同步成功，外围副作用等待自动补偿：${(error as Error).message}`,
           status: REFUND_STATUS.SUCCESS,
           wechatStatus,
           recoveredFrom: REFUND_STATUS.ABNORMAL,
           sideEffectsPending: true,
-          message: `退款核心已同步成功，外围副作用等待自动补偿：${(error as Error).message}`,
         };
       }
       throw error;
