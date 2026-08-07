@@ -5,6 +5,7 @@ export const REFUND_STATUS = {
   PROCESSING: 'processing',
   SUCCESS: 'success',
   FAILED: 'failed',
+  RETRYING: 'retrying',
   CLOSED: 'closed',
   ABNORMAL: 'abnormal',
 } as const;
