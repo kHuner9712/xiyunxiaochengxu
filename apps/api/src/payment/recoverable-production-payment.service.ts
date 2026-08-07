@@ -13,6 +13,13 @@ import { ShareService } from '../share/share.service';
 import { ProductionPaymentService } from './production-payment.service';
 
 const REFUND_SIDE_EFFECT_REASON = 'refund_success_side_effects';
+const PAID_SIDE_EFFECT_REASON = 'paid_order_side_effects';
+const PAID_EFFECT_ELIGIBLE_STATUSES: OrderStatus[] = [
+  OrderStatus.pending_delivery,
+  OrderStatus.pending_pickup,
+  OrderStatus.delivered,
+  OrderStatus.completed,
+];
 
 interface RefundResult {
   status: string;
@@ -87,8 +94,6 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
         };
       }
     } else if (existingRefund.status !== REFUND_STATUS.CLOSED) {
-      // ABNORMAL is deliberately not auto-retried. It requires merchant-platform handling
-      // and must keep refund-scoped benefits frozen until WeChat reaches a clear outcome.
       return {
         status: existingRefund.status,
         refundId: existingRefund.id.toString(),
@@ -121,7 +126,7 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
         );
         await this.resolveRefundSideEffectTask(task.id);
       } catch (error) {
-        await this.markRefundSideEffectTaskFailed(task.id, error);
+        await this.markSideEffectTaskFailed(task.id, error);
         throw error;
       }
     } catch (error) {
@@ -130,10 +135,136 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
       });
       if (currentRefund?.status === REFUND_STATUS.SUCCESS) {
         const task = await this.ensureRefundSideEffectTask(currentRefund);
-        await this.markRefundSideEffectTaskFailed(task.id, error);
+        await this.markSideEffectTaskFailed(task.id, error);
       }
       throw error;
     }
+  }
+
+  /**
+   * Durable recovery for immediate post-payment effects. The seed query deliberately excludes
+   * OrderStatus.paid (group-buy waiting state) and aftersale so benefits are never released
+   * before group success or while a refund is being decided. A NOT EXISTS query prevents old
+   * resolved tasks from starving new orders.
+   */
+  async reconcilePaidOrderSideEffects(limit = 200) {
+    const candidates = await this.recoveryPrisma.$queryRaw<Array<{
+      id: bigint;
+      orderNo: string;
+      payAmount: number | null;
+    }>>`
+      SELECT
+        o.id AS id,
+        o.order_no AS orderNo,
+        o.pay_amount AS payAmount
+      FROM orders o
+      WHERE o.status IN ('pending_delivery', 'pending_pickup', 'delivered', 'completed')
+        AND NOT EXISTS (
+          SELECT 1
+          FROM payment_compensation_tasks t
+          WHERE t.order_no = o.order_no
+            AND t.reason = ${PAID_SIDE_EFFECT_REASON}
+            AND t.transaction_id = CONCAT('paid-effects:', o.id)
+        )
+      ORDER BY o.id ASC
+      LIMIT ${limit}
+    `;
+
+    if (candidates.length > 0) {
+      await this.recoveryPrisma.paymentCompensationTask.createMany({
+        data: candidates.map((order) => ({
+          orderNo: order.orderNo,
+          transactionId: `paid-effects:${order.id}`,
+          amount: order.payAmount ?? 0,
+          reason: PAID_SIDE_EFFECT_REASON,
+          status: 'pending',
+          callbackPayload: { orderId: order.id.toString() },
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    const tasks = await this.recoveryPrisma.paymentCompensationTask.findMany({
+      where: { reason: PAID_SIDE_EFFECT_REASON, status: 'pending' },
+      orderBy: { updatedAt: 'asc' },
+      take: limit,
+    });
+
+    let resolved = 0;
+    let failed = 0;
+    let skipped = 0;
+    for (const task of tasks) {
+      const order = await this.recoveryPrisma.order.findFirst({
+        where: { orderNo: task.orderNo },
+        select: {
+          id: true,
+          userId: true,
+          orderNo: true,
+          payAmount: true,
+          status: true,
+        },
+      });
+      if (!order) {
+        failed += 1;
+        await this.markSideEffectTaskFailed(task.id, new Error('补偿任务对应订单不存在'));
+        continue;
+      }
+
+      if (order.status === OrderStatus.cancelled) {
+        await this.resolvePaidSideEffectTask(task.id, '订单已取消，无需补发支付成功副作用');
+        resolved += 1;
+        continue;
+      }
+      if (!PAID_EFFECT_ELIGIBLE_STATUSES.includes(order.status)) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        if ((order.payAmount ?? 0) > 0) {
+          await this.recoveryShareService.processFirstPaidReward(
+            order.userId.toString(),
+            order.id.toString(),
+            order.payAmount ?? 0,
+          );
+          // A paid-effect task may run after a refund task. Replaying every successful refund
+          // attribution adjustment after the gross attribution keeps the final report correct
+          // regardless of scheduler ordering; every adjustment is refundId-idempotent.
+          const successfulRefunds = await this.recoveryPrisma.orderRefund.findMany({
+            where: { orderId: order.id, status: REFUND_STATUS.SUCCESS },
+            select: { id: true },
+            orderBy: { createdAt: 'asc' },
+          });
+          for (const refund of successfulRefunds) {
+            await (this.recoveryShareService as any).reverseFirstPaidAttributionAfterRefund?.(
+              order.id,
+              refund.id,
+            );
+          }
+        }
+
+        await (this.recoveryBenefitPackageService as any).reconcileOrderBenefits?.(
+          order.id,
+          order.userId,
+        );
+        await this.resolvePaidSideEffectTask(task.id, '首单归因与权益发放已完成并校验');
+        resolved += 1;
+      } catch (error) {
+        failed += 1;
+        await this.markSideEffectTaskFailed(task.id, error);
+        this.recoveryLogger.error(
+          `支付成功副作用补偿失败: orderId=${order.id}, error=${(error as Error).message}`,
+        );
+      }
+    }
+
+    return {
+      seeded: candidates.length,
+      total: tasks.length,
+      resolved,
+      failed,
+      skipped,
+    };
   }
 
   async reconcileRefundSuccessSideEffects(limit = 200) {
@@ -142,8 +273,6 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
         reason: REFUND_SIDE_EFFECT_REASON,
         status: 'pending',
       },
-      // Failed attempts update updatedAt, rotating them behind tasks that have not yet run.
-      // This prevents a permanently bad oldest task from starving newer refunds forever.
       orderBy: { updatedAt: 'asc' },
       take: limit,
     });
@@ -179,7 +308,7 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
         resolved += 1;
       } catch (error) {
         failed += 1;
-        await this.markRefundSideEffectTaskFailed(task.id, error);
+        await this.markSideEffectTaskFailed(task.id, error);
         this.recoveryLogger.error(
           `退款成功副作用补偿失败: refundId=${refund.id}, error=${(error as Error).message}`,
         );
@@ -199,9 +328,12 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
       where: { id: BigInt(id) },
       select: { reason: true },
     });
-    if (task?.reason === REFUND_SIDE_EFFECT_REASON) {
+    if (
+      task?.reason === REFUND_SIDE_EFFECT_REASON ||
+      task?.reason === PAID_SIDE_EFFECT_REASON
+    ) {
       throw new BadRequestException(
-        '退款成功后的账务副作用补偿任务不能人工忽略或标记完成，必须由自动补偿实际执行成功后关闭',
+        '资金/权益一致性补偿任务不能人工忽略或标记完成，必须由自动补偿实际执行成功后关闭',
       );
     }
     return super.resolveCompensationTask(id, handledBy, resolution, status);
@@ -252,7 +384,19 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
     });
   }
 
-  private async markRefundSideEffectTaskFailed(taskId: bigint, error: unknown) {
+  private async resolvePaidSideEffectTask(taskId: bigint, resolution: string) {
+    await this.recoveryPrisma.paymentCompensationTask.updateMany({
+      where: { id: taskId, status: 'pending' },
+      data: {
+        status: 'resolved',
+        handledBy: 'system:paid-side-effect-reconcile',
+        handledAt: new Date(),
+        resolution,
+      },
+    });
+  }
+
+  private async markSideEffectTaskFailed(taskId: bigint, error: unknown) {
     await this.recoveryPrisma.paymentCompensationTask.updateMany({
       where: { id: taskId, status: 'pending' },
       data: {
@@ -308,8 +452,6 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
 
       return { retryable: false, status: REFUND_STATUS.FAILED };
     } catch {
-      // FAILED can represent a network timeout after WeChat accepted the request.
-      // If the old outRefundNo cannot be authoritatively resolved, never submit a second refund.
       return { retryable: false, status: REFUND_STATUS.FAILED };
     }
   }
