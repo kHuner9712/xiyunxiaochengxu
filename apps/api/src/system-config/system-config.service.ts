@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 
@@ -12,26 +12,19 @@ export class SystemConfigService {
   ) {}
 
   async findByGroup(groupName: string) {
-    const configs = await this.prisma.systemConfig.findMany({
-      where: { groupName },
-    });
-    return configs.map((c) => ({
-      ...c,
-      value: this.parseValue(c.configValue, c.valueType),
-    }));
+    const configs = await this.prisma.systemConfig.findMany({ where: { groupName } });
+    return configs.map((c) => ({ ...c, value: this.parseValue(c.configValue, c.valueType) }));
   }
 
   async findAll() {
-    return this.prisma.systemConfig.findMany();
+    return this.prisma.systemConfig.findMany({ orderBy: { id: 'asc' } });
   }
 
   async findByGrouped() {
-    const configs = await this.prisma.systemConfig.findMany();
+    const configs = await this.prisma.systemConfig.findMany({ orderBy: { id: 'asc' } });
     const grouped: Record<string, any> = {};
     for (const config of configs) {
-      if (!grouped[config.groupName]) {
-        grouped[config.groupName] = {};
-      }
+      if (!grouped[config.groupName]) grouped[config.groupName] = {};
       grouped[config.groupName][config.configKey] = this.parseValue(config.configValue, config.valueType);
     }
     return grouped;
@@ -40,59 +33,88 @@ export class SystemConfigService {
   async getValue(groupName: string, configKey: string): Promise<string | null> {
     const cacheKey = `config:${groupName}:${configKey}`;
     const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached;
+    if (cached !== null && cached !== undefined) return cached;
 
-    const config = await this.prisma.systemConfig.findFirst({
-      where: { groupName, configKey },
-    });
-
+    const config = await this.prisma.systemConfig.findFirst({ where: { groupName, configKey } });
     if (!config) return null;
-
     await this.redisService.set(cacheKey, config.configValue || '', 3600);
     return config.configValue;
   }
 
-  async getIntValue(groupName: string, configKey: string): Promise<number> {
+  async getIntValue(groupName: string, configKey: string, fallback = 0): Promise<number> {
     const value = await this.getValue(groupName, configKey);
-    return value ? parseInt(value, 10) : 0;
+    if (value === null || value === '') return fallback;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
   }
 
-  async update(groupName: string, configKey: string, configValue: string) {
+  async getNumberValue(groupName: string, configKey: string, fallback: number): Promise<number> {
+    const value = await this.getValue(groupName, configKey);
+    if (value === null || value === '') return fallback;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  async update(groupName: string, configKey: string, configValue: string, valueType?: string) {
+    const normalizedGroup = String(groupName || '').trim();
+    const normalizedKey = String(configKey || '').trim();
+    if (!normalizedGroup || !normalizedKey) throw new BadRequestException('配置分组和配置键不能为空');
+    const normalizedValue = String(configValue ?? '');
     const result = await this.prisma.systemConfig.upsert({
-      where: { uk_group_key: { groupName, configKey } },
-      update: { configValue },
-      create: { groupName, configKey, configValue },
+      where: { uk_group_key: { groupName: normalizedGroup, configKey: normalizedKey } },
+      update: { configValue: normalizedValue, ...(valueType ? { valueType } : {}) },
+      create: {
+        groupName: normalizedGroup,
+        configKey: normalizedKey,
+        configValue: normalizedValue,
+        valueType: valueType || 'string',
+      },
     });
-
-    const cacheKey = `config:${groupName}:${configKey}`;
-    await this.redisService.set(cacheKey, configValue, 3600);
-
-    this.logger.log(`更新配置：${groupName}.${configKey} = ${configValue}`);
+    await this.redisService.set(`config:${normalizedGroup}:${normalizedKey}`, normalizedValue, 3600);
+    this.logger.log(`更新配置：${normalizedGroup}.${normalizedKey}`);
     return result;
   }
 
-  async batchUpdate(configs: { groupName: string; configKey: string; configValue: string }[]) {
-    const results = [];
-    for (const config of configs) {
-      results.push(await this.update(config.groupName, config.configKey, config.configValue));
-    }
-    this.logger.log(`批量更新配置，共${configs.length}项`);
+  async batchUpdate(configs: { groupName: string; configKey: string; configValue: string; valueType?: string }[]) {
+    if (!Array.isArray(configs) || configs.length === 0) throw new BadRequestException('系统配置不能为空');
+    const normalized = configs.map((config) => {
+      const groupName = String(config.groupName || '').trim();
+      const configKey = String(config.configKey || '').trim();
+      if (!groupName || !configKey) throw new BadRequestException('配置分组和配置键不能为空');
+      return {
+        groupName,
+        configKey,
+        configValue: String(config.configValue ?? ''),
+        valueType: config.valueType || 'string',
+      };
+    });
+
+    const results = await this.prisma.$transaction(async (tx) => {
+      const rows = [];
+      for (const config of normalized) {
+        rows.push(await tx.systemConfig.upsert({
+          where: { uk_group_key: { groupName: config.groupName, configKey: config.configKey } },
+          update: { configValue: config.configValue, valueType: config.valueType },
+          create: config,
+        }));
+      }
+      return rows;
+    });
+
+    await Promise.all(normalized.map((config) =>
+      this.redisService.set(`config:${config.groupName}:${config.configKey}`, config.configValue, 3600),
+    ));
+    this.logger.log(`批量更新配置，共${normalized.length}项`);
     return results;
   }
 
   async getCustomerServiceConfig() {
     const group = await this.findByGroup('customer_service');
     const configMap: Record<string, any> = {};
-    for (const item of group) {
-      configMap[item.configKey] = item.value;
-    }
+    for (const item of group) configMap[item.configKey] = item.value;
     const fallbackPhone = await this.getValue('basic', 'customer_service_phone');
-    const phone = this.isPlaceholderContact(configMap.phone)
-      ? ''
-      : (configMap.phone ?? '');
-    const basicPhone = this.isPlaceholderContact(fallbackPhone)
-      ? ''
-      : (fallbackPhone ?? '');
+    const phone = this.isPlaceholderContact(configMap.phone) ? '' : (configMap.phone ?? '');
+    const basicPhone = this.isPlaceholderContact(fallbackPhone) ? '' : (fallbackPhone ?? '');
     return {
       enabled: configMap.enabled === 'true' || configMap.enabled === true,
       type: configMap.type ?? 'phone',
@@ -107,12 +129,14 @@ export class SystemConfigService {
 
   async updateCustomerServiceConfig(dto: any) {
     const keys = ['enabled', 'type', 'phone', 'wechatQrCode', 'serviceTime', 'autoReplyText', 'faqContent', 'notice'];
-    const configs = keys.map(key => ({
+    const configs = keys.map((key) => ({
       groupName: 'customer_service',
       configKey: key,
       configValue: String(dto[key] ?? ''),
+      valueType: key === 'enabled' ? 'boolean' : 'string',
     }));
-    return this.batchUpdate(configs);
+    await this.batchUpdate(configs);
+    return this.getCustomerServiceConfig();
   }
 
   private isPlaceholderContact(value: unknown): boolean {
@@ -125,18 +149,11 @@ export class SystemConfigService {
   private parseValue(value: string | null, type: string | null): any {
     if (value === null) return null;
     switch (type) {
-      case 'number':
-        return Number(value);
-      case 'boolean':
-        return value === 'true' || value === '1';
+      case 'number': return Number(value);
+      case 'boolean': return value === 'true' || value === '1';
       case 'json':
-        try {
-          return JSON.parse(value);
-        } catch {
-          return value;
-        }
-      default:
-        return value;
+        try { return JSON.parse(value); } catch { return value; }
+      default: return value;
     }
   }
 }
