@@ -4,7 +4,7 @@ import {
   WeappFlashSaleController,
 } from './flash-sale.controller';
 import { FlashSaleService } from './flash-sale.service';
-import { TransactionalFlashSaleService } from './transactional-flash-sale.service';
+import { ProductionFlashSaleService } from './production-flash-sale.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
 import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
@@ -15,7 +15,7 @@ import { BenefitPackageModule } from '../benefit-package/benefit-package.module'
   providers: [
     {
       provide: FlashSaleService,
-      useClass: TransactionalFlashSaleService,
+      useClass: ProductionFlashSaleService,
     },
   ],
   exports: [FlashSaleService],
