@@ -40,7 +40,7 @@ export class UserCouponListQueryDto extends CouponListQueryDto {
   @Type(() => Number)
   @IsInt()
   @IsIn([1, 2, 3, 4])
-  userCouponStatus?: number;
+  status?: number;
 }
 
 export class UsableCouponQueryDto {
