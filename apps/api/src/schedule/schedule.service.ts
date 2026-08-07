@@ -1,16 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PAYMENT_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { OrderService } from '../order/order.service';
+import { CancellationSafeProductionOrderService } from '../order/cancellation-safe-production-order.service';
 import { PaymentService } from '../payment/payment.service';
+import { CancellationSafeStockSafePaymentService } from '../payment/cancellation-safe-stock-safe-payment.service';
 import { PaymentReconcileService } from '../payment/payment-reconcile.service';
+import { HistoricalAnomalyPaymentReconcileService } from '../payment/historical-anomaly-payment-reconcile.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
+import { ProductionFlashSaleService } from '../flash-sale/production-flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
+import { ProductionGroupBuyService } from '../group-buy/production-group-buy.service';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
+import { ProductionMerchantSettlementService } from '../merchant-settlement/production-merchant-settlement.service';
 import { ShareService } from '../share/share.service';
+import { ProductionShareService } from '../share/production-share.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
+import { SnapshotGuardedProductionBenefitPackageService } from '../benefit-package/snapshot-guarded-production-benefit-package.service';
 
 @Injectable()
 export class ScheduleService {
@@ -19,14 +27,22 @@ export class ScheduleService {
   constructor(
     private readonly redisService: RedisService,
     private readonly prismaService: PrismaService,
-    private readonly orderService: OrderService,
-    private readonly paymentService: PaymentService,
-    private readonly paymentReconcileService: PaymentReconcileService,
-    private readonly flashSaleService: FlashSaleService,
-    private readonly groupBuyService: GroupBuyService,
-    private readonly merchantSettlementService: MerchantSettlementService,
-    private readonly shareService: ShareService,
-    private readonly benefitPackageService: BenefitPackageService,
+    @Inject(OrderService)
+    private readonly orderService: CancellationSafeProductionOrderService,
+    @Inject(PaymentService)
+    private readonly paymentService: CancellationSafeStockSafePaymentService,
+    @Inject(PaymentReconcileService)
+    private readonly paymentReconcileService: HistoricalAnomalyPaymentReconcileService,
+    @Inject(FlashSaleService)
+    private readonly flashSaleService: ProductionFlashSaleService,
+    @Inject(GroupBuyService)
+    private readonly groupBuyService: ProductionGroupBuyService,
+    @Inject(MerchantSettlementService)
+    private readonly merchantSettlementService: ProductionMerchantSettlementService,
+    @Inject(ShareService)
+    private readonly shareService: ProductionShareService,
+    @Inject(BenefitPackageService)
+    private readonly benefitPackageService: SnapshotGuardedProductionBenefitPackageService,
   ) {}
 
   private async acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
@@ -85,16 +101,8 @@ export class ScheduleService {
     const lockValue = await this.acquireLock(lockKey, 240);
     if (!lockValue) return;
     try {
-      const result = (await this.groupBuyService.markExpiredGroups()) as {
-        affected: number;
-        refundOrderIds?: string[];
-      };
+      const result = await this.groupBuyService.markExpiredGroups();
 
-      // Do not rely on the one transition that changes a group from forming -> failed.
-      // A process/database failure can happen after the group is marked failed but before
-      // createRefund persists its INITIATING record. In that case a transition-only scanner
-      // would never see the paid member again. Re-discover every financially exposed member
-      // from durable business state on every run so the next scheduler pass can retry safely.
       const durableCandidates = await this.findFailedGroupRefundCandidates();
       const refundOrderIds = Array.from(
         new Set([...(result.refundOrderIds ?? []), ...durableCandidates]),
@@ -104,11 +112,11 @@ export class ScheduleService {
       let refundFailed = 0;
       for (const orderId of refundOrderIds) {
         try {
-          const refundResult = await (this.paymentService as any).createGroupBuyFailureRefund(
+          const refundResult = await this.paymentService.createGroupBuyFailureRefund(
             orderId,
             '拼团失败自动退款',
           );
-          if (refundResult?.status !== 'not_group_buy' && refundResult?.status !== 'group_not_failed') {
+          if (refundResult.status !== 'not_group_buy' && refundResult.status !== 'group_not_failed') {
             refundSubmitted += 1;
           }
         } catch (error) {
@@ -138,9 +146,9 @@ export class ScheduleService {
     if (!lockValue) return;
     try {
       const result = await this.paymentReconcileService.reconcilePendingPayments();
-      const sideEffects = await (this.paymentService as any).reconcilePaidOrderSideEffects?.();
+      const sideEffects = await this.paymentService.reconcilePaidOrderSideEffects();
       this.logger.log(
-        `支付对账任务完成: payment=${JSON.stringify(result)}, sideEffects=${JSON.stringify(sideEffects ?? {})}`,
+        `支付对账任务完成: payment=${JSON.stringify(result)}, sideEffects=${JSON.stringify(sideEffects)}`,
       );
     } catch (error) {
       const err = error as Error;
@@ -157,14 +165,40 @@ export class ScheduleService {
     if (!lockValue) return;
     try {
       const result = await this.paymentReconcileService.reconcilePendingRefunds();
-      const benefitResult = await (this.benefitPackageService as any).reconcileTerminalRefundFreezes?.();
-      const sideEffectResult = await (this.paymentService as any).reconcileRefundSuccessSideEffects?.();
+      const benefitResult = await this.benefitPackageService.reconcileTerminalRefundFreezes();
+      const sideEffectResult = await this.paymentService.reconcileRefundSuccessSideEffects();
       this.logger.log(
-        `退款对账任务完成: refund=${JSON.stringify(result)}, benefit=${JSON.stringify(benefitResult ?? {})}, sideEffects=${JSON.stringify(sideEffectResult ?? {})}`,
+        `退款对账任务完成: refund=${JSON.stringify(result)}, benefit=${JSON.stringify(benefitResult)}, sideEffects=${JSON.stringify(sideEffectResult)}`,
       );
     } catch (error) {
       const err = error as Error;
       this.logger.error(`退款对账任务失败：${err.message}`, err.stack);
+    } finally {
+      await this.releaseLock(lockKey, lockValue);
+    }
+  }
+
+  @Cron('45 */5 * * * *')
+  async handleBenefitSettlementReconcile() {
+    const lockKey = 'schedule:benefit_settlement_reconcile';
+    const lockValue = await this.acquireLock(lockKey, 240);
+    if (!lockValue) return;
+    try {
+      const auditGaps = await this.benefitPackageService.reconcileUsedEntitlementAuditGaps();
+      const commissions = await this.merchantSettlementService.reconcileMissingServiceCommissions();
+      if (
+        auditGaps.total > 0 ||
+        commissions.total > 0 ||
+        auditGaps.failed > 0 ||
+        commissions.failed > 0
+      ) {
+        this.logger.log(
+          `权益核销/服务结算补偿完成: audit=${JSON.stringify(auditGaps)}, commission=${JSON.stringify(commissions)}`,
+        );
+      }
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(`权益核销/服务结算补偿失败：${err.message}`, err.stack);
     } finally {
       await this.releaseLock(lockKey, lockValue);
     }
@@ -176,8 +210,8 @@ export class ScheduleService {
     const lockValue = await this.acquireLock(lockKey, 1800);
     if (!lockValue) return;
     try {
-      const result = await (this.merchantSettlementService as any).generateMatureSalesCommissions?.();
-      if (result && (result.generated > 0 || result.failed > 0)) {
+      const result = await this.merchantSettlementService.generateMatureSalesCommissions();
+      if (result.generated > 0 || result.failed > 0) {
         this.logger.log(`成熟订单销售分佣任务完成: ${JSON.stringify(result)}`);
       }
     } catch (error) {
@@ -194,8 +228,8 @@ export class ScheduleService {
     const lockValue = await this.acquireLock(lockKey, 1800);
     if (!lockValue) return;
     try {
-      const result = await (this.shareService as any).reconcileMatureFirstPaidRewards?.();
-      if (result && (result.issued > 0 || result.failed > 0)) {
+      const result = await this.shareService.reconcileMatureFirstPaidRewards();
+      if (result.issued > 0 || result.failed > 0) {
         this.logger.log(`成熟首单邀请奖励任务完成: ${JSON.stringify(result)}`);
       }
     } catch (error) {
