@@ -49,7 +49,10 @@ export class ScheduleService {
       const preCheck = await this.paymentReconcileService.confirmTimeoutOrdersBeforeClose();
       this.logger.log(`关单前支付确认完成: ${JSON.stringify(preCheck)}`);
       const result = await this.orderService.closeTimeoutOrders();
-      this.logger.log(`超时订单关闭完成，共关闭 ${result.closedCount} 笔`);
+      const promotionCleanup = await this.reconcileCancelledPromotionReservations();
+      this.logger.log(
+        `超时订单关闭完成，共关闭 ${result.closedCount} 笔；促销残留修复=${JSON.stringify(promotionCleanup)}`,
+      );
     } catch (error) {
       const err = error as Error;
       this.logger.error(`关闭超时订单任务失败：${err.message}`, err.stack);
@@ -218,6 +221,56 @@ export class ScheduleService {
     } finally {
       await this.releaseLock(lockKey, lockValue);
     }
+  }
+
+  private async reconcileCancelledPromotionReservations(limit = 200) {
+    const flashRows = await this.prismaService.$queryRaw<Array<{ orderId: bigint }>>`
+      SELECT f.order_id AS orderId
+      FROM flash_sale_orders f
+      INNER JOIN orders o ON o.id = f.order_id
+      WHERE f.deleted_at IS NULL
+        AND f.status = 'pending_payment'
+        AND o.status = 'cancelled'
+      ORDER BY f.id ASC
+      LIMIT ${limit}
+    `;
+    const groupRows = await this.prismaService.$queryRaw<Array<{ orderId: bigint }>>`
+      SELECT m.order_id AS orderId
+      FROM group_buy_members m
+      INNER JOIN orders o ON o.id = m.order_id
+      WHERE m.deleted_at IS NULL
+        AND m.status = 'pending_payment'
+        AND o.status = 'cancelled'
+      ORDER BY m.id ASC
+      LIMIT ${limit}
+    `;
+
+    let flashFixed = 0;
+    let groupFixed = 0;
+    let failed = 0;
+    for (const row of flashRows) {
+      try {
+        await this.flashSaleService.handleOrderCancel(row.orderId);
+        flashFixed += 1;
+      } catch (error) {
+        failed += 1;
+        this.logger.error(
+          `取消订单秒杀占用补偿失败：orderId=${row.orderId}, error=${(error as Error).message}`,
+        );
+      }
+    }
+    for (const row of groupRows) {
+      try {
+        await this.groupBuyService.handleOrderCancel(row.orderId);
+        groupFixed += 1;
+      } catch (error) {
+        failed += 1;
+        this.logger.error(
+          `取消订单拼团占用补偿失败：orderId=${row.orderId}, error=${(error as Error).message}`,
+        );
+      }
+    }
+    return { flashCandidates: flashRows.length, groupCandidates: groupRows.length, flashFixed, groupFixed, failed };
   }
 
   private async findFailedGroupRefundCandidates(limit = 200): Promise<string[]> {
