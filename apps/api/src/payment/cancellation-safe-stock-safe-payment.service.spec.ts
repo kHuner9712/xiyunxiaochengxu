@@ -1,13 +1,16 @@
 import { BadRequestException } from '@nestjs/common';
-import { REFUND_STATUS } from '../common/constants';
+import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
 import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recoverable-production-payment.service';
 import { CancellationSafeStockSafePaymentService } from './cancellation-safe-stock-safe-payment.service';
 
 describe('CancellationSafeStockSafePaymentService', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  function createService(lockAcquired = true, refund?: any) {
+  function createService(lockAcquired = true, refund?: any, terminalPayment?: any) {
     const prisma: any = {
+      orderPayment: {
+        findFirst: jest.fn().mockResolvedValue(terminalPayment ?? null),
+      },
       orderRefund: {
         findFirst: jest.fn().mockResolvedValue(refund ?? null),
         findUnique: jest.fn(),
@@ -68,6 +71,25 @@ describe('CancellationSafeStockSafePaymentService', () => {
     expect(baseCreatePayment).not.toHaveBeenCalled();
   });
 
+  it('does not reopen a payment record that has already reached FAILED terminal state', async () => {
+    const baseCreatePayment = jest.spyOn(
+      StockSafeRecoverableProductionPaymentService.prototype,
+      'createPayment',
+    );
+    const { service, prisma } = createService(true, undefined, {
+      id: 7n,
+      status: PAYMENT_STATUS.FAILED,
+    });
+
+    await expect(service.createPayment('42', '8')).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.orderPayment.findFirst).toHaveBeenCalledWith({
+      where: { orderId: 42n, status: PAYMENT_STATUS.FAILED },
+      select: { id: true },
+    });
+    expect(baseCreatePayment).not.toHaveBeenCalled();
+  });
+
   it('reopens ABNORMAL to pending and runs the full refund-success chain when WeChat is SUCCESS', async () => {
     const refund = {
       id: 1n,
@@ -104,6 +126,7 @@ describe('CancellationSafeStockSafePaymentService', () => {
     );
     expect(result).toEqual(expect.objectContaining({
       synced: true,
+      reason: 'abnormal_recovered_success',
       status: REFUND_STATUS.SUCCESS,
       recoveredFrom: REFUND_STATUS.ABNORMAL,
     }));
@@ -137,6 +160,7 @@ describe('CancellationSafeStockSafePaymentService', () => {
     expect(processSuccess).not.toHaveBeenCalled();
     expect(result).toEqual(expect.objectContaining({
       synced: true,
+      reason: 'abnormal_recovered_closed',
       status: REFUND_STATUS.CLOSED,
     }));
   });
@@ -169,6 +193,7 @@ describe('CancellationSafeStockSafePaymentService', () => {
     expect(processSuccess).not.toHaveBeenCalled();
     expect(result).toEqual(expect.objectContaining({
       synced: false,
+      reason: 'wechat_still_abnormal',
       status: REFUND_STATUS.ABNORMAL,
     }));
   });
