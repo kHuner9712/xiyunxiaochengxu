@@ -47,8 +47,8 @@
         </el-table-column>
         <el-table-column label="活动时间" width="320">
           <template #default="{ row }">
-            <div>{{ formatDate(row.startTime) }} 至</div>
-            <div>{{ formatDate(row.endTime) }}</div>
+            <div>{{ formatActivityDate(row.startTime) }} 至</div>
+            <div>{{ formatActivityDate(row.endTime) }}</div>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -330,8 +330,8 @@ async function handleEdit(row: any) {
     groupExpireHours: d.groupExpireHours ?? 24,
     stockLimit: d.stockLimit,
     limitPerUser: d.limitPerUser ?? 0,
-    startTime: d.startTime ? formatDate(d.startTime) : '',
-    endTime: d.endTime ? formatDate(d.endTime) : '',
+    startTime: toLocalPickerDateTime(d.startTime),
+    endTime: toLocalPickerDateTime(d.endTime),
     status: d.status ?? 1,
     sortOrder: d.sortOrder ?? 0,
     coverImage: d.coverImage || '',
@@ -341,9 +341,29 @@ async function handleEdit(row: any) {
   dialogVisible.value = true
 }
 
-function formatDate(d: string): string {
-  if (!d) return ''
-  return d.replace('T', ' ').slice(0, 19)
+function padDatePart(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+function toLocalPickerDateTime(value: unknown): string {
+  if (!value) return ''
+  const date = new Date(String(value))
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`
+}
+
+function parsePickerDateTime(value: unknown): Date | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const date = new Date(value.trim().replace(' ', 'T'))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function toIsoDateTime(value: unknown): string | null {
+  return parsePickerDateTime(value)?.toISOString() ?? null
+}
+
+function formatActivityDate(value: unknown): string {
+  return toLocalPickerDateTime(value) || '-'
 }
 
 async function handleSubmit() {
@@ -367,11 +387,14 @@ async function handleSubmit() {
     ElMessage.warning('请选择该商品的有效SKU')
     return
   }
-  if (!editing.startTime || !editing.endTime) {
-    ElMessage.warning('请选择活动时间')
+
+  const startDate = parsePickerDateTime(editing.startTime)
+  const endDate = parsePickerDateTime(editing.endTime)
+  if (!startDate || !endDate) {
+    ElMessage.warning('请选择有效的活动时间')
     return
   }
-  if (new Date(editing.startTime).getTime() >= new Date(editing.endTime).getTime()) {
+  if (startDate.getTime() >= endDate.getTime()) {
     ElMessage.warning('活动结束时间必须晚于开始时间')
     return
   }
@@ -385,6 +408,8 @@ async function handleSubmit() {
     ...rest,
     productId,
     skuId,
+    startTime: toIsoDateTime(editing.startTime),
+    endTime: toIsoDateTime(editing.endTime),
   }
   if (payload.originalPrice === null || payload.originalPrice === '') delete payload.originalPrice
   if (payload.stockLimit === null || payload.stockLimit === '') delete payload.stockLimit
