@@ -8,12 +8,16 @@ export function getMyCoupons(params: { status?: number; page: number; pageSize: 
   return get<{ list: MyCouponItem[]; total: number }>('/weapp/coupon/my', params)
 }
 
-export function receiveCoupon(couponId: string | number) {
-  return post(`/weapp/coupon/receive/${couponId}`)
+export function receiveCoupon(couponId: string) {
+  return post(`/weapp/coupon/receive/${encodeURIComponent(couponId)}`)
 }
 
-export function getAvailableCoupons(params: { amount: number; productIds: (string | number)[] }) {
-  return get<MyCouponItem[]>('/weapp/coupon/usable', params)
+export function getAvailableCoupons(params: { amount: number; productIds: string[] }) {
+  return get<MyCouponItem[]>('/weapp/coupon/usable', {
+    amount: params.amount,
+    // Explicit CSV avoids platform-specific array query serialization differences.
+    productIds: params.productIds.join(',')
+  })
 }
 
 export interface CouponItem {
@@ -26,6 +30,7 @@ export interface CouponItem {
   endTime: string
   received: boolean
   remainCount: number
+  description?: string
 }
 
 export interface MyCouponItem {
@@ -37,7 +42,11 @@ export interface MyCouponItem {
   minAmount: number
   startTime: string
   endTime: string
+  /** UI status: 1 available, 2 used, 3 expired, 4 locked by a pending order. */
   status: number
+  rawStatus?: number
   useTime?: string
-  orderNo?: string
+  usedAt?: string
+  usedOrderId?: string | null
+  description?: string
 }
