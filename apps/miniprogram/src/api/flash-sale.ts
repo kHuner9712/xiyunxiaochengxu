@@ -4,7 +4,7 @@ export interface FlashSaleActivity {
   id: string
   name: string
   productId: string
-  skuId?: string
+  skuId: string
   flashPrice: number
   originalPrice?: number
   stockLimit: number
@@ -49,11 +49,11 @@ export const flashSaleApi = {
   getList(params: { page?: number; pageSize?: number }) {
     return get<{ list: FlashSaleActivity[]; total: number }>('/weapp/flash-sale/list', params)
   },
-  getDetail(id: string | number) {
+  getDetail(id: string) {
     return get<FlashSaleActivity>(`/weapp/flash-sale/detail/${id}`)
   },
   buy(data: {
-    activityId: number
+    activityId: string
     quantity?: number
     addressId?: string
     pickupStoreId?: string
