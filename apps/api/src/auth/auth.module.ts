@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AdminAuthController, WeappAuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { ProductionAuthService } from './production-auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { RedisModule } from '../common/redis/redis.module';
@@ -23,7 +24,10 @@ import { RedisModule } from '../common/redis/redis.module';
     }),
   ],
   controllers: [AdminAuthController, WeappAuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [
+    { provide: AuthService, useClass: ProductionAuthService },
+    JwtStrategy,
+  ],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
