@@ -86,10 +86,9 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
           outRefundNo: existingRefund.outRefundNo,
         };
       }
-    } else if (
-      existingRefund.status !== REFUND_STATUS.CLOSED &&
-      existingRefund.status !== REFUND_STATUS.ABNORMAL
-    ) {
+    } else if (existingRefund.status !== REFUND_STATUS.CLOSED) {
+      // ABNORMAL is deliberately not auto-retried. It requires merchant-platform handling
+      // and must keep refund-scoped benefits frozen until WeChat reaches a clear outcome.
       return {
         status: existingRefund.status,
         refundId: existingRefund.id.toString(),
@@ -143,7 +142,9 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
         reason: REFUND_SIDE_EFFECT_REASON,
         status: 'pending',
       },
-      orderBy: { createdAt: 'asc' },
+      // Failed attempts update updatedAt, rotating them behind tasks that have not yet run.
+      // This prevents a permanently bad oldest task from starving newer refunds forever.
+      orderBy: { updatedAt: 'asc' },
       take: limit,
     });
 
@@ -289,19 +290,20 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
         return { retryable: false, status: REFUND_STATUS.PENDING };
       }
 
-      if (
-        wechatStatus === WECHAT_REFUND_STATUS.CLOSED ||
-        wechatStatus === WECHAT_REFUND_STATUS.ABNORMAL
-      ) {
-        const localStatus =
-          wechatStatus === WECHAT_REFUND_STATUS.CLOSED
-            ? REFUND_STATUS.CLOSED
-            : REFUND_STATUS.ABNORMAL;
+      if (wechatStatus === WECHAT_REFUND_STATUS.CLOSED) {
         await this.recoveryPrisma.orderRefund.updateMany({
           where: { id: refund.id, status: REFUND_STATUS.FAILED },
-          data: { status: localStatus, rawResponse: wechatResult },
+          data: { status: REFUND_STATUS.CLOSED, rawResponse: wechatResult },
         });
-        return { retryable: true, status: localStatus };
+        return { retryable: true, status: REFUND_STATUS.CLOSED };
+      }
+
+      if (wechatStatus === WECHAT_REFUND_STATUS.ABNORMAL) {
+        await this.recoveryPrisma.orderRefund.updateMany({
+          where: { id: refund.id, status: REFUND_STATUS.FAILED },
+          data: { status: REFUND_STATUS.ABNORMAL, rawResponse: wechatResult },
+        });
+        return { retryable: false, status: REFUND_STATUS.ABNORMAL };
       }
 
       return { retryable: false, status: REFUND_STATUS.FAILED };
