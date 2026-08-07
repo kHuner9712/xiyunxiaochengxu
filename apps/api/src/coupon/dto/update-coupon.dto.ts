@@ -25,12 +25,11 @@ const normalizeIds = ({ value }: { value: unknown }) => {
 };
 
 export class UpdateCouponDto {
-  @IsOptional() @Transform(trim) @IsString() @IsNotEmpty() @MaxLength(100) name?: string;
-  @IsOptional() @Type(() => Number) @IsInt() @IsIn([1, 2, 3, 4]) type?: number;
+  @IsOptional() @Transform(trim) @IsString() @IsNotEmpty() @MaxLength(50) name?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @IsIn([1, 2, 3]) type?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) value?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) minAmount?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) discountLimit?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) maxDiscount?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) totalCount?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) perLimit?: number;
 
@@ -48,6 +47,7 @@ export class UpdateCouponDto {
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) validDays?: number;
   @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1, 2]) applicableType?: number;
+
   @IsOptional()
   @Transform(normalizeIds)
   @IsArray()
@@ -55,7 +55,9 @@ export class UpdateCouponDto {
   @Matches(POSITIVE_ID_PATTERN, { each: true, message: '优惠券适用范围ID无效' })
   @MaxLength(19, { each: true, message: '优惠券适用范围ID超出范围' })
   applicableIds?: string[];
+
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(500) description?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) memberLevelId?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) memberLevel?: number;
   @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1]) isNewUser?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1]) status?: number;
 }
