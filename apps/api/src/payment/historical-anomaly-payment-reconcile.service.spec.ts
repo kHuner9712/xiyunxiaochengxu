@@ -10,7 +10,7 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
     const prisma: any = {
       $queryRaw: jest.fn().mockResolvedValue(rows),
       order: {
-        findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
       paymentCompensationTask: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -126,7 +126,7 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
       status: 'pending',
       callbackPayload: { original: true },
     }]);
-    prisma.order.findUnique.mockResolvedValue({
+    prisma.order.findFirst.mockResolvedValue({
       id: 42n,
       orderNo: 'O42',
       status: OrderStatus.cancelled,
@@ -169,7 +169,7 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
       status: 'pending',
       callbackPayload: {},
     }]);
-    prisma.order.findUnique.mockResolvedValue({
+    prisma.order.findFirst.mockResolvedValue({
       id: 42n,
       orderNo: 'O42',
       status: OrderStatus.cancelled,
@@ -203,7 +203,7 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
       status: 'pending',
       callbackPayload: {},
     }]);
-    prisma.order.findUnique.mockResolvedValue({
+    prisma.order.findFirst.mockResolvedValue({
       id: 42n,
       orderNo: 'O42',
       status: OrderStatus.cancelled,
