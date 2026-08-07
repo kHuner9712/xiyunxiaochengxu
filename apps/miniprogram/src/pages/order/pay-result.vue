@@ -15,15 +15,23 @@
       </view>
 
       <text class="result-text">{{ resultText }}</text>
-      <text class="result-subtext">订单状态可能有短暂延迟，请以订单详情为准</text>
+      <text class="result-subtext">{{ resultSubtext }}</text>
     </view>
 
-    <view v-if="paymentState === 'success' && orderInfo?.fulfillmentType === 'pickup'" class="pickup-tip card">
+    <view
+      v-if="paymentState === 'success' && orderInfo?.status === 'pending_pickup' && orderInfo?.fulfillmentType === 'pickup'"
+      class="pickup-tip card"
+    >
       <text class="tip-text">请到店出示自提码取货</text>
       <view v-if="orderInfo.pickupCode" class="tip-code">
         <text class="tip-code-label">自提码</text>
         <text class="tip-code-text">{{ orderInfo.pickupCode }}</text>
       </view>
+    </view>
+
+    <view v-if="paymentState === 'success' && orderInfo?.status === 'paid'" class="group-tip card">
+      <text class="tip-text">已付款，正在等待拼团成团</text>
+      <text class="group-tip-subtext">成团后订单才会进入发货或自提流程；若拼团失败，系统会按规则自动退款。</text>
     </view>
 
     <view v-if="orderInfo" class="order-info card">
@@ -74,11 +82,22 @@ const zeroPay = ref(false)
 
 const resultText = computed(() => {
   if (checking.value || paymentState.value === 'confirming') return '正在确认支付结果...'
-  if (zeroPay.value && paymentState.value === 'success') return '订单提交成功'
-  if (paymentState.value === 'success') return '支付成功'
+  if (zeroPay.value && paymentState.value === 'success') {
+    return orderInfo.value?.status === 'paid' ? '订单已提交，等待拼团成团' : '订单提交成功'
+  }
+  if (paymentState.value === 'success') {
+    return orderInfo.value?.status === 'paid' ? '支付成功，等待拼团成团' : '支付成功'
+  }
   if (paymentState.value === 'pending') return '支付结果确认中，请稍后在订单详情查看'
   if (paymentState.value === 'failed') return '支付失败'
   return '支付结果未知，请稍后在订单详情查看'
+})
+
+const resultSubtext = computed(() => {
+  if (paymentState.value === 'success' && orderInfo.value?.status === 'paid') {
+    return '当前仅代表付款成功，尚未进入发货或自提状态'
+  }
+  return '订单状态可能有短暂延迟，请以订单详情为准'
 })
 
 function stopPolling() {
@@ -93,6 +112,7 @@ function mapStatusToState(status: any): PaymentState {
   if (status.displayStatus === 'closed' || status.displayStatus === 'failed' || status.displayStatus === 'cancelled') return 'failed'
   if (status.displayStatus === 'pending' || status.displayStatus === 'confirming' || status.confirming) return 'confirming'
   if (
+    status.orderStatus === 'paid' ||
     status.orderStatus === 'pending_delivery' ||
     status.orderStatus === 'pending_pickup' ||
     status.orderStatus === 'delivered' ||
@@ -278,7 +298,8 @@ onUnload(() => {
   width: 100%;
 }
 
-.pickup-tip {
+.pickup-tip,
+.group-tip {
   width: 100%;
   text-align: center;
   padding: $spacing-lg $spacing-md;
@@ -294,6 +315,13 @@ onUnload(() => {
   font-weight: 600;
   display: block;
   margin-bottom: $spacing-sm;
+}
+
+.group-tip-subtext {
+  display: block;
+  font-size: $font-xs;
+  color: $text-secondary;
+  line-height: 1.6;
 }
 
 .tip-code {
