@@ -11,10 +11,13 @@ const service = readFileSync(resolve(root, 'apps/api/src/aftersale/aftersale.ser
 const paymentConstants = readFileSync(resolve(root, 'apps/api/src/common/constants/payment.ts'), 'utf8')
 const refundMethod = service.slice(service.indexOf('  async refund('), service.indexOf('  private serializeAftersale('))
 
-test('refund retry and sync eligibility come from backend status rules', () => {
+test('refund retry, sync and manual eligibility come from backend status rules', () => {
   assert.match(detail, /detail\.value\.refundRetryable === true/)
   assert.match(detail, /detail\.value\.refundSyncRequired === true/)
-  assert.match(detail, /退款请求结果待核实，请先同步微信退款状态/)
+  assert.match(detail, /detail\.value\.refundManualRequired === true/)
+  assert.match(detail, /微信退款异常，不能重新发起普通退款/)
+  assert.match(detail, /微信支付商户平台的交易中心处理此笔异常退款/)
+  assert.match(detail, /确认已关闭后才能重新发起普通退款/)
   assert.match(detail, /isRefundRetry\.value/)
   assert.match(detail, /重新发起退款/)
   assert.doesNotMatch(detail, /latestAftersaleAction/)
@@ -25,15 +28,17 @@ test('refund retry and sync eligibility come from backend status rules', () => {
   assert.match(service, /latestRefundStatus: latestRefund\?\.status \|\| null/)
   assert.match(service, /refundRetryable: !!latestRefund && retryableStatuses\.includes\(latestRefund\.status\)/)
   assert.match(service, /refundSyncRequired: !!latestRefund && syncRequiredStatuses\.includes\(latestRefund\.status\)/)
+  assert.match(service, /refundManualRequired: !!latestRefund && manualRequiredStatuses\.includes\(latestRefund\.status\)/)
+  assert.match(service, /retryableStatuses = \[REFUND_STATUS\.CLOSED\]/)
   assert.match(service, /syncRequiredStatuses = \[REFUND_STATUS\.INITIATING, REFUND_STATUS\.FAILED, REFUND_STATUS\.RETRYING\]/)
-  assert.match(service, /REFUND_STATUS\.CLOSED/)
-  assert.match(service, /REFUND_STATUS\.ABNORMAL/)
+  assert.match(service, /manualRequiredStatuses = \[REFUND_STATUS\.ABNORMAL\]/)
   assert.match(service, /latestRefundBefore\?\.status === REFUND_STATUS\.FAILED/)
-  assert.match(service, /退款请求结果待核实，请先同步微信退款状态/)
-  assert.doesNotMatch(service, /\[REFUND_STATUS\.FAILED, REFUND_STATUS\.CLOSED, REFUND_STATUS\.ABNORMAL\]/)
+  assert.match(service, /latestRefundBefore\?\.status === REFUND_STATUS\.ABNORMAL/)
+  assert.match(service, /微信退款异常，请前往微信支付商户平台处理异常退款，不能重新发起普通退款/)
+  assert.doesNotMatch(service, /retryableStatuses = \[REFUND_STATUS\.CLOSED, REFUND_STATUS\.ABNORMAL\]/)
 })
 
-test('refund initiation uses atomic state claims without session locks', () => {
+test('refund initiation uses isolated atomic state claims without session locks', () => {
   assert.match(refundMethod, /await prisma\.aftersaleOrder\.updateMany\(\{[\s\S]*status: aftersale\.status[\s\S]*status: AftersaleStatus\.pending_refund/)
   assert.match(refundMethod, /await prisma\.orderRefund\.updateMany\(\{[\s\S]*id: latestRefundBefore\.id[\s\S]*status: latestRefundBefore\.status[\s\S]*status: REFUND_STATUS\.RETRYING/)
   assert.match(refundMethod, /claim\.count !== 1/)
