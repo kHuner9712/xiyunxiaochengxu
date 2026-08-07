@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -140,10 +141,23 @@ export class StartGroupBuyDto {
   skuId?: string;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1) quantity?: number;
-  @IsOptional() @IsString() addressId?: string;
-  @IsOptional() @IsString() pickupStoreId?: string;
-  @IsOptional() @IsString() fulfillmentType?: string;
-  @IsOptional() @IsString() remark?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeId(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '收货地址ID无效' })
+  @MaxLength(19, { message: '收货地址ID超出范围' })
+  addressId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeId(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '自提点ID无效' })
+  @MaxLength(19, { message: '自提点ID超出范围' })
+  pickupStoreId?: string;
+
+  @IsOptional() @IsString() @IsIn(['delivery', 'pickup']) fulfillmentType?: string;
+  @IsOptional() @IsString() @MaxLength(200) remark?: string;
 }
 
 export class JoinGroupBuyDto {
@@ -154,10 +168,23 @@ export class JoinGroupBuyDto {
   groupId!: string;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1) quantity?: number;
-  @IsOptional() @IsString() addressId?: string;
-  @IsOptional() @IsString() pickupStoreId?: string;
-  @IsOptional() @IsString() fulfillmentType?: string;
-  @IsOptional() @IsString() remark?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeId(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '收货地址ID无效' })
+  @MaxLength(19, { message: '收货地址ID超出范围' })
+  addressId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeId(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '自提点ID无效' })
+  @MaxLength(19, { message: '自提点ID超出范围' })
+  pickupStoreId?: string;
+
+  @IsOptional() @IsString() @IsIn(['delivery', 'pickup']) fulfillmentType?: string;
+  @IsOptional() @IsString() @MaxLength(200) remark?: string;
 }
 
 // ============ 小程序：可用团查询 ============
