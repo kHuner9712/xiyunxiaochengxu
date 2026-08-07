@@ -48,7 +48,7 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
   }
 
   async restoreAfterRefundClosed(orderId: bigint | string, aftersaleId?: bigint | string | null) {
-    const packageIds = await this.findAffectedPackageIds(orderId, aftersaleId);
+    const packageIds = await this.findAffectedPackageIds(orderId, aftersaleId, true);
     if (packageIds.length === 0) return { affected: 0 };
 
     const result = await this.productionPrisma.userBenefitPackage.updateMany({
@@ -63,7 +63,7 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
   }
 
   async revokeAfterRefundSuccess(orderId: bigint | string, aftersaleId?: bigint | string | null) {
-    const packageIds = await this.findAffectedPackageIds(orderId, aftersaleId);
+    const packageIds = await this.findAffectedPackageIds(orderId, aftersaleId, true);
     if (packageIds.length === 0) return { packages: 0, entitlements: 0 };
 
     const unexpectedUsed = await this.productionPrisma.userBenefitEntitlement.findFirst({
@@ -102,9 +102,57 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     });
   }
 
+  /**
+   * 补偿微信退款 CLOSED/ABNORMAL 后仍被冻结的权益。
+   * 只处理同一订单/售后单“最新一笔退款”已经进入失败终态的情况，
+   * 避免旧退款失败但新退款仍在处理中时误解冻。
+   */
+  async reconcileTerminalRefundFreezes(limit = 200) {
+    const frozen = await this.productionPrisma.userBenefitPackage.findMany({
+      where: { status: 'refund_pending', deletedAt: null },
+      select: { orderId: true },
+      distinct: ['orderId'],
+      take: limit,
+    });
+
+    let restored = 0;
+    let skipped = 0;
+    for (const item of frozen) {
+      const refunds = await this.productionPrisma.orderRefund.findMany({
+        where: { orderId: item.orderId },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+      if (refunds.length === 0) {
+        skipped += 1;
+        continue;
+      }
+
+      // Process each refund scope independently. A full-order refund has aftersaleId=null;
+      // an item refund is scoped by aftersaleId.
+      const seenScopes = new Set<string>();
+      for (const refund of refunds) {
+        const scope = refund.aftersaleId?.toString() ?? 'full-order';
+        if (seenScopes.has(scope)) continue;
+        seenScopes.add(scope);
+
+        if (refund.status === 'closed' || refund.status === 'abnormal') {
+          const result = await this.restoreAfterRefundClosed(
+            refund.orderId,
+            refund.aftersaleId,
+          );
+          restored += result.affected;
+        }
+      }
+    }
+
+    return { orders: frozen.length, restored, skipped };
+  }
+
   private async findAffectedPackageIds(
     orderId: bigint | string,
     aftersaleId?: bigint | string | null,
+    includeFrozen = false,
   ): Promise<bigint[]> {
     const orderIdValue = BigInt(orderId);
     let orderItemId: bigint | null = null;
@@ -123,7 +171,9 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
       where: {
         orderId: orderIdValue,
         ...(orderItemId ? { orderItemId } : {}),
-        status: { in: ['active', 'refund_pending'] },
+        status: includeFrozen
+          ? { in: ['active', 'refund_pending'] }
+          : 'active',
         deletedAt: null,
       },
       select: { id: true },
