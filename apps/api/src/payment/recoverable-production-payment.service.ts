@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
@@ -12,6 +12,8 @@ import { OrderService } from '../order/order.service';
 import { ShareService } from '../share/share.service';
 import { ProductionPaymentService } from './production-payment.service';
 
+const REFUND_SIDE_EFFECT_REASON = 'refund_success_side_effects';
+
 interface RefundResult {
   status: string;
   refundId?: string;
@@ -21,12 +23,14 @@ interface RefundResult {
 
 @Injectable()
 export class RecoverableProductionPaymentService extends ProductionPaymentService {
+  private readonly recoveryLogger = new Logger(RecoverableProductionPaymentService.name);
+
   constructor(
     private readonly recoveryPrisma: PrismaService,
     configService: ConfigService,
     businessEvent: BusinessEventService,
     orderService: OrderService,
-    shareService: ShareService,
+    private readonly recoveryShareService: ShareService,
     private readonly recoveryBenefitPackageService: BenefitPackageService,
     merchantSettlementService: MerchantSettlementService,
     groupBuyService: GroupBuyService,
@@ -37,7 +41,7 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
       configService,
       businessEvent,
       orderService,
-      shareService,
+      recoveryShareService,
       recoveryBenefitPackageService,
       merchantSettlementService,
       groupBuyService,
@@ -100,6 +104,142 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
     );
 
     return this.retryDefinitiveFailedGroupRefund(normalizedOrderId, reason);
+  }
+
+  override async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {
+    try {
+      await super.processWechatRefundSuccess(refund, refundId, wechatData);
+      const currentRefund = await this.recoveryPrisma.orderRefund.findUnique({
+        where: { id: refund.id },
+      });
+      if (!currentRefund || currentRefund.status !== REFUND_STATUS.SUCCESS) return;
+
+      const task = await this.ensureRefundSideEffectTask(currentRefund);
+      try {
+        await (this.recoveryShareService as any).reverseFirstPaidAttributionAfterRefund?.(
+          currentRefund.orderId,
+          currentRefund.id,
+        );
+        await this.resolveRefundSideEffectTask(task.id);
+      } catch (error) {
+        await this.markRefundSideEffectTaskFailed(task.id, error);
+        throw error;
+      }
+    } catch (error) {
+      const currentRefund = await this.recoveryPrisma.orderRefund.findUnique({
+        where: { id: refund.id },
+      });
+      if (currentRefund?.status === REFUND_STATUS.SUCCESS) {
+        const task = await this.ensureRefundSideEffectTask(currentRefund);
+        await this.markRefundSideEffectTaskFailed(task.id, error);
+      }
+      throw error;
+    }
+  }
+
+  async reconcileRefundSuccessSideEffects(limit = 200) {
+    const tasks = await this.recoveryPrisma.paymentCompensationTask.findMany({
+      where: {
+        reason: REFUND_SIDE_EFFECT_REASON,
+        status: 'pending',
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+
+    let resolved = 0;
+    let failed = 0;
+    let skipped = 0;
+    for (const task of tasks) {
+      if (!task.transactionId) {
+        skipped += 1;
+        continue;
+      }
+
+      const refund = await this.recoveryPrisma.orderRefund.findFirst({
+        where: { outRefundNo: task.transactionId },
+      });
+      if (!refund || refund.status !== REFUND_STATUS.SUCCESS) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        await super.processWechatRefundSuccess(
+          refund,
+          refund.refundId || '',
+          refund.rawResponse || { amount: { refund: refund.refundAmount } },
+        );
+        await (this.recoveryShareService as any).reverseFirstPaidAttributionAfterRefund?.(
+          refund.orderId,
+          refund.id,
+        );
+        await this.resolveRefundSideEffectTask(task.id);
+        resolved += 1;
+      } catch (error) {
+        failed += 1;
+        await this.markRefundSideEffectTaskFailed(task.id, error);
+        this.recoveryLogger.error(
+          `退款成功副作用补偿失败: refundId=${refund.id}, error=${(error as Error).message}`,
+        );
+      }
+    }
+
+    return { total: tasks.length, resolved, failed, skipped };
+  }
+
+  private async ensureRefundSideEffectTask(refund: any) {
+    const order = await this.recoveryPrisma.order.findUnique({
+      where: { id: refund.orderId },
+      select: { orderNo: true },
+    });
+    if (!order) throw new InternalServerErrorException('退款对应订单不存在');
+
+    await this.recoveryPrisma.paymentCompensationTask.createMany({
+      data: [{
+        orderNo: order.orderNo,
+        transactionId: refund.outRefundNo,
+        amount: refund.refundAmount,
+        reason: REFUND_SIDE_EFFECT_REASON,
+        status: 'pending',
+        callbackPayload: {
+          refundId: refund.id.toString(),
+          outRefundNo: refund.outRefundNo,
+        },
+      }],
+      skipDuplicates: true,
+    });
+
+    const task = await this.recoveryPrisma.paymentCompensationTask.findFirst({
+      where: {
+        orderNo: order.orderNo,
+        reason: REFUND_SIDE_EFFECT_REASON,
+        transactionId: refund.outRefundNo,
+      },
+    });
+    if (!task) throw new InternalServerErrorException('退款副作用补偿任务创建失败');
+    return task;
+  }
+
+  private async resolveRefundSideEffectTask(taskId: bigint) {
+    await this.recoveryPrisma.paymentCompensationTask.updateMany({
+      where: { id: taskId, status: 'pending' },
+      data: {
+        status: 'resolved',
+        handledBy: 'system:refund-side-effect-reconcile',
+        handledAt: new Date(),
+        resolution: '退款成功后的权益、分佣、拼团与分享归因副作用已完成',
+      },
+    });
+  }
+
+  private async markRefundSideEffectTaskFailed(taskId: bigint, error: unknown) {
+    await this.recoveryPrisma.paymentCompensationTask.updateMany({
+      where: { id: taskId, status: 'pending' },
+      data: {
+        resolution: `自动补偿失败，等待重试：${(error as Error).message}`.slice(0, 4000),
+      },
+    });
   }
 
   private async resolveUncertainFailedRefund(refund: any): Promise<{
