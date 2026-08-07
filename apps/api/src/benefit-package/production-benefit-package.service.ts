@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BenefitPackageService } from './benefit-package.service';
+import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
 
 @Injectable()
 export class ProductionBenefitPackageService extends BenefitPackageService {
@@ -28,6 +29,42 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     });
     if (usedEntitlement) {
       throw new BadRequestException('该商品包含已核销权益，无法在线退款，请联系管理员人工处理');
+    }
+  }
+
+  async assertRefundAmountSupported(
+    orderId: bigint | string,
+    aftersaleId: bigint | string | null | undefined,
+    refundAmount: number,
+  ) {
+    if (!aftersaleId) return;
+    const packageIds = await this.findAffectedPackageIds(orderId, aftersaleId);
+    if (packageIds.length === 0) return;
+
+    const aftersale = await this.productionPrisma.aftersaleOrder.findFirst({
+      where: { id: BigInt(aftersaleId), orderId: BigInt(orderId) },
+      include: {
+        orderItem: true,
+        order: {
+          include: {
+            orderItems: true,
+            orderRefunds: true,
+            aftersaleOrders: true,
+          },
+        },
+      },
+    });
+    if (!aftersale) throw new BadRequestException('售后单与订单不匹配');
+
+    const cap = calculateOrderItemRefundCap(
+      aftersale.order,
+      aftersale.orderItem,
+      aftersale.id,
+    );
+    if (refundAmount !== cap.remainingAmount) {
+      throw new BadRequestException(
+        `权益类商品在线退款必须一次退清该商品剩余可退金额${cap.remainingAmount}分，避免退款金额与权益撤销不一致`,
+      );
     }
   }
 
@@ -128,8 +165,6 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
         continue;
       }
 
-      // Process each refund scope independently. A full-order refund has aftersaleId=null;
-      // an item refund is scoped by aftersaleId.
       const seenScopes = new Set<string>();
       for (const refund of refunds) {
         const scope = refund.aftersaleId?.toString() ?? 'full-order';
