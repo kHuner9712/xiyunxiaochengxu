@@ -35,7 +35,7 @@
         <el-table-column label="订单实付" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.order?.payAmount) }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="100">
+        <el-table-column label="状态" width="120">
           <template #default="{ row }">
             <el-tag :type="REFUND_STATUS_TAG_TYPE[row.status] || 'info'" size="small">
               {{ REFUND_STATUS_MAP[row.status] || row.status }}
@@ -81,8 +81,10 @@ import { formatPrice, formatDate } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 const REFUND_STATUS_MAP: Record<string, string> = {
+  initiating: '提交中',
   pending: '待处理',
   processing: '处理中',
+  retrying: '重试核实中',
   success: '退款成功',
   failed: '退款失败',
   closed: '已关闭',
@@ -90,8 +92,10 @@ const REFUND_STATUS_MAP: Record<string, string> = {
 }
 
 const REFUND_STATUS_TAG_TYPE: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
+  initiating: 'warning',
   pending: 'warning',
   processing: 'primary',
+  retrying: 'warning',
   success: 'success',
   failed: 'danger',
   closed: 'info',
