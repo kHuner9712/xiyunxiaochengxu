@@ -119,7 +119,7 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
         return { retryable: false, status: REFUND_STATUS.SUCCESS };
       }
 
-      if (wechatStatus === WECHAT_REFUND_STATUS.PROCESSING) {
+      if (wechatStatus === 'PROCESSING') {
         await this.recoveryPrisma.orderRefund.updateMany({
           where: { id: refund.id, status: REFUND_STATUS.FAILED },
           data: {
