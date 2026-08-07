@@ -21,7 +21,7 @@ test('package.json exposes audited freeze and production gates', () => {
   assert.match(production, /--require-real-wx-appid/)
   assert.equal(
     pkg.scripts['test:admin'],
-    'node --test apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs apps/admin-web/src/core-operation-permissions.test.mjs apps/admin-web/src/batch-delivery-tracking.test.mjs apps/admin-web/src/aftersale-refund-retry.test.mjs',
+    'node --test apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs apps/admin-web/src/core-operation-permissions.test.mjs apps/admin-web/src/batch-delivery-tracking.test.mjs apps/admin-web/src/aftersale-refund-retry.test.mjs apps/admin-web/src/reconcile-history-observability.test.mjs',
   )
   assert.equal(pkg.scripts['test:admin:browser'], 'node deploy/scripts/run-admin-browser-e2e.mjs')
 })
