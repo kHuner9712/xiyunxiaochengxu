@@ -38,7 +38,7 @@ export function formatDate(timestamp: CompatibleTime, format = 'YYYY-MM-DD HH:mm
 export function formatOrderStatus(status: string): string {
   const statusMap: Record<string, string> = {
     pending_payment: '待付款',
-    paid: '已付款',
+    paid: '已付款待成团',
     pending_delivery: '待发货',
     pending_pickup: '待自提',
     delivered: '待收货',
