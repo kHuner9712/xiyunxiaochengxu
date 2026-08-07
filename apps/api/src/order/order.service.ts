@@ -235,8 +235,14 @@ export class OrderService {
       if (sku.product.status !== 1) throw new BadRequestException(`商品 ${sku.product.name} 已下架`);
       if (sku.stock < item.quantity) throw new BadRequestException(`商品 ${sku.product.name} 库存不足`);
 
-      const subtotal = sku.price * item.quantity;
-      totalAmount += subtotal;
+      const effectivePrice = item.priceOverride === undefined ? sku.price : item.priceOverride;
+      if (!Number.isSafeInteger(effectivePrice) || effectivePrice < 0 || effectivePrice > sku.price) {
+        throw new BadRequestException(`商品 ${sku.product.name} 活动价格异常`);
+      }
+      const originalSubtotal = sku.price * item.quantity;
+      const subtotal = effectivePrice * item.quantity;
+      totalAmount += originalSubtotal;
+      activityDiscountAmount += originalSubtotal - subtotal;
 
       skuStockChecks.push({ skuId: sku.id, quantity: item.quantity, beforeStock: sku.stock });
 
@@ -246,8 +252,8 @@ export class OrderService {
         productName: sku.product.name,
         skuSpecs: sku.specs,
         productImage: pickOrderProductImage(sku.image, sku.product.mainImage),
-        price: sku.price,
-        originalPrice: sku.originalPrice,
+        price: effectivePrice,
+        originalPrice: item.priceOverride === undefined ? sku.originalPrice : sku.price,
         quantity: item.quantity,
         subtotal,
         supplierId: sku.product.supplierId,
@@ -657,7 +663,7 @@ export class OrderService {
       orderId: view.id,
       orderNo: view.orderNo,
       status: view.status,
-      fulfillmentType: view.fulfillmentType,
+      fulfillmentType,
       totalAmount: view.totalAmount,
       payAmount: view.payAmount,
       userName: view.user?.nickname || '',
