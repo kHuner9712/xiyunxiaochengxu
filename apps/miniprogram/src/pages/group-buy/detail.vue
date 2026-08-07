@@ -24,14 +24,18 @@
       </view>
     </view>
 
-    <!-- 可参与的团 -->
     <view class="section">
       <view class="section-title">正在拼团，可直接参与</view>
       <view v-if="availableGroups.length === 0" class="empty-tip">暂无可参与的团，快来开团吧</view>
       <view v-for="g in availableGroups" :key="g.id" class="group-card card">
         <view class="group-info">
           <view class="group-leader">
-            <image v-if="g.leader?.avatar" class="avatar" :src="g.leader.avatar" mode="aspectFill" />
+            <image
+              v-if="g.leader?.avatarUrl || g.leader?.avatar"
+              class="avatar"
+              :src="g.leader?.avatarUrl || g.leader?.avatar || ''"
+              mode="aspectFill"
+            />
             <view v-else class="avatar avatar-placeholder" />
             <text class="leader-name">{{ g.leader?.nickname || '用户' + g.leaderUserId }}</text>
           </view>
@@ -55,13 +59,14 @@ import { ref } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { groupBuyApi, type GroupBuyActivity, type GroupBuyGroup } from '@/api/group-buy'
 import { useUserStore } from '@/stores/user'
-import { getPromotionSourceForOrder } from '@/utils/share'
+import { resolvePromotionDeliveryAddressId } from '@/utils/promotion-address'
 import { createPayment, wxPay } from '@/api/payment'
 
 const userStore = useUserStore()
 const activity = ref<GroupBuyActivity | null>(null)
 const availableGroups = ref<GroupBuyGroup[]>([])
 const submitting = ref(false)
+const lastGroupId = ref('')
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
@@ -98,10 +103,10 @@ async function payOrder(orderId: string) {
   try {
     const payment = await createPayment({ orderId })
     await wxPay(payment)
-    uni.showToast({ title: '支付成功', icon: 'success' })
+    uni.showToast({ title: '支付成功，等待成团', icon: 'success' })
     setTimeout(() => {
       uni.redirectTo({ url: `/pages/group-buy/group?id=${lastGroupId.value}` })
-    }, 1500)
+    }, 1200)
   } catch (err: any) {
     const msg = err?.errMsg || err?.message || ''
     if (msg.includes('cancel')) {
@@ -120,30 +125,32 @@ async function payOrder(orderId: string) {
   }
 }
 
-const lastGroupId = ref('')
-
 async function handleStart() {
-  if (!activity.value) return
-  if (submitting.value) return
+  if (!activity.value || submitting.value) return
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(() => handleStart())
     return
   }
   if (!activity.value.skuId) {
-    uni.showToast({ title: '该活动未指定规格，请联系客服', icon: 'none' })
+    uni.showToast({ title: '活动商品规格配置异常', icon: 'none' })
     return
   }
+
   submitting.value = true
   try {
+    const addressId = await resolvePromotionDeliveryAddressId('拼团')
+    if (!addressId) return
+
     const result = await groupBuyApi.start({
-      activityId: Number(activity.value.id),
-      skuId: activity.value.skuId ? Number(activity.value.skuId) : undefined,
+      activityId: activity.value.id,
+      skuId: activity.value.skuId,
       quantity: 1,
+      addressId,
       fulfillmentType: 'delivery',
     })
     lastGroupId.value = result.groupId
     uni.showToast({ title: '开团成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 800)
+    setTimeout(() => payOrder(result.orderId), 500)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '开团失败', icon: 'none' })
   } finally {
@@ -151,23 +158,27 @@ async function handleStart() {
   }
 }
 
-async function handleJoin(groupId: string | number) {
-  if (!activity.value) return
-  if (submitting.value) return
+async function handleJoin(groupId: string) {
+  if (!activity.value || submitting.value) return
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(() => handleJoin(groupId))
     return
   }
+
   submitting.value = true
   try {
+    const addressId = await resolvePromotionDeliveryAddressId('拼团')
+    if (!addressId) return
+
     const result = await groupBuyApi.join({
-      groupId: Number(groupId),
+      groupId,
       quantity: 1,
+      addressId,
       fulfillmentType: 'delivery',
     })
     lastGroupId.value = result.groupId
     uni.showToast({ title: '参团成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 800)
+    setTimeout(() => payOrder(result.orderId), 500)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '参团失败', icon: 'none' })
   } finally {
@@ -177,7 +188,7 @@ async function handleJoin(groupId: string | number) {
 
 onLoad((options) => {
   if (options?.id) {
-    loadDetail(options.id)
+    loadDetail(String(options.id))
   }
 })
 
