@@ -59,14 +59,14 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
 
   override async cancel(userId: string, id: string) {
     return this.withPaymentCancelLock(id, async () => {
-      await this.assertManualCancelHasNoPayment(id);
+      await this.assertManualCancelHasNoUnsafePayment(id);
       return super.cancel(userId, id);
     });
   }
 
   override async adminCancel(id: string, reason: string) {
     return this.withPaymentCancelLock(id, async () => {
-      await this.assertManualCancelHasNoPayment(id);
+      await this.assertManualCancelHasNoUnsafePayment(id);
       return super.adminCancel(id, reason);
     });
   }
@@ -114,30 +114,87 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
             return false;
           }
 
+          const closedAt = new Date();
           const claimed = await tx.order.updateMany({
             where: { id: currentOrder.id, status: OrderStatus.pending_payment },
-            data: { status: OrderStatus.cancelled, cancelledAt: new Date() },
+            data: {
+              status: OrderStatus.cancelled,
+              cancelledAt: closedAt,
+              cancelReason: '超时未支付自动关闭',
+            },
           });
           if (claimed.count === 0) return false;
 
           for (const item of currentOrder.orderItems) {
+            const sku = await tx.productSku.findUnique({
+              where: { id: item.skuId },
+              select: { stock: true },
+            });
+            if (!sku) continue;
             await tx.productSku.update({
               where: { id: item.skuId },
               data: { stock: { increment: item.quantity } },
             });
             await (this as any).safeDecrementSkuSales(tx, item.skuId, item.quantity);
+            await tx.productStockLog.create({
+              data: {
+                productId: item.productId,
+                skuId: item.skuId,
+                type: 3,
+                quantity: item.quantity,
+                beforeStock: sku.stock,
+                afterStock: sku.stock + item.quantity,
+                reason: '超时自动关闭归还库存',
+              },
+            });
           }
 
           await (this as any).restoreUserPoints(tx, currentOrder);
           await (this as any).releaseCouponAfterCancel(tx, currentOrder);
+
+          // Promotion reservations must close in the same database transaction as the order.
+          // Otherwise the order can be cancelled while a group member still occupies a seat or
+          // a flash-sale row still holds activity inventory until a later scheduler pass.
+          const flashSaleOrder = await tx.flashSaleOrder.findFirst({
+            where: {
+              orderId: currentOrder.id,
+              status: 'pending_payment',
+              deletedAt: null,
+            },
+            select: { id: true, activityId: true, quantity: true },
+          });
+          if (flashSaleOrder) {
+            const flashClaim = await tx.flashSaleOrder.updateMany({
+              where: { id: flashSaleOrder.id, status: 'pending_payment' },
+              data: { status: 'cancelled', cancelledAt: closedAt },
+            });
+            if (flashClaim.count > 0) {
+              await tx.$executeRaw`
+                UPDATE flash_sale_activities
+                SET locked_count = GREATEST(locked_count - ${flashSaleOrder.quantity}, 0),
+                    updated_at = NOW(3)
+                WHERE id = ${flashSaleOrder.activityId}
+              `;
+            }
+          }
+
+          await tx.groupBuyMember.updateMany({
+            where: {
+              orderId: currentOrder.id,
+              status: 'pending_payment',
+              deletedAt: null,
+            },
+            data: { status: 'cancelled' },
+          });
+
           await tx.orderLog.create({
             data: {
               orderId: currentOrder.id,
               operatorType: 'system',
               action: 'auto_cancel',
               content: currentOrder.payment
-                ? '超时未支付，微信交易已确认关闭，系统自动取消订单'
-                : '超时未支付且未发起微信支付，系统自动取消订单',
+                ? '超时未支付，微信交易已确认关闭，系统自动取消订单及促销占用'
+                : '超时未支付且未发起微信支付，系统自动取消订单及促销占用',
             },
           });
           return true;
@@ -151,7 +208,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     return { closedCount };
   }
 
-  private async assertManualCancelHasNoPayment(orderId: string) {
+  private async assertManualCancelHasNoUnsafePayment(orderId: string) {
     const order = await this.cancellationPrisma.order.findUnique({
       where: { id: BigInt(orderId) },
       select: { status: true },
@@ -162,7 +219,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       where: { orderId: BigInt(orderId) },
       select: { id: true, status: true },
     });
-    if (payment) {
+    if (payment && payment.status !== PAYMENT_STATUS.FAILED) {
       throw new BadRequestException(
         '该订单已发起微信支付，为避免扣款与取消并发，请等待支付结果确认；未支付订单会在微信关单确认后自动关闭',
       );
