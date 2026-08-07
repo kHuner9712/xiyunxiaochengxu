@@ -2,8 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { RedisService } from '../common/redis/redis.service';
 import { OrderService } from '../order/order.service';
+import { PaymentService } from '../payment/payment.service';
 import { PaymentReconcileService } from '../payment/payment-reconcile.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
+import { GroupBuyService } from '../group-buy/group-buy.service';
 
 @Injectable()
 export class ScheduleService {
@@ -12,8 +14,10 @@ export class ScheduleService {
   constructor(
     private readonly redisService: RedisService,
     private readonly orderService: OrderService,
+    private readonly paymentService: PaymentService,
     private readonly paymentReconcileService: PaymentReconcileService,
     private readonly flashSaleService: FlashSaleService,
+    private readonly groupBuyService: GroupBuyService,
   ) {}
 
   private async acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
@@ -63,6 +67,48 @@ export class ScheduleService {
     } catch (error) {
       const err = error as Error;
       this.logger.error(`秒杀过期库存锁自动释放失败：${err.message}`, err.stack);
+    } finally {
+      await this.releaseLock(lockKey, lockValue);
+    }
+  }
+
+  @Cron('15 * * * * *')
+  async handleExpiredGroupBuys() {
+    const lockKey = 'schedule:expire_group_buys';
+    const lockValue = await this.acquireLock(lockKey, 240);
+    if (!lockValue) return;
+
+    try {
+      const result = (await this.groupBuyService.markExpiredGroups()) as {
+        affected: number;
+        refundOrderIds?: string[];
+      };
+      let refundSubmitted = 0;
+      let refundFailed = 0;
+      for (const orderId of result.refundOrderIds ?? []) {
+        try {
+          const refundResult = await (this.paymentService as any).createGroupBuyFailureRefund(
+            orderId,
+            '拼团失败自动退款',
+          );
+          if (refundResult?.status !== 'not_group_buy' && refundResult?.status !== 'group_not_failed') {
+            refundSubmitted += 1;
+          }
+        } catch (error) {
+          refundFailed += 1;
+          this.logger.error(
+            `拼团失败自动退款提交失败：orderId=${orderId}, error=${(error as Error).message}`,
+          );
+        }
+      }
+      if (result.affected > 0 || refundSubmitted > 0 || refundFailed > 0) {
+        this.logger.log(
+          `拼团过期任务完成: failedGroups=${result.affected}, refundSubmitted=${refundSubmitted}, refundFailed=${refundFailed}`,
+        );
+      }
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(`拼团过期与退款任务失败：${err.message}`, err.stack);
     } finally {
       await this.releaseLock(lockKey, lockValue);
     }
