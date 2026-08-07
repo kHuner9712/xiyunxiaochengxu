@@ -3,6 +3,7 @@ import { AdminService } from './admin.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateAdminUserDto, AdminUserStatusDto, UpdateRoleDto } from './dto/update-admin.dto';
 import { AdminQueryDto } from './dto/admin-query.dto';
 import { OperationLogQueryDto } from './dto/operation-log-query.dto';
 
@@ -30,13 +31,13 @@ export class AdminUserController {
 
   @Put(':id')
   @RequirePermission('system:admin')
-  async update(@Param('id') id: string, @Body() dto: Partial<CreateAdminUserDto>) {
+  async update(@Param('id') id: string, @Body() dto: UpdateAdminUserDto) {
     return this.adminService.update(id, dto);
   }
 
   @Put(':id/status')
   @RequirePermission('system:admin')
-  async updateStatus(@Param('id') id: string, @Body() body: { status: number }) {
+  async updateStatus(@Param('id') id: string, @Body() body: AdminUserStatusDto) {
     return this.adminService.updateStatus(id, body.status);
   }
 
@@ -71,7 +72,7 @@ export class AdminRoleController {
 
   @Put(':id')
   @RequirePermission('system:role')
-  async update(@Param('id') id: string, @Body() dto: Partial<CreateRoleDto>) {
+  async update(@Param('id') id: string, @Body() dto: UpdateRoleDto) {
     return this.adminService.updateRole(id, dto);
   }
 
