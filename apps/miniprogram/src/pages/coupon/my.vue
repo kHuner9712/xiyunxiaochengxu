@@ -2,33 +2,38 @@
   <view class="my-coupon-page page-shell">
     <view class="tab-wrap">
       <view class="tab-bar pill-tab-bar">
-      <view
-        v-for="tab in tabs"
-        :key="tab.value"
-        class="tab-item pill-tab-item"
-        :class="{ active: currentTab === tab.value }"
-        @tap="switchTab(tab.value)"
-      >
-        <text class="tab-text">{{ tab.label }}</text>
-      </view>
+        <view
+          v-for="tab in tabs"
+          :key="tab.value"
+          class="tab-item pill-tab-item"
+          :class="{ active: currentTab === tab.value }"
+          @tap="switchTab(tab.value)"
+        >
+          <text class="tab-text">{{ tab.label }}</text>
+        </view>
       </view>
     </view>
 
     <view class="coupon-list">
-      <view v-for="item in coupons" :key="item.id" class="coupon-card" :class="{ used: item.status === 2, expired: item.status === 3 }">
+      <view
+        v-for="item in coupons"
+        :key="item.id"
+        class="coupon-card"
+        :class="{ used: item.status === 2, expired: item.status === 3, locked: item.status === 4 }"
+      >
         <view class="coupon-left">
           <view class="coupon-value">
-            <text v-if="item.type === 1 || item.type === 3" class="value-symbol">¥</text>
             <text class="value-num">{{ formatCouponValue(item) }}</text>
           </view>
           <text class="coupon-condition">{{ item.minAmount > 0 ? `满${formatPrice(item.minAmount)}可用` : '无门槛' }}</text>
         </view>
         <view class="coupon-right">
           <text class="coupon-name">{{ item.name }}</text>
-          <text class="coupon-time">{{ item.startTime }} - {{ item.endTime }}</text>
+          <text class="coupon-time">{{ formatDate(item.startTime, 'YYYY-MM-DD') }} - {{ formatDate(item.endTime, 'YYYY-MM-DD') }}</text>
           <text v-if="item.status === 2" class="coupon-status used">已使用</text>
-          <text v-if="item.status === 3" class="coupon-status expired">已过期</text>
-          <view v-if="item.status === 1" class="coupon-use-btn" @tap="goUse">
+          <text v-else-if="item.status === 3" class="coupon-status expired">已过期</text>
+          <text v-else-if="item.status === 4" class="coupon-status locked">待付款订单使用中</text>
+          <view v-else-if="item.status === 1" class="coupon-use-btn" @tap="goUse">
             <text class="use-text">去使用</text>
           </view>
         </view>
@@ -45,12 +50,13 @@ import { ref, onMounted } from 'vue'
 import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { getMyCoupons, type MyCouponItem } from '@/api/coupon'
 import { useUserStore } from '@/stores/user'
-import { formatPrice, formatCouponValue } from '@/utils/format'
+import { formatDate, formatPrice, formatCouponValue } from '@/utils/format'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
 const tabs = [
   { label: '可用', value: 1 },
+  { label: '使用中', value: 4 },
   { label: '已使用', value: 2 },
   { label: '已过期', value: 3 }
 ]
@@ -136,6 +142,10 @@ onMounted(() => {
   padding: $spacing-md $spacing-md $spacing-sm;
 }
 
+.tab-bar {
+  display: flex;
+}
+
 .tab-item {
   flex: 1;
   position: relative;
@@ -166,8 +176,8 @@ onMounted(() => {
   border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
 
-  &.used, &.expired {
-    opacity: 0.6;
+  &.used, &.expired, &.locked {
+    opacity: 0.68;
   }
 }
 
@@ -185,10 +195,6 @@ onMounted(() => {
   font-weight: 700;
   display: flex;
   align-items: baseline;
-}
-
-.value-symbol {
-  font-size: $font-sm;
 }
 
 .value-num {
@@ -230,6 +236,7 @@ onMounted(() => {
 
   &.used { background: $bg-gray; color: $text-hint; }
   &.expired { background: $danger-soft; color: $danger-color; }
+  &.locked { background: $warning-soft; color: $warning-color; }
 }
 
 .coupon-use-btn {
