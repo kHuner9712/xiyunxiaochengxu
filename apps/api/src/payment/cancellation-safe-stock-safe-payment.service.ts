@@ -5,7 +5,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { BusinessEventService } from '../common/business-event.service';
-import { REFUND_STATUS, WECHAT_REFUND_STATUS } from '../common/constants';
+import { PAYMENT_STATUS, REFUND_STATUS, WECHAT_REFUND_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
@@ -56,7 +56,21 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   }
 
   override async createPayment(orderId: string, userId: string) {
-    return this.withPaymentCancelLock(orderId, async () => super.createPayment(orderId, userId));
+    return this.withPaymentCancelLock(orderId, async () => {
+      const terminalPayment = await this.cancellationPrisma.orderPayment.findFirst({
+        where: {
+          orderId: BigInt(orderId),
+          status: PAYMENT_STATUS.FAILED,
+        },
+        select: { id: true },
+      });
+      if (terminalPayment) {
+        throw new BadRequestException(
+          '该微信支付单已关闭，订单正在安全关单，请刷新订单状态后再操作',
+        );
+      }
+      return super.createPayment(orderId, userId);
+    });
   }
 
   /**
