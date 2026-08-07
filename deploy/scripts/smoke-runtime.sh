@@ -84,13 +84,20 @@ api_health="$(curl --fail --silent --show-error "http://127.0.0.1:${API_HOST_POR
 echo "$api_health" | grep -q '"status":"ok"' || fail "API health response is not ok: $api_health"
 echo "$api_health" | grep -q '"database":"ok"' || fail "API health does not report database=ok: $api_health"
 echo "$api_health" | grep -q '"redis":"ok"' || fail "API health does not report redis=ok: $api_health"
-pass 'loopback API health, database and Redis checks pass'
+api_build_sha="$(printf '%s' "$api_health" | sed -n 's/.*"buildSha":"\([^"]*\)".*/\1/p')"
+[[ "$api_build_sha" =~ ^[0-9a-fA-F]{7,40}$ ]] || fail "API health buildSha is missing or invalid: ${api_build_sha:-empty}"
+if [ -n "${BUILD_SHA:-}" ]; then
+  [ "$api_build_sha" = "$BUILD_SHA" ] || fail "API runtime build SHA mismatch: expected=$BUILD_SHA actual=$api_build_sha"
+fi
+pass "loopback API health, database, Redis and build identity checks pass ($api_build_sha)"
 
 nginx_api_health="$(curl --fail --silent --show-error --insecure \
   --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/api/health")"
 echo "$nginx_api_health" | grep -q '"status":"ok"' || fail "Nginx API proxy health is not ok: $nginx_api_health"
-pass 'HTTPS API virtual host proxies to the API container'
+nginx_build_sha="$(printf '%s' "$nginx_api_health" | sed -n 's/.*"buildSha":"\([^"]*\)".*/\1/p')"
+[ "$nginx_build_sha" = "$api_build_sha" ] || fail "Nginx API build SHA mismatch: loopback=$api_build_sha nginx=$nginx_build_sha"
+pass 'HTTPS API virtual host proxies to the same API build'
 
 admin_html="$(curl --fail --silent --show-error --insecure \
   --resolve "${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
@@ -123,7 +130,8 @@ served_hash="$(curl --fail --silent --show-error --insecure \
   "https://${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}/.build-hash" | tr -d '\r\n')"
 [ -n "$image_hash" ] || fail 'API image does not contain /app/admin-dist/.build-hash'
 [ "$image_hash" = "$served_hash" ] || fail "admin build hash mismatch: image=$image_hash served=$served_hash"
+[ "$image_hash" = "$api_build_sha" ] || fail "API/admin build identity mismatch: api=$api_build_sha admin=$image_hash"
 [[ "$served_hash" != unknown* ]] || fail "admin build hash is not deterministic: $served_hash"
-pass "admin static volume matches image build $served_hash"
+pass "API and admin static volume match image build $served_hash"
 
 printf 'RUNTIME SMOKE PASS (%d checks)\n' "$PASS_COUNT"
