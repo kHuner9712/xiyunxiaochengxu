@@ -31,23 +31,26 @@
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="100" />
         <el-table-column prop="name" label="优惠券名称" min-width="150" />
         <el-table-column label="类型" width="100">
           <template #default="{ row }">{{ formatCouponType(row.type) }}</template>
         </el-table-column>
         <el-table-column label="面额/折扣" width="120">
           <template #default="{ row }">
-            <span v-if="row.type === 2">{{ (row.discount * 100).toFixed(0) }}折</span>
-            <span v-else>¥{{ formatPrice(row.amount) }}</span>
+            <span v-if="row.type === 2">{{ (Number(row.value || 0) / 10).toFixed(1) }}折</span>
+            <span v-else>¥{{ formatPrice(row.value || 0) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="使用门槛" width="120">
           <template #default="{ row }">{{ row.minAmount ? '满¥' + formatPrice(row.minAmount) : '无门槛' }}</template>
         </el-table-column>
-        <el-table-column prop="totalCount" label="发行量" width="80" />
+        <el-table-column prop="totalCount" label="发行量" width="80">
+          <template #default="{ row }">{{ row.totalCount === 0 ? '不限' : row.totalCount }}</template>
+        </el-table-column>
+        <el-table-column prop="receivedCount" label="已领取" width="80" />
         <el-table-column prop="usedCount" label="已使用" width="80" />
-        <el-table-column label="有效期" min-width="200">
+        <el-table-column label="有效期" min-width="250">
           <template #default="{ row }">{{ formatDate(row.startTime) }} ~ {{ formatDate(row.endTime) }}</template>
         </el-table-column>
         <el-table-column label="状态" width="80">
@@ -127,29 +130,35 @@ function resetSearch() {
 }
 
 async function handleToggleStatus(row: any) {
-  const actionText = row.status === 1 ? '禁用' : '启用'
+  const nextStatus = row.status === 1 ? 0 : 1
+  const actionText = nextStatus === 1 ? '启用' : '禁用'
   try {
     await ElMessageBox.confirm(`确定${actionText}该优惠券吗？`, '提示', { type: 'warning' })
-  } catch {
-    return
-  }
-
-  try {
-    await couponApi.update({ id: row.id, status: row.status === 1 ? 0 : 1 })
+    await couponApi.update(String(row.id), { status: nextStatus })
     ElMessage.success('操作成功')
-    fetchList()
+    await fetchList()
   } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return
     ElMessage.error(e?.message || '操作失败')
   }
 }
 
 async function handleDelete(row: any) {
   try {
-    await ElMessageBox.confirm('确定删除该优惠券吗？', '提示', { type: 'warning' })
-    await couponApi.delete(row.id)
-    ElMessage.success('删除成功')
-    fetchList()
-  } catch {}
+    await ElMessageBox.confirm(
+      Number(row.receivedCount || 0) > 0
+        ? '该优惠券已有用户领取。删除将停止继续发放，但会保留用户已领取权益，是否继续？'
+        : '确定删除该优惠券吗？',
+      '提示',
+      { type: 'warning' },
+    )
+    await couponApi.delete(String(row.id))
+    ElMessage.success(Number(row.receivedCount || 0) > 0 ? '已停止发放并保留已领取权益' : '删除成功')
+    await fetchList()
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e?.message || '删除失败')
+  }
 }
 
 fetchList()
