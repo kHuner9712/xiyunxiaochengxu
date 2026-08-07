@@ -1,6 +1,6 @@
 import { Controller, Get, Res, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { RedisService } from '../common/redis/redis.service';
+import { RedisService } from '../common/redis/redis.module';
 import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { Response } from 'express';
@@ -19,6 +19,7 @@ export class HealthController {
     const result: any = {
       status: 'ok',
       timestamp: new Date().toISOString(),
+      buildSha: process.env.BUILD_SHA || 'unknown',
       services: {} as Record<string, string>,
     };
 
