@@ -96,14 +96,23 @@ describe('production operation closure contracts', () => {
 
   it('makes production deployment identity and restored-backup migration verification mandatory', () => {
     const deploy = read('deploy/scripts/deploy-production.sh');
+    const smoke = read('deploy/scripts/smoke-runtime.sh');
     const compose = read('deploy/docker-compose.yml');
 
     expect(deploy).toContain("CURRENT_BRANCH=\"$(git branch --show-current)\"");
     expect(deploy).toContain("[ \"$CURRENT_BRANCH\" = 'main' ]");
     expect(deploy).toContain('EXPECTED_DEPLOY_SHA');
     expect(deploy).toContain('git fetch --quiet origin main');
+    expect(deploy).toContain('FULL_SHA="$(git rev-parse HEAD)"');
+    expect(deploy).toContain('SHORT_SHA="$(git rev-parse --short HEAD)"');
+    expect(deploy).toContain('BUILD_SHA="$FULL_SHA"');
+    expect(deploy).toContain('mysql-before-${SHORT_SHA}-${DEPLOY_TIME}.sql.gz');
+    expect(deploy).toContain('rollback-${SHORT_SHA}-${DEPLOY_TIME}');
     expect(deploy).toContain('production backup restored into disposable migration clone');
     expect(deploy).toContain('npx prisma migrate deploy');
+    expect(smoke).toContain('^[0-9a-fA-F]{40}$');
+    expect(smoke).toContain('API runtime build SHA mismatch');
+    expect(smoke).toContain('API/admin build identity mismatch');
     expect(compose).toContain('${DATABASE_URL:?DATABASE_URL required}');
   });
 });
