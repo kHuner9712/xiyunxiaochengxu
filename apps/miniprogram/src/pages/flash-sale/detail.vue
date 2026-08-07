@@ -65,7 +65,7 @@ import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
 import { useUserStore } from '@/stores/user'
 import { getPromotionSourceForOrder } from '@/utils/share'
-import { resolvePromotionDeliveryAddressId } from '@/utils/promotion-address'
+import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
 import { createPayment, wxPay } from '@/api/payment'
 import Loading from '@/components/Loading.vue'
 
@@ -149,15 +149,14 @@ async function handleBuy() {
 
   submitting.value = true
   try {
-    const addressId = await resolvePromotionDeliveryAddressId('秒杀')
-    if (!addressId) return
+    const fulfillment = await resolvePromotionFulfillment(activity.value.productId, '秒杀')
+    if (!fulfillment) return
 
     const promo = getPromotionSourceForOrder()
     const result = await flashSaleApi.buy({
       activityId: activity.value.id,
       quantity: 1,
-      addressId,
-      fulfillmentType: 'delivery',
+      ...fulfillment,
       sourceType: promo.sourceType,
       sourceCode: promo.sourceCode,
       referrerUserId: promo.referrerUserId,
