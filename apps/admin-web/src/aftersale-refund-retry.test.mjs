@@ -8,6 +8,7 @@ const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const detail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/aftersale-detail.vue'), 'utf8')
 const refundApi = readFileSync(resolve(root, 'apps/admin-web/src/api/refund.ts'), 'utf8')
 const service = readFileSync(resolve(root, 'apps/api/src/aftersale/aftersale.service.ts'), 'utf8')
+const paymentConstants = readFileSync(resolve(root, 'apps/api/src/common/constants/payment.ts'), 'utf8')
 const refundMethod = service.slice(service.indexOf('  async refund('), service.indexOf('  private serializeAftersale('))
 
 test('refund retry and sync eligibility come from backend status rules', () => {
@@ -20,10 +21,11 @@ test('refund retry and sync eligibility come from backend status rules', () => {
   assert.doesNotMatch(detail, /detail\.value\.latestRefundStatus === 'failed'/)
   assert.doesNotMatch(detail, /\['refund_failed', 'sync_refund_failed'\]/)
 
+  assert.match(paymentConstants, /RETRYING: 'retrying'/)
   assert.match(service, /latestRefundStatus: latestRefund\?\.status \|\| null/)
   assert.match(service, /refundRetryable: !!latestRefund && retryableStatuses\.includes\(latestRefund\.status\)/)
   assert.match(service, /refundSyncRequired: !!latestRefund && syncRequiredStatuses\.includes\(latestRefund\.status\)/)
-  assert.match(service, /syncRequiredStatuses = \[REFUND_STATUS\.INITIATING, REFUND_STATUS\.FAILED\]/)
+  assert.match(service, /syncRequiredStatuses = \[REFUND_STATUS\.INITIATING, REFUND_STATUS\.FAILED, REFUND_STATUS\.RETRYING\]/)
   assert.match(service, /REFUND_STATUS\.CLOSED/)
   assert.match(service, /REFUND_STATUS\.ABNORMAL/)
   assert.match(service, /latestRefundBefore\?\.status === REFUND_STATUS\.FAILED/)
@@ -33,7 +35,7 @@ test('refund retry and sync eligibility come from backend status rules', () => {
 
 test('refund initiation uses atomic state claims without session locks', () => {
   assert.match(refundMethod, /await prisma\.aftersaleOrder\.updateMany\(\{[\s\S]*status: aftersale\.status[\s\S]*status: AftersaleStatus\.pending_refund/)
-  assert.match(refundMethod, /await prisma\.orderRefund\.updateMany\(\{[\s\S]*id: latestRefundBefore\.id[\s\S]*status: latestRefundBefore\.status[\s\S]*status: REFUND_STATUS\.FAILED/)
+  assert.match(refundMethod, /await prisma\.orderRefund\.updateMany\(\{[\s\S]*id: latestRefundBefore\.id[\s\S]*status: latestRefundBefore\.status[\s\S]*status: REFUND_STATUS\.RETRYING/)
   assert.match(refundMethod, /claim\.count !== 1/)
   assert.match(refundMethod, /退款操作正在处理中，请勿重复提交/)
   assert.match(refundMethod, /await this\.paymentService\.createRefund\(/)
@@ -42,8 +44,9 @@ test('refund initiation uses atomic state claims without session locks', () => {
   assert.match(refundMethod, /REFUND_STATUS\.PENDING/)
   assert.match(refundMethod, /REFUND_STATUS\.PROCESSING/)
   assert.match(refundMethod, /data: \{ status: aftersale\.status \}/)
-  assert.match(refundMethod, /data: \{ status: originalRetryStatus \}/)
+  assert.match(refundMethod, /status: REFUND_STATUS\.RETRYING[\s\S]*data: \{ status: originalRetryStatus \}/)
   assert.match(refundMethod, /退款请求结果待核实:[\s\S]*请先同步微信退款状态/)
+  assert.doesNotMatch(refundMethod, /data: \{ status: REFUND_STATUS\.FAILED \}[\s\S]*已原子占位重试/)
 
   assert.doesNotMatch(refundMethod, /GET_LOCK/)
   assert.doesNotMatch(refundMethod, /RELEASE_LOCK/)
