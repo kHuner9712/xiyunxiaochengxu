@@ -188,6 +188,24 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
     return { total: tasks.length, resolved, failed, skipped };
   }
 
+  override async resolveCompensationTask(
+    id: string,
+    handledBy: string,
+    resolution: string,
+    status: 'resolved' | 'ignored',
+  ) {
+    const task = await this.recoveryPrisma.paymentCompensationTask.findFirst({
+      where: { id: BigInt(id) },
+      select: { reason: true },
+    });
+    if (task?.reason === REFUND_SIDE_EFFECT_REASON) {
+      throw new BadRequestException(
+        '退款成功后的账务副作用补偿任务不能人工忽略或标记完成，必须由自动补偿实际执行成功后关闭',
+      );
+    }
+    return super.resolveCompensationTask(id, handledBy, resolution, status);
+  }
+
   private async ensureRefundSideEffectTask(refund: any) {
     const order = await this.recoveryPrisma.order.findUnique({
       where: { id: refund.orderId },
