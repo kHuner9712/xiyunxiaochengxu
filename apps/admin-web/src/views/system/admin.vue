@@ -24,7 +24,7 @@
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" width="100" />
         <el-table-column prop="username" label="用户名" width="120" />
         <el-table-column prop="realName" label="真实姓名" width="120" />
         <el-table-column prop="phone" label="手机号" width="130" />
@@ -39,7 +39,7 @@
           </template>
         </el-table-column>
         <el-table-column label="最后登录" width="180">
-          <template #default="{ row }">{{ formatDate(row.lastLoginTime) }}</template>
+          <template #default="{ row }">{{ row.lastLoginAt ? formatDate(row.lastLoginAt) : '-' }}</template>
         </el-table-column>
         <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
@@ -69,20 +69,20 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" placeholder="请输入用户名" :disabled="!!form.id" />
+          <el-input v-model="form.username" placeholder="请输入用户名" :disabled="!!form.id" maxlength="50" />
         </el-form-item>
         <el-form-item v-if="!form.id" label="密码" prop="password">
-          <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password />
+          <el-input v-model="form.password" type="password" placeholder="至少8位" show-password />
         </el-form-item>
         <el-form-item label="真实姓名" prop="realName">
-          <el-input v-model="form.realName" placeholder="请输入真实姓名" />
+          <el-input v-model="form.realName" placeholder="请输入真实姓名" maxlength="50" />
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
-          <el-input v-model="form.phone" placeholder="请输入手机号" />
+          <el-input v-model="form.phone" placeholder="请输入手机号" maxlength="20" />
         </el-form-item>
         <el-form-item label="角色" prop="roleIds">
-          <el-select v-model="form.roleIds" multiple placeholder="请选择角色">
-            <el-option v-for="role in roleList" :key="role.id" :label="role.name" :value="role.id" />
+          <el-select v-model="form.roleIds" multiple placeholder="请选择角色" style="width: 100%">
+            <el-option v-for="role in roleList" :key="role.id" :label="role.name" :value="String(role.id)" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -103,7 +103,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { adminApi } from '@/api/admin'
+import { adminApi, type AdminPayload } from '@/api/admin'
 import { roleApi } from '@/api/role'
 import { formatDate } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
@@ -119,18 +119,21 @@ const searchForm = reactive({ username: '', status: undefined as number | undefi
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: '',
   username: '',
   password: '',
   realName: '',
   phone: '',
-  roleIds: [] as number[],
-  status: 1,
+  roleIds: [] as string[],
+  status: 1 as 0 | 1,
 })
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 8, message: '密码至少8位', trigger: 'blur' },
+  ],
   realName: [{ required: true, message: '请输入真实姓名', trigger: 'blur' }],
   roleIds: [{ required: true, message: '请选择角色', trigger: 'change', type: 'array' }],
 }
@@ -143,16 +146,20 @@ async function fetchList() {
     const res = await adminApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
-  } catch {} finally {
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取管理员列表失败')
+  } finally {
     loading.value = false
   }
 }
 
 async function fetchRoleList() {
   try {
-    const res = await roleApi.getList({ page: 1, pageSize: 100 })
+    const res = await roleApi.getList()
     roleList.value = Array.isArray(res.data) ? res.data : ((res.data as any)?.list || [])
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取角色列表失败')
+  }
 }
 
 function handleSearch() {
@@ -167,63 +174,94 @@ function resetSearch() {
 }
 
 function handleAdd() {
-  form.id = undefined
-  form.username = ''
-  form.password = ''
-  form.realName = ''
-  form.phone = ''
-  form.roleIds = []
-  form.status = 1
+  Object.assign(form, {
+    id: '', username: '', password: '', realName: '', phone: '', roleIds: [], status: 1,
+  })
   dialogVisible.value = true
 }
 
 function handleEdit(row: any) {
-  form.id = row.id
-  form.username = row.username
-  form.password = ''
-  form.realName = row.realName
-  form.phone = row.phone || ''
-  form.roleIds = row.roles?.map((r: any) => r.id) || []
-  form.status = row.status
+  Object.assign(form, {
+    id: String(row.id),
+    username: row.username || '',
+    password: '',
+    realName: row.realName || '',
+    phone: row.phone || '',
+    roleIds: Array.isArray(row.roles) ? row.roles.map((role: any) => String(role.id)) : [],
+    status: row.status === 0 ? 0 : 1,
+  })
   dialogVisible.value = true
 }
 
-async function handleResetPassword(_row: any) {
-  ElMessage.info('请联系超级管理员重置密码')
+async function handleResetPassword(row: any) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `请输入管理员“${row.username}”的新密码`,
+      '重置密码',
+      {
+        inputType: 'password',
+        inputPattern: /^.{8,100}$/,
+        inputErrorMessage: '密码长度必须为8-100位',
+        confirmButtonText: '确认重置',
+        cancelButtonText: '取消',
+      },
+    )
+    await adminApi.update(String(row.id), { password: value })
+    ElMessage.success('密码已重置')
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e?.message || '重置密码失败')
+  }
 }
 
 async function handleToggleStatus(row: any) {
   try {
-    await adminApi.updateStatus(row.id, row.status === 1 ? 0 : 1)
+    const nextStatus: 0 | 1 = row.status === 1 ? 0 : 1
+    await adminApi.updateStatus(String(row.id), nextStatus)
     ElMessage.success('操作成功')
-    fetchList()
-  } catch {}
+    await fetchList()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '操作失败')
+  }
 }
 
 async function handleDelete(row: any) {
   try {
-    await ElMessageBox.confirm('确定删除该管理员吗？', '提示', { type: 'warning' })
-    await adminApi.delete(row.id)
+    await ElMessageBox.confirm('确定删除该管理员吗？删除后其登录令牌将立即失效。', '提示', { type: 'warning' })
+    await adminApi.delete(String(row.id))
     ElMessage.success('删除成功')
-    fetchList()
-  } catch {}
+    await fetchList()
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e?.message || '删除失败')
+  }
 }
 
 async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
+  const payload: AdminPayload = {
+    realName: form.realName.trim(),
+    phone: form.phone.trim(),
+    roleIds: form.roleIds.map(String),
+    status: form.status,
+  }
+  if (!form.id) {
+    payload.username = form.username.trim()
+    payload.password = form.password
+  }
+
   submitting.value = true
   try {
-    if (form.id) {
-      await adminApi.update({ ...form })
-    } else {
-      await adminApi.create({ ...form })
-    }
+    if (form.id) await adminApi.update(form.id, payload)
+    else await adminApi.create(payload)
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    fetchList()
-  } catch {} finally {
+    await fetchList()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
     submitting.value = false
   }
 }
