@@ -16,6 +16,12 @@ function createOrderService() {
   };
 }
 
+function createPaymentService() {
+  return {
+    createGroupBuyFailureRefund: jest.fn(),
+  };
+}
+
 function createPaymentReconcileService() {
   return {
     confirmTimeoutOrdersBeforeClose: jest.fn(),
@@ -30,31 +36,45 @@ function createFlashSaleService() {
   };
 }
 
+function createGroupBuyService() {
+  return {
+    markExpiredGroups: jest.fn(),
+  };
+}
+
 describe('ScheduleService', () => {
   let service: ScheduleService;
   let redisService: ReturnType<typeof createRedisService>;
   let orderService: ReturnType<typeof createOrderService>;
+  let paymentService: ReturnType<typeof createPaymentService>;
   let paymentReconcileService: ReturnType<typeof createPaymentReconcileService>;
   let flashSaleService: ReturnType<typeof createFlashSaleService>;
+  let groupBuyService: ReturnType<typeof createGroupBuyService>;
 
   beforeEach(() => {
     redisService = createRedisService();
     orderService = createOrderService();
+    paymentService = createPaymentService();
     paymentReconcileService = createPaymentReconcileService();
     flashSaleService = createFlashSaleService();
+    groupBuyService = createGroupBuyService();
     redisService.setNX.mockImplementation(async () => true);
     redisService.releaseLockWithLua.mockImplementation(async () => true);
     orderService.closeTimeoutOrders.mockImplementation(async () => ({ closedCount: 0 }));
+    paymentService.createGroupBuyFailureRefund.mockImplementation(async () => ({ status: 'pending' }));
     paymentReconcileService.confirmTimeoutOrdersBeforeClose.mockImplementation(async () => ({ total: 0, fixed: 0, delayed: 0, closable: 0, failed: 0 }));
     paymentReconcileService.reconcilePendingPayments.mockImplementation(async () => ({ total: 0, fixed: 0, skipped: 0, failed: 0 }));
     paymentReconcileService.reconcilePendingRefunds.mockImplementation(async () => ({ total: 0, fixed: 0, skipped: 0, failed: 0 }));
     flashSaleService.releaseExpiredLocks.mockImplementation(async () => ({ released: 0 }));
+    groupBuyService.markExpiredGroups.mockImplementation(async () => ({ affected: 0, refundOrderIds: [] }));
 
     service = new ScheduleService(
       redisService as any,
       orderService as any,
+      paymentService as any,
       paymentReconcileService as any,
       flashSaleService as any,
+      groupBuyService as any,
     );
     jest.spyOn((service as any).logger, 'log').mockImplementation(() => {});
     jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
@@ -84,6 +104,25 @@ describe('ScheduleService', () => {
     expect(flashSaleService.releaseExpiredLocks).toHaveBeenCalled();
     expect(redisService.releaseLockWithLua).toHaveBeenCalledWith(
       'schedule:release_expired_flash_sale_locks',
+      expect.any(String),
+    );
+  });
+
+  it('拼团过期后自动对已支付订单发起退款', async () => {
+    groupBuyService.markExpiredGroups.mockImplementation(async () => ({
+      affected: 1,
+      refundOrderIds: ['123'],
+    }));
+
+    await service.handleExpiredGroupBuys();
+
+    expect(groupBuyService.markExpiredGroups).toHaveBeenCalled();
+    expect(paymentService.createGroupBuyFailureRefund).toHaveBeenCalledWith(
+      '123',
+      '拼团失败自动退款',
+    );
+    expect(redisService.releaseLockWithLua).toHaveBeenCalledWith(
+      'schedule:expire_group_buys',
       expect.any(String),
     );
   });
