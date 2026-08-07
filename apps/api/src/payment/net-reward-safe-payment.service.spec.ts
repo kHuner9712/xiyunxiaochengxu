@@ -1,6 +1,10 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { CancellationSafeStockSafePaymentService } from './cancellation-safe-stock-safe-payment.service';
 import { NetRewardSafePaymentService } from './net-reward-safe-payment.service';
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 function createService(params?: {
   payAmount?: number;
@@ -17,7 +21,7 @@ function createService(params?: {
   const availablePoints = params?.availablePoints ?? 100;
   const existingAdjustment = params?.existingAdjustment ?? false;
 
-  const pointsFindFirst = jest.fn()
+  const pointsFindFirst = (jest.fn() as any)
     .mockResolvedValueOnce(existingAdjustment ? { id: 999n } : null)
     .mockResolvedValueOnce(completionReward === null ? null : { points: completionReward });
   const pointsFindMany = (jest.fn() as any).mockResolvedValue(
