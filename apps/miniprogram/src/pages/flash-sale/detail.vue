@@ -63,6 +63,7 @@
 import { ref, computed } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
+import { getAddressList } from '@/api/address'
 import { useUserStore } from '@/stores/user'
 import { getPromotionSourceForOrder } from '@/utils/share'
 import { createPayment, wxPay } from '@/api/payment'
@@ -135,6 +136,28 @@ async function loadDetail(id: string) {
   }
 }
 
+async function resolveDeliveryAddressId(): Promise<string | null> {
+  try {
+    const list = await getAddressList()
+    const selected = list.find(item => item.isDefault) || list[0]
+    if (selected?.id) return String(selected.id)
+  } catch (error) {
+    console.error('[baby-mall] flash sale load address failed:', error)
+    uni.showToast({ title: '加载收货地址失败', icon: 'none' })
+    return null
+  }
+
+  uni.showModal({
+    title: '请先添加收货地址',
+    content: '秒杀下单需要收货地址，添加后返回本页即可继续抢购。',
+    confirmText: '去添加',
+    success: ({ confirm }) => {
+      if (confirm) uni.navigateTo({ url: '/pages/address/list' })
+    },
+  })
+  return null
+}
+
 async function handleBuy() {
   if (!activity.value) return
   if (!canBuy.value) return
@@ -145,10 +168,14 @@ async function handleBuy() {
   }
   submitting.value = true
   try {
+    const addressId = await resolveDeliveryAddressId()
+    if (!addressId) return
+
     const promo = getPromotionSourceForOrder()
     const result = await flashSaleApi.buy({
-      activityId: Number(activity.value.id),
+      activityId: activity.value.id,
       quantity: 1,
+      addressId,
       fulfillmentType: 'delivery',
       sourceType: promo.sourceType,
       sourceCode: promo.sourceCode,
@@ -191,7 +218,7 @@ async function payOrder(orderId: string) {
 
 onLoad((options) => {
   if (options?.id) {
-    loadDetail(options.id)
+    loadDetail(String(options.id))
   }
 })
 
