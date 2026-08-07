@@ -37,10 +37,6 @@ export class ProductionOrderService extends TransactionalOrderService {
       flashSaleService,
     );
 
-    // The legacy order state machine dispatches coupon math through this method. Keep the single
-    // transactional checkout implementation, but make the admin-visible type-3 no-threshold
-    // coupon economically real instead of silently calculating a zero discount. Fail at startup
-    // if the inherited calculator ever disappears, rather than allowing an unchecked call path.
     const runtime = this as unknown as {
       calculateCouponAmount?: (coupon: any, orderAmount: number) => number;
     };
@@ -182,12 +178,17 @@ export class ProductionOrderService extends TransactionalOrderService {
     skuScopes: Array<{ productId: bigint; product: { categoryId: bigint } }>,
   ) {
     const id = parsePositiveBigIntId(userCouponId, '用户优惠券');
+    const now = new Date();
     const userCoupon = await this.productionPrisma.userCoupon.findFirst({
       where: {
         id,
         userId,
         status: 1,
-        expireAt: { gte: new Date() },
+        OR: [{ expireAt: null }, { expireAt: { gte: now } }],
+        coupon: {
+          startTime: { lte: now },
+          endTime: { gte: now },
+        },
       },
       include: { coupon: true },
     });
@@ -219,13 +220,16 @@ export class ProductionOrderService extends TransactionalOrderService {
 
   private parseCouponApplicableIds(raw: unknown): string[] {
     if (raw === null || raw === undefined || raw === '') return [];
-    let parsed = raw;
+    let parsed: unknown = raw;
     if (typeof raw === 'string') {
       try {
         parsed = JSON.parse(raw);
       } catch {
         return [];
       }
+    }
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      parsed = (parsed as Record<string, unknown>).ids ?? [];
     }
     if (!Array.isArray(parsed)) return [];
     const result: string[] = [];
