@@ -28,12 +28,12 @@ export class CreateCouponDto {
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
-  @MaxLength(100)
+  @MaxLength(50)
   name!: string;
 
   @Type(() => Number)
   @IsInt()
-  @IsIn([1, 2, 3, 4])
+  @IsIn([1, 2, 3])
   type!: number;
 
   @Type(() => Number)
@@ -52,12 +52,6 @@ export class CreateCouponDto {
   @IsInt()
   @Min(0)
   discountLimit?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  maxDiscount?: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -102,6 +96,12 @@ export class CreateCouponDto {
   applicableIds?: string[];
 
   @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -110,12 +110,12 @@ export class CreateCouponDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(0)
-  memberLevel?: number;
+  @IsIn([0, 1])
+  isNewUser?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @IsIn([0, 1])
-  isNewUser?: number;
+  status?: number;
 }
