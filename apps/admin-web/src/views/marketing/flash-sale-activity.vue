@@ -28,7 +28,7 @@
         <el-table-column prop="limitPerUser" label="限购" width="70" />
         <el-table-column prop="lockMinutes" label="锁库存(分)" width="100" />
         <el-table-column label="活动时间" width="320">
-          <template #default="{ row }">{{ formatDateShort(row.startTime) }} ~ {{ formatDateShort(row.endTime) }}</template>
+          <template #default="{ row }">{{ formatActivityDate(row.startTime) }} ~ {{ formatActivityDate(row.endTime) }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -135,7 +135,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { flashSaleApi } from '@/api/flash-sale'
 import { productApi } from '@/api/product'
-import { formatPrice, formatDateShort } from '@/utils/format'
+import { formatPrice } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
 const POSITIVE_ID = /^[1-9]\d*$/
@@ -273,8 +273,8 @@ async function openEdit(row: any) {
     stockLimit: row.stockLimit,
     limitPerUser: row.limitPerUser,
     lockMinutes: row.lockMinutes,
-    startTime: normalizeDateTime(row.startTime),
-    endTime: normalizeDateTime(row.endTime),
+    startTime: toLocalPickerDateTime(row.startTime),
+    endTime: toLocalPickerDateTime(row.endTime),
     status: row.status,
     sortOrder: row.sortOrder,
     coverImage: row.coverImage || '',
@@ -284,9 +284,29 @@ async function openEdit(row: any) {
   dialogVisible.value = true
 }
 
-function normalizeDateTime(value: unknown): string {
-  if (typeof value !== 'string' || !value) return ''
-  return value.replace('T', ' ').slice(0, 19)
+function padDatePart(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+function toLocalPickerDateTime(value: unknown): string {
+  if (!value) return ''
+  const date = new Date(String(value))
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`
+}
+
+function parsePickerDateTime(value: unknown): Date | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const date = new Date(value.trim().replace(' ', 'T'))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function toIsoDateTime(value: unknown): string | null {
+  return parsePickerDateTime(value)?.toISOString() ?? null
+}
+
+function formatActivityDate(value: unknown): string {
+  return toLocalPickerDateTime(value) || '-'
 }
 
 async function handleSubmit() {
@@ -302,8 +322,11 @@ async function handleSubmit() {
     ElMessage.warning('请选择该商品的有效SKU')
     return
   }
-  if (!editing.startTime || !editing.endTime) { ElMessage.warning('请选择活动时间'); return }
-  if (new Date(editing.startTime).getTime() >= new Date(editing.endTime).getTime()) {
+
+  const startDate = parsePickerDateTime(editing.startTime)
+  const endDate = parsePickerDateTime(editing.endTime)
+  if (!startDate || !endDate) { ElMessage.warning('请选择有效的活动时间'); return }
+  if (startDate.getTime() >= endDate.getTime()) {
     ElMessage.warning('活动结束时间必须晚于开始时间')
     return
   }
@@ -336,6 +359,8 @@ async function handleSubmit() {
     limitPerUser: Number(editing.limitPerUser),
     lockMinutes: Number(editing.lockMinutes),
     sortOrder: Number(editing.sortOrder),
+    startTime: toIsoDateTime(editing.startTime),
+    endTime: toIsoDateTime(editing.endTime),
   }
   if (payload.originalPrice === undefined) delete payload.originalPrice
   try {
