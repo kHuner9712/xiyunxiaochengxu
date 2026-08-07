@@ -44,12 +44,12 @@
             <text class="remain">剩 {{ remainTime(g.expiresAt) }}</text>
           </view>
         </view>
-        <button class="join-btn" size="mini" @tap="handleJoin(g.id)">参与拼团</button>
+        <button class="join-btn" size="mini" :disabled="submitting" @tap="handleJoin(g.id)">参与拼团</button>
       </view>
     </view>
 
     <view class="bottom-bar">
-      <button class="start-btn" @tap="handleStart">我要开团</button>
+      <button class="start-btn" :disabled="submitting" @tap="handleStart">我要开团</button>
     </view>
   </view>
 </template>
@@ -57,7 +57,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
-import { groupBuyApi, type GroupBuyActivity, type GroupBuyGroup } from '@/api/group-buy'
+import { groupBuyApi, type GroupBuyActivity, type GroupBuyGroup, type StartGroupBuyResult } from '@/api/group-buy'
 import { useUserStore } from '@/stores/user'
 import { resolvePromotionDeliveryAddressId } from '@/utils/promotion-address'
 import { createPayment, wxPay } from '@/api/payment'
@@ -106,13 +106,13 @@ async function payOrder(orderId: string) {
     uni.showToast({ title: '支付成功，等待成团', icon: 'success' })
     setTimeout(() => {
       uni.redirectTo({ url: `/pages/group-buy/group?id=${lastGroupId.value}` })
-    }, 1200)
+    }, 800)
   } catch (err: any) {
-    const msg = err?.errMsg || err?.message || ''
-    if (msg.includes('cancel')) {
+    const msg = String(err?.errMsg || err?.message || '')
+    if (msg.toLowerCase().includes('cancel')) {
       uni.showModal({
         title: '支付未完成',
-        content: '请尽快在订单列表中完成支付',
+        content: '请尽快在订单列表中完成支付，否则该参团名额不会计入成团人数。',
         showCancel: false,
         confirmText: '查看订单',
         success: () => {
@@ -121,8 +121,30 @@ async function payOrder(orderId: string) {
       })
       return
     }
-    uni.showToast({ title: '支付失败', icon: 'none' })
+    uni.showModal({
+      title: '支付未完成',
+      content: err?.message || '支付发起失败，请到订单详情稍后重试。',
+      showCancel: false,
+      confirmText: '查看订单',
+      success: () => {
+        uni.redirectTo({ url: `/pages/order/detail?id=${orderId}` })
+      },
+    })
   }
+}
+
+async function handleCheckoutResult(result: StartGroupBuyResult) {
+  lastGroupId.value = result.groupId
+  if (result.isZeroPay) {
+    uni.showToast({ title: '参团成功，等待成团', icon: 'success' })
+    setTimeout(() => {
+      uni.redirectTo({ url: `/pages/group-buy/group?id=${result.groupId}` })
+    }, 500)
+    return
+  }
+
+  uni.showToast({ title: result.role === 'leader' ? '开团成功，请支付' : '参团成功，请支付', icon: 'success' })
+  setTimeout(() => payOrder(result.orderId), 300)
 }
 
 async function handleStart() {
@@ -148,9 +170,7 @@ async function handleStart() {
       addressId,
       fulfillmentType: 'delivery',
     })
-    lastGroupId.value = result.groupId
-    uni.showToast({ title: '开团成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 500)
+    await handleCheckoutResult(result)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '开团失败', icon: 'none' })
   } finally {
@@ -176,9 +196,7 @@ async function handleJoin(groupId: string) {
       addressId,
       fulfillmentType: 'delivery',
     })
-    lastGroupId.value = result.groupId
-    uni.showToast({ title: '参团成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 500)
+    await handleCheckoutResult(result)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '参团失败', icon: 'none' })
   } finally {
