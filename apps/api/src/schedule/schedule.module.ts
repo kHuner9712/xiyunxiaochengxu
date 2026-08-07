@@ -9,6 +9,7 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
 import { GroupBuyModule } from '../group-buy/group-buy.module';
 import { MerchantSettlementModule } from '../merchant-settlement/merchant-settlement.module';
 import { ShareModule } from '../share/share.module';
+import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ShareModule } from '../share/share.module';
     GroupBuyModule,
     MerchantSettlementModule,
     ShareModule,
+    BenefitPackageModule,
     forwardRef(() => PaymentModule),
   ],
   providers: [ScheduleService],
