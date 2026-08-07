@@ -1,25 +1,41 @@
 import request from '@/utils/request'
 
+export interface ActivityProductPayload {
+  productId: string
+  skuId?: string
+  activityPrice?: number
+  activityStock?: number
+  limitPerUser?: number
+}
+
+export interface ActivityPayload {
+  name?: string
+  type?: '1' | '2' | '3' | '4' | '5'
+  description?: string
+  rules?: Record<string, unknown>
+  bannerImage?: string
+  startTime?: string
+  endTime?: string
+  products?: ActivityProductPayload[]
+}
+
 export const activityApi = {
-  getList(params: { page: number; pageSize: number; name?: string; status?: number }) {
+  getList(params: { page: number; pageSize: number; name?: string; status?: number; type?: string }) {
     return request.get('/admin/activity/list', { params })
   },
-  getDetail(id: number) {
-    return request.get(`/admin/activity/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/activity/${encodeURIComponent(id)}`)
   },
-  create(data: any) {
+  create(data: ActivityPayload) {
     return request.post('/admin/activity', data)
   },
-  update(idOrData: number | any, data?: any) {
-    const id = typeof idOrData === 'number' ? idOrData : idOrData.id
-    const payload = typeof idOrData === 'number' ? (data || {}) : { ...(idOrData || {}) }
-    delete payload.id
-    return request.put(`/admin/activity/${id}`, payload)
+  update(id: string, data: ActivityPayload) {
+    return request.put(`/admin/activity/${encodeURIComponent(id)}`, data)
   },
-  delete(id: number) {
-    return request.delete(`/admin/activity/${id}`)
+  delete(id: string) {
+    return request.delete(`/admin/activity/${encodeURIComponent(id)}`)
   },
-  updateStatus(id: number, status: number) {
-    return request.put(`/admin/activity/${id}/status`, { status })
+  updateStatus(id: string, status: 0 | 1 | 2) {
+    return request.put(`/admin/activity/${encodeURIComponent(id)}/status`, { status })
   },
 }
