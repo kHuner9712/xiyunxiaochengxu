@@ -73,6 +73,17 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     if (packageIds.length === 0) return { affected: 0 };
 
     await this.assertRefundable(orderId, aftersaleId);
+    if (aftersaleId) {
+      const aftersale = await this.productionPrisma.aftersaleOrder.findFirst({
+        where: { id: BigInt(aftersaleId), orderId: BigInt(orderId) },
+        select: { refundAmount: true },
+      });
+      if (!aftersale?.refundAmount) {
+        throw new BadRequestException('权益类商品退款金额未设置');
+      }
+      await this.assertRefundAmountSupported(orderId, aftersaleId, aftersale.refundAmount);
+    }
+
     const result = await this.productionPrisma.userBenefitPackage.updateMany({
       where: {
         id: { in: packageIds },
