@@ -48,7 +48,8 @@ CURRENT_BRANCH="$(git branch --show-current)"
 [ "$CURRENT_BRANCH" = 'main' ] || fail "production deployment must run from main; current branch is '${CURRENT_BRANCH:-detached}'"
 
 FULL_SHA="$(git rev-parse HEAD)"
-BUILD_SHA="$(git rev-parse --short HEAD)"
+SHORT_SHA="$(git rev-parse --short HEAD)"
+BUILD_SHA="$FULL_SHA"
 EXPECTED_DEPLOY_SHA="${EXPECTED_DEPLOY_SHA:-}"
 [[ "$EXPECTED_DEPLOY_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || fail 'EXPECTED_DEPLOY_SHA is required and must be the exact 40-character commit SHA approved for deployment'
 EXPECTED_DEPLOY_SHA="$(printf '%s' "$EXPECTED_DEPLOY_SHA" | tr 'A-F' 'a-f')"
@@ -60,14 +61,16 @@ REMOTE_MAIN_SHA="$(git rev-parse origin/main)"
 [ "$FULL_SHA" = "$REMOTE_MAIN_SHA" ] || fail "HEAD $FULL_SHA is not the current origin/main tip $REMOTE_MAIN_SHA"
 pass "release identity verified: main@$FULL_SHA"
 
+# BUILD_SHA is an externally observable deployment identity and must remain the exact commit.
+# SHORT_SHA is only for local operational resource names where the full hash is unnecessarily long.
 export BUILD_SHA
 DEPLOY_TIME="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$ROOT_DIR/deploy/backups"
-BACKUP_FILE="$BACKUP_DIR/mysql-before-${BUILD_SHA}-${DEPLOY_TIME}.sql.gz"
-ROLLBACK_TAG="baby-mall-api:rollback-${BUILD_SHA}-${DEPLOY_TIME}"
+BACKUP_FILE="$BACKUP_DIR/mysql-before-${SHORT_SHA}-${DEPLOY_TIME}.sql.gz"
+ROLLBACK_TAG="baby-mall-api:rollback-${SHORT_SHA}-${DEPLOY_TIME}"
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 
-printf 'Deploy commit: %s (%s)\n' "$BUILD_SHA" "$FULL_SHA"
+printf 'Deploy commit: %s (%s)\n' "$SHORT_SHA" "$FULL_SHA"
 "${COMPOSE[@]}" config --quiet
 pass 'docker compose configuration is valid'
 
@@ -126,8 +129,8 @@ pass "API and admin image built with BUILD_SHA=$BUILD_SHA"
 API_IMAGE_ID="$("${COMPOSE[@]}" images -q api | head -n 1)"
 [ -n "$API_IMAGE_ID" ] || fail 'cannot resolve newly built API image for migration clone verification'
 
-DRY_RUN_NETWORK="baby-mall-migrate-check-${BUILD_SHA}-${DEPLOY_TIME}"
-DRY_RUN_DB_CONTAINER="baby-mall-migrate-db-${BUILD_SHA}-${DEPLOY_TIME}"
+DRY_RUN_NETWORK="baby-mall-migrate-check-${SHORT_SHA}-${DEPLOY_TIME}"
+DRY_RUN_DB_CONTAINER="baby-mall-migrate-db-${SHORT_SHA}-${DEPLOY_TIME}"
 DRY_RUN_DB_NAME="baby_mall_migrate_verify"
 DRY_RUN_DB_PASSWORD="verify${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DRY_RUN_DATABASE_URL="mysql://root:${DRY_RUN_DB_PASSWORD}@mysql-check:3306/${DRY_RUN_DB_NAME}"
