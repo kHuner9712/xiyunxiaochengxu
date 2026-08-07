@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
   Matches,
@@ -12,6 +13,7 @@ import {
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 const POSITIVE_ID_PATTERN = /^[1-9]\d*$/;
+const EXPLICIT_TIMEZONE_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/i;
 
 function normalizeId(value: unknown): unknown {
   if (value === undefined || value === null) return value;
@@ -56,8 +58,17 @@ export class GroupBuyActivityDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) groupExpireHours?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) stockLimit?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) limitPerUser?: number;
-  @IsString() startTime!: string;
-  @IsString() endTime!: string;
+
+  @IsString()
+  @IsISO8601({}, { message: '开始时间必须为ISO 8601时间' })
+  @Matches(EXPLICIT_TIMEZONE_PATTERN, { message: '开始时间必须包含明确时区' })
+  startTime!: string;
+
+  @IsString()
+  @IsISO8601({}, { message: '结束时间必须为ISO 8601时间' })
+  @Matches(EXPLICIT_TIMEZONE_PATTERN, { message: '结束时间必须包含明确时区' })
+  endTime!: string;
+
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1) status?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) sortOrder?: number;
   @IsOptional() @IsString() description?: string;
