@@ -2,6 +2,7 @@ import { get, post, put } from '@/utils/request'
 
 export type OrderStatus =
   | 'pending_payment'
+  | 'paid'
   | 'pending_delivery'
   | 'pending_pickup'
   | 'delivered'
@@ -11,6 +12,7 @@ export type OrderStatus =
 
 export const ORDER_STATUS_VALUES: OrderStatus[] = [
   'pending_payment',
+  'paid',
   'pending_delivery',
   'pending_pickup',
   'delivered',
@@ -21,6 +23,7 @@ export const ORDER_STATUS_VALUES: OrderStatus[] = [
 
 const LEGACY_ORDER_STATUS_MAP: Record<string, OrderStatus> = {
   '10': 'pending_payment',
+  '15': 'paid',
   '20': 'pending_delivery',
   '25': 'pending_pickup',
   '30': 'delivered',
@@ -90,6 +93,7 @@ export function getOrderCount() {
 
 export interface OrderCount {
   unpaid: number
+  paid?: number
   unshipped: number
   pendingPickup: number
   unreceived: number
