@@ -111,6 +111,15 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
     }
 
     if (wechatStatus !== WECHAT_REFUND_STATUS.SUCCESS) {
+      // Keep ABNORMAL frozen but refresh updatedAt/rawResponse through updateMany so the
+      // scheduler's oldest-first scan rotates long-lived abnormal refunds fairly.
+      await this.cancellationPrisma.orderRefund.updateMany({
+        where: { id: refund.id, status: REFUND_STATUS.ABNORMAL },
+        data: {
+          refundId: wechatResult?.refund_id || refund.refundId,
+          rawResponse: wechatResult,
+        },
+      });
       return {
         synced: false,
         status: REFUND_STATUS.ABNORMAL,
