@@ -16,6 +16,7 @@ import {
 } from '@baby-mall/shared';
 import { PAYMENT_STATUS } from '../common/constants/payment';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 
 const DEFAULT_COVER_MARKER = '/uploads/static/default-cover.png';
 const PROMOTION_ACTIVITY_TYPES = new Set(['flash_sale', 'group_buy']);
@@ -100,11 +101,21 @@ export class PromotionCheckoutService {
       throw new BadRequestException('到店自提必须选择自提点');
     }
 
+    const addressId = fulfillmentType === 'delivery'
+      ? parsePositiveBigIntId(input.addressId!, '收货地址')
+      : null;
+    const pickupStoreId = fulfillmentType === 'pickup'
+      ? parsePositiveBigIntId(input.pickupStoreId!, '自提点')
+      : null;
+    const referrerUserId = input.referrerUserId
+      ? parsePositiveBigIntId(input.referrerUserId, '推荐人用户')
+      : null;
+
     const [address, pickupStore, sku] = await Promise.all([
       fulfillmentType === 'delivery'
         ? tx.userAddress.findFirst({
             where: {
-              id: BigInt(input.addressId!),
+              id: addressId!,
               userId: input.userId,
               deletedAt: null,
             },
@@ -112,7 +123,7 @@ export class PromotionCheckoutService {
         : null,
       fulfillmentType === 'pickup'
         ? tx.pickupStore.findFirst({
-            where: { id: BigInt(input.pickupStoreId!), status: 1, deletedAt: null },
+            where: { id: pickupStoreId!, status: 1, deletedAt: null },
           })
         : null,
       tx.productSku.findFirst({
@@ -125,8 +136,6 @@ export class PromotionCheckoutService {
     if (fulfillmentType === 'pickup' && !pickupStore) throw new NotFoundException('自提点不存在或已停用');
     if (!sku || sku.product.status !== 1) throw new NotFoundException('活动商品规格不存在或已下架');
 
-    // 商品履约方式是商品级业务约束，促销下单不能绕过。之前页面固定传 delivery，
-    // 会把 pickup-only 商品创建成无法履约的快递单；这里作为最终服务端硬门禁。
     const productFulfillmentType = sku.product.fulfillmentType || 'delivery';
     if (productFulfillmentType !== 'delivery' && productFulfillmentType !== 'pickup') {
       throw new BadRequestException('该商品的履约方式不支持拼团/秒杀活动');
@@ -188,7 +197,6 @@ export class PromotionCheckoutService {
       ? input.sourceType
       : 'direct';
     const sourceCode = input.sourceCode?.trim() || null;
-    const referrerUserId = input.referrerUserId ? BigInt(input.referrerUserId) : null;
     const pickupCode = isZeroPay && !holdUntilPromotionSuccess && fulfillmentType === 'pickup'
       ? await this.generatePickupCode(tx)
       : null;
