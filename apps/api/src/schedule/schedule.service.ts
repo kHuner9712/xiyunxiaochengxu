@@ -7,6 +7,7 @@ import { PaymentReconcileService } from '../payment/payment-reconcile.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
+import { ShareService } from '../share/share.service';
 
 @Injectable()
 export class ScheduleService {
@@ -20,6 +21,7 @@ export class ScheduleService {
     private readonly flashSaleService: FlashSaleService,
     private readonly groupBuyService: GroupBuyService,
     private readonly merchantSettlementService: MerchantSettlementService,
+    private readonly shareService: ShareService,
   ) {}
 
   private async acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
@@ -36,9 +38,7 @@ export class ScheduleService {
   async handleCloseTimeoutOrders() {
     const lockKey = 'schedule:close_timeout_orders';
     const lockValue = await this.acquireLock(lockKey, 120);
-
     if (!lockValue) return;
-
     try {
       this.logger.log('开始扫描超时未支付订单...');
       const preCheck = await this.paymentReconcileService.confirmTimeoutOrdersBeforeClose();
@@ -58,7 +58,6 @@ export class ScheduleService {
     const lockKey = 'schedule:release_expired_flash_sale_locks';
     const lockValue = await this.acquireLock(lockKey, 120);
     if (!lockValue) return;
-
     try {
       const result = await this.flashSaleService.releaseExpiredLocks();
       if (result.released > 0) {
@@ -77,7 +76,6 @@ export class ScheduleService {
     const lockKey = 'schedule:expire_group_buys';
     const lockValue = await this.acquireLock(lockKey, 240);
     if (!lockValue) return;
-
     try {
       const result = (await this.groupBuyService.markExpiredGroups()) as {
         affected: number;
@@ -119,7 +117,6 @@ export class ScheduleService {
     const lockKey = 'schedule:payment_reconcile';
     const lockValue = await this.acquireLock(lockKey, 240);
     if (!lockValue) return;
-
     try {
       const result = await this.paymentReconcileService.reconcilePendingPayments();
       this.logger.log(`支付对账任务完成: ${JSON.stringify(result)}`);
@@ -136,7 +133,6 @@ export class ScheduleService {
     const lockKey = 'schedule:refund_reconcile';
     const lockValue = await this.acquireLock(lockKey, 240);
     if (!lockValue) return;
-
     try {
       const result = await this.paymentReconcileService.reconcilePendingRefunds();
       this.logger.log(`退款对账任务完成: ${JSON.stringify(result)}`);
@@ -153,7 +149,6 @@ export class ScheduleService {
     const lockKey = 'schedule:mature_sales_commissions';
     const lockValue = await this.acquireLock(lockKey, 1800);
     if (!lockValue) return;
-
     try {
       const result = await (this.merchantSettlementService as any).generateMatureSalesCommissions?.();
       if (result && (result.generated > 0 || result.failed > 0)) {
@@ -167,13 +162,29 @@ export class ScheduleService {
     }
   }
 
+  @Cron('0 20 * * * *')
+  async handleMatureReferralRewards() {
+    const lockKey = 'schedule:mature_referral_rewards';
+    const lockValue = await this.acquireLock(lockKey, 1800);
+    if (!lockValue) return;
+    try {
+      const result = await (this.shareService as any).reconcileMatureFirstPaidRewards?.();
+      if (result && (result.issued > 0 || result.failed > 0)) {
+        this.logger.log(`成熟首单邀请奖励任务完成: ${JSON.stringify(result)}`);
+      }
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(`成熟首单邀请奖励任务失败：${err.message}`, err.stack);
+    } finally {
+      await this.releaseLock(lockKey, lockValue);
+    }
+  }
+
   @Cron('0 0 2 * * *')
   async handleAutoCompleteOrders() {
     const lockKey = 'schedule:auto_complete_orders';
     const lockValue = await this.acquireLock(lockKey, 3600);
-
     if (!lockValue) return;
-
     try {
       this.logger.log('开始扫描超时未确认收货订单...');
       const result = await this.orderService.autoCompleteOrders();
