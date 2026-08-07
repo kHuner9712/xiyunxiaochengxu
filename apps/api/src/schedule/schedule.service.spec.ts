@@ -54,6 +54,12 @@ function createShareService() {
   };
 }
 
+function createBenefitPackageService() {
+  return {
+    reconcileTerminalRefundFreezes: jest.fn(),
+  };
+}
+
 describe('ScheduleService', () => {
   let service: ScheduleService;
   let redisService: ReturnType<typeof createRedisService>;
@@ -64,6 +70,7 @@ describe('ScheduleService', () => {
   let groupBuyService: ReturnType<typeof createGroupBuyService>;
   let merchantSettlementService: ReturnType<typeof createMerchantSettlementService>;
   let shareService: ReturnType<typeof createShareService>;
+  let benefitPackageService: ReturnType<typeof createBenefitPackageService>;
 
   beforeEach(() => {
     redisService = createRedisService();
@@ -74,6 +81,7 @@ describe('ScheduleService', () => {
     groupBuyService = createGroupBuyService();
     merchantSettlementService = createMerchantSettlementService();
     shareService = createShareService();
+    benefitPackageService = createBenefitPackageService();
     redisService.setNX.mockImplementation(async () => true);
     redisService.releaseLockWithLua.mockImplementation(async () => true);
     orderService.closeTimeoutOrders.mockImplementation(async () => ({ closedCount: 0 }));
@@ -85,6 +93,7 @@ describe('ScheduleService', () => {
     groupBuyService.markExpiredGroups.mockImplementation(async () => ({ affected: 0, refundOrderIds: [] }));
     merchantSettlementService.generateMatureSalesCommissions.mockImplementation(async () => ({ total: 0, generated: 0, skipped: 0, failed: 0 }));
     shareService.reconcileMatureFirstPaidRewards.mockImplementation(async () => ({ total: 0, issued: 0, skipped: 0, failed: 0 }));
+    benefitPackageService.reconcileTerminalRefundFreezes.mockImplementation(async () => ({ orders: 0, restored: 0, skipped: 0 }));
 
     service = new ScheduleService(
       redisService as any,
@@ -95,6 +104,7 @@ describe('ScheduleService', () => {
       groupBuyService as any,
       merchantSettlementService as any,
       shareService as any,
+      benefitPackageService as any,
     );
     jest.spyOn((service as any).logger, 'log').mockImplementation(() => {});
     jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
@@ -105,9 +115,10 @@ describe('ScheduleService', () => {
     expect(paymentReconcileService.reconcilePendingPayments).toHaveBeenCalled();
   });
 
-  it('退款对账定时任务调用 reconcilePendingRefunds', async () => {
+  it('退款对账同时修复失败终态遗留的权益冻结', async () => {
     await service.handleRefundReconcile();
     expect(paymentReconcileService.reconcilePendingRefunds).toHaveBeenCalled();
+    expect(benefitPackageService.reconcileTerminalRefundFreezes).toHaveBeenCalled();
   });
 
   it('超时关单前会先做支付确认', async () => {
