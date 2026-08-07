@@ -8,7 +8,11 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
 
   function createService(rows: any[] = []) {
     const prisma: any = {
-      $queryRaw: jest.fn().mockResolvedValue(rows),
+      $queryRaw: jest.fn().mockImplementation(async (strings: readonly string[]) => {
+        const sql = Array.from(strings).join(' ');
+        if (sql.includes('FROM order_payments p')) return [];
+        return rows;
+      }),
       order: {
         findFirst: jest.fn(),
       },
@@ -240,9 +244,13 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
 
     await service.reconcilePendingPayments();
 
-    const rawCall = prisma.$queryRaw.mock.calls[0];
-    const sql = Array.from(rawCall[0] as readonly string[]).join(' ');
-    const values = rawCall.slice(1);
+    const rawCall = prisma.$queryRaw.mock.calls.find(([strings]: any[]) => {
+      const sql = Array.from(strings as readonly string[]).join(' ');
+      return sql.includes('FROM orders o') && sql.includes('payment_compensation_tasks');
+    });
+    expect(rawCall).toBeDefined();
+    const sql = Array.from(rawCall![0] as readonly string[]).join(' ');
+    const values = rawCall!.slice(1);
     expect(sql).toContain('NOT EXISTS');
     expect(sql).toContain('payment_compensation_tasks');
     expect(sql).toContain('HAVING COALESCE(SUM');
@@ -254,5 +262,6 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
     expect(values).toContain(REFUND_STATUS.SUCCESS);
     expect(values).toContain('cancelled_order_paid_callback');
     expect(values).toContain('cancelled_order_paid_historical_anomaly');
+    expect(values).toContain('cancelled_order_paid_amount_mismatch');
   });
 });
