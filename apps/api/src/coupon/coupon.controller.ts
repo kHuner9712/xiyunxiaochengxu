@@ -48,7 +48,7 @@ export class WeappCouponController {
     @CurrentUser('id') userId: string,
     @Query() query: UsableCouponQueryDto,
   ) {
-    return this.couponService.findUsable(userId, query.amount);
+    return this.couponService.findUsable(userId, query.amount, query.productIds);
   }
 }
 
