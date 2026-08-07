@@ -35,7 +35,7 @@ describe('CancellationSafeProductionOrderService', () => {
     const baseCancel = jest.spyOn(ProductionOrderService.prototype, 'cancel').mockResolvedValue({} as any);
     const { service, redis } = createService({ id: 7n, status: 1 });
 
-    await expect(service.cancel('42', '8', '不想买了')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.cancel('8', '42')).rejects.toBeInstanceOf(BadRequestException);
 
     expect(baseCancel).not.toHaveBeenCalled();
     expect(redis.setNX).toHaveBeenCalledWith(
@@ -52,8 +52,24 @@ describe('CancellationSafeProductionOrderService', () => {
       .mockResolvedValue({ id: '42', status: OrderStatus.cancelled } as any);
     const { service } = createService(null);
 
-    await service.cancel('42', '8', '不想买了');
+    await service.cancel('8', '42');
 
-    expect(baseCancel).toHaveBeenCalledWith('42', '8', '不想买了');
+    expect(baseCancel).toHaveBeenCalledWith('8', '42');
+  });
+
+  it('uses the order id as the lock target for admin cancellation', async () => {
+    const baseCancel = jest
+      .spyOn(ProductionOrderService.prototype, 'adminCancel')
+      .mockResolvedValue({ id: '42', status: OrderStatus.cancelled } as any);
+    const { service, redis } = createService(null);
+
+    await service.adminCancel('42', '后台取消');
+
+    expect(redis.setNX).toHaveBeenCalledWith(
+      'order:payment-cancel:42',
+      expect.any(String),
+      90,
+    );
+    expect(baseCancel).toHaveBeenCalledWith('42', '后台取消');
   });
 });
