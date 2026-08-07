@@ -13,10 +13,6 @@ const CANCELLED_PAID_TASK_REASONS = [
   CANCELLED_PAID_CALLBACK_REASON,
   CANCELLED_PAID_ANOMALY_REASON,
 ] as const;
-const CANCELLED_PAID_DEDUPE_REASONS = [
-  ...CANCELLED_PAID_TASK_REASONS,
-  CANCELLED_PAID_AMOUNT_MISMATCH_REASON,
-] as const;
 const ACTIVE_REFUND_STATUSES = new Set<string>([
   REFUND_STATUS.INITIATING,
   REFUND_STATUS.PENDING,
@@ -259,6 +255,49 @@ export class HistoricalAnomalyPaymentReconcileService extends ProductionPaymentR
     }
 
     const paidAt = this.parseWechatSuccessTime(result?.success_time);
+
+    if (wechatAmount !== expectedAmount) {
+      const synced = await this.historicalPrisma.$transaction(async (tx) => {
+        const paymentClaim = await tx.orderPayment.updateMany({
+          where: { id: candidate.paymentId, status: PAYMENT_STATUS.CREATED },
+          data: {
+            status: PAYMENT_STATUS.SUCCESS,
+            transactionId,
+            paidAt,
+            rawResponse: result,
+          },
+        });
+        if (paymentClaim.count === 0) return false;
+
+        await tx.paymentCompensationTask.createMany({
+          data: [{
+            orderNo: candidate.orderNo,
+            transactionId,
+            amount: wechatAmount,
+            reason: CANCELLED_PAID_AMOUNT_MISMATCH_REASON,
+            status: 'pending',
+            resolution: `历史取消订单微信实际支付${wechatAmount}分，与本地订单应付${expectedAmount}分不一致，禁止自动处理，需人工核账`,
+            callbackPayload: {
+              detectedBy: 'system:historical-cancelled-created-payment',
+              orderId: candidate.orderId.toString(),
+              paymentId: candidate.paymentId.toString(),
+              expectedAmount,
+              wechatAmount,
+              wechat: result,
+            },
+          }],
+          skipDuplicates: true,
+        });
+        return true;
+      });
+      if (!synced) return 'pending';
+
+      this.historicalLogger.error(
+        `历史取消订单支付金额不一致: order=${candidate.orderNo}, expected=${expectedAmount}, wechat=${wechatAmount}`,
+      );
+      return 'mismatch';
+    }
+
     const synced = await this.historicalPrisma.orderPayment.updateMany({
       where: { id: candidate.paymentId, status: PAYMENT_STATUS.CREATED },
       data: {
@@ -270,32 +309,6 @@ export class HistoricalAnomalyPaymentReconcileService extends ProductionPaymentR
     });
     if (synced.count === 0) {
       return 'pending';
-    }
-
-    if (wechatAmount !== expectedAmount) {
-      await this.historicalPrisma.paymentCompensationTask.createMany({
-        data: [{
-          orderNo: candidate.orderNo,
-          transactionId,
-          amount: wechatAmount,
-          reason: CANCELLED_PAID_AMOUNT_MISMATCH_REASON,
-          status: 'pending',
-          resolution: `历史取消订单微信实际支付${wechatAmount}分，与本地订单应付${expectedAmount}分不一致，禁止自动处理，需人工核账`,
-          callbackPayload: {
-            detectedBy: 'system:historical-cancelled-created-payment',
-            orderId: candidate.orderId.toString(),
-            paymentId: candidate.paymentId.toString(),
-            expectedAmount,
-            wechatAmount,
-            wechat: result,
-          },
-        }],
-        skipDuplicates: true,
-      });
-      this.historicalLogger.error(
-        `历史取消订单支付金额不一致: order=${candidate.orderNo}, expected=${expectedAmount}, wechat=${wechatAmount}`,
-      );
-      return 'mismatch';
     }
 
     this.historicalLogger.error(
