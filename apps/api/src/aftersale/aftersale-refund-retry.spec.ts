@@ -43,7 +43,7 @@ function createService(
     refundClaimCounts?: number[];
   } = {},
 ) {
-  const findRefund = jest.fn();
+  const findRefund: any = jest.fn();
   if (options.refundSequence) {
     for (const value of options.refundSequence) findRefund.mockResolvedValueOnce(value);
   } else {
@@ -52,36 +52,43 @@ function createService(
     );
   }
 
-  const aftersaleUpdateMany = jest.fn();
+  const aftersaleUpdateMany: any = jest.fn();
   for (const count of options.aftersaleClaimCounts || [1]) {
     aftersaleUpdateMany.mockResolvedValueOnce({ count });
   }
   aftersaleUpdateMany.mockResolvedValue({ count: 1 });
 
-  const refundUpdateMany = jest.fn();
+  const refundUpdateMany: any = jest.fn();
   for (const count of options.refundClaimCounts || [1, 1]) {
     refundUpdateMany.mockResolvedValueOnce({ count });
   }
   refundUpdateMany.mockResolvedValue({ count: 1 });
 
+  const aftersaleFindFirst: any = jest.fn();
+  aftersaleFindFirst.mockResolvedValue(options.aftersale || PENDING_REFUND_AFTERSALE);
+  const aftersaleLogCreate: any = jest.fn();
+  aftersaleLogCreate.mockResolvedValue({});
+
   const prisma = {
     aftersaleOrder: {
-      findFirst: jest.fn().mockResolvedValue(options.aftersale || PENDING_REFUND_AFTERSALE),
+      findFirst: aftersaleFindFirst,
       updateMany: aftersaleUpdateMany,
     },
     orderRefund: {
       findFirst: findRefund,
       updateMany: refundUpdateMany,
     },
-    aftersaleLog: { create: jest.fn().mockResolvedValue({}) },
+    aftersaleLog: { create: aftersaleLogCreate },
   };
-  const paymentService = {
-    createRefund: jest.fn().mockResolvedValue({
-      refundId: '71',
-      refundNo: 'RF202608070001',
-      outRefundNo: 'RF202608070001',
-    }),
-  };
+
+  const createRefund: any = jest.fn();
+  createRefund.mockResolvedValue({
+    refundId: '71',
+    refundNo: 'RF202608070001',
+    outRefundNo: 'RF202608070001',
+  });
+  const paymentService = { createRefund };
+
   const service = new AftersaleService(prisma as any, paymentService as any);
   jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
