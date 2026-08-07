@@ -151,9 +151,10 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
   }
 
   /**
-   * 补偿微信退款 CLOSED/ABNORMAL 后仍被冻结的权益。
-   * 只处理同一订单/售后单“最新一笔退款”已经进入失败终态的情况，
-   * 避免旧退款失败但新退款仍在处理中时误解冻。
+   * 只补偿微信退款明确 CLOSED 后仍被冻结的权益。
+   * ABNORMAL 代表退款异常，需要商户平台人工处理，不能视为“确定未退款”；
+   * 在微信侧最终结果明确前必须继续冻结权益，避免后续退款成功时出现钱和权益双失。
+   * 同一订单/售后范围只看最新一笔退款，避免旧 CLOSED 误解冻正在重试的新退款。
    */
   async reconcileTerminalRefundFreezes(limit = 200) {
     const frozen = await this.productionPrisma.userBenefitPackage.findMany({
@@ -182,12 +183,14 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
         if (seenScopes.has(scope)) continue;
         seenScopes.add(scope);
 
-        if (refund.status === 'closed' || refund.status === 'abnormal') {
+        if (refund.status === 'closed') {
           const result = await this.restoreAfterRefundClosed(
             refund.orderId,
             refund.aftersaleId,
           );
           restored += result.affected;
+        } else {
+          skipped += 1;
         }
       }
     }
