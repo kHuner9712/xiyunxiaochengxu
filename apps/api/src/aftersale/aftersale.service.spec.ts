@@ -12,7 +12,13 @@ function createMockPrisma() {
 
   return {
     orderItem: { findFirst: jest.fn() },
-    aftersaleOrder: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), update: jest.fn() },
+    aftersaleOrder: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(async () => ({ count: 1 })),
+    },
     aftersaleLog: { create: jest.fn() },
     $transaction: jest.fn(),
     _mockTx: mockTx,
