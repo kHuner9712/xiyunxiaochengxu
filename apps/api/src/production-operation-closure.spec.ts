@@ -71,20 +71,23 @@ describe('production operation closure contracts', () => {
     expect(settlement).toContain('sales_referral_refund_debt');
   });
 
-  it('uses production runtime providers rather than leaving hardened services unused', () => {
+  it('uses the outermost hardened runtime providers rather than leaving safety wrappers unused', () => {
     const paymentModule = read('apps/api/src/payment/payment.module.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
+    const aftersaleModule = read('apps/api/src/aftersale/aftersale.module.ts');
     const groupModule = read('apps/api/src/group-buy/group-buy.module.ts');
     const flashModule = read('apps/api/src/flash-sale/flash-sale.module.ts');
     const benefitModule = read('apps/api/src/benefit-package/benefit-package.module.ts');
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
 
-    expect(paymentModule).toContain('ProductionPaymentService');
-    expect(orderModule).toContain('ProductionOrderService');
+    expect(paymentModule).toContain('CancellationSafeStockSafePaymentService');
+    expect(paymentModule).toContain('ProductionPaymentReconcileService');
+    expect(orderModule).toContain('CancellationSafeProductionOrderService');
+    expect(aftersaleModule).toContain('ProductionAftersaleService');
     expect(groupModule).toContain('ProductionGroupBuyService');
     expect(flashModule).toContain('ProductionFlashSaleService');
-    expect(benefitModule).toContain('ProductionBenefitPackageService');
+    expect(benefitModule).toContain('SnapshotGuardedProductionBenefitPackageService');
     expect(settlementModule).toContain('ProductionMerchantSettlementService');
     expect(shareModule).toContain('ProductionShareService');
   });
