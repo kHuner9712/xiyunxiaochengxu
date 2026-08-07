@@ -41,18 +41,21 @@ function createPaymentReconcileService() {
 function createFlashSaleService() {
   return {
     releaseExpiredLocks: jest.fn(),
+    handleOrderCancel: jest.fn(),
   };
 }
 
 function createGroupBuyService() {
   return {
     markExpiredGroups: jest.fn(),
+    handleOrderCancel: jest.fn(),
   };
 }
 
 function createMerchantSettlementService() {
   return {
     generateMatureSalesCommissions: jest.fn(),
+    reconcileMissingServiceCommissions: jest.fn(),
   };
 }
 
@@ -65,6 +68,7 @@ function createShareService() {
 function createBenefitPackageService() {
   return {
     reconcileTerminalRefundFreezes: jest.fn(),
+    reconcileUsedEntitlementAuditGaps: jest.fn(),
   };
 }
 
@@ -104,10 +108,14 @@ describe('ScheduleService', () => {
     paymentReconcileService.reconcilePendingPayments.mockImplementation(async () => ({ total: 0, fixed: 0, skipped: 0, failed: 0 }));
     paymentReconcileService.reconcilePendingRefunds.mockImplementation(async () => ({ total: 0, fixed: 0, skipped: 0, failed: 0 }));
     flashSaleService.releaseExpiredLocks.mockImplementation(async () => ({ released: 0 }));
+    flashSaleService.handleOrderCancel.mockImplementation(async () => undefined);
     groupBuyService.markExpiredGroups.mockImplementation(async () => ({ affected: 0, refundOrderIds: [] }));
+    groupBuyService.handleOrderCancel.mockImplementation(async () => undefined);
     merchantSettlementService.generateMatureSalesCommissions.mockImplementation(async () => ({ total: 0, generated: 0, skipped: 0, failed: 0 }));
+    merchantSettlementService.reconcileMissingServiceCommissions.mockImplementation(async () => ({ total: 0, created: 0, skipped: 0, failed: 0 }));
     shareService.reconcileMatureFirstPaidRewards.mockImplementation(async () => ({ total: 0, issued: 0, skipped: 0, failed: 0 }));
     benefitPackageService.reconcileTerminalRefundFreezes.mockImplementation(async () => ({ orders: 0, restored: 0, skipped: 0 }));
+    benefitPackageService.reconcileUsedEntitlementAuditGaps.mockImplementation(async () => ({ total: 0, repaired: 0, failed: 0 }));
 
     service = new ScheduleService(
       redisService as any,
@@ -128,18 +136,31 @@ describe('ScheduleService', () => {
   it('支付对账定时任务调用 reconcilePendingPayments', async () => {
     await service.handlePaymentReconcile();
     expect(paymentReconcileService.reconcilePendingPayments).toHaveBeenCalled();
+    expect(paymentService.reconcilePaidOrderSideEffects).toHaveBeenCalled();
   });
 
   it('退款对账同时修复失败终态遗留的权益冻结', async () => {
     await service.handleRefundReconcile();
     expect(paymentReconcileService.reconcilePendingRefunds).toHaveBeenCalled();
     expect(benefitPackageService.reconcileTerminalRefundFreezes).toHaveBeenCalled();
+    expect(paymentService.reconcileRefundSuccessSideEffects).toHaveBeenCalled();
   });
 
   it('超时关单前会先做支付确认', async () => {
     await service.handleCloseTimeoutOrders();
     expect(paymentReconcileService.confirmTimeoutOrdersBeforeClose).toHaveBeenCalled();
     expect(orderService.closeTimeoutOrders).toHaveBeenCalled();
+  });
+
+  it('已取消订单残留的秒杀与拼团占用会被持久状态巡检修复', async () => {
+    prismaService.$queryRaw
+      .mockImplementationOnce(async () => [{ orderId: 11n }])
+      .mockImplementationOnce(async () => [{ orderId: 12n }]);
+
+    await service.handleCloseTimeoutOrders();
+
+    expect(flashSaleService.handleOrderCancel).toHaveBeenCalledWith(11n);
+    expect(groupBuyService.handleOrderCancel).toHaveBeenCalledWith(12n);
   });
 
   it('自动释放过期秒杀库存锁', async () => {
@@ -198,6 +219,29 @@ describe('ScheduleService', () => {
     await service.handleExpiredGroupBuys();
 
     expect(paymentService.createGroupBuyFailureRefund).toHaveBeenCalledTimes(1);
+  });
+
+  it('权益核销审计缺口和服务分佣缺口都会自动重建', async () => {
+    benefitPackageService.reconcileUsedEntitlementAuditGaps.mockImplementation(async () => ({
+      total: 1,
+      repaired: 1,
+      failed: 0,
+    }));
+    merchantSettlementService.reconcileMissingServiceCommissions.mockImplementation(async () => ({
+      total: 1,
+      created: 1,
+      skipped: 0,
+      failed: 0,
+    }));
+
+    await service.handleBenefitSettlementReconcile();
+
+    expect(benefitPackageService.reconcileUsedEntitlementAuditGaps).toHaveBeenCalled();
+    expect(merchantSettlementService.reconcileMissingServiceCommissions).toHaveBeenCalled();
+    expect(redisService.releaseLockWithLua).toHaveBeenCalledWith(
+      'schedule:benefit_settlement_reconcile',
+      expect.any(String),
+    );
   });
 
   it('按小时生成超过售后窗口的销售分佣', async () => {
