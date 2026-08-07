@@ -8,9 +8,14 @@ import { ProductionPaymentReconcileService } from './production-payment-reconcil
 
 const CANCELLED_PAID_ANOMALY_REASON = 'cancelled_order_paid_historical_anomaly';
 const CANCELLED_PAID_CALLBACK_REASON = 'cancelled_order_paid_callback';
+const CANCELLED_PAID_AMOUNT_MISMATCH_REASON = 'cancelled_order_paid_amount_mismatch';
 const CANCELLED_PAID_TASK_REASONS = [
   CANCELLED_PAID_CALLBACK_REASON,
   CANCELLED_PAID_ANOMALY_REASON,
+] as const;
+const CANCELLED_PAID_DEDUPE_REASONS = [
+  ...CANCELLED_PAID_TASK_REASONS,
+  CANCELLED_PAID_AMOUNT_MISMATCH_REASON,
 ] as const;
 const ACTIVE_REFUND_STATUSES = new Set<string>([
   REFUND_STATUS.INITIATING,
@@ -29,23 +34,308 @@ interface CancelledPaidExposureRow {
   activeRefundAmount: number | bigint;
 }
 
+interface CancelledCreatedPaymentRow {
+  orderId: bigint;
+  orderNo: string;
+  payAmount: number | bigint;
+  paymentId: bigint;
+  paymentAmount: number | bigint;
+  paymentUpdatedAt: Date;
+}
+
 @Injectable()
 export class HistoricalAnomalyPaymentReconcileService extends ProductionPaymentReconcileService {
   private readonly historicalLogger = new Logger(HistoricalAnomalyPaymentReconcileService.name);
 
   constructor(
     private readonly historicalPrisma: PrismaService,
-    paymentService: PaymentService,
+    private readonly historicalPaymentService: PaymentService,
     businessEvent: BusinessEventService,
   ) {
-    super(historicalPrisma, paymentService, businessEvent);
+    super(historicalPrisma, historicalPaymentService, businessEvent);
   }
 
   override async reconcilePendingPayments() {
     const base = await super.reconcilePendingPayments();
+    const createdPayments = await this.reconcileCancelledCreatedPayments();
     const refreshed = await this.reconcileExistingCancelledPaidTasks();
     const anomalies = await this.seedCancelledPaidAnomalies();
-    return { ...base, ...refreshed, ...anomalies };
+    return { ...base, ...createdPayments, ...refreshed, ...anomalies };
+  }
+
+  /**
+   * A historical cancelled order may still have a local CREATED payment even though the remote
+   * WeChat transaction is authoritative. Query WeChat before changing anything. SUCCESS only
+   * synchronizes the payment fact; it never reactivates the cancelled order and never refunds
+   * automatically. NOTPAY is remotely closed first. Ambiguous states stay CREATED and rotate.
+   */
+  private async reconcileCancelledCreatedPayments(limit = 50) {
+    const candidates = await this.historicalPrisma.$queryRaw<CancelledCreatedPaymentRow[]>`
+      SELECT
+        o.id AS orderId,
+        o.order_no AS orderNo,
+        o.pay_amount AS payAmount,
+        p.id AS paymentId,
+        p.amount AS paymentAmount,
+        p.updated_at AS paymentUpdatedAt
+      FROM order_payments p
+      INNER JOIN orders o ON o.id = p.order_id
+      WHERE o.status = ${OrderStatus.cancelled}
+        AND o.pay_amount > 0
+        AND p.status = ${PAYMENT_STATUS.CREATED}
+        AND p.payment_method = 'wechat'
+      ORDER BY p.updated_at ASC
+      LIMIT ${limit}
+    `;
+
+    let cancelledCreatedSuccess = 0;
+    let cancelledCreatedClosed = 0;
+    let cancelledCreatedPending = 0;
+    let cancelledCreatedMismatch = 0;
+    let cancelledCreatedFailed = 0;
+
+    for (const candidate of candidates) {
+      if (!this.historicalPaymentService.isPaymentStatusSyncAvailable()) {
+        await this.touchCreatedPayment(candidate.paymentId, {
+          detector: 'historical-cancelled-created-payment',
+          state: 'sync_unavailable',
+          checkedAt: new Date().toISOString(),
+        });
+        cancelledCreatedPending += 1;
+        continue;
+      }
+
+      try {
+        const result = await this.historicalPaymentService.queryWechatOrder(candidate.orderNo);
+        const outcome = await this.applyCreatedPaymentWechatState(candidate, result);
+        if (outcome === 'success') cancelledCreatedSuccess += 1;
+        else if (outcome === 'closed') cancelledCreatedClosed += 1;
+        else if (outcome === 'mismatch') cancelledCreatedMismatch += 1;
+        else cancelledCreatedPending += 1;
+      } catch (error) {
+        const code = this.wechatErrorCode(error);
+        if (code === 'ORDER_NOT_EXIST') {
+          await this.markCreatedPaymentFailed(candidate.paymentId, 'ORDER_NOT_EXIST', {
+            detector: 'historical-cancelled-created-payment',
+            code,
+            checkedAt: new Date().toISOString(),
+          });
+          cancelledCreatedClosed += 1;
+          continue;
+        }
+
+        cancelledCreatedFailed += 1;
+        cancelledCreatedPending += 1;
+        await this.touchCreatedPayment(candidate.paymentId, {
+          detector: 'historical-cancelled-created-payment',
+          state: 'query_failed',
+          error: (error as Error).message,
+          code: code || null,
+          checkedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    return {
+      cancelledCreatedChecked: candidates.length,
+      cancelledCreatedSuccess,
+      cancelledCreatedClosed,
+      cancelledCreatedPending,
+      cancelledCreatedMismatch,
+      cancelledCreatedFailed,
+    };
+  }
+
+  private async applyCreatedPaymentWechatState(
+    candidate: CancelledCreatedPaymentRow,
+    result: any,
+  ): Promise<'success' | 'closed' | 'pending' | 'mismatch'> {
+    const tradeState = result?.trade_state;
+
+    if (tradeState === 'SUCCESS') {
+      return this.syncCreatedPaymentSuccess(candidate, result);
+    }
+
+    if (tradeState === 'CLOSED' || tradeState === 'REVOKED' || tradeState === 'PAYERROR') {
+      await this.markCreatedPaymentFailed(candidate.paymentId, tradeState, result);
+      return 'closed';
+    }
+
+    if (tradeState === 'NOTPAY') {
+      const closeFn = (this.historicalPaymentService as any).closeWechatOrderForCancellation;
+      if (typeof closeFn !== 'function') {
+        await this.touchCreatedPayment(candidate.paymentId, {
+          detector: 'historical-cancelled-created-payment',
+          state: 'wechat_close_capability_unavailable',
+          wechat: result,
+          checkedAt: new Date().toISOString(),
+        });
+        return 'pending';
+      }
+
+      try {
+        await closeFn.call(this.historicalPaymentService, candidate.orderNo);
+        await this.markCreatedPaymentFailed(candidate.paymentId, 'CLOSED_BY_MERCHANT', result);
+        return 'closed';
+      } catch (closeError) {
+        return this.resolveCreatedPaymentAfterCloseFailure(candidate, closeError);
+      }
+    }
+
+    await this.touchCreatedPayment(candidate.paymentId, {
+      detector: 'historical-cancelled-created-payment',
+      state: tradeState || 'unknown',
+      wechat: result,
+      checkedAt: new Date().toISOString(),
+    });
+    return 'pending';
+  }
+
+  private async resolveCreatedPaymentAfterCloseFailure(
+    candidate: CancelledCreatedPaymentRow,
+    closeError: unknown,
+  ): Promise<'success' | 'closed' | 'pending' | 'mismatch'> {
+    try {
+      const result = await this.historicalPaymentService.queryWechatOrder(candidate.orderNo);
+      const tradeState = result?.trade_state;
+      if (tradeState === 'SUCCESS') {
+        return this.syncCreatedPaymentSuccess(candidate, result);
+      }
+      if (tradeState === 'CLOSED' || tradeState === 'REVOKED' || tradeState === 'PAYERROR') {
+        await this.markCreatedPaymentFailed(candidate.paymentId, tradeState, result);
+        return 'closed';
+      }
+
+      await this.touchCreatedPayment(candidate.paymentId, {
+        detector: 'historical-cancelled-created-payment',
+        state: `close_failed_then_${tradeState || 'unknown'}`,
+        closeError: (closeError as Error).message,
+        wechat: result,
+        checkedAt: new Date().toISOString(),
+      });
+      return 'pending';
+    } catch (queryError) {
+      const code = this.wechatErrorCode(queryError);
+      if (code === 'ORDER_NOT_EXIST') {
+        await this.markCreatedPaymentFailed(candidate.paymentId, 'ORDER_NOT_EXIST', {
+          detector: 'historical-cancelled-created-payment',
+          closeError: (closeError as Error).message,
+          code,
+          checkedAt: new Date().toISOString(),
+        });
+        return 'closed';
+      }
+
+      await this.touchCreatedPayment(candidate.paymentId, {
+        detector: 'historical-cancelled-created-payment',
+        state: 'close_and_query_failed',
+        closeError: (closeError as Error).message,
+        queryError: (queryError as Error).message,
+        code: code || null,
+        checkedAt: new Date().toISOString(),
+      });
+      return 'pending';
+    }
+  }
+
+  private async syncCreatedPaymentSuccess(
+    candidate: CancelledCreatedPaymentRow,
+    result: any,
+  ): Promise<'success' | 'pending' | 'mismatch'> {
+    const transactionId = typeof result?.transaction_id === 'string'
+      ? result.transaction_id.trim()
+      : '';
+    const wechatAmount = Number(result?.amount?.total);
+    const expectedAmount = Number(candidate.payAmount ?? candidate.paymentAmount ?? 0);
+
+    if (!transactionId || !Number.isInteger(wechatAmount) || wechatAmount <= 0) {
+      await this.touchCreatedPayment(candidate.paymentId, {
+        detector: 'historical-cancelled-created-payment',
+        state: 'invalid_wechat_success_payload',
+        wechat: result,
+        checkedAt: new Date().toISOString(),
+      });
+      return 'pending';
+    }
+
+    const paidAt = this.parseWechatSuccessTime(result?.success_time);
+    const synced = await this.historicalPrisma.orderPayment.updateMany({
+      where: { id: candidate.paymentId, status: PAYMENT_STATUS.CREATED },
+      data: {
+        status: PAYMENT_STATUS.SUCCESS,
+        transactionId,
+        paidAt,
+        rawResponse: result,
+      },
+    });
+    if (synced.count === 0) {
+      return 'pending';
+    }
+
+    if (wechatAmount !== expectedAmount) {
+      await this.historicalPrisma.paymentCompensationTask.createMany({
+        data: [{
+          orderNo: candidate.orderNo,
+          transactionId,
+          amount: wechatAmount,
+          reason: CANCELLED_PAID_AMOUNT_MISMATCH_REASON,
+          status: 'pending',
+          resolution: `历史取消订单微信实际支付${wechatAmount}分，与本地订单应付${expectedAmount}分不一致，禁止自动处理，需人工核账`,
+          callbackPayload: {
+            detectedBy: 'system:historical-cancelled-created-payment',
+            orderId: candidate.orderId.toString(),
+            paymentId: candidate.paymentId.toString(),
+            expectedAmount,
+            wechatAmount,
+            wechat: result,
+          },
+        }],
+        skipDuplicates: true,
+      });
+      this.historicalLogger.error(
+        `历史取消订单支付金额不一致: order=${candidate.orderNo}, expected=${expectedAmount}, wechat=${wechatAmount}`,
+      );
+      return 'mismatch';
+    }
+
+    this.historicalLogger.error(
+      `检测到历史取消订单微信已支付但本地仍CREATED: order=${candidate.orderNo}, transactionId=${transactionId}。已同步支付事实，未自动退款。`,
+    );
+    return 'success';
+  }
+
+  private async markCreatedPaymentFailed(paymentId: bigint, terminalState: string, raw: unknown) {
+    await this.historicalPrisma.orderPayment.updateMany({
+      where: { id: paymentId, status: PAYMENT_STATUS.CREATED },
+      data: {
+        status: PAYMENT_STATUS.FAILED,
+        rawResponse: {
+          detector: 'historical-cancelled-created-payment',
+          terminalState,
+          wechat: raw as any,
+          checkedAt: new Date().toISOString(),
+        },
+      },
+    });
+  }
+
+  private async touchCreatedPayment(paymentId: bigint, rawResponse: Record<string, unknown>) {
+    await this.historicalPrisma.orderPayment.updateMany({
+      where: { id: paymentId, status: PAYMENT_STATUS.CREATED },
+      data: { rawResponse: rawResponse as any },
+    });
+  }
+
+  private parseWechatSuccessTime(value: unknown) {
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  }
+
+  private wechatErrorCode(error: unknown): string | undefined {
+    return (error as any)?.response?.data?.code;
   }
 
   /**
@@ -222,7 +512,8 @@ export class HistoricalAnomalyPaymentReconcileService extends ProductionPaymentR
             AND t.transaction_id = p.transaction_id
             AND t.reason IN (
               ${CANCELLED_PAID_CALLBACK_REASON},
-              ${CANCELLED_PAID_ANOMALY_REASON}
+              ${CANCELLED_PAID_ANOMALY_REASON},
+              ${CANCELLED_PAID_AMOUNT_MISMATCH_REASON}
             )
         )
       GROUP BY
