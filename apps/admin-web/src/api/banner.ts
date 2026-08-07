@@ -1,19 +1,25 @@
 import request from '@/utils/request'
 
+export interface BannerPayload {
+  title?: string
+  image?: string
+  linkType?: 0 | 1 | 2 | 3
+  linkValue?: string
+  sortOrder?: number
+  status?: 0 | 1
+}
+
 export const bannerApi = {
-  getList(params: { page: number; pageSize: number; position?: number }) {
-    return request.get('/admin/banner/list', { params })
+  getList() {
+    return request.get('/admin/banner/list')
   },
-  create(data: any) {
+  create(data: BannerPayload) {
     return request.post('/admin/banner', data)
   },
-  update(idOrData: number | any, data?: any) {
-    const id = typeof idOrData === 'number' ? idOrData : idOrData.id
-    const payload = typeof idOrData === 'number' ? (data || {}) : { ...(idOrData || {}) }
-    delete payload.id
-    return request.put(`/admin/banner/${id}`, payload)
+  update(id: string, data: BannerPayload) {
+    return request.put(`/admin/banner/${encodeURIComponent(id)}`, data)
   },
-  delete(id: number) {
-    return request.delete(`/admin/banner/${id}`)
+  delete(id: string) {
+    return request.delete(`/admin/banner/${encodeURIComponent(id)}`)
   },
 }
