@@ -1,12 +1,19 @@
 import { BadRequestException } from '@nestjs/common';
+import { REFUND_STATUS } from '../common/constants';
 import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recoverable-production-payment.service';
 import { CancellationSafeStockSafePaymentService } from './cancellation-safe-stock-safe-payment.service';
 
 describe('CancellationSafeStockSafePaymentService', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  function createService(lockAcquired = true) {
-    const prisma: any = {};
+  function createService(lockAcquired = true, refund?: any) {
+    const prisma: any = {
+      orderRefund: {
+        findFirst: jest.fn().mockResolvedValue(refund ?? null),
+        findUnique: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
     const config: any = {
       get: jest.fn((key: string, fallback?: unknown) => {
         if (key === 'NODE_ENV') return 'test';
@@ -30,7 +37,7 @@ describe('CancellationSafeStockSafePaymentService', () => {
       noop,
       redis,
     );
-    return { service, redis };
+    return { service, prisma, redis };
   }
 
   it('serializes payment initialization using the same order payment-cancel lock', async () => {
@@ -59,5 +66,110 @@ describe('CancellationSafeStockSafePaymentService', () => {
 
     await expect(service.createPayment('42', '8')).rejects.toBeInstanceOf(BadRequestException);
     expect(baseCreatePayment).not.toHaveBeenCalled();
+  });
+
+  it('reopens ABNORMAL to pending and runs the full refund-success chain when WeChat is SUCCESS', async () => {
+    const refund = {
+      id: 1n,
+      orderId: 42n,
+      status: REFUND_STATUS.ABNORMAL,
+      refundAmount: 500,
+      totalAmount: 1000,
+      refundId: null,
+      outRefundNo: 'OR1',
+    };
+    const { service, prisma } = createService(true, refund);
+    jest.spyOn(service, 'queryRefund').mockResolvedValue({
+      status: 'SUCCESS',
+      refund_id: 'WX-R1',
+      amount: { refund: 500, total: 1000 },
+    });
+    const processSuccess = jest
+      .spyOn(service, 'processWechatRefundSuccess')
+      .mockResolvedValue(undefined);
+
+    const result = await service.syncRefund('OR1');
+
+    expect(prisma.orderRefund.updateMany).toHaveBeenCalledWith({
+      where: { id: 1n, status: REFUND_STATUS.ABNORMAL },
+      data: expect.objectContaining({
+        status: REFUND_STATUS.PENDING,
+        refundId: 'WX-R1',
+      }),
+    });
+    expect(processSuccess).toHaveBeenCalledWith(
+      refund,
+      'WX-R1',
+      expect.objectContaining({ status: 'SUCCESS' }),
+    );
+    expect(result).toEqual(expect.objectContaining({
+      synced: true,
+      status: REFUND_STATUS.SUCCESS,
+      recoveredFrom: REFUND_STATUS.ABNORMAL,
+    }));
+  });
+
+  it('moves ABNORMAL to CLOSED without running refund-success effects when WeChat is CLOSED', async () => {
+    const refund = {
+      id: 2n,
+      status: REFUND_STATUS.ABNORMAL,
+      refundAmount: 500,
+      totalAmount: 1000,
+      refundId: null,
+      outRefundNo: 'OR2',
+    };
+    const { service, prisma } = createService(true, refund);
+    jest.spyOn(service, 'queryRefund').mockResolvedValue({
+      status: 'CLOSED',
+      refund_id: 'WX-R2',
+    });
+    const processSuccess = jest.spyOn(service, 'processWechatRefundSuccess');
+
+    const result = await service.syncRefund('OR2');
+
+    expect(prisma.orderRefund.updateMany).toHaveBeenCalledWith({
+      where: { id: 2n, status: REFUND_STATUS.ABNORMAL },
+      data: expect.objectContaining({
+        status: REFUND_STATUS.CLOSED,
+        refundId: 'WX-R2',
+      }),
+    });
+    expect(processSuccess).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({
+      synced: true,
+      status: REFUND_STATUS.CLOSED,
+    }));
+  });
+
+  it('keeps ABNORMAL frozen and only refreshes its observation when WeChat is still ABNORMAL', async () => {
+    const refund = {
+      id: 3n,
+      status: REFUND_STATUS.ABNORMAL,
+      refundAmount: 500,
+      totalAmount: 1000,
+      refundId: 'WX-R3',
+      outRefundNo: 'OR3',
+    };
+    const { service, prisma } = createService(true, refund);
+    jest.spyOn(service, 'queryRefund').mockResolvedValue({
+      status: 'ABNORMAL',
+      refund_id: 'WX-R3',
+    });
+    const processSuccess = jest.spyOn(service, 'processWechatRefundSuccess');
+
+    const result = await service.syncRefund('OR3');
+
+    expect(prisma.orderRefund.updateMany).toHaveBeenCalledWith({
+      where: { id: 3n, status: REFUND_STATUS.ABNORMAL },
+      data: expect.objectContaining({
+        refundId: 'WX-R3',
+        rawResponse: expect.objectContaining({ status: 'ABNORMAL' }),
+      }),
+    });
+    expect(processSuccess).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({
+      synced: false,
+      status: REFUND_STATUS.ABNORMAL,
+    }));
   });
 });
