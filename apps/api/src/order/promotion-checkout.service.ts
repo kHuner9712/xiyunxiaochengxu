@@ -61,27 +61,18 @@ function pickOrderProductImage(
   productMainImage?: string | null,
 ): string {
   const cleanSkuImage = typeof skuImage === 'string' ? skuImage.trim() : '';
-  const cleanProductMainImage =
-    typeof productMainImage === 'string' ? productMainImage.trim() : '';
-  const candidate =
-    cleanSkuImage && !cleanSkuImage.includes(DEFAULT_COVER_MARKER)
-      ? cleanSkuImage
-      : cleanProductMainImage;
+  const cleanProductMainImage = typeof productMainImage === 'string' ? productMainImage.trim() : '';
+  const candidate = cleanSkuImage && !cleanSkuImage.includes(DEFAULT_COVER_MARKER)
+    ? cleanSkuImage
+    : cleanProductMainImage;
   return normalizeAssetUrl(candidate || '');
 }
 
 @Injectable()
 export class PromotionCheckoutService {
-  assertNoUnsupportedStacking(input: {
-    couponId?: string;
-    pointsDeduct?: number;
-  }): void {
-    if (input.couponId) {
-      throw new BadRequestException('促销订单暂不支持叠加优惠券');
-    }
-    if ((input.pointsDeduct ?? 0) > 0) {
-      throw new BadRequestException('促销订单暂不支持叠加积分抵扣');
-    }
+  assertNoUnsupportedStacking(input: { couponId?: string; pointsDeduct?: number }): void {
+    if (input.couponId) throw new BadRequestException('促销订单暂不支持叠加优惠券');
+    if ((input.pointsDeduct ?? 0) > 0) throw new BadRequestException('促销订单暂不支持叠加积分抵扣');
   }
 
   async createOrder(
@@ -121,11 +112,7 @@ export class PromotionCheckoutService {
         : null,
       fulfillmentType === 'pickup'
         ? tx.pickupStore.findFirst({
-            where: {
-              id: BigInt(input.pickupStoreId!),
-              status: 1,
-              deletedAt: null,
-            },
+            where: { id: BigInt(input.pickupStoreId!), status: 1, deletedAt: null },
           })
         : null,
       tx.productSku.findFirst({
@@ -134,37 +121,36 @@ export class PromotionCheckoutService {
       }),
     ]);
 
-    if (fulfillmentType === 'delivery' && !address) {
-      throw new NotFoundException('收货地址不存在');
+    if (fulfillmentType === 'delivery' && !address) throw new NotFoundException('收货地址不存在');
+    if (fulfillmentType === 'pickup' && !pickupStore) throw new NotFoundException('自提点不存在或已停用');
+    if (!sku || sku.product.status !== 1) throw new NotFoundException('活动商品规格不存在或已下架');
+
+    // 商品履约方式是商品级业务约束，促销下单不能绕过。之前页面固定传 delivery，
+    // 会把 pickup-only 商品创建成无法履约的快递单；这里作为最终服务端硬门禁。
+    const productFulfillmentType = sku.product.fulfillmentType || 'delivery';
+    if (productFulfillmentType !== 'delivery' && productFulfillmentType !== 'pickup') {
+      throw new BadRequestException('该商品的履约方式不支持拼团/秒杀活动');
     }
-    if (fulfillmentType === 'pickup' && !pickupStore) {
-      throw new NotFoundException('自提点不存在或已停用');
+    if (productFulfillmentType !== fulfillmentType) {
+      throw new BadRequestException(
+        productFulfillmentType === 'pickup'
+          ? '该商品仅支持到店自提，请选择自提点'
+          : '该商品仅支持快递配送，请选择收货地址',
+      );
     }
-    if (!sku || sku.product.status !== 1) {
-      throw new NotFoundException('活动商品规格不存在或已下架');
-    }
-    if (input.unitPrice > sku.price) {
-      throw new BadRequestException('活动价格不能高于商品原价');
-    }
+    if (input.unitPrice > sku.price) throw new BadRequestException('活动价格不能高于商品原价');
 
     const stockClaim = await tx.productSku.updateMany({
       where: { id: sku.id, status: 1, stock: { gte: input.quantity } },
-      data: {
-        stock: { decrement: input.quantity },
-        sales: { increment: input.quantity },
-      },
+      data: { stock: { decrement: input.quantity }, sales: { increment: input.quantity } },
     });
-    if (stockClaim.count === 0) {
-      throw new BadRequestException('库存不足，下单失败');
-    }
+    if (stockClaim.count === 0) throw new BadRequestException('库存不足，下单失败');
 
     const skuAfterDeduct = await tx.productSku.findUnique({
       where: { id: sku.id },
       select: { stock: true },
     });
-    if (!skuAfterDeduct) {
-      throw new BadRequestException('SKU不存在，下单失败');
-    }
+    if (!skuAfterDeduct) throw new BadRequestException('SKU不存在，下单失败');
     await tx.productStockLog.create({
       data: {
         productId: sku.productId,
@@ -180,14 +166,10 @@ export class PromotionCheckoutService {
     const totalAmount = sku.price * input.quantity;
     const promotionSubtotal = input.unitPrice * input.quantity;
     const activityDiscountAmount = totalAmount - promotionSubtotal;
-    const freightAmount =
-      fulfillmentType === 'delivery'
-        ? this.calculateFreight(totalAmount, address?.province)
-        : 0;
-    const payAmount = Math.max(
-      0,
-      totalAmount - activityDiscountAmount + freightAmount,
-    );
+    const freightAmount = fulfillmentType === 'delivery'
+      ? this.calculateFreight(totalAmount, address?.province)
+      : 0;
+    const payAmount = Math.max(0, totalAmount - activityDiscountAmount + freightAmount);
     const isZeroPay = payAmount === 0;
     const holdUntilPromotionSuccess = input.holdUntilPromotionSuccess === true;
     const status = isZeroPay
@@ -202,18 +184,14 @@ export class PromotionCheckoutService {
       throw new BadRequestException('活动支付时限已结束');
     }
 
-    const sourceType =
-      input.sourceType && ALLOWED_SOURCE_TYPES.has(input.sourceType)
-        ? input.sourceType
-        : 'direct';
+    const sourceType = input.sourceType && ALLOWED_SOURCE_TYPES.has(input.sourceType)
+      ? input.sourceType
+      : 'direct';
     const sourceCode = input.sourceCode?.trim() || null;
-    const referrerUserId = input.referrerUserId
-      ? BigInt(input.referrerUserId)
+    const referrerUserId = input.referrerUserId ? BigInt(input.referrerUserId) : null;
+    const pickupCode = isZeroPay && !holdUntilPromotionSuccess && fulfillmentType === 'pickup'
+      ? await this.generatePickupCode(tx)
       : null;
-    const pickupCode =
-      isZeroPay && !holdUntilPromotionSuccess && fulfillmentType === 'pickup'
-        ? await this.generatePickupCode(tx)
-        : null;
 
     const order = await tx.order.create({
       data: {
@@ -253,14 +231,8 @@ export class PromotionCheckoutService {
             productId: sku.productId,
             skuId: sku.id,
             productName: sku.product.name,
-            skuSpecs:
-              sku.specs === null
-                ? Prisma.JsonNull
-                : (sku.specs as Prisma.InputJsonValue),
-            productImage: pickOrderProductImage(
-              sku.image,
-              sku.product.mainImage,
-            ),
+            skuSpecs: sku.specs === null ? Prisma.JsonNull : (sku.specs as Prisma.InputJsonValue),
+            productImage: pickOrderProductImage(sku.image, sku.product.mainImage),
             price: input.unitPrice,
             originalPrice: sku.price,
             quantity: input.quantity,
@@ -284,9 +256,7 @@ export class PromotionCheckoutService {
     });
 
     const orderItem = order.orderItems[0];
-    if (!orderItem) {
-      throw new InternalServerErrorException('促销订单项创建失败');
-    }
+    if (!orderItem) throw new InternalServerErrorException('促销订单项创建失败');
 
     let paymentCreated = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -297,27 +267,18 @@ export class PromotionCheckoutService {
             paymentNo: generatePaymentNo(),
             amount: payAmount,
             paymentMethod: isZeroPay ? 'zero_pay' : 'wechat',
-            status: isZeroPay
-              ? PAYMENT_STATUS.SUCCESS
-              : PAYMENT_STATUS.CREATED,
+            status: isZeroPay ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.CREATED,
             ...(isZeroPay ? { paidAt: new Date() } : {}),
           },
         });
         paymentCreated = true;
         break;
       } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
-          continue;
-        }
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue;
         throw error;
       }
     }
-    if (!paymentCreated) {
-      throw new InternalServerErrorException('支付单号生成失败，请重试');
-    }
+    if (!paymentCreated) throw new InternalServerErrorException('支付单号生成失败，请重试');
 
     if (isZeroPay) {
       await tx.orderLog.create({
@@ -332,9 +293,7 @@ export class PromotionCheckoutService {
       });
     }
 
-    await tx.cart.deleteMany({
-      where: { userId: input.userId, skuId: input.skuId },
-    });
+    await tx.cart.deleteMany({ where: { userId: input.userId, skuId: input.skuId } });
 
     return {
       orderId: order.id,
@@ -349,10 +308,7 @@ export class PromotionCheckoutService {
 
   private calculateFreight(totalAmount: number, province?: string): number {
     if (totalAmount >= FREIGHT_FREE_AMOUNT) return 0;
-    if (
-      province &&
-      FREIGHT_REMOTE_AREAS.some((area) => province.includes(area))
-    ) {
+    if (province && FREIGHT_REMOTE_AREAS.some((area) => province.includes(area))) {
       return FREIGHT_REMOTE_FEE;
     }
     return FREIGHT_DEFAULT_FEE;
@@ -361,10 +317,7 @@ export class PromotionCheckoutService {
   private async generatePickupCode(tx: TransactionClient): Promise<string> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const code = String(crypto.randomInt(10000000, 100000000));
-      const exists = await tx.order.findFirst({
-        where: { pickupCode: code },
-        select: { id: true },
-      });
+      const exists = await tx.order.findFirst({ where: { pickupCode: code }, select: { id: true } });
       if (!exists) return code;
     }
     throw new InternalServerErrorException('自提码生成失败，请重试');
