@@ -99,6 +99,10 @@ export class ProductionPaymentService extends PaymentService {
             select: { status: true },
           });
 
+      // No local refund means the request definitely never entered the refund state machine.
+      // CLOSED is also a definitive non-refund terminal state. FAILED stays frozen until
+      // sync/reconciliation confirms the real WeChat terminal state because a network error
+      // can be uncertain after the remote side accepted the request.
       if (!latestRefund || latestRefund.status === REFUND_STATUS.CLOSED) {
         await benefitService.restoreAfterRefundClosed?.(
           params.orderId,
@@ -387,6 +391,14 @@ export class ProductionPaymentService extends PaymentService {
     await benefitService.revokeAfterRefundSuccess?.(
       refund.orderId,
       refund.aftersaleId ?? null,
+    );
+
+    // Historical commissions may exist from pre-hardening behavior or manual late refunds.
+    // Reconcile them synchronously with the refund success so merchant settlement cannot pay
+    // against revenue that has already been returned to the customer.
+    await (this.productionMerchantSettlementService as any).reverseSalesCommissionAfterRefund?.(
+      refund.orderId,
+      refund.id,
     );
 
     try {
