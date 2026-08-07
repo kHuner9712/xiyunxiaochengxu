@@ -7,9 +7,10 @@ import { FlashSaleService } from './flash-sale.service';
 import { TransactionalFlashSaleService } from './transactional-flash-sale.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
+import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => OrderModule)],
+  imports: [PrismaModule, BenefitPackageModule, forwardRef(() => OrderModule)],
   controllers: [AdminFlashSaleController, WeappFlashSaleController],
   providers: [
     {
