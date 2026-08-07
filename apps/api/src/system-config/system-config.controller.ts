@@ -2,7 +2,7 @@ import { Controller, Get, Put, Body, Param } from '@nestjs/common';
 import { SystemConfigService } from './system-config.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
-import { IsString, IsNotEmpty, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsNotEmpty, IsArray, IsIn, IsOptional, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class UpdateConfigDto {
@@ -16,6 +16,11 @@ class UpdateConfigDto {
 
   @IsString()
   configValue!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['string', 'number', 'boolean', 'json'])
+  valueType?: string;
 }
 
 class ConfigItemDto {
@@ -29,6 +34,11 @@ class ConfigItemDto {
 
   @IsString()
   configValue!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['string', 'number', 'boolean', 'json'])
+  valueType?: string;
 }
 
 class BatchUpdateDto {
@@ -83,7 +93,7 @@ export class SystemConfigController {
   @Put('update')
   @RequirePermission('system:config')
   async update(@Body() dto: UpdateConfigDto) {
-    return this.systemConfigService.update(dto.groupName, dto.configKey, dto.configValue);
+    return this.systemConfigService.update(dto.groupName, dto.configKey, dto.configValue, dto.valueType);
   }
 
   @Put('batch-update')
