@@ -1,8 +1,12 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BenefitPackageService } from './benefit-package.service';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
+
+const VERIFY_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const VERIFY_CODE_LENGTH = 8;
 
 @Injectable()
 export class ProductionBenefitPackageService extends BenefitPackageService {
@@ -13,6 +17,36 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     merchantSettlementService: MerchantSettlementService,
   ) {
     super(productionPrisma, merchantSettlementService);
+  }
+
+  /**
+   * Base issuance keeps the payment callback resilient by logging its own errors. Production
+   * must additionally verify the result so the durable paid-order side-effect reconciler can
+   * detect a partial grant instead of silently treating it as complete.
+   */
+  override async grantBenefitsForOrder(orderId: string | bigint, userId: string | bigint) {
+    await super.grantBenefitsForOrder(orderId, userId);
+    await this.assertOrderBenefitsComplete(orderId);
+  }
+
+  /**
+   * Repair is intentionally separated from the immediate callback path. The scheduler invokes
+   * it after the original grant attempt has finished, locks each user-benefit package row and
+   * only fills missing entitlement counts. This avoids duplicate codes if a callback was merely
+   * slow while still making a partially-created package self-healing.
+   */
+  async reconcileOrderBenefits(orderId: string | bigint, userId: string | bigint) {
+    await super.grantBenefitsForOrder(orderId, userId);
+    const targets = await this.getExpectedGrantTargets(orderId);
+    for (const target of targets) {
+      if (!target.userPackageId) continue;
+      await this.repairUserPackageEntitlements(
+        target.userPackageId,
+        BigInt(userId),
+        target.packageId,
+      );
+    }
+    await this.assertOrderBenefitsComplete(orderId);
   }
 
   async assertRefundable(orderId: bigint | string, aftersaleId?: bigint | string | null) {
@@ -196,6 +230,146 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     }
 
     return { orders: frozen.length, restored, skipped };
+  }
+
+  private async getExpectedGrantTargets(orderId: bigint | string) {
+    const order = await this.productionPrisma.order.findUnique({
+      where: { id: BigInt(orderId) },
+      include: { orderItems: true },
+    });
+    if (!order) throw new Error(`权益发放校验失败：订单不存在 orderId=${orderId}`);
+
+    const targets: Array<{
+      packageId: bigint;
+      userPackageId: bigint | null;
+      grantKey: string;
+    }> = [];
+    for (const item of order.orderItems) {
+      const pkg = await this.productionPrisma.benefitPackage.findFirst({
+        where: { productId: item.productId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!pkg) continue;
+
+      const qty = item.quantity > 0 ? item.quantity : 1;
+      for (let unit = 0; unit < qty; unit++) {
+        const grantKey = `order_item:${item.id}:unit:${unit}:package:${pkg.id}`;
+        const userPackage = await this.productionPrisma.userBenefitPackage.findUnique({
+          where: { grantKey },
+          select: { id: true },
+        });
+        targets.push({
+          packageId: pkg.id,
+          userPackageId: userPackage?.id ?? null,
+          grantKey,
+        });
+      }
+    }
+    return targets;
+  }
+
+  private async assertOrderBenefitsComplete(orderId: bigint | string) {
+    const targets = await this.getExpectedGrantTargets(orderId);
+    for (const target of targets) {
+      if (!target.userPackageId) {
+        throw new Error(`权益包未完整发放：${target.grantKey}`);
+      }
+      const items = await this.productionPrisma.benefitPackageItem.findMany({
+        where: { packageId: target.packageId, deletedAt: null, status: 1 },
+        select: { id: true, quantity: true },
+      });
+      for (const item of items) {
+        const expected = item.quantity > 0 ? item.quantity : 1;
+        const actual = await this.productionPrisma.userBenefitEntitlement.count({
+          where: {
+            userBenefitPackageId: target.userPackageId,
+            packageItemId: item.id,
+            deletedAt: null,
+          },
+        });
+        if (actual < expected) {
+          throw new Error(
+            `权益码未完整发放：grantKey=${target.grantKey}, itemId=${item.id}, expected=${expected}, actual=${actual}`,
+          );
+        }
+      }
+    }
+  }
+
+  private async repairUserPackageEntitlements(
+    userPackageId: bigint,
+    userId: bigint,
+    packageId: bigint,
+  ) {
+    await this.productionPrisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id FROM user_benefit_packages
+        WHERE id = ${userPackageId}
+        FOR UPDATE
+      `;
+      const userPackage = await tx.userBenefitPackage.findUnique({
+        where: { id: userPackageId },
+        select: { id: true, status: true },
+      });
+      if (!userPackage || userPackage.status !== 'active') return;
+
+      const items = await tx.benefitPackageItem.findMany({
+        where: { packageId, deletedAt: null, status: 1 },
+        select: { id: true, quantity: true },
+        orderBy: { sortOrder: 'asc' },
+      });
+      for (const item of items) {
+        const expected = item.quantity > 0 ? item.quantity : 1;
+        const actual = await tx.userBenefitEntitlement.count({
+          where: {
+            userBenefitPackageId,
+            packageItemId: item.id,
+            deletedAt: null,
+          },
+        });
+        const missing = Math.max(0, expected - actual);
+        for (let index = 0; index < missing; index++) {
+          await this.createRepairEntitlementWithRetry(tx, userPackageId, userId, item.id);
+        }
+      }
+    });
+  }
+
+  private async createRepairEntitlementWithRetry(
+    tx: Prisma.TransactionClient,
+    userBenefitPackageId: bigint,
+    userId: bigint,
+    packageItemId: bigint,
+    maxRetries = 5,
+  ) {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      let verifyCode = '';
+      for (let i = 0; i < VERIFY_CODE_LENGTH; i++) {
+        verifyCode += VERIFY_CODE_CHARS[Math.floor(Math.random() * VERIFY_CODE_CHARS.length)];
+      }
+      try {
+        await tx.userBenefitEntitlement.create({
+          data: {
+            userBenefitPackageId,
+            userId,
+            packageItemId,
+            verifyCode,
+            status: 'unused',
+          },
+        });
+        return;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002' &&
+          attempt < maxRetries - 1
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('权益补偿核销码生成失败');
   }
 
   private async findAffectedPackageIds(
