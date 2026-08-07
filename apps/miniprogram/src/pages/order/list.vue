@@ -42,9 +42,13 @@
             <text class="total-price">¥{{ formatPrice(order.payAmount) }}</text>
           </view>
         </view>
+        <view v-if="order.status === 'paid'" class="group-waiting-tip">
+          已付款，等待拼团成团；成团后才进入发货或自提流程
+        </view>
         <view class="order-actions">
           <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
           <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap.stop="handlePay(order)">去支付</view>
+          <view v-if="order.status === 'paid'" class="action-btn primary" @tap.stop="goDetail(order.id)">查看拼团进度</view>
           <view v-if="order.status === 'pending_pickup'" class="action-btn primary" @tap.stop="goDetail(order.id)">查看自提码</view>
           <view v-if="order.status === 'delivered'" class="action-btn primary" @tap.stop="handleConfirm(order.id)">确认收货</view>
           <view v-if="order.status === 'completed' || order.status === 'delivered'" class="action-btn" @tap.stop="handleAftersale(order)">申请售后</view>
@@ -58,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { onLoad, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { getOrderList, cancelOrder, confirmReceive, normalizeOrderStatus, type OrderItem, type OrderStatus } from '@/api/order'
 import { createPayment, wxPay } from '@/api/payment'
@@ -70,6 +74,7 @@ import Empty from '@/components/Empty.vue'
 const tabs = [
   { label: '全部', value: '' },
   { label: '待付款', value: 'pending_payment' },
+  { label: '待成团', value: 'paid' },
   { label: '待发货', value: 'pending_delivery' },
   { label: '待自提', value: 'pending_pickup' },
   { label: '待收货', value: 'delivered' },
@@ -139,6 +144,7 @@ function handleAftersale(order: OrderItem) {
 function getStatusClass(status: string): string {
   const map: Record<string, string> = {
     pending_payment: 'status-unpaid',
+    paid: 'status-grouping',
     pending_delivery: 'status-shipping',
     pending_pickup: 'status-pickup',
     delivered: 'status-receiving',
@@ -327,6 +333,7 @@ defineExpose({
   font-weight: 500;
 
   &.status-unpaid { @include status-warning; }
+  &.status-grouping { @include status-primary; }
   &.status-shipping { @include status-info; }
   &.status-pickup { @include status-primary; }
   &.status-receiving { background: $secondary-soft; color: $secondary-color; }
@@ -409,6 +416,16 @@ defineExpose({
   color: $price-color;
   font-weight: 800;
   font-size: $font-lg;
+}
+
+.group-waiting-tip {
+  margin-top: 8rpx;
+  padding: 14rpx 18rpx;
+  border-radius: $radius-lg;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: $font-xs;
+  line-height: 1.5;
 }
 
 .order-actions {
