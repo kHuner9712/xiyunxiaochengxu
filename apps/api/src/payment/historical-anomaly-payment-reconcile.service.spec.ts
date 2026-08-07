@@ -6,13 +6,10 @@ import { HistoricalAnomalyPaymentReconcileService } from './historical-anomaly-p
 describe('HistoricalAnomalyPaymentReconcileService', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  function createService(orders: any[], existingTasks: any[] = []) {
+  function createService(rows: any[]) {
     const prisma: any = {
-      order: {
-        findMany: jest.fn().mockResolvedValue(orders),
-      },
+      $queryRaw: jest.fn().mockResolvedValue(rows),
       paymentCompensationTask: {
-        findMany: jest.fn().mockResolvedValue(existingTasks),
         createMany: jest.fn().mockImplementation(async ({ data }: any) => ({ count: data.length })),
       },
     };
@@ -26,16 +23,14 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
     return { service, prisma };
   }
 
-  const cancelledPaidOrder = (overrides: any = {}) => ({
-    id: 42n,
+  const exposureRow = (overrides: any = {}) => ({
+    orderId: 42n,
     orderNo: 'O42',
     payAmount: 1000,
-    payment: {
-      id: 7n,
-      amount: 1000,
-      transactionId: 'WX-TX-42',
-    },
-    orderRefunds: [],
+    paymentId: 7n,
+    paymentAmount: 1000,
+    transactionId: 'WX-TX-42',
+    countedRefundAmount: 0,
     ...overrides,
   });
 
@@ -46,23 +41,10 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
       failed: 0,
       skipped: 0,
     });
-    const { service, prisma } = createService([cancelledPaidOrder()]);
+    const { service, prisma } = createService([exposureRow()]);
 
     const result = await service.reconcilePendingPayments();
 
-    expect(prisma.order.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        status: OrderStatus.cancelled,
-        payAmount: { gt: 0 },
-        payment: {
-          is: expect.objectContaining({
-            status: PAYMENT_STATUS.SUCCESS,
-            paymentMethod: 'wechat',
-            transactionId: { not: null },
-          }),
-        },
-      }),
-    }));
     expect(prisma.paymentCompensationTask.createMany).toHaveBeenCalledWith({
       data: [expect.objectContaining({
         orderNo: 'O42',
@@ -70,6 +52,13 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
         amount: 1000,
         reason: 'cancelled_order_paid_historical_anomaly',
         status: 'pending',
+        callbackPayload: expect.objectContaining({
+          orderId: '42',
+          paymentId: '7',
+          paidAmount: 1000,
+          countedRefundAmount: 0,
+          outstandingAmount: 1000,
+        }),
       })],
       skipDuplicates: true,
     });
@@ -86,13 +75,9 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
       failed: 0,
       skipped: 0,
     });
-    const order = cancelledPaidOrder({
-      orderRefunds: [
-        { id: 1n, refundAmount: 400, status: REFUND_STATUS.SUCCESS, outRefundNo: 'R1' },
-        { id: 2n, refundAmount: 100, status: REFUND_STATUS.CLOSED, outRefundNo: 'R2' },
-      ],
-    });
-    const { service, prisma } = createService([order]);
+    const { service, prisma } = createService([
+      exposureRow({ countedRefundAmount: 400n }),
+    ]);
 
     await service.reconcilePendingPayments();
 
@@ -100,23 +85,18 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
     expect(payload.amount).toBe(600);
     expect(payload.callbackPayload.countedRefundAmount).toBe(400);
     expect(payload.callbackPayload.outstandingAmount).toBe(600);
-    expect(payload.callbackPayload.countedRefunds).toHaveLength(1);
   });
 
-  it('does not create a task when active or successful refunds fully cover the paid amount', async () => {
+  it('fails safe when a defensive row is already fully covered by refunds', async () => {
     jest.spyOn(PaymentReconcileService.prototype, 'reconcilePendingPayments').mockResolvedValue({
       total: 0,
       fixed: 0,
       failed: 0,
       skipped: 0,
     });
-    const order = cancelledPaidOrder({
-      orderRefunds: [
-        { id: 1n, refundAmount: 700, status: REFUND_STATUS.SUCCESS, outRefundNo: 'R1' },
-        { id: 2n, refundAmount: 300, status: REFUND_STATUS.PROCESSING, outRefundNo: 'R2' },
-      ],
-    });
-    const { service, prisma } = createService([order]);
+    const { service, prisma } = createService([
+      exposureRow({ countedRefundAmount: 1000n }),
+    ]);
 
     const result = await service.reconcilePendingPayments();
 
@@ -125,22 +105,30 @@ describe('HistoricalAnomalyPaymentReconcileService', () => {
     expect(result.cancelledPaidSeeded).toBe(0);
   });
 
-  it('does not reseed an anomaly that already has the same order and transaction task', async () => {
+  it('filters at the database layer for cancelled successful WeChat payments and existing callback tasks', async () => {
     jest.spyOn(PaymentReconcileService.prototype, 'reconcilePendingPayments').mockResolvedValue({
       total: 0,
       fixed: 0,
       failed: 0,
       skipped: 0,
     });
-    const { service, prisma } = createService(
-      [cancelledPaidOrder()],
-      [{ orderNo: 'O42', transactionId: 'WX-TX-42' }],
-    );
+    const { service, prisma } = createService([]);
 
-    const result = await service.reconcilePendingPayments();
+    await service.reconcilePendingPayments();
 
-    expect(prisma.paymentCompensationTask.createMany).not.toHaveBeenCalled();
-    expect(result.cancelledPaidDetected).toBe(0);
-    expect(result.cancelledPaidSeeded).toBe(0);
+    const rawCall = prisma.$queryRaw.mock.calls[0];
+    const sql = Array.from(rawCall[0] as readonly string[]).join(' ');
+    const values = rawCall.slice(1);
+    expect(sql).toContain('NOT EXISTS');
+    expect(sql).toContain('payment_compensation_tasks');
+    expect(sql).toContain('HAVING COALESCE(SUM');
+    expect(values).toContain(OrderStatus.cancelled);
+    expect(values).toContain(PAYMENT_STATUS.SUCCESS);
+    expect(values).toContain(REFUND_STATUS.INITIATING);
+    expect(values).toContain(REFUND_STATUS.PENDING);
+    expect(values).toContain(REFUND_STATUS.PROCESSING);
+    expect(values).toContain(REFUND_STATUS.SUCCESS);
+    expect(values).toContain('cancelled_order_paid_callback');
+    expect(values).toContain('cancelled_order_paid_historical_anomaly');
   });
 });
