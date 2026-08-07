@@ -3,9 +3,9 @@ import { ref, computed } from 'vue'
 import { get, post, put, del } from '@/utils/request'
 
 interface CartItem {
-  id: number
-  productId: number
-  skuId: number
+  id: string
+  productId: string
+  skuId: string
   productName: string
   productImage: string
   skuName: string
@@ -68,17 +68,17 @@ export const useCartStore = defineStore('cart', () => {
     }
   }
 
-  async function addToCart(params: { productId: number; skuId: number; quantity: number }) {
+  async function addToCart(params: { productId: string; skuId: string; quantity: number }) {
     await post('/weapp/cart/add', params)
     await fetchCart()
   }
 
-  async function updateQuantity(cartItemId: number, quantity: number) {
+  async function updateQuantity(cartItemId: string, quantity: number) {
     await put('/weapp/cart/update', { id: cartItemId, quantity })
     await fetchCart()
   }
 
-  async function removeItem(cartItemId: number) {
+  async function removeItem(cartItemId: string) {
     await del(`/weapp/cart/delete/${cartItemId}`)
     await fetchCart()
   }
