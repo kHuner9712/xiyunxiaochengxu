@@ -92,7 +92,7 @@
 
         <el-card v-if="needsRefundSync" style="margin-bottom: 20px">
           <el-alert
-            title="退款请求结果待核实，请先同步微信退款状态，确认已关闭或异常后再重试"
+            title="退款请求结果待核实，请先同步微信退款状态；确认已关闭后才能重新发起普通退款"
             type="warning"
             :closable="false"
             show-icon
@@ -106,6 +106,16 @@
           >
             同步微信退款状态
           </el-button>
+        </el-card>
+
+        <el-card v-if="needsManualRefund" style="margin-bottom: 20px">
+          <el-alert
+            title="微信退款异常，不能重新发起普通退款"
+            description="请前往微信支付商户平台的交易中心处理此笔异常退款，或按微信支付异常退款流程处理。处理完成后再同步退款状态。"
+            type="error"
+            :closable="false"
+            show-icon
+          />
         </el-card>
 
         <el-card v-if="canRefund" v-permission="'order:aftersale:refund'">
@@ -155,6 +165,9 @@ const isRefundRetry = computed(() => {
 })
 const needsRefundSync = computed(() => {
   return detail.value.status === 'pending_refund' && detail.value.refundSyncRequired === true
+})
+const needsManualRefund = computed(() => {
+  return detail.value.status === 'pending_refund' && detail.value.refundManualRequired === true
 })
 const canRefund = computed(() => {
   return (
