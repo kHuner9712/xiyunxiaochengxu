@@ -1,7 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PaymentController, RefundController, PaymentReconcileController, RefundReconcileController, PaymentCompensationController } from './payment.controller';
 import { PaymentService } from './payment.service';
-import { RecoverableProductionPaymentService } from './recoverable-production-payment.service';
+import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recoverable-production-payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
@@ -17,7 +17,7 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
   providers: [
     {
       provide: PaymentService,
-      useClass: RecoverableProductionPaymentService,
+      useClass: StockSafeRecoverableProductionPaymentService,
     },
     PaymentReconcileService,
   ],
