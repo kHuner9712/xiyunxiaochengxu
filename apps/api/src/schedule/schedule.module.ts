@@ -7,6 +7,7 @@ import { OrderModule } from '../order/order.module';
 import { PaymentModule } from '../payment/payment.module';
 import { FlashSaleModule } from '../flash-sale/flash-sale.module';
 import { GroupBuyModule } from '../group-buy/group-buy.module';
+import { MerchantSettlementModule } from '../merchant-settlement/merchant-settlement.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { GroupBuyModule } from '../group-buy/group-buy.module';
     OrderModule,
     FlashSaleModule,
     GroupBuyModule,
+    MerchantSettlementModule,
     forwardRef(() => PaymentModule),
   ],
   providers: [ScheduleService],
