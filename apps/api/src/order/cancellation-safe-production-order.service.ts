@@ -169,7 +169,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     }
   }
 
-  private async withPaymentCancelLock<T>(orderId: string, action: () => Promise<T>) {
+  private async withPaymentCancelLock<T>(orderId: string, action: () => Promise<T>): Promise<T> {
     const key = this.paymentCancelLockKey(orderId);
     const token = this.lockToken();
     const acquired = await this.cancellationRedis.setNX(
