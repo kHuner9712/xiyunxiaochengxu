@@ -43,6 +43,7 @@ export interface PromotionCheckoutInput {
   referrerUserId?: string;
   remark?: string;
   autoCloseAt?: Date;
+  holdUntilPromotionSuccess?: boolean;
 }
 
 export interface PromotionCheckoutResult {
@@ -188,10 +189,13 @@ export class PromotionCheckoutService {
       totalAmount - activityDiscountAmount + freightAmount,
     );
     const isZeroPay = payAmount === 0;
+    const holdUntilPromotionSuccess = input.holdUntilPromotionSuccess === true;
     const status = isZeroPay
-      ? fulfillmentType === 'pickup'
-        ? OrderStatus.pending_pickup
-        : OrderStatus.pending_delivery
+      ? holdUntilPromotionSuccess
+        ? OrderStatus.paid
+        : fulfillmentType === 'pickup'
+          ? OrderStatus.pending_pickup
+          : OrderStatus.pending_delivery
       : OrderStatus.pending_payment;
     const autoCloseAt = input.autoCloseAt ?? new Date(Date.now() + 30 * 60 * 1000);
     if (!isZeroPay && autoCloseAt.getTime() <= Date.now()) {
@@ -207,7 +211,7 @@ export class PromotionCheckoutService {
       ? BigInt(input.referrerUserId)
       : null;
     const pickupCode =
-      isZeroPay && fulfillmentType === 'pickup'
+      isZeroPay && !holdUntilPromotionSuccess && fulfillmentType === 'pickup'
         ? await this.generatePickupCode(tx)
         : null;
 
@@ -321,7 +325,9 @@ export class PromotionCheckoutService {
           orderId: order.id,
           operatorType: 'system',
           action: 'pay_zero_amount',
-          content: '0元促销订单自动支付成功',
+          content: holdUntilPromotionSuccess
+            ? '0元拼团订单自动支付成功，等待成团'
+            : '0元促销订单自动支付成功',
         },
       });
     }
