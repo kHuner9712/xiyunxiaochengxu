@@ -121,7 +121,10 @@ export class ScheduleService {
     if (!lockValue) return;
     try {
       const result = await this.paymentReconcileService.reconcilePendingPayments();
-      this.logger.log(`支付对账任务完成: ${JSON.stringify(result)}`);
+      const sideEffects = await (this.paymentService as any).reconcilePaidOrderSideEffects?.();
+      this.logger.log(
+        `支付对账任务完成: payment=${JSON.stringify(result)}, sideEffects=${JSON.stringify(sideEffects ?? {})}`,
+      );
     } catch (error) {
       const err = error as Error;
       this.logger.error(`支付对账任务失败：${err.message}`, err.stack);
