@@ -73,6 +73,7 @@ describe('production operation closure contracts', () => {
 
   it('uses the outermost hardened runtime providers rather than leaving safety wrappers unused', () => {
     const paymentModule = read('apps/api/src/payment/payment.module.ts');
+    const historicalReconcile = read('apps/api/src/payment/historical-anomaly-payment-reconcile.service.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
     const aftersaleModule = read('apps/api/src/aftersale/aftersale.module.ts');
     const groupModule = read('apps/api/src/group-buy/group-buy.module.ts');
@@ -82,7 +83,8 @@ describe('production operation closure contracts', () => {
     const shareModule = read('apps/api/src/share/share.module.ts');
 
     expect(paymentModule).toContain('CancellationSafeStockSafePaymentService');
-    expect(paymentModule).toContain('ProductionPaymentReconcileService');
+    expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
+    expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
     expect(orderModule).toContain('CancellationSafeProductionOrderService');
     expect(aftersaleModule).toContain('ProductionAftersaleService');
     expect(groupModule).toContain('ProductionGroupBuyService');
