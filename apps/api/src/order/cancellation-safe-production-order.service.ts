@@ -3,7 +3,7 @@ import { OrderStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { BusinessEventService } from '../common/business-event.service';
-import { PAYMENT_STATUS } from '../common/constants';
+import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
@@ -29,6 +29,32 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       groupBuyService,
       flashSaleService,
     );
+
+    // OrderService keeps the completion reward helper private, but the runtime method is
+    // dispatched through `this`. Wrap it at the outermost production provider so the original
+    // completion transaction remains intact while reward points use net paid revenue after all
+    // refunds that were already successful before the order completes.
+    const rewardCompletedOrder = (this as any).rewardCompletedOrder.bind(this);
+    (this as any).rewardCompletedOrder = async (
+      tx: any,
+      order: any,
+      rewardSource: string,
+    ) => {
+      const refundSummary = await tx.orderRefund.aggregate({
+        where: {
+          orderId: order.id,
+          status: REFUND_STATUS.SUCCESS,
+        },
+        _sum: { refundAmount: true },
+      });
+      const successfulRefundAmount = refundSummary?._sum?.refundAmount ?? 0;
+      const netPayAmount = Math.max((order.payAmount ?? 0) - successfulRefundAmount, 0);
+      return rewardCompletedOrder(
+        tx,
+        { ...order, payAmount: netPayAmount },
+        rewardSource,
+      );
+    };
   }
 
   override async cancel(userId: string, id: string) {
@@ -143,7 +169,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     }
   }
 
-  private async withPaymentCancelLock<T>(orderId: string, action: () => Promise<T>): Promise<T> {
+  private async withPaymentCancelLock<T>(orderId: string, action: () => Promise<T>) {
     const key = this.paymentCancelLockKey(orderId);
     const token = this.lockToken();
     const acquired = await this.cancellationRedis.setNX(
