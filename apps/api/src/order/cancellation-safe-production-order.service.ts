@@ -31,17 +31,17 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     );
   }
 
-  override async cancel(orderId: string, userId: string, reason?: string) {
-    return this.withPaymentCancelLock(orderId, async () => {
-      await this.assertManualCancelHasNoPayment(orderId);
-      return super.cancel(orderId, userId, reason);
+  override async cancel(userId: string, id: string) {
+    return this.withPaymentCancelLock(id, async () => {
+      await this.assertManualCancelHasNoPayment(id);
+      return super.cancel(userId, id);
     });
   }
 
-  override async adminCancel(orderId: string, adminId: string, reason?: string) {
-    return this.withPaymentCancelLock(orderId, async () => {
-      await this.assertManualCancelHasNoPayment(orderId);
-      return super.adminCancel(orderId, adminId, reason);
+  override async adminCancel(id: string, reason: string) {
+    return this.withPaymentCancelLock(id, async () => {
+      await this.assertManualCancelHasNoPayment(id);
+      return super.adminCancel(id, reason);
     });
   }
 
