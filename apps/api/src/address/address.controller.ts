@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common'
 import { AddressService } from './address.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateAddressDto } from './dto/create-address.dto';
+import { UpdateAddressDto } from './dto/update-address.dto';
 
 @Controller('weapp/address')
 export class WeappAddressController {
@@ -26,7 +27,7 @@ export class WeappAddressController {
   async update(
     @CurrentUser('id') userId: string,
     @Param('id') id: string,
-    @Body() dto: Partial<CreateAddressDto>,
+    @Body() dto: UpdateAddressDto,
   ) {
     return this.addressService.update(userId, id, dto);
   }
