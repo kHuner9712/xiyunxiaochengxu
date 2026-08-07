@@ -241,7 +241,7 @@ export class AftersaleService {
         })
       : null;
     const retryableStatuses = [REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL] as string[];
-    const syncRequiredStatuses = [REFUND_STATUS.INITIATING, REFUND_STATUS.FAILED] as string[];
+    const syncRequiredStatuses = [REFUND_STATUS.INITIATING, REFUND_STATUS.FAILED, REFUND_STATUS.RETRYING] as string[];
 
     return {
       ...this.serializeAftersale(aftersale),
@@ -403,7 +403,7 @@ export class AftersaleService {
           id: latestRefundBefore.id,
           status: latestRefundBefore.status,
         },
-        data: { status: REFUND_STATUS.FAILED },
+        data: { status: REFUND_STATUS.RETRYING },
       });
       if (claim.count !== 1) {
         throw new BadRequestException('退款操作正在处理中，请勿重复提交');
@@ -472,7 +472,7 @@ export class AftersaleService {
           await prisma.orderRefund.updateMany({
             where: {
               id: latestRefundBefore.id,
-              status: REFUND_STATUS.FAILED,
+              status: REFUND_STATUS.RETRYING,
             },
             data: { status: originalRetryStatus },
           });
