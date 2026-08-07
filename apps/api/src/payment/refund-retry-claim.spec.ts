@@ -1,4 +1,6 @@
 import { describe, expect, it, jest } from '@jest/globals';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { REFUND_STATUS } from '../common/constants';
 import { PaymentService } from './payment.service';
 
@@ -120,5 +122,14 @@ describe('refund retry claim safety', () => {
 
     expect(prisma.orderRefund.findFirst).toHaveBeenCalledWith({ where: { outRefundNo: 'RF70' } });
     expect(processSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('refund query validation', () => {
+  it('requires a decimal order id before service bigint conversion', () => {
+    const controller = readFileSync(resolve(__dirname, 'payment.controller.ts'), 'utf8');
+
+    expect(controller).toMatch(/IsIn, Matches/);
+    expect(controller).toMatch(/@Matches\(\/\^\\d\+\$\/, \{ message: '订单ID必须为数字' \}\)/);
   });
 });
