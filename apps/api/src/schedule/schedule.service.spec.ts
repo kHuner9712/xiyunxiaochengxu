@@ -9,6 +9,12 @@ function createRedisService() {
   };
 }
 
+function createPrismaService() {
+  return {
+    $queryRaw: jest.fn(),
+  };
+}
+
 function createOrderService() {
   return {
     closeTimeoutOrders: jest.fn(),
@@ -19,6 +25,8 @@ function createOrderService() {
 function createPaymentService() {
   return {
     createGroupBuyFailureRefund: jest.fn(),
+    reconcilePaidOrderSideEffects: jest.fn(),
+    reconcileRefundSuccessSideEffects: jest.fn(),
   };
 }
 
@@ -63,6 +71,7 @@ function createBenefitPackageService() {
 describe('ScheduleService', () => {
   let service: ScheduleService;
   let redisService: ReturnType<typeof createRedisService>;
+  let prismaService: ReturnType<typeof createPrismaService>;
   let orderService: ReturnType<typeof createOrderService>;
   let paymentService: ReturnType<typeof createPaymentService>;
   let paymentReconcileService: ReturnType<typeof createPaymentReconcileService>;
@@ -74,6 +83,7 @@ describe('ScheduleService', () => {
 
   beforeEach(() => {
     redisService = createRedisService();
+    prismaService = createPrismaService();
     orderService = createOrderService();
     paymentService = createPaymentService();
     paymentReconcileService = createPaymentReconcileService();
@@ -84,8 +94,12 @@ describe('ScheduleService', () => {
     benefitPackageService = createBenefitPackageService();
     redisService.setNX.mockImplementation(async () => true);
     redisService.releaseLockWithLua.mockImplementation(async () => true);
+    prismaService.$queryRaw.mockImplementation(async () => []);
     orderService.closeTimeoutOrders.mockImplementation(async () => ({ closedCount: 0 }));
+    orderService.autoCompleteOrders.mockImplementation(async () => ({ completedCount: 0 }));
     paymentService.createGroupBuyFailureRefund.mockImplementation(async () => ({ status: 'pending' }));
+    paymentService.reconcilePaidOrderSideEffects.mockImplementation(async () => ({ total: 0 }));
+    paymentService.reconcileRefundSuccessSideEffects.mockImplementation(async () => ({ total: 0 }));
     paymentReconcileService.confirmTimeoutOrdersBeforeClose.mockImplementation(async () => ({ total: 0, fixed: 0, delayed: 0, closable: 0, failed: 0 }));
     paymentReconcileService.reconcilePendingPayments.mockImplementation(async () => ({ total: 0, fixed: 0, skipped: 0, failed: 0 }));
     paymentReconcileService.reconcilePendingRefunds.mockImplementation(async () => ({ total: 0, fixed: 0, skipped: 0, failed: 0 }));
@@ -97,6 +111,7 @@ describe('ScheduleService', () => {
 
     service = new ScheduleService(
       redisService as any,
+      prismaService as any,
       orderService as any,
       paymentService as any,
       paymentReconcileService as any,
@@ -156,6 +171,33 @@ describe('ScheduleService', () => {
       'schedule:expire_group_buys',
       expect.any(String),
     );
+  });
+
+  it('已失败拼团即使上一轮退款在建立退款记录前失败，也会被下一轮重新发现', async () => {
+    groupBuyService.markExpiredGroups.mockImplementation(async () => ({
+      affected: 0,
+      refundOrderIds: [],
+    }));
+    prismaService.$queryRaw.mockImplementation(async () => [{ orderId: 987654321n }]);
+
+    await service.handleExpiredGroupBuys();
+
+    expect(paymentService.createGroupBuyFailureRefund).toHaveBeenCalledWith(
+      '987654321',
+      '拼团失败自动退款',
+    );
+  });
+
+  it('新失败团与持久化扫描结果会去重，避免同一轮重复提交退款', async () => {
+    groupBuyService.markExpiredGroups.mockImplementation(async () => ({
+      affected: 1,
+      refundOrderIds: ['123'],
+    }));
+    prismaService.$queryRaw.mockImplementation(async () => [{ orderId: 123n }]);
+
+    await service.handleExpiredGroupBuys();
+
+    expect(paymentService.createGroupBuyFailureRefund).toHaveBeenCalledTimes(1);
   });
 
   it('按小时生成超过售后窗口的销售分佣', async () => {
