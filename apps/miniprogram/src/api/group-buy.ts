@@ -42,6 +42,8 @@ export interface StartGroupBuyResult {
   groupNo: string
   orderId: string
   role: string
+  isZeroPay: boolean
+  orderStatus?: string | null
 }
 
 export const groupBuyApi = {
