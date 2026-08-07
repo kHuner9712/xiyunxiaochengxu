@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
 import { RecoverableProductionPaymentService } from './recoverable-production-payment.service';
@@ -79,7 +80,7 @@ describe('RecoverableProductionPaymentService', () => {
       flashService,
     );
 
-    return { service, prisma, benefitService };
+    return { service, prisma, benefitService, shareService };
   }
 
   it('creates a new refund only after the previous attempt is definitively closed', async () => {
@@ -154,5 +155,21 @@ describe('RecoverableProductionPaymentService', () => {
     });
     expect(result.status).toBe(REFUND_STATUS.PENDING);
     expect(createRefund).not.toHaveBeenCalled();
+  });
+
+  it('does not allow an admin to ignore or manually resolve refund-success side-effect tasks', async () => {
+    const { service, prisma } = createService(null);
+    prisma.paymentCompensationTask.findFirst.mockResolvedValue({
+      id: 9n,
+      reason: 'refund_success_side_effects',
+      status: 'pending',
+    });
+
+    await expect(
+      service.resolveCompensationTask('9', '1', 'manual bypass', 'ignored'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.resolveCompensationTask('9', '1', 'manual bypass', 'resolved'),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
