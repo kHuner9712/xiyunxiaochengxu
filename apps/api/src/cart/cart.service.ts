@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { AddCartDto } from './dto/add-cart.dto';
 import { UpdateCartDto } from './dto/update-cart.dto';
-import { CART_MAX_QUANTITY, CART_MAX_ITEMS } from '@baby-mall/shared';
-import { formatSkuSpecs } from '@baby-mall/shared';
+import { CART_MAX_QUANTITY, CART_MAX_ITEMS, formatSkuSpecs } from '@baby-mall/shared';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 
 @Injectable()
@@ -13,8 +14,9 @@ export class CartService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(userId: string) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
     const carts = await this.prisma.cart.findMany({
-      where: { userId: BigInt(userId) },
+      where: { userId: userIdValue },
       orderBy: { createdAt: 'desc' },
       include: {
         product: { select: { id: true, name: true, mainImage: true, status: true } },
@@ -27,107 +29,156 @@ export class CartService {
   }
 
   async addItem(userId: string, dto: AddCartDto) {
-    const sku = await this.prisma.productSku.findFirst({
-      where: { id: BigInt(dto.skuId), status: 1 },
-      include: { product: true },
-    });
-    if (!sku) throw new NotFoundException('SKU不存在或已下架');
-    if (sku.product.status !== 1) throw new BadRequestException('商品已下架');
-    if (sku.stock < dto.quantity) throw new BadRequestException('库存不足');
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const skuId = parsePositiveBigIntId(dto.skuId, 'SKU ');
+    const requestedProductId = dto.productId
+      ? parsePositiveBigIntId(dto.productId, '商品')
+      : null;
+    if (!Number.isInteger(dto.quantity) || dto.quantity <= 0 || dto.quantity > CART_MAX_QUANTITY) {
+      throw new BadRequestException(`单件商品数量必须为1-${CART_MAX_QUANTITY}`);
+    }
 
-    const cartCount = await this.prisma.cart.count({
-      where: { userId: BigInt(userId) },
-    });
-
-    const existing = await this.prisma.cart.findFirst({
-      where: { userId: BigInt(userId), skuId: BigInt(dto.skuId) },
-    });
-
-    if (existing) {
-      const newQuantity = existing.quantity + dto.quantity;
-      if (newQuantity > CART_MAX_QUANTITY) {
-        throw new BadRequestException(`单件商品数量不能超过${CART_MAX_QUANTITY}`);
-      }
-      if (sku.stock < newQuantity) throw new BadRequestException('库存不足');
-
-      const result = await this.prisma.cart.update({
-        where: { id: existing.id },
-        data: { quantity: newQuantity },
+    const result = await this.prisma.$transaction(async (tx) => {
+      await this.lockUser(tx, userIdValue);
+      const sku = await tx.productSku.findFirst({
+        where: { id: skuId, status: 1 },
+        include: { product: true },
       });
-      this.logger.log(`用户${userId}更新购物车SKU${dto.skuId}数量为${newQuantity}`);
-      return { ...result, id: result.id.toString(), userId: result.userId.toString(), productId: result.productId.toString(), skuId: result.skuId.toString() };
-    }
+      if (!sku) throw new NotFoundException('SKU不存在或已下架');
+      if (sku.product.status !== 1) throw new BadRequestException('商品已下架');
+      if (requestedProductId && requestedProductId !== sku.productId) {
+        throw new BadRequestException('SKU不属于所选商品');
+      }
 
-    if (cartCount >= CART_MAX_ITEMS) {
-      throw new BadRequestException(`购物车最多添加${CART_MAX_ITEMS}种商品`);
-    }
+      const existing = await tx.cart.findFirst({
+        where: { userId: userIdValue, skuId },
+      });
+      if (existing) {
+        const newQuantity = existing.quantity + dto.quantity;
+        if (newQuantity > CART_MAX_QUANTITY) {
+          throw new BadRequestException(`单件商品数量不能超过${CART_MAX_QUANTITY}`);
+        }
+        if (sku.stock < newQuantity) throw new BadRequestException('库存不足');
+        return tx.cart.update({
+          where: { id: existing.id },
+          data: { quantity: newQuantity },
+        });
+      }
 
-    const result = await this.prisma.cart.create({
-      data: {
-        userId: BigInt(userId),
-        productId: sku.productId,
-        skuId: BigInt(dto.skuId),
-        quantity: dto.quantity,
-      },
+      const cartCount = await tx.cart.count({ where: { userId: userIdValue } });
+      if (cartCount >= CART_MAX_ITEMS) {
+        throw new BadRequestException(`购物车最多添加${CART_MAX_ITEMS}种商品`);
+      }
+      if (sku.stock < dto.quantity) throw new BadRequestException('库存不足');
+
+      return tx.cart.create({
+        data: {
+          userId: userIdValue,
+          productId: sku.productId,
+          skuId,
+          quantity: dto.quantity,
+        },
+      });
     });
-    this.logger.log(`用户${userId}添加购物车SKU${dto.skuId}，数量${dto.quantity}`);
-    return { ...result, id: result.id.toString(), userId: result.userId.toString(), productId: result.productId.toString(), skuId: result.skuId.toString() };
+
+    this.logger.log(`用户${userId}添加/更新购物车SKU${dto.skuId}，数量${result.quantity}`);
+    return this.serializeRawCart(result);
   }
 
   async updateItem(userId: string, dto: UpdateCartDto) {
-    const cart = await this.prisma.cart.findFirst({
-      where: { id: BigInt(dto.id), userId: BigInt(userId) },
-    });
-    if (!cart) throw new NotFoundException('购物车记录不存在');
-
-    const updateData: any = {};
-    if (dto.quantity !== undefined) {
-      if (dto.quantity > CART_MAX_QUANTITY) {
-        throw new BadRequestException(`单件商品数量不能超过${CART_MAX_QUANTITY}`);
-      }
-      const sku = await this.prisma.productSku.findFirst({
-        where: { id: cart.skuId },
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const cartId = parsePositiveBigIntId(dto.id, '购物车');
+    const result = await this.prisma.$transaction(async (tx) => {
+      await this.lockUser(tx, userIdValue);
+      const cart = await tx.cart.findFirst({
+        where: { id: cartId, userId: userIdValue },
+        include: { sku: { include: { product: true } } },
       });
-      if (sku && sku.stock < dto.quantity) throw new BadRequestException('库存不足');
-      updateData.quantity = dto.quantity;
-    }
-    if (dto.isSelected !== undefined) {
-      updateData.isSelected = dto.isSelected;
-    }
+      if (!cart) throw new NotFoundException('购物车记录不存在');
 
-    const result = await this.prisma.cart.update({
-      where: { id: BigInt(dto.id) },
-      data: updateData,
+      const updateData: Prisma.CartUpdateInput = {};
+      if (dto.quantity !== undefined) {
+        if (!Number.isInteger(dto.quantity) || dto.quantity <= 0 || dto.quantity > CART_MAX_QUANTITY) {
+          throw new BadRequestException(`单件商品数量必须为1-${CART_MAX_QUANTITY}`);
+        }
+        if (cart.sku.status !== 1 || cart.sku.product.status !== 1) {
+          throw new BadRequestException('商品或SKU已下架，不能修改购买数量');
+        }
+        if (cart.sku.stock < dto.quantity) throw new BadRequestException('库存不足');
+        updateData.quantity = dto.quantity;
+      }
+      if (dto.isSelected !== undefined) {
+        updateData.isSelected = dto.isSelected;
+      }
+
+      if (Object.keys(updateData).length === 0) return cart;
+      return tx.cart.update({
+        where: { id: cartId },
+        data: updateData,
+      });
     });
     this.logger.log(`用户${userId}更新购物车项${dto.id}`);
-    return { ...result, id: result.id.toString(), userId: result.userId.toString(), productId: result.productId.toString(), skuId: result.skuId.toString() };
+    return this.serializeRawCart(result);
   }
 
   async removeItem(userId: string, id: string) {
-    const cart = await this.prisma.cart.findFirst({
-      where: { id: BigInt(id), userId: BigInt(userId) },
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const cartId = parsePositiveBigIntId(id, '购物车');
+    const result = await this.prisma.$transaction(async (tx) => {
+      await this.lockUser(tx, userIdValue);
+      const cart = await tx.cart.findFirst({
+        where: { id: cartId, userId: userIdValue },
+      });
+      if (!cart) throw new NotFoundException('购物车记录不存在');
+      return tx.cart.delete({ where: { id: cartId } });
     });
-    if (!cart) throw new NotFoundException('购物车记录不存在');
-
-    const result = await this.prisma.cart.delete({ where: { id: BigInt(id) } });
     this.logger.log(`用户${userId}删除购物车项${id}`);
-    return { ...result, id: result.id.toString(), userId: result.userId.toString(), productId: result.productId.toString(), skuId: result.skuId.toString() };
+    return this.serializeRawCart(result);
   }
 
   async selectAll(userId: string, isSelected: number) {
-    await this.prisma.cart.updateMany({
-      where: { userId: BigInt(userId) },
-      data: { isSelected },
+    if (isSelected !== 0 && isSelected !== 1) {
+      throw new BadRequestException('购物车选择状态无效');
+    }
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const result = await this.prisma.$transaction(async (tx) => {
+      await this.lockUser(tx, userIdValue);
+      return tx.cart.updateMany({
+        where: { userId: userIdValue },
+        data: { isSelected },
+      });
     });
     this.logger.log(`用户${userId}全选/取消全选购物车，isSelected=${isSelected}`);
+    return { updatedCount: result.count };
   }
 
   async removeSelected(userId: string) {
-    const result = await this.prisma.cart.deleteMany({
-      where: { userId: BigInt(userId), isSelected: 1 },
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const result = await this.prisma.$transaction(async (tx) => {
+      await this.lockUser(tx, userIdValue);
+      return tx.cart.deleteMany({
+        where: { userId: userIdValue, isSelected: 1 },
+      });
     });
     this.logger.log(`用户${userId}删除已选购物车项，共${result.count}条`);
     return { deletedCount: result.count };
+  }
+
+  private async lockUser(tx: Prisma.TransactionClient, userId: bigint) {
+    const rows = await tx.$queryRaw<Array<{ id: bigint }>>`
+      SELECT id FROM users WHERE id = ${userId} AND deleted_at IS NULL FOR UPDATE
+    `;
+    if (rows.length === 0) throw new NotFoundException('用户不存在');
+  }
+
+  private serializeRawCart(result: any) {
+    return {
+      ...result,
+      id: result.id.toString(),
+      userId: result.userId.toString(),
+      productId: result.productId.toString(),
+      skuId: result.skuId.toString(),
+    };
   }
 
   private serializeCartItem(cart: any) {
