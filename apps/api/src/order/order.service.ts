@@ -663,7 +663,7 @@ export class OrderService {
       orderId: view.id,
       orderNo: view.orderNo,
       status: view.status,
-      fulfillmentType,
+      fulfillmentType: view.fulfillmentType,
       totalAmount: view.totalAmount,
       payAmount: view.payAmount,
       userName: view.user?.nickname || '',
