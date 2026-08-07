@@ -157,6 +157,24 @@ describe('RecoverableProductionPaymentService', () => {
     expect(createRefund).not.toHaveBeenCalled();
   });
 
+  it('keeps abnormal refunds frozen and never auto-retries them', async () => {
+    const previous = {
+      id: 1n,
+      orderId: 42n,
+      status: REFUND_STATUS.ABNORMAL,
+      refundNo: 'R1',
+      outRefundNo: 'OR1',
+    };
+    const { service, benefitService } = createService(previous);
+    const createRefund = jest.spyOn(service, 'createRefund');
+
+    const result = await service.createGroupBuyFailureRefund(42n);
+
+    expect(result.status).toBe(REFUND_STATUS.ABNORMAL);
+    expect(createRefund).not.toHaveBeenCalled();
+    expect(benefitService.restoreAfterRefundClosed).not.toHaveBeenCalled();
+  });
+
   it('does not allow an admin to ignore or manually resolve refund-success side-effect tasks', async () => {
     const { service, prisma } = createService(null);
     prisma.paymentCompensationTask.findFirst.mockResolvedValue({
