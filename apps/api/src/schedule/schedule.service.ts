@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { AFTERSALE_APPLY_DAYS } from '@baby-mall/shared';
 import { PAYMENT_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
@@ -102,7 +103,6 @@ export class ScheduleService {
     if (!lockValue) return;
     try {
       const result = await this.groupBuyService.markExpiredGroups();
-
       const durableCandidates = await this.findFailedGroupRefundCandidates();
       const refundOrderIds = Array.from(
         new Set([...(result.refundOrderIds ?? []), ...durableCandidates]),
@@ -210,7 +210,7 @@ export class ScheduleService {
     const lockValue = await this.acquireLock(lockKey, 1800);
     if (!lockValue) return;
     try {
-      const result = await this.merchantSettlementService.generateMatureSalesCommissions();
+      const result = await this.reconcileMatureSalesCommissionGaps();
       if (result.generated > 0 || result.failed > 0) {
         this.logger.log(`成熟订单销售分佣任务完成: ${JSON.stringify(result)}`);
       }
@@ -255,6 +255,73 @@ export class ScheduleService {
     } finally {
       await this.releaseLock(lockKey, lockValue);
     }
+  }
+
+  private async reconcileMatureSalesCommissionGaps(limit = 200) {
+    const cutoff = new Date(
+      Date.now() - AFTERSALE_APPLY_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const rows = await this.prismaService.$queryRaw<Array<{
+      id: bigint;
+      userId: bigint;
+      payAmount: number;
+      sourceType: string;
+      sourceCode: string;
+    }>>`
+      SELECT
+        o.id AS id,
+        o.user_id AS userId,
+        o.pay_amount AS payAmount,
+        o.source_type AS sourceType,
+        o.source_code AS sourceCode
+      FROM orders o
+      WHERE o.status = 'completed'
+        AND o.completed_at IS NOT NULL
+        AND o.completed_at <= ${cutoff}
+        AND o.source_type = 'merchant_referral'
+        AND o.source_code IS NOT NULL
+        AND COALESCE(o.pay_amount, 0) > 0
+        AND NOT EXISTS (
+          SELECT 1
+          FROM merchant_commission_records r
+          WHERE r.order_id = o.id
+            AND r.source_type = 'sales_referral'
+            AND r.deleted_at IS NULL
+        )
+      ORDER BY o.completed_at ASC, o.id ASC
+      LIMIT ${limit}
+    `;
+
+    let generated = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const row of rows) {
+      try {
+        await this.merchantSettlementService.generateSalesCommission(
+          row.id,
+          row.userId,
+          row.payAmount ?? 0,
+          row.sourceType,
+          row.sourceCode,
+        );
+        const record = await this.prismaService.merchantCommissionRecord.findFirst({
+          where: {
+            orderId: row.id,
+            sourceType: 'sales_referral',
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (record) generated += 1;
+        else skipped += 1;
+      } catch (error) {
+        failed += 1;
+        this.logger.error(
+          `成熟订单销售分佣补偿失败：orderId=${row.id}, error=${(error as Error).message}`,
+        );
+      }
+    }
+    return { total: rows.length, generated, skipped, failed };
   }
 
   private async reconcileCancelledPromotionReservations(limit = 200) {
