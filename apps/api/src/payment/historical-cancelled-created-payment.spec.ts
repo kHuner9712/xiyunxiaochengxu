@@ -12,6 +12,8 @@ describe('HistoricalAnomalyPaymentReconcileService cancelled CREATED payments', 
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
+    prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
+
     const paymentService: any = {
       isPaymentStatusSyncAvailable: jest.fn().mockReturnValue(true),
       queryWechatOrder: jest.fn(),
@@ -147,7 +149,7 @@ describe('HistoricalAnomalyPaymentReconcileService cancelled CREATED payments', 
     expect(result.cancelledCreatedClosed).toBe(1);
   });
 
-  it('synchronizes SUCCESS fact but creates a manual task when WeChat amount mismatches the cancelled order', async () => {
+  it('synchronizes mismatch payment fact and manual task in one Prisma transaction', async () => {
     const { service, prisma, paymentService } = createService([candidate()]);
     paymentService.queryWechatOrder.mockResolvedValue({
       trade_state: 'SUCCESS',
@@ -157,6 +159,7 @@ describe('HistoricalAnomalyPaymentReconcileService cancelled CREATED payments', 
 
     const result = await (service as any).reconcileCancelledCreatedPayments();
 
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.orderPayment.updateMany).toHaveBeenCalledWith({
       where: { id: 7n, status: PAYMENT_STATUS.CREATED },
       data: expect.objectContaining({
@@ -180,5 +183,44 @@ describe('HistoricalAnomalyPaymentReconcileService cancelled CREATED payments', 
     });
     expect(result.cancelledCreatedMismatch).toBe(1);
     expect(result.cancelledCreatedSuccess).toBe(0);
+  });
+
+  it('does not perform a non-transactional SUCCESS write when mismatch task creation fails', async () => {
+    const { service, prisma, paymentService } = createService([candidate()]);
+    paymentService.queryWechatOrder.mockResolvedValue({
+      trade_state: 'SUCCESS',
+      transaction_id: 'WX-MISMATCH-FAIL',
+      amount: { total: 1200 },
+    });
+
+    const txOrderPayment = { updateMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    const txTask = { createMany: jest.fn().mockRejectedValue(new Error('task write failed')) };
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback({
+      orderPayment: txOrderPayment,
+      paymentCompensationTask: txTask,
+    }));
+
+    const result = await (service as any).reconcileCancelledCreatedPayments();
+
+    expect(txOrderPayment.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: PAYMENT_STATUS.SUCCESS }),
+    }));
+    expect(txTask.createMany).toHaveBeenCalled();
+    const outerSuccessWrite = prisma.orderPayment.updateMany.mock.calls.find(
+      ([arg]: any[]) => arg?.data?.status === PAYMENT_STATUS.SUCCESS,
+    );
+    expect(outerSuccessWrite).toBeUndefined();
+    expect(prisma.orderPayment.updateMany).toHaveBeenCalledWith({
+      where: { id: 7n, status: PAYMENT_STATUS.CREATED },
+      data: {
+        rawResponse: expect.objectContaining({
+          state: 'query_failed',
+          error: 'task write failed',
+        }),
+      },
+    });
+    expect(result.cancelledCreatedFailed).toBe(1);
+    expect(result.cancelledCreatedPending).toBe(1);
+    expect(result.cancelledCreatedMismatch).toBe(0);
   });
 });
