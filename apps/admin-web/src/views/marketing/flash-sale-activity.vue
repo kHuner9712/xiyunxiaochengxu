@@ -56,10 +56,10 @@
           <el-input v-model="editing.name" placeholder="请输入活动名称" />
         </el-form-item>
         <el-form-item label="商品ID" required>
-          <el-input v-model="editing.productId" placeholder="请输入商品ID" />
+          <el-input v-model="editing.productId" inputmode="numeric" maxlength="19" placeholder="请输入商品ID" />
         </el-form-item>
         <el-form-item label="SKU ID">
-          <el-input v-model="editing.skuId" placeholder="可选，留空则需用户选择规格" />
+          <el-input v-model="editing.skuId" inputmode="numeric" maxlength="19" placeholder="可选，留空则需用户选择规格" />
         </el-form-item>
         <el-form-item label="秒杀价(元)" required>
           <el-input-number v-model="editing.flashPrice" :min="0" :precision="2" />
@@ -114,6 +114,7 @@ import { flashSaleApi } from '@/api/flash-sale'
 import { formatPrice, formatDateShort } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
+const MAX_SIGNED_BIGINT_ID = '9223372036854775807'
 const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
@@ -143,6 +144,13 @@ const editing = reactive<any>({
   coverImage: '',
   description: '',
 })
+
+function isPositiveBigIntId(value: unknown): boolean {
+  const normalized = String(value ?? '').trim()
+  if (!/^[1-9]\d*$/.test(normalized)) return false
+  return normalized.length < MAX_SIGNED_BIGINT_ID.length
+    || (normalized.length === MAX_SIGNED_BIGINT_ID.length && normalized <= MAX_SIGNED_BIGINT_ID)
+}
 
 async function loadList() {
   loading.value = true
@@ -183,10 +191,10 @@ function openCreate() {
 
 function openEdit(row: any) {
   Object.assign(editing, {
-    id: row.id,
+    id: String(row.id || ''),
     name: row.name,
-    productId: row.productId,
-    skuId: row.skuId || '',
+    productId: String(row.productId || ''),
+    skuId: row.skuId ? String(row.skuId) : '',
     flashPrice: row.flashPrice / 100,
     originalPrice: row.originalPrice ? row.originalPrice / 100 : null,
     stockLimit: row.stockLimit,
@@ -203,21 +211,34 @@ function openEdit(row: any) {
 }
 
 async function handleSubmit() {
+  const productId = String(editing.productId || '').trim()
+  const skuId = String(editing.skuId || '').trim()
   if (!editing.name) { ElMessage.warning('请填写活动名称'); return }
-  if (!editing.productId) { ElMessage.warning('请填写商品ID'); return }
+  if (!isPositiveBigIntId(productId)) { ElMessage.warning('商品ID必须是有效的正整数'); return }
+  if (skuId && !isPositiveBigIntId(skuId)) { ElMessage.warning('SKU ID必须是有效的正整数'); return }
   if (!editing.startTime || !editing.endTime) { ElMessage.warning('请选择活动时间'); return }
   const payload: any = {
-    ...editing,
-    productId: Number(editing.productId),
+    name: editing.name,
+    productId,
+    skuId: skuId || undefined,
     flashPrice: Math.round(Number(editing.flashPrice) * 100),
-    originalPrice: editing.originalPrice ? Math.round(Number(editing.originalPrice) * 100) : undefined,
+    originalPrice: editing.originalPrice === null || editing.originalPrice === undefined
+      ? undefined
+      : Math.round(Number(editing.originalPrice) * 100),
     stockLimit: Number(editing.stockLimit),
     limitPerUser: Number(editing.limitPerUser),
     lockMinutes: Number(editing.lockMinutes),
+    startTime: editing.startTime,
+    endTime: editing.endTime,
+    status: Number(editing.status),
     sortOrder: Number(editing.sortOrder),
+    coverImage: editing.coverImage || undefined,
+    description: editing.description || undefined,
   }
   if (!payload.skuId) delete payload.skuId
   if (payload.originalPrice === undefined) delete payload.originalPrice
+  if (!payload.coverImage) delete payload.coverImage
+  if (!payload.description) delete payload.description
   try {
     if (editing.id) {
       await flashSaleApi.updateActivity(editing.id, payload)
@@ -226,7 +247,7 @@ async function handleSubmit() {
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    loadList()
+    await loadList()
   } catch (e) {}
 }
 
@@ -245,7 +266,7 @@ async function handleDelete(row: any) {
     await ElMessageBox.confirm(`确认删除活动「${row.name}」吗？`, '提示', { type: 'warning' })
     await flashSaleApi.deleteActivity(row.id)
     ElMessage.success('删除成功')
-    loadList()
+    await loadList()
   } catch (e) {}
 }
 
