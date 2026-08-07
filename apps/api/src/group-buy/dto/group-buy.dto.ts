@@ -20,10 +20,6 @@ function normalizeId(value: unknown): unknown {
   return String(value).trim();
 }
 
-function idDecorators() {
-  return undefined;
-}
-
 // ============ 后台：活动查询 ============
 export class GroupBuyActivityQueryDto extends PaginationDto {
   @IsOptional() @IsString() keyword?: string;
