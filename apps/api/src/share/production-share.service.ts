@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { AFTERSALE_APPLY_DAYS } from '@baby-mall/shared';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { AFTERSALE_APPLY_DAYS, POINTS_EXPIRE_MONTHS } from '@baby-mall/shared';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
@@ -14,8 +14,8 @@ export class ProductionShareService extends ShareService {
   constructor(
     private readonly productionPrisma: PrismaService,
     private readonly productionRedis: RedisService,
-    private readonly productionPoints: PointsService,
-    private readonly productionCoupon: CouponService,
+    productionPoints: PointsService,
+    productionCoupon: CouponService,
   ) {
     super(productionPrisma, productionRedis, productionPoints, productionCoupon);
   }
@@ -73,9 +73,6 @@ export class ProductionShareService extends ShareService {
       Date.now() - AFTERSALE_APPLY_DAYS * 24 * 60 * 60 * 1000,
     );
 
-    // Only select relations that are currently eligible and have not completed reconciliation.
-    // A fixed `take` over all historical relations would repeatedly scan the same successful
-    // first page forever and starve later users once the table grows beyond the limit.
     const candidateRows = await this.productionPrisma.$queryRaw<Array<{ relationId: bigint }>>`
       SELECT r.id AS relationId
       FROM user_invite_relations r
@@ -167,8 +164,6 @@ export class ProductionShareService extends ShareService {
   }
 
   async reconcileSuccessfulRefundAttributions(limit = 200) {
-    // Only scan successful refunds whose attribution adjustment marker is still missing.
-    // This guarantees progress through the entire history instead of revisiting the newest 200.
     const refunds = await this.productionPrisma.$queryRaw<Array<{ id: bigint; orderId: bigint }>>`
       SELECT DISTINCT r.id AS id, r.order_id AS orderId
       FROM order_refunds r
@@ -214,10 +209,6 @@ export class ProductionShareService extends ShareService {
     return { total: refunds.length, adjusted, skipped, failed };
   }
 
-  /**
-   * 退款成功后反向修正分享首单归因报表。
-   * 每笔退款按 refundId 幂等扣减 paidOrderAmount；累计全额退款时 orderCount 只减一次。
-   */
   async reverseFirstPaidAttributionAfterRefund(
     orderId: bigint | string,
     refundId: bigint | string,
@@ -383,73 +374,147 @@ export class ProductionShareService extends ShareService {
 
     const inviterConfig: any = campaign.inviterRewardConfig;
     if (!inviterConfig) return;
-    const inviterUserId = relation.inviterUserId.toString();
 
     if (campaign.rewardType === 'points' || campaign.rewardType === 'both') {
       const points = Number(inviterConfig.points || 0);
-      if (points > 0) {
-        const existing = await this.productionPrisma.pointsRecord.findFirst({
-          where: {
-            userId: relation.inviterUserId,
-            source: 'inviter_first_paid',
-            sourceId: orderId,
-          },
-          select: { id: true },
-        });
-        if (!existing) {
-          await this.productionPoints.earnPoints(
-            inviterUserId,
-            points,
-            'inviter_first_paid',
-            orderId.toString(),
-            `邀请好友首单奖励${points}积分`,
-          );
-        }
-        await this.ensureRewardRecord({
-          userId: relation.inviterUserId,
-          inviteeUserId: relation.inviteeUserId,
-          campaignId: relation.sourceCampaignId,
-          rewardType: 'points',
-          rewardName: `邀请好友首单奖励${points}积分`,
-          points,
-          sourceId: orderId,
-          dedupeKey: `first_paid:points:${orderId}`,
-        });
+      if (Number.isSafeInteger(points) && points > 0) {
+        await this.issuePointsRewardAtomic(relation, orderId, points);
       }
     }
 
     if (campaign.rewardType === 'coupon' || campaign.rewardType === 'both') {
       const couponId = inviterConfig.couponId ? BigInt(inviterConfig.couponId) : null;
       if (couponId) {
-        const reward = await this.productionPrisma.userInviteReward.findUnique({
-          where: { dedupeKey: `first_paid:coupon:${orderId}:${couponId}` },
-        });
-        if (!reward) {
-          try {
-            await this.productionCoupon.receive(inviterUserId, couponId.toString());
-          } catch (error) {
-            const owned = await this.productionPrisma.userCoupon.findFirst({
-              where: {
-                userId: relation.inviterUserId,
-                couponId,
-                status: { in: [1, 2, 3] },
-              },
-              select: { id: true },
-            });
-            if (!owned) throw error;
-          }
-        }
-        await this.ensureRewardRecord({
-          userId: relation.inviterUserId,
-          inviteeUserId: relation.inviteeUserId,
-          campaignId: relation.sourceCampaignId,
-          rewardType: 'coupon',
-          rewardName: '邀请好友首单优惠券奖励',
-          couponId,
-          sourceId: orderId,
-          dedupeKey: `first_paid:coupon:${orderId}:${couponId}`,
-        });
+        await this.issueCouponRewardAtomic(relation, orderId, couponId);
       }
+    }
+  }
+
+  private async issuePointsRewardAtomic(relation: any, orderId: bigint, points: number) {
+    const dedupeKey = `first_paid:points:${orderId}`;
+    try {
+      await this.productionPrisma.$transaction(async (tx) => {
+        const existing = await tx.userInviteReward.findUnique({
+          where: { dedupeKey },
+          select: { id: true },
+        });
+        if (existing) return;
+
+        const user = await tx.user.findUnique({
+          where: { id: relation.inviterUserId },
+          select: { availablePoints: true },
+        });
+        if (!user) throw new NotFoundException('邀请人不存在，无法发放首单积分奖励');
+
+        const expireAt = new Date();
+        expireAt.setMonth(expireAt.getMonth() + POINTS_EXPIRE_MONTHS);
+        expireAt.setDate(expireAt.getDate() - 1);
+        expireAt.setHours(23, 59, 59, 0);
+
+        await tx.user.update({
+          where: { id: relation.inviterUserId },
+          data: {
+            totalPoints: { increment: points },
+            availablePoints: { increment: points },
+          },
+        });
+        await tx.pointsRecord.create({
+          data: {
+            userId: relation.inviterUserId,
+            type: 1,
+            points,
+            balance: user.availablePoints + points,
+            source: 'inviter_first_paid',
+            sourceId: orderId,
+            description: `邀请好友首单奖励${points}积分`,
+            expireAt,
+          },
+        });
+        await tx.userInviteReward.create({
+          data: {
+            userId: relation.inviterUserId,
+            inviteeUserId: relation.inviteeUserId,
+            campaignId: relation.sourceCampaignId,
+            rewardType: 'points',
+            rewardName: `邀请好友首单奖励${points}积分`,
+            points,
+            status: 'issued',
+            sourceType: 'first_paid_order',
+            sourceId: orderId,
+            dedupeKey,
+            issuedAt: new Date(),
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
+      throw error;
+    }
+  }
+
+  private async issueCouponRewardAtomic(relation: any, orderId: bigint, couponId: bigint) {
+    const dedupeKey = `first_paid:coupon:${orderId}:${couponId}`;
+    try {
+      await this.productionPrisma.$transaction(async (tx) => {
+        const existing = await tx.userInviteReward.findUnique({
+          where: { dedupeKey },
+          select: { id: true },
+        });
+        if (existing) return;
+
+        const coupon = await tx.coupon.findFirst({
+          where: { id: couponId, status: 1 },
+        });
+        if (!coupon) throw new NotFoundException('邀请奖励优惠券不存在或已停用');
+        const now = new Date();
+        if (now < coupon.startTime || now > coupon.endTime) {
+          throw new BadRequestException('邀请奖励优惠券不在有效发放时间范围内');
+        }
+
+        if (coupon.totalCount > 0) {
+          const claimed = await tx.coupon.updateMany({
+            where: { id: coupon.id, receivedCount: { lt: coupon.totalCount } },
+            data: { receivedCount: { increment: 1 } },
+          });
+          if (claimed.count !== 1) {
+            throw new BadRequestException('邀请奖励优惠券库存不足');
+          }
+        } else {
+          await tx.coupon.update({
+            where: { id: coupon.id },
+            data: { receivedCount: { increment: 1 } },
+          });
+        }
+
+        const expireAt = coupon.validDays && coupon.validDays > 0
+          ? new Date(now.getTime() + coupon.validDays * 24 * 60 * 60 * 1000)
+          : coupon.endTime;
+        await tx.userCoupon.create({
+          data: {
+            userId: relation.inviterUserId,
+            couponId: coupon.id,
+            expireAt,
+          },
+        });
+        await tx.userInviteReward.create({
+          data: {
+            userId: relation.inviterUserId,
+            inviteeUserId: relation.inviteeUserId,
+            campaignId: relation.sourceCampaignId,
+            rewardType: 'coupon',
+            rewardName: '邀请好友首单优惠券奖励',
+            couponId: coupon.id,
+            status: 'issued',
+            sourceType: 'first_paid_order',
+            sourceId: orderId,
+            dedupeKey,
+            issuedAt: new Date(),
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
+      throw error;
     }
   }
 
@@ -475,42 +540,6 @@ export class ProductionShareService extends ShareService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
-      throw error;
-    }
-  }
-
-  private async ensureRewardRecord(data: {
-    userId: bigint;
-    inviteeUserId: bigint;
-    campaignId: bigint;
-    rewardType: string;
-    rewardName: string;
-    couponId?: bigint;
-    points?: number;
-    sourceId: bigint;
-    dedupeKey: string;
-  }) {
-    try {
-      await this.productionPrisma.userInviteReward.create({
-        data: {
-          userId: data.userId,
-          inviteeUserId: data.inviteeUserId,
-          campaignId: data.campaignId,
-          rewardType: data.rewardType,
-          rewardName: data.rewardName,
-          couponId: data.couponId ?? null,
-          points: data.points ?? null,
-          status: 'issued',
-          sourceType: 'first_paid_order',
-          sourceId: data.sourceId,
-          dedupeKey: data.dedupeKey,
-          issuedAt: new Date(),
-        },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return;
-      }
       throw error;
     }
   }
