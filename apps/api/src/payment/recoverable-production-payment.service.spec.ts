@@ -6,9 +6,11 @@ import { RecoverableProductionPaymentService } from './recoverable-production-pa
 describe('RecoverableProductionPaymentService', () => {
   function createService(latestRefund: any) {
     const prisma: any = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
       orderRefund: {
         findFirst: jest.fn().mockResolvedValue(latestRefund),
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       groupBuyMember: {
@@ -25,6 +27,7 @@ describe('RecoverableProductionPaymentService', () => {
           payAmount: 1000,
           payment: { status: PAYMENT_STATUS.SUCCESS },
         }),
+        findFirst: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       paymentCompensationTask: {
@@ -57,6 +60,7 @@ describe('RecoverableProductionPaymentService', () => {
       restoreAfterRefundClosed: jest.fn().mockResolvedValue({ affected: 0 }),
       revokeAfterRefundSuccess: jest.fn(),
       grantBenefitsForOrder: jest.fn(),
+      reconcileOrderBenefits: jest.fn(),
     };
     const merchantService: any = {
       generateSalesCommission: jest.fn(),
@@ -175,19 +179,77 @@ describe('RecoverableProductionPaymentService', () => {
     expect(benefitService.restoreAfterRefundClosed).not.toHaveBeenCalled();
   });
 
-  it('does not allow an admin to ignore or manually resolve refund-success side-effect tasks', async () => {
-    const { service, prisma } = createService(null);
-    prisma.paymentCompensationTask.findFirst.mockResolvedValue({
-      id: 9n,
-      reason: 'refund_success_side_effects',
+  it('never releases paid-order side effects while a group order is still waiting to form', async () => {
+    const { service, prisma, benefitService, shareService } = createService(null);
+    prisma.paymentCompensationTask.findMany.mockResolvedValue([{
+      id: 20n,
+      orderNo: 'O42',
+      reason: 'paid_order_side_effects',
       status: 'pending',
+      updatedAt: new Date(),
+    }]);
+    prisma.order.findFirst.mockResolvedValue({
+      id: 42n,
+      userId: 8n,
+      orderNo: 'O42',
+      payAmount: 1000,
+      status: OrderStatus.paid,
     });
 
-    await expect(
-      service.resolveCompensationTask('9', '1', 'manual bypass', 'ignored'),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    await expect(
-      service.resolveCompensationTask('9', '1', 'manual bypass', 'resolved'),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    const result = await service.reconcilePaidOrderSideEffects();
+
+    expect(result.skipped).toBe(1);
+    expect(shareService.processFirstPaidReward).not.toHaveBeenCalled();
+    expect(benefitService.reconcileOrderBenefits).not.toHaveBeenCalled();
+  });
+
+  it('reconciles attribution and benefits for an eligible paid order before resolving the task', async () => {
+    const { service, prisma, benefitService, shareService } = createService(null);
+    prisma.paymentCompensationTask.findMany.mockResolvedValue([{
+      id: 21n,
+      orderNo: 'O43',
+      reason: 'paid_order_side_effects',
+      status: 'pending',
+      updatedAt: new Date(),
+    }]);
+    prisma.order.findFirst.mockResolvedValue({
+      id: 43n,
+      userId: 9n,
+      orderNo: 'O43',
+      payAmount: 1200,
+      status: OrderStatus.pending_delivery,
+    });
+    prisma.orderRefund.findMany.mockResolvedValue([{ id: 99n }]);
+
+    const result = await service.reconcilePaidOrderSideEffects();
+
+    expect(shareService.processFirstPaidReward).toHaveBeenCalledWith('9', '43', 1200);
+    expect(shareService.reverseFirstPaidAttributionAfterRefund).toHaveBeenCalledWith(43n, 99n);
+    expect(benefitService.reconcileOrderBenefits).toHaveBeenCalledWith(43n, 9n);
+    expect(prisma.paymentCompensationTask.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 21n, status: 'pending' },
+        data: expect.objectContaining({ status: 'resolved' }),
+      }),
+    );
+    expect(result.resolved).toBe(1);
+  });
+
+  it('does not allow an admin to bypass durable money or benefit side-effect tasks', async () => {
+    const { service, prisma } = createService(null);
+    for (const reason of ['refund_success_side_effects', 'paid_order_side_effects']) {
+      prisma.paymentCompensationTask.findFirst.mockResolvedValue({
+        id: 9n,
+        reason,
+        status: 'pending',
+      });
+
+      await expect(
+        service.resolveCompensationTask('9', '1', 'manual bypass', 'ignored'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.resolveCompensationTask('9', '1', 'manual bypass', 'resolved'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
   });
 });
