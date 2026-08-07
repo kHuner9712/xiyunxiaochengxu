@@ -1,11 +1,11 @@
 import { get } from '@/utils/request'
 
-export function getActivityList(params: { type?: number; page: number; pageSize: number }) {
-  return get<{ list: ActivityDetail[]; total: number }>('/weapp/activity/active', params)
+export function getActivityList(params: { type?: string; page: number; pageSize: number }) {
+  return get<ActivityDetail[]>('/weapp/activity/active', params)
 }
 
-export function getActivityDetail(id: number) {
-  return get<ActivityDetail>(`/weapp/activity/${id}`)
+export function getActivityDetail(id: string) {
+  return get<ActivityDetail>(`/weapp/activity/${encodeURIComponent(id)}`)
 }
 
 export function getActivityFeed(params: { tab: string; page: number; pageSize: number }) {
@@ -13,19 +13,19 @@ export function getActivityFeed(params: { tab: string; page: number; pageSize: n
 }
 
 export interface ActivityDetail {
-  id: string | number
+  id: string
   name: string
   image?: string
   bannerImage?: string
   description: string
-  type: string | number
+  type: string
   startTime: number | string | Date
   endTime: number | string | Date
-  rules: string
+  rules?: Record<string, unknown> | null
   discount?: number
   minAmount?: number
   products?: ActivityProduct[]
-  activityProducts?: any[]
+  activityProducts?: ActivityProduct[]
   productList?: ActivityProduct[]
   goodsList?: ActivityProduct[]
 }
@@ -50,9 +50,9 @@ export interface FeedItem {
 }
 
 export interface ActivityProduct {
-  id?: string | number
-  productId: string | number
-  skuId?: string | number
+  id?: string
+  productId: string
+  skuId?: string | null
   name: string
   image: string
   price: number
@@ -60,4 +60,6 @@ export interface ActivityProduct {
   sales: number
   activityPrice: number
   stock: number
+  activityStock?: number
+  limitPerUser?: number
 }
