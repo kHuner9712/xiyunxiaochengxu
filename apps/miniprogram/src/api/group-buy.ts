@@ -4,7 +4,7 @@ export interface GroupBuyActivity {
   id: string
   name: string
   productId: string
-  skuId?: string
+  skuId: string
   groupPrice: number
   originalPrice?: number
   groupSize: number
@@ -33,7 +33,7 @@ export interface GroupBuyGroup {
   failedAt?: string
   createdAt: string
   members?: any[]
-  leader?: { id: string; nickname: string; avatar: string } | null
+  leader?: { id: string; nickname: string; avatar?: string; avatarUrl?: string } | null
   activity?: { id: string; name: string; coverImage?: string; groupPrice: number; groupSize: number } | null
 }
 
@@ -48,21 +48,21 @@ export const groupBuyApi = {
   getList(params: { page?: number; pageSize?: number }) {
     return get<{ list: GroupBuyActivity[]; total: number }>('/weapp/group-buy/list', params)
   },
-  getDetail(id: string | number) {
+  getDetail(id: string) {
     return get<GroupBuyActivity>(`/weapp/group-buy/detail/${id}`)
   },
-  getAvailableGroups(activityId: string | number) {
+  getAvailableGroups(activityId: string) {
     return get<GroupBuyGroup[]>('/weapp/group-buy/available-groups', { activityId })
   },
   getMyGroups(params: { page?: number; pageSize?: number }) {
     return get<{ list: GroupBuyGroup[]; total: number }>('/weapp/group-buy/my-groups', params)
   },
-  getGroupDetail(id: string | number) {
+  getGroupDetail(id: string) {
     return get<GroupBuyGroup>(`/weapp/group-buy/group/${id}`)
   },
   start(data: {
-    activityId: number
-    skuId?: number
+    activityId: string
+    skuId?: string
     quantity?: number
     addressId?: string
     pickupStoreId?: string
@@ -72,7 +72,7 @@ export const groupBuyApi = {
     return post<StartGroupBuyResult>('/weapp/group-buy/start', data)
   },
   join(data: {
-    groupId: number
+    groupId: string
     quantity?: number
     addressId?: string
     pickupStoreId?: string
