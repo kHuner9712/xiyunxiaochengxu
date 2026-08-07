@@ -6,7 +6,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { SkipThrottle } from '@nestjs/throttler';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max, IsIn, Matches } from 'class-validator';
 
 class CreatePaymentDto {
   @IsString()
@@ -28,6 +28,7 @@ class GetRefundListDto {
 
   @IsString()
   @IsOptional()
+  @Matches(/^\d+$/, { message: '订单ID必须为数字' })
   orderId?: string;
 
   @IsString()
