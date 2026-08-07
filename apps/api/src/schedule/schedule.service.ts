@@ -138,8 +138,9 @@ export class ScheduleService {
     try {
       const result = await this.paymentReconcileService.reconcilePendingRefunds();
       const benefitResult = await (this.benefitPackageService as any).reconcileTerminalRefundFreezes?.();
+      const sideEffectResult = await (this.paymentService as any).reconcileRefundSuccessSideEffects?.();
       this.logger.log(
-        `退款对账任务完成: refund=${JSON.stringify(result)}, benefit=${JSON.stringify(benefitResult ?? {})}`,
+        `退款对账任务完成: refund=${JSON.stringify(result)}, benefit=${JSON.stringify(benefitResult ?? {})}, sideEffects=${JSON.stringify(sideEffectResult ?? {})}`,
       );
     } catch (error) {
       const err = error as Error;
