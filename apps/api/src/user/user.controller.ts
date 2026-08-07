@@ -5,6 +5,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { UserQueryDto } from './dto/user-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AdjustMemberLevelDto, AdjustUserPointsDto } from './dto/admin-user-mutation.dto';
 
 @Controller('weapp/user')
 export class WeappUserController {
@@ -16,10 +17,7 @@ export class WeappUserController {
   }
 
   @Put('profile')
-  async updateProfile(
-    @CurrentUser('id') userId: string,
-    @Body() dto: UpdateProfileDto,
-  ) {
+  async updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateProfileDto) {
     return this.userService.updateProfile(userId, dto);
   }
 }
@@ -45,19 +43,13 @@ export class AdminUserController {
 
   @Put('level/:id')
   @RequirePermission('user:member')
-  async adjustLevel(
-    @Param('id') id: string,
-    @Body() body: { memberLevelId: number; reason?: string },
-  ) {
+  async adjustLevel(@Param('id') id: string, @Body() body: AdjustMemberLevelDto) {
     return this.userService.adjustLevel(id, body.memberLevelId, body.reason);
   }
 
   @Put('points/:id')
   @RequirePermission('user:detail')
-  async adjustPoints(
-    @Param('id') id: string,
-    @Body() body: { points: number; reason: string },
-  ) {
+  async adjustPoints(@Param('id') id: string, @Body() body: AdjustUserPointsDto) {
     return this.pointsService.adminAdjust(id, body.points, body.reason);
   }
 
