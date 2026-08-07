@@ -90,28 +90,34 @@ function createService(
 }
 
 describe('AftersaleService refund retry', () => {
-  for (const terminalStatus of [REFUND_STATUS.CLOSED, REFUND_STATUS.ABNORMAL]) {
-    it(`最近退款为 ${terminalStatus} 时使用 retrying 原子占位后重新发起并恢复历史终态`, async () => {
-      const { service, prisma, paymentService } = createService(terminalStatus);
+  it('最近退款为 closed 时使用 retrying 原子占位后重新发起并恢复历史终态', async () => {
+    const { service, prisma, paymentService } = createService(REFUND_STATUS.CLOSED);
 
-      await service.refund('50', '1');
+    await service.refund('50', '1');
 
-      expect(prisma.orderRefund.updateMany).toHaveBeenNthCalledWith(1, {
-        where: { id: 70n, status: terminalStatus },
-        data: { status: REFUND_STATUS.RETRYING },
-      });
-      expect(paymentService.createRefund).toHaveBeenCalledWith({
-        orderId: '1',
-        aftersaleId: '50',
-        refundAmount: 9900,
-        reason: '退款失败后重试',
-      });
-      expect(prisma.orderRefund.updateMany).toHaveBeenNthCalledWith(2, {
-        where: { id: 70n, status: REFUND_STATUS.RETRYING },
-        data: { status: terminalStatus },
-      });
+    expect(prisma.orderRefund.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: 70n, status: REFUND_STATUS.CLOSED },
+      data: { status: REFUND_STATUS.RETRYING },
     });
-  }
+    expect(paymentService.createRefund).toHaveBeenCalledWith({
+      orderId: '1',
+      aftersaleId: '50',
+      refundAmount: 9900,
+      reason: '退款失败后重试',
+    });
+    expect(prisma.orderRefund.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 70n, status: REFUND_STATUS.RETRYING },
+      data: { status: REFUND_STATUS.CLOSED },
+    });
+  });
+
+  it('最近退款为 abnormal 时拒绝普通重试并要求人工异常退款处理', async () => {
+    const { service, paymentService } = createService(REFUND_STATUS.ABNORMAL);
+
+    await expect(service.refund('50', '1'))
+      .rejects.toThrow('微信退款异常，请前往微信支付商户平台处理异常退款，不能重新发起普通退款');
+    expect(paymentService.createRefund).not.toHaveBeenCalled();
+  });
 
   it('最近退款为 failed 时必须先同步微信状态', async () => {
     const { service, paymentService } = createService(REFUND_STATUS.FAILED);
@@ -143,7 +149,7 @@ describe('AftersaleService refund retry', () => {
     expect(paymentService.createRefund).not.toHaveBeenCalled();
   });
 
-  it('后台详情只对微信确认 closed/abnormal 返回重试标志', async () => {
+  it('后台详情仅对 closed 返回普通重试标志', async () => {
     const { service, prisma } = createService(REFUND_STATUS.CLOSED);
 
     await expect(service.findAdminDetail('50')).resolves.toEqual(
@@ -152,6 +158,7 @@ describe('AftersaleService refund retry', () => {
         latestOutRefundNo: 'RF70',
         refundRetryable: true,
         refundSyncRequired: false,
+        refundManualRequired: false,
       }),
     );
     expect(prisma.orderRefund.findFirst).toHaveBeenCalledWith({
@@ -159,6 +166,19 @@ describe('AftersaleService refund retry', () => {
       orderBy: { createdAt: 'desc' },
       select: { status: true, outRefundNo: true },
     });
+  });
+
+  it('后台详情对 abnormal 只要求人工异常退款处理', async () => {
+    const { service } = createService(REFUND_STATUS.ABNORMAL);
+
+    await expect(service.findAdminDetail('50')).resolves.toEqual(
+      expect.objectContaining({
+        latestRefundStatus: REFUND_STATUS.ABNORMAL,
+        refundRetryable: false,
+        refundSyncRequired: false,
+        refundManualRequired: true,
+      }),
+    );
   });
 
   for (const syncStatus of [REFUND_STATUS.FAILED, REFUND_STATUS.INITIATING, REFUND_STATUS.RETRYING]) {
@@ -170,6 +190,7 @@ describe('AftersaleService refund retry', () => {
           latestRefundStatus: syncStatus,
           refundRetryable: false,
           refundSyncRequired: true,
+          refundManualRequired: false,
         }),
       );
     });
@@ -204,7 +225,7 @@ describe('AftersaleService atomic refund initiation claim', () => {
     expect(prisma.aftersaleLog.create).not.toHaveBeenCalled();
   });
 
-  it('失败终态重试占位失败时拒绝重复提交且不调用支付服务', async () => {
+  it('closed 重试占位失败时拒绝重复提交且不调用支付服务', async () => {
     const { service, prisma, paymentService } = createService(REFUND_STATUS.CLOSED, {
       refundClaimCounts: [0],
     });
@@ -260,7 +281,7 @@ describe('AftersaleService atomic refund initiation claim', () => {
     );
   });
 
-  it('失败终态重试异常时仍恢复上一笔退款的真实终态', async () => {
+  it('closed 重试异常时仍恢复上一笔退款的真实终态', async () => {
     const oldClosed = refundRecord(REFUND_STATUS.CLOSED, 70n);
     const claimedOld = refundRecord(REFUND_STATUS.RETRYING, 70n);
     const { service, prisma, paymentService } = createService(null, {
