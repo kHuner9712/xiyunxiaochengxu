@@ -9,7 +9,7 @@ import { PaymentService } from './payment.service';
 @Injectable()
 export class ProductionPaymentReconcileService extends PaymentReconcileService {
   private readonly productionLogger = new Logger(ProductionPaymentReconcileService.name);
-  private readonly closeDelayMs = 5 * 60 * 1000;
+  private readonly productionCloseDelayMs = 5 * 60 * 1000;
 
   constructor(
     private readonly productionPrisma: PrismaService,
@@ -45,7 +45,7 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
       }
 
       if (!this.productionPaymentService.isPaymentStatusSyncAvailable()) {
-        await this.delayAutoClose(order.id, 'wechat_payment_sync_unavailable');
+        await this.delayProductionAutoClose(order.id, 'wechat_payment_sync_unavailable');
         delayed += 1;
         continue;
       }
@@ -87,7 +87,7 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
         if (tradeState === 'NOTPAY') {
           const closeFn = (this.productionPaymentService as any).closeWechatOrderForCancellation;
           if (typeof closeFn !== 'function') {
-            await this.delayAutoClose(order.id, 'wechat_close_capability_unavailable');
+            await this.delayProductionAutoClose(order.id, 'wechat_close_capability_unavailable');
             delayed += 1;
             continue;
           }
@@ -107,7 +107,7 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
           }
         }
 
-        await this.delayAutoClose(order.id, `trade_state=${tradeState || 'unknown'}`);
+        await this.delayProductionAutoClose(order.id, `trade_state=${tradeState || 'unknown'}`);
         delayed += 1;
       } catch (error) {
         const code = this.wechatErrorCode(error);
@@ -118,7 +118,7 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
         }
 
         failed += 1;
-        await this.delayAutoClose(order.id, `query_error=${(error as Error).message}`);
+        await this.delayProductionAutoClose(order.id, `query_error=${(error as Error).message}`);
         delayed += 1;
       }
     }
@@ -205,7 +205,7 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
         return { fixed: 0, closable: 1, delayed: 0, failed: 0 };
       }
 
-      await this.delayAutoClose(
+      await this.delayProductionAutoClose(
         order.id,
         `close_failed_then_trade_state=${tradeState || 'unknown'}`,
       );
@@ -220,7 +220,7 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
       this.productionLogger.warn(
         `微信关单失败且复查状态失败: order=${order.orderNo}, close=${(closeError as Error).message}, query=${(queryError as Error).message}`,
       );
-      await this.delayAutoClose(order.id, `close_and_query_failed=${(queryError as Error).message}`);
+      await this.delayProductionAutoClose(order.id, `close_and_query_failed=${(queryError as Error).message}`);
       return { fixed: 0, closable: 0, delayed: 1, failed: 1 };
     }
   }
@@ -235,8 +235,8 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
     });
   }
 
-  private async delayAutoClose(orderId: bigint, reason: string) {
-    const nextCloseAt = new Date(Date.now() + this.closeDelayMs);
+  private async delayProductionAutoClose(orderId: bigint, reason: string) {
+    const nextCloseAt = new Date(Date.now() + this.productionCloseDelayMs);
     await this.productionPrisma.order.update({
       where: { id: orderId },
       data: { autoCloseAt: nextCloseAt },
