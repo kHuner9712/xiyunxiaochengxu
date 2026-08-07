@@ -60,7 +60,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: mysql://root:${DB_PASSWORD:?DB_PASSWORD required}@mysql:3306/${DB_NAME:-baby_mall}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-baby_mall}
