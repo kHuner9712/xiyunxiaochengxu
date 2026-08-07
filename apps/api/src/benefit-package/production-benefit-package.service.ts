@@ -19,25 +19,50 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     super(productionPrisma, merchantSettlementService);
   }
 
-  /**
-   * Base issuance keeps the payment callback resilient by logging its own errors. Production
-   * must additionally verify the result so the durable paid-order side-effect reconciler can
-   * detect a partial grant instead of silently treating it as complete.
-   */
   override async grantBenefitsForOrder(orderId: string | bigint, userId: string | bigint) {
     await super.grantBenefitsForOrder(orderId, userId);
     await this.assertOrderBenefitsComplete(orderId);
   }
 
   /**
-   * Repair is intentionally separated from the immediate callback path. The scheduler invokes
-   * it after the original grant attempt has finished, locks each user-benefit package row and
-   * only fills missing entitlement counts. This avoids duplicate codes if a callback was merely
-   * slow while still making a partially-created package self-healing.
+   * Reconcile only order items that are still economically valid. If an aftersale already
+   * reached refunded, a late payment-side-effect task must never recreate that item's benefit.
+   * For the remaining items we reuse the base package-level grantKey and then repair any
+   * partially-created entitlement set under a row lock.
    */
   async reconcileOrderBenefits(orderId: string | bigint, userId: string | bigint) {
-    await super.grantBenefitsForOrder(orderId, userId);
-    const targets = await this.getExpectedGrantTargets(orderId);
+    const oid = BigInt(orderId);
+    const order = await this.productionPrisma.order.findUnique({
+      where: { id: oid },
+      include: { orderItems: true },
+    });
+    if (!order) throw new Error(`权益补偿失败：订单不存在 orderId=${orderId}`);
+
+    const refundedOrderItemIds = await this.getRefundedOrderItemIds(oid);
+    for (const item of order.orderItems) {
+      if (refundedOrderItemIds.has(item.id.toString())) continue;
+      const pkg = await this.productionPrisma.benefitPackage.findFirst({
+        where: { productId: item.productId, deletedAt: null },
+      });
+      if (!pkg) continue;
+
+      const qty = item.quantity > 0 ? item.quantity : 1;
+      for (let unit = 0; unit < qty; unit++) {
+        const grantKey = `order_item:${item.id}:unit:${unit}:package:${pkg.id}`;
+        // grantOnePackage is private in the legacy base service, but is the canonical grant
+        // routine and already owns the package-level unique grantKey. Use it only from this
+        // scheduler-driven recovery path, then independently verify/repair entitlements below.
+        await (this as any).grantOnePackage(
+          pkg,
+          BigInt(userId),
+          oid,
+          item.id,
+          grantKey,
+        );
+      }
+    }
+
+    const targets = await this.getExpectedGrantTargets(oid, refundedOrderItemIds);
     for (const target of targets) {
       if (!target.userPackageId) continue;
       await this.repairUserPackageEntitlements(
@@ -46,7 +71,7 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
         target.packageId,
       );
     }
-    await this.assertOrderBenefitsComplete(orderId);
+    await this.assertOrderBenefitsComplete(oid, refundedOrderItemIds);
   }
 
   async assertRefundable(orderId: bigint | string, aftersaleId?: bigint | string | null) {
@@ -184,12 +209,6 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     });
   }
 
-  /**
-   * 只补偿微信退款明确 CLOSED 后仍被冻结的权益。
-   * ABNORMAL 代表退款异常，需要商户平台人工处理，不能视为“确定未退款”；
-   * 在微信侧最终结果明确前必须继续冻结权益，避免后续退款成功时出现钱和权益双失。
-   * 同一订单/售后范围只看最新一笔退款，避免旧 CLOSED 误解冻正在重试的新退款。
-   */
   async reconcileTerminalRefundFreezes(limit = 200) {
     const frozen = await this.productionPrisma.userBenefitPackage.findMany({
       where: { status: 'refund_pending', deletedAt: null },
@@ -232,12 +251,25 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     return { orders: frozen.length, restored, skipped };
   }
 
-  private async getExpectedGrantTargets(orderId: bigint | string) {
+  private async getRefundedOrderItemIds(orderId: bigint): Promise<Set<string>> {
+    const refundedAftersales = await this.productionPrisma.aftersaleOrder.findMany({
+      where: { orderId, status: 'refunded' },
+      select: { orderItemId: true },
+    });
+    return new Set(refundedAftersales.map((item) => item.orderItemId.toString()));
+  }
+
+  private async getExpectedGrantTargets(
+    orderId: bigint | string,
+    refundedOrderItemIds?: Set<string>,
+  ) {
+    const oid = BigInt(orderId);
     const order = await this.productionPrisma.order.findUnique({
-      where: { id: BigInt(orderId) },
+      where: { id: oid },
       include: { orderItems: true },
     });
     if (!order) throw new Error(`权益发放校验失败：订单不存在 orderId=${orderId}`);
+    const refundedIds = refundedOrderItemIds ?? await this.getRefundedOrderItemIds(oid);
 
     const targets: Array<{
       packageId: bigint;
@@ -245,6 +277,7 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
       grantKey: string;
     }> = [];
     for (const item of order.orderItems) {
+      if (refundedIds.has(item.id.toString())) continue;
       const pkg = await this.productionPrisma.benefitPackage.findFirst({
         where: { productId: item.productId, deletedAt: null },
         select: { id: true },
@@ -268,8 +301,11 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
     return targets;
   }
 
-  private async assertOrderBenefitsComplete(orderId: bigint | string) {
-    const targets = await this.getExpectedGrantTargets(orderId);
+  private async assertOrderBenefitsComplete(
+    orderId: bigint | string,
+    refundedOrderItemIds?: Set<string>,
+  ) {
+    const targets = await this.getExpectedGrantTargets(orderId, refundedOrderItemIds);
     for (const target of targets) {
       if (!target.userPackageId) {
         throw new Error(`权益包未完整发放：${target.grantKey}`);
@@ -329,7 +365,7 @@ export class ProductionBenefitPackageService extends BenefitPackageService {
         });
         const missing = Math.max(0, expected - actual);
         for (let index = 0; index < missing; index++) {
-          await this.createRepairEntitlementWithRetry(tx, userPackageId, userId, item.id);
+          await this.createRepairEntitlementWithRetry(tx, userBenefitPackageId, userId, item.id);
         }
       }
     });
