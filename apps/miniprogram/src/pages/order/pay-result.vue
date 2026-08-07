@@ -32,6 +32,7 @@
     <view v-if="paymentState === 'success' && orderInfo?.status === 'paid'" class="group-tip card">
       <text class="tip-text">已付款，正在等待拼团成团</text>
       <text class="group-tip-subtext">成团后订单才会进入发货或自提流程；若拼团失败，系统会按规则自动退款。</text>
+      <view v-if="resolvedGroupId" class="group-progress-link" @tap="goGroupProgress">查看拼团进度</view>
     </view>
 
     <view v-if="orderInfo" class="order-info card">
@@ -50,8 +51,8 @@
     </view>
 
     <view class="action-btns">
-      <view class="btn-outline" @tap="goOrderDetail">
-        <text class="btn-text">查看订单</text>
+      <view class="btn-outline" @tap="goPrimaryDetail">
+        <text class="btn-text">{{ resolvedGroupId && paymentState === 'success' ? '查看拼团' : '查看订单' }}</text>
       </view>
       <view class="btn-primary" @tap="goHome">
         <text class="btn-text-white">返回首页</text>
@@ -70,6 +71,7 @@ import { formatPrice } from '@/utils/format'
 type PaymentState = 'confirming' | 'success' | 'failed' | 'pending' | 'unknown'
 
 const orderId = ref('')
+const groupId = ref('')
 const orderInfo = ref<OrderDetail | null>(null)
 const checking = ref(true)
 const paymentState = ref<PaymentState>('confirming')
@@ -79,6 +81,8 @@ const pollIntervalMs = 2000
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 const payIntent = ref('')
 const zeroPay = ref(false)
+
+const resolvedGroupId = computed(() => groupId.value || orderInfo.value?.groupBuyGroupId || '')
 
 const resultText = computed(() => {
   if (checking.value || paymentState.value === 'confirming') return '正在确认支付结果...'
@@ -184,13 +188,30 @@ function goOrderDetail() {
   uni.redirectTo({ url: `/pages/order/detail?id=${orderId.value}` })
 }
 
+function goGroupProgress() {
+  if (!resolvedGroupId.value) {
+    goOrderDetail()
+    return
+  }
+  uni.redirectTo({ url: `/pages/group-buy/group?id=${resolvedGroupId.value}` })
+}
+
+function goPrimaryDetail() {
+  if (resolvedGroupId.value && paymentState.value === 'success') {
+    goGroupProgress()
+    return
+  }
+  goOrderDetail()
+}
+
 function goHome() {
   uni.switchTab({ url: '/pages/home/index' })
 }
 
 onLoad((options) => {
-  if (options?.orderId) orderId.value = options.orderId
-  if (options?.payIntent) payIntent.value = options.payIntent
+  if (options?.orderId) orderId.value = String(options.orderId)
+  if (options?.groupId) groupId.value = String(options.groupId)
+  if (options?.payIntent) payIntent.value = String(options.payIntent)
   zeroPay.value = options?.zeroPay === '1'
   if (payIntent.value === 'cancel') {
     uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
@@ -322,6 +343,20 @@ onUnload(() => {
   font-size: $font-xs;
   color: $text-secondary;
   line-height: 1.6;
+}
+
+.group-progress-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60rpx;
+  margin-top: $spacing-sm;
+  padding: 0 28rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.9);
+  color: $primary-dark;
+  font-size: $font-sm;
+  font-weight: 700;
 }
 
 .tip-code {
