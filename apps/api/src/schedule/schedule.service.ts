@@ -8,6 +8,7 @@ import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
 import { ShareService } from '../share/share.service';
+import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 
 @Injectable()
 export class ScheduleService {
@@ -22,6 +23,7 @@ export class ScheduleService {
     private readonly groupBuyService: GroupBuyService,
     private readonly merchantSettlementService: MerchantSettlementService,
     private readonly shareService: ShareService,
+    private readonly benefitPackageService: BenefitPackageService,
   ) {}
 
   private async acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
@@ -135,7 +137,10 @@ export class ScheduleService {
     if (!lockValue) return;
     try {
       const result = await this.paymentReconcileService.reconcilePendingRefunds();
-      this.logger.log(`退款对账任务完成: ${JSON.stringify(result)}`);
+      const benefitResult = await (this.benefitPackageService as any).reconcileTerminalRefundFreezes?.();
+      this.logger.log(
+        `退款对账任务完成: refund=${JSON.stringify(result)}, benefit=${JSON.stringify(benefitResult ?? {})}`,
+      );
     } catch (error) {
       const err = error as Error;
       this.logger.error(`退款对账任务失败：${err.message}`, err.stack);
