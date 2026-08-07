@@ -4,6 +4,36 @@ import { AFTERSALE_APPLY_DAYS } from '@baby-mall/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { MerchantSettlementService } from './merchant-settlement.service';
 
+function computeProductionCommission(rule: any, sourceAmount: number) {
+  let amount = 0;
+  const snapshot: Record<string, unknown> = {
+    ruleId: rule.id.toString(),
+    ruleName: rule.name,
+    calculationType: rule.calculationType,
+    commissionRate: rule.commissionRate ?? null,
+    commissionAmount: rule.commissionAmount ?? null,
+    sourceAmount,
+  };
+  if (rule.calculationType === 'fixed_amount') {
+    amount = rule.commissionAmount ?? 0;
+    snapshot.formula = `fixed_amount: ${amount}`;
+  } else if (rule.calculationType === 'percent') {
+    const rate = rule.commissionRate ?? 0;
+    amount = Math.floor((sourceAmount * rate) / 10000);
+    snapshot.formula = `percent: sourceAmount(${sourceAmount}) * rate(${rate}) / 10000 = ${amount}`;
+  }
+  if (rule.minCommissionAmount != null && amount < rule.minCommissionAmount) {
+    amount = rule.minCommissionAmount;
+    snapshot.cappedBy = 'min';
+  }
+  if (rule.maxCommissionAmount != null && amount > rule.maxCommissionAmount) {
+    amount = rule.maxCommissionAmount;
+    snapshot.cappedBy = 'max';
+  }
+  snapshot.finalAmount = amount;
+  return { amount, snapshot };
+}
+
 @Injectable()
 export class ProductionMerchantSettlementService extends MerchantSettlementService {
   private readonly productionLogger = new Logger(ProductionMerchantSettlementService.name);
@@ -61,6 +91,156 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
     await this.applyOutstandingMerchantDebt(order.id);
   }
 
+  override async generateServiceCommission(
+    verificationLogId: bigint | string,
+    entitlementId: bigint | string,
+    packageItemId: bigint | string,
+    packageId: bigint | string,
+    pickupStoreId?: bigint | string | null,
+    merchantPromotionSourceId?: bigint | string | null,
+  ): Promise<void> {
+    const verificationLog = await this.productionPrisma.userBenefitVerificationLog.findUnique({
+      where: { id: BigInt(verificationLogId) },
+      select: { createdAt: true },
+    });
+    const occurredAt = verificationLog?.createdAt ?? new Date();
+    await this.productionPrisma.$transaction((tx) =>
+      this.generateServiceCommissionInTransaction(tx, {
+        verificationLogId: BigInt(verificationLogId),
+        entitlementId: BigInt(entitlementId),
+        packageItemId: BigInt(packageItemId),
+        packageId: BigInt(packageId),
+        pickupStoreId: pickupStoreId == null ? null : BigInt(pickupStoreId),
+        merchantPromotionSourceId:
+          merchantPromotionSourceId == null ? null : BigInt(merchantPromotionSourceId),
+        occurredAt,
+      }),
+    );
+  }
+
+  async generateServiceCommissionInTransaction(
+    tx: Prisma.TransactionClient,
+    params: {
+      verificationLogId: bigint;
+      entitlementId: bigint;
+      packageItemId: bigint;
+      packageId: bigint;
+      pickupStoreId?: bigint | null;
+      merchantPromotionSourceId?: bigint | null;
+      occurredAt: Date;
+    },
+  ): Promise<{ created: boolean; reason: string }> {
+    const item = await tx.benefitPackageItem.findFirst({
+      where: { id: params.packageItemId },
+      select: { id: true, originalValue: true },
+    });
+    if (!item) throw new Error(`服务结算失败：权益项不存在 itemId=${params.packageItemId}`);
+    const sourceAmount = Math.max(0, item.originalValue ?? 0);
+
+    const rule = await this.matchServiceRuleAt(tx, params, params.occurredAt);
+    if (!rule) return { created: false, reason: 'no_rule' };
+
+    const { amount, snapshot } = computeProductionCommission(rule, sourceAmount);
+    if (amount <= 0) return { created: false, reason: 'zero_amount' };
+
+    const dedupeKey = `service_verification:verification_log:${params.verificationLogId}:rule:${rule.id}`;
+    try {
+      await tx.merchantCommissionRecord.create({
+        data: {
+          ruleId: rule.id,
+          merchantPromotionSourceId: rule.merchantPromotionSourceId,
+          pickupStoreId: rule.pickupStoreId,
+          benefitPackageId: params.packageId,
+          benefitPackageItemId: params.packageItemId,
+          entitlementId: params.entitlementId,
+          verificationLogId: params.verificationLogId,
+          sourceType: 'service_verification',
+          sourceAmount,
+          commissionAmount: amount,
+          calculationSnapshot: {
+            ...snapshot,
+            verificationOccurredAt: params.occurredAt.toISOString(),
+          },
+          status: 'pending',
+          dedupeKey,
+          occurredAt: params.occurredAt,
+        },
+      });
+      return { created: true, reason: 'created' };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return { created: false, reason: 'already_exists' };
+      }
+      throw error;
+    }
+  }
+
+  async reconcileMissingServiceCommissions(limit = 200) {
+    const logs = await this.productionPrisma.$queryRaw<Array<{
+      verificationLogId: bigint;
+      entitlementId: bigint;
+      packageId: bigint;
+      packageItemId: bigint;
+      createdAt: Date;
+    }>>`
+      SELECT
+        l.id AS verificationLogId,
+        l.entitlement_id AS entitlementId,
+        l.package_id AS packageId,
+        l.package_item_id AS packageItemId,
+        l.created_at AS createdAt
+      FROM user_benefit_verification_logs l
+      WHERE l.action = 'verify'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM merchant_commission_records r
+          WHERE r.verification_log_id = l.id
+            AND r.source_type = 'service_verification'
+            AND r.deleted_at IS NULL
+        )
+      ORDER BY l.created_at ASC
+      LIMIT ${limit}
+    `;
+
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const log of logs) {
+      try {
+        const item = await this.productionPrisma.benefitPackageItem.findFirst({
+          where: { id: log.packageItemId },
+          select: { pickupStoreId: true, merchantPromotionSourceId: true },
+        });
+        if (!item) {
+          failed += 1;
+          this.productionLogger.error(
+            `服务分佣补偿失败：核销日志${log.verificationLogId}对应权益项不存在`,
+          );
+          continue;
+        }
+        const result = await this.productionPrisma.$transaction((tx) =>
+          this.generateServiceCommissionInTransaction(tx, {
+            verificationLogId: log.verificationLogId,
+            entitlementId: log.entitlementId,
+            packageId: log.packageId,
+            packageItemId: log.packageItemId,
+            pickupStoreId: item.pickupStoreId,
+            merchantPromotionSourceId: item.merchantPromotionSourceId,
+            occurredAt: log.createdAt,
+          }),
+        );
+        if (result.created) created += 1;
+        else skipped += 1;
+      } catch (error) {
+        failed += 1;
+        this.productionLogger.error(
+          `服务分佣补偿失败: verificationLogId=${log.verificationLogId}, error=${(error as Error).message}`,
+        );
+      }
+    }
+    return { total: logs.length, created, skipped, failed };
+  }
+
   async generateMatureSalesCommissions(limit = 200) {
     const cutoff = new Date(
       Date.now() - AFTERSALE_APPLY_DAYS * 24 * 60 * 60 * 1000,
@@ -108,7 +288,7 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
           order.sourceType,
           order.sourceCode || '',
         );
-        const created = await this.productionPrisma.merchantCommissionRecord.findFirst({
+        const createdRecord = await this.productionPrisma.merchantCommissionRecord.findFirst({
           where: {
             orderId: order.id,
             sourceType: 'sales_referral',
@@ -116,7 +296,7 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
           },
           select: { id: true },
         });
-        if (created) generated += 1;
+        if (createdRecord) generated += 1;
         else skipped += 1;
       } catch (error) {
         failed += 1;
@@ -168,9 +348,6 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
         continue;
       }
 
-      // A commission may already have been created from a partially-refunded net amount.
-      // Only reverse the additional revenue loss below the source amount that this record
-      // was originally based on; do not subtract cumulative refunds twice.
       if (netOrderRevenue >= originalSource) continue;
       const targetSource = Math.max(0, netOrderRevenue);
       const targetCommission = Math.max(
@@ -281,6 +458,67 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
     }
 
     return { adjusted, debtCreated };
+  }
+
+  private async matchServiceRuleAt(
+    tx: Prisma.TransactionClient,
+    params: {
+      packageItemId: bigint;
+      packageId: bigint;
+      pickupStoreId?: bigint | null;
+      merchantPromotionSourceId?: bigint | null;
+    },
+    occurredAt: Date,
+  ) {
+    const rules = await tx.merchantCommissionRule.findMany({
+      where: {
+        deletedAt: null,
+        ruleType: 'service_verification',
+        status: 1,
+        createdAt: { lte: occurredAt },
+      },
+    });
+    const effective = rules.filter((rule) => {
+      if (rule.effectiveStartAt && occurredAt < rule.effectiveStartAt) return false;
+      if (rule.effectiveEndAt && occurredAt > rule.effectiveEndAt) return false;
+      return true;
+    });
+
+    const itemId = params.packageItemId.toString();
+    const packageId = params.packageId.toString();
+    const storeId = params.pickupStoreId?.toString();
+    const merchantId = params.merchantPromotionSourceId?.toString();
+
+    let candidates = effective.filter(
+      (rule) => rule.benefitPackageItemId?.toString() === itemId,
+    );
+    if (candidates.length === 0) {
+      candidates = effective.filter(
+        (rule) =>
+          rule.benefitPackageId?.toString() === packageId &&
+          rule.benefitPackageItemId === null,
+      );
+    }
+    if (candidates.length === 0 && storeId) {
+      candidates = effective.filter(
+        (rule) =>
+          rule.pickupStoreId?.toString() === storeId &&
+          rule.benefitPackageId === null &&
+          rule.benefitPackageItemId === null,
+      );
+    }
+    if (candidates.length === 0 && merchantId) {
+      candidates = effective.filter(
+        (rule) =>
+          rule.merchantPromotionSourceId?.toString() === merchantId &&
+          rule.benefitPackageId === null &&
+          rule.benefitPackageItemId === null &&
+          rule.pickupStoreId === null,
+      );
+    }
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => b.priority - a.priority || Number(a.id - b.id));
+    return candidates[0];
   }
 
   private async applyOutstandingMerchantDebt(orderId: bigint) {
