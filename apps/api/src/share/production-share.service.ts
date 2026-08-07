@@ -67,6 +67,10 @@ export class ProductionShareService extends ShareService {
   }
 
   async reconcileMatureFirstPaidRewards(limit = 200) {
+    // 先补齐已成功退款的首单归因反向流水。这里故意与成熟奖励共用定时任务，
+    // 即使退款回调某次副作用失败，后续扫描仍能依靠 dedupeKey 自动补偿。
+    await this.reconcileSuccessfulRefundAttributions(limit);
+
     const cutoff = new Date(
       Date.now() - AFTERSALE_APPLY_DAYS * 24 * 60 * 60 * 1000,
     );
@@ -94,7 +98,9 @@ export class ProductionShareService extends ShareService {
             payAmount: true,
           },
         });
-        if (!order?.completedAt || order.completedAt > cutoff) {
+        // 只允许真正处于 completed 的订单成熟。用户在售后窗口最后一天发起售后时，
+        // Order.status 会切到 aftersale；即使 completedAt 已经过窗口，也不能先发奖励。
+        if (!order?.completedAt || order.status !== 'completed' || order.completedAt > cutoff) {
           skipped += 1;
           continue;
         }
@@ -139,6 +145,35 @@ export class ProductionShareService extends ShareService {
       }
     }
     return { total: relations.length, issued, skipped, failed };
+  }
+
+  async reconcileSuccessfulRefundAttributions(limit = 200) {
+    const refunds = await this.productionPrisma.orderRefund.findMany({
+      where: { status: 'success' },
+      select: { id: true, orderId: true },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+
+    let adjusted = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const refund of refunds) {
+      try {
+        const result = await this.reverseFirstPaidAttributionAfterRefund(
+          refund.orderId,
+          refund.id,
+        );
+        if (result.adjusted) adjusted += 1;
+        else skipped += 1;
+      } catch (error) {
+        failed += 1;
+        this.productionLogger.error(
+          `首单退款归因补偿失败: refundId=${refund.id}, error=${(error as Error).message}`,
+        );
+      }
+    }
+    return { total: refunds.length, adjusted, skipped, failed };
   }
 
   /**
