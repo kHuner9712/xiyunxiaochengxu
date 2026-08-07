@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { getMemberLevelByGrowth, MEMBER_LEVELS } from '@baby-mall/shared';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
+import { UpdateMemberLevelDto } from './dto/update-member-level.dto';
 
 @Injectable()
 export class MemberService {
@@ -10,129 +11,294 @@ export class MemberService {
 
   async findAllLevels() {
     const levels = await this.prisma.memberLevel.findMany({
-      where: { status: 1 },
-      orderBy: { sortOrder: 'asc' },
+      orderBy: [{ minGrowthValue: 'asc' }, { sortOrder: 'asc' }],
     });
-    return levels.map((l) => ({
-      ...l,
-      id: l.id.toString(),
-    }));
+    return levels.map((level, index) => this.serializeLevel(level, index));
   }
 
   async getMemberInfo(userId: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: BigInt(userId), deletedAt: null },
-      include: { memberLevel: true },
-    });
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const [user, levels] = await Promise.all([
+      this.prisma.user.findFirst({
+        where: { id: userIdValue, deletedAt: null },
+        include: { memberLevel: true },
+      }),
+      this.getActiveLevels(),
+    ]);
     if (!user) throw new NotFoundException('用户不存在');
+    if (levels.length === 0) throw new BadRequestException('会员等级尚未配置');
 
-    const levelCode = getMemberLevelByGrowth(user.growthValue);
-    const currentLevelConfig = MEMBER_LEVELS[levelCode];
-    const nextLevelConfig = MEMBER_LEVELS[levelCode + 1];
-    const nextLevelGrowth = nextLevelConfig?.minGrowth ?? user.growthValue;
-    const rights = this.getLevelBenefits(user.memberLevel?.benefits, levelCode, currentLevelConfig.name, currentLevelConfig.pointsRate);
+    const currentIndex = this.resolveLevelIndex(levels, user.growthValue);
+    const current = levels[currentIndex];
+    const next = levels[currentIndex + 1] ?? null;
+    const rights = this.getLevelBenefits(current.benefits, currentIndex, current.name, current.pointsRate);
 
     return {
-      level: levelCode,
-      levelName: currentLevelConfig.name,
+      level: currentIndex,
+      levelId: current.id.toString(),
+      levelName: current.name,
       growthValue: user.growthValue,
       currentLevelGrowth: user.growthValue,
-      nextLevelGrowth,
+      currentLevelMinGrowth: current.minGrowthValue,
+      nextLevelGrowth: next?.minGrowthValue ?? user.growthValue,
       rights: rights.map((right) => right.name),
-      currentLevel: currentLevelConfig.name,
-      currentLevelCode: levelCode,
-      discountRate: currentLevelConfig.discountRate,
-      pointsRate: currentLevelConfig.pointsRate,
-      nextLevel: nextLevelConfig ? nextLevelConfig.name : null,
-      growthGap: nextLevelConfig ? nextLevelConfig.minGrowth - user.growthValue : 0,
-      memberLevel: user.memberLevel ? { ...user.memberLevel, id: user.memberLevel.id.toString() } : null,
+      currentLevel: current.name,
+      currentLevelCode: currentIndex,
+      discountRate: current.discountRate,
+      pointsRate: current.pointsRate,
+      nextLevel: next?.name ?? null,
+      growthGap: next ? Math.max(0, next.minGrowthValue - user.growthValue) : 0,
+      memberLevel: this.serializeLevel(current, currentIndex),
     };
   }
 
   async getBenefits(userId: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: BigInt(userId), deletedAt: null },
-      include: { memberLevel: true },
-    });
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const [user, levels] = await Promise.all([
+      this.prisma.user.findFirst({ where: { id: userIdValue, deletedAt: null } }),
+      this.getActiveLevels(),
+    ]);
     if (!user) throw new NotFoundException('用户不存在');
-
-    const levelCode = getMemberLevelByGrowth(user.growthValue);
-    const currentLevelConfig = MEMBER_LEVELS[levelCode];
-    const benefits = this.getLevelBenefits(
-      user.memberLevel?.benefits,
-      levelCode,
-      currentLevelConfig.name,
-      currentLevelConfig.pointsRate,
-    );
-
-    return benefits;
+    if (levels.length === 0) return [];
+    const levelIndex = this.resolveLevelIndex(levels, user.growthValue);
+    const current = levels[levelIndex];
+    return this.getLevelBenefits(current.benefits, levelIndex, current.name, current.pointsRate);
   }
 
   async findLevelById(id: string) {
-    const level = await this.prisma.memberLevel.findFirst({ where: { id: BigInt(id) } });
-    if (!level) throw new NotFoundException('会员等级不存在');
-    return { ...level, id: level.id.toString() };
-  }
-
-  async createLevel(data: any) {
-    const level = await this.prisma.memberLevel.create({ data });
-    this.logger.log(`创建会员等级：${level.id}`);
-    return { ...level, id: level.id.toString() };
-  }
-
-  async updateLevel(id: string, data: any) {
-    const level = await this.prisma.memberLevel.findFirst({ where: { id: BigInt(id) } });
-    if (!level) throw new NotFoundException('会员等级不存在');
-
-    const result = await this.prisma.memberLevel.update({
-      where: { id: BigInt(id) },
-      data,
+    const levelId = parsePositiveBigIntId(id, '会员等级');
+    const levels = await this.prisma.memberLevel.findMany({
+      orderBy: [{ minGrowthValue: 'asc' }, { sortOrder: 'asc' }],
     });
+    const index = levels.findIndex((level) => level.id === levelId);
+    if (index < 0) throw new NotFoundException('会员等级不存在');
+    return this.serializeLevel(levels[index], index);
+  }
+
+  async createLevel(dto: UpdateMemberLevelDto) {
+    if (!dto.name || dto.minGrowthValue === undefined) {
+      throw new BadRequestException('新增会员等级必须填写名称和最低成长值');
+    }
+    const benefits = this.normalizeBenefits(dto.benefits, dto.name, dto.pointsRate ?? 10);
+    const level = await this.prisma.memberLevel.create({
+      data: {
+        name: dto.name.trim(),
+        icon: dto.icon || null,
+        minGrowthValue: dto.minGrowthValue,
+        maxGrowthValue: dto.maxGrowthValue ?? null,
+        discountRate: dto.discountRate ?? null,
+        pointsRate: dto.pointsRate ?? 10,
+        benefits,
+        sortOrder: dto.sortOrder ?? dto.minGrowthValue,
+        status: dto.status ?? 1,
+      },
+    });
+    try {
+      await this.assertValidActiveLevelRanges();
+    } catch (error) {
+      await this.prisma.memberLevel.delete({ where: { id: level.id } });
+      throw error;
+    }
+    await this.reconcileAllUserLevels('会员等级配置变更');
+    this.logger.log(`创建会员等级：${level.id}`);
+    return this.findLevelById(level.id.toString());
+  }
+
+  async updateLevel(id: string, dto: UpdateMemberLevelDto) {
+    const levelId = parsePositiveBigIntId(id, '会员等级');
+    const current = await this.prisma.memberLevel.findUnique({ where: { id: levelId } });
+    if (!current) throw new NotFoundException('会员等级不存在');
+
+    const data: any = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.icon !== undefined) data.icon = dto.icon || null;
+    if (dto.minGrowthValue !== undefined) data.minGrowthValue = dto.minGrowthValue;
+    if (dto.maxGrowthValue !== undefined) data.maxGrowthValue = dto.maxGrowthValue;
+    if (dto.discountRate !== undefined) data.discountRate = dto.discountRate;
+    if (dto.pointsRate !== undefined) data.pointsRate = dto.pointsRate;
+    if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
+    if (dto.status !== undefined) data.status = dto.status;
+    if (dto.benefits !== undefined) {
+      data.benefits = this.normalizeBenefits(dto.benefits, dto.name ?? current.name, dto.pointsRate ?? current.pointsRate);
+    }
+
+    await this.prisma.memberLevel.update({ where: { id: levelId }, data });
+    try {
+      await this.assertValidActiveLevelRanges();
+    } catch (error) {
+      await this.prisma.memberLevel.update({
+        where: { id: levelId },
+        data: {
+          name: current.name,
+          icon: current.icon,
+          minGrowthValue: current.minGrowthValue,
+          maxGrowthValue: current.maxGrowthValue,
+          discountRate: current.discountRate,
+          pointsRate: current.pointsRate,
+          benefits: current.benefits,
+          sortOrder: current.sortOrder,
+          status: current.status,
+        },
+      });
+      throw error;
+    }
+    await this.reconcileAllUserLevels('会员等级配置变更');
     this.logger.log(`更新会员等级：${id}`);
-    return { ...result, id: result.id.toString() };
+    return this.findLevelById(id);
   }
 
   async checkAndUpgradeLevel(userId: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: BigInt(userId), deletedAt: null },
-    });
-    if (!user) return;
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const levels = await this.getActiveLevels();
+    if (levels.length === 0) return;
 
-    const expectedLevelCode = getMemberLevelByGrowth(user.growthValue);
-    const levels = await this.prisma.memberLevel.findMany({
-      where: { status: 1 },
-      orderBy: { sortOrder: 'asc' },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: bigint }>>`
+        SELECT id FROM users WHERE id = ${userIdValue} AND deleted_at IS NULL FOR UPDATE
+      `;
+      if (rows.length === 0) return;
+      const user = await tx.user.findUnique({ where: { id: userIdValue } });
+      if (!user) return;
+      const target = levels[this.resolveLevelIndex(levels, user.growthValue)];
+      if (user.memberLevelId === target.id) return;
 
-    const targetLevel = levels[expectedLevelCode];
-    if (!targetLevel) return;
-
-    if (!user.memberLevelId || user.memberLevelId !== targetLevel.id) {
-      await this.prisma.user.update({
-        where: { id: BigInt(userId) },
-        data: { memberLevelId: targetLevel.id },
+      await tx.user.update({
+        where: { id: userIdValue },
+        data: { memberLevelId: target.id },
       });
-
-      await this.prisma.userMemberRecord.create({
+      await tx.userMemberRecord.create({
         data: {
-          userId: BigInt(userId),
+          userId: userIdValue,
           oldLevelId: user.memberLevelId,
-          newLevelId: targetLevel.id,
-          changeReason: `成长值达到${user.growthValue}自动升级`,
+          newLevelId: target.id,
+          changeReason: `成长值${user.growthValue}匹配会员等级${target.name}`,
         },
       });
-
-      this.logger.log(`用户${userId}升级为${targetLevel.name}`);
-    }
+    });
   }
 
   async addGrowthValue(userId: string, value: number, reason: string) {
-    await this.prisma.user.update({
-      where: { id: BigInt(userId) },
+    if (!Number.isSafeInteger(value) || value === 0) {
+      throw new BadRequestException('成长值变更必须为非零整数');
+    }
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const updated = await this.prisma.user.updateMany({
+      where: {
+        id: userIdValue,
+        deletedAt: null,
+        ...(value < 0 ? { growthValue: { gte: Math.abs(value) } } : {}),
+      },
       data: { growthValue: { increment: value } },
     });
+    if (updated.count === 0) throw new BadRequestException('用户不存在或成长值不足');
     await this.checkAndUpgradeLevel(userId);
-    this.logger.log(`用户${userId}增加成长值${value}，原因：${reason}`);
+    this.logger.log(`用户${userId}成长值变更${value}，原因：${reason}`);
+  }
+
+  private async getActiveLevels() {
+    return this.prisma.memberLevel.findMany({
+      where: { status: 1 },
+      orderBy: [{ minGrowthValue: 'asc' }, { sortOrder: 'asc' }],
+    });
+  }
+
+  private resolveLevelIndex(levels: any[], growthValue: number) {
+    let matched = -1;
+    for (let index = 0; index < levels.length; index += 1) {
+      const level = levels[index];
+      if (
+        growthValue >= level.minGrowthValue &&
+        (level.maxGrowthValue === null || growthValue <= level.maxGrowthValue)
+      ) {
+        matched = index;
+      }
+    }
+    if (matched >= 0) return matched;
+    if (growthValue < levels[0].minGrowthValue) return 0;
+    return levels.length - 1;
+  }
+
+  private async assertValidActiveLevelRanges() {
+    const levels = await this.getActiveLevels();
+    if (levels.length === 0) throw new BadRequestException('至少需要一个启用的会员等级');
+    if (levels[0].minGrowthValue !== 0) throw new BadRequestException('第一个启用会员等级必须从成长值0开始');
+
+    for (let index = 0; index < levels.length; index += 1) {
+      const current = levels[index];
+      if (current.maxGrowthValue !== null && current.maxGrowthValue < current.minGrowthValue) {
+        throw new BadRequestException(`会员等级“${current.name}”最高成长值不能低于最低成长值`);
+      }
+      const next = levels[index + 1];
+      if (!next) continue;
+      if (current.maxGrowthValue === null) {
+        throw new BadRequestException(`会员等级“${current.name}”不是最后一级，不能设置无上限`);
+      }
+      if (next.minGrowthValue !== current.maxGrowthValue + 1) {
+        throw new BadRequestException(
+          `会员等级区间必须连续且不重叠：“${current.name}”结束于${current.maxGrowthValue}，下一等级应从${current.maxGrowthValue + 1}开始`,
+        );
+      }
+    }
+    if (levels[levels.length - 1].maxGrowthValue !== null) {
+      throw new BadRequestException('最后一个启用会员等级必须设置为无上限');
+    }
+  }
+
+  private async reconcileAllUserLevels(reason: string) {
+    const levels = await this.getActiveLevels();
+    if (levels.length === 0) return;
+    const users = await this.prisma.user.findMany({
+      where: { deletedAt: null },
+      select: { id: true, growthValue: true, memberLevelId: true },
+    });
+    for (const user of users) {
+      const target = levels[this.resolveLevelIndex(levels, user.growthValue)];
+      if (user.memberLevelId === target.id) continue;
+      await this.prisma.$transaction(async (tx) => {
+        const claim = await tx.user.updateMany({
+          where: { id: user.id, memberLevelId: user.memberLevelId },
+          data: { memberLevelId: target.id },
+        });
+        if (claim.count === 0) return;
+        await tx.userMemberRecord.create({
+          data: {
+            userId: user.id,
+            oldLevelId: user.memberLevelId,
+            newLevelId: target.id,
+            changeReason: reason,
+          },
+        });
+      });
+    }
+  }
+
+  private serializeLevel(level: any, index: number) {
+    return {
+      ...level,
+      id: level.id.toString(),
+      level: index,
+      discountRate: level.discountRate,
+      pointsMultiplier: level.pointsRate / 10,
+      description: this.extractBenefitDescription(level.benefits),
+    };
+  }
+
+  private normalizeBenefits(raw: string | undefined, levelName: string, pointsRate: number) {
+    if (raw && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) throw new Error('not array');
+        return JSON.stringify(parsed);
+      } catch {
+        throw new BadRequestException('会员权益必须是合法的 JSON 数组');
+      }
+    }
+    return JSON.stringify(this.defaultBenefits(0, levelName, pointsRate));
+  }
+
+  private extractBenefitDescription(raw: string | null | undefined) {
+    const benefits = this.parseBenefits(raw, 0);
+    return benefits.map((benefit) => benefit.name).join('、');
   }
 
   private getLevelBenefits(benefitsJson: string | null | undefined, levelCode: number, levelName: string, pointsRate: number) {
