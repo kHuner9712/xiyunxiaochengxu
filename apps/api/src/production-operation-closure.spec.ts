@@ -73,7 +73,6 @@ describe('production operation closure contracts', () => {
 
   it('uses the outermost hardened runtime providers rather than leaving safety wrappers unused', () => {
     const paymentModule = read('apps/api/src/payment/payment.module.ts');
-    const netRewardPayment = read('apps/api/src/payment/net-reward-safe-payment.service.ts');
     const historicalReconcile = read('apps/api/src/payment/historical-anomaly-payment-reconcile.service.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
     const netRewardOrder = read('apps/api/src/order/cancellation-safe-production-order.service.ts');
@@ -84,12 +83,11 @@ describe('production operation closure contracts', () => {
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
 
-    expect(paymentModule).toContain('NetRewardSafePaymentService');
-    expect(netRewardPayment).toContain('extends CancellationSafeStockSafePaymentService');
-    expect(netRewardPayment).toContain('reconcileRefundRewardPoints');
+    expect(paymentModule).toContain('CancellationSafeStockSafePaymentService');
     expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
     expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
     expect(orderModule).toContain('CancellationSafeProductionOrderService');
+    expect(netRewardOrder).toContain('status: REFUND_STATUS.SUCCESS');
     expect(netRewardOrder).toContain('successfulRefundAmount');
     expect(netRewardOrder).toContain('netPayAmount');
     expect(aftersaleModule).toContain('ProductionAftersaleService');
