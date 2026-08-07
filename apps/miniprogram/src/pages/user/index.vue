@@ -63,6 +63,11 @@
           <text class="shortcut-text">待付款</text>
           <view v-if="orderCount.unpaid" class="shortcut-badge">{{ orderCount.unpaid }}</view>
         </view>
+        <view class="shortcut-item" @tap="goOrderList('paid')">
+          <view class="shortcut-icon">团</view>
+          <text class="shortcut-text">待成团</text>
+          <view v-if="orderCount.paid" class="shortcut-badge">{{ orderCount.paid }}</view>
+        </view>
         <view class="shortcut-item" @tap="goOrderList('pending_delivery')">
           <view class="shortcut-icon">发</view>
           <text class="shortcut-text">待发货</text>
@@ -183,6 +188,7 @@ const userStore = useUserStore()
 const hasAgreedToPolicies = ref(false)
 const orderCount = ref<OrderCount>({
   unpaid: 0,
+  paid: 0,
   unshipped: 0,
   pendingPickup: 0,
   unreceived: 0,
@@ -193,7 +199,7 @@ async function loadOrderCount() {
   if (!userStore.isLoggedIn) return
   try {
     const data = await getOrderCount()
-    orderCount.value = data
+    orderCount.value = { paid: 0, ...data }
   } catch {
     uni.showToast({ title: '订单数量加载失败', icon: 'none' })
   }
@@ -241,18 +247,10 @@ async function handleGetPhoneNumber(e: any) {
   } else if (detail.encryptedData && detail.iv) {
     try {
       const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
-        uni.login({
-          provider: 'weixin',
-          success: resolve,
-          fail: reject
-        })
+        uni.login({ provider: 'weixin', success: resolve, fail: reject })
       })
       if (loginRes.code) {
-        bindPayload = {
-          code: loginRes.code,
-          encryptedData: detail.encryptedData,
-          iv: detail.iv
-        }
+        bindPayload = { code: loginRes.code, encryptedData: detail.encryptedData, iv: detail.iv }
       }
     } catch (err) {
       console.error('[baby-mall] uni.login for legacy bindPhone failed:', err)
@@ -266,9 +264,7 @@ async function handleGetPhoneNumber(e: any) {
   }
 
   try {
-    if (!userStore.isLoggedIn) {
-      await userStore.wxLogin()
-    }
+    if (!userStore.isLoggedIn) await userStore.wxLogin()
     await userStore.bindPhone(bindPayload)
     uni.showToast({ title: '手机号绑定成功', icon: 'success' })
   } catch (err) {
@@ -317,18 +313,14 @@ function goOrderList(status?: OrderStatus | number) {
   })
 }
 
-interface NavOptions {
-  requireLogin?: boolean
-}
+interface NavOptions { requireLogin?: boolean }
 
 function smartNavigate(url: string, options: NavOptions = {}) {
   const { requireLogin = false } = options
-
   if (!userStore.isLoggedIn) {
     showLoginRequired()
     return
   }
-
   uni.navigateTo({
     url,
     fail: (err) => {
@@ -345,9 +337,7 @@ function showLoginRequired() {
     cancelText: '取消',
     confirmText: '去登录',
     success: (res) => {
-      if (res.confirm) {
-        handleLogin()
-      }
+      if (res.confirm) handleLogin()
     }
   })
 }
@@ -379,11 +369,7 @@ onShow(() => {
 </script>
 
 <style lang="scss" scoped>
-.user-page {
-  min-height: 100vh;
-  padding-bottom: $spacing-xl;
-}
-
+.user-page { min-height: 100vh; padding-bottom: $spacing-xl; }
 .user-header {
   position: relative;
   overflow: hidden;
@@ -395,355 +381,43 @@ onShow(() => {
   border-radius: 0 0 $radius-xxl $radius-xxl;
   box-shadow: 0 18rpx 40rpx rgba(131, 91, 78, 0.08);
 }
-
-.header-brand-row {
-  @include flex-between;
-  margin-bottom: $spacing-lg;
-}
-
-.brand-pill {
-  min-height: 40rpx;
-  padding: 0 18rpx;
-  border-radius: $radius-round;
-  background: rgba(255, 255, 255, 0.78);
-  color: $primary-dark;
-  font-size: $font-xs;
-  line-height: 40rpx;
-  font-weight: 800;
-  box-shadow: $shadow-xs;
-}
-
-.brand-copy {
-  color: $text-secondary;
-  font-size: $font-xs;
-  font-weight: 700;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-}
-
-.user-avatar {
-  width: 132rpx;
-  height: 132rpx;
-  border-radius: 50%;
-  border: 4rpx solid rgba(255, 255, 255, 0.9);
-  box-shadow: $shadow-md;
-  background: $bg-ivory;
-}
-
-.user-detail {
-  margin-left: $spacing-md;
-  min-width: 0;
-}
-
-.user-name {
-  font-size: $font-xl;
-  color: $text-color;
-  font-weight: 900;
-  display: block;
-  max-width: 420rpx;
-  @include text-ellipsis;
-}
-
-.member-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 42rpx;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1rpx solid rgba($primary-color, 0.16);
-  border-radius: $radius-round;
-  padding: 0 16rpx;
-  margin-top: 10rpx;
-}
-
-.member-text {
-  font-size: $font-xs;
-  color: $primary-dark;
-  font-weight: 700;
-}
-
-.login-btn {
-  @include flex-center;
-  width: 240rpx;
-  min-height: 76rpx;
-  margin-top: $spacing-lg;
-  background: $gradient-coral;
-  border-radius: $radius-round;
-  box-shadow: $shadow-coral;
-
-  &.disabled {
-    opacity: 0.56;
-    box-shadow: none;
-  }
-}
-
-.login-text {
-  color: #FFFFFF;
-  font-size: $font-md;
-  font-weight: 800;
-}
-
-.phone-btn {
-  @include flex-center;
-  width: 240rpx;
-  min-height: 76rpx;
-  margin: $spacing-lg 0 0;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.9);
-  border: 2rpx solid rgba($primary-color, 0.28);
-  border-radius: $radius-round;
-  color: $primary-dark;
-  font-size: $font-md;
-  font-weight: 800;
-  line-height: 76rpx;
-
-  &::after {
-    border: none;
-  }
-}
-
-.profile-btn {
-  @include flex-center;
-  width: 240rpx;
-  min-height: 76rpx;
-  margin-top: $spacing-sm;
-  background: rgba($success-color, 0.12);
-  border: 2rpx solid rgba($success-color, 0.24);
-  border-radius: $radius-round;
-}
-
-.profile-text {
-  color: $success-color;
-  font-size: $font-md;
-  font-weight: 800;
-}
-
-.login-agreement {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  min-height: 48rpx;
-  margin-top: 14rpx;
-}
-
-.agreement-checkbox {
-  @include flex-center;
-  width: 30rpx;
-  height: 30rpx;
-  margin-right: 8rpx;
-  border: 2rpx solid rgba($text-secondary, 0.72);
-  border-radius: 8rpx;
-  background: rgba(255, 255, 255, 0.9);
-  box-sizing: border-box;
-  flex-shrink: 0;
-
-  &.checked {
-    border-color: $primary-color;
-    background: $primary-color;
-  }
-}
-
-.agreement-checkmark {
-  color: #FFFFFF;
-  font-size: 22rpx;
-  line-height: 1;
-  font-weight: 800;
-}
-
-.agreement-prefix {
-  color: $text-secondary;
-  font-size: $font-xs;
-}
-
-.agreement-link {
-  color: $primary-dark;
-  font-size: $font-xs;
-  text-decoration: underline;
-  margin: 0 6rpx;
-}
-
-.header-trust {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  margin-top: $spacing-lg;
-
-  text {
-    min-height: 38rpx;
-    padding: 0 16rpx;
-    border-radius: $radius-round;
-    background: rgba($success-color, 0.12);
-    color: $success-dark;
-    font-size: $font-xs;
-    line-height: 38rpx;
-    font-weight: 700;
-  }
-}
-
-.order-section {
-  margin: -24rpx $spacing-md $spacing-md;
-  position: relative;
-  background:
-    radial-gradient(circle at 90% 0%, rgba($primary-color, 0.1), rgba($primary-color, 0) 220rpx),
-    rgba(255, 255, 255, 0.94);
-  border-color: rgba(255, 255, 255, 0.78);
-  box-shadow: $shadow-md;
-}
-
-.section-header {
-  @include flex-between;
-  margin-bottom: $spacing-md;
-}
-
-.section-title {
-  display: block;
-  font-size: $font-md;
-  font-weight: 800;
-  color: $text-color;
-}
-
-.section-subtitle {
-  display: block;
-  margin-top: 6rpx;
-  font-size: $font-xs;
-  color: $text-hint;
-}
-
-.section-more {
-  font-size: $font-sm;
-  color: $text-hint;
-  flex-shrink: 0;
-}
-
-.order-shortcuts {
-  display: flex;
-  gap: 10rpx;
-}
-
-.shortcut-item {
-  @include flex-center;
-  @include flex-column;
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 132rpx;
-  border-radius: 28rpx;
-  background: rgba(255, 248, 244, 0.78);
-  border: 1rpx solid rgba($border-color, 0.66);
-}
-
-.shortcut-icon {
-  width: 62rpx;
-  height: 62rpx;
-  border-radius: 24rpx;
-  @include flex-center;
-  background: linear-gradient(135deg, $primary-soft, $secondary-soft);
-  color: $primary-dark;
-  font-size: $font-md;
-  font-weight: 800;
-  margin-bottom: 8rpx;
-}
-
-.shortcut-text {
-  font-size: $font-xs;
-  color: $text-secondary;
-}
-
-.shortcut-badge {
-  position: absolute;
-  top: 8rpx;
-  right: 8rpx;
-  background: $gradient-coral;
-  color: #FFFFFF;
-  font-size: 20rpx;
-  min-width: 32rpx;
-  height: 32rpx;
-  border-radius: 16rpx;
-  @include flex-center;
-  padding: 0 8rpx;
-}
-
-.menu-section {
-  margin: 0 $spacing-md $spacing-md;
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(255, 255, 255, 0.78);
-}
-
-.menu-item {
-  @include flex-between;
-  min-height: 94rpx;
-  padding: 14rpx 0;
-  border-bottom: 1rpx solid $divider-color;
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.menu-left {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.menu-icon {
-  @include flex-center;
-  width: 56rpx;
-  height: 56rpx;
-  margin-right: $spacing-sm;
-  border-radius: 22rpx;
-  background: $primary-soft;
-  color: $primary-dark;
-  font-size: $font-sm;
-  font-weight: 900;
-  flex-shrink: 0;
-
-  &.sage {
-    background: $success-soft;
-    color: $success-dark;
-  }
-
-  &.peach {
-    background: $secondary-soft;
-    color: $secondary-color;
-  }
-
-  &.mint {
-    background: rgba($mint-color, 0.14);
-    color: $success-dark;
-  }
-
-  &.muted {
-    background: rgba($bg-gray, 0.9);
-    color: $text-secondary;
-  }
-}
-
-.menu-text {
-  font-size: $font-md;
-  color: $text-color;
-  font-weight: 600;
-  @include text-ellipsis;
-}
-
-.menu-arrow {
-  font-size: $font-md;
-  color: $text-hint;
-}
-
-.logout-btn {
-  margin: $spacing-xl $spacing-md;
-  padding: 24rpx;
-  text-align: center;
-  background: rgba($danger-color, 0.08);
-  border-radius: $radius-round;
-  border: 1rpx solid rgba($danger-color, 0.1);
-}
-
-.logout-text {
-  font-size: $font-md;
-  color: $danger-color;
-}
+.header-brand-row { @include flex-between; margin-bottom: $spacing-lg; }
+.brand-pill { min-height: 40rpx; padding: 0 18rpx; border-radius: $radius-round; background: rgba(255, 255, 255, 0.78); color: $primary-dark; font-size: $font-xs; line-height: 40rpx; font-weight: 800; box-shadow: $shadow-xs; }
+.brand-copy { color: $text-secondary; font-size: $font-xs; font-weight: 700; }
+.user-info { display: flex; align-items: center; }
+.user-avatar { width: 132rpx; height: 132rpx; border-radius: 50%; border: 4rpx solid rgba(255, 255, 255, 0.9); box-shadow: $shadow-md; background: $bg-ivory; }
+.user-detail { margin-left: $spacing-md; min-width: 0; }
+.user-name { font-size: $font-xl; color: $text-color; font-weight: 900; display: block; max-width: 420rpx; @include text-ellipsis; }
+.member-badge { display: inline-flex; align-items: center; min-height: 42rpx; background: rgba(255, 255, 255, 0.78); border: 1rpx solid rgba($primary-color, 0.16); border-radius: $radius-round; padding: 0 16rpx; margin-top: 10rpx; }
+.member-text { font-size: $font-xs; color: $primary-dark; font-weight: 700; }
+.login-btn { @include flex-center; width: 240rpx; min-height: 76rpx; margin-top: $spacing-lg; background: $gradient-coral; border-radius: $radius-round; box-shadow: $shadow-coral; &.disabled { opacity: 0.56; box-shadow: none; } }
+.login-text { color: #FFFFFF; font-size: $font-md; font-weight: 800; }
+.phone-btn { @include flex-center; width: 240rpx; min-height: 76rpx; margin: $spacing-lg 0 0; padding: 0; background: rgba(255, 255, 255, 0.9); border: 2rpx solid rgba($primary-color, 0.28); border-radius: $radius-round; color: $primary-dark; font-size: $font-md; font-weight: 800; line-height: 76rpx; &::after { border: none; } }
+.profile-btn { @include flex-center; width: 240rpx; min-height: 76rpx; margin-top: $spacing-sm; background: rgba($success-color, 0.12); border: 2rpx solid rgba($success-color, 0.24); border-radius: $radius-round; }
+.profile-text { color: $success-color; font-size: $font-md; font-weight: 800; }
+.login-agreement { display: flex; align-items: center; flex-wrap: wrap; min-height: 48rpx; margin-top: 14rpx; }
+.agreement-checkbox { @include flex-center; width: 30rpx; height: 30rpx; margin-right: 8rpx; border: 2rpx solid rgba($text-secondary, 0.72); border-radius: 8rpx; background: rgba(255, 255, 255, 0.9); box-sizing: border-box; flex-shrink: 0; &.checked { border-color: $primary-color; background: $primary-color; } }
+.agreement-checkmark { color: #FFFFFF; font-size: 22rpx; line-height: 1; font-weight: 800; }
+.agreement-prefix { color: $text-secondary; font-size: $font-xs; }
+.agreement-link { color: $primary-dark; font-size: $font-xs; text-decoration: underline; margin: 0 6rpx; }
+.header-trust { display: flex; align-items: center; gap: 10rpx; margin-top: $spacing-lg; }
+.header-trust text { min-height: 38rpx; padding: 0 16rpx; border-radius: $radius-round; background: rgba($success-color, 0.12); color: $success-dark; font-size: $font-xs; line-height: 38rpx; font-weight: 700; }
+.order-section { margin: -24rpx $spacing-md $spacing-md; position: relative; background: radial-gradient(circle at 90% 0%, rgba($primary-color, 0.1), rgba($primary-color, 0) 220rpx), rgba(255, 255, 255, 0.94); border-color: rgba(255, 255, 255, 0.78); box-shadow: $shadow-md; }
+.section-header { @include flex-between; margin-bottom: $spacing-md; }
+.section-title { display: block; font-size: $font-md; font-weight: 800; color: $text-color; }
+.section-subtitle { display: block; margin-top: 6rpx; font-size: $font-xs; color: $text-hint; }
+.section-more { font-size: $font-sm; color: $text-hint; flex-shrink: 0; }
+.order-shortcuts { display: flex; flex-wrap: wrap; gap: 10rpx; }
+.shortcut-item { @include flex-center; @include flex-column; position: relative; flex: 0 0 calc((100% - 20rpx) / 3); box-sizing: border-box; min-width: 0; min-height: 132rpx; border-radius: 28rpx; background: rgba(255, 248, 244, 0.78); border: 1rpx solid rgba($border-color, 0.66); }
+.shortcut-icon { width: 62rpx; height: 62rpx; border-radius: 24rpx; @include flex-center; background: linear-gradient(135deg, $primary-soft, $secondary-soft); color: $primary-dark; font-size: $font-md; font-weight: 800; margin-bottom: 8rpx; }
+.shortcut-text { font-size: $font-xs; color: $text-secondary; }
+.shortcut-badge { position: absolute; top: 8rpx; right: 8rpx; background: $gradient-coral; color: #FFFFFF; font-size: 20rpx; min-width: 32rpx; height: 32rpx; border-radius: 16rpx; @include flex-center; padding: 0 8rpx; }
+.menu-section { margin: 0 $spacing-md $spacing-md; background: rgba(255, 255, 255, 0.92); border-color: rgba(255, 255, 255, 0.78); }
+.menu-item { @include flex-between; min-height: 94rpx; padding: 14rpx 0; border-bottom: 1rpx solid $divider-color; &:last-child { border-bottom: none; } }
+.menu-left { display: flex; align-items: center; min-width: 0; }
+.menu-icon { @include flex-center; width: 56rpx; height: 56rpx; margin-right: $spacing-sm; border-radius: 22rpx; background: $primary-soft; color: $primary-dark; font-size: $font-sm; font-weight: 900; flex-shrink: 0; &.sage { background: $success-soft; color: $success-dark; } &.peach { background: $secondary-soft; color: $secondary-color; } &.mint { background: rgba($mint-color, 0.14); color: $success-dark; } &.muted { background: rgba($bg-gray, 0.9); color: $text-secondary; } }
+.menu-text { font-size: $font-md; color: $text-color; font-weight: 600; @include text-ellipsis; }
+.menu-arrow { font-size: $font-md; color: $text-hint; }
+.logout-btn { margin: $spacing-xl $spacing-md; padding: 24rpx; text-align: center; background: rgba($danger-color, 0.08); border-radius: $radius-round; border: 1rpx solid rgba($danger-color, 0.1); }
+.logout-text { font-size: $font-md; color: $danger-color; }
 </style>
