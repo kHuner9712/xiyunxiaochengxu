@@ -27,6 +27,7 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
         id: true,
         status: true,
         completedAt: true,
+        payAmount: true,
       },
     });
     if (!order || order.status !== OrderStatus.completed || !order.completedAt) {
@@ -38,13 +39,25 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
     );
     if (matureAt > new Date()) return;
 
-    const successfulRefund = await this.productionPrisma.orderRefund.findFirst({
+    const successfulRefunds = await this.productionPrisma.orderRefund.aggregate({
       where: { orderId: order.id, status: 'success' },
-      select: { id: true },
+      _sum: { refundAmount: true },
     });
-    if (successfulRefund) return;
+    const grossPaid = Math.max(0, order.payAmount ?? payAmount ?? 0);
+    const refundedAmount = Math.min(
+      grossPaid,
+      Math.max(0, successfulRefunds._sum.refundAmount ?? 0),
+    );
+    const netPaidAmount = Math.max(0, grossPaid - refundedAmount);
+    if (netPaidAmount <= 0) return;
 
-    await super.generateSalesCommission(orderId, userId, payAmount, sourceType, sourceCode);
+    await super.generateSalesCommission(
+      orderId,
+      userId,
+      netPaidAmount,
+      sourceType,
+      sourceCode,
+    );
     await this.applyOutstandingMerchantDebt(order.id);
   }
 
@@ -134,6 +147,7 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
     });
     const totalRefunded = Math.min(order.payAmount, refunded._sum.refundAmount ?? 0);
     if (totalRefunded <= 0) return { adjusted: 0, debtCreated: 0 };
+    const netOrderRevenue = Math.max(0, order.payAmount - totalRefunded);
 
     const records = await this.productionPrisma.merchantCommissionRecord.findMany({
       where: {
@@ -154,10 +168,14 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
         continue;
       }
 
-      const remainingSource = Math.max(0, originalSource - totalRefunded);
+      // A commission may already have been created from a partially-refunded net amount.
+      // Only reverse the additional revenue loss below the source amount that this record
+      // was originally based on; do not subtract cumulative refunds twice.
+      if (netOrderRevenue >= originalSource) continue;
+      const targetSource = Math.max(0, netOrderRevenue);
       const targetCommission = Math.max(
         0,
-        Math.floor((originalCommission * remainingSource) / originalSource),
+        Math.floor((originalCommission * targetSource) / originalSource),
       );
       const currentPositiveCommission = Math.max(0, record.commissionAmount);
       const reversalAmount = Math.max(0, currentPositiveCommission - targetCommission);
@@ -186,12 +204,13 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
               userId: record.userId,
               orderId: record.orderId,
               sourceType: 'sales_referral_refund_debt',
-              sourceAmount: -Math.min(totalRefunded, originalSource),
+              sourceAmount: -Math.max(0, originalSource - targetSource),
               commissionAmount: -reversalAmount,
               calculationSnapshot: {
                 originalRecordId: record.id.toString(),
                 refundId: String(refundId),
-                totalRefunded,
+                cumulativeRefunded: totalRefunded,
+                targetSource,
                 reversalAmount,
               },
               status: 'pending',
@@ -224,22 +243,21 @@ export class ProductionMerchantSettlementService extends MerchantSettlementServi
           throw new Error('分佣批次已付款，需转入后续抵扣');
         }
 
-        const newSourceAmount = Math.max(0, originalSource - totalRefunded);
         await tx.merchantCommissionRecord.update({
           where: { id: record.id },
           data: {
-            sourceAmount: newSourceAmount,
+            sourceAmount: targetSource,
             commissionAmount: targetCommission,
             ...(targetCommission === 0
               ? { status: 'cancelled', cancelledAt: new Date() }
               : {}),
-            remark: `订单退款后自动冲减分佣，累计退款${totalRefunded}分`,
+            remark: `订单退款后自动冲减分佣，累计退款${totalRefunded}分，剩余有效成交${targetSource}分`,
           },
         });
 
         if (lockedItem && lockedBatch && lockedItem.status === 'included') {
           const commissionDelta = lockedItem.amount - targetCommission;
-          const sourceDelta = Math.max(0, record.sourceAmount - newSourceAmount);
+          const sourceDelta = Math.max(0, record.sourceAmount - targetSource);
           await tx.merchantSettlementItem.update({
             where: { id: lockedItem.id },
             data: {
