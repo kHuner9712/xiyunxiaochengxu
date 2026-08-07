@@ -52,8 +52,8 @@ describe('refund retry claim safety', () => {
   it('processWechatRefundSuccess refuses a refund currently used as a retry claim', async () => {
     const tx = {
       orderRefund: {
-        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-        findUnique: jest.fn().mockResolvedValue({ id: 70n, status: REFUND_STATUS.RETRYING }),
+        updateMany: jest.fn(async () => ({ count: 0 })),
+        findUnique: jest.fn(async () => ({ id: 70n, status: REFUND_STATUS.RETRYING })),
       },
     };
     const { service } = createService({
@@ -102,7 +102,7 @@ describe('refund retry claim safety', () => {
     };
     const { service, prisma } = createService({
       orderRefund: {
-        findFirst: jest.fn().mockResolvedValue(refund),
+        findFirst: jest.fn(async () => refund),
       },
     });
     jest.spyOn(service, 'queryRefund').mockResolvedValue({
