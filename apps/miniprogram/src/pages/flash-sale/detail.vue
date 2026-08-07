@@ -65,6 +65,7 @@ import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
 import { useUserStore } from '@/stores/user'
 import { getPromotionSourceForOrder } from '@/utils/share'
+import { resolvePromotionDeliveryAddressId } from '@/utils/promotion-address'
 import { createPayment, wxPay } from '@/api/payment'
 import Loading from '@/components/Loading.vue'
 
@@ -136,26 +137,33 @@ async function loadDetail(id: string) {
 }
 
 async function handleBuy() {
-  if (!activity.value) return
-  if (!canBuy.value) return
-  if (submitting.value) return
+  if (!activity.value || !canBuy.value || submitting.value) return
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(() => handleBuy())
     return
   }
+  if (!activity.value.skuId) {
+    uni.showToast({ title: '活动商品规格配置异常', icon: 'none' })
+    return
+  }
+
   submitting.value = true
   try {
+    const addressId = await resolvePromotionDeliveryAddressId('秒杀')
+    if (!addressId) return
+
     const promo = getPromotionSourceForOrder()
     const result = await flashSaleApi.buy({
-      activityId: Number(activity.value.id),
+      activityId: activity.value.id,
       quantity: 1,
+      addressId,
       fulfillmentType: 'delivery',
       sourceType: promo.sourceType,
       sourceCode: promo.sourceCode,
       referrerUserId: promo.referrerUserId,
     })
     uni.showToast({ title: '抢购成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 800)
+    setTimeout(() => payOrder(result.orderId), 500)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '秒杀失败', icon: 'none' })
   } finally {
@@ -170,7 +178,7 @@ async function payOrder(orderId: string) {
     uni.showToast({ title: '支付成功', icon: 'success' })
     setTimeout(() => {
       uni.redirectTo({ url: `/pages/order/detail?id=${orderId}` })
-    }, 1500)
+    }, 1200)
   } catch (err: any) {
     const msg = err?.errMsg || err?.message || ''
     if (msg.includes('cancel')) {
@@ -191,7 +199,7 @@ async function payOrder(orderId: string) {
 
 onLoad((options) => {
   if (options?.id) {
-    loadDetail(options.id)
+    loadDetail(String(options.id))
   }
 })
 
