@@ -1,7 +1,9 @@
 import { get } from '@/utils/request'
 
+export type ProductFulfillmentType = 'delivery' | 'pickup' | 'online' | 'none'
+
 export function getProductList(params: {
-  categoryId?: number
+  categoryId?: string | number
   keyword?: string
   sort?: string
   page: number
@@ -10,19 +12,22 @@ export function getProductList(params: {
   return get<{ list: ProductDetail[]; total: number }>('/weapp/product/list', params)
 }
 
-export function getProductDetail(id: number) {
+export function getProductDetail(id: string | number) {
   return get<ProductDetail>(`/weapp/product/detail/${id}`)
 }
 
-export function getProductRecommend(params: { productId: number; page: number; pageSize: number }) {
+export function getProductRecommend(params: { productId: string | number; page: number; pageSize: number }) {
   return get<{ list: ProductDetail[]; total: number }>('/weapp/product/recommend', params)
 }
 
 export interface ProductDetail {
-  id: number
+  id: string
   status?: number
   name: string
   subtitle: string
+  productType?: 'physical' | 'virtual'
+  fulfillmentType?: ProductFulfillmentType
+  businessCategory?: string
   images: string[]
   videoUrl?: string
   price: number
@@ -55,13 +60,15 @@ export interface ProductCompliance {
 }
 
 export interface SkuItem {
-  id: number
+  id: string
+  productId?: string
   specs: Record<string, string> | string
   specText: string
   price: number
   originalPrice: number
   stock: number
   image: string
+  status?: number
 }
 
 export interface SpecGroup {
