@@ -91,6 +91,7 @@ export class ProductionShareService extends ShareService {
             status: true,
             paidAt: true,
             completedAt: true,
+            payAmount: true,
           },
         });
         if (!order?.completedAt || order.completedAt > cutoff) {
@@ -98,11 +99,17 @@ export class ProductionShareService extends ShareService {
           continue;
         }
 
-        const successfulRefund = await this.productionPrisma.orderRefund.findFirst({
+        const successfulRefunds = await this.productionPrisma.orderRefund.aggregate({
           where: { orderId: order.id, status: 'success' },
-          select: { id: true },
+          _sum: { refundAmount: true },
         });
-        if (successfulRefund) {
+        const grossPaid = Math.max(0, order.payAmount ?? 0);
+        const refundedAmount = Math.min(
+          grossPaid,
+          Math.max(0, successfulRefunds._sum.refundAmount ?? 0),
+        );
+        const netPaidAmount = Math.max(0, grossPaid - refundedAmount);
+        if (netPaidAmount <= 0) {
           skipped += 1;
           continue;
         }
