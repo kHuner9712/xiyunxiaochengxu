@@ -25,7 +25,8 @@
     "test:integration:promotion": "ts-node --transpile-only -P tsconfig.json test/promotion-order-lifecycle.integration.ts",
     "test:integration:promotion-timeout": "ts-node --transpile-only -P tsconfig.json test/promotion-timeout-lifecycle.integration.ts",
     "test:integration:payment-anomaly": "ts-node --transpile-only -P tsconfig.json test/historical-payment-anomaly.integration.ts",
-    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly",
+    "test:integration:cancelled-created-payment": "ts-node --transpile-only -P tsconfig.json test/historical-cancelled-created-payment.integration.ts",
+    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment",
     "test:ci": "jest --config jest.config.js && jest --config test/jest-e2e.config.js"
   },
   "dependencies": {
