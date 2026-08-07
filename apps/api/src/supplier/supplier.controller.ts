@@ -2,27 +2,16 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/
 import { SupplierService } from './supplier.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
+import { UpdateSupplierDto, SupplierStatusDto } from './dto/update-supplier.dto';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { IsOptional, IsString, IsInt } from 'class-validator';
+import { IsOptional, IsString, IsInt, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class SupplierQueryDto extends PaginationDto {
-  @IsOptional()
-  @IsString()
-  keyword?: string;
-
-  @IsOptional()
-  @IsString()
-  name?: string;
-
-  @IsOptional()
-  @IsString()
-  contactPhone?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  status?: number;
+  @IsOptional() @IsString() keyword?: string;
+  @IsOptional() @IsString() name?: string;
+  @IsOptional() @IsString() contactPhone?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1]) status?: number;
 }
 
 @Controller('admin/supplier')
@@ -49,7 +38,7 @@ export class AdminSupplierController {
 
   @Put('update/:id')
   @RequirePermission('product:supplier')
-  async update(@Param('id') id: string, @Body() dto: Partial<CreateSupplierDto>) {
+  async update(@Param('id') id: string, @Body() dto: UpdateSupplierDto) {
     return this.supplierService.update(id, dto);
   }
 
@@ -61,7 +50,7 @@ export class AdminSupplierController {
 
   @Put('status/:id')
   @RequirePermission('product:supplier')
-  async updateStatus(@Param('id') id: string, @Body() body: { status: number }) {
+  async updateStatus(@Param('id') id: string, @Body() body: SupplierStatusDto) {
     return this.supplierService.updateStatus(id, body.status);
   }
 }
