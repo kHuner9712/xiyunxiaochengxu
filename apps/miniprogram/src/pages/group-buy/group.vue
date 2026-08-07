@@ -71,7 +71,7 @@ import { ref, computed } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { groupBuyApi, type GroupBuyGroup } from '@/api/group-buy'
 import { useUserStore } from '@/stores/user'
-import { resolvePromotionDeliveryAddressId } from '@/utils/promotion-address'
+import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
 import { createPayment, wxPay } from '@/api/payment'
 import Loading from '@/components/Loading.vue'
 
@@ -161,28 +161,30 @@ async function handleJoinCurrentGroup() {
 
   submitting.value = true
   try {
-    const addressId = await resolvePromotionDeliveryAddressId('拼团')
-    if (!addressId) return
-
     const targetGroupId = group.value.id
+    const activity = await groupBuyApi.getDetail(group.value.activityId)
+    const fulfillment = await resolvePromotionFulfillment(activity.productId, '拼团')
+    if (!fulfillment) return
+
     const result = await groupBuyApi.join({
       groupId: targetGroupId,
       quantity: 1,
-      addressId,
-      fulfillmentType: 'delivery',
+      ...fulfillment,
     })
 
     if (result.isZeroPay) {
-      uni.showToast({ title: '参团成功，等待成团', icon: 'success' })
-      await loadDetail(targetGroupId)
+      uni.redirectTo({
+        url: `/pages/order/pay-result?orderId=${result.orderId}&payScene=group&groupId=${targetGroupId}&zeroPay=1&payIntent=success`,
+      })
       return
     }
 
     try {
       const payment = await createPayment({ orderId: result.orderId })
       await wxPay(payment)
-      uni.showToast({ title: '支付成功，等待成团', icon: 'success' })
-      setTimeout(() => loadDetail(targetGroupId), 800)
+      uni.redirectTo({
+        url: `/pages/order/pay-result?orderId=${result.orderId}&payScene=group&groupId=${targetGroupId}&payIntent=success`,
+      })
     } catch (payErr: any) {
       const msg = String(payErr?.errMsg || payErr?.message || '')
       uni.showModal({
