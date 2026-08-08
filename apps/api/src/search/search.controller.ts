@@ -3,6 +3,7 @@ import { SearchService } from './search.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { OptionalAuth } from '../common/decorators/optional-auth.decorator';
+import { SearchQueryDto } from './dto/search-query.dto';
 
 @Controller('weapp/search')
 export class WeappSearchController {
@@ -11,17 +12,14 @@ export class WeappSearchController {
   @OptionalAuth()
   @Get()
   async search(
-    @Query('keyword') keyword?: string,
-    @Query('sort') sort?: string,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
+    @Query() query: SearchQueryDto,
     @CurrentUser('id') userId?: string,
   ) {
     return this.searchService.search(
-      keyword || '',
-      page ? Number(page) : 1,
-      pageSize ? Number(pageSize) : 10,
-      sort,
+      query.keyword || '',
+      query.page,
+      query.pageSize,
+      query.sort,
       userId,
     );
   }
