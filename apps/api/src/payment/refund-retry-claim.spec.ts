@@ -122,7 +122,11 @@ describe('refund retry claim', () => {
     });
     const processSpy = jest.spyOn(service, 'processWechatRefundSuccess').mockResolvedValue(undefined as any);
 
-    await expect(service.syncRefund('RF70')).resolves.toEqual({ synced: true, status: 'success' });
+    await expect(service.syncRefund('RF70')).resolves.toEqual({
+      synced: true,
+      reason: 'wechat_success_processed',
+      message: '微信退款已成功，本地副作用已补偿完成',
+    });
 
     expect(prisma.orderRefund.findFirst).toHaveBeenCalledWith({ where: { outRefundNo: 'RF70' } });
     expect(processSpy).toHaveBeenCalledWith(refund, 'WX-REFUND-70', expect.any(Object));
