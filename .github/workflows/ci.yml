@@ -87,7 +87,26 @@ jobs:
         run: pnpm --filter @baby-mall/miniprogram test
 
       - name: Build API
-        run: pnpm build:api
+        id: build-api
+        run: |
+          set +e
+          pnpm build:api > api-build.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 200 api-build.log
+            exit "$status"
+          fi
+          cat api-build.log
+
+      - name: Preserve API build failure diagnostics
+        if: failure() && steps.build-api.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-build-failure-log
+          path: api-build.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Build Admin Web
         run: pnpm build:admin
