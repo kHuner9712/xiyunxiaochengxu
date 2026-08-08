@@ -69,7 +69,14 @@ export class ReferentiallySafeCouponService extends CouponService {
   private rewardConfigReferencesCoupon(raw: unknown, couponId: bigint) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
     const value = (raw as Record<string, unknown>).couponId;
-    if (value === undefined || value === null || value === '') return false;
+    if (
+      value === undefined ||
+      value === null ||
+      value === '' ||
+      (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'bigint')
+    ) {
+      return false;
+    }
     try {
       return parsePositiveBigIntId(value, '奖励优惠券') === couponId;
     } catch {
