@@ -23,6 +23,8 @@ type LoadedActivity = {
   promotionLabel: string;
 };
 
+type QuotaQueryClient = Pick<Prisma.TransactionClient, '$queryRaw'>;
+
 @Injectable()
 export class ActivityCheckoutService {
   constructor(
@@ -43,7 +45,6 @@ export class ActivityCheckoutService {
       activityProductId,
       skuId,
       dto.quantity,
-      false,
     );
 
     const fulfillmentType = dto.fulfillmentType || loaded.sku.product.fulfillmentType || 'delivery';
@@ -117,7 +118,10 @@ export class ActivityCheckoutService {
     const skuId = parsePositiveBigIntId(dto.skuId, 'SKU');
 
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userIdValue} AND deleted_at IS NULL FOR UPDATE`;
+      const userRows = await tx.$queryRaw<Array<{ id: bigint }>>`
+        SELECT id FROM users WHERE id = ${userIdValue} AND deleted_at IS NULL FOR UPDATE
+      `;
+      if (userRows.length === 0) throw new NotFoundException('用户不存在');
       await tx.$queryRaw`SELECT id FROM activities WHERE id = ${activityIdValue} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM activity_products WHERE id = ${activityProductId} FOR UPDATE`;
 
@@ -128,7 +132,6 @@ export class ActivityCheckoutService {
         activityProductId,
         skuId,
         dto.quantity,
-        true,
       );
 
       const fulfillmentType = dto.fulfillmentType || loaded.sku.product.fulfillmentType || 'delivery';
@@ -172,7 +175,6 @@ export class ActivityCheckoutService {
     activityProductId: bigint,
     skuId: bigint,
     quantity: number,
-    enforceQuota: boolean,
   ): Promise<LoadedActivity> {
     if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > 99) {
       throw new BadRequestException('活动购买数量必须为1-99的整数');
@@ -192,10 +194,10 @@ export class ActivityCheckoutService {
     }
 
     const activityProduct = await (client as any).activityProduct.findFirst({
-      where: { id: activityProductId, activityId, productId: { not: undefined } },
+      where: { id: activityProductId, activityId },
     });
     if (!activityProduct) throw new NotFoundException('活动商品不存在');
-    if (activityProduct.skuId && activityProduct.skuId !== skuId) {
+    if (!activityProduct.skuId || activityProduct.skuId !== skuId) {
       throw new BadRequestException('所选SKU不属于该活动商品');
     }
 
@@ -210,9 +212,7 @@ export class ActivityCheckoutService {
     if (!sku || sku.product.status !== 1) throw new NotFoundException('活动商品规格不存在或已下架');
     if (sku.stock < quantity) throw new BadRequestException('活动商品库存不足');
 
-    if (enforceQuota) {
-      await this.assertActivityQuota(client as Prisma.TransactionClient, activity, activityProduct, skuId, userId, quantity);
-    }
+    await this.assertActivityQuota(client as QuotaQueryClient, activity, activityProduct, skuId, userId, quantity);
 
     if (String(activity.type) === '5') {
       const usedNewUserActivity = await (client as any).orderItem.count({
@@ -225,7 +225,6 @@ export class ActivityCheckoutService {
       const previousPaidOrders = await (client as any).order.count({
         where: {
           userId,
-          id: { notIn: [] },
           status: { notIn: ['pending_payment', 'cancelled'] },
         },
       });
@@ -262,7 +261,7 @@ export class ActivityCheckoutService {
   }
 
   private async assertActivityQuota(
-    tx: Prisma.TransactionClient,
+    client: QuotaQueryClient,
     activity: any,
     activityProduct: any,
     skuId: bigint,
@@ -270,7 +269,7 @@ export class ActivityCheckoutService {
     quantity: number,
   ) {
     const [soldRows, userRows] = await Promise.all([
-      tx.$queryRaw<Array<{ quantity: bigint | number | string }>>`
+      client.$queryRaw<Array<{ quantity: bigint | number | string }>>`
         SELECT COALESCE(SUM(oi.quantity), 0) AS quantity
         FROM order_items oi
         INNER JOIN orders o ON o.id = oi.order_id
@@ -279,7 +278,7 @@ export class ActivityCheckoutService {
           AND oi.sku_id = ${skuId}
           AND o.status <> 'cancelled'
       `,
-      tx.$queryRaw<Array<{ quantity: bigint | number | string }>>`
+      client.$queryRaw<Array<{ quantity: bigint | number | string }>>`
         SELECT COALESCE(SUM(oi.quantity), 0) AS quantity
         FROM order_items oi
         INNER JOIN orders o ON o.id = oi.order_id
