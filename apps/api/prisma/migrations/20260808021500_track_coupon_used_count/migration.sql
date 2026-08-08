@@ -1,24 +1,20 @@
--- Keep coupons.used_count synchronized with the authoritative user_coupons status transition.
+-- Reconcile the denormalized coupons.used_count without installing a database trigger.
 -- Canonical user_coupons status contract: 1 FREE, 2 LOCKED, 3 USED, 4 EXPIRED.
--- This is deliberately limited to the denormalized used_count field; issuance continues to be
--- controlled transactionally by application code so stock/per-user eligibility stays explicit.
+--
+-- Production migrations run with the application database account. CREATE TRIGGER can require
+-- SUPER (or log_bin_trust_function_creators) when MySQL binary logging is enabled, which is an
+-- inappropriate privilege requirement for the runtime/migration account. user_coupons.status is
+-- the authoritative redemption state; used_count is only a denormalized reporting cache.
+-- Admin reads recompute the authoritative count from user_coupons, while this migration aligns
+-- any historical cached values once without elevated database privileges.
 
-DROP TRIGGER IF EXISTS `trg_user_coupons_used_count_after_update`;
-
-CREATE TRIGGER `trg_user_coupons_used_count_after_update`
-AFTER UPDATE ON `user_coupons`
-FOR EACH ROW
-UPDATE `coupons`
-SET `used_count` = GREATEST(
-  0,
-  `used_count` + CASE
-    WHEN OLD.`status` <> 3 AND NEW.`status` = 3 THEN 1
-    WHEN OLD.`status` = 3 AND NEW.`status` <> 3 THEN -1
-    ELSE 0
-  END
-)
-WHERE `id` = NEW.`coupon_id`
-  AND (
-    (OLD.`status` <> 3 AND NEW.`status` = 3)
-    OR (OLD.`status` = 3 AND NEW.`status` <> 3)
-  );
+UPDATE `coupons` c
+LEFT JOIN (
+  SELECT
+    `coupon_id`,
+    COUNT(*) AS `used_count`
+  FROM `user_coupons`
+  WHERE `status` = 3
+  GROUP BY `coupon_id`
+) actual ON actual.`coupon_id` = c.`id`
+SET c.`used_count` = COALESCE(actual.`used_count`, 0);
