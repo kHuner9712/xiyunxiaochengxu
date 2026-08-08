@@ -235,7 +235,7 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const orderPagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
-  id: undefined as string | number | undefined,
+  id: undefined as string | undefined,
   name: '',
   promotionCode: '',
   contactName: '',
@@ -314,7 +314,7 @@ function handleAdd() {
 }
 
 function handleEdit(row: any) {
-  form.id = row.id
+  form.id = String(row.id)
   form.name = row.name || ''
   form.promotionCode = row.promotionCode || ''
   form.contactName = row.contactName || ''
@@ -365,7 +365,6 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const payload = {
-      id: form.id,
       name: form.name.trim(),
       promotionCode: form.promotionCode.trim().toUpperCase(),
       contactName: form.contactName.trim(),
@@ -376,7 +375,7 @@ async function handleSubmit() {
     }
 
     if (form.id) {
-      await merchantPromotionSourceApi.update(payload)
+      await merchantPromotionSourceApi.update({ id: form.id, ...payload })
     } else {
       await merchantPromotionSourceApi.create(payload)
     }
@@ -397,7 +396,7 @@ async function handleStatusChange(row: any) {
   const oldStatus = nextStatus === 1 ? 0 : 1
 
   try {
-    await merchantPromotionSourceApi.updateStatus(row.id, nextStatus)
+    await merchantPromotionSourceApi.updateStatus(String(row.id), nextStatus)
     ElMessage.success(nextStatus === 1 ? '已启用' : '已停用')
     fetchStats()
   } catch (e: any) {
