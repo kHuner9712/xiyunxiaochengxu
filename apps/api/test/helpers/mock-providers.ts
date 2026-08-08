@@ -1,11 +1,3 @@
-import { Test, TestingModuleBuilder } from '@nestjs/testing';
-import { ValidationPipe, INestApplication } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { PrismaService } from '../../src/common/prisma/prisma.service';
-import { RedisService } from '../../src/common/redis/redis.service';
-import { TransformInterceptor } from '../../src/common/interceptors/transform.interceptor';
-import { HttpExceptionFilter } from '../../src/common/filters/http-exception.filter';
-
 function createPrismaMock() {
   const txMock = {
     adminUser: {
@@ -132,32 +124,4 @@ export function createTestEnvConfig(): Record<string, string> {
     WECHAT_NOTIFY_URL: 'http://localhost:3000/api/weapp/pay/callback',
     WECHAT_REFUND_NOTIFY_URL: 'http://localhost:3000/api/weapp/pay/refund-callback',
   };
-}
-
-export async function setupTestApp(
-  moduleBuilder: TestingModuleBuilder,
-): Promise<INestApplication> {
-  const moduleFixture = await moduleBuilder
-    .overrideProvider(PrismaService)
-    .useValue(prismaMock)
-    .overrideProvider(RedisService)
-    .useValue(redisMock)
-    .overrideProvider('REDIS_CLIENT')
-    .useValue({})
-    .compile();
-
-  const app = moduleFixture.createNestApplication({ rawBody: true });
-  app.setGlobalPrefix('api');
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: false,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
-  app.useGlobalInterceptors(new TransformInterceptor(new Reflector()));
-  app.useGlobalFilters(new HttpExceptionFilter());
-  await app.init();
-  return app;
 }
