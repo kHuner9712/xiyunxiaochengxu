@@ -2,7 +2,7 @@
   <div class="page-container">
     <el-card>
       <template #header>
-        <div style="display: flex; justify-content: space-between; align-items: center">
+        <div class="header-row">
           <span>分类管理</span>
           <el-button v-permission="'product:category'" type="primary" @click="handleAdd(null)">添加一级分类</el-button>
         </div>
@@ -10,7 +10,7 @@
 
       <el-table :data="categoryTree" row-key="id" border default-expand-all v-loading="loading" :tree-props="{ children: 'children' }">
         <el-table-column prop="name" label="分类名称" min-width="200" />
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="ID" min-width="130" show-overflow-tooltip />
         <el-table-column prop="sortOrder" label="排序" width="80" />
         <el-table-column label="合规标签" min-width="220">
           <template #default="{ row }">
@@ -49,21 +49,16 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="分类名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入分类名称" />
+          <el-input v-model="form.name" maxlength="50" placeholder="请输入分类名称" />
         </el-form-item>
         <el-form-item label="上级分类">
-          <el-input :value="parentName" disabled />
+          <el-input :model-value="parentName" disabled />
         </el-form-item>
         <el-form-item label="排序" prop="sortOrder">
           <el-input-number v-model="form.sortOrder" :min="0" />
         </el-form-item>
         <el-form-item label="分类图标">
-          <el-upload
-            action=""
-            :http-request="handleUploadIcon"
-            :show-file-list="false"
-            accept="image/*"
-          >
+          <el-upload action="" :http-request="handleUploadIcon" :show-file-list="false" accept="image/*">
             <el-image v-if="form.icon" :src="form.icon" style="width: 60px; height: 60px" fit="cover" />
             <el-button v-else size="small">上传图标</el-button>
           </el-upload>
@@ -75,18 +70,10 @@
           </el-radio-group>
         </el-form-item>
         <el-divider content-position="left">类目合规配置</el-divider>
-        <el-form-item label="食品类目">
-          <el-switch v-model="form.complianceConfig.isFood" />
-        </el-form-item>
-        <el-form-item label="保健类目">
-          <el-switch v-model="form.complianceConfig.isHealthSupplement" />
-        </el-form-item>
-        <el-form-item label="奶粉类目">
-          <el-switch v-model="form.complianceConfig.isInfantFormula" />
-        </el-form-item>
-        <el-form-item label="需资质图片">
-          <el-switch v-model="form.complianceConfig.requiresCertImages" />
-        </el-form-item>
+        <el-form-item label="食品类目"><el-switch v-model="form.complianceConfig.isFood" /></el-form-item>
+        <el-form-item label="保健类目"><el-switch v-model="form.complianceConfig.isHealthSupplement" /></el-form-item>
+        <el-form-item label="奶粉类目"><el-switch v-model="form.complianceConfig.isInfantFormula" /></el-form-item>
+        <el-form-item label="需资质图片"><el-switch v-model="form.complianceConfig.requiresCertImages" /></el-form-item>
         <el-form-item label="附加必填字段">
           <el-select v-model="form.complianceConfig.requiredComplianceFields" multiple filterable clearable>
             <el-option label="生产许可证编号" value="productionLicenseNo" />
@@ -111,26 +98,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { categoryApi } from '@/api/category'
+import { categoryApi, type CategoryPayload, type CategoryRecord } from '@/api/category'
 import { uploadApi } from '@/api/upload'
 import { asArray } from '@/utils/response'
 
+const POSITIVE_ID = /^[1-9]\d*$/
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
-const categoryTree = ref<any[]>([])
+const categoryTree = ref<CategoryRecord[]>([])
 const formRef = ref<FormInstance>()
 const parentName = ref('')
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: '' as string,
   name: '',
-  parentId: 0,
+  parentId: '0' as string,
   sortOrder: 0,
   icon: '',
-  isShow: 1,
+  isShow: 1 as 0 | 1,
   complianceConfig: {
     isFood: false,
     isHealthSupplement: false,
@@ -143,107 +131,145 @@ const form = reactive({
 const rules: FormRules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
 }
-
 const dialogTitle = computed(() => (form.id ? '编辑分类' : '添加分类'))
+
+function normalizeTree(rows: any[]): CategoryRecord[] {
+  return rows.map((row) => ({
+    ...row,
+    id: String(row.id || ''),
+    parentId: String(row.parentId ?? '0'),
+    children: Array.isArray(row.children) ? normalizeTree(row.children) : [],
+  }))
+}
 
 async function fetchTree() {
   loading.value = true
   try {
     const res = await categoryApi.getTree()
-    categoryTree.value = asArray(res.data)
-  } catch {} finally {
+    categoryTree.value = normalizeTree(asArray(res.data))
+  } catch (e: any) {
+    ElMessage.error(e?.message || '加载分类失败')
+  } finally {
     loading.value = false
   }
 }
 
-function handleAdd(row: any) {
-  form.id = undefined
+function resetCompliance(row?: CategoryRecord | null) {
+  form.complianceConfig = {
+    isFood: row?.complianceConfig?.isFood === true,
+    isHealthSupplement: row?.complianceConfig?.isHealthSupplement === true,
+    isInfantFormula: row?.complianceConfig?.isInfantFormula === true,
+    requiresCertImages: row?.complianceConfig?.requiresCertImages === true,
+    requiredComplianceFields: Array.isArray(row?.complianceConfig?.requiredComplianceFields)
+      ? [...row!.complianceConfig!.requiredComplianceFields!]
+      : [],
+  }
+}
+
+function handleAdd(row: CategoryRecord | null) {
+  form.id = ''
   form.name = ''
-  form.parentId = row ? row.id : 0
+  form.parentId = row?.id || '0'
   form.sortOrder = 0
   form.icon = ''
   form.isShow = 1
-  form.complianceConfig = {
-    isFood: false,
-    isHealthSupplement: false,
-    isInfantFormula: false,
-    requiresCertImages: false,
-    requiredComplianceFields: [],
-  }
-  parentName.value = row ? row.name : '无（一级分类）'
+  resetCompliance()
+  parentName.value = row?.name || '无（一级分类）'
   dialogVisible.value = true
 }
 
-function handleEdit(row: any) {
+function findCategoryName(id: string, rows = categoryTree.value): string {
+  if (id === '0') return '无（一级分类）'
+  for (const row of rows) {
+    if (row.id === id) return row.name
+    const childName = findCategoryName(id, row.children || [])
+    if (childName !== '无（一级分类）' && childName !== '') return childName
+  }
+  return ''
+}
+
+function handleEdit(row: CategoryRecord) {
   form.id = row.id
   form.name = row.name
-  form.parentId = row.parentId || 0
-  form.sortOrder = row.sortOrder
+  form.parentId = row.parentId || '0'
+  form.sortOrder = Number(row.sortOrder || 0)
   form.icon = row.icon || ''
-  form.isShow = row.isShow
-  form.complianceConfig = {
-    isFood: row.complianceConfig?.isFood === true,
-    isHealthSupplement: row.complianceConfig?.isHealthSupplement === true,
-    isInfantFormula: row.complianceConfig?.isInfantFormula === true,
-    requiresCertImages: row.complianceConfig?.requiresCertImages === true,
-    requiredComplianceFields: Array.isArray(row.complianceConfig?.requiredComplianceFields) ? row.complianceConfig.requiredComplianceFields : [],
-  }
-  parentName.value = row.parentName || '无（一级分类）'
+  form.isShow = row.isShow === 0 ? 0 : 1
+  resetCompliance(row)
+  parentName.value = findCategoryName(form.parentId) || '父级分类已不可用'
   dialogVisible.value = true
 }
 
-async function handleDelete(row: any) {
-  if (row.children?.length) {
-    ElMessage.warning('请先删除子分类')
+async function handleDelete(row: CategoryRecord) {
+  if ((row.children || []).length > 0) {
+    ElMessage.warning('请先删除或移动子分类')
     return
   }
   try {
-    await ElMessageBox.confirm('确定删除该分类吗？', '提示', { type: 'warning' })
+    await ElMessageBox.confirm(`确定删除分类“${row.name}”吗？`, '提示', { type: 'warning' })
     await categoryApi.delete(row.id)
     ElMessage.success('删除成功')
-    fetchTree()
-  } catch {}
+    await fetchTree()
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return
+    if (e?.message) ElMessage.error(e.message)
+  }
 }
 
 async function handleUploadIcon(options: any) {
   try {
     const res = await uploadApi.uploadImage(options.file)
     form.icon = res.data.url
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.message || '图标上传失败')
+  }
 }
 
 async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
+  if (form.parentId !== '0' && !POSITIVE_ID.test(form.parentId)) {
+    ElMessage.warning('父级分类ID无效，请刷新分类树后重试')
+    return
+  }
+  if (form.id && !POSITIVE_ID.test(form.id)) {
+    ElMessage.warning('分类ID无效，请刷新分类树后重试')
+    return
+  }
+
+  const payload: CategoryPayload = {
+    name: form.name.trim(),
+    parentId: form.parentId,
+    sortOrder: form.sortOrder,
+    icon: form.icon.trim(),
+    isShow: form.isShow,
+    complianceConfig: {
+      ...form.complianceConfig,
+      requiredComplianceFields: [...form.complianceConfig.requiredComplianceFields],
+    },
+  }
 
   submitting.value = true
   try {
-    const payload = {
-      name: form.name,
-      parentId: form.parentId,
-      sortOrder: form.sortOrder,
-      icon: form.icon,
-      isShow: form.isShow,
-      complianceConfig: {
-        isFood: form.complianceConfig.isFood,
-        isHealthSupplement: form.complianceConfig.isHealthSupplement,
-        isInfantFormula: form.complianceConfig.isInfantFormula,
-        requiresCertImages: form.complianceConfig.requiresCertImages,
-        requiredComplianceFields: form.complianceConfig.requiredComplianceFields,
-      },
-    }
-    if (form.id) {
-      await categoryApi.update(form.id, payload)
-    } else {
-      await categoryApi.create(payload)
-    }
+    if (form.id) await categoryApi.update(form.id, payload)
+    else await categoryApi.create(payload)
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    fetchTree()
-  } catch {} finally {
+    await fetchTree()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
     submitting.value = false
   }
 }
 
 fetchTree()
 </script>
+
+<style scoped>
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+</style>
