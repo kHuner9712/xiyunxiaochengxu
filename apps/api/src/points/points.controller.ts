@@ -4,6 +4,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { SignInDto } from './dto/sign-in.dto';
 import { PointsQueryDto } from './dto/points-query.dto';
+import { AdminAdjustPointsDto, AdminPointsQueryDto } from './dto/admin-points.dto';
 
 @Controller('weapp/points')
 export class WeappPointsController {
@@ -41,7 +42,7 @@ export class AdminPointsController {
 
   @Get('records')
   @RequirePermission('user:points')
-  async records(@Query() dto: PointsQueryDto & { userId?: string }) {
+  async records(@Query() dto: AdminPointsQueryDto) {
     if (dto.userId) {
       return this.pointsService.findByUser(dto.userId, dto);
     }
@@ -50,8 +51,8 @@ export class AdminPointsController {
 
   @Post('adjust')
   @RequirePermission('user:points')
-  async adjust(@Body() body: { userId: string; points: number; description: string }) {
-    return this.pointsService.adminAdjust(body.userId, body.points, body.description);
+  async adjust(@Body() dto: AdminAdjustPointsDto) {
+    return this.pointsService.adminAdjust(dto.userId, dto.points, dto.description);
   }
 
   @Post('expire-clean')
