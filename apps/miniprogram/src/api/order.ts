@@ -71,20 +71,20 @@ export function getOrderList(params: {
   return get<{ list: OrderItem[]; total: number }>('/weapp/order/list', params)
 }
 
-export function getOrderDetail(id: string | number) {
-  return get<OrderDetail>(`/weapp/order/detail/${id}`)
+export function getOrderDetail(id: string) {
+  return get<OrderDetail>(`/weapp/order/detail/${encodeURIComponent(id)}`)
 }
 
 export function getOrderDetailByNo(orderNo: string) {
   return get<OrderDetail>(`/weapp/order/detail-by-no/${encodeURIComponent(orderNo)}`)
 }
 
-export function cancelOrder(id: string | number) {
-  return put(`/weapp/order/cancel/${id}`)
+export function cancelOrder(id: string) {
+  return put(`/weapp/order/cancel/${encodeURIComponent(id)}`)
 }
 
-export function confirmReceive(id: string | number) {
-  return put(`/weapp/order/confirm-receive/${id}`)
+export function confirmReceive(id: string) {
+  return put(`/weapp/order/confirm-receive/${encodeURIComponent(id)}`)
 }
 
 export function getOrderCount() {
