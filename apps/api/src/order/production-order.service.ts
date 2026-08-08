@@ -184,15 +184,25 @@ export class ProductionOrderService extends TransactionalOrderService {
         id,
         userId,
         status: 1,
-        OR: [{ expireAt: null }, { expireAt: { gte: now } }],
-        coupon: {
-          startTime: { lte: now },
-          endTime: { gte: now },
-        },
       },
       include: { coupon: true },
     });
     if (!userCoupon) throw new BadRequestException('优惠券不可用或已过期');
+
+    // Master coupon start/end are the receiving window. Existing UserCoupon rows use their own
+    // expireAt. Historical rows without expireAt inherit the master endTime once and are repaired
+    // here so the base order service sees the same explicit expiry on the subsequent lookup.
+    const effectiveExpireAt = userCoupon.expireAt ?? userCoupon.coupon.endTime;
+    if (!effectiveExpireAt || effectiveExpireAt.getTime() < now.getTime()) {
+      throw new BadRequestException('优惠券不可用或已过期');
+    }
+    if (!userCoupon.expireAt) {
+      await this.productionPrisma.userCoupon.updateMany({
+        where: { id: userCoupon.id, userId, status: 1, expireAt: null },
+        data: { expireAt: effectiveExpireAt },
+      });
+    }
+
     if (!this.couponScopeMatches(userCoupon.coupon, skuScopes)) {
       throw new BadRequestException(
         userCoupon.coupon.applicableType === 1
