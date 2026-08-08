@@ -126,5 +126,6 @@ export interface ActivityProduct {
   stock: number
   activityStock?: number
   limitPerUser?: number
+  fulfillmentType?: 'delivery' | 'pickup'
   detailUrl?: string
 }
