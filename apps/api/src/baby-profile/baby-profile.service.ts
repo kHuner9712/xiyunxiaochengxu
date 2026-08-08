@@ -184,12 +184,12 @@ export class BabyProfileService {
   }
 
   private async ensureOneDefault(tx: any, userId: bigint) {
-    const active = await tx.babyProfile.findMany({
+    const active: any[] = await tx.babyProfile.findMany({
       where: { userId, deletedAt: null },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
     });
     if (active.length === 0) return;
-    const defaults = active.filter((item) => item.isDefault === 1);
+    const defaults = active.filter((item: any) => item.isDefault === 1);
     if (defaults.length === 1) return;
     await tx.babyProfile.updateMany({ where: { userId, deletedAt: null }, data: { isDefault: 0 } });
     await tx.babyProfile.update({ where: { id: (defaults[0] ?? active[0]).id }, data: { isDefault: 1 } });
