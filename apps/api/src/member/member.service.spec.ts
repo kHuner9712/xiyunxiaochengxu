@@ -19,26 +19,56 @@ function createMockPrisma() {
   };
 }
 
+const activeLevels = [
+  {
+    id: 1n,
+    name: '普通会员',
+    minGrowthValue: 0,
+    maxGrowthValue: 999,
+    discountRate: 100,
+    pointsRate: 10,
+    benefits: null,
+    sortOrder: 0,
+    status: 1,
+  },
+  {
+    id: 2n,
+    name: '银卡会员',
+    minGrowthValue: 1000,
+    maxGrowthValue: null,
+    discountRate: 98,
+    pointsRate: 12,
+    benefits: null,
+    sortOrder: 1000,
+    status: 1,
+  },
+];
+
 describe('MemberService weapp benefits', () => {
   let service: MemberService;
   let prisma: ReturnType<typeof createMockPrisma>;
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    prisma.memberLevel.findMany.mockResolvedValue(activeLevels);
     service = new MemberService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   });
 
-  it('getBenefits returns front-end MemberRight array for ordinary users without seeded benefits', async () => {
+  it('getBenefits returns front-end MemberRight array from the active database level', async () => {
     prisma.user.findFirst.mockResolvedValue({
       id: 1n,
       growthValue: 0,
-      memberLevel: { id: 1n, benefits: null },
+      memberLevelId: 1n,
       deletedAt: null,
     });
 
     const result = await service.getBenefits('1');
 
+    expect(prisma.memberLevel.findMany).toHaveBeenCalledWith({
+      where: { status: 1 },
+      orderBy: [{ minGrowthValue: 'asc' }, { sortOrder: 'asc' }],
+    });
     expect(Array.isArray(result)).toBe(true);
     expect(result).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -54,11 +84,12 @@ describe('MemberService weapp benefits', () => {
     ]));
   });
 
-  it('getMemberInfo keeps legacy fields and adds miniprogram-compatible fields', async () => {
+  it('getMemberInfo derives level thresholds and names from database configuration', async () => {
     prisma.user.findFirst.mockResolvedValue({
       id: 1n,
       growthValue: 120,
-      memberLevel: { id: 1n, benefits: null },
+      memberLevelId: 1n,
+      memberLevel: activeLevels[0],
       deletedAt: null,
     });
 
@@ -66,13 +97,17 @@ describe('MemberService weapp benefits', () => {
 
     expect(result).toEqual(expect.objectContaining({
       level: 0,
+      levelId: '1',
       levelName: '普通会员',
       growthValue: 120,
       currentLevelGrowth: 120,
+      currentLevelMinGrowth: 0,
       nextLevelGrowth: 1000,
       rights: expect.arrayContaining(['会员价']),
       currentLevel: '普通会员',
       currentLevelCode: 0,
+      nextLevel: '银卡会员',
+      growthGap: 880,
     }));
   });
 });
