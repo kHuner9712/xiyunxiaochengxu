@@ -1,21 +1,19 @@
 import request from '@/utils/request'
 
-type Id = string | number
-
 export const aftersaleApi = {
   getList(params: { page: number; pageSize: number; status?: string }) {
     return request.get('/admin/aftersale/list', { params })
   },
-  getDetail(id: Id) {
-    return request.get(`/admin/aftersale/detail/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/aftersale/detail/${encodeURIComponent(id)}`)
   },
-  approve(id: Id, refundAmount: number) {
-    return request.put(`/admin/aftersale/${id}/approve`, { refundAmount })
+  approve(id: string, refundAmount: number) {
+    return request.put(`/admin/aftersale/${encodeURIComponent(id)}/approve`, { refundAmount })
   },
-  reject(id: Id, rejectReason: string) {
-    return request.put(`/admin/aftersale/${id}/reject`, { rejectReason })
+  reject(id: string, rejectReason: string) {
+    return request.put(`/admin/aftersale/${encodeURIComponent(id)}/reject`, { rejectReason })
   },
-  refund(id: Id) {
-    return request.put(`/admin/aftersale/${id}/refund`)
+  refund(id: string) {
+    return request.put(`/admin/aftersale/${encodeURIComponent(id)}/refund`)
   },
 }
