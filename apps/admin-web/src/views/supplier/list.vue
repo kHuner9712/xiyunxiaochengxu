@@ -107,7 +107,7 @@ const searchForm = reactive({ name: '', contactPhone: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: undefined as string | undefined,
   name: '',
   contactPerson: '',
   contactPhone: '',
@@ -160,7 +160,7 @@ function handleAdd() {
 }
 
 function handleEdit(row: any) {
-  form.id = row.id
+  form.id = String(row.id)
   form.name = row.name
   form.contactPerson = row.contactPerson
   form.contactPhone = row.contactPhone
@@ -174,7 +174,7 @@ function handleEdit(row: any) {
 async function handleDelete(row: any) {
   try {
     await ElMessageBox.confirm('确定删除该供应商吗？', '提示', { type: 'warning' })
-    await supplierApi.delete(row.id)
+    await supplierApi.delete(String(row.id))
     ElMessage.success('删除成功')
     fetchList()
   } catch {}
@@ -187,9 +187,10 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (form.id) {
-      await supplierApi.update({ ...form })
+      await supplierApi.update({ ...form, id: form.id })
     } else {
-      await supplierApi.create({ ...form })
+      const { id: _id, ...createPayload } = form
+      await supplierApi.create(createPayload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
