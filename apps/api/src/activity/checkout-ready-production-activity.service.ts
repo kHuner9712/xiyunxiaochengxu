@@ -89,6 +89,7 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
     rules?: Record<string, unknown> | null | unknown;
     products?: Array<{
       productId: string;
+      skuId?: string;
       activityPrice?: number;
       activityStock?: number;
       limitPerUser?: number;
@@ -101,6 +102,9 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
     const products = Array.isArray(data.products) ? data.products : [];
     if (products.length === 0) throw new BadRequestException('活动至少需要配置一个活动商品');
     for (const product of products) {
+      if (!product.skuId || !/^[1-9]\d*$/.test(String(product.skuId))) {
+        throw new BadRequestException('可购买活动商品必须绑定具体SKU，不能使用模糊的商品级价格/库存');
+      }
       const stock = Number(product.activityStock ?? 0);
       if (!Number.isSafeInteger(stock) || stock <= 0) {
         throw new BadRequestException('活动商品必须配置大于0的活动库存');
