@@ -43,20 +43,22 @@ test('release gate wrapper preserves env, reports boundaries and runs supplement
   assert.match(wrapper, /does not constitute production runtime or real-device acceptance/)
 })
 
-test('admin browser gate uses a built SPA, Chrome DevTools and refresh persistence evidence', () => {
+test('admin browser gate uses a built SPA, Chrome DevTools and grouped config refresh persistence evidence', () => {
   const browserGate = readFileSync(resolve(root, 'deploy/scripts/admin-browser-e2e.mjs'), 'utf8')
   const browserRunner = readFileSync(resolve(root, 'deploy/scripts/run-admin-browser-e2e.mjs'), 'utf8')
 
   assert.match(browserGate, /apps\/admin-web\/dist/)
   assert.match(browserGate, /remote-debugging-port=0/)
   assert.match(browserGate, /\/api\/admin\/auth\/login/)
-  assert.match(browserGate, /\/api\/admin\/system-config\/update/)
+  assert.match(browserGate, /\/api\/admin\/system-config\/list/)
+  assert.match(browserGate, /\/api\/admin\/system-config\/batch-update/)
+  assert.match(browserGate, /submittedConfigs/)
   assert.match(browserGate, /Page\.reload/)
   assert.match(browserGate, /reload persistence/)
   assert.doesNotMatch(browserGate, /puppeteer|playwright|selenium/i)
 
   assert.match(browserRunner, /spawnSync\(process\.execPath/)
-  assert.match(browserRunner, /PASS login → permission menu → config save → reload persistence/)
+  assert.match(browserRunner, /PASS login → permission menu → grouped config batch save → reload persistence/)
   assert.match(browserRunner, /ENOTEMPTY: directory not empty/)
   assert.match(browserRunner, /maxRetries: 10/)
   assert.match(browserRunner, /retryDelay: 100/)
