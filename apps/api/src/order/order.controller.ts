@@ -4,11 +4,13 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { DeliverDto, BatchDeliverDto } from './dto/deliver.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { AdminRemarkDto } from './dto/admin-remark.dto';
+import { AdminCancelOrderDto } from './dto/admin-cancel-order.dto';
 import { Response } from 'express';
 
 @Controller('weapp/order')
@@ -54,8 +56,7 @@ export class WeappOrderController {
   }
 
   @Post('pay/:id')
-  async pay(@CurrentUser('id') userId: string, @Param('id') id: string) {
-    // Deprecated: legacy compatibility endpoint. New clients must use /weapp/pay/create.
+  async pay(@CurrentUser('id') _userId: string, @Param('id') id: string) {
     return { orderId: id, message: '请通过支付模块发起支付' };
   }
 
@@ -104,10 +105,11 @@ export class AdminOrderController {
   @Get('detail/:id')
   @RequirePermission('order:detail')
   async detail(@Param('id') id: string) {
+    const orderId = parsePositiveBigIntId(id, '订单');
     const [detail, order] = await Promise.all([
       this.orderService.findAdminById(id),
       this.prisma.order.findUnique({
-        where: { id: BigInt(id) },
+        where: { id: orderId },
         select: { adminRemark: true },
       }),
     ]);
@@ -128,8 +130,8 @@ export class AdminOrderController {
 
   @Put('cancel/:id')
   @RequirePermission('order:cancel')
-  async cancel(@Param('id') id: string, @Body() body: { reason: string }) {
-    return this.orderService.adminCancel(id, body.reason);
+  async cancel(@Param('id') id: string, @Body() dto: AdminCancelOrderDto) {
+    return this.orderService.adminCancel(id, dto.reason);
   }
 
   @Get('delivery-list')
