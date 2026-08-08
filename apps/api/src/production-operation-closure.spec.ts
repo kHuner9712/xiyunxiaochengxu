@@ -58,10 +58,12 @@ describe('production operation closure contracts', () => {
     expect(groupPage).not.toContain('参与此团\n        </button>\n      </view>\n      <button');
   });
 
-  it('keeps refund side effects closed for benefits, settlement, group-buy and cumulative point conservation', () => {
+  it('keeps refund side effects closed for paid and zero-pay orders', () => {
     const payment = read('apps/api/src/payment/production-payment.service.ts');
     const pointConservation = read('apps/api/src/payment/point-conserving-payment.service.ts');
+    const zeroPay = read('apps/api/src/payment/zero-pay-aftersale-payment.service.ts');
     const benefits = read('apps/api/src/benefit-package/production-benefit-package.service.ts');
+    const zeroPayBenefits = read('apps/api/src/benefit-package/zero-pay-aware-benefit-package.service.ts');
     const settlement = read('apps/api/src/merchant-settlement/production-merchant-settlement.service.ts');
 
     expect(payment).toContain('revokeAfterRefundSuccess');
@@ -70,8 +72,12 @@ describe('production operation closure contracts', () => {
     expect(pointConservation).toContain('reconcileRefundPointConservation');
     expect(pointConservation).toContain('outstandingRewardClawback');
     expect(pointConservation).toContain('refund_points_conservation');
+    expect(zeroPay).toContain('0元订单售后结算成功，无需调用微信退款');
+    expect(zeroPay).toContain('reconcileZeroPayRefundPoints');
+    expect(zeroPay).toContain('zero_refund_points_conservation');
     expect(benefits).toContain("status: 'refund_pending'");
     expect(benefits).toContain("data: { status: 'refunded' }");
+    expect(zeroPayBenefits).toContain("refundAmount !== 0");
     expect(settlement).toContain('sales_referral_refund_debt');
   });
 
@@ -87,7 +93,7 @@ describe('production operation closure contracts', () => {
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
 
-    expect(paymentModule).toContain('PointConservingPaymentService');
+    expect(paymentModule).toContain('ZeroPayAftersalePaymentService');
     expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
     expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
     expect(orderModule).toContain('CancellationSafeProductionOrderService');
@@ -97,7 +103,7 @@ describe('production operation closure contracts', () => {
     expect(aftersaleModule).toContain('ProductionAftersaleService');
     expect(groupModule).toContain('ProductionGroupBuyService');
     expect(flashModule).toContain('ProductionFlashSaleService');
-    expect(benefitModule).toContain('SnapshotGuardedProductionBenefitPackageService');
+    expect(benefitModule).toContain('ZeroPayAwareBenefitPackageService');
     expect(settlementModule).toContain('ProductionMerchantSettlementService');
     expect(shareModule).toContain('SafeShareProductionService');
   });
