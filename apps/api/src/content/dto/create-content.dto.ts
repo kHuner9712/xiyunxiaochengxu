@@ -7,7 +7,6 @@ import {
   IsOptional,
   IsString,
   Matches,
-  Max,
   MaxLength,
   Min,
   ValidateIf,
@@ -22,6 +21,12 @@ function normalizeOptionalId(value: unknown): unknown {
     return '__unsafe_numeric_id__';
   }
   return String(value).trim();
+}
+
+function normalizeIdArray(value: unknown): unknown {
+  if (value === undefined || value === null) return value;
+  if (!Array.isArray(value)) return value;
+  return value.map((item) => typeof item === 'string' ? item.trim() : '__invalid_numeric_id__');
 }
 
 export class CreateContentDto {
@@ -86,13 +91,13 @@ export class CreateContentDto {
   tags?: string[] | null;
 
   @IsOptional()
+  @Transform(({ value }) => normalizeIdArray(value))
   @IsArray()
   @ArrayMaxSize(10)
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  @Max(Number.MAX_SAFE_INTEGER, { each: true })
-  relatedProductIds?: number[] | null;
+  @IsString({ each: true })
+  @Matches(POSITIVE_ID_PATTERN, { each: true, message: '关联商品ID无效' })
+  @MaxLength(19, { each: true, message: '关联商品ID超出范围' })
+  relatedProductIds?: string[] | null;
 
   @IsOptional()
   @Transform(({ value }) => normalizeOptionalId(value))
