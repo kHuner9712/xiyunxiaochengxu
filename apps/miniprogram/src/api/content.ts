@@ -4,8 +4,8 @@ export function getContentList(params: { categoryId?: string; contentType?: stri
   return get<{ list: ContentItem[]; total: number }>('/weapp/content/list', params)
 }
 
-export function getContentDetail(id: string | number) {
-  return get<ContentDetail>(`/weapp/content/${id}`)
+export function getContentDetail(id: string) {
+  return get<ContentDetail>(`/weapp/content/${encodeURIComponent(id)}`)
 }
 
 export function getContentCategories() {
@@ -41,7 +41,7 @@ export interface ContentDetail {
   videoCover?: string
   videoDuration?: number
   tags?: string[]
-  relatedProductIds?: number[]
+  relatedProductIds?: string[]
   relatedActivityId?: string
   viewCount: number
   publishedAt: string
