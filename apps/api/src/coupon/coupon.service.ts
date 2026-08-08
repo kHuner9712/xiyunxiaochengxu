@@ -116,9 +116,10 @@ export class CouponService {
         userId: userIdValue,
         status: COUPON_STATUS.FREE,
         OR: [{ expireAt: null }, { expireAt: { gte: now } }],
+        // Coupon start/end define the receiving window. Once a coupon has been issued, its own
+        // UserCoupon.expireAt is the source of truth for redemption. Re-checking the master
+        // coupon endTime here would incorrectly invalidate rolling-validity coupons.
         coupon: {
-          startTime: { lte: now },
-          endTime: { gte: now },
           minAmount: { lte: amount },
         },
       },
@@ -182,10 +183,11 @@ export class CouponService {
         throw new BadRequestException(`每人最多领取${coupon.perLimit}张`);
       }
 
-      const expireAtByDays = coupon.validDays > 0
+      // startTime/endTime are the receiving window; validDays > 0 is explicitly a rolling
+      // validity period after receipt. Only validDays === 0 inherits the master coupon endTime.
+      const expireAt = coupon.validDays > 0
         ? new Date(now.getTime() + coupon.validDays * 24 * 60 * 60 * 1000)
         : coupon.endTime;
-      const expireAt = expireAtByDays < coupon.endTime ? expireAtByDays : coupon.endTime;
 
       const userCoupon = await tx.userCoupon.create({
         data: {
