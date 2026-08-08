@@ -1,37 +1,35 @@
 import request from '@/utils/request'
 
 export const flashSaleApi = {
-  // 活动管理
   getActivities(params: {
     page: number
     pageSize: number
     keyword?: string
     status?: number
-    productId?: number
+    productId?: string
   }) {
     return request.get('/admin/flash-sale/activity/list', { params })
   },
-  getActivityDetail(id: string | number) {
-    return request.get(`/admin/flash-sale/activity/detail/${id}`)
+  getActivityDetail(id: string) {
+    return request.get(`/admin/flash-sale/activity/detail/${encodeURIComponent(id)}`)
   },
   createActivity(data: any) {
     return request.post('/admin/flash-sale/activity/create', data)
   },
-  updateActivity(id: string | number, data: any) {
-    return request.put(`/admin/flash-sale/activity/update/${id}`, data)
+  updateActivity(id: string, data: any) {
+    return request.put(`/admin/flash-sale/activity/update/${encodeURIComponent(id)}`, data)
   },
-  updateActivityStatus(id: string | number, status: number) {
-    return request.put(`/admin/flash-sale/activity/status/${id}`, { status })
+  updateActivityStatus(id: string, status: number) {
+    return request.put(`/admin/flash-sale/activity/status/${encodeURIComponent(id)}`, { status })
   },
-  deleteActivity(id: string | number) {
-    return request.delete(`/admin/flash-sale/activity/delete/${id}`)
+  deleteActivity(id: string) {
+    return request.delete(`/admin/flash-sale/activity/delete/${encodeURIComponent(id)}`)
   },
-  // 秒杀订单
   getOrders(params: any) {
     return request.get('/admin/flash-sale/orders', { params })
   },
-  getOrderDetail(id: string | number) {
-    return request.get(`/admin/flash-sale/orders/${id}`)
+  getOrderDetail(id: string) {
+    return request.get(`/admin/flash-sale/orders/${encodeURIComponent(id)}`)
   },
   getStats() {
     return request.get('/admin/flash-sale/stats')
