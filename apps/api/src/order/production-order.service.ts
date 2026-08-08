@@ -1,13 +1,25 @@
-import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
+import {
+  FREIGHT_DEFAULT_FEE,
+  FREIGHT_FREE_AMOUNT,
+  FREIGHT_REMOTE_AREAS,
+  FREIGHT_REMOTE_FEE,
+  ORDER_AUTO_CLOSE_MINUTES,
+  ORDER_AUTO_COMPLETE_DAYS,
+  POINTS_DEDUCT_MAX_PERCENT,
+  POINTS_DEDUCT_RATE,
+} from '@baby-mall/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BusinessEventService } from '../common/business-event.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
+import { SystemConfigService } from '../system-config/system-config.service';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { DeliverDto } from './dto/deliver.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { TransactionalOrderService } from './transactional-order.service';
 
@@ -28,6 +40,7 @@ export class ProductionOrderService extends TransactionalOrderService {
     groupBuyService: GroupBuyService,
     @Inject(forwardRef(() => FlashSaleService))
     flashSaleService: FlashSaleService,
+    @Optional() private readonly systemConfigService?: SystemConfigService,
   ) {
     super(
       productionPrisma,
@@ -39,12 +52,34 @@ export class ProductionOrderService extends TransactionalOrderService {
 
     const runtime = this as unknown as {
       calculateCouponAmount?: (coupon: any, orderAmount: number) => number;
+      calculateFreight?: (totalAmount: number, province?: string) => number;
+      calculatePointsDeduction?: (
+        baseAmount: number,
+        availablePoints: number,
+        requestedPoints: number,
+      ) => {
+        availablePoints: number;
+        maxPointsDeduct: number;
+        pointsDeducted: number;
+        pointsAmount: number;
+      };
     };
-    if (typeof runtime.calculateCouponAmount !== 'function') {
-      throw new Error('OrderService coupon calculator is unavailable');
+    if (
+      typeof runtime.calculateCouponAmount !== 'function' ||
+      typeof runtime.calculateFreight !== 'function' ||
+      typeof runtime.calculatePointsDeduction !== 'function'
+    ) {
+      throw new Error('OrderService production calculators are unavailable');
     }
     runtime.calculateCouponAmount = (coupon: any, orderAmount: number) =>
       this.calculateProductionCouponAmount(coupon, orderAmount);
+    runtime.calculateFreight = (totalAmount: number, province?: string) =>
+      this.calculateProductionFreight(totalAmount, province);
+    runtime.calculatePointsDeduction = (
+      baseAmount: number,
+      availablePoints: number,
+      requestedPoints: number,
+    ) => this.calculateProductionPointsDeduction(baseAmount, availablePoints, requestedPoints);
   }
 
   override async confirm(userId: string, dto: ConfirmOrderDto) {
@@ -64,6 +99,9 @@ export class ProductionOrderService extends TransactionalOrderService {
         this.couponScopeMatches(candidate?.coupon, skuScopes),
       );
     }
+    const config = this.getRuntimeConfig();
+    result.pointsDeductRate = config.pointsDeductRate;
+    result.pointsDeductMaxPercent = config.pointsDeductMaxPercent;
     return result;
   }
 
@@ -92,7 +130,47 @@ export class ProductionOrderService extends TransactionalOrderService {
     if (dto.couponId) {
       await this.assertSelectedCouponApplicable(userIdValue, dto.couponId, skuScopes);
     }
-    return super.create(userId, dto);
+    const result: any = await super.create(userId, dto);
+
+    // Base OrderService still seeds the legacy default timeout. Persist the configured timeout
+    // immediately after creation so the durable order row, scheduler and operator UI all share
+    // the same rule. Zero-pay orders have no payment timeout.
+    if (!result?.isZeroPay && result?.orderId) {
+      const orderId = parsePositiveBigIntId(result.orderId, '订单');
+      const created = await this.productionPrisma.order.findUnique({
+        where: { id: orderId },
+        select: { createdAt: true, status: true },
+      });
+      if (created?.status === OrderStatus.pending_payment) {
+        const autoCloseAt = new Date(
+          created.createdAt.getTime() + this.getRuntimeConfig().orderAutoCloseMinutes * 60 * 1000,
+        );
+        await this.productionPrisma.order.updateMany({
+          where: { id: orderId, status: OrderStatus.pending_payment },
+          data: { autoCloseAt },
+        });
+      }
+    }
+    return result;
+  }
+
+  override async adminDeliver(dto: DeliverDto) {
+    const result: any = await super.adminDeliver(dto);
+    const orderId = parsePositiveBigIntId(dto.orderId, '订单');
+    const order = await this.productionPrisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true, deliveredAt: true },
+    });
+    if (order?.status === OrderStatus.delivered && order.deliveredAt) {
+      const autoCompleteAt = new Date(
+        order.deliveredAt.getTime() + this.getRuntimeConfig().orderAutoCompleteDays * 24 * 60 * 60 * 1000,
+      );
+      await this.productionPrisma.order.updateMany({
+        where: { id: orderId, status: OrderStatus.delivered },
+        data: { autoCompleteAt },
+      });
+    }
+    return result;
   }
 
   override async getOrderCountByUser(userId: string) {
@@ -133,6 +211,63 @@ export class ProductionOrderService extends TransactionalOrderService {
     const result: any = await super.findByOrderNo(userId, orderNo);
     const [view] = await this.attachGroupBuyContext([result]);
     return view;
+  }
+
+  private getRuntimeConfig() {
+    return this.systemConfigService?.getRuntimeConfig() ?? {
+      orderAutoCloseMinutes: ORDER_AUTO_CLOSE_MINUTES,
+      orderAutoCompleteDays: ORDER_AUTO_COMPLETE_DAYS,
+      aftersaleApplyDays: 7,
+      defaultFreight: FREIGHT_DEFAULT_FEE,
+      freeShippingAmount: FREIGHT_FREE_AMOUNT,
+      pointsDeductRate: POINTS_DEDUCT_RATE,
+      pointsDeductMaxPercent: POINTS_DEDUCT_MAX_PERCENT,
+    };
+  }
+
+  private calculateProductionFreight(totalAmount: number, province?: string): number {
+    const config = this.getRuntimeConfig();
+    if (totalAmount >= config.freeShippingAmount) return 0;
+    if (province && FREIGHT_REMOTE_AREAS.some((area) => province.includes(area))) {
+      return FREIGHT_REMOTE_FEE;
+    }
+    return config.defaultFreight;
+  }
+
+  private calculateProductionPointsDeduction(
+    baseAmount: number,
+    availablePoints: number,
+    requestedPoints: number,
+  ) {
+    const config = this.getRuntimeConfig();
+    const maxDeductAmount = Math.floor(baseAmount * config.pointsDeductMaxPercent / 100);
+    const maxPointsDeduct = Math.floor(maxDeductAmount / 100) * config.pointsDeductRate;
+    const normalizedAvailablePoints = Math.max(0, availablePoints || 0);
+    const normalizedRequestedPoints = Math.max(0, requestedPoints || 0);
+
+    if (normalizedRequestedPoints > 0) {
+      if (normalizedRequestedPoints > normalizedAvailablePoints) {
+        throw new BadRequestException('积分不足');
+      }
+      if (normalizedRequestedPoints % config.pointsDeductRate !== 0) {
+        throw new BadRequestException(`积分抵扣需按${config.pointsDeductRate}积分为单位`);
+      }
+      if (maxPointsDeduct <= 0) {
+        throw new BadRequestException('当前订单金额不满足积分抵扣');
+      }
+      if (normalizedRequestedPoints > maxPointsDeduct) {
+        throw new BadRequestException('积分抵扣超过订单可用上限');
+      }
+    }
+
+    const pointsDeducted = normalizedRequestedPoints;
+    const pointsAmount = Math.floor(pointsDeducted / config.pointsDeductRate) * 100;
+    return {
+      availablePoints: normalizedAvailablePoints,
+      maxPointsDeduct,
+      pointsDeducted,
+      pointsAmount,
+    };
   }
 
   private calculateProductionCouponAmount(coupon: any, orderAmount: number): number {
@@ -189,9 +324,6 @@ export class ProductionOrderService extends TransactionalOrderService {
     });
     if (!userCoupon) throw new BadRequestException('优惠券不可用或已过期');
 
-    // Master coupon start/end are the receiving window. Existing UserCoupon rows use their own
-    // expireAt. Historical rows without expireAt inherit the master endTime once and are repaired
-    // here so the base order service sees the same explicit expiry on the subsequent lookup.
     const effectiveExpireAt = userCoupon.expireAt ?? userCoupon.coupon.endTime;
     if (!effectiveExpireAt || effectiveExpireAt.getTime() < now.getTime()) {
       throw new BadRequestException('优惠券不可用或已过期');
