@@ -1,5 +1,22 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, IsObject, IsArray, IsBoolean } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  IsObject,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  Matches,
+  MaxLength,
+} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+
+const toSafeIdString = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === null || value === '') return value;
+  if (typeof value === 'number') return Number.isSafeInteger(value) ? String(value) : '__unsafe_number__';
+  return typeof value === 'string' ? value.trim() : value;
+};
 
 export class CategoryComplianceConfigDto {
   @IsOptional()
@@ -20,21 +37,27 @@ export class CategoryComplianceConfigDto {
 
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
   requiredComplianceFields?: string[];
 }
 
 export class CreateCategoryDto {
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  parentId?: number;
+  @Transform(toSafeIdString)
+  @IsString()
+  @Matches(/^(0|[1-9]\d*)$/, { message: '父级分类ID格式不正确' })
+  parentId?: string;
 
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   name!: string;
 
   @IsOptional()
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString()
+  @MaxLength(500)
   icon?: string;
 
   @IsOptional()
@@ -45,6 +68,7 @@ export class CreateCategoryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @IsIn([0, 1])
   isShow?: number;
 
   @IsOptional()
