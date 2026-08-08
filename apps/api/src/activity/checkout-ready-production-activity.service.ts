@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
+import { normalizeAssetUrl } from '../common/utils/asset-url';
 import { ProductionActivityService } from './production-activity.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
@@ -15,12 +16,20 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
 
   override async findActive() {
     const list: any[] = await super.findActive();
-    return list.filter((activity) => EXECUTABLE_TYPES.has(String(activity.type)));
+    return list
+      .filter((activity) => EXECUTABLE_TYPES.has(String(activity.type)))
+      .map((activity) => this.normalizeActivityProducts(activity));
   }
 
   override async findByType(type: string) {
     if (!EXECUTABLE_TYPES.has(String(type))) return [];
-    return super.findByType(type);
+    const list: any[] = await super.findByType(type);
+    return list.map((activity) => this.normalizeActivityProducts(activity));
+  }
+
+  override async findById(id: string) {
+    const result: any = await super.findById(id);
+    return this.normalizeActivityProducts(result);
   }
 
   override async findPublishedById(id: string) {
@@ -28,12 +37,13 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
     if (!EXECUTABLE_TYPES.has(String(result.type))) {
       throw new NotFoundException('活动不存在或当前类型尚未开放购买');
     }
-    return result;
+    return this.normalizeActivityProducts(result);
   }
 
   override async create(data: CreateActivityDto) {
     this.assertExecutableDefinition(data);
-    return super.create(data);
+    const result: any = await super.create(data);
+    return this.normalizeActivityProducts(result);
   }
 
   override async update(id: string, data: UpdateActivityDto) {
@@ -55,7 +65,8 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
       })),
     };
     this.assertExecutableDefinition(finalDefinition);
-    return super.update(id, data);
+    const result: any = await super.update(id, data);
+    return this.normalizeActivityProducts(result);
   }
 
   override async updateStatus(id: string, status: number) {
@@ -82,6 +93,49 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
       }
     }
     return super.updateStatus(id, status);
+  }
+
+  private normalizeActivityProducts(activity: any) {
+    if (!activity) return activity;
+    const relations = Array.isArray(activity.activityProducts)
+      ? activity.activityProducts
+      : Array.isArray(activity.products)
+        ? activity.products
+        : [];
+    const products = relations.map((item: any) => {
+      const product = item.product || {};
+      const sku = item.sku || {};
+      const productId = String(item.productId ?? product.id ?? '');
+      const skuId = item.skuId ? String(item.skuId) : sku.id ? String(sku.id) : null;
+      const activityProductId = String(item.activityProductId ?? item.id ?? '');
+      const originalPrice = Number(sku.price ?? item.originalPrice ?? product.minPrice ?? 0);
+      const activityPrice = Number(item.activityPrice ?? originalPrice);
+      const activityStock = Number(item.activityStock ?? 0);
+      const skuStock = Number(sku.stock ?? activityStock);
+      return {
+        activityProductId,
+        id: productId,
+        productId,
+        skuId,
+        name: item.name || product.name || '',
+        image: normalizeAssetUrl(item.image || sku.image || product.mainImage || ''),
+        originalPrice,
+        price: String(activity.type) === '2' ? originalPrice : activityPrice,
+        activityPrice,
+        activityStock,
+        stock: Math.max(0, Math.min(activityStock, skuStock)),
+        limitPerUser: Number(item.limitPerUser || 0),
+        sales: Number(item.sales || product.totalSales || 0),
+        sku: skuId ? {
+          id: skuId,
+          specs: sku.specs ?? null,
+          price: originalPrice,
+          stock: skuStock,
+          status: sku.status,
+        } : null,
+      };
+    });
+    return { ...activity, products };
   }
 
   private assertExecutableDefinition(data: {
