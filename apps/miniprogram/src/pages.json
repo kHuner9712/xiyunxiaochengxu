@@ -21,6 +21,7 @@
     { "path": "pages/baby/list", "style": { "navigationBarTitleText": "宝宝档案" } },
     { "path": "pages/baby/edit", "style": { "navigationBarTitleText": "编辑宝宝" } },
     { "path": "pages/activity/detail", "style": { "navigationBarTitleText": "活动详情" } },
+    { "path": "pages/activity/checkout", "style": { "navigationBarTitleText": "活动确认订单" } },
     { "path": "pages/aftersale/apply", "style": { "navigationBarTitleText": "申请售后" } },
     { "path": "pages/aftersale/list", "style": { "navigationBarTitleText": "售后记录" } },
     { "path": "pages/aftersale/detail", "style": { "navigationBarTitleText": "售后详情" } },
