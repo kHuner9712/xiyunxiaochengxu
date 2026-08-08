@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { paginate } from '@baby-mall/shared';
 import { StockQueryDto } from './dto/stock-query.dto';
 import { StockAdjustDto } from './dto/stock-adjust.dto';
@@ -15,15 +16,9 @@ export class StockService {
       product: { deletedAt: null },
     };
 
-    if (dto.name) {
-      where.product.name = { contains: dto.name };
-    }
-
-    if (dto.stockStatus === 'zero') {
-      where.stock = 0;
-    } else if (dto.stockStatus === 'low') {
-      where.stock = { gt: 0, lte: 10 };
-    }
+    if (dto.name) where.product.name = { contains: dto.name };
+    if (dto.stockStatus === 'zero') where.stock = 0;
+    else if (dto.stockStatus === 'low') where.stock = { gt: 0, lte: 10 };
 
     const [list, total] = await Promise.all([
       this.prisma.productSku.findMany({
@@ -31,9 +26,7 @@ export class StockService {
         skip: dto.skip,
         take: dto.take,
         orderBy: { updatedAt: 'desc' },
-        include: {
-          product: { select: { id: true, name: true, deletedAt: true } },
-        },
+        include: { product: { select: { id: true, name: true, deletedAt: true } } },
       }),
       this.prisma.productSku.count({ where }),
     ]);
@@ -56,9 +49,7 @@ export class StockService {
 
   async findLogs(dto: StockQueryDto) {
     const where: any = {};
-    if (dto.name) {
-      where.product = { name: { contains: dto.name }, deletedAt: null };
-    }
+    if (dto.name) where.product = { name: { contains: dto.name }, deletedAt: null };
 
     const [list, total] = await Promise.all([
       this.prisma.productStockLog.findMany({
@@ -97,30 +88,32 @@ export class StockService {
   }
 
   async adjust(dto: StockAdjustDto, adminUserId?: string) {
+    const skuId = parsePositiveBigIntId(dto.skuId, 'SKU');
+    const expectedProductId = dto.productId ? parsePositiveBigIntId(dto.productId, '商品') : null;
+    const operatorId = adminUserId ? parsePositiveBigIntId(adminUserId, '管理员') : undefined;
     const sku = await this.prisma.productSku.findFirst({
-      where: { id: BigInt(dto.skuId), product: { deletedAt: null } },
+      where: { id: skuId, product: { deletedAt: null } },
       include: { product: { select: { id: true, name: true } } },
     });
 
-    if (!sku) {
-      throw new NotFoundException('SKU不存在');
+    if (!sku) throw new NotFoundException('SKU不存在');
+    if (expectedProductId && expectedProductId !== sku.productId) {
+      throw new BadRequestException('所选SKU不属于当前商品，请刷新库存列表后重试');
     }
-
-    if (dto.type === 'out' && sku.stock < dto.quantity) {
-      throw new BadRequestException('库存不足');
-    }
+    if (dto.type === 'out' && sku.stock < dto.quantity) throw new BadRequestException('库存不足');
 
     const beforeStock = sku.stock;
     const afterStock = dto.type === 'in' ? beforeStock + dto.quantity : beforeStock - dto.quantity;
+    if (!Number.isSafeInteger(afterStock) || afterStock < 0) throw new BadRequestException('调整后的库存无效');
 
     const result = await this.prisma.$transaction(async (tx) => {
+      // Compare-and-swap preserves concurrent user order deductions: if any order changes this
+      // SKU after the admin list was read, the adjustment fails instead of overwriting it.
       const updated = await tx.productSku.updateMany({
         where: { id: sku.id, stock: beforeStock },
         data: { stock: afterStock },
       });
-      if (updated.count === 0) {
-        throw new BadRequestException('库存已变更，请刷新后重试');
-      }
+      if (updated.count === 0) throw new BadRequestException('库存已变更，请刷新后重试');
 
       await tx.productStockLog.create({
         data: {
@@ -130,18 +123,19 @@ export class StockService {
           quantity: dto.quantity,
           beforeStock,
           afterStock,
-          reason: dto.reason,
-          operatorId: adminUserId ? BigInt(adminUserId) : undefined,
+          reason: dto.reason.trim(),
+          operatorId,
         },
       });
 
-      return tx.productSku.findFirst({ where: { id: sku.id } });
+      return tx.productSku.findUnique({ where: { id: sku.id } });
     });
 
+    if (!result) throw new NotFoundException('SKU不存在');
     this.logger.log(`管理员调整库存：SKU ${sku.id.toString()} ${dto.type} ${dto.quantity}`);
     return {
-      skuId: result!.id.toString(),
-      productId: result!.productId.toString(),
+      skuId: result.id.toString(),
+      productId: result.productId.toString(),
       beforeStock,
       afterStock,
     };
