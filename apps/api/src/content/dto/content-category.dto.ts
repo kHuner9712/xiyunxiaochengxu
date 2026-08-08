@@ -1,6 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
-import { PartialType } from '@nestjs/mapped-types';
+import { PartialType } from '@nestjs/swagger';
 
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 
