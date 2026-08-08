@@ -108,4 +108,15 @@ describe('DurableZeroPayAftersalePaymentService', () => {
       service.resolveCompensationTask('44', 'admin:1', 'manual close', 'resolved'),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('does not allow operators to manually close zero-pay point conservation debt', async () => {
+    const { service, prisma } = createService();
+    prisma.paymentCompensationTask.findFirst.mockResolvedValueOnce({
+      reason: 'zero_refund_points_conservation',
+    });
+
+    await expect(
+      service.resolveCompensationTask('44', 'admin:1', 'manual close', 'ignored'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 });
