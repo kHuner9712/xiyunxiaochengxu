@@ -12,19 +12,26 @@ const indexFile = resolve(distDir, 'index.html')
 const browserTimeoutMs = Number(process.env.ADMIN_BROWSER_E2E_TIMEOUT_MS || 30_000)
 
 const persistedConfig = {
-  siteName: '禧孕优选',
-  siteLogo: '',
-  servicePhone: '400-000-0000',
-  serviceWechat: 'xiyun-service',
-  autoCancelMinutes: 30,
-  autoConfirmDays: 15,
-  aftersaleDays: 7,
-  defaultFreight: 1200,
-  freeShippingAmount: 9900,
-  pointsDiscountRate: 0.01,
-  pointsDiscountLimit: 30,
-  userAgreement: '浏览器验收用户协议',
-  privacyPolicy: '浏览器验收隐私政策',
+  basic: {
+    shop_name: '禧孕优选',
+    shop_logo: '',
+    customer_service_phone: '400-000-0000',
+  },
+  payment: {
+    order_auto_close_minutes: 30,
+  },
+  logistics: {
+    order_auto_complete_days: 15,
+    default_freight: 1200,
+    free_shipping_amount: 9900,
+  },
+  order: {
+    aftersale_apply_days: 7,
+  },
+  points: {
+    points_deduct_rate: 100,
+    points_deduct_max_percent: 30,
+  },
 }
 
 const observed = {
@@ -57,6 +64,23 @@ function requireAuth(req, res) {
   }
   observed.authenticatedRequests += 1
   return true
+}
+
+function applyConfigEntries(configs) {
+  for (const entry of configs) {
+    const groupName = String(entry?.groupName || '')
+    const configKey = String(entry?.configKey || '')
+    if (!groupName || !configKey) continue
+    if (!persistedConfig[groupName]) persistedConfig[groupName] = {}
+    const value = entry?.valueType === 'number'
+      ? Number(entry.configValue)
+      : entry?.valueType === 'boolean'
+        ? String(entry.configValue) === 'true'
+        : entry?.valueType === 'json'
+          ? JSON.parse(String(entry.configValue || 'null'))
+          : String(entry?.configValue ?? '')
+    persistedConfig[groupName][configKey] = value
+  }
 }
 
 async function handleApi(req, res, url) {
@@ -117,11 +141,16 @@ async function handleApi(req, res, url) {
     return
   }
 
-  if (req.method === 'PUT' && url.pathname === '/api/admin/system-config/update') {
+  if (req.method === 'PUT' && url.pathname === '/api/admin/system-config/batch-update') {
     if (!requireAuth(req, res)) return
     observed.updateBody = await readJsonBody(req)
-    Object.assign(persistedConfig, observed.updateBody)
-    json(res, 200, { code: 0, message: 'ok', data: persistedConfig })
+    const configs = Array.isArray(observed.updateBody?.configs) ? observed.updateBody.configs : []
+    if (configs.length === 0) {
+      json(res, 200, { code: 40001, message: '批量配置不能为空', data: null })
+      return
+    }
+    applyConfigEntries(configs)
+    json(res, 200, { code: 0, message: 'ok', data: { updated: configs.length } })
     return
   }
 
@@ -491,12 +520,25 @@ async function main() {
       '保存成功提示',
     )
 
-    if (!observed.updateBody) throw new Error('浏览器未向配置更新接口提交请求')
-    if (observed.updateBody.siteName !== savedSiteName) {
+    const submittedConfigs = Array.isArray(observed.updateBody?.configs) ? observed.updateBody.configs : []
+    if (submittedConfigs.length === 0) throw new Error('浏览器未向批量配置接口提交 configs')
+    const findConfig = (groupName, configKey) => submittedConfigs.find(
+      (item) => item.groupName === groupName && item.configKey === configKey,
+    )
+    if (findConfig('basic', 'shop_name')?.configValue !== savedSiteName) {
       throw new Error('配置更新请求未携带修改后的商城名称')
     }
-    if (observed.updateBody.defaultFreight !== 1200 || observed.updateBody.freeShippingAmount !== 9900) {
+    if (
+      findConfig('logistics', 'default_freight')?.configValue !== '1200' ||
+      findConfig('logistics', 'free_shipping_amount')?.configValue !== '9900'
+    ) {
       throw new Error('配置更新请求金额单位换算错误')
+    }
+    if (
+      findConfig('points', 'points_deduct_rate')?.configValue !== '100' ||
+      findConfig('points', 'points_deduct_max_percent')?.configValue !== '30'
+    ) {
+      throw new Error('积分配置更新请求与当前运行时配置单位不一致')
     }
 
     await client.send('Page.reload', { ignoreCache: true })
@@ -508,14 +550,14 @@ async function main() {
     )
 
     if (!observed.loginBody) throw new Error('登录请求未到达模拟 API')
-    if (observed.authenticatedRequests < 3) {
+    if (observed.authenticatedRequests < 4) {
       throw new Error(`带鉴权请求数量不足: ${observed.authenticatedRequests}`)
     }
     if (pageExceptions.length > 0) {
       throw new Error(`页面存在未处理异常: ${pageExceptions.join(' | ')}`)
     }
 
-    console.log('[admin-browser-e2e] PASS login → permission menu → config save → reload persistence')
+    console.log('[admin-browser-e2e] PASS login → permission menu → grouped config batch save → reload persistence')
   } catch (error) {
     if (client) {
       try {
