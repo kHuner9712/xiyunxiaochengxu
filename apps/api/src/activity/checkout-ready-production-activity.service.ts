@@ -53,14 +53,14 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
       include: { activityProducts: true },
     });
     if (!current || current.status === 4) throw new NotFoundException('活动不存在');
-    const finalDefinition: any = {
+    const finalDefinition = {
       type: data.type ?? current.type,
       rules: data.rules ?? current.rules,
       products: data.products ?? current.activityProducts.map((item) => ({
         productId: item.productId.toString(),
         skuId: item.skuId?.toString(),
-        activityPrice: item.activityPrice,
-        activityStock: item.activityStock,
+        activityPrice: item.activityPrice ?? undefined,
+        activityStock: item.activityStock ?? undefined,
         limitPerUser: item.limitPerUser,
       })),
     };
@@ -83,8 +83,8 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
         products: current.activityProducts.map((item) => ({
           productId: item.productId.toString(),
           skuId: item.skuId?.toString(),
-          activityPrice: item.activityPrice,
-          activityStock: item.activityStock,
+          activityPrice: item.activityPrice ?? undefined,
+          activityStock: item.activityStock ?? undefined,
           limitPerUser: item.limitPerUser,
         })),
       });
@@ -141,7 +141,7 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
 
   private assertExecutableDefinition(data: {
     type: string;
-    rules?: Record<string, unknown> | null | unknown;
+    rules?: unknown;
     products?: Array<{
       productId: string;
       skuId?: string;
