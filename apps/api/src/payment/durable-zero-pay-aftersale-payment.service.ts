@@ -14,6 +14,7 @@ import { ShareService } from '../share/share.service';
 import { ZeroPayAftersalePaymentService } from './zero-pay-aftersale-payment.service';
 
 const ZERO_PAY_REFUND_SIDE_EFFECT_REASON = 'zero_refund_side_effects';
+const ZERO_PAY_REFUND_POINT_REASON = 'zero_refund_points_conservation';
 
 interface ZeroPayRefundSideEffectCandidate {
   refundId: bigint;
@@ -84,6 +85,9 @@ export class DurableZeroPayAftersalePaymentService extends ZeroPayAftersalePayme
     });
     if (task?.reason === ZERO_PAY_REFUND_SIDE_EFFECT_REASON) {
       throw new BadRequestException('0元退款权益/拼团一致性补偿任务不能人工关闭，必须由自动对账实际执行成功后关闭');
+    }
+    if (task?.reason === ZERO_PAY_REFUND_POINT_REASON) {
+      throw new BadRequestException('0元退款积分守恒补偿任务不能人工关闭，必须由自动对账实际收敛后关闭');
     }
     return super.resolveCompensationTask(id, handledBy, resolution, status);
   }
