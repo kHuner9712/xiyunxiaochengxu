@@ -96,20 +96,21 @@ export class CartService {
       });
       if (!cart) throw new NotFoundException('购物车记录不存在');
 
-      const updateData: Prisma.CartUpdateInput = {};
-      if (dto.quantity !== undefined) {
-        if (!Number.isInteger(dto.quantity) || dto.quantity <= 0 || dto.quantity > CART_MAX_QUANTITY) {
+      const nextQuantity = dto.quantity ?? cart.quantity;
+      const wantsSelection = dto.isSelected === 1;
+      if (dto.quantity !== undefined || wantsSelection) {
+        if (!Number.isInteger(nextQuantity) || nextQuantity <= 0 || nextQuantity > CART_MAX_QUANTITY) {
           throw new BadRequestException(`单件商品数量必须为1-${CART_MAX_QUANTITY}`);
         }
         if (cart.sku.status !== 1 || cart.sku.product.status !== 1) {
-          throw new BadRequestException('商品或SKU已下架，不能修改购买数量');
+          throw new BadRequestException('商品或SKU已下架，不能选中购买');
         }
-        if (cart.sku.stock < dto.quantity) throw new BadRequestException('库存不足');
-        updateData.quantity = dto.quantity;
+        if (cart.sku.stock < nextQuantity) throw new BadRequestException('库存不足');
       }
-      if (dto.isSelected !== undefined) {
-        updateData.isSelected = dto.isSelected;
-      }
+
+      const updateData: Prisma.CartUpdateInput = {};
+      if (dto.quantity !== undefined) updateData.quantity = dto.quantity;
+      if (dto.isSelected !== undefined) updateData.isSelected = dto.isSelected;
 
       if (Object.keys(updateData).length === 0) return cart;
       return tx.cart.update({
@@ -143,9 +144,38 @@ export class CartService {
     const userIdValue = parsePositiveBigIntId(userId, '用户');
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lockUser(tx, userIdValue);
-      return tx.cart.updateMany({
+      if (isSelected === 0) {
+        return tx.cart.updateMany({
+          where: { userId: userIdValue },
+          data: { isSelected: 0 },
+        });
+      }
+
+      // Clear stale selections first, then only select rows that are still purchasable at their
+      // current quantity. This makes the API itself safe even if a client ignores `isValid`.
+      await tx.cart.updateMany({
         where: { userId: userIdValue },
-        data: { isSelected },
+        data: { isSelected: 0 },
+      });
+      const carts = await tx.cart.findMany({
+        where: { userId: userIdValue },
+        include: {
+          product: { select: { status: true } },
+          sku: { select: { status: true, stock: true } },
+        },
+      });
+      const validIds = carts
+        .filter((cart) =>
+          cart.product?.status === 1 &&
+          cart.sku?.status === 1 &&
+          cart.quantity > 0 &&
+          cart.sku.stock >= cart.quantity,
+        )
+        .map((cart) => cart.id);
+      if (validIds.length === 0) return { count: 0 };
+      return tx.cart.updateMany({
+        where: { userId: userIdValue, id: { in: validIds } },
+        data: { isSelected: 1 },
       });
     });
     this.logger.log(`用户${userId}全选/取消全选购物车，isSelected=${isSelected}`);
@@ -184,6 +214,7 @@ export class CartService {
   private serializeCartItem(cart: any) {
     const productValid = cart.product && cart.product.status === 1;
     const skuValid = cart.sku && cart.sku.status === 1;
+    const stockValid = skuValid && Number.isInteger(cart.quantity) && cart.quantity > 0 && cart.sku.stock >= cart.quantity;
     return {
       id: cart.id.toString(),
       userId: cart.userId.toString(),
@@ -197,7 +228,7 @@ export class CartService {
       quantity: cart.quantity,
       stock: cart.sku?.stock || 0,
       isSelected: cart.isSelected === 1,
-      isValid: productValid && skuValid,
+      isValid: productValid && skuValid && stockValid,
       product: cart.product ? { ...cart.product, id: cart.product.id.toString() } : null,
       sku: cart.sku ? { ...cart.sku, id: cart.sku.id.toString() } : null,
     };
