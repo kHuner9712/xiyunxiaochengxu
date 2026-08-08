@@ -3,7 +3,7 @@ import { get } from '@/utils/request'
 export type ProductFulfillmentType = 'delivery' | 'pickup' | 'online' | 'none'
 
 export function getProductList(params: {
-  categoryId?: string | number
+  categoryId?: string
   keyword?: string
   sort?: string
   page: number
@@ -12,11 +12,11 @@ export function getProductList(params: {
   return get<{ list: ProductDetail[]; total: number }>('/weapp/product/list', params)
 }
 
-export function getProductDetail(id: string | number) {
-  return get<ProductDetail>(`/weapp/product/detail/${id}`)
+export function getProductDetail(id: string) {
+  return get<ProductDetail>(`/weapp/product/detail/${encodeURIComponent(id)}`)
 }
 
-export function getProductRecommend(params: { productId: string | number; page: number; pageSize: number }) {
+export function getProductRecommend(params: { productId: string; page: number; pageSize: number }) {
   return get<{ list: ProductDetail[]; total: number }>('/weapp/product/recommend', params)
 }
 
