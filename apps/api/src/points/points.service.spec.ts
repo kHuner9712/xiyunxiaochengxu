@@ -29,8 +29,8 @@ describe('PointsService ownership guard', () => {
     prisma.$transaction.mockImplementation(async (callback: any) => callback(prisma));
     redis = {
       set: jest.fn(),
-      setNX: jest.fn().mockResolvedValue(true),
-      releaseLockWithLua: jest.fn().mockResolvedValue(true),
+      setNX: jest.fn(async () => true),
+      releaseLockWithLua: jest.fn(async () => true),
     };
     service = new PointsService(prisma as any, redis as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
