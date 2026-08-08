@@ -11,7 +11,6 @@ import {
   createMockPrismaService,
   createMockRedisService,
   createTestEnvConfig,
-  setupTestApp,
 } from './helpers/mock-providers';
 
 describe('HealthController (e2e)', () => {
