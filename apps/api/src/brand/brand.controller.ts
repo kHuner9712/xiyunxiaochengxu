@@ -4,6 +4,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { CreateBrandDto } from './dto/create-brand.dto';
+import { UpdateBrandDto } from './dto/update-brand.dto';
 import { IsOptional, IsString } from 'class-validator';
 
 class BrandQueryDto extends PaginationDto {
@@ -47,7 +48,7 @@ export class AdminBrandController {
 
   @Put('update/:id')
   @RequirePermission('product:brand')
-  async update(@Param('id') id: string, @Body() dto: Partial<CreateBrandDto>) {
+  async update(@Param('id') id: string, @Body() dto: UpdateBrandDto) {
     return this.brandService.update(id, dto);
   }
 
