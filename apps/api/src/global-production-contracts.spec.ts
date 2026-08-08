@@ -71,18 +71,19 @@ describe('global production API contracts', () => {
       resolve(repoRoot, 'apps/miniprogram/src/api'),
     ];
     const violations: string[] = [];
-    const idProperty = /\b(?:id|[A-Za-z][A-Za-z0-9]*Id)\??\s*:\s*number\b/g;
-    const idParameter = /\b(?:id|[A-Za-z][A-Za-z0-9]*Id)\s*:\s*number\b/g;
+    // Reject number anywhere in an id/xxxId type annotation, including unions such as
+    // `string | number`. BIGINT safety must be guaranteed by the API contract itself rather
+    // than relying on every current caller to remember String(id).
+    const idTypedWithNumber = /\b(?:id|[A-Za-z][A-Za-z0-9]*Id)\??\s*:\s*[^,;\n)}]*\bnumber\b/g;
 
     for (const root of roots) {
       const files = walk(root, (path) => /\.(ts|tsx)$/.test(path));
       for (const file of files) {
         const source = readFileSync(file, 'utf8');
-        if (idProperty.test(source) || idParameter.test(source)) {
-          violations.push(`${relative(repoRoot, file)}: DB id is typed as number; use decimal string`);
+        if (idTypedWithNumber.test(source)) {
+          violations.push(`${relative(repoRoot, file)}: DB id type contains number; use decimal string only`);
         }
-        idProperty.lastIndex = 0;
-        idParameter.lastIndex = 0;
+        idTypedWithNumber.lastIndex = 0;
       }
     }
     failViolations('Frontend BIGINT contract regressions found:', violations);
