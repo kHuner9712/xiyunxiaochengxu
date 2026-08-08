@@ -70,8 +70,8 @@ export function getBenefitPackageList(params: { page: number; pageSize: number }
   return get<{ list: BenefitPackageSummary[]; total: number }>('/weapp/benefit-package/list', params)
 }
 
-export function getBenefitPackageDetail(id: string | number) {
-  return get<BenefitPackageDetail>(`/weapp/benefit-package/detail/${id}`)
+export function getBenefitPackageDetail(id: string) {
+  return get<BenefitPackageDetail>(`/weapp/benefit-package/detail/${encodeURIComponent(id)}`)
 }
 
 export function getMyBenefitPackages(params: { page: number; pageSize: number; status?: string }) {
@@ -90,6 +90,6 @@ export function getMyBenefitEntitlements(params: {
   )
 }
 
-export function getBenefitEntitlement(id: string | number) {
-  return get<UserBenefitEntitlementDetail>(`/weapp/benefit-package/entitlement/${id}`)
+export function getBenefitEntitlement(id: string) {
+  return get<UserBenefitEntitlementDetail>(`/weapp/benefit-package/entitlement/${encodeURIComponent(id)}`)
 }
