@@ -38,11 +38,29 @@ export class PrismaClient {
   constructor() {}
 }
 
+class PrismaClientKnownRequestError extends Error {
+  readonly code: string;
+  readonly clientVersion: string;
+  readonly meta?: Record<string, unknown>;
+
+  constructor(
+    message: string,
+    options: { code: string; clientVersion: string; meta?: Record<string, unknown> },
+  ) {
+    super(message);
+    this.name = 'PrismaClientKnownRequestError';
+    this.code = options.code;
+    this.clientVersion = options.clientVersion;
+    this.meta = options.meta;
+  }
+}
+
 export const Prisma = {
   DbNull: class {},
   JsonNull: class {},
   HttpError: class {},
   Decimal: class {},
+  PrismaClientKnownRequestError,
 };
 
 export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
