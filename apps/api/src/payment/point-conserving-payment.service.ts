@@ -4,6 +4,7 @@ import { BenefitPackageService } from '../benefit-package/benefit-package.servic
 import { BusinessEventService } from '../common/business-event.service';
 import { REFUND_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
@@ -14,8 +15,8 @@ import { CancellationSafeStockSafePaymentService } from './cancellation-safe-sto
 import { calculateRefundPointTargets } from './refund-points-conservation';
 
 const REFUND_POINTS_CONSERVATION_REASON = 'refund_points_conservation';
-const RESTORE_RECONCILE_SOURCE = 'refund_points_restore_reconcile';
-const CLAWBACK_RECONCILE_SOURCE = 'refund_reward_clawback_reconcile';
+const RESTORE_RECONCILE_SOURCE = 'refund_restore_reconcile';
+const CLAWBACK_RECONCILE_SOURCE = 'refund_reward_reconcile';
 const ORIGINAL_COMPLETION_REWARD_SOURCES = ['order_complete', 'order_auto_complete'];
 const LEGACY_RESTORE_SOURCES = ['aftersale_refund_restore_deducted'];
 const LEGACY_CLAWBACK_SOURCES = [
@@ -61,6 +62,12 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
       throw error;
     }
     await this.bestEffortReconcileSuccessfulRefundPoints(refund.id);
+  }
+
+  override async reconcileRefundSuccessSideEffects(limit = 200) {
+    const sideEffects = await super.reconcileRefundSuccessSideEffects(limit);
+    const pointConservation = await this.reconcileRefundPointConservation(limit);
+    return { ...sideEffects, pointConservation };
   }
 
   /**
@@ -181,8 +188,9 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
     resolution: string,
     status: 'resolved' | 'ignored',
   ) {
+    const taskId = parsePositiveBigIntId(id, '补偿任务');
     const task = await this.conservationPrisma.paymentCompensationTask.findFirst({
-      where: { id: BigInt(id) },
+      where: { id: taskId },
       select: { reason: true },
     });
     if (task?.reason === REFUND_POINTS_CONSERVATION_REASON) {
@@ -346,7 +354,7 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
             balance: availablePoints,
             source: RESTORE_RECONCILE_SOURCE,
             sourceId: latestRefund.id,
-            description: `累计退款积分守恒补差，归还抵扣积分${restoreDelta}`, 
+            description: `累计退款积分守恒补差，归还抵扣积分${restoreDelta}`,
           },
         });
       }
@@ -369,7 +377,7 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
             balance: availablePoints,
             source: CLAWBACK_RECONCILE_SOURCE,
             sourceId: latestRefund.id,
-            description: `累计退款积分守恒补差，扣回订单完成奖励${clawbackDue}`, 
+            description: `累计退款积分守恒补差，扣回订单完成奖励${clawbackDue}`,
           },
         });
       }
