@@ -72,18 +72,20 @@ describe('global production API contracts', () => {
     ];
     const violations: string[] = [];
     // Reject number anywhere in an id/xxxId type annotation, including unions such as
-    // `string | number`. BIGINT safety must be guaranteed by the API contract itself rather
-    // than relying on every current caller to remember String(id).
+    // `string | number`. Also reject ID aliases that hide the same union, e.g.
+    // `type Id = string | number` or `type ProductId = string | number`.
     const idTypedWithNumber = /\b(?:id|[A-Za-z][A-Za-z0-9]*Id)\??\s*:\s*[^,;\n)}]*\bnumber\b/g;
+    const idAliasWithNumber = /\btype\s+(?:Id|[A-Za-z][A-Za-z0-9]*Id)\s*=\s*[^;\n]*\bnumber\b/g;
 
     for (const root of roots) {
       const files = walk(root, (path) => /\.(ts|tsx)$/.test(path));
       for (const file of files) {
         const source = readFileSync(file, 'utf8');
-        if (idTypedWithNumber.test(source)) {
+        if (idTypedWithNumber.test(source) || idAliasWithNumber.test(source)) {
           violations.push(`${relative(repoRoot, file)}: DB id type contains number; use decimal string only`);
         }
         idTypedWithNumber.lastIndex = 0;
+        idAliasWithNumber.lastIndex = 0;
       }
     }
     failViolations('Frontend BIGINT contract regressions found:', violations);
