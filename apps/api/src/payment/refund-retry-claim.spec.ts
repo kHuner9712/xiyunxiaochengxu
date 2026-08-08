@@ -67,19 +67,24 @@ function createService(overrides: Record<string, any> = {}) {
   return { service, prisma };
 }
 
+function refundFixture(status: string) {
+  return {
+    id: 7n,
+    orderId: 70n,
+    aftersaleId: 700n,
+    outRefundNo: 'RF70',
+    refundAmount: 9900,
+    totalAmount: 9900,
+    reason: '售后退款',
+    status,
+    wechatRefundId: null,
+    updatedAt: new Date(),
+  } as any;
+}
+
 describe('refund retry claim', () => {
   it('does not resubmit an uncertain failed refund before querying WeChat', async () => {
-    const refund: any = {
-      id: 7n,
-      orderId: 70n,
-      aftersaleId: 700n,
-      outRefundNo: 'RF70',
-      refundAmount: 9900,
-      reason: '售后退款',
-      status: REFUND_STATUS.FAILED,
-      wechatRefundId: null,
-      updatedAt: new Date(),
-    };
+    const refund = refundFixture(REFUND_STATUS.FAILED);
     const { service } = createService({
       orderRefund: {
         findFirst: jest.fn(async () => refund),
@@ -96,21 +101,15 @@ describe('refund retry claim', () => {
 
     expect(querySpy).toHaveBeenCalledWith('RF70');
     expect(createRefundSpy).not.toHaveBeenCalled();
-    expect(result).toEqual({ synced: false, reason: 'processing' });
+    expect(result).toEqual({
+      synced: true,
+      reason: 'wechat_processing',
+      message: '微信退款处理中，等待回调',
+    });
   });
 
   it('processes confirmed WeChat success for a failed local refund', async () => {
-    const refund: any = {
-      id: 7n,
-      orderId: 70n,
-      aftersaleId: 700n,
-      outRefundNo: 'RF70',
-      refundAmount: 9900,
-      reason: '售后退款',
-      status: REFUND_STATUS.FAILED,
-      wechatRefundId: null,
-      updatedAt: new Date(),
-    };
+    const refund = refundFixture(REFUND_STATUS.FAILED);
     const { service, prisma } = createService({
       orderRefund: {
         findFirst: jest.fn(async () => refund),
@@ -130,17 +129,7 @@ describe('refund retry claim', () => {
   });
 
   it('refuses to auto-compensate unexpected local statuses', async () => {
-    const refund: any = {
-      id: 7n,
-      orderId: 70n,
-      aftersaleId: 700n,
-      outRefundNo: 'RF70',
-      refundAmount: 9900,
-      reason: '售后退款',
-      status: REFUND_STATUS.RETRYING,
-      wechatRefundId: null,
-      updatedAt: new Date(),
-    };
+    const refund = refundFixture(REFUND_STATUS.RETRYING);
     const { service, prisma } = createService({
       orderRefund: {
         findFirst: jest.fn(async () => refund),
