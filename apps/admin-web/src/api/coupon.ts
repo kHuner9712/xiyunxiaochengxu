@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-export type CouponId = string | number
+export type CouponId = string
 
 export interface CouponPayload {
   name: string
@@ -16,7 +16,7 @@ export interface CouponPayload {
   applicableType?: 0 | 1 | 2
   applicableIds?: string[]
   description?: string
-  memberLevelId?: number
+  memberLevelId?: string | 0
   isNewUser?: 0 | 1
   status?: 0 | 1
 }
@@ -36,15 +36,15 @@ export const couponApi = {
     return request.get('/admin/coupon/list', { params })
   },
   getDetail(id: CouponId) {
-    return request.get(`/admin/coupon/${encodeURIComponent(String(id))}`)
+    return request.get(`/admin/coupon/${encodeURIComponent(id)}`)
   },
   create(data: CouponPayload) {
     return request.post('/admin/coupon', data)
   },
   update(id: CouponId, data: Partial<CouponPayload>) {
-    return request.put(`/admin/coupon/${encodeURIComponent(String(id))}`, data)
+    return request.put(`/admin/coupon/${encodeURIComponent(id)}`, data)
   },
   delete(id: CouponId) {
-    return request.delete(`/admin/coupon/${encodeURIComponent(String(id))}`)
+    return request.delete(`/admin/coupon/${encodeURIComponent(id)}`)
   },
 }
