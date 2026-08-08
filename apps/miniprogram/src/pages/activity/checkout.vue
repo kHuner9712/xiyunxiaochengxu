@@ -70,7 +70,13 @@
 
     <view class="card remark-card">
       <text class="field-label">订单备注</text>
-      <textarea v-model="remark" class="remark-input" maxlength="500" placeholder="选填，请勿填写敏感信息" />
+      <textarea
+        v-model="remark"
+        class="remark-input"
+        maxlength="500"
+        placeholder="选填，请勿填写敏感信息"
+        placeholder-class="remark-placeholder"
+      />
     </view>
 
     <view class="legal-row">
@@ -381,7 +387,7 @@ onLoad(async (options) => {
 .amount-row.total { color: $text-color; font-size: $font-md; font-weight: 900; }
 .amount-divider { height: 1rpx; background: $border-color; margin: 18rpx 0; }
 .field-label { display: block; font-size: $font-md; font-weight: 800; color: $text-color; }
-.remark-input { width: 100%; min-height: 120rpx; box-sizing: border-box; margin-top: 14rpx; padding: 18rpx; border-radius: $radius-lg; background: $bg-ivory; font-size: $font-sm; }
+.remark-input { width: 100%; min-height: 120rpx; box-sizing: border-box; margin-top: 14rpx; padding: 18rpx; border-radius: $radius-lg; background: $bg-ivory; font-size: $font-sm; line-height: 1.5; }
 .legal-row { display: flex; align-items: center; flex-wrap: wrap; padding: 10rpx 6rpx 28rpx; color: $text-secondary; font-size: $font-xs; }
 .legal-label { display: flex; align-items: center; }
 .legal-link { color: $primary-dark; }
