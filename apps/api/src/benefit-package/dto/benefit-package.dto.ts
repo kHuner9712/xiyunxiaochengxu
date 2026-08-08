@@ -13,7 +13,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { PartialType } from '@nestjs/mapped-types';
+import { PartialType } from '@nestjs/swagger';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 const POSITIVE_ID = /^[1-9]\d*$/;
