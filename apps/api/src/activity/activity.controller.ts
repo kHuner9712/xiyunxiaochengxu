@@ -1,10 +1,13 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ActivityService } from './activity.service';
-import { ProductionActivityService } from './production-activity.service';
+import { CheckoutReadyProductionActivityService } from './checkout-ready-production-activity.service';
+import { ActivityCheckoutService } from './activity-checkout.service';
 import { ContentService } from '../content/content.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateActivityDto } from './dto/create-activity.dto';
+import { ActivityCheckoutDto } from './dto/activity-checkout.dto';
 import { ActivityQueryDto } from './dto/activity-query.dto';
 import { ActivityFeedQueryDto, ActivityStatusDto, AddActivityProductDto, UpdateActivityDto } from './dto/update-activity.dto';
 
@@ -13,6 +16,7 @@ export class WeappActivityController {
   constructor(
     private readonly activityService: ActivityService,
     private readonly contentService: ContentService,
+    private readonly activityCheckoutService: ActivityCheckoutService,
   ) {}
 
   @Public()
@@ -30,7 +34,7 @@ export class WeappActivityController {
   @Public()
   @Get(':id')
   async findById(@Param('id') id: string) {
-    const service = this.activityService as ProductionActivityService;
+    const service = this.activityService as CheckoutReadyProductionActivityService;
     return service.findPublishedById(id);
   }
 
@@ -38,6 +42,24 @@ export class WeappActivityController {
   @Get('type/:type')
   async findByType(@Param('type') type: string) {
     return this.activityService.findByType(type);
+  }
+
+  @Post(':id/preview')
+  async previewOrder(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: ActivityCheckoutDto,
+  ) {
+    return this.activityCheckoutService.preview(userId, id, dto);
+  }
+
+  @Post(':id/order')
+  async createOrder(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: ActivityCheckoutDto,
+  ) {
+    return this.activityCheckoutService.createOrder(userId, id, dto);
   }
 }
 
