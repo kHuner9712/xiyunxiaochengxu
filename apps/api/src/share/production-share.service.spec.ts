@@ -1,25 +1,34 @@
 import { BadRequestException } from '@nestjs/common';
-import { ProductionShareService } from './production-share.service';
+import { DurableRewardProductionShareService } from './durable-reward-production-share.service';
 
 function createService() {
   const tx: any = {
+    userInviteRelation: {
+      findUnique: jest.fn(),
+      updateMany: jest.fn(),
+    },
     userInviteReward: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({ id: 1n }),
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     user: {
-      findUnique: jest.fn().mockResolvedValue({ availablePoints: 100 }),
+      findUnique: jest.fn(),
       update: jest.fn().mockResolvedValue({}),
     },
     pointsRecord: {
       create: jest.fn().mockResolvedValue({}),
     },
     coupon: {
-      findFirst: jest.fn().mockResolvedValue({
+      findUnique: jest.fn().mockResolvedValue({
         id: 7n,
-        status: 1,
-        startTime: new Date(Date.now() - 60_000),
-        endTime: new Date(Date.now() + 86_400_000),
+        status: 0,
+        startTime: new Date(Date.now() - 86_400_000),
+        endTime: new Date(Date.now() - 60_000),
         totalCount: 10,
         receivedCount: 2,
         validDays: 7,
@@ -30,30 +39,57 @@ function createService() {
     userCoupon: {
       create: jest.fn().mockResolvedValue({ id: 9n }),
     },
+    shareCampaign: {
+      findUnique: jest.fn(),
+    },
+    shareRecord: {
+      update: jest.fn(),
+    },
+    $queryRaw: jest.fn(),
   };
   const prisma: any = {
+    ...tx,
     $transaction: jest.fn(async (fn: any) => fn(tx)),
   };
-  const redis: any = {};
+  const redis: any = {
+    setNX: jest.fn().mockResolvedValue(true),
+    releaseLockWithLua: jest.fn().mockResolvedValue(true),
+  };
   const points: any = {};
   const coupon: any = {};
-  const service = new ProductionShareService(prisma, redis, points, coupon);
-  return { service, prisma, tx };
+  const systemConfig: any = {
+    getRuntimeConfig: jest.fn().mockReturnValue({ aftersaleApplyDays: 10 }),
+  };
+  const service = new DurableRewardProductionShareService(
+    prisma,
+    redis,
+    points,
+    coupon,
+    systemConfig,
+  );
+  return { service, prisma, tx, redis, systemConfig };
 }
 
-const relation = {
-  inviterUserId: 1n,
-  inviteeUserId: 2n,
-  sourceCampaignId: 3n,
-};
-
-describe('ProductionShareService atomic mature rewards', () => {
-  it('writes points balance, ledger and reward marker in one transaction', async () => {
+describe('DurableRewardProductionShareService', () => {
+  it('settles a snapshotted points reward atomically', async () => {
     const { service, prisma, tx } = createService();
+    tx.$queryRaw.mockResolvedValue([{ id: 1n, availablePoints: 100 }]);
+    const reward = {
+      id: 11n,
+      userId: 1n,
+      rewardType: 'points',
+      points: 20,
+      sourceId: 42n,
+      status: 'pending',
+    };
 
-    await (service as any).issuePointsRewardAtomic(relation, 42n, 20);
+    await (service as any).settlePointsReward(reward);
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.userInviteReward.updateMany).toHaveBeenCalledWith({
+      where: { id: 11n, status: 'pending', deletedAt: null },
+      data: { status: 'issuing' },
+    });
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 1n },
       data: {
@@ -70,30 +106,26 @@ describe('ProductionShareService atomic mature rewards', () => {
         sourceId: 42n,
       }),
     });
-    expect(tx.userInviteReward.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        dedupeKey: 'first_paid:points:42',
-        status: 'issued',
-      }),
+    expect(tx.userInviteReward.update).toHaveBeenCalledWith({
+      where: { id: 11n },
+      data: expect.objectContaining({ status: 'issued' }),
     });
   });
 
-  it('does not move points when the reward marker already exists', async () => {
+  it('settles an already-earned rolling coupon after the public receive window has ended', async () => {
     const { service, tx } = createService();
-    tx.userInviteReward.findUnique.mockResolvedValueOnce({ id: 99n });
+    const reward = {
+      id: 12n,
+      userId: 1n,
+      rewardType: 'coupon',
+      couponId: 7n,
+      sourceId: 42n,
+      status: 'pending',
+    };
 
-    await (service as any).issuePointsRewardAtomic(relation, 42n, 20);
+    await (service as any).settleCouponReward(reward);
 
-    expect(tx.user.update).not.toHaveBeenCalled();
-    expect(tx.pointsRecord.create).not.toHaveBeenCalled();
-    expect(tx.userInviteReward.create).not.toHaveBeenCalled();
-  });
-
-  it('creates a new user coupon and reward marker atomically instead of accepting an unrelated existing coupon', async () => {
-    const { service, tx } = createService();
-
-    await (service as any).issueCouponRewardAtomic(relation, 42n, 7n);
-
+    expect(tx.coupon.findUnique).toHaveBeenCalledWith({ where: { id: 7n } });
     expect(tx.coupon.updateMany).toHaveBeenCalledWith({
       where: { id: 7n, receivedCount: { lt: 10 } },
       data: { receivedCount: { increment: 1 } },
@@ -102,37 +134,54 @@ describe('ProductionShareService atomic mature rewards', () => {
       data: expect.objectContaining({
         userId: 1n,
         couponId: 7n,
+        status: 1,
+        expireAt: expect.any(Date),
       }),
     });
-    expect(tx.userInviteReward.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        dedupeKey: 'first_paid:coupon:42:7',
-        couponId: 7n,
-        status: 'issued',
-      }),
-    });
+    const expireAt = tx.userCoupon.create.mock.calls[0][0].data.expireAt as Date;
+    expect(expireAt.getTime()).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
   });
 
-  it('does not create a user coupon when the reward marker already exists', async () => {
-    const { service, tx } = createService();
-    tx.userInviteReward.findUnique.mockResolvedValueOnce({ id: 99n });
-
-    await (service as any).issueCouponRewardAtomic(relation, 42n, 7n);
-
-    expect(tx.coupon.findFirst).not.toHaveBeenCalled();
-    expect(tx.coupon.updateMany).not.toHaveBeenCalled();
-    expect(tx.userCoupon.create).not.toHaveBeenCalled();
-  });
-
-  it('fails the entire coupon grant when inventory cannot be claimed', async () => {
+  it('rolls back coupon settlement when reward inventory cannot be claimed', async () => {
     const { service, tx } = createService();
     tx.coupon.updateMany.mockResolvedValueOnce({ count: 0 });
 
-    await expect(
-      (service as any).issueCouponRewardAtomic(relation, 42n, 7n),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect((service as any).settleCouponReward({
+      id: 12n,
+      userId: 1n,
+      rewardType: 'coupon',
+      couponId: 7n,
+      sourceId: 42n,
+      status: 'pending',
+    })).rejects.toBeInstanceOf(BadRequestException);
 
     expect(tx.userCoupon.create).not.toHaveBeenCalled();
-    expect(tx.userInviteReward.create).not.toHaveBeenCalled();
+    expect(tx.userInviteReward.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects fixed-end coupons for delayed inviter rewards', async () => {
+    const { service, prisma } = createService();
+    prisma.coupon.findUnique.mockResolvedValueOnce({ id: 7n, validDays: 0 });
+
+    await expect(service.createCampaign({
+      name: '首单邀请活动',
+      type: 'invite',
+      rewardType: 'coupon',
+      inviterRewardConfig: { couponId: '7' },
+      startTime: new Date(Date.now() - 60_000).toISOString(),
+      endTime: new Date(Date.now() + 86_400_000).toISOString(),
+      status: 1,
+    })).rejects.toThrow('奖励优惠券必须设置“领取后有效天数”大于0');
+  });
+
+  it('uses the runtime aftersale window instead of a hard-coded maturity period', async () => {
+    const { service, prisma, systemConfig } = createService();
+    prisma.$queryRaw.mockResolvedValue([]);
+    prisma.orderRefund = { aggregate: jest.fn() };
+
+    const result = await service.reconcileMatureFirstPaidRewards(50);
+
+    expect(systemConfig.getRuntimeConfig).toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({ aftersaleDays: 10 }));
   });
 });
