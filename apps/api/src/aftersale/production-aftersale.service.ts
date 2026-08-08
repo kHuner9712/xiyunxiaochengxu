@@ -190,7 +190,11 @@ export class ProductionAftersaleService extends AftersaleService {
     if (aftersale.type === 2 && aftersale.status === AftersaleStatus.approved) {
       throw new BadRequestException('退货退款需等待用户退货并确认收货后再退款');
     }
-    if (![AftersaleStatus.approved, AftersaleStatus.returned].includes(aftersale.status)) {
+    const refundableStatuses: AftersaleStatus[] = [
+      AftersaleStatus.approved,
+      AftersaleStatus.returned,
+    ];
+    if (!refundableStatuses.includes(aftersale.status)) {
       throw new BadRequestException('售后单状态不允许退款');
     }
 
