@@ -95,7 +95,7 @@ export class ProductionActivityService extends ActivityService {
           name: data.name.trim(),
           type: data.type,
           description: data.description?.trim() || null,
-          rules: data.rules ?? Prisma.JsonNull,
+          rules: this.toPrismaJson(data.rules),
           bannerImage: data.bannerImage?.trim() || null,
           startTime,
           endTime,
@@ -143,7 +143,7 @@ export class ProductionActivityService extends ActivityService {
           ...(data.name !== undefined ? { name: data.name.trim() } : {}),
           ...(data.type !== undefined ? { type: data.type } : {}),
           ...(data.description !== undefined ? { description: data.description.trim() || null } : {}),
-          ...(data.rules !== undefined ? { rules: data.rules } : {}),
+          ...(data.rules !== undefined ? { rules: this.toPrismaJson(data.rules) } : {}),
           ...(data.bannerImage !== undefined ? { bannerImage: data.bannerImage.trim() || null } : {}),
           ...(data.startTime !== undefined ? { startTime } : {}),
           ...(data.endTime !== undefined ? { endTime } : {}),
@@ -198,7 +198,7 @@ export class ProductionActivityService extends ActivityService {
       id: result.id.toString(),
       activityId: result.activityId.toString(),
       productId: result.productId.toString(),
-      skuId: result.skuId?.toString() ?? null,
+      skuId: result.skuId?.toString(),
     };
   }
 
@@ -257,6 +257,10 @@ export class ProductionActivityService extends ActivityService {
       });
     }
     return result;
+  }
+
+  private toPrismaJson(value: Record<string, unknown> | undefined) {
+    return value === undefined ? Prisma.JsonNull : value as Prisma.InputJsonValue;
   }
 
   private assertWindow(startTime: Date, endTime: Date) {
