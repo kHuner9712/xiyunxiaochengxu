@@ -76,9 +76,15 @@
               </el-radio-group>
             </el-form-item>
             <el-form-item v-if="auditResult === 'approve'" label="退款金额(元)">
-              <el-input-number v-model="refundAmountYuan" :min="0.01" :precision="2" style="width: 180px" />
+              <el-input-number
+                v-model="refundAmountYuan"
+                :min="isZeroPayOrder ? 0 : 0.01"
+                :precision="2"
+                :disabled="isZeroPayOrder"
+                style="width: 180px"
+              />
               <div style="width: 100%; margin-top: 6px; color: #909399; font-size: 12px">
-                系统会校验可退金额上限
+                {{ isZeroPayOrder ? '该订单实付为0元，将执行本地售后结算，不调用微信退款' : '系统会校验可退金额上限' }}
               </div>
             </el-form-item>
             <el-form-item v-if="auditResult === 'reject'" label="拒绝原因">
@@ -124,7 +130,7 @@
             <el-descriptions-item label="确认退款金额">¥{{ formatPrice(detail.refundAmount) }}</el-descriptions-item>
           </el-descriptions>
           <el-button type="primary" :loading="submitting" @click="handleRefund">
-            {{ isRefundRetry ? '重新发起退款' : '确认退款' }}
+            {{ isRefundRetry ? '重新发起退款' : (isZeroPayOrder ? '确认售后结算' : '确认退款') }}
           </el-button>
         </el-card>
       </el-col>
@@ -160,14 +166,15 @@ const refundAmountYuan = ref(0)
 const displayImages = ref<string[]>([])
 
 const orderItems = computed(() => (detail.value.orderItem ? [detail.value.orderItem] : []))
+const isZeroPayOrder = computed(() => Number(detail.value.order?.payAmount ?? 0) === 0)
 const isRefundRetry = computed(() => {
   return detail.value.status === 'pending_refund' && detail.value.refundRetryable === true
 })
 const needsRefundSync = computed(() => {
-  return detail.value.status === 'pending_refund' && detail.value.refundSyncRequired === true
+  return !isZeroPayOrder.value && detail.value.status === 'pending_refund' && detail.value.refundSyncRequired === true
 })
 const needsManualRefund = computed(() => {
-  return detail.value.status === 'pending_refund' && detail.value.refundManualRequired === true
+  return !isZeroPayOrder.value && detail.value.status === 'pending_refund' && detail.value.refundManualRequired === true
 })
 const canRefund = computed(() => {
   return (
@@ -191,8 +198,9 @@ async function fetchDetail() {
     displayImages.value = []
     const res = await aftersaleApi.getDetail(String(route.params.id))
     detail.value = res.data || {}
-    const defaultRefundAmount = detail.value.refundAmount || detail.value.orderItem?.subtotal || 0
-    refundAmountYuan.value = defaultRefundAmount / 100
+    const orderIsZeroPay = Number(detail.value.order?.payAmount ?? 0) === 0
+    const defaultRefundAmount = detail.value.refundAmount ?? (orderIsZeroPay ? 0 : (detail.value.orderItem?.subtotal || 0))
+    refundAmountYuan.value = Number(defaultRefundAmount || 0) / 100
     displayImages.value = await resolvePrivateFileUrls(asArray(detail.value.images))
   } catch (e: any) {
     ElMessage.error(e?.message || '获取售后详情失败')
@@ -205,13 +213,17 @@ async function handleAudit() {
     return
   }
 
-  const refundAmount = priceToFen(refundAmountYuan.value)
-  if (auditResult.value === 'approve' && refundAmount <= 0) {
+  const refundAmount = isZeroPayOrder.value ? 0 : priceToFen(refundAmountYuan.value)
+  if (auditResult.value === 'approve' && !isZeroPayOrder.value && refundAmount <= 0) {
     ElMessage.warning('请输入正确的退款金额')
     return
   }
 
-  const actionLabel = auditResult.value === 'approve' ? `通过并确认退款 ¥${refundAmountYuan.value.toFixed(2)}` : '拒绝'
+  const actionLabel = auditResult.value === 'approve'
+    ? isZeroPayOrder.value
+      ? '通过并确认0元售后结算'
+      : `通过并确认退款 ¥${refundAmountYuan.value.toFixed(2)}`
+    : '拒绝'
   try {
     await ElMessageBox.confirm(`确认${actionLabel}该售后申请？`, '审核确认', {
       confirmButtonText: '确认',
@@ -264,16 +276,21 @@ async function handleSyncRefund() {
 }
 
 async function handleRefund() {
-  const refundAmount = Number(detail.value.refundAmount || 0)
-  if (refundAmount <= 0) {
+  const refundAmount = Number(detail.value.refundAmount ?? 0)
+  if (!isZeroPayOrder.value && refundAmount <= 0) {
     ElMessage.warning('退款金额未设置')
     return
   }
 
-  const actionLabel = isRefundRetry.value ? '重新发起退款' : '确认退款'
+  const actionLabel = isZeroPayOrder.value
+    ? '确认完成0元售后结算'
+    : (isRefundRetry.value ? '重新发起退款' : '确认退款')
+  const confirmation = isZeroPayOrder.value
+    ? '该订单实付为0元，不会调用微信退款；系统将完成售后状态、库存、积分与权益结算。'
+    : `${actionLabel} ¥${formatPrice(refundAmount)}？此操作将发起微信退款，请谨慎操作。`
   try {
-    await ElMessageBox.confirm(`${actionLabel} ¥${formatPrice(refundAmount)}？此操作将发起微信退款，请谨慎操作。`, '退款确认', {
-      confirmButtonText: isRefundRetry.value ? '重新发起' : '确认退款',
+    await ElMessageBox.confirm(confirmation, '退款确认', {
+      confirmButtonText: isRefundRetry.value ? '重新发起' : '确认',
       cancelButtonText: '取消',
       type: 'warning',
     })
@@ -284,7 +301,7 @@ async function handleRefund() {
   submitting.value = true
   try {
     await aftersaleApi.refund(String(detail.value.id))
-    ElMessage.success(isRefundRetry.value ? '退款已重新发起' : '退款已发起')
+    ElMessage.success(isZeroPayOrder.value ? '0元售后结算完成' : (isRefundRetry.value ? '退款已重新发起' : '退款已发起'))
     await fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.message || '退款失败')
