@@ -33,6 +33,6 @@ export function getActivityContentList(params: ActivityContentListParams) {
   return get<{ list: ActivityContentListItem[]; total: number }>('/weapp/activity-content/list', params)
 }
 
-export function getActivityContentDetail(id: string | number) {
-  return get<ActivityContentDetail>(`/weapp/activity-content/detail/${id}`)
+export function getActivityContentDetail(id: string) {
+  return get<ActivityContentDetail>(`/weapp/activity-content/detail/${encodeURIComponent(id)}`)
 }
