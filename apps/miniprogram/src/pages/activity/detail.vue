@@ -223,7 +223,7 @@ onLoad((options) => {
 .activity-price { color: $primary-dark; font-size: $font-lg; font-weight: 900; }
 .original-price { color: $text-hint; font-size: $font-xs; text-decoration: line-through; }
 .product-footer { margin-top: 18rpx; padding-top: 16rpx; border-top: 1rpx solid $border-color; }
-.buy-btn { min-width: 190rpx; height: 66rpx; padding: 0 28rpx; border: 0; border-radius: $radius-round; background: $gradient-primary; color: #fff; font-size: $font-sm; font-weight: 900; line-height: 66rpx; }
+.buy-btn { min-width: 190rpx; height: 66rpx; padding: 0 28rpx; border: 0; border-radius: $radius-round; background: $gradient-coral; color: #fff; font-size: $font-sm; font-weight: 900; line-height: 66rpx; }
 .buy-btn::after { border: 0; }
 .buy-btn[disabled] { opacity: .48; }
 .empty { text-align: center; padding: 50rpx 28rpx; }
