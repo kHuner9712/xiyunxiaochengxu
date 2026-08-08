@@ -13,6 +13,7 @@ function createMockPrisma() {
       findFirst: jest.fn() as any,
       create: jest.fn() as any,
     },
+    $queryRaw: jest.fn() as any,
     $transaction: jest.fn() as any,
   };
 }
@@ -20,11 +21,17 @@ function createMockPrisma() {
 describe('PointsService ownership guard', () => {
   let service: PointsService;
   let prisma: ReturnType<typeof createMockPrisma>;
+  let redis: any;
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    prisma.$queryRaw.mockResolvedValue([{ id: 100n }]);
     prisma.$transaction.mockImplementation(async (callback: any) => callback(prisma));
-    const redis = { set: jest.fn() };
+    redis = {
+      set: jest.fn(),
+      setNX: jest.fn().mockResolvedValue(true),
+      releaseLockWithLua: jest.fn().mockResolvedValue(true),
+    };
     service = new PointsService(prisma as any, redis as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   });
@@ -103,19 +110,31 @@ describe('PointsService ownership guard', () => {
     });
   });
 
-  it('signIn returns continuous alias after success', async () => {
+  it('signIn returns continuous alias after success and uses a distributed lock', async () => {
     prisma.pointsRecord.findFirst.mockResolvedValue(null);
     prisma.user.findFirst.mockResolvedValue({ id: 100n, availablePoints: 10, totalPoints: 20 });
+    prisma.user.update.mockResolvedValue({});
+    prisma.pointsRecord.create.mockResolvedValue({});
     jest.spyOn(service as any, 'getConsecutiveSignInDays').mockResolvedValue(2);
 
     const result = await service.signIn('100');
 
+    expect(redis.setNX).toHaveBeenCalled();
+    expect(redis.releaseLockWithLua).toHaveBeenCalled();
+    expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(result).toMatchObject({
       alreadySigned: false,
       points: 9,
       continuous: 3,
       consecutiveDays: 3,
     });
+  });
+
+  it('refuses a concurrent duplicate sign-in before touching the database', async () => {
+    redis.setNX.mockResolvedValueOnce(false);
+
+    await expect(service.signIn('100')).rejects.toThrow('签到处理中，请勿重复提交');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('getRules returns renderable rule array', async () => {
