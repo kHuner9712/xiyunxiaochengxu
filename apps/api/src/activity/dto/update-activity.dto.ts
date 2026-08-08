@@ -9,15 +9,12 @@ import {
   IsOptional,
   IsString,
   Matches,
-  Max,
   MaxLength,
-  Min,
   ValidateNested,
 } from 'class-validator';
 import { ActivityProductDto } from './create-activity.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
-const POSITIVE_ID = /^[1-9]\d*$/;
 const EXPLICIT_TIMEZONE = /(?:Z|[+-]\d{2}:\d{2})$/i;
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 
@@ -60,6 +57,6 @@ export class ActivityFeedQueryDto extends PaginationDto {
   @IsOptional()
   @Transform(trim)
   @IsString()
-  @IsIn(['recommend', 'discount', 'video', 'article', 'offline'])
+  @IsIn(['recommend', 'discount', 'video', 'article'])
   tab = 'recommend';
 }
