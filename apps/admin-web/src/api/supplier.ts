@@ -1,22 +1,24 @@
 import request from '@/utils/request'
 
+type SupplierMutation = { id: string; [key: string]: any }
+
 export const supplierApi = {
   getList(params: { page: number; pageSize: number; name?: string; contactPhone?: string }) {
     return request.get('/admin/supplier/list', { params })
   },
-  getDetail(id: number) {
-    return request.get(`/admin/supplier/detail/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/supplier/detail/${encodeURIComponent(id)}`)
   },
   create(data: any) {
     return request.post('/admin/supplier/create', data)
   },
-  update(idOrData: number | any, data?: any) {
-    const id = typeof idOrData === 'number' ? idOrData : idOrData.id
-    const payload = typeof idOrData === 'number' ? (data || {}) : { ...(idOrData || {}) }
+  update(idOrData: string | SupplierMutation, data?: any) {
+    const id = typeof idOrData === 'string' ? idOrData : idOrData.id
+    const payload = typeof idOrData === 'string' ? (data || {}) : { ...(idOrData || {}) }
     delete payload.id
-    return request.put(`/admin/supplier/update/${id}`, payload)
+    return request.put(`/admin/supplier/update/${encodeURIComponent(id)}`, payload)
   },
-  delete(id: number) {
-    return request.delete(`/admin/supplier/delete/${id}`)
+  delete(id: string) {
+    return request.delete(`/admin/supplier/delete/${encodeURIComponent(id)}`)
   },
 }
