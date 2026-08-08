@@ -126,7 +126,7 @@ const searchForm = reactive({
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const pointsForm = reactive({
-  userId: undefined as number | undefined,
+  userId: undefined as string | undefined,
   nickname: '',
   currentPoints: 0,
   points: 0,
@@ -183,11 +183,11 @@ function resetSearch() {
 }
 
 function handleDetail(row: any) {
-  router.push(`/user/detail/${row.id}`)
+  router.push(`/user/detail/${String(row.id)}`)
 }
 
 function handleAdjustPoints(row: any) {
-  pointsForm.userId = row.id
+  pointsForm.userId = String(row.id)
   pointsForm.nickname = row.nickname
   pointsForm.currentPoints = row.points
   pointsForm.points = 0
@@ -197,11 +197,11 @@ function handleAdjustPoints(row: any) {
 
 async function handlePointsSubmit() {
   const valid = await pointsFormRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!valid || !pointsForm.userId) return
 
   submitting.value = true
   try {
-    await userApi.adjustPoints(pointsForm.userId!, pointsForm.points, pointsForm.reason)
+    await userApi.adjustPoints(pointsForm.userId, pointsForm.points, pointsForm.reason)
     ElMessage.success('调整成功')
     pointsVisible.value = false
     fetchList()
