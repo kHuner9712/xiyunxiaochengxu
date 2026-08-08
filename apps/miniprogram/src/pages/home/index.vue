@@ -252,8 +252,8 @@ function goActivityList() {
   uni.switchTab({ url: '/pages/activity/index' })
 }
 
-function goActivityDetail(id: number) {
-  uni.navigateTo({ url: `/pages/activity/detail?id=${id}` })
+function goActivityDetail(id: string) {
+  uni.navigateTo({ url: `/pages/activity/detail?id=${encodeURIComponent(id)}` })
 }
 
 function goActivityContentList() {
