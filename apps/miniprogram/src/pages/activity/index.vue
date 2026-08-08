@@ -87,8 +87,7 @@ const tabs = [
   { label: '推荐', value: 'recommend' },
   { label: '优惠', value: 'discount' },
   { label: '视频', value: 'video' },
-  { label: '文章', value: 'article' },
-  { label: '线下', value: 'offline' }
+  { label: '文章', value: 'article' }
 ]
 
 const currentTab = ref('recommend')
@@ -143,7 +142,9 @@ function typeLabel(type: string) {
 }
 
 function marketingLabel(item: FeedItem) {
-  if (item.activityType) return item.activityType
+  if (item.activityType === '1') return '限时折扣'
+  if (item.activityType === '2') return '满减优惠'
+  if (item.activityType === '5') return '新人优惠'
   if (item.type === 'activity') return '限时活动'
   if (item.type === 'video') return '育儿视频'
   if (item.type === 'article') return '科学育儿'
