@@ -169,7 +169,14 @@ docker run --rm \
   --network "$DRY_RUN_NETWORK" \
   -e DATABASE_URL="$DRY_RUN_DATABASE_URL" \
   "$API_IMAGE_ID" npx prisma migrate status
-pass 'production-backup migration clone passed with the deployment image'
+
+# migrate status only proves migration history. A historical production database can still carry
+# manual/legacy schema drift, so compare the migrated clone itself against the release schema.
+docker run --rm \
+  --network "$DRY_RUN_NETWORK" \
+  -e DATABASE_URL="$DRY_RUN_DATABASE_URL" \
+  "$API_IMAGE_ID" sh -c 'npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code'
+pass 'production-backup migration clone passed migrations and schema drift verification with the deployment image'
 
 cleanup_migration_clone
 trap - EXIT
