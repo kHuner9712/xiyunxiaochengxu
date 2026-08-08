@@ -62,11 +62,13 @@ async function main() {
     prisma as any,
     orderService,
     promotionCheckout,
+    benefitPackage as any,
   );
   const groupBuyService = new TransactionalGroupBuyService(
     prisma as any,
     orderService,
     promotionCheckout,
+    benefitPackage as any,
   );
 
   try {
