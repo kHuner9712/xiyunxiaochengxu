@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
@@ -11,15 +12,17 @@ import {
   FREIGHT_FREE_AMOUNT,
   FREIGHT_REMOTE_AREAS,
   FREIGHT_REMOTE_FEE,
+  ORDER_AUTO_CLOSE_MINUTES,
   generateOrderNo,
   generatePaymentNo,
 } from '@baby-mall/shared';
 import { PAYMENT_STATUS } from '../common/constants/payment';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
+import { SystemConfigService } from '../system-config/system-config.service';
 
 const DEFAULT_COVER_MARKER = '/uploads/static/default-cover.png';
-const PROMOTION_ACTIVITY_TYPES = new Set(['flash_sale', 'group_buy']);
+const PROMOTION_ACTIVITY_TYPES = new Set(['flash_sale', 'group_buy', 'activity']);
 const ALLOWED_SOURCE_TYPES = new Set([
   'direct',
   'user_referral',
@@ -28,6 +31,7 @@ const ALLOWED_SOURCE_TYPES = new Set([
 ]);
 
 type TransactionClient = Prisma.TransactionClient;
+export type PromotionActivityType = 'flash_sale' | 'group_buy' | 'activity';
 
 export interface PromotionCheckoutInput {
   userId: bigint;
@@ -35,7 +39,10 @@ export interface PromotionCheckoutInput {
   quantity: number;
   unitPrice: number;
   activityId: bigint;
-  activityType: 'flash_sale' | 'group_buy';
+  activityType: PromotionActivityType;
+  /** Optional order-level activity discount, used by threshold promotions such as 满减. */
+  promotionDiscountAmount?: number;
+  promotionLabel?: string;
   addressId?: string;
   pickupStoreId?: string;
   fulfillmentType?: string;
@@ -71,6 +78,8 @@ function pickOrderProductImage(
 
 @Injectable()
 export class PromotionCheckoutService {
+  constructor(@Optional() private readonly systemConfigService?: SystemConfigService) {}
+
   assertNoUnsupportedStacking(input: { couponId?: string; pointsDeduct?: number }): void {
     if (input.couponId) throw new BadRequestException('促销订单暂不支持叠加优惠券');
     if ((input.pointsDeduct ?? 0) > 0) throw new BadRequestException('促销订单暂不支持叠加积分抵扣');
@@ -138,7 +147,7 @@ export class PromotionCheckoutService {
 
     const productFulfillmentType = sku.product.fulfillmentType || 'delivery';
     if (productFulfillmentType !== 'delivery' && productFulfillmentType !== 'pickup') {
-      throw new BadRequestException('该商品的履约方式不支持拼团/秒杀活动');
+      throw new BadRequestException('该商品的履约方式不支持当前活动');
     }
     if (productFulfillmentType !== fulfillmentType) {
       throw new BadRequestException(
@@ -160,6 +169,7 @@ export class PromotionCheckoutService {
       select: { stock: true },
     });
     if (!skuAfterDeduct) throw new BadRequestException('SKU不存在，下单失败');
+    const activityLabel = this.activityLabel(input.activityType, input.promotionLabel);
     await tx.productStockLog.create({
       data: {
         productId: sku.productId,
@@ -168,13 +178,27 @@ export class PromotionCheckoutService {
         quantity: input.quantity,
         beforeStock: skuAfterDeduct.stock + input.quantity,
         afterStock: skuAfterDeduct.stock,
-        reason: `${input.activityType === 'flash_sale' ? '秒杀' : '拼团'}订单预扣库存`,
+        reason: `${activityLabel}订单预扣库存`,
       },
     });
 
     const totalAmount = sku.price * input.quantity;
     const promotionSubtotal = input.unitPrice * input.quantity;
-    const activityDiscountAmount = totalAmount - promotionSubtotal;
+    const calculatedDiscount = totalAmount - promotionSubtotal;
+    const activityDiscountAmount = input.promotionDiscountAmount === undefined
+      ? calculatedDiscount
+      : input.promotionDiscountAmount;
+    if (
+      !Number.isSafeInteger(activityDiscountAmount) ||
+      activityDiscountAmount < 0 ||
+      activityDiscountAmount > totalAmount
+    ) {
+      throw new BadRequestException('活动优惠金额无效');
+    }
+
+    const usesOrderLevelDiscount = input.promotionDiscountAmount !== undefined;
+    const orderItemUnitPrice = usesOrderLevelDiscount ? sku.price : input.unitPrice;
+    const orderItemSubtotal = orderItemUnitPrice * input.quantity;
     const freightAmount = fulfillmentType === 'delivery'
       ? this.calculateFreight(totalAmount, address?.province)
       : 0;
@@ -188,7 +212,10 @@ export class PromotionCheckoutService {
           ? OrderStatus.pending_pickup
           : OrderStatus.pending_delivery
       : OrderStatus.pending_payment;
-    const autoCloseAt = input.autoCloseAt ?? new Date(Date.now() + 30 * 60 * 1000);
+    const configuredCloseMinutes = this.systemConfigService?.getRuntimeConfig().orderAutoCloseMinutes
+      ?? ORDER_AUTO_CLOSE_MINUTES;
+    const autoCloseAt = input.autoCloseAt
+      ?? new Date(Date.now() + configuredCloseMinutes * 60 * 1000);
     if (!isZeroPay && autoCloseAt.getTime() <= Date.now()) {
       throw new BadRequestException('活动支付时限已结束');
     }
@@ -241,10 +268,10 @@ export class PromotionCheckoutService {
             productName: sku.product.name,
             skuSpecs: sku.specs === null ? Prisma.JsonNull : (sku.specs as Prisma.InputJsonValue),
             productImage: pickOrderProductImage(sku.image, sku.product.mainImage),
-            price: input.unitPrice,
+            price: orderItemUnitPrice,
             originalPrice: sku.price,
             quantity: input.quantity,
-            subtotal: promotionSubtotal,
+            subtotal: orderItemSubtotal,
             activityId: input.activityId,
             activityType: input.activityType,
             activityDiscount: activityDiscountAmount,
@@ -256,7 +283,7 @@ export class PromotionCheckoutService {
             operatorType: 'user',
             operatorId: input.userId,
             action: 'create',
-            content: `${input.activityType === 'flash_sale' ? '秒杀' : '拼团'}下单`,
+            content: `${activityLabel}下单`,
           },
         },
       },
@@ -282,7 +309,7 @@ export class PromotionCheckoutService {
         paymentCreated = true;
         break;
       } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue;
+        if ((error as any)?.code === 'P2002') continue;
         throw error;
       }
     }
@@ -296,7 +323,7 @@ export class PromotionCheckoutService {
           action: 'pay_zero_amount',
           content: holdUntilPromotionSuccess
             ? '0元拼团订单自动支付成功，等待成团'
-            : '0元促销订单自动支付成功',
+            : `0元${activityLabel}订单自动支付成功`,
         },
       });
     }
@@ -315,11 +342,22 @@ export class PromotionCheckoutService {
   }
 
   private calculateFreight(totalAmount: number, province?: string): number {
-    if (totalAmount >= FREIGHT_FREE_AMOUNT) return 0;
+    const config = this.systemConfigService?.getRuntimeConfig();
+    const freeShippingAmount = config?.freeShippingAmount ?? FREIGHT_FREE_AMOUNT;
+    const defaultFreight = config?.defaultFreight ?? FREIGHT_DEFAULT_FEE;
+    if (totalAmount >= freeShippingAmount) return 0;
     if (province && FREIGHT_REMOTE_AREAS.some((area) => province.includes(area))) {
       return FREIGHT_REMOTE_FEE;
     }
-    return FREIGHT_DEFAULT_FEE;
+    return defaultFreight;
+  }
+
+  private activityLabel(type: PromotionActivityType, custom?: string) {
+    const trimmed = custom?.trim();
+    if (trimmed) return trimmed.slice(0, 30);
+    if (type === 'flash_sale') return '秒杀';
+    if (type === 'group_buy') return '拼团';
+    return '活动';
   }
 
   private async generatePickupCode(tx: TransactionClient): Promise<string> {
