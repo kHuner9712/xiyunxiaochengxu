@@ -109,13 +109,51 @@ jobs:
           retention-days: 1
 
       - name: Build Admin Web
-        run: pnpm build:admin
+        id: build-admin
+        run: |
+          set +e
+          pnpm build:admin > admin-build.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 200 admin-build.log
+            exit "$status"
+          fi
+          cat admin-build.log
+
+      - name: Preserve Admin build failure diagnostics
+        if: failure() && steps.build-admin.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-build-failure-log
+          path: admin-build.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Run Admin browser operation flow
         run: pnpm test:admin:browser
 
       - name: Build Miniprogram
-        run: VITE_API_BASE_URL=https://example.invalid/api pnpm build:mini
+        id: build-mini
+        run: |
+          set +e
+          VITE_API_BASE_URL=https://example.invalid/api pnpm build:mini > mini-build.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 200 mini-build.log
+            exit "$status"
+          fi
+          cat mini-build.log
+
+      - name: Preserve Miniprogram build failure diagnostics
+        if: failure() && steps.build-mini.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mini-build-failure-log
+          path: mini-build.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Build production Docker image
         run: >-
