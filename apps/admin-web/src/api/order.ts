@@ -4,14 +4,14 @@ export const orderApi = {
   getList(params: { page: number; pageSize: number; orderNo?: string; status?: string; startDate?: string; endDate?: string; fulfillmentType?: string }) {
     return request.get('/admin/order/list', { params })
   },
-  getDetail(id: string | number) {
-    return request.get(`/admin/order/detail/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/order/detail/${encodeURIComponent(id)}`)
   },
-  remark(id: string | number, remark: string) {
-    return request.put(`/admin/order/remark/${id}`, { remark })
+  remark(id: string, remark: string) {
+    return request.put(`/admin/order/remark/${encodeURIComponent(id)}`, { remark })
   },
-  cancel(id: string | number, reason: string) {
-    return request.put(`/admin/order/cancel/${id}`, { reason })
+  cancel(id: string, reason: string) {
+    return request.put(`/admin/order/cancel/${encodeURIComponent(id)}`, { reason })
   },
   getDeliveryList(params: { page: number; pageSize: number; orderNo?: string }) {
     return request.get('/admin/order/delivery-list', { params })
