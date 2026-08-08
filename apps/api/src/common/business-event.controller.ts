@@ -1,6 +1,8 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
 import { RequirePermission } from './decorators/require-permission.decorator';
+import { parsePositiveBigIntId } from './utils/bigint-id';
+import { BusinessEventQueryDto } from './dto/business-event-query.dto';
 
 @Controller('admin/business-events')
 @RequirePermission('system:log')
@@ -8,34 +10,22 @@ export class BusinessEventController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get('list')
-  async list(
-    @Query('page') page = '1',
-    @Query('pageSize') pageSize = '20',
-    @Query('level') level?: string,
-    @Query('bizType') bizType?: string,
-    @Query('eventType') eventType?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-  ) {
-    const p = Math.max(1, parseInt(page, 10) || 1);
-    const ps = Math.min(100, Math.max(1, parseInt(pageSize, 10) || 20));
-    const skip = (p - 1) * ps;
-
+  async list(@Query() dto: BusinessEventQueryDto) {
     const where: any = {};
-    if (level) where.level = level;
-    if (bizType) where.bizType = bizType;
-    if (eventType) where.eventType = eventType;
-    if (startDate || endDate) {
+    if (dto.level) where.level = dto.level;
+    if (dto.bizType) where.bizType = dto.bizType;
+    if (dto.eventType) where.eventType = dto.eventType;
+    if (dto.startDate || dto.endDate) {
       where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
+      if (dto.startDate) where.createdAt.gte = new Date(dto.startDate);
+      if (dto.endDate) where.createdAt.lte = new Date(dto.endDate);
     }
 
     const [items, total] = await Promise.all([
       this.prisma.businessEvent.findMany({
         where,
-        skip,
-        take: ps,
+        skip: dto.skip,
+        take: dto.take,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.businessEvent.count({ where }),
@@ -47,18 +37,19 @@ export class BusinessEventController {
         id: item.id.toString(),
       })),
       pagination: {
-        page: p,
-        pageSize: ps,
+        page: dto.page,
+        pageSize: dto.pageSize,
         total,
-        totalPages: Math.ceil(total / ps),
+        totalPages: Math.ceil(total / dto.pageSize),
       },
     };
   }
 
   @Get('detail/:id')
   async detail(@Param('id') id: string) {
+    const eventId = parsePositiveBigIntId(id, '业务事件');
     const event = await this.prisma.businessEvent.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: eventId },
     });
     if (!event) {
       return { error: '事件不存在' };
