@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { BusinessEventService } from '../common/business-event.service';
@@ -22,6 +22,14 @@ interface ZeroPayRefundSideEffectCandidate {
   orderNo: string;
 }
 
+interface RefundBenefitEffectCapability {
+  revokeAfterRefundSuccess(orderId: bigint | string, aftersaleId: bigint | string): Promise<unknown>;
+}
+
+interface RefundGroupBuyEffectCapability {
+  handleRefundSuccess(orderId: bigint | string): Promise<unknown>;
+}
+
 @Injectable()
 export class DurableZeroPayAftersalePaymentService extends ZeroPayAftersalePaymentService {
   private readonly durableZeroPayLogger = new Logger(DurableZeroPayAftersalePaymentService.name);
@@ -32,9 +40,11 @@ export class DurableZeroPayAftersalePaymentService extends ZeroPayAftersalePayme
     businessEvent: BusinessEventService,
     orderService: OrderService,
     shareService: ShareService,
-    private readonly durableZeroPayBenefitPackageService: BenefitPackageService,
+    @Inject(BenefitPackageService)
+    private readonly durableZeroPayBenefitPackageService: RefundBenefitEffectCapability,
     merchantSettlementService: MerchantSettlementService,
-    private readonly durableZeroPayGroupBuyService: GroupBuyService,
+    @Inject(GroupBuyService)
+    private readonly durableZeroPayGroupBuyService: RefundGroupBuyEffectCapability,
     flashSaleService: FlashSaleService,
     redisService: RedisService,
   ) {
@@ -44,9 +54,9 @@ export class DurableZeroPayAftersalePaymentService extends ZeroPayAftersalePayme
       businessEvent,
       orderService,
       shareService,
-      durableZeroPayBenefitPackageService,
+      durableZeroPayBenefitPackageService as BenefitPackageService,
       merchantSettlementService,
-      durableZeroPayGroupBuyService,
+      durableZeroPayGroupBuyService as GroupBuyService,
       flashSaleService,
       redisService,
     );
