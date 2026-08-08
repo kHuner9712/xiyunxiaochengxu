@@ -48,6 +48,8 @@ export interface PromotionCheckoutInput {
   fulfillmentType?: string;
   sourceType?: string;
   sourceCode?: string;
+  shareRecordId?: string;
+  shareCampaignId?: string;
   referrerUserId?: string;
   remark?: string;
   autoCloseAt?: Date;
@@ -115,6 +117,12 @@ export class PromotionCheckoutService {
       : null;
     const pickupStoreId = fulfillmentType === 'pickup'
       ? parsePositiveBigIntId(input.pickupStoreId!, '自提点')
+      : null;
+    const shareRecordId = input.shareRecordId
+      ? parsePositiveBigIntId(input.shareRecordId, '分享记录')
+      : null;
+    const shareCampaignId = input.shareCampaignId
+      ? parsePositiveBigIntId(input.shareCampaignId, '裂变活动')
       : null;
     const referrerUserId = input.referrerUserId
       ? parsePositiveBigIntId(input.referrerUserId, '推荐人用户')
@@ -245,6 +253,8 @@ export class PromotionCheckoutService {
         fulfillmentType,
         sourceType,
         sourceCode,
+        shareRecordId,
+        shareCampaignId,
         referrerUserId,
         receiverName: address?.receiverName ?? '',
         receiverPhone: address?.receiverPhone ?? '',
