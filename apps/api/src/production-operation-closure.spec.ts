@@ -95,7 +95,7 @@ describe('production operation closure contracts', () => {
     expect(flashModule).toContain('ProductionFlashSaleService');
     expect(benefitModule).toContain('SnapshotGuardedProductionBenefitPackageService');
     expect(settlementModule).toContain('ProductionMerchantSettlementService');
-    expect(shareModule).toContain('ProductionShareService');
+    expect(shareModule).toContain('SafeShareProductionService');
   });
 
   it('makes production deployment identity and restored-backup migration verification mandatory', () => {
