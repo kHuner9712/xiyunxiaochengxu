@@ -5,6 +5,7 @@ import { RequirePermission } from '../common/decorators/require-permission.decor
 import { ProductQueryDto } from './dto/product-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductStatusDto } from './dto/product-status.dto';
 
 @Controller('weapp/product')
 export class WeappProductController {
@@ -65,7 +66,7 @@ export class AdminProductController {
 
   @Put('status/:id')
   @RequirePermission('product:publish')
-  async updateStatus(@Param('id') id: string, @Body() body: { status: number }) {
-    return this.productService.updateStatus(id, body.status);
+  async updateStatus(@Param('id') id: string, @Body() dto: ProductStatusDto) {
+    return this.productService.updateStatus(id, dto.status);
   }
 }
