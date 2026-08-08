@@ -41,10 +41,10 @@ export class DurableZeroPayAftersalePaymentService extends ZeroPayAftersalePayme
     orderService: OrderService,
     shareService: ShareService,
     @Inject(BenefitPackageService)
-    private readonly durableZeroPayBenefitPackageService: RefundBenefitEffectCapability,
+    private readonly durableZeroPayBenefitPackageService: BenefitPackageService & RefundBenefitEffectCapability,
     merchantSettlementService: MerchantSettlementService,
     @Inject(GroupBuyService)
-    private readonly durableZeroPayGroupBuyService: RefundGroupBuyEffectCapability,
+    private readonly durableZeroPayGroupBuyService: GroupBuyService & RefundGroupBuyEffectCapability,
     flashSaleService: FlashSaleService,
     redisService: RedisService,
   ) {
@@ -54,9 +54,9 @@ export class DurableZeroPayAftersalePaymentService extends ZeroPayAftersalePayme
       businessEvent,
       orderService,
       shareService,
-      durableZeroPayBenefitPackageService as BenefitPackageService,
+      durableZeroPayBenefitPackageService,
       merchantSettlementService,
-      durableZeroPayGroupBuyService as GroupBuyService,
+      durableZeroPayGroupBuyService,
       flashSaleService,
       redisService,
     );
