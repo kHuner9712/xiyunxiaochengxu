@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -51,4 +52,11 @@ export class UpdatePickupStoreDto {
 
 export class PickupStoreStatusDto {
   @Type(() => Number) @IsInt() @IsIn([0, 1]) status!: number;
+}
+
+export class PickupCodeDto {
+  @Transform(trim)
+  @IsString()
+  @Matches(/^\d{8}$/, { message: '自提码必须为8位数字' })
+  pickupCode!: string;
 }
