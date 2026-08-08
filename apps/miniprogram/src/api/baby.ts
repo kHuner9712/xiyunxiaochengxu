@@ -4,24 +4,24 @@ export function getBabyList() {
   return get<BabyItem[]>('/weapp/baby-profile')
 }
 
-export function getBabyDetail(id: string | number) {
-  return get<BabyItem>(`/weapp/baby-profile/${id}`)
+export function getBabyDetail(id: string) {
+  return get<BabyItem>(`/weapp/baby-profile/${encodeURIComponent(id)}`)
 }
 
 export function createBaby(data: BabyForm) {
   return post('/weapp/baby-profile', normalizeBabyPayload(data))
 }
 
-export function updateBaby(data: BabyForm & { id: string | number }) {
-  return put(`/weapp/baby-profile/${data.id}`, normalizeBabyPayload(data))
+export function updateBaby(data: BabyForm & { id: string }) {
+  return put(`/weapp/baby-profile/${encodeURIComponent(data.id)}`, normalizeBabyPayload(data))
 }
 
-export function deleteBaby(id: string | number) {
-  return del(`/weapp/baby-profile/${id}`)
+export function deleteBaby(id: string) {
+  return del(`/weapp/baby-profile/${encodeURIComponent(id)}`)
 }
 
 function normalizeBabyPayload<T extends BabyForm>(data: T) {
-  const payload = { ...(data as T & { id?: string | number }) }
+  const payload = { ...(data as T & { id?: string }) }
   delete payload.id
   return {
     ...payload,
