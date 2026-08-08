@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { generateRefundNo } from '@baby-mall/shared';
@@ -22,6 +22,17 @@ const ZERO_RESTORE_SOURCE = 'zero_refund_restore';
 const ZERO_CLAWBACK_SOURCE = 'zero_reward_reconcile';
 const COMPLETION_REWARD_SOURCES = ['order_complete', 'order_auto_complete'];
 
+interface ZeroPayBenefitRefundCapability {
+  assertRefundable(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  freezeForRefund(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  restoreAfterRefundClosed(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  revokeAfterRefundSuccess(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+}
+
+interface ZeroPayGroupBuyRefundCapability {
+  handleRefundSuccess(orderId: bigint | string): Promise<unknown>;
+}
+
 @Injectable()
 export class ZeroPayAftersalePaymentService extends PointConservingPaymentService {
   private readonly zeroPayLogger = new Logger(ZeroPayAftersalePaymentService.name);
@@ -32,9 +43,11 @@ export class ZeroPayAftersalePaymentService extends PointConservingPaymentServic
     businessEvent: BusinessEventService,
     orderService: OrderService,
     shareService: ShareService,
-    private readonly zeroPayBenefitPackageService: BenefitPackageService,
+    @Inject(BenefitPackageService)
+    private readonly zeroPayBenefitPackageService: BenefitPackageService & ZeroPayBenefitRefundCapability,
     merchantSettlementService: MerchantSettlementService,
-    private readonly zeroPayGroupBuyService: GroupBuyService,
+    @Inject(GroupBuyService)
+    private readonly zeroPayGroupBuyService: GroupBuyService & ZeroPayGroupBuyRefundCapability,
     flashSaleService: FlashSaleService,
     redisService: RedisService,
   ) {
@@ -245,6 +258,8 @@ export class ZeroPayAftersalePaymentService extends PointConservingPaymentServic
                 paymentId: current.order.payment.id,
                 aftersaleId,
                 refundNo,
+                outTradeNo: current.order.orderNo,
+                transactionId: current.order.payment.transactionId,
                 outRefundNo: refundNo,
                 refundId: `ZERO-${aftersaleId}`,
                 totalAmount: 0,
@@ -264,7 +279,7 @@ export class ZeroPayAftersalePaymentService extends PointConservingPaymentServic
         };
       });
     } catch (error) {
-      await this.zeroPayBenefitPackageService.restoreAfterRefundFailure(params.orderId, aftersaleId).catch(() => undefined);
+      await this.zeroPayBenefitPackageService.restoreAfterRefundClosed(params.orderId, aftersaleId).catch(() => undefined);
       throw error;
     }
 
