@@ -252,8 +252,9 @@ export class SystemConfigService implements OnModuleInit {
     target: RuntimeBusinessConfig,
     groupName: string,
     configKey: string,
-    rawValue: string,
+    rawValue: string | null,
   ) {
+    if (rawValue === null || rawValue.trim() === '') return;
     const value = Number(rawValue);
     if (!Number.isFinite(value)) return;
     switch (`${groupName}.${configKey}`) {
