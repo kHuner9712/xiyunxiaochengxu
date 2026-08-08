@@ -71,7 +71,7 @@ async function fetchList() {
       page: pagination.page,
       pageSize: pagination.pageSize,
       name: searchForm.name || undefined,
-      userId: searchForm.userId ? Number(searchForm.userId) : undefined,
+      userId: searchForm.userId.trim() || undefined,
     })
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
