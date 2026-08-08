@@ -15,10 +15,10 @@ export class ProductionAftersaleService extends AftersaleService {
 
   constructor(
     private readonly productionPrisma: PrismaService,
-    paymentService: PaymentService,
+    private readonly productionPaymentService: PaymentService,
     @Optional() private readonly systemConfigService?: SystemConfigService,
   ) {
-    super(productionPrisma, paymentService);
+    super(productionPrisma, productionPaymentService);
   }
 
   override async create(userId: string, dto: CreateAftersaleDto) {
@@ -95,8 +95,10 @@ export class ProductionAftersaleService extends AftersaleService {
   }
 
   override async approve(id: string, adminId: string, refundAmount: number) {
+    const aftersaleId = parsePositiveBigIntId(id, '售后单');
+    const adminIdValue = parsePositiveBigIntId(adminId, '管理员');
     const aftersale = await this.productionPrisma.aftersaleOrder.findFirst({
-      where: { id: BigInt(id) },
+      where: { id: aftersaleId },
       include: {
         orderItem: true,
         order: {
@@ -108,8 +110,54 @@ export class ProductionAftersaleService extends AftersaleService {
         },
       },
     });
+    if (!aftersale) throw new NotFoundException('售后单不存在');
 
-    if (aftersale?.type === 2 && Number.isInteger(refundAmount) && refundAmount > 0) {
+    if ((aftersale.order.payAmount ?? 0) === 0) {
+      if (!Number.isSafeInteger(refundAmount) || refundAmount !== 0) {
+        throw new BadRequestException('0元订单退款金额必须为0分');
+      }
+      if (aftersale.status !== AftersaleStatus.pending_review) {
+        throw new BadRequestException('售后单状态不允许审核');
+      }
+      if (aftersale.type === 2) {
+        const refundCap = calculateOrderItemRefundCap(
+          aftersale.order,
+          aftersale.orderItem,
+          aftersale.id,
+        );
+        if (refundCap.remainingAmount !== 0) {
+          throw new BadRequestException('0元订单退货退款金额分配异常，请先核对订单金额');
+        }
+      }
+
+      await this.productionPrisma.$transaction(async (tx) => {
+        const claimed = await tx.aftersaleOrder.updateMany({
+          where: { id: aftersaleId, status: AftersaleStatus.pending_review },
+          data: {
+            status: AftersaleStatus.approved,
+            refundAmount: 0,
+            adminId: adminIdValue,
+            reviewedAt: new Date(),
+          },
+        });
+        if (claimed.count !== 1) throw new BadRequestException('售后单状态已变化，请刷新后重试');
+        await tx.aftersaleLog.create({
+          data: {
+            aftersaleId,
+            operatorType: 'admin',
+            operatorId: adminIdValue,
+            action: 'approve',
+            content: '管理员审核通过，0元订单退款金额：0分',
+          },
+        });
+      });
+      return this.findAdminDetail(id);
+    }
+
+    if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0) {
+      throw new BadRequestException('退款金额必须大于0分');
+    }
+    if (aftersale.type === 2) {
       const refundCap = calculateOrderItemRefundCap(
         aftersale.order,
         aftersale.orderItem,
@@ -123,5 +171,62 @@ export class ProductionAftersaleService extends AftersaleService {
     }
 
     return super.approve(id, adminId, refundAmount);
+  }
+
+  override async refund(id: string, adminId: string) {
+    const aftersaleId = parsePositiveBigIntId(id, '售后单');
+    const adminIdValue = parsePositiveBigIntId(adminId, '管理员');
+    const aftersale = await this.productionPrisma.aftersaleOrder.findFirst({
+      where: { id: aftersaleId },
+      include: { order: true },
+    });
+    if (!aftersale) throw new NotFoundException('售后单不存在');
+    if ((aftersale.order.payAmount ?? 0) !== 0) {
+      return super.refund(id, adminId);
+    }
+    if (aftersale.refundAmount !== 0) {
+      throw new BadRequestException('0元订单退款金额状态异常');
+    }
+    if (aftersale.type === 2 && aftersale.status === AftersaleStatus.approved) {
+      throw new BadRequestException('退货退款需等待用户退货并确认收货后再退款');
+    }
+    if (![AftersaleStatus.approved, AftersaleStatus.returned].includes(aftersale.status)) {
+      throw new BadRequestException('售后单状态不允许退款');
+    }
+
+    const previousStatus = aftersale.status;
+    await this.productionPrisma.$transaction(async (tx) => {
+      const claimed = await tx.aftersaleOrder.updateMany({
+        where: { id: aftersaleId, status: previousStatus },
+        data: { status: AftersaleStatus.pending_refund },
+      });
+      if (claimed.count !== 1) throw new BadRequestException('售后单状态已变化，请刷新后重试');
+      await tx.aftersaleLog.create({
+        data: {
+          aftersaleId,
+          operatorType: 'admin',
+          operatorId: adminIdValue,
+          action: 'refund',
+          content: '管理员发起0元订单售后结算',
+        },
+      });
+    });
+
+    try {
+      await this.productionPaymentService.createRefund({
+        orderId: aftersale.orderId.toString(),
+        refundAmount: 0,
+        reason: `售后退款: ${aftersale.reason}`,
+        aftersaleId: aftersale.id.toString(),
+      });
+    } catch (error) {
+      await this.productionPrisma.aftersaleOrder.updateMany({
+        where: { id: aftersaleId, status: AftersaleStatus.pending_refund },
+        data: { status: previousStatus },
+      });
+      throw error;
+    }
+
+    return this.findAdminDetail(id);
   }
 }
