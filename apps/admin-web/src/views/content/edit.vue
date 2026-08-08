@@ -242,19 +242,15 @@ function isPositiveBigIntId(value: unknown): boolean {
     || (normalized.length === MAX_SIGNED_BIGINT_ID.length && normalized <= MAX_SIGNED_BIGINT_ID)
 }
 
-function parseRelatedProductIds(value: string): number[] | null {
+function parseRelatedProductIds(value: string): string[] | null {
   const normalized = value.trim()
   if (!normalized) return null
   const tokens = normalized.split(',').map(item => item.trim())
   if (tokens.length > 10) throw new Error('最多关联10个商品')
-  if (tokens.some(item => !/^[1-9]\d*$/.test(item))) {
-    throw new Error('关联商品ID必须为正整数，多个ID请使用英文逗号分隔')
+  if (tokens.some(item => !isPositiveBigIntId(item))) {
+    throw new Error('关联商品ID必须为有效的64位正整数，多个ID请使用英文逗号分隔')
   }
-  const ids = tokens.map(item => Number(item))
-  if (ids.some(item => !Number.isSafeInteger(item))) {
-    throw new Error('关联商品ID超出前端可安全处理的范围')
-  }
-  return ids
+  return tokens
 }
 
 function extractUploadedAsset(response: any) {
@@ -492,7 +488,7 @@ async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
-  let relatedProductIds: number[] | null
+  let relatedProductIds: string[] | null
   try {
     relatedProductIds = parseRelatedProductIds(form.relatedProductIdsStr)
   } catch (error) {
@@ -505,12 +501,15 @@ async function handleSubmit() {
     ElMessage.error('关联活动ID必须是有效的正整数')
     return
   }
+  if (isEdit.value && (!form.id || !isPositiveBigIntId(form.id))) {
+    ElMessage.error('内容ID无效，请返回列表重试')
+    return
+  }
 
   submitting.value = true
   preservePendingAssetsOnUnmount = false
   try {
     const payload = {
-      id: form.id,
       title: form.title.trim(),
       contentType: form.contentType,
       coverImage: form.coverImage || null,
@@ -530,7 +529,7 @@ async function handleSubmit() {
     }
 
     if (isEdit.value) {
-      await contentApi.update(payload)
+      await contentApi.update({ id: form.id!, ...payload })
     } else {
       await contentApi.create(payload)
     }
