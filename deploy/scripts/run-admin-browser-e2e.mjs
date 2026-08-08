@@ -29,7 +29,7 @@ if (result.status === 0) {
 
 const output = `${result.stdout || ''}\n${result.stderr || ''}`
 const browserFlowPassed = output.includes(
-  '[admin-browser-e2e] PASS login → permission menu → config save → reload persistence',
+  '[admin-browser-e2e] PASS login → permission menu → grouped config batch save → reload persistence',
 )
 const knownCleanupRace =
   output.includes('ENOTEMPTY: directory not empty') &&
