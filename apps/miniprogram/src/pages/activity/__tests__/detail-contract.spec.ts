@@ -26,22 +26,25 @@ function activityDetail(overrides: Record<string, any> = {}) {
     name: '限时活动',
     bannerImage: 'https://api.example.com/activity.jpg',
     description: '活动说明',
-    type: 'flash_sale',
+    type: '1',
     startTime: now.toISOString(),
     endTime: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
-    rules: '活动规则',
-    activityProducts: [{
-      id: 'ap-1',
-      productId: 'p-1',
+    rules: null,
+    products: [{
+      id: '2',
+      activityProductId: '10',
+      productId: '2',
+      skuId: '3',
+      name: '活动奶粉',
+      image: 'https://api.example.com/product.jpg',
+      price: 8900,
+      originalPrice: 9900,
+      sales: 12,
       activityPrice: 8900,
+      stock: 5,
       activityStock: 5,
-      product: {
-        id: 'p-1',
-        name: '活动奶粉',
-        mainImage: 'https://api.example.com/product.jpg',
-        minPrice: 9900,
-        totalSales: 12,
-      },
+      limitPerUser: 2,
+      fulfillmentType: 'delivery',
     }],
     ...overrides,
   }
@@ -79,7 +82,7 @@ describe('活动详情字段契约', () => {
     expect(wrapper.text()).not.toContain('NaN')
   })
 
-  it('将 activityProducts 映射为 ProductCard 可用字段', async () => {
+  it('使用服务端 canonical products 渲染活动商品', async () => {
     const wrapper = mount(ActivityDetailPage, {
       global: {
         stubs: {
@@ -93,10 +96,13 @@ describe('活动详情字段契约', () => {
     expect(wrapper.text()).toContain('活动奶粉')
     expect(wrapper.text()).toContain('¥89.00')
     expect(wrapper.text()).toContain('¥99.00')
-    expect(wrapper.text()).toContain('已售 12 件')
+    expect(wrapper.text()).toContain('活动可售 5 件')
     expect(wrapper.find('.product-image').attributes('src')).toBe('https://api.example.com/product.jpg')
 
     expect((wrapper.vm as any).activityProducts[0]).toMatchObject({
+      activityProductId: '10',
+      productId: '2',
+      skuId: '3',
       name: '活动奶粉',
       image: 'https://api.example.com/product.jpg',
       price: 8900,
