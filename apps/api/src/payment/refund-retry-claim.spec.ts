@@ -90,12 +90,12 @@ describe('refund retry claim', () => {
       refund_id: 'WX-REFUND-70',
       amount: { refund: 9900, total: 9900 },
     });
-    const retrySpy = jest.spyOn(service, 'retryRefund').mockResolvedValue({ status: 'processing' } as any);
+    const createRefundSpy = jest.spyOn(service, 'createRefund');
 
     const result = await service.syncRefund('RF70');
 
     expect(querySpy).toHaveBeenCalledWith('RF70');
-    expect(retrySpy).not.toHaveBeenCalled();
+    expect(createRefundSpy).not.toHaveBeenCalled();
     expect(result).toEqual({ synced: false, reason: 'processing' });
   });
 
