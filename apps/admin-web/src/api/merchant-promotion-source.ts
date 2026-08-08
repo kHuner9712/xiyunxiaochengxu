@@ -1,5 +1,7 @@
 import request from '@/utils/request'
 
+type MerchantPromotionUpdateInput = string | ({ id: string } & Record<string, any>)
+
 export const merchantPromotionSourceApi = {
   getList(params: {
     page: number
@@ -22,21 +24,22 @@ export const merchantPromotionSourceApi = {
     return request.get('/admin/merchant-promotion-source/stats', { params })
   },
   getOrders(promotionCode: string, params: { page: number; pageSize: number }) {
-    return request.get(`/admin/merchant-promotion-source/orders/${promotionCode}`, { params })
+    return request.get(`/admin/merchant-promotion-source/orders/${encodeURIComponent(promotionCode)}`, { params })
   },
-  getDetail(id: string | number) {
-    return request.get(`/admin/merchant-promotion-source/detail/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/merchant-promotion-source/detail/${encodeURIComponent(id)}`)
   },
   create(data: any) {
     return request.post('/admin/merchant-promotion-source/create', data)
   },
-  update(idOrData: string | number | any, data?: any) {
-    const id = typeof idOrData === 'object' ? idOrData.id : idOrData
-    const payload = typeof idOrData === 'object' ? { ...(idOrData || {}) } : { ...(data || {}) }
+  update(idOrData: MerchantPromotionUpdateInput, data?: any) {
+    const isObject = typeof idOrData === 'object'
+    const id = isObject ? idOrData.id : idOrData
+    const payload = isObject ? { ...idOrData } : { ...(data || {}) }
     delete payload.id
-    return request.put(`/admin/merchant-promotion-source/update/${id}`, payload)
+    return request.put(`/admin/merchant-promotion-source/update/${encodeURIComponent(id)}`, payload)
   },
-  updateStatus(id: string | number, status: number) {
-    return request.put(`/admin/merchant-promotion-source/status/${id}`, { status })
+  updateStatus(id: string, status: number) {
+    return request.put(`/admin/merchant-promotion-source/status/${encodeURIComponent(id)}`, { status })
   },
 }
