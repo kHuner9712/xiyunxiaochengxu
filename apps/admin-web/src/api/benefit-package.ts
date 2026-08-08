@@ -1,7 +1,6 @@
 import request from '@/utils/request'
 
 export const benefitPackageApi = {
-  // 权益包配置
   getList(params: {
     page: number
     pageSize: number
@@ -10,22 +9,21 @@ export const benefitPackageApi = {
   }) {
     return request.get('/admin/benefit-package/list', { params })
   },
-  getDetail(id: string | number) {
-    return request.get(`/admin/benefit-package/detail/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/benefit-package/detail/${encodeURIComponent(id)}`)
   },
   create(data: any) {
     return request.post('/admin/benefit-package/create', data)
   },
-  update(id: string | number, data: any) {
-    return request.put(`/admin/benefit-package/update/${id}`, data)
+  update(id: string, data: any) {
+    return request.put(`/admin/benefit-package/update/${encodeURIComponent(id)}`, data)
   },
-  updateStatus(id: string | number, status: number) {
-    return request.put(`/admin/benefit-package/status/${id}`, { status })
+  updateStatus(id: string, status: number) {
+    return request.put(`/admin/benefit-package/status/${encodeURIComponent(id)}`, { status })
   },
-  remove(id: string | number) {
-    return request.delete(`/admin/benefit-package/delete/${id}`)
+  remove(id: string) {
+    return request.delete(`/admin/benefit-package/delete/${encodeURIComponent(id)}`)
   },
-  // 用户权益 / 核销 / 记录
   getUserPackages(params: any) {
     return request.get('/admin/benefit-package/user-packages', { params })
   },
