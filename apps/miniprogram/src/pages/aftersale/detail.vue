@@ -121,7 +121,7 @@ const displayStatusText = computed(() => {
   return formatAftersaleStatus(detail.value.status)
 })
 
-async function loadDetail(id: string | number) {
+async function loadDetail(id: string) {
   try {
     detail.value = normalizeDetail(await getAftersaleDetail(id))
     displayImages.value = await resolvePrivateFileUrls(detail.value.images || [])
@@ -141,6 +141,8 @@ function normalizeDetail(data: any): AftersaleDetail {
 
   return {
     ...data,
+    id: String(data.id || ''),
+    orderId: String(data.orderId || data.order?.id || ''),
     orderNo: data.orderNo || data.order?.orderNo || '',
     productName: data.productName || data.orderItem?.productName || '',
     productImage: data.productImage || data.orderItem?.productImage || '',
@@ -184,7 +186,7 @@ async function handleCancel() {
       if (res.confirm) {
         try {
           await cancelAftersale(detail.value.id)
-          loadDetail(detail.value.id)
+          await loadDetail(detail.value.id)
         } catch {
           uni.showToast({ title: '取消失败', icon: 'none' })
         }
@@ -240,7 +242,7 @@ async function submitReturnLogistics() {
 
 onLoad((options) => {
   const id = Array.isArray(options?.id) ? options?.id[0] : options?.id
-  if (id) loadDetail(id)
+  if (id) loadDetail(String(id))
 })
 
 defineExpose({
