@@ -38,7 +38,7 @@ function createService(overrides: Record<string, any> = {}) {
     ...overrides.prisma,
   };
   const config: any = { get: jest.fn() };
-  const businessEvent: any = { emit: jest.fn() };
+  const businessEvent: any = { emit: jest.fn(), emitWarn: jest.fn() };
   const orderService: any = {};
   const shareService: any = {};
   const benefitPackageService: any = {
