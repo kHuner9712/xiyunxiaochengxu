@@ -5,6 +5,7 @@ import { RequirePermission } from '../common/decorators/require-permission.decor
 import { CreateContentDto } from './dto/create-content.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
 import { ContentQueryDto } from './dto/content-query.dto';
+import { CreateContentCategoryDto, UpdateContentCategoryDto } from './dto/content-category.dto';
 
 @Controller('weapp/content')
 export class WeappContentController {
@@ -65,13 +66,13 @@ export class AdminContentController {
 
   @Post('category')
   @RequirePermission('content')
-  async createCategory(@Body() dto: { name: string; icon?: string; sortOrder?: number }) {
+  async createCategory(@Body() dto: CreateContentCategoryDto) {
     return this.contentService.createCategory(dto);
   }
 
   @Put('category/:id')
   @RequirePermission('content')
-  async updateCategory(@Param('id') id: string, @Body() dto: { name?: string; icon?: string; sortOrder?: number }) {
+  async updateCategory(@Param('id') id: string, @Body() dto: UpdateContentCategoryDto) {
     return this.contentService.updateCategory(id, dto);
   }
 
