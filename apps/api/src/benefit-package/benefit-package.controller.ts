@@ -13,11 +13,15 @@ import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
+  BenefitPackagePublicQueryDto,
   BenefitPackageQueryDto,
   UserBenefitPackageQueryDto,
   EntitlementQueryDto,
   VerificationLogQueryDto,
   VerifyBenefitDto,
+  CreateBenefitPackageDto,
+  UpdateBenefitPackageDto,
+  BenefitPackageStatusDto,
 } from './dto/benefit-package.dto';
 
 @Controller('weapp/benefit-package')
@@ -26,11 +30,8 @@ export class WeappBenefitPackageController {
 
   @Public()
   @Get('list')
-  async list(
-    @Query('page') page: string = '1',
-    @Query('pageSize') pageSize: string = '10',
-  ) {
-    return this.service.findPublished(Number(page), Number(pageSize));
+  async list(@Query() dto: BenefitPackagePublicQueryDto) {
+    return this.service.findPublished(dto.page, dto.pageSize);
   }
 
   @Public()
@@ -42,19 +43,17 @@ export class WeappBenefitPackageController {
   @Get('my-packages')
   async myPackages(
     @CurrentUser('id') userId: string,
-    @Query('page') page: string = '1',
-    @Query('pageSize') pageSize: string = '10',
+    @Query() dto: BenefitPackagePublicQueryDto,
   ) {
-    return this.service.findMyPackages(userId, Number(page), Number(pageSize));
+    return this.service.findMyPackages(userId, dto.page, dto.pageSize);
   }
 
   @Get('my-entitlements')
   async myEntitlements(
     @CurrentUser('id') userId: string,
-    @Query('page') page: string = '1',
-    @Query('pageSize') pageSize: string = '10',
+    @Query() dto: BenefitPackagePublicQueryDto,
   ) {
-    return this.service.findMyEntitlements(userId, Number(page), Number(pageSize));
+    return this.service.findMyEntitlements(userId, dto.page, dto.pageSize);
   }
 
   @Get('entitlement/:id')
@@ -66,8 +65,6 @@ export class WeappBenefitPackageController {
 @Controller('admin/benefit-package')
 export class AdminBenefitPackageController {
   constructor(private readonly service: BenefitPackageService) {}
-
-  // ===== 权益包配置 =====
 
   @Get('list')
   @RequirePermission('marketing:activity')
@@ -83,13 +80,13 @@ export class AdminBenefitPackageController {
 
   @Post('create')
   @RequirePermission('marketing:activity')
-  async create(@Body() dto: any) {
+  async create(@Body() dto: CreateBenefitPackageDto) {
     return this.service.create(dto);
   }
 
   @Put('update/:id')
   @RequirePermission('marketing:activity')
-  async update(@Param('id') id: string, @Body() dto: any) {
+  async update(@Param('id') id: string, @Body() dto: UpdateBenefitPackageDto) {
     return this.service.update(id, dto);
   }
 
@@ -97,7 +94,7 @@ export class AdminBenefitPackageController {
   @RequirePermission('marketing:activity')
   async updateStatus(
     @Param('id') id: string,
-    @Body() dto: { status: number },
+    @Body() dto: BenefitPackageStatusDto,
   ) {
     return this.service.updateStatus(id, dto.status);
   }
@@ -107,8 +104,6 @@ export class AdminBenefitPackageController {
   async delete(@Param('id') id: string) {
     return this.service.delete(id);
   }
-
-  // ===== 用户权益 / 核销 / 记录 =====
 
   @Get('user-packages')
   @RequirePermission('marketing:activity')
