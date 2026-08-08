@@ -8,7 +8,7 @@ function createFixture() {
     status: 1,
     startTime: new Date(Date.now() - 60_000),
     endTime: new Date(Date.now() + 3_600_000),
-    rules: null,
+    rules: null as any,
   };
   const activityProduct = {
     id: 10n,
