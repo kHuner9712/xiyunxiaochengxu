@@ -2,13 +2,15 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { SystemConfigService } from './system-config.service';
 
 function createMockPrisma() {
-  return {
+  const prisma: any = {
     systemConfig: {
-      findMany: jest.fn() as any,
-      findFirst: jest.fn() as any,
-      upsert: jest.fn() as any,
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      upsert: jest.fn(),
     },
   };
+  prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
+  return prisma;
 }
 
 function createMockRedis() {
@@ -33,6 +35,8 @@ describe('SystemConfigService - CustomerService', () => {
   describe('getCustomerServiceConfig', () => {
     it('should return default values when no config exists', async () => {
       prisma.systemConfig.findMany.mockResolvedValue([]);
+      redis.get.mockResolvedValue(null);
+      prisma.systemConfig.findFirst.mockResolvedValue(null);
 
       const result = await service.getCustomerServiceConfig();
 
@@ -57,6 +61,8 @@ describe('SystemConfigService - CustomerService', () => {
         { groupName: 'customer_service', configKey: 'faqContent', configValue: '[]', valueType: 'json' },
         { groupName: 'customer_service', configKey: 'notice', configValue: '公告', valueType: 'string' },
       ]);
+      redis.get.mockResolvedValue(null);
+      prisma.systemConfig.findFirst.mockResolvedValue(null);
 
       const result = await service.getCustomerServiceConfig();
 
@@ -75,7 +81,7 @@ describe('SystemConfigService - CustomerService', () => {
         { groupName: 'customer_service', configKey: 'type', configValue: 'phone', valueType: 'string' },
         { groupName: 'customer_service', configKey: 'phone', configValue: '', valueType: 'string' },
       ]);
-      redis.get.mockResolvedValue('');
+      redis.get.mockResolvedValue(null);
       prisma.systemConfig.findFirst.mockResolvedValue({
         groupName: 'basic',
         configKey: 'customer_service_phone',
@@ -94,7 +100,7 @@ describe('SystemConfigService - CustomerService', () => {
         { groupName: 'customer_service', configKey: 'type', configValue: 'phone', valueType: 'string' },
         { groupName: 'customer_service', configKey: 'phone', configValue: '400-XXX-XXXX', valueType: 'string' },
       ]);
-      redis.get.mockResolvedValue('');
+      redis.get.mockResolvedValue(null);
       prisma.systemConfig.findFirst.mockResolvedValue(null);
 
       const result = await service.getCustomerServiceConfig();
@@ -104,8 +110,11 @@ describe('SystemConfigService - CustomerService', () => {
   });
 
   describe('updateCustomerServiceConfig', () => {
-    it('should batch update all customer_service config keys', async () => {
+    it('should batch update all customer_service config keys atomically', async () => {
       prisma.systemConfig.upsert.mockResolvedValue({});
+      prisma.systemConfig.findMany.mockResolvedValue([]);
+      redis.get.mockResolvedValue(null);
+      prisma.systemConfig.findFirst.mockResolvedValue(null);
 
       const dto = {
         enabled: 'true',
@@ -120,13 +129,19 @@ describe('SystemConfigService - CustomerService', () => {
 
       await service.updateCustomerServiceConfig(dto);
 
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(prisma.systemConfig.upsert).toHaveBeenCalledTimes(8);
       expect(prisma.systemConfig.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { uk_group_key: { groupName: 'customer_service', configKey: 'enabled' } },
-          update: { configValue: 'true' },
-          create: { groupName: 'customer_service', configKey: 'enabled', configValue: 'true' },
-        })
+          update: { configValue: 'true', valueType: 'boolean' },
+          create: {
+            groupName: 'customer_service',
+            configKey: 'enabled',
+            configValue: 'true',
+            valueType: 'boolean',
+          },
+        }),
       );
     });
   });
