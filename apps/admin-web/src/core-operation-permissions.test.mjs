@@ -136,8 +136,9 @@ test('stock adjustment and pickup verification keep the selected operation targe
   assert.match(stockPage, /adjustForm\.skuId\s*=\s*String\(row\.skuId\)/)
   assert.match(stockDto, /productId\?: string/)
   assert.match(stockDto, /skuId!:\s*string/)
-  assert.equal((stockDto.match(/@Matches\(\/\^\\d\+\$\//g) || []).length, 2)
-  assert.doesNotMatch(stockDto, /@Type\(\(\) => Number\)/)
+  assert.match(stockDto, /const POSITIVE_ID = \/\^\[1-9\]\\d\*\$\//)
+  assert.equal((stockDto.match(/@Matches\(POSITIVE_ID/g) || []).length, 2)
+  assert.doesNotMatch(stockDto, /@Type\(\(\) => Number\)[\s\S]{0,80}(?:productId|skuId)/)
 
   assert.match(pickupVerify, /const previewedPickupCode = ref\(''\)/)
   assert.match(pickupVerify, /@input="handleCodeInput"/)
