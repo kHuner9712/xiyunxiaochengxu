@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
@@ -8,6 +8,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
+import { SystemConfigService } from '../system-config/system-config.service';
 import { ProductionOrderService } from './production-order.service';
 
 const PAYMENT_CANCEL_LOCK_TTL_SECONDS = 90;
@@ -21,6 +22,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     groupBuyService: GroupBuyService,
     flashSaleService: FlashSaleService,
     private readonly cancellationRedis: RedisService,
+    @Optional() systemConfigService?: SystemConfigService,
   ) {
     super(
       cancellationPrisma,
@@ -28,12 +30,9 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       benefitPackageService,
       groupBuyService,
       flashSaleService,
+      systemConfigService,
     );
 
-    // OrderService keeps the completion reward helper private, but the runtime method is
-    // dispatched through `this`. Wrap it at the outermost production provider so the original
-    // completion transaction remains intact while reward points use net paid revenue after all
-    // refunds that were already successful before the order completes.
     const rewardCompletedOrder = (this as any).rewardCompletedOrder.bind(this);
     (this as any).rewardCompletedOrder = async (
       tx: any,
@@ -108,8 +107,6 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
             return false;
           }
 
-          // A CREATED/SUCCESS payment must never be locally cancelled. Payment reconciliation
-          // first closes the remote WeChat transaction and only then marks it FAILED.
           if (currentOrder.payment && currentOrder.payment.status !== PAYMENT_STATUS.FAILED) {
             return false;
           }
@@ -187,9 +184,6 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
             });
           }
 
-          // Promotion reservations must close in the same database transaction as the order.
-          // Otherwise the order can be cancelled while a group member still occupies a seat or
-          // a flash-sale row still holds activity inventory until a later scheduler pass.
           const flashSaleOrder = await tx.flashSaleOrder.findFirst({
             where: {
               orderId: currentOrder.id,
