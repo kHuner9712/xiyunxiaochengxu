@@ -54,6 +54,7 @@ export class DurableRewardProductionShareService extends ProductionShareService 
         select: { id: true, userId: true, paidAt: true, payAmount: true, status: true },
       });
       if (!order || order.userId !== inviteeId || !order.paidAt) return;
+      const paidAt = order.paidAt;
 
       await this.durablePrisma.$transaction(async (tx) => {
         const current = await tx.userInviteRelation.findUnique({ where: { id: relation.id } });
@@ -63,7 +64,7 @@ export class DurableRewardProductionShareService extends ProductionShareService 
         if (!current.firstPaidOrderId) {
           const claimed = await tx.userInviteRelation.updateMany({
             where: { id: current.id, status: 1, firstPaidOrderId: null },
-            data: { firstPaidOrderId: orderIdValue, firstPaidAt: order.paidAt },
+            data: { firstPaidOrderId: orderIdValue, firstPaidAt: paidAt },
           });
           if (claimed.count !== 1) {
             const refreshed = await tx.userInviteRelation.findUnique({ where: { id: current.id } });
@@ -82,7 +83,7 @@ export class DurableRewardProductionShareService extends ProductionShareService 
             sourceType: 'first_paid_attribution',
             sourceId: orderIdValue,
             dedupeKey: `first_paid:attribution:${orderIdValue}`,
-            issuedAt: order.paidAt,
+            issuedAt: paidAt,
           }],
           skipDuplicates: true,
         });
@@ -96,7 +97,7 @@ export class DurableRewardProductionShareService extends ProductionShareService 
           });
         }
 
-        await this.snapshotEarnedRewards(tx, current, orderIdValue, order.paidAt, true);
+        await this.snapshotEarnedRewards(tx, current, orderIdValue, paidAt, true);
       });
     } finally {
       await this.durableRedis.releaseLockWithLua(lockKey, lockValue);
