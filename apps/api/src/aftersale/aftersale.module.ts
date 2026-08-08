@@ -4,9 +4,10 @@ import { AftersaleService } from './aftersale.service';
 import { ProductionAftersaleService } from './production-aftersale.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { PaymentModule } from '../payment/payment.module';
+import { SystemConfigModule } from '../system-config/system-config.module';
 
 @Module({
-  imports: [PrismaModule, PaymentModule],
+  imports: [PrismaModule, PaymentModule, SystemConfigModule],
   controllers: [WeappAftersaleController, AdminAftersaleController],
   providers: [
     {
