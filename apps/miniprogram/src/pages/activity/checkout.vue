@@ -277,8 +277,6 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    // The create endpoint recalculates all activity economics and quotas again inside a locked
-    // transaction. The preview amount is never trusted as an order price.
     const order = await createActivityOrder(activityId.value, buildCheckoutInput())
     if (order.isZeroPay || order.payAmount === 0) {
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}&payIntent=success&zeroPay=1` })
@@ -395,7 +393,7 @@ onLoad(async (options) => {
 .submit-price { flex: 1; }
 .submit-label { color: $text-secondary; font-size: $font-xs; }
 .submit-amount { margin-left: 8rpx; color: $primary-dark; font-size: 36rpx; font-weight: 900; }
-.submit-btn { width: 260rpx; height: 82rpx; border: 0; border-radius: $radius-round; background: $gradient-primary; color: #fff; font-size: $font-md; font-weight: 900; line-height: 82rpx; }
+.submit-btn { width: 260rpx; height: 82rpx; border: 0; border-radius: $radius-round; background: $gradient-coral; color: #fff; font-size: $font-md; font-weight: 900; line-height: 82rpx; }
 .submit-btn::after { border: 0; }
 .submit-btn[disabled] { opacity: .55; }
 </style>
