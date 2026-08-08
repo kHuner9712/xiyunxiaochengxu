@@ -126,6 +126,7 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
         stock: Math.max(0, Math.min(activityStock, skuStock)),
         limitPerUser: Number(item.limitPerUser || 0),
         sales: Number(item.sales || product.totalSales || 0),
+        fulfillmentType: product.fulfillmentType || item.fulfillmentType || 'delivery',
         sku: skuId ? {
           id: skuId,
           specs: sku.specs ?? null,
