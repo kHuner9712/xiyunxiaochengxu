@@ -4,24 +4,24 @@ export function getAddressList() {
   return get<AddressItem[]>('/weapp/address')
 }
 
-export function getAddressDetail(id: string | number) {
-  return get<AddressItem>(`/weapp/address/${id}`)
+export function getAddressDetail(id: string) {
+  return get<AddressItem>(`/weapp/address/${encodeURIComponent(id)}`)
 }
 
 export function createAddress(data: AddressForm) {
   return post('/weapp/address', data)
 }
 
-export function updateAddress(data: AddressForm & { id: string | number }) {
-  return put(`/weapp/address/${data.id}`, data)
+export function updateAddress(data: AddressForm & { id: string }) {
+  return put(`/weapp/address/${encodeURIComponent(data.id)}`, data)
 }
 
-export function deleteAddress(id: string | number) {
-  return del(`/weapp/address/${id}`)
+export function deleteAddress(id: string) {
+  return del(`/weapp/address/${encodeURIComponent(id)}`)
 }
 
-export function setDefaultAddress(id: string | number) {
-  return put(`/weapp/address/${id}/default`)
+export function setDefaultAddress(id: string) {
+  return put(`/weapp/address/${encodeURIComponent(id)}/default`)
 }
 
 export interface AddressItem {
