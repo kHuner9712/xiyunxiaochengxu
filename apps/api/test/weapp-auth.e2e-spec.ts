@@ -102,14 +102,18 @@ describe('Weapp Auth (e2e)', () => {
       data: { openid: 'test_openid', session_key: 'test_session_key' },
     });
 
-    mockPrisma.user.findFirst.mockResolvedValue(null);
-    mockPrisma.user.create.mockResolvedValue({
+    const createdUser = {
       id: BigInt(1),
       openid: 'test_openid',
       unionId: null,
       status: 1,
       deletedAt: null,
-    });
+      lastLoginAt: new Date(),
+    };
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    mockPrisma.memberLevel.findFirst.mockResolvedValue(null);
+    mockPrisma.user.create.mockResolvedValue(createdUser);
+    mockPrisma.user.update.mockResolvedValue(createdUser);
 
     const res = await request(app.getHttpServer())
       .post('/api/weapp/auth/login')
@@ -119,6 +123,10 @@ describe('Weapp Auth (e2e)', () => {
     expect(res.body.data.token).toBeDefined();
     expect(typeof res.body.data.token).toBe('string');
     expect(res.body.data.isNewUser).toBe(true);
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: BigInt(1) },
+      data: expect.objectContaining({ lastLoginAt: expect.any(Date) }),
+    });
 
     token = res.body.data.token;
   });
