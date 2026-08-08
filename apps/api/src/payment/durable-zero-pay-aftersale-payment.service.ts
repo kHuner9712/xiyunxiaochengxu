@@ -23,7 +23,10 @@ interface ZeroPayRefundSideEffectCandidate {
 }
 
 interface RefundBenefitEffectCapability {
-  revokeAfterRefundSuccess(orderId: bigint | string, aftersaleId: bigint | string): Promise<unknown>;
+  assertRefundable(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  freezeForRefund(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  restoreAfterRefundClosed(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  revokeAfterRefundSuccess(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
 }
 
 interface RefundGroupBuyEffectCapability {
