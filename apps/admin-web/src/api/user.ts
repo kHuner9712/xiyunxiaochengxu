@@ -4,19 +4,19 @@ export const userApi = {
   getList(params: { page: number; pageSize: number; nickname?: string; phone?: string; memberLevel?: number }) {
     return request.get('/admin/user/list', { params })
   },
-  getDetail(id: number) {
-    return request.get(`/admin/user/detail/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/user/detail/${encodeURIComponent(id)}`)
   },
-  updateStatus(id: number, status: number) {
-    return request.put(`/admin/user/status/${id}`, { status })
+  updateStatus(id: string, status: number) {
+    return request.put(`/admin/user/status/${encodeURIComponent(id)}`, { status })
   },
-  adjustLevel(id: number, memberLevelId: number, reason?: string) {
-    return request.put(`/admin/user/level/${id}`, { memberLevelId, reason })
+  adjustLevel(id: string, memberLevelId: string, reason?: string) {
+    return request.put(`/admin/user/level/${encodeURIComponent(id)}`, { memberLevelId, reason })
   },
-  adjustPoints(id: number, points: number, reason: string) {
-    return request.put(`/admin/user/points/${id}`, { points, reason })
+  adjustPoints(id: string, points: number, reason: string) {
+    return request.put(`/admin/user/points/${encodeURIComponent(id)}`, { points, reason })
   },
-  getBabyList(params: { page: number; pageSize: number; name?: string; userId?: number }) {
+  getBabyList(params: { page: number; pageSize: number; name?: string; userId?: string }) {
     return request.get('/admin/baby-profile', { params })
   },
 }
