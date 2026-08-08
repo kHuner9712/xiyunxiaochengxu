@@ -38,10 +38,10 @@ describe('ProductionAuthService', () => {
       signAsync: jest.fn().mockResolvedValue('access-token'),
     };
     const config: any = {
-      get: jest.fn((key: string) => {
+      get: jest.fn((key: string, defaultValue?: unknown) => {
         if (key === 'WECHAT_APP_ID') return 'app-id';
         if (key === 'WECHAT_APP_SECRET') return 'app-secret';
-        return undefined;
+        return defaultValue;
       }),
     };
     const redis: any = {
