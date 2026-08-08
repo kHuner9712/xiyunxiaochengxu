@@ -58,14 +58,18 @@ describe('production operation closure contracts', () => {
     expect(groupPage).not.toContain('参与此团\n        </button>\n      </view>\n      <button');
   });
 
-  it('keeps refund side effects closed for benefits, settlement and group-buy compensation', () => {
+  it('keeps refund side effects closed for benefits, settlement, group-buy and cumulative point conservation', () => {
     const payment = read('apps/api/src/payment/production-payment.service.ts');
+    const pointConservation = read('apps/api/src/payment/point-conserving-payment.service.ts');
     const benefits = read('apps/api/src/benefit-package/production-benefit-package.service.ts');
     const settlement = read('apps/api/src/merchant-settlement/production-merchant-settlement.service.ts');
 
     expect(payment).toContain('revokeAfterRefundSuccess');
     expect(payment).toContain('reverseSalesCommissionAfterRefund');
     expect(payment).toContain('handleRefundSuccess');
+    expect(pointConservation).toContain('reconcileRefundPointConservation');
+    expect(pointConservation).toContain('outstandingRewardClawback');
+    expect(pointConservation).toContain('refund_points_conservation');
     expect(benefits).toContain("status: 'refund_pending'");
     expect(benefits).toContain("data: { status: 'refunded' }");
     expect(settlement).toContain('sales_referral_refund_debt');
@@ -83,7 +87,7 @@ describe('production operation closure contracts', () => {
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
 
-    expect(paymentModule).toContain('CancellationSafeStockSafePaymentService');
+    expect(paymentModule).toContain('PointConservingPaymentService');
     expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
     expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
     expect(orderModule).toContain('CancellationSafeProductionOrderService');
