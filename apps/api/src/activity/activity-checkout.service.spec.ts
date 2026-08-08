@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { ActivityCheckoutService } from './activity-checkout.service';
 
 function createFixture() {
