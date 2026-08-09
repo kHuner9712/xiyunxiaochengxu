@@ -59,6 +59,56 @@ describe('calculateOrderItemRefundCap promotional multi-item allocation', () => 
     expect(calculateOrderItemRefundCap(order, secondItem).maxRefundableAmount).toBe(3000);
   });
 
+  it('reuses persisted bundle subtotals so remainder cents are fully refundable', () => {
+    const firstItem = {
+      id: 23n,
+      subtotal: 18461,
+      activityDiscount: 1539,
+      originalPrice: 10000,
+      quantity: 2,
+    };
+    const secondItem = {
+      id: 24n,
+      subtotal: 5539,
+      activityDiscount: 461,
+      originalPrice: 3000,
+      quantity: 2,
+    };
+    const order = {
+      totalAmount: 26000,
+      activityDiscountAmount: 2000,
+      freightAmount: 0,
+      payAmount: 24000,
+      orderItems: [firstItem, secondItem],
+      aftersaleOrders: [],
+      orderRefunds: [],
+    };
+
+    const firstCap = calculateOrderItemRefundCap(order, firstItem).maxRefundableAmount;
+    const secondCap = calculateOrderItemRefundCap(order, secondItem).maxRefundableAmount;
+    expect(firstCap).toBe(18461);
+    expect(secondCap).toBe(5539);
+    expect(firstCap + secondCap).toBe(24000);
+  });
+
+  it('distributes order-level discount rounding residue instead of losing cents', () => {
+    const firstItem = { id: 25n, subtotal: 10000, activityDiscount: 0, quantity: 1 };
+    const secondItem = { id: 26n, subtotal: 5000, activityDiscount: 0, quantity: 1 };
+    const order = {
+      totalAmount: 15000,
+      couponAmount: 1,
+      freightAmount: 0,
+      payAmount: 14999,
+      orderItems: [firstItem, secondItem],
+      aftersaleOrders: [],
+      orderRefunds: [],
+    };
+
+    const firstCap = calculateOrderItemRefundCap(order, firstItem).maxRefundableAmount;
+    const secondCap = calculateOrderItemRefundCap(order, secondItem).maxRefundableAmount;
+    expect(firstCap + secondCap).toBe(14999);
+  });
+
   it('still caps remaining refund by prior successful or in-flight refunds', () => {
     const item = { id: 31n, subtotal: 5000, activityDiscount: 0, quantity: 1 };
     const order = {
