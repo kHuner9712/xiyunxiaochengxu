@@ -10,11 +10,11 @@ import { SaveRecommendationDto } from './dto/save-recommendation.dto';
 const RECOMMENDATION_SECTION_TYPE = 'recommendation';
 const RECOMMENDATION_TYPES = new Set([1, 2, 3]);
 
-interface StoredRecommendationItem {
+export type StoredRecommendationItem = {
   targetId: string;
   targetName: string;
   sort: number;
-}
+};
 
 @Injectable()
 export class RecommendationService {
