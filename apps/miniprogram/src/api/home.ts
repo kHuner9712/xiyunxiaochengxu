@@ -2,6 +2,7 @@ import { get } from '@/utils/request'
 
 export function getHomeData() {
   return get<{
+    brand: StorefrontBrand
     banners: BannerItem[]
     quickEntries: QuickEntry[]
     announcement?: string
@@ -15,6 +16,11 @@ export function getHomeData() {
 
 export function getGuessProducts(params: { page: number; pageSize: number }) {
   return get<{ list: ProductItem[]; total: number }>('/weapp/home/guess', params)
+}
+
+export interface StorefrontBrand {
+  name: string
+  logo: string
 }
 
 export interface BannerItem {
