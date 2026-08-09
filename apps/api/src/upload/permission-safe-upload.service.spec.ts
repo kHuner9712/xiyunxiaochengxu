@@ -161,10 +161,10 @@ describe('PermissionSafeUploadService private-file access', () => {
     await openAndClose(result.stream);
   });
 
-  it('requires a supplier reference for product:supplier access to business licenses', async () => {
+  it('requires a supplier business reference for supplier access to business licenses', async () => {
     prisma.fileAsset.findFirst.mockResolvedValue(privateFile('business_license'));
     prisma.adminUserRole.findMany.mockResolvedValue([
-      activeRole('supplier_operator', ['product:supplier']),
+      activeRole('supplier_operator', ['supplier:list']),
     ]);
     prisma.supplier.findFirst.mockResolvedValue({ id: 8n });
 
