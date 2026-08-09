@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
-import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { ActivityMultiItemCheckoutService } from './activity-multi-item-checkout.service';
 import { ActivityCheckoutDto } from './dto/activity-checkout.dto';
