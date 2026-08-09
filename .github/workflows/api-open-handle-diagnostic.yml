@@ -83,7 +83,7 @@ jobs:
           path: |
             api-open-handles.log
             api-open-handles-isolation.log
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 1
 
       - name: Fail when aggregate open-handle diagnostic failed
