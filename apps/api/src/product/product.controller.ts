@@ -35,13 +35,13 @@ export class AdminProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Get('list')
-  @RequirePermission('product:list')
+  @RequirePermission('product:list', 'product:create', 'product:edit', 'marketing:activity')
   async list(@Query() dto: ProductQueryDto) {
     return this.productService.findAllAdmin(dto);
   }
 
   @Get('detail/:id')
-  @RequirePermission('product:list')
+  @RequirePermission('product:list', 'product:edit', 'marketing:activity')
   async detail(@Param('id') id: string) {
     return this.productService.findAdminById(id);
   }
