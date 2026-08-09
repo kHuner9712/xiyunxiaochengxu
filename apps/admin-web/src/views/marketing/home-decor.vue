@@ -99,7 +99,7 @@ function addKeyword() {
 
 async function handleUploadNavIcon(options: any, row: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
+    const res = await uploadApi.uploadImage(options.file, 'home-decor')
     row.icon = res.data.url
   } catch {}
 }
