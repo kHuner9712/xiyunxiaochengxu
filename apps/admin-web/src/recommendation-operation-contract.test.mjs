@@ -19,6 +19,7 @@ const homeDecorController = read('apps/api/src/home/admin-home-decor.controller.
 const customerPage = read('apps/admin-web/src/views/system/customer-service.vue')
 const customerController = read('apps/api/src/system-config/system-config.controller.ts')
 const customerService = read('apps/api/src/system-config/system-config.service.ts')
+const productEdit = read('apps/admin-web/src/views/product/edit.vue')
 
 test('recommendation item management has a real candidate selection flow', () => {
   assert.match(page, /v-model="addItemVisible"/)
@@ -73,4 +74,19 @@ test('customer service config cannot silently save unusable or malformed public 
   assert.match(customerPage, /客服二维码上传失败/)
   assert.match(customerPage, /客服配置保存失败/)
   assert.doesNotMatch(customerPage, /catch \{\}/)
+})
+
+test('product main image and gallery stay independent during upload and removal', () => {
+  assert.match(productEdit, /:http-request="handleUploadMainImage"/)
+  assert.match(productEdit, /:http-request="handleUploadGalleryImage"/)
+  assert.match(productEdit, /function handleUploadMainImage/)
+  assert.match(productEdit, /form\.mainImage = uploadedUrl/)
+  assert.match(productEdit, /function handleUploadGalleryImage/)
+  assert.match(productEdit, /form\.images\.push\(uploadedUrl\)/)
+  assert.match(productEdit, /function handleRemoveImage/)
+  assert.doesNotMatch(productEdit, /syncMainImageAfterImagesChanged/)
+  const removeImageBody = productEdit.match(/function handleRemoveImage\(file: any\) \{([\s\S]*?)\n\}/)?.[1] || ''
+  assert.doesNotMatch(removeImageBody, /mainImage/)
+  assert.match(productEdit, /商品主图上传失败/)
+  assert.match(productEdit, /商品图片上传失败/)
 })
