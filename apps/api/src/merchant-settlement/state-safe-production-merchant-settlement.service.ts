@@ -93,7 +93,7 @@ export class StateSafeProductionMerchantSettlementService extends RefundSafeProd
         },
       });
 
-      return tx.merchantCommissionRecord.findUnique({ where: { id: recordId } });
+      return tx.merchantCommissionRecord.findUniqueOrThrow({ where: { id: recordId } });
     });
   }
 
@@ -248,7 +248,7 @@ export class StateSafeProductionMerchantSettlementService extends RefundSafeProd
       });
       if (claimed.count !== 1) throw new BadRequestException('批次状态已变化，请刷新后重试');
 
-      return tx.merchantSettlementBatch.findUnique({ where: { id: batchId } });
+      return tx.merchantSettlementBatch.findUniqueOrThrow({ where: { id: batchId } });
     });
   }
 
@@ -308,7 +308,7 @@ export class StateSafeProductionMerchantSettlementService extends RefundSafeProd
         },
       });
 
-      return tx.merchantSettlementBatch.findUnique({ where: { id: batchId } });
+      return tx.merchantSettlementBatch.findUniqueOrThrow({ where: { id: batchId } });
     });
   }
 
@@ -325,6 +325,23 @@ export class StateSafeProductionMerchantSettlementService extends RefundSafeProd
         throw new BadRequestException('批次包含已结算明细，不能取消');
       }
 
+      const inclusionEvents = await tx.businessEvent.findMany({
+        where: {
+          eventType: INCLUDED_EVENT,
+          bizType: BATCH_BIZ_TYPE,
+          bizId: batchId.toString(),
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      const inclusionByRecordId = new Map<string, Record<string, any>>();
+      for (const event of inclusionEvents) {
+        const payload = (event.payload ?? {}) as Record<string, any>;
+        const commissionRecordId = String(payload.commissionRecordId ?? '');
+        if (commissionRecordId && !inclusionByRecordId.has(commissionRecordId)) {
+          inclusionByRecordId.set(commissionRecordId, payload);
+        }
+      }
+
       const now = new Date();
       const batchClaim = await tx.merchantSettlementBatch.updateMany({
         where: { id: batchId, status: context.batch.status, deletedAt: null },
@@ -338,18 +355,8 @@ export class StateSafeProductionMerchantSettlementService extends RefundSafeProd
 
       for (const item of context.items) {
         const record = context.records.get(item.commissionRecordId.toString()) ?? null;
-        const inclusion = await tx.businessEvent.findFirst({
-          where: {
-            eventType: INCLUDED_EVENT,
-            bizType: BATCH_BIZ_TYPE,
-            bizId: batchId.toString(),
-          },
-          orderBy: { createdAt: 'asc' },
-        });
-        const inclusionPayload = (inclusion?.payload ?? {}) as Record<string, any>;
-        let originalRecordStatus = inclusionPayload.commissionRecordId === item.commissionRecordId.toString()
-          ? String(inclusionPayload.originalRecordStatus || '')
-          : '';
+        const inclusionPayload = inclusionByRecordId.get(item.commissionRecordId.toString()) ?? {};
+        let originalRecordStatus = String(inclusionPayload.originalRecordStatus || '');
         if (!originalRecordStatus && record) {
           originalRecordStatus = record.confirmedAt && record.confirmedAt <= context.batch.createdAt
             ? 'confirmed'
@@ -398,7 +405,7 @@ export class StateSafeProductionMerchantSettlementService extends RefundSafeProd
         await tx.merchantSettlementItem.delete({ where: { id: item.id } });
       }
 
-      return tx.merchantSettlementBatch.findUnique({ where: { id: batchId } });
+      return tx.merchantSettlementBatch.findUniqueOrThrow({ where: { id: batchId } });
     });
   }
 
