@@ -45,6 +45,8 @@ function createFixture() {
     pickupStore: { findFirst: jest.fn() },
     $queryRaw: jest.fn()
       .mockResolvedValueOnce([{ quantity: 1 }])
+      .mockResolvedValueOnce([{ quantity: 0 }])
+      .mockResolvedValueOnce([{ quantity: 1 }])
       .mockResolvedValueOnce([{ quantity: 0 }]),
   };
   const tx: any = {
@@ -142,6 +144,7 @@ describe('ActivityCheckoutService', () => {
     expect(result.payAmount).toBe(2600);
     expect(result.items[0].price).toBe(800);
     expect(result.promotionStackingDisabled).toBe(true);
+    expect(result.maxQuantity).toBe(2);
   });
 
   it('uses highest matched full-reduction threshold and never trusts a client price', async () => {
@@ -159,6 +162,7 @@ describe('ActivityCheckoutService', () => {
     expect(result.activityDiscountAmount).toBe(300);
     expect(result.items[0].price).toBe(1000);
     expect(result.payAmount).toBe(2700);
+    expect(result.maxQuantity).toBe(2);
   });
 
   it('routes full-gift preview through the real multi-item checkout service', async () => {
