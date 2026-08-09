@@ -126,4 +126,26 @@ describe('AdminPrivilegeService', () => {
 
     await expect(service.assertCanAssignRoles('1', ['99'])).resolves.toBeUndefined();
   });
+
+  it('allows an active super admin to manage an existing disabled role', async () => {
+    const prisma: any = {
+      adminUser: {
+        findFirst: jest.fn().mockResolvedValue(
+          operator({ super: true, permissions: [] }),
+        ),
+      },
+      adminRole: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 88n,
+          code: 'legacy_operator',
+          name: '已停用旧角色',
+          status: 0,
+          adminRolePermissions: [],
+        }),
+      },
+    };
+    const service = new AdminPrivilegeService(prisma);
+
+    await expect(service.assertCanMutateRole('1', '88')).resolves.toBeUndefined();
+  });
 });
