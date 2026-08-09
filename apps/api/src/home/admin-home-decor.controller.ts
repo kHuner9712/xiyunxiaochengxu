@@ -21,6 +21,13 @@ const HOME_ENTRY_LINK = /^(?:\/pages\/[A-Za-z0-9_./?=&%+\-]+|gift|discount|point
 const MAX_HOME_KEYWORDS = 20;
 const MAX_HOME_NAV_ICONS = 20;
 
+type NormalizedNavIcon = {
+  icon: string;
+  name: string;
+  linkUrl: string;
+  sort: number;
+};
+
 class HomeDecorNavIconDto {
   @IsString()
   @IsNotEmpty()
@@ -109,16 +116,16 @@ export class AdminHomeDecorController {
 
   private normalizeStoredConfig(value: any) {
     const hotKeywords = this.normalizeKeywords(Array.isArray(value?.hotKeywords) ? value.hotKeywords : []);
-    const navIcons = (Array.isArray(value?.navIcons) ? value.navIcons : [])
+    const navIcons: NormalizedNavIcon[] = (Array.isArray(value?.navIcons) ? value.navIcons : [])
       .slice(0, MAX_HOME_NAV_ICONS)
-      .map((item: any, index: number) => {
+      .map((item: unknown, index: number): NormalizedNavIcon | null => {
         try {
           return this.normalizeNavIcon(item, index);
         } catch {
           return null;
         }
       })
-      .filter((item): item is { icon: string; name: string; linkUrl: string; sort: number } => !!item);
+      .filter((item: NormalizedNavIcon | null): item is NormalizedNavIcon => item !== null);
     const announcement = typeof value?.announcement === 'string'
       ? value.announcement.trim().slice(0, 500)
       : '';
@@ -138,11 +145,14 @@ export class AdminHomeDecorController {
     return normalized;
   }
 
-  private normalizeNavIcon(value: any, index: number) {
-    const icon = String(value?.icon || '').trim();
-    const name = String(value?.name || '').trim();
-    const linkUrl = String(value?.linkUrl || '').trim();
-    const sort = Number(value?.sort ?? 0);
+  private normalizeNavIcon(value: unknown, index: number): NormalizedNavIcon {
+    const record = value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+    const icon = String(record.icon || '').trim();
+    const name = String(record.name || '').trim();
+    const linkUrl = String(record.linkUrl || '').trim();
+    const sort = Number(record.sort ?? 0);
     if (!icon || icon.length > 500) throw new BadRequestException(`第${index + 1}个导航图标地址无效`);
     if (!name || name.length > 30) throw new BadRequestException(`第${index + 1}个导航名称无效`);
     if (!linkUrl || linkUrl.length > 200 || !HOME_ENTRY_LINK.test(linkUrl)) {
