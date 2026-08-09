@@ -11,16 +11,26 @@ function createMockPrisma() {
   };
 }
 
+function createMockRedis() {
+  return {
+    del: jest.fn() as any,
+  };
+}
+
 describe('AdminHomeDecorController', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
+  let redis: ReturnType<typeof createMockRedis>;
   let controller: AdminHomeDecorController;
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    controller = new AdminHomeDecorController(prisma as any);
+    redis = createMockRedis();
+    redis.del.mockResolvedValue(undefined);
+    controller = new AdminHomeDecorController(prisma as any, redis as any);
+    jest.spyOn(controller['logger'], 'warn').mockImplementation(() => {});
   });
 
-  it('normalizes keywords and navigation entries before persistence', async () => {
+  it('normalizes keywords and navigation entries before persistence and invalidates search hot cache', async () => {
     prisma.systemConfig.upsert.mockResolvedValue({ id: 7n });
 
     const result: any = await controller.updateConfig({
@@ -50,6 +60,22 @@ describe('AdminHomeDecorController', () => {
         valueType: 'json',
       }),
     }));
+    expect(redis.del).toHaveBeenCalledWith('search:hot_keywords');
+  });
+
+  it('keeps a successful database update even when cache invalidation fails', async () => {
+    prisma.systemConfig.upsert.mockResolvedValue({ id: 8n });
+    redis.del.mockRejectedValue(new Error('redis unavailable'));
+
+    const result: any = await controller.updateConfig({
+      hotKeywords: ['奶粉'],
+      navIcons: [],
+      announcement: '',
+    } as any);
+
+    expect(result.id).toBe('8');
+    expect(redis.del).toHaveBeenCalledWith('search:hot_keywords');
+    expect(controller['logger'].warn).toHaveBeenCalledWith(expect.stringContaining('缓存失效失败'));
   });
 
   it('rejects invalid navigation targets before writing configuration', async () => {
@@ -65,6 +91,7 @@ describe('AdminHomeDecorController', () => {
     } as any)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(prisma.systemConfig.upsert).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
   });
 
   it('filters malformed historical navigation entries when reading config', async () => {
