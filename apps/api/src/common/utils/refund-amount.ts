@@ -34,6 +34,77 @@ function getRefundAllocationBasis(item: any): number {
   return subtotal + activityDiscount;
 }
 
+/**
+ * Allocate the order's merchandise cash amount to individual order items in integer cents.
+ *
+ * When persisted subtotals already add up exactly to the merchandise cash paid (for example the
+ * multi-item activity checkout), they are the authoritative allocation and must be reused. This
+ * preserves the exact remainder-cent decision made when the order was created.
+ *
+ * Otherwise allocate proportionally by economic basis and distribute rounding residue using the
+ * largest-remainder method. Independent Math.floor() calls are not acceptable here because their
+ * totals can be one or more cents below the amount the customer actually paid.
+ */
+function allocateRefundCaps(orderItems: any[], nonFreightPaidAmount: number) {
+  const persistedSubtotalTotal = orderItems.reduce(
+    (sum, item) => sum + Math.max(0, toAmount(item?.subtotal)),
+    0,
+  );
+  if (persistedSubtotalTotal === nonFreightPaidAmount) {
+    return new Map(
+      orderItems.map((item) => [
+        String(item?.id),
+        Math.max(0, toAmount(item?.subtotal)),
+      ]),
+    );
+  }
+
+  const entries = orderItems.map((item, index) => ({
+    id: String(item?.id),
+    index,
+    cap: Math.max(0, toAmount(item?.subtotal)),
+    basis: getRefundAllocationBasis(item),
+    allocation: 0,
+    remainder: 0,
+  }));
+  const totalBasis = entries.reduce((sum, entry) => sum + entry.basis, 0);
+  if (totalBasis <= 0 || nonFreightPaidAmount <= 0) {
+    return new Map(entries.map((entry) => [entry.id, 0]));
+  }
+
+  let allocated = 0;
+  for (const entry of entries) {
+    if (entry.basis <= 0 || entry.cap <= 0) continue;
+    const numerator = nonFreightPaidAmount * entry.basis;
+    const floor = Math.floor(numerator / totalBasis);
+    entry.allocation = Math.min(entry.cap, floor);
+    entry.remainder = numerator % totalBasis;
+    allocated += entry.allocation;
+  }
+
+  let residue = Math.max(0, nonFreightPaidAmount - allocated);
+  const candidates = entries
+    .filter((entry) => entry.basis > 0 && entry.allocation < entry.cap)
+    .sort((a, b) => {
+      if (a.remainder !== b.remainder) return b.remainder - a.remainder;
+      return a.index - b.index;
+    });
+
+  while (residue > 0 && candidates.length > 0) {
+    let progressed = false;
+    for (const entry of candidates) {
+      if (residue <= 0) break;
+      if (entry.allocation >= entry.cap) continue;
+      entry.allocation += 1;
+      residue -= 1;
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+
+  return new Map(entries.map((entry) => [entry.id, entry.allocation]));
+}
+
 export function calculateOrderItemRefundCap(order: any, orderItem: any, currentAftersaleId?: bigint | string) {
   const orderItems = getOrderItems(order, orderItem);
   const totalAmount = Math.max(
@@ -54,22 +125,10 @@ export function calculateOrderItemRefundCap(order: any, orderItem: any, currentA
   const itemSubtotal = Math.max(0, toAmount(orderItem?.subtotal));
   const itemIsWholeOrder = orderItems.length === 1 && sameId(orderItems[0]?.id, orderItem?.id);
 
-  const allocationBasisByItem = orderItems.map((item) => ({
-    id: item?.id,
-    basis: getRefundAllocationBasis(item),
-  }));
-  const totalAllocationBasis = allocationBasisByItem.reduce((sum, item) => sum + item.basis, 0);
-  const currentAllocationBasis = allocationBasisByItem.find((item) => sameId(item.id, orderItem?.id))?.basis
-    ?? getRefundAllocationBasis(orderItem);
-
+  const refundCapsByItem = allocateRefundCaps(orderItems, nonFreightPaidAmount);
   const maxRefundableAmount = itemIsWholeOrder
     ? payAmount
-    : Math.min(
-        itemSubtotal,
-        totalAllocationBasis > 0
-          ? Math.floor(nonFreightPaidAmount * currentAllocationBasis / totalAllocationBasis)
-          : 0,
-      );
+    : Math.min(itemSubtotal, refundCapsByItem.get(String(orderItem?.id)) ?? 0);
 
   const aftersalesById = new Map<string, any>(
     (Array.isArray(order?.aftersaleOrders) ? order.aftersaleOrders : [])
