@@ -116,7 +116,7 @@ export class AdminPrivilegeService {
         adminRolePermissions: { include: { permission: true } },
       },
     });
-    if (!role || role.status !== 1) throw new NotFoundException('角色不存在或已停用');
+    if (!role) throw new NotFoundException('角色不存在');
 
     if (!scope.isSuper) {
       if (role.code === 'super_admin') {
