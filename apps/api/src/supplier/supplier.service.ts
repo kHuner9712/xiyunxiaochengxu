@@ -27,9 +27,30 @@ export class SupplierService {
       }),
       this.prisma.supplier.count({ where }),
     ]);
+    const supplierIds = list.map((supplier) => supplier.id);
+    const productCounts = supplierIds.length
+      ? await this.prisma.product.groupBy({
+          by: ['supplierId'],
+          where: {
+            supplierId: { in: supplierIds },
+            deletedAt: null,
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const productCountMap = new Map(
+      productCounts
+        .filter((row) => row.supplierId !== null)
+        .map((row) => [row.supplierId!.toString(), row._count._all]),
+    );
+
     this.logger.log(`管理员查询供应商列表，共${total}条`);
     return paginate(
-      list.map((supplier) => ({ ...supplier, id: supplier.id.toString() })),
+      list.map((supplier) => ({
+        ...supplier,
+        id: supplier.id.toString(),
+        productCount: productCountMap.get(supplier.id.toString()) ?? 0,
+      })),
       total,
       dto.page,
       dto.pageSize,
