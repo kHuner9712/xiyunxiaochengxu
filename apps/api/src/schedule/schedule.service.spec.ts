@@ -1,5 +1,8 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-jest.mock('@nestjs/schedule', () => ({ Cron: () => () => {} }));
+jest.mock('@nestjs/schedule', () => ({
+  Cron: () => () => {},
+  SchedulerRegistry: class SchedulerRegistry {},
+}));
 import { ScheduleService } from './schedule.service';
 
 function createRedisService() {
@@ -75,6 +78,14 @@ function createBenefitPackageService() {
   };
 }
 
+function createSchedulerRegistry() {
+  const stop = jest.fn();
+  return {
+    stop,
+    getCronJobs: jest.fn(() => new Map([['schedule-test', { stop }]])),
+  };
+}
+
 describe('ScheduleService', () => {
   let service: ScheduleService;
   let redisService: ReturnType<typeof createRedisService>;
@@ -87,6 +98,7 @@ describe('ScheduleService', () => {
   let merchantSettlementService: ReturnType<typeof createMerchantSettlementService>;
   let shareService: ReturnType<typeof createShareService>;
   let benefitPackageService: ReturnType<typeof createBenefitPackageService>;
+  let schedulerRegistry: ReturnType<typeof createSchedulerRegistry>;
 
   beforeEach(() => {
     redisService = createRedisService();
@@ -99,6 +111,7 @@ describe('ScheduleService', () => {
     merchantSettlementService = createMerchantSettlementService();
     shareService = createShareService();
     benefitPackageService = createBenefitPackageService();
+    schedulerRegistry = createSchedulerRegistry();
     redisService.setNX.mockImplementation(async () => true);
     redisService.releaseLockWithLua.mockImplementation(async () => true);
     prismaService.$queryRaw.mockImplementation(async () => []);
@@ -132,8 +145,10 @@ describe('ScheduleService', () => {
       merchantSettlementService as any,
       shareService as any,
       benefitPackageService as any,
+      schedulerRegistry as any,
     );
     jest.spyOn((service as any).logger, 'log').mockImplementation(() => {});
+    jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
     jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
   });
 
@@ -286,6 +301,48 @@ describe('ScheduleService', () => {
     expect(shareService.reconcileMatureFirstPaidRewards).toHaveBeenCalled();
     expect(redisService.releaseLockWithLua).toHaveBeenCalledWith(
       'schedule:mature_referral_rewards',
+      expect.any(String),
+    );
+  });
+
+  it('关机时停止 Cron 并等待已持有锁的任务释放后才完成', async () => {
+    const lockValue = await (service as any).acquireLock('schedule:shutdown-test', 30);
+    expect(lockValue).toEqual(expect.any(String));
+
+    let shutdownCompleted = false;
+    const shutdown = service.onModuleDestroy().then(() => {
+      shutdownCompleted = true;
+    });
+    await Promise.resolve();
+
+    expect(schedulerRegistry.stop).toHaveBeenCalledTimes(1);
+    expect(shutdownCompleted).toBe(false);
+
+    await (service as any).releaseLock('schedule:shutdown-test', lockValue);
+    await shutdown;
+
+    expect(shutdownCompleted).toBe(true);
+    const setCallsBefore = redisService.setNX.mock.calls.length;
+    await expect((service as any).acquireLock('schedule:after-shutdown', 30)).resolves.toBeNull();
+    expect(redisService.setNX).toHaveBeenCalledTimes(setCallsBefore);
+  });
+
+  it('SIGTERM 落在 SET NX 等待期间时释放刚拿到的锁且不启动新任务', async () => {
+    let resolveSetNX: (value: boolean) => void = () => undefined;
+    const pendingSetNX = new Promise<boolean>((resolve) => {
+      resolveSetNX = resolve;
+    });
+    redisService.setNX.mockImplementation(() => pendingSetNX as any);
+
+    const acquiring = (service as any).acquireLock('schedule:in-flight', 30);
+    const shutdown = service.onModuleDestroy();
+    resolveSetNX(true);
+
+    await expect(acquiring).resolves.toBeNull();
+    await shutdown;
+    expect(redisService.releaseLockWithLua).toHaveBeenCalledTimes(1);
+    expect(redisService.releaseLockWithLua).toHaveBeenCalledWith(
+      'schedule:in-flight',
       expect.any(String),
     );
   });
