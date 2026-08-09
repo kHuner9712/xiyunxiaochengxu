@@ -86,7 +86,10 @@ export class PermissionSafeUploadService extends UploadService {
     return super.findPrivateById(id, currentUser);
   }
 
-  private async assertAdminHasAnyPermission(adminId: unknown, allowed: string[]) {
+  private async assertAdminHasAnyPermission(
+    adminId: string | number | bigint | null | undefined,
+    allowed: string[],
+  ) {
     const adminUserId = parsePositiveBigIntId(adminId, '管理员');
     const assignments = await this.permissionPrisma.adminUserRole.findMany({
       where: { adminUserId },
