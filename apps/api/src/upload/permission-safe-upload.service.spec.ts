@@ -1,11 +1,16 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { PermissionSafeUploadService, allowedAdminPermissionsForGroup } from './permission-safe-upload.service';
+import {
+  PermissionSafeUploadService,
+  allowedAdminPermissionsForGroup,
+  USER_PRIVATE_UPLOAD_GROUPS,
+  USER_PUBLIC_UPLOAD_GROUPS,
+} from './permission-safe-upload.service';
 import { UploadModule } from './upload.module';
 import { UploadService } from './upload.service';
 
@@ -13,6 +18,7 @@ function createMockPrisma() {
   return {
     fileAsset: {
       findFirst: jest.fn() as any,
+      create: jest.fn() as any,
     },
     adminUserRole: {
       findMany: jest.fn() as any,
@@ -70,6 +76,24 @@ describe('PermissionSafeUploadService private-file access', () => {
     };
   }
 
+  function jpegUpload(size = 4): Express.Multer.File {
+    const buffer = size === 4
+      ? Buffer.from([0xff, 0xd8, 0xff, 0xd9])
+      : Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(size - 3)]);
+    return {
+      fieldname: 'file',
+      originalname: 'avatar.jpg',
+      encoding: '7bit',
+      mimetype: 'image/jpeg',
+      size,
+      buffer,
+      destination: '',
+      filename: '',
+      path: '',
+      stream: undefined as any,
+    };
+  }
+
   it('keeps user access owner-only', async () => {
     prisma.fileAsset.findFirst.mockResolvedValue(privateFile('aftersale', 10n));
     const own = await service.findPrivateById('1', { id: '10', roleType: 'user' });
@@ -116,6 +140,52 @@ describe('PermissionSafeUploadService private-file access', () => {
     ]);
     const superAdminResult = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
     superAdminResult.stream.destroy();
+  });
+
+  it('only permits explicit user upload purposes and image content', async () => {
+    expect([...USER_PUBLIC_UPLOAD_GROUPS]).toEqual(expect.arrayContaining(['user-avatar', 'baby-avatar']));
+    expect([...USER_PRIVATE_UPLOAD_GROUPS]).toContain('aftersale');
+
+    await expect(service.uploadFile(jpegUpload(), '10', 'user')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.uploadFile(jpegUpload(), '10', 'user', 'content-cover'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.uploadFile(
+        { ...jpegUpload(), originalname: 'avatar.mp4', mimetype: 'video/mp4' },
+        '10',
+        'user',
+        'user-avatar',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.uploadFile(jpegUpload(10 * 1024 * 1024 + 1), '10', 'user', 'user-avatar'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('keeps public avatar uploads and private aftersale uploads functional', async () => {
+    prisma.fileAsset.create.mockImplementation(async ({ data }: any) => ({
+      id: data.groupName === 'aftersale' ? 2n : 1n,
+      ...data,
+      createdAt: new Date(),
+    }));
+
+    const avatar = await service.uploadFile(jpegUpload(), '10', 'user', 'baby-avatar');
+    expect(avatar.groupName).toBe('baby-avatar');
+    expect(avatar.url).toMatch(/^\/uploads\/public\//);
+
+    const aftersale = await service.uploadFile(jpegUpload(), '10', 'user', 'aftersale');
+    expect(aftersale.groupName).toBe('aftersale');
+    expect(aftersale.url).toBe('/api/common/file/private/2');
+  });
+
+  it('does not let admins bypass admin upload permissions through the common endpoint', async () => {
+    prisma.adminUserRole.findMany.mockResolvedValue([
+      activeRole('content_editor', ['content:list']),
+    ]);
+    await expect(
+      service.uploadFile(jpegUpload(), '99', 'admin', 'content-cover'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('uses PermissionSafeUploadService as the production UploadService provider', async () => {
