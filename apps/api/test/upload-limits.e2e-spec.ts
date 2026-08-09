@@ -76,21 +76,23 @@ describe('Upload limits and MIME guard (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/common/file/upload')
       .set('Authorization', `Bearer ${token()}`)
-      .attach('file', Buffer.alloc(52428801), { filename: 'big.jpg', contentType: 'image/jpeg' });
+      .field('groupName', 'user-avatar')
+      .attach('file', Buffer.alloc(10 * 1024 * 1024 + 1), { filename: 'big.jpg', contentType: 'image/jpeg' });
 
     expect(res.status).toBe(413);
     expect(res.body.message).toContain('File too large');
     expect(mockPrisma.fileAsset.create).not.toHaveBeenCalled();
   });
 
-  it('错误 MIME 被 Multer 层 400 拒绝', async () => {
+  it('错误 MIME 被 common Multer 图片白名单 400 拒绝', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/common/file/upload')
       .set('Authorization', `Bearer ${token()}`)
+      .field('groupName', 'user-avatar')
       .attach('file', Buffer.from('<svg></svg>'), { filename: 'bad.svg', contentType: 'image/svg+xml' });
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toContain('不支持的MIME类型');
+    expect(res.body.message).toContain('用户上传仅支持');
     expect(mockPrisma.fileAsset.create).not.toHaveBeenCalled();
   });
 
@@ -99,6 +101,7 @@ describe('Upload limits and MIME guard (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/common/file/upload')
       .set('Authorization', `Bearer ${token()}`)
+      .field('groupName', 'user-avatar')
       .attach('file', jpegMagic, { filename: 'bad.exe', contentType: 'image/jpeg' });
 
     expect(res.status).toBe(400);
@@ -111,6 +114,7 @@ describe('Upload limits and MIME guard (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/common/file/upload')
       .set('Authorization', `Bearer ${token()}`)
+      .field('groupName', 'user-avatar')
       .attach('file', pdfMagic, { filename: 'bad.jpg', contentType: 'image/jpeg' });
 
     expect(res.status).toBe(400);
