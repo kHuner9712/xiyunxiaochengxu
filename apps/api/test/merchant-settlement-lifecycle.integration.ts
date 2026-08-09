@@ -163,6 +163,49 @@ async function main() {
       '已结算分佣不能被单条状态接口回退',
     );
 
+    const raceRecord = await prisma.merchantCommissionRecord.create({
+      data: {
+        sourceType: 'sales_referral',
+        sourceAmount: 3000,
+        commissionAmount: 300,
+        calculationSnapshot: { sourceAmount: 3000, finalAmount: 300 },
+        status: 'pending',
+        dedupeKey: 'settlement-lifecycle-race',
+        occurredAt,
+      },
+    });
+    const raceBatch = await service.createBatch({ periodStart, periodEnd, remark: '并发竞争批次' });
+    await service.confirmBatch(raceBatch.id.toString(), '进入并发竞争');
+
+    const raceResults = await Promise.allSettled([
+      service.markBatchPaid(raceBatch.id.toString(), '并发付款'),
+      service.cancelBatch(raceBatch.id.toString(), '并发取消'),
+    ]);
+    const fulfilled = raceResults.filter((result) => result.status === 'fulfilled');
+    const rejected = raceResults.filter((result) => result.status === 'rejected');
+    assert.equal(fulfilled.length, 1, '付款与取消并发时必须且只能有一个操作成功');
+    assert.equal(rejected.length, 1, '付款与取消并发时输掉竞争的一方必须失败');
+
+    const finalRaceBatch = await prisma.merchantSettlementBatch.findUniqueOrThrow({
+      where: { id: raceBatch.id },
+    });
+    const finalRaceRecord = await prisma.merchantCommissionRecord.findUniqueOrThrow({
+      where: { id: raceRecord.id },
+    });
+    const finalRaceItems = await prisma.merchantSettlementItem.findMany({
+      where: { batchId: raceBatch.id },
+    });
+
+    if (finalRaceBatch.status === 'paid') {
+      assert.equal(finalRaceRecord.status, 'settled', '付款赢得竞争时分佣必须同步 settled');
+      assert.equal(finalRaceItems.length, 1);
+      assert.equal(finalRaceItems[0]?.status, 'settled', '付款赢得竞争时批次明细必须 settled');
+    } else {
+      assert.equal(finalRaceBatch.status, 'cancelled', '取消赢得竞争时批次只能进入 cancelled');
+      assert.equal(finalRaceRecord.status, 'pending', '取消赢得竞争时分佣必须恢复原 pending');
+      assert.equal(finalRaceItems.length, 0, '取消赢得竞争时必须释放唯一明细占用');
+    }
+
     console.log('[merchant-settlement-lifecycle-integration] PASS');
   } finally {
     await cleanup();
