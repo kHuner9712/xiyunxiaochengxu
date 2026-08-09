@@ -80,7 +80,7 @@ function onDateChange(e: any) {
 
 async function uploadAvatar() {
   try {
-    const results = await chooseAndUploadImage(1)
+    const results = await chooseAndUploadImage(1, 'baby-avatar')
     if (results.length) {
       form.value.avatar = results[0].url
       form.value.avatarUrl = results[0].url
