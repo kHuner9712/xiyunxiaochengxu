@@ -19,13 +19,13 @@ export class AdminSupplierController {
   constructor(private readonly supplierService: SupplierService) {}
 
   @Get('list')
-  @RequirePermission('supplier:list')
+  @RequirePermission('supplier:list', 'product:create', 'product:edit')
   async list(@Query() dto: SupplierQueryDto) {
     return this.supplierService.findAll(dto);
   }
 
   @Get('detail/:id')
-  @RequirePermission('supplier:list')
+  @RequirePermission('supplier:list', 'product:create', 'product:edit')
   async detail(@Param('id') id: string) {
     return this.supplierService.findById(id);
   }
