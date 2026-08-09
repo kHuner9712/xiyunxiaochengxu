@@ -167,40 +167,79 @@ export class SnapshotViewBenefitPackageService extends VersionedBenefitPackageSe
 
   private async overlayUserPackageSnapshot(row: any, mini = false) {
     const userPackageId = row.id?.toString?.() ?? String(row.id ?? '');
-    if (!userPackageId) return row;
-    const pkg = await this.loadUserPackageSnapshot(userPackageId);
-    if (!pkg) return row;
+    const pkg = userPackageId ? await this.loadUserPackageSnapshot(userPackageId) : null;
+    const coverImage = pkg?.coverImage ?? row.coverImage ?? row.packageCoverImage ?? null;
     return {
       ...row,
-      packageName: pkg.name,
-      coverImage: pkg.coverImage,
-      ...(mini ? { packageCoverImage: pkg.coverImage } : {}),
+      ...(pkg
+        ? {
+            packageName: pkg.name,
+            coverImage: pkg.coverImage,
+          }
+        : {}),
+      ...(mini ? { packageCoverImage: coverImage } : {}),
     };
   }
 
   private async overlayEntitlementSnapshot(row: any, detail = false) {
     const entitlementId = row.id?.toString?.() ?? String(row.id ?? '');
     if (!entitlementId) return row;
-    const snapshot = await this.loadEntitlementSnapshot(entitlementId);
-    if (!snapshot?.item) return row;
 
-    const packageId = row.userBenefitPackageId
-      ? await this.loadPackageForUserPackage(
-          row.userBenefitPackageId?.toString?.() ?? String(row.userBenefitPackageId),
-        )
-      : null;
-    const pkg = packageId ?? snapshot.package;
-    const item = snapshot.item;
+    const userPackageId = row.userBenefitPackageId?.toString?.()
+      ?? (row.userBenefitPackageId ? String(row.userBenefitPackageId) : '');
+    const packageItemId = row.packageItemId?.toString?.()
+      ?? (row.packageItemId ? String(row.packageItemId) : '');
+    const [snapshot, userPkg, pkg, currentItem] = await Promise.all([
+      this.loadEntitlementSnapshot(entitlementId),
+      userPackageId
+        ? this.viewPrisma.userBenefitPackage.findFirst({
+            where: { id: BigInt(userPackageId), deletedAt: null },
+            select: { id: true, validFrom: true, validTo: true },
+          })
+        : null,
+      userPackageId ? this.loadUserPackageSnapshot(userPackageId) : null,
+      packageItemId
+        ? this.viewPrisma.benefitPackageItem.findFirst({
+            where: { id: BigInt(packageItemId) },
+            select: {
+              id: true,
+              name: true,
+              itemType: true,
+              description: true,
+              originalValue: true,
+              merchantPromotionSourceId: true,
+              pickupStoreId: true,
+            },
+          })
+        : null,
+    ]);
+
+    const item = snapshot?.item ?? (currentItem
+      ? {
+          id: currentItem.id.toString(),
+          name: currentItem.name,
+          itemType: currentItem.itemType,
+          description: currentItem.description ?? null,
+          originalValue: currentItem.originalValue ?? null,
+          merchantPromotionSourceId: currentItem.merchantPromotionSourceId?.toString() ?? null,
+          pickupStoreId: currentItem.pickupStoreId?.toString() ?? null,
+        }
+      : null);
+    const resolvedPackage = pkg ?? snapshot?.package ?? null;
+
     const base = {
       ...row,
-      packageName: pkg?.name ?? row.packageName ?? null,
-      itemName: item.name,
-      itemType: item.itemType,
-      originalValue: item.originalValue,
-      pickupStoreId: item.pickupStoreId,
-      merchantPromotionSourceId: item.merchantPromotionSourceId,
+      packageName: resolvedPackage?.name ?? row.packageName ?? null,
+      itemName: item?.name ?? row.itemName ?? null,
+      itemType: item?.itemType ?? row.itemType ?? null,
+      originalValue: item?.originalValue ?? row.originalValue ?? null,
+      validFrom: userPkg?.validFrom ?? row.validFrom ?? null,
+      validTo: userPkg?.validTo ?? row.validTo ?? null,
+      pickupStoreId: item?.pickupStoreId ?? row.pickupStoreId ?? null,
+      merchantPromotionSourceId:
+        item?.merchantPromotionSourceId ?? row.merchantPromotionSourceId ?? null,
     };
-    if (!detail) return base;
+    if (!detail || !item) return base;
 
     const [merchant, store] = await Promise.all([
       item.merchantPromotionSourceId
@@ -227,7 +266,7 @@ export class SnapshotViewBenefitPackageService extends VersionedBenefitPackageSe
     ]);
     return {
       ...base,
-      packageSubtitle: pkg?.subtitle ?? row.packageSubtitle ?? null,
+      packageSubtitle: resolvedPackage?.subtitle ?? row.packageSubtitle ?? null,
       itemDescription: item.description,
       merchantName: merchant?.name ?? null,
       merchantContactPhone: merchant?.contactPhone ?? null,
@@ -238,10 +277,6 @@ export class SnapshotViewBenefitPackageService extends VersionedBenefitPackageSe
       storePhone: store?.contactPhone ?? null,
       businessHours: store?.businessHours ?? null,
     };
-  }
-
-  private async loadPackageForUserPackage(userPackageId: string) {
-    return this.loadUserPackageSnapshot(userPackageId);
   }
 
   private async loadUserPackageSnapshot(userPackageId: string): Promise<SnapshotPackage | null> {
