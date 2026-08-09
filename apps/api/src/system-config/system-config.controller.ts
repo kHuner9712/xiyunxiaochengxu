@@ -1,9 +1,12 @@
-import { Controller, Get, Put, Body, Param } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Put, Body, Param } from '@nestjs/common';
 import { SystemConfigService } from './system-config.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { IsString, IsNotEmpty, IsArray, IsIn, IsOptional, ValidateNested, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
+
+const STOREFRONT_ASSET_URL = /^(?:\/(?!\/)|https?:\/\/)/i;
+const CUSTOMER_PHONE = /^[0-9+()\-.\s]{5,40}$/;
 
 class UpdateConfigDto {
   @IsString()
@@ -101,13 +104,51 @@ export class SystemConfigController {
   @Put('update')
   @RequirePermission('system:config')
   async update(@Body() dto: UpdateConfigDto) {
-    return this.systemConfigService.update(dto.groupName, dto.configKey, dto.configValue, dto.valueType);
+    const normalized = this.normalizeConfigEntry(dto);
+    return this.systemConfigService.update(
+      normalized.groupName,
+      normalized.configKey,
+      normalized.configValue,
+      normalized.valueType,
+    );
   }
 
   @Put('batch-update')
   @RequirePermission('system:config')
   async batchUpdate(@Body() dto: BatchUpdateDto) {
-    return this.systemConfigService.batchUpdate(dto.configs);
+    return this.systemConfigService.batchUpdate(dto.configs.map((config) => this.normalizeConfigEntry(config)));
+  }
+
+  private normalizeConfigEntry<T extends ConfigItemDto | UpdateConfigDto>(entry: T): T {
+    const groupName = String(entry.groupName || '').trim();
+    const configKey = String(entry.configKey || '').trim();
+    let configValue = String(entry.configValue ?? '');
+
+    if (groupName === 'basic') {
+      if (configKey === 'shop_name') {
+        configValue = configValue.trim();
+        if (!configValue || configValue.length > 80) {
+          throw new BadRequestException('商城名称必须为1-80个字符');
+        }
+      } else if (configKey === 'shop_logo') {
+        configValue = configValue.trim();
+        if (configValue.length > 500 || (configValue && !STOREFRONT_ASSET_URL.test(configValue))) {
+          throw new BadRequestException('商城Logo必须是合法站内路径或HTTP(S)地址');
+        }
+      } else if (configKey === 'customer_service_phone') {
+        configValue = configValue.trim();
+        if (configValue && !CUSTOMER_PHONE.test(configValue)) {
+          throw new BadRequestException('客服电话格式无效');
+        }
+      }
+    }
+
+    return {
+      ...entry,
+      groupName,
+      configKey,
+      configValue,
+    };
   }
 }
 
