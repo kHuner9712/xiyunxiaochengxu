@@ -62,7 +62,7 @@ async function main() {
     });
     createdRoleIds.push(preservedRole.id);
 
-    const manualPermission = await prisma.adminPermission.findUniqueOrThrow({
+    const manualPermission = await prisma.adminPermission.findFirstOrThrow({
       where: { code: manualPermissionCode },
     });
     await prisma.adminRolePermission.create({
