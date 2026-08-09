@@ -8,6 +8,7 @@ import { PaymentService } from '../payment/payment.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AftersaleService } from './aftersale.service';
 import { CreateAftersaleDto } from './dto/create-aftersale.dto';
+import { ReturnLogisticsDto } from './dto/return-logistics.dto';
 
 @Injectable()
 export class ProductionAftersaleService extends AftersaleService {
@@ -94,6 +95,92 @@ export class ProductionAftersaleService extends AftersaleService {
     }
   }
 
+  override async cancel(userId: string, id: string) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const aftersaleId = parsePositiveBigIntId(id, '售后单');
+    const aftersale = await this.productionPrisma.aftersaleOrder.findFirst({
+      where: { id: aftersaleId, userId: userIdValue },
+      include: { order: true },
+    });
+    if (!aftersale) throw new NotFoundException('售后单不存在');
+
+    await this.productionPrisma.$transaction(async (tx) => {
+      const claimed = await tx.aftersaleOrder.updateMany({
+        where: {
+          id: aftersaleId,
+          userId: userIdValue,
+          status: AftersaleStatus.pending_review,
+        },
+        data: {
+          status: AftersaleStatus.closed,
+          activeOrderItemId: null,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException('售后单状态已变化，只能取消待审核的售后申请');
+      }
+      await tx.aftersaleLog.create({
+        data: {
+          aftersaleId,
+          operatorType: 'user',
+          operatorId: userIdValue,
+          action: 'cancel',
+          content: '用户取消售后申请',
+        },
+      });
+      await this.restoreOrderStatusWhenNoActiveAftersale(tx, aftersale.orderId, aftersaleId, aftersale.order);
+    });
+
+    this.productionLogger.log(`用户${userIdValue}取消售后：${aftersaleId}`);
+    return this.findUserDetail(userIdValue.toString(), aftersaleId.toString());
+  }
+
+  override async fillReturnLogistics(userId: string, id: string, dto: ReturnLogisticsDto) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const aftersaleId = parsePositiveBigIntId(id, '售后单');
+    const aftersale = await this.productionPrisma.aftersaleOrder.findFirst({
+      where: { id: aftersaleId, userId: userIdValue },
+      select: { id: true, type: true },
+    });
+    if (!aftersale) throw new NotFoundException('售后单不存在');
+    if (aftersale.type !== 2) throw new BadRequestException('仅退款类型不需要填写退货物流');
+
+    await this.productionPrisma.$transaction(async (tx) => {
+      const claimed = await tx.aftersaleOrder.updateMany({
+        where: {
+          id: aftersaleId,
+          userId: userIdValue,
+          status: AftersaleStatus.approved,
+          type: 2,
+        },
+        data: {
+          status: AftersaleStatus.returned,
+          returnLogisticsCompany: dto.returnLogisticsCompany,
+          returnLogisticsNo: dto.returnLogisticsNo,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException('售后单状态已变化，当前状态不允许填写退货物流');
+      }
+      await tx.aftersaleLog.create({
+        data: {
+          aftersaleId,
+          operatorType: 'user',
+          operatorId: userIdValue,
+          action: 'fill_return_logistics',
+          content: [
+            `用户填写退货物流，${dto.returnLogisticsCompany}：${dto.returnLogisticsNo}`,
+            dto.contactPhone ? `联系电话：${dto.contactPhone}` : '',
+            dto.remark ? `备注：${dto.remark}` : '',
+          ].filter(Boolean).join('；'),
+        },
+      });
+    });
+
+    this.productionLogger.log(`用户${userIdValue}填写退货物流：${aftersaleId}`);
+    return this.findUserDetail(userIdValue.toString(), aftersaleId.toString());
+  }
+
   override async approve(id: string, adminId: string, refundAmount: number) {
     const aftersaleId = parsePositiveBigIntId(id, '售后单');
     const adminIdValue = parsePositiveBigIntId(adminId, '管理员');
@@ -112,65 +199,100 @@ export class ProductionAftersaleService extends AftersaleService {
     });
     if (!aftersale) throw new NotFoundException('售后单不存在');
 
-    if ((aftersale.order.payAmount ?? 0) === 0) {
+    const isZeroPay = (aftersale.order.payAmount ?? 0) === 0;
+    const refundCap = calculateOrderItemRefundCap(
+      aftersale.order,
+      aftersale.orderItem,
+      aftersale.id,
+    );
+    if (isZeroPay) {
       if (!Number.isSafeInteger(refundAmount) || refundAmount !== 0) {
         throw new BadRequestException('0元订单退款金额必须为0分');
       }
-      if (aftersale.status !== AftersaleStatus.pending_review) {
-        throw new BadRequestException('售后单状态不允许审核');
+      if (refundCap.remainingAmount !== 0) {
+        throw new BadRequestException('0元订单退款金额分配异常，请先核对订单金额');
       }
-      if (aftersale.type === 2) {
-        const refundCap = calculateOrderItemRefundCap(
-          aftersale.order,
-          aftersale.orderItem,
-          aftersale.id,
-        );
-        if (refundCap.remainingAmount !== 0) {
-          throw new BadRequestException('0元订单退货退款金额分配异常，请先核对订单金额');
-        }
+    } else {
+      if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0) {
+        throw new BadRequestException('退款金额必须大于0分');
       }
-
-      await this.productionPrisma.$transaction(async (tx) => {
-        const claimed = await tx.aftersaleOrder.updateMany({
-          where: { id: aftersaleId, status: AftersaleStatus.pending_review },
-          data: {
-            status: AftersaleStatus.approved,
-            refundAmount: 0,
-            adminId: adminIdValue,
-            reviewedAt: new Date(),
-          },
-        });
-        if (claimed.count !== 1) throw new BadRequestException('售后单状态已变化，请刷新后重试');
-        await tx.aftersaleLog.create({
-          data: {
-            aftersaleId,
-            operatorType: 'admin',
-            operatorId: adminIdValue,
-            action: 'approve',
-            content: '管理员审核通过，0元订单退款金额：0分',
-          },
-        });
-      });
-      return this.findAdminDetail(id);
-    }
-
-    if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0) {
-      throw new BadRequestException('退款金额必须大于0分');
-    }
-    if (aftersale.type === 2) {
-      const refundCap = calculateOrderItemRefundCap(
-        aftersale.order,
-        aftersale.orderItem,
-        aftersale.id,
-      );
-      if (refundAmount !== refundCap.remainingAmount) {
+      if (refundAmount > refundCap.remainingAmount) {
+        throw new BadRequestException(`退款金额不能超过剩余可退金额${refundCap.remainingAmount}分`);
+      }
+      if (aftersale.type === 2 && refundAmount !== refundCap.remainingAmount) {
         throw new BadRequestException(
           `当前售后模型不支持部分数量退货；退货退款必须一次退清该订单项剩余可退金额${refundCap.remainingAmount}分，避免退款金额与库存归还数量不一致`,
         );
       }
     }
 
-    return super.approve(id, adminId, refundAmount);
+    await this.productionPrisma.$transaction(async (tx) => {
+      const claimed = await tx.aftersaleOrder.updateMany({
+        where: { id: aftersaleId, status: AftersaleStatus.pending_review },
+        data: {
+          status: AftersaleStatus.approved,
+          refundAmount,
+          adminId: adminIdValue,
+          reviewedAt: new Date(),
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException('售后单状态已变化，请刷新后重试');
+      }
+      await tx.aftersaleLog.create({
+        data: {
+          aftersaleId,
+          operatorType: 'admin',
+          operatorId: adminIdValue,
+          action: 'approve',
+          content: isZeroPay
+            ? '管理员审核通过，0元订单退款金额：0分'
+            : `管理员同意售后，退款金额：${refundAmount}分`,
+        },
+      });
+    });
+
+    this.productionLogger.log(`管理员${adminIdValue}同意售后：${aftersaleId}，退款${refundAmount}分`);
+    return this.findAdminDetail(aftersaleId.toString());
+  }
+
+  override async reject(id: string, adminId: string, rejectReason: string) {
+    const aftersaleId = parsePositiveBigIntId(id, '售后单');
+    const adminIdValue = parsePositiveBigIntId(adminId, '管理员');
+    const aftersale = await this.productionPrisma.aftersaleOrder.findFirst({
+      where: { id: aftersaleId },
+      include: { order: true },
+    });
+    if (!aftersale) throw new NotFoundException('售后单不存在');
+
+    await this.productionPrisma.$transaction(async (tx) => {
+      const claimed = await tx.aftersaleOrder.updateMany({
+        where: { id: aftersaleId, status: AftersaleStatus.pending_review },
+        data: {
+          status: AftersaleStatus.rejected,
+          rejectReason,
+          adminId: adminIdValue,
+          reviewedAt: new Date(),
+          activeOrderItemId: null,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException('售后单状态已变化，请刷新后重试');
+      }
+      await tx.aftersaleLog.create({
+        data: {
+          aftersaleId,
+          operatorType: 'admin',
+          operatorId: adminIdValue,
+          action: 'reject',
+          content: `管理员拒绝售后：${rejectReason}`,
+        },
+      });
+      await this.restoreOrderStatusWhenNoActiveAftersale(tx, aftersale.orderId, aftersaleId, aftersale.order);
+    });
+
+    this.productionLogger.log(`管理员${adminIdValue}拒绝售后：${aftersaleId}，原因：${rejectReason}`);
+    return this.findAdminDetail(aftersaleId.toString());
   }
 
   override async refund(id: string, adminId: string) {
@@ -232,5 +354,34 @@ export class ProductionAftersaleService extends AftersaleService {
     }
 
     return this.findAdminDetail(id);
+  }
+
+  private async restoreOrderStatusWhenNoActiveAftersale(
+    tx: any,
+    orderId: bigint,
+    currentAftersaleId: bigint,
+    order: { completedAt?: Date | null },
+  ) {
+    const otherAftersale = await tx.aftersaleOrder.findFirst({
+      where: {
+        orderId,
+        id: { not: currentAftersaleId },
+        status: {
+          notIn: [
+            AftersaleStatus.closed,
+            AftersaleStatus.rejected,
+            AftersaleStatus.refunded,
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    if (otherAftersale) return;
+
+    const restoreStatus = order.completedAt ? OrderStatus.completed : OrderStatus.delivered;
+    await tx.order.updateMany({
+      where: { id: orderId, status: OrderStatus.aftersale },
+      data: { status: restoreStatus },
+    });
   }
 }
