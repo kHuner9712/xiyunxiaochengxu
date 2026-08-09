@@ -68,10 +68,13 @@ export const DEFAULT_ROLE_PERMISSION_CODES: Record<string, string[]> = {
   ],
 };
 
-export async function ensureDefaultRolePermissions(prisma: PrismaClient) {
+export async function ensureDefaultRolePermissions(
+  prisma: PrismaClient,
+  rolePermissionCodes: Record<string, string[]> = DEFAULT_ROLE_PERMISSION_CODES,
+) {
   const results: Array<{ roleCode: string; action: 'seeded' | 'preserved' | 'missing-role'; count: number }> = [];
 
-  for (const [roleCode, permissionCodes] of Object.entries(DEFAULT_ROLE_PERMISSION_CODES)) {
+  for (const [roleCode, permissionCodes] of Object.entries(rolePermissionCodes)) {
     const role = await prisma.adminRole.findUnique({ where: { code: roleCode } });
     if (!role) {
       results.push({ roleCode, action: 'missing-role', count: 0 });
