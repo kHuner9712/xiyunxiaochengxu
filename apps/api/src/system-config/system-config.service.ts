@@ -272,19 +272,21 @@ export class SystemConfigService implements OnModuleInit {
       if (strict) throw new BadRequestException('常见问题必须是数组');
       return '[]';
     }
-    if (parsed.length > MAX_CUSTOMER_FAQS) {
-      if (strict) throw new BadRequestException(`常见问题最多${MAX_CUSTOMER_FAQS}条`);
-      parsed = parsed.slice(0, MAX_CUSTOMER_FAQS);
+    const parsedItems: unknown[] = parsed;
+    if (parsedItems.length > MAX_CUSTOMER_FAQS && strict) {
+      throw new BadRequestException(`常见问题最多${MAX_CUSTOMER_FAQS}条`);
     }
+    const faqItems = parsedItems.slice(0, MAX_CUSTOMER_FAQS);
 
     const normalized: CustomerFaqItem[] = [];
-    for (const [index, item] of parsed.entries()) {
+    for (const [index, item] of faqItems.entries()) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
         if (strict) throw new BadRequestException(`第${index + 1}条常见问题格式无效`);
         continue;
       }
-      const question = String((item as any).question ?? '').trim();
-      const answer = String((item as any).answer ?? '').trim();
+      const record = item as Record<string, unknown>;
+      const question = String(record.question ?? '').trim();
+      const answer = String(record.answer ?? '').trim();
       if (!question || !answer || question.length > 200 || answer.length > 2000) {
         if (strict) throw new BadRequestException(`第${index + 1}条常见问题的问答内容无效`);
         continue;
