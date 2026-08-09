@@ -132,6 +132,14 @@ admin_html="$(curl --fail --silent --show-error --insecure \
 echo "$admin_html" | grep -Eqi '<!doctype html|<html' || fail 'admin virtual host did not return the SPA entry page'
 pass 'HTTPS admin virtual host serves the SPA'
 
+admin_captcha_response="$(curl --fail --silent --show-error --insecure \
+  --resolve "${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
+  "https://${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}/api/admin/auth/captcha")"
+echo "$admin_captcha_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0' || fail "admin captcha API did not return code=0: $admin_captcha_response"
+echo "$admin_captcha_response" | grep -Eq '"captchaId"[[:space:]]*:[[:space:]]*"captcha:' || fail "admin captcha API response has no valid captchaId: $admin_captcha_response"
+echo "$admin_captcha_response" | grep -Eq '"captchaSvg"[[:space:]]*:[[:space:]]*"' || fail "admin captcha API response has no captchaSvg: $admin_captcha_response"
+pass 'admin HTTPS host reaches the real captcha controller and Redis-backed auth path'
+
 redirect_code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
   --resolve "${API_DOMAIN}:${HTTP_HOST_PORT}:127.0.0.1" \
   "http://${API_DOMAIN}:${HTTP_HOST_PORT}/api/health")"
