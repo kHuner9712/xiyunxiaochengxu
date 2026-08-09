@@ -4,7 +4,7 @@ export const MAX_SIGNED_BIGINT = 9223372036854775807n;
 export const POSITIVE_BIGINT_ID_PATTERN = /^[1-9]\d*$/;
 
 export function parsePositiveBigIntId(
-  value: string | number | bigint,
+  value: string | number | bigint | null | undefined,
   label: string,
 ): bigint {
   if (typeof value === 'number' && !Number.isSafeInteger(value)) {
