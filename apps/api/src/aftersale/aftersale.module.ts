@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WeappAftersaleController, AdminAftersaleController } from './aftersale.controller';
 import { AftersaleService } from './aftersale.service';
-import { ProductionAftersaleService } from './production-aftersale.service';
+import { AttachmentSafeProductionAftersaleService } from './attachment-safe-production-aftersale.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { PaymentModule } from '../payment/payment.module';
 import { SystemConfigModule } from '../system-config/system-config.module';
@@ -12,7 +12,7 @@ import { SystemConfigModule } from '../system-config/system-config.module';
   providers: [
     {
       provide: AftersaleService,
-      useClass: ProductionAftersaleService,
+      useClass: AttachmentSafeProductionAftersaleService,
     },
   ],
   exports: [AftersaleService],
