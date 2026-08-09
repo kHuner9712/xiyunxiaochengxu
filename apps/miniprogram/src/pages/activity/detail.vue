@@ -32,13 +32,26 @@
 
     <view class="stacking-note card">
       <text class="stacking-title">优惠叠加说明</text>
-      <text class="stacking-desc">本活动订单不与普通优惠券、积分抵扣叠加；活动价、活动库存、限购和新人资格均由服务器在提交订单时重新核验。</text>
+      <text class="stacking-desc">本活动订单不与普通优惠券、积分抵扣叠加；活动价、活动库存、限购、赠品和套餐构成均由服务器在提交订单时重新核验。</text>
+    </view>
+
+    <view v-if="activity.type === '4' && activityProducts.length" class="bundle-buy-card card">
+      <view>
+        <text class="bundle-label">整套购买</text>
+        <text class="bundle-price">¥{{ formatPrice(bundlePrice) }}</text>
+        <text class="bundle-desc">每套共 {{ bundleTotalUnits }} 件，结算时会一次校验并扣减全部 SKU 库存。</text>
+      </view>
+      <button
+        class="buy-btn bundle-btn"
+        :disabled="activityStatusText !== '进行中' || !bundleAnchor"
+        @tap="buyBundle"
+      >购买套餐</button>
     </view>
 
     <view v-if="activityProducts.length" class="products-section">
       <view class="section-title-row">
-        <text class="section-title">活动商品</text>
-        <text class="section-subtitle">{{ activityProducts.length }} 个可购 SKU</text>
+        <text class="section-title">{{ activity.type === '4' ? '套餐构成' : '活动商品' }}</text>
+        <text class="section-subtitle">{{ activityProducts.length }} 个 SKU</text>
       </view>
       <view class="product-list">
         <view v-for="product in activityProducts" :key="product.activityProductId" class="activity-product card">
@@ -46,15 +59,17 @@
             <image class="product-image" :src="product.image || '/static/default-cover.png'" mode="aspectFill" />
             <view class="product-main">
               <text class="product-name">{{ product.name }}</text>
-              <text v-if="product.skuId" class="sku-id">活动 SKU · {{ product.skuId }}</text>
+              <text v-if="product.skuId" class="sku-id">SKU · {{ product.skuId }}</text>
               <view class="price-row">
                 <text class="activity-price">¥{{ formatPrice(product.price) }}</text>
                 <text v-if="product.originalPrice > product.price" class="original-price">¥{{ formatPrice(product.originalPrice) }}</text>
               </view>
-              <text class="stock-text">活动可售 {{ product.stock }} 件{{ product.limitPerUser ? ` · 每人限购 ${product.limitPerUser} 件` : '' }}</text>
+              <text v-if="activity.type === '4'" class="stock-text">每套 {{ bundleQuantityFor(product.skuId) }} 件 · 活动可售 {{ product.stock }} 件</text>
+              <text v-else class="stock-text">活动可售 {{ product.stock }} 件{{ product.limitPerUser ? ` · 每人限购 ${product.limitPerUser} 件` : '' }}</text>
+              <text v-if="activity.type === '3' && isGiftSku(product.skuId)" class="gift-tag">可作为满赠赠品</text>
             </view>
           </view>
-          <view class="product-footer">
+          <view v-if="activity.type !== '4'" class="product-footer">
             <text class="fulfillment-tag">{{ product.fulfillmentType === 'pickup' ? '到店自提' : '快递配送' }}</text>
             <button
               class="buy-btn"
@@ -99,12 +114,33 @@ const activity = ref<ActivityDetail>({
 const activityBanner = computed(() => activity.value.image || activity.value.bannerImage || '/static/default-cover.png')
 const activityProducts = computed<ActivityProduct[]>(() => Array.isArray(activity.value.products) ? activity.value.products : [])
 const normalizedEndTime = computed(() => normalizeActivityTime(activity.value.endTime))
+const parsedRules = computed<any>(() => activity.value.rules && typeof activity.value.rules === 'object' ? activity.value.rules : {})
 
 const activityTypeText = computed(() => {
   if (activity.value.type === '1') return '限时折扣'
   if (activity.value.type === '2') return '满减活动'
+  if (activity.value.type === '3') return '满赠活动'
+  if (activity.value.type === '4') return '组合套餐'
   if (activity.value.type === '5') return '新人优惠'
   return '禧孕优选活动'
+})
+
+const bundlePrice = computed(() => Number(parsedRules.value?.bundlePrice || 0))
+const bundleItems = computed<Array<{ skuId: string; quantity: number }>>(() => {
+  const rows = Array.isArray(parsedRules.value?.bundleItems) ? parsedRules.value.bundleItems : []
+  return rows
+    .map((item: any) => ({ skuId: String(item?.skuId || ''), quantity: Number(item?.quantity || 0) }))
+    .filter((item: any) => POSITIVE_ID.test(item.skuId) && Number.isSafeInteger(item.quantity) && item.quantity > 0)
+})
+const bundleTotalUnits = computed(() => bundleItems.value.reduce((sum, item) => sum + item.quantity, 0))
+const bundleAnchor = computed(() => activityProducts.value.find((product) =>
+  POSITIVE_ID.test(String(product.activityProductId || '')) &&
+  POSITIVE_ID.test(String(product.skuId || '')) &&
+  bundleItems.value.some((item) => item.skuId === String(product.skuId)),
+) || null)
+const giftSkuIds = computed(() => {
+  const rules = Array.isArray(parsedRules.value?.fullGiftRules) ? parsedRules.value.fullGiftRules : []
+  return new Set(rules.map((item: any) => String(item?.giftSkuId || '')).filter((id: string) => POSITIVE_ID.test(id)))
 })
 
 const activityStatusText = computed(() => {
@@ -126,8 +162,7 @@ const ruleText = computed(() => {
   if (activity.value.type === '1') return '活动商品按页面标示活动价结算；每次下单都会重新校验活动时间、SKU、库存和限购。'
   if (activity.value.type === '5') return '仅限尚未完成首笔有效订单的新用户；活动价和每人限购在提交订单时重新核验。'
   if (activity.value.type === '2') {
-    const rules: any = activity.value.rules
-    const items = Array.isArray(rules?.fullReductionRules) ? rules.fullReductionRules : []
+    const items = Array.isArray(parsedRules.value?.fullReductionRules) ? parsedRules.value.fullReductionRules : []
     const text = items
       .map((item: any) => ({ full: Number(item.fullAmount), reduce: Number(item.reduceAmount) }))
       .filter((item: any) => Number.isSafeInteger(item.full) && Number.isSafeInteger(item.reduce) && item.full > item.reduce && item.reduce > 0)
@@ -136,11 +171,45 @@ const ruleText = computed(() => {
       .join('；')
     return text || '满减金额由服务器根据当前活动规则实时计算。'
   }
+  if (activity.value.type === '3') {
+    const items = Array.isArray(parsedRules.value?.fullGiftRules) ? parsedRules.value.fullGiftRules : []
+    const text = items
+      .map((item: any) => ({
+        full: Number(item.fullAmount),
+        giftSkuId: String(item.giftSkuId || ''),
+        quantity: Number(item.giftQuantity || 0),
+      }))
+      .filter((item: any) => Number.isSafeInteger(item.full) && item.full > 0 && POSITIVE_ID.test(item.giftSkuId) && Number.isSafeInteger(item.quantity) && item.quantity > 0)
+      .sort((a: any, b: any) => a.full - b.full)
+      .map((item: any) => {
+        const product = activityProducts.value.find((row) => String(row.skuId || '') === item.giftSkuId)
+        return `满 ¥${formatPrice(item.full)} 赠 ${product?.name || `SKU ${item.giftSkuId}`} × ${item.quantity}`
+      })
+      .join('；')
+    return text ? `${text}。达到多个门槛时按最高门槛赠送；赠品不计实付金额。` : '赠品由服务器根据订单金额实时计算。'
+  }
+  if (activity.value.type === '4') {
+    const composition = bundleItems.value.map((item) => {
+      const product = activityProducts.value.find((row) => String(row.skuId || '') === item.skuId)
+      return `${product?.name || `SKU ${item.skuId}`} × ${item.quantity}`
+    }).join(' + ')
+    return composition
+      ? `${composition}；套餐价 ¥${formatPrice(bundlePrice.value)}。优惠按商品原价比例分摊到各订单项。`
+      : '组合套餐构成和套餐价由服务器实时校验。'
+  }
   return ''
 })
 
 function normalizeActivityTime(value?: CompatibleTime) {
   return normalizeTimeToTimestamp(value)
+}
+
+function bundleQuantityFor(skuId?: string | null) {
+  return bundleItems.value.find((item) => item.skuId === String(skuId || ''))?.quantity || 1
+}
+
+function isGiftSku(skuId?: string | null) {
+  return giftSkuIds.value.has(String(skuId || ''))
 }
 
 async function loadActivity(id: string) {
@@ -156,11 +225,7 @@ function openProductDetail(product: ActivityProduct) {
   uni.navigateTo({ url: `/pages/product/detail?id=${encodeURIComponent(product.productId)}` })
 }
 
-function buyActivityProduct(product: ActivityProduct) {
-  if (activityStatusText.value !== '进行中') {
-    uni.showToast({ title: activityStatusText.value === '已结束' ? '活动已结束' : '活动尚未开始', icon: 'none' })
-    return
-  }
+function goCheckout(product: ActivityProduct) {
   const aId = String(activity.value.id || '')
   const relationId = String(product.activityProductId || '')
   const selectedSkuId = String(product.skuId || '')
@@ -171,6 +236,26 @@ function buyActivityProduct(product: ActivityProduct) {
   uni.navigateTo({
     url: `/pages/activity/checkout?activityId=${encodeURIComponent(aId)}&activityProductId=${encodeURIComponent(relationId)}&skuId=${encodeURIComponent(selectedSkuId)}`,
   })
+}
+
+function buyActivityProduct(product: ActivityProduct) {
+  if (activityStatusText.value !== '进行中') {
+    uni.showToast({ title: activityStatusText.value === '已结束' ? '活动已结束' : '活动尚未开始', icon: 'none' })
+    return
+  }
+  goCheckout(product)
+}
+
+function buyBundle() {
+  if (activityStatusText.value !== '进行中') {
+    uni.showToast({ title: activityStatusText.value === '已结束' ? '活动已结束' : '活动尚未开始', icon: 'none' })
+    return
+  }
+  if (!bundleAnchor.value) {
+    uni.showToast({ title: '套餐配置无效，请稍后重试', icon: 'none' })
+    return
+  }
+  goCheckout(bundleAnchor.value)
 }
 
 onShareAppMessage(() => ({
@@ -212,6 +297,11 @@ onLoad((options) => {
 .section-title, .stacking-title { color: $text-color; font-size: $font-lg; font-weight: 900; }
 .stacking-note { background: rgba($primary-color,.06); }
 .stacking-desc { margin-top: 10rpx; }
+.bundle-buy-card { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; background: rgba($secondary-color,.08); }
+.bundle-label { display: block; color: $text-secondary; font-size: $font-xs; font-weight: 700; }
+.bundle-price { display: block; margin-top: 4rpx; color: $primary-dark; font-size: 40rpx; font-weight: 900; }
+.bundle-desc { display: block; margin-top: 6rpx; color: $text-hint; font-size: $font-xs; line-height: 1.5; }
+.bundle-btn { flex-shrink: 0; }
 .product-list { padding-bottom: 10rpx; }
 .activity-product { padding: 20rpx; }
 .product-click-area { display: flex; gap: 18rpx; }
@@ -219,6 +309,7 @@ onLoad((options) => {
 .product-main { flex: 1; min-width: 0; }
 .product-name { display: block; color: $text-color; font-size: $font-md; font-weight: 800; line-height: 1.45; }
 .sku-id, .stock-text { display: block; margin-top: 8rpx; color: $text-hint; font-size: $font-xs; }
+.gift-tag { display: inline-block; margin-top: 10rpx; padding: 5rpx 12rpx; border-radius: $radius-round; color: $primary-dark; background: $primary-soft; font-size: $font-xs; font-weight: 800; }
 .price-row { display: flex; align-items: baseline; gap: 10rpx; margin-top: 14rpx; }
 .activity-price { color: $primary-dark; font-size: $font-lg; font-weight: 900; }
 .original-price { color: $text-hint; font-size: $font-xs; text-decoration: line-through; }
