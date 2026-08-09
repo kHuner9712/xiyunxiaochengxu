@@ -5,16 +5,21 @@ import { CheckoutReadyProductionActivityService } from './checkout-ready-product
 import { ActivityCheckoutService } from './activity-checkout.service';
 import { ActivityMultiItemCheckoutService } from './activity-multi-item-checkout.service';
 import { ExclusiveNewUserActivityCheckoutService } from './exclusive-new-user-activity-checkout.service';
+import { QuotaSafeActivityMultiItemCheckoutService } from './quota-safe-activity-multi-item-checkout.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
+import { RedisModule } from '../common/redis/redis.module';
 import { ContentModule } from '../content/content.module';
 import { OrderModule } from '../order/order.module';
 import { SystemConfigModule } from '../system-config/system-config.module';
 
 @Module({
-  imports: [PrismaModule, ContentModule, OrderModule, SystemConfigModule],
+  imports: [PrismaModule, RedisModule, ContentModule, OrderModule, SystemConfigModule],
   controllers: [WeappActivityController, AdminActivityController],
   providers: [
-    ActivityMultiItemCheckoutService,
+    {
+      provide: ActivityMultiItemCheckoutService,
+      useClass: QuotaSafeActivityMultiItemCheckoutService,
+    },
     { provide: ActivityCheckoutService, useClass: ExclusiveNewUserActivityCheckoutService },
     { provide: ActivityService, useClass: CheckoutReadyProductionActivityService },
   ],
