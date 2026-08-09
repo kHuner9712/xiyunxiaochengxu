@@ -49,13 +49,8 @@ export class SafeShareProductionService extends DurableRewardProductionShareServ
           where: { inviteeUserId },
         });
         if (existing) {
-          const reward = await this.issueInviteeRegistrationRewards(tx, existing, false);
-          return {
-            bound: false,
-            reason: 'already_invited',
-            relationId: existing.id.toString(),
-            rewardReconciled: reward.issued > 0,
-          };
+          await this.issueInviteeRegistrationRewards(tx, existing, false);
+          return { bound: false, reason: 'already_invited' };
         }
 
         const shareRecord = requestedShareRecordId
@@ -123,11 +118,10 @@ export class SafeShareProductionService extends DurableRewardProductionShareServ
           });
         }
 
-        const reward = await this.issueInviteeRegistrationRewards(tx, relation, true);
+        await this.issueInviteeRegistrationRewards(tx, relation, true);
         return {
           bound: true,
           relationId: relation.id.toString(),
-          rewardIssued: reward.issued,
         };
       });
     } catch (error: any) {
@@ -139,13 +133,8 @@ export class SafeShareProductionService extends DurableRewardProductionShareServ
       return this.safeSharePrisma.$transaction(async (tx) => {
         const existing = await tx.userInviteRelation.findUnique({ where: { inviteeUserId } });
         if (!existing) throw error;
-        const reward = await this.issueInviteeRegistrationRewards(tx, existing, false);
-        return {
-          bound: false,
-          reason: 'already_invited',
-          relationId: existing.id.toString(),
-          rewardReconciled: reward.issued > 0,
-        };
+        await this.issueInviteeRegistrationRewards(tx, existing, false);
+        return { bound: false, reason: 'already_invited' };
       });
     }
   }
