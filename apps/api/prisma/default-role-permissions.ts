@@ -75,7 +75,7 @@ export async function ensureDefaultRolePermissions(
   const results: Array<{ roleCode: string; action: 'seeded' | 'preserved' | 'missing-role'; count: number }> = [];
 
   for (const [roleCode, permissionCodes] of Object.entries(rolePermissionCodes)) {
-    const role = await prisma.adminRole.findUnique({ where: { code: roleCode } });
+    const role = await prisma.adminRole.findFirst({ where: { code: roleCode } });
     if (!role) {
       results.push({ roleCode, action: 'missing-role', count: 0 });
       continue;
