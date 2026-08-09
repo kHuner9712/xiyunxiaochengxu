@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Logger, Put } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -15,11 +15,13 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { RedisService } from '../common/redis/redis.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 
 const HOME_ENTRY_LINK = /^(?:\/pages\/[A-Za-z0-9_./?=&%+\-]+|gift|discount|points|member)$/;
 const MAX_HOME_KEYWORDS = 20;
 const MAX_HOME_NAV_ICONS = 20;
+const HOT_KEYWORDS_CACHE_KEY = 'search:hot_keywords';
 
 type NormalizedNavIcon = {
   icon: string;
@@ -77,7 +79,12 @@ class HomeDecorConfigDto {
 
 @Controller('admin/home-decor')
 export class AdminHomeDecorController {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AdminHomeDecorController.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   @Get('config')
   @RequirePermission('marketing:decor')
@@ -111,6 +118,11 @@ export class AdminHomeDecorController {
         description: '首页装修配置',
       },
     });
+    try {
+      await this.redisService.del(HOT_KEYWORDS_CACHE_KEY);
+    } catch (error) {
+      this.logger.warn(`首页热词缓存失效失败，将按缓存TTL自然刷新：${(error as Error).message}`);
+    }
     return { ...result, id: result.id.toString(), value: config };
   }
 
