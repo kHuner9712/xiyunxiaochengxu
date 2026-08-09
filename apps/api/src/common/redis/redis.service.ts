@@ -1,8 +1,10 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 
 @Injectable()
-export class RedisService {
+export class RedisService implements OnModuleDestroy {
+  private readonly logger = new Logger(RedisService.name);
   private readonly client: any;
+  private closing = false;
 
   constructor(@Inject('REDIS_CLIENT') client: any) {
     this.client = client;
@@ -66,5 +68,28 @@ export class RedisService {
     const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
     const result = await this.client.eval(lua, 1, key, value);
     return result === 1;
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (this.closing || !this.client) return;
+    this.closing = true;
+
+    const status = String(this.client.status || '');
+    if (status === 'end' || status === 'close') return;
+
+    try {
+      if (typeof this.client.quit === 'function') {
+        await this.client.quit();
+      } else if (typeof this.client.disconnect === 'function') {
+        this.client.disconnect();
+      }
+    } catch (error: any) {
+      this.logger.warn(`Redis graceful shutdown failed, forcing disconnect: ${error?.message || error}`);
+      try {
+        this.client.disconnect?.();
+      } catch {
+        // The process is already shutting down; there is no further recovery action here.
+      }
+    }
   }
 }
