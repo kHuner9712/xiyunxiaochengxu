@@ -2,9 +2,12 @@
   <view class="home-page page-shell">
     <view class="brand-panel">
       <view class="brand-top">
-        <view>
-          <text class="brand-title">禧孕优选</text>
-          <text class="brand-subtitle">科学育儿 · 品质之选</text>
+        <view class="brand-identity">
+          <image v-if="homeData.brand.logo" class="brand-logo" :src="homeData.brand.logo" mode="aspectFit" />
+          <view class="brand-copy">
+            <text class="brand-title">{{ homeData.brand.name }}</text>
+            <text class="brand-subtitle">科学育儿 · 品质之选</text>
+          </view>
         </view>
         <view class="brand-badge">
           <text class="brand-badge-text">自营母婴精品</text>
@@ -207,6 +210,7 @@ import {
   type ActivityItem,
   type ContentRecommendationItem,
   type RecommendationSection,
+  type StorefrontBrand,
 } from '@/api/home'
 import { useUserStore } from '@/stores/user'
 import { resolveBannerNavigation } from './banner-navigation'
@@ -218,12 +222,8 @@ import Empty from '@/components/Empty.vue'
 const userStore = useUserStore()
 const activityLabels = ['限时秒杀', '会员专享', '新人礼包']
 
-onShareAppMessage(() => ({
-  title: '禧孕优选 - 品质母婴好物',
-  path: `/pages/home/index?inviter=${userStore.userInfo?.id || ''}`
-}))
-
 const homeData = reactive<{
+  brand: StorefrontBrand
   banners: BannerItem[]
   quickEntries: QuickEntry[]
   announcement: string
@@ -233,6 +233,7 @@ const homeData = reactive<{
   newProducts: ProductItem[]
   activities: ActivityItem[]
 }>({
+  brand: { name: '禧孕优选', logo: '' },
   banners: [],
   quickEntries: [],
   announcement: '',
@@ -242,6 +243,11 @@ const homeData = reactive<{
   newProducts: [],
   activities: []
 })
+
+onShareAppMessage(() => ({
+  title: `${homeData.brand.name || '禧孕优选'} - 品质母婴好物`,
+  path: `/pages/home/index?inviter=${userStore.userInfo?.id || ''}`
+}))
 
 const guessProducts = ref<ProductItem[]>([])
 const guessLoading = ref(false)
@@ -373,12 +379,34 @@ onMounted(() => {
   margin-bottom: $spacing-md;
 }
 
+.brand-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.brand-logo {
+  width: 86rpx;
+  height: 86rpx;
+  margin-right: 18rpx;
+  border-radius: 24rpx;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: $shadow-xs;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
 .brand-title {
   display: block;
+  max-width: 420rpx;
   font-size: 52rpx;
   line-height: 1.12;
   font-weight: 900;
   color: $text-color;
+  @include text-ellipsis;
 }
 
 .brand-subtitle {
@@ -393,6 +421,7 @@ onMounted(() => {
   border-radius: $radius-round;
   background: rgba($success-color, 0.12);
   border: 1rpx solid rgba($success-color, 0.18);
+  flex-shrink: 0;
 }
 
 .brand-badge-text {
