@@ -22,9 +22,24 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
     env:
       PRISMA_SKIP_POSTINSTALL_GENERATE: true
       DATABASE_URL: mysql://root:root@127.0.0.1:3306/baby_mall_test
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      NODE_ENV: test
+      JWT_SECRET: ci-runtime-jwt-secret-not-for-production-2026
+      REFRESH_TOKEN_SECRET: ci-runtime-refresh-secret-not-for-production-2026
 
     strategy:
       matrix:
@@ -106,6 +121,94 @@ jobs:
           name: api-build-failure-log
           path: api-build.log
           if-no-files-found: error
+          retention-days: 1
+
+      - name: Start real API and verify MySQL/Redis runtime
+        id: real-api-runtime
+        run: |
+          set -euo pipefail
+          : > real-api-runtime.log
+          PORT=3100 BUILD_SHA=${GITHUB_SHA} pnpm --filter @baby-mall/api start:prod >> real-api-runtime.log 2>&1 &
+          api_pid=$!
+
+          cleanup() {
+            if kill -0 "$api_pid" 2>/dev/null; then
+              kill -TERM "$api_pid" 2>/dev/null || true
+              for _ in $(seq 1 20); do
+                if ! kill -0 "$api_pid" 2>/dev/null; then
+                  break
+                fi
+                sleep 1
+              done
+              if kill -0 "$api_pid" 2>/dev/null; then
+                echo "API did not exit after SIGTERM" | tee -a real-api-runtime.log
+                kill -KILL "$api_pid" 2>/dev/null || true
+                wait "$api_pid" 2>/dev/null || true
+                return 1
+              fi
+            fi
+            wait "$api_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          healthy=0
+          for _ in $(seq 1 30); do
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "API process exited before becoming healthy" >&2
+              tail -n 200 real-api-runtime.log >&2
+              exit 1
+            fi
+            if curl --silent --show-error --fail http://127.0.0.1:3100/api/health > real-api-health.json; then
+              healthy=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$healthy" -ne 1 ]; then
+            echo "API health endpoint did not become ready" >&2
+            tail -n 200 real-api-runtime.log >&2
+            exit 1
+          fi
+
+          node -e '
+            const fs = require("fs");
+            const health = JSON.parse(fs.readFileSync("real-api-health.json", "utf8"));
+            if (health.status !== "ok") throw new Error(`health status=${health.status}`);
+            if (health.services?.database !== "ok") throw new Error("database health is not ok");
+            if (health.services?.redis !== "ok") throw new Error("redis health is not ok");
+            if (health.buildSha !== process.env.GITHUB_SHA) throw new Error(`buildSha mismatch: ${health.buildSha}`);
+          '
+
+          kill -TERM "$api_pid"
+          for _ in $(seq 1 20); do
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if kill -0 "$api_pid" 2>/dev/null; then
+            echo "API did not shut down cleanly after SIGTERM" >&2
+            tail -n 200 real-api-runtime.log >&2
+            exit 1
+          fi
+          wait "$api_pid" || status=$?
+          status=${status:-0}
+          if [ "$status" -ne 0 ]; then
+            echo "API exited with status $status after SIGTERM" >&2
+            tail -n 200 real-api-runtime.log >&2
+            exit "$status"
+          fi
+          trap - EXIT
+
+      - name: Preserve real API runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-api-runtime
+          path: |
+            real-api-runtime.log
+            real-api-health.json
+          if-no-files-found: warn
           retention-days: 1
 
       - name: Build Admin Web
