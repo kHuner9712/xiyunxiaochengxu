@@ -104,7 +104,7 @@ async function main() {
         productId: product.id,
         skuId: sku.id,
         quantity: 2,
-        selected: 1,
+        isSelected: 1,
       },
     });
 
