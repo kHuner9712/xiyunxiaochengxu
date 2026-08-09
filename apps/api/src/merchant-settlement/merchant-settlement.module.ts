@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminMerchantSettlementController } from './merchant-settlement.controller';
 import { MerchantSettlementService } from './merchant-settlement.service';
-import { StateSafeProductionMerchantSettlementService } from './state-safe-production-merchant-settlement.service';
+import { SnapshotAwareStateSafeMerchantSettlementService } from './snapshot-aware-state-safe-merchant-settlement.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 
 @Module({
@@ -10,7 +10,7 @@ import { PrismaModule } from '../common/prisma/prisma.module';
   providers: [
     {
       provide: MerchantSettlementService,
-      useClass: StateSafeProductionMerchantSettlementService,
+      useClass: SnapshotAwareStateSafeMerchantSettlementService,
     },
   ],
   exports: [MerchantSettlementService],
