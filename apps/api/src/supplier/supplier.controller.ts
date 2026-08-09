@@ -19,37 +19,37 @@ export class AdminSupplierController {
   constructor(private readonly supplierService: SupplierService) {}
 
   @Get('list')
-  @RequirePermission('product:supplier')
+  @RequirePermission('supplier:list')
   async list(@Query() dto: SupplierQueryDto) {
     return this.supplierService.findAll(dto);
   }
 
   @Get('detail/:id')
-  @RequirePermission('product:supplier')
+  @RequirePermission('supplier:list')
   async detail(@Param('id') id: string) {
     return this.supplierService.findById(id);
   }
 
   @Post('create')
-  @RequirePermission('product:supplier')
+  @RequirePermission('supplier:create')
   async create(@Body() dto: CreateSupplierDto) {
     return this.supplierService.create(dto);
   }
 
   @Put('update/:id')
-  @RequirePermission('product:supplier')
+  @RequirePermission('supplier:edit')
   async update(@Param('id') id: string, @Body() dto: UpdateSupplierDto) {
     return this.supplierService.update(id, dto);
   }
 
   @Delete('delete/:id')
-  @RequirePermission('product:supplier')
+  @RequirePermission('supplier:delete')
   async delete(@Param('id') id: string) {
     return this.supplierService.delete(id);
   }
 
   @Put('status/:id')
-  @RequirePermission('product:supplier')
+  @RequirePermission('supplier:edit')
   async updateStatus(@Param('id') id: string, @Body() body: SupplierStatusDto) {
     return this.supplierService.updateStatus(id, body.status);
   }
