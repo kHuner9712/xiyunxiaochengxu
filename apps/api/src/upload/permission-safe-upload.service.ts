@@ -104,7 +104,10 @@ export class PermissionSafeUploadService extends UploadService {
     return super.findPrivateById(id, currentUser);
   }
 
-  private async isReferencedByAuthorizedBusiness(group: string | undefined, fileId: bigint) {
+  private async isReferencedByAuthorizedBusiness(
+    group: string | null | undefined,
+    fileId: bigint,
+  ) {
     const privateUrl = `/api/common/file/private/${fileId.toString()}`;
     if (group === 'aftersale') {
       const aftersale = await this.permissionPrisma.aftersaleOrder.findFirst({
