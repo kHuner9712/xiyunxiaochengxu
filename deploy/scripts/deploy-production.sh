@@ -54,13 +54,20 @@ docker compose version >/dev/null 2>&1 || fail 'docker compose is unavailable'
 [ -r "$ENV_FILE" ] || fail "production env file is not readable: $ENV_FILE"
 
 EXPECTED_API_DOMAIN="${API_DOMAIN:-api.yunxixiaochengxu.com.cn}"
+EXPECTED_MINIPROGRAM_APP_ID="wxe40f76a33427090f"
+EXPECTED_UPLOAD_PUBLIC_URL="https://${EXPECTED_API_DOMAIN}"
 EXPECTED_PAY_NOTIFY_URL="https://${EXPECTED_API_DOMAIN}/api/weapp/pay/callback"
 EXPECTED_REFUND_NOTIFY_URL="https://${EXPECTED_API_DOMAIN}/api/weapp/pay/refund-callback"
+CONFIGURED_WECHAT_APP_ID="$(read_env_value WECHAT_APP_ID)"
+CONFIGURED_UPLOAD_PUBLIC_URL="$(read_env_value UPLOAD_PUBLIC_URL)"
+CONFIGURED_UPLOAD_PUBLIC_URL="${CONFIGURED_UPLOAD_PUBLIC_URL%/}"
 CONFIGURED_PAY_NOTIFY_URL="$(read_env_value WECHAT_NOTIFY_URL)"
 CONFIGURED_REFUND_NOTIFY_URL="$(read_env_value WECHAT_REFUND_NOTIFY_URL)"
+[ "$CONFIGURED_WECHAT_APP_ID" = "$EXPECTED_MINIPROGRAM_APP_ID" ] || fail "WECHAT_APP_ID must match the miniprogram AppID $EXPECTED_MINIPROGRAM_APP_ID; configured=${CONFIGURED_WECHAT_APP_ID:-empty}"
+[ "$CONFIGURED_UPLOAD_PUBLIC_URL" = "$EXPECTED_UPLOAD_PUBLIC_URL" ] || fail "UPLOAD_PUBLIC_URL must exactly match $EXPECTED_UPLOAD_PUBLIC_URL so generated public asset URLs use the deployed API origin; configured=${CONFIGURED_UPLOAD_PUBLIC_URL:-empty}"
 [ "$CONFIGURED_PAY_NOTIFY_URL" = "$EXPECTED_PAY_NOTIFY_URL" ] || fail "WECHAT_NOTIFY_URL must exactly match $EXPECTED_PAY_NOTIFY_URL; configured=${CONFIGURED_PAY_NOTIFY_URL:-empty}"
 [ "$CONFIGURED_REFUND_NOTIFY_URL" = "$EXPECTED_REFUND_NOTIFY_URL" ] || fail "WECHAT_REFUND_NOTIFY_URL must exactly match $EXPECTED_REFUND_NOTIFY_URL; configured=${CONFIGURED_REFUND_NOTIFY_URL:-empty}"
-pass 'WeChat payment and refund callback URLs exactly match the deployed public API routes'
+pass 'miniprogram AppID, public asset origin, and WeChat callback URLs match the deployed production routes'
 
 cd "$ROOT_DIR"
 [ -z "$(git status --porcelain)" ] || fail 'Git worktree is not clean; stop before production deployment'
