@@ -25,6 +25,7 @@ export const DEFAULT_ROLE_PERMISSION_CODES: Record<string, string[]> = {
     'order:cancel',
     'order:aftersale',
     'order:aftersale:review',
+    'pickup',
     'pickup:store',
     'pickup:verify',
     'marketing',
