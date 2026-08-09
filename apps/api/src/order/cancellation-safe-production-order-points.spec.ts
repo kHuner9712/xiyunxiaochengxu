@@ -1,9 +1,9 @@
+import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it, jest } from '@jest/globals';
 import { REFUND_STATUS } from '../common/constants';
 import { CancellationSafeProductionOrderService } from './cancellation-safe-production-order.service';
 
-function createService() {
-  const prisma = {};
+function createService(prisma: any = {}) {
   const businessEvent = {
     emit: jest.fn(),
     emitInfo: jest.fn(),
@@ -97,5 +97,56 @@ describe('CancellationSafeProductionOrderService net-paid completion rewards', (
     expect(earned).toBe(0);
     expect(userUpdate).not.toHaveBeenCalled();
     expect(pointsCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('CancellationSafeProductionOrderService automatic completion observability', () => {
+  const candidate = {
+    id: 77n,
+    userId: 100n,
+    orderNo: 'AUTO-COMPLETE-77',
+    status: 'delivered',
+    payAmount: 9900,
+    autoCompleteAt: new Date('2026-08-01T00:00:00Z'),
+    orderItems: [],
+  };
+
+  it('logs real transactional failures instead of silently swallowing them', async () => {
+    const prisma = {
+      order: {
+        findMany: (jest.fn() as any).mockResolvedValue([candidate]),
+      },
+    };
+    const service = createService(prisma);
+    const complete = (jest.fn() as any).mockRejectedValue(new Error('database write failed'));
+    (service as any).completeOrderAndReward = complete;
+    const logError = jest.spyOn((service as any).cancellationLogger, 'error').mockImplementation(() => undefined);
+
+    const result = await service.autoCompleteOrders();
+
+    expect(result).toEqual({ completedCount: 0 });
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringContaining('orderId=77'),
+      expect.any(String),
+    );
+  });
+
+  it('treats a concurrent claim loss as a normal skip without false error noise', async () => {
+    const prisma = {
+      order: {
+        findMany: (jest.fn() as any).mockResolvedValue([candidate]),
+      },
+    };
+    const service = createService(prisma);
+    (service as any).completeOrderAndReward = (jest.fn() as any).mockRejectedValue(
+      new BadRequestException('订单抢占失败'),
+    );
+    const logError = jest.spyOn((service as any).cancellationLogger, 'error').mockImplementation(() => undefined);
+
+    const result = await service.autoCompleteOrders();
+
+    expect(result).toEqual({ completedCount: 0 });
+    expect(logError).not.toHaveBeenCalled();
   });
 });
