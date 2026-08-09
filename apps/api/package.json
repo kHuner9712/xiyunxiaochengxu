@@ -33,7 +33,8 @@
     "test:integration:benefit-snapshot": "ts-node --transpile-only -P tsconfig.json test/benefit-snapshot-lifecycle.integration.ts",
     "test:integration:benefit-snapshot-view": "ts-node --transpile-only -P tsconfig.json test/benefit-snapshot-view.integration.ts",
     "test:integration:dashboard-payment-facts": "ts-node --transpile-only -P tsconfig.json test/dashboard-payment-facts.integration.ts",
-    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale && pnpm test:integration:merchant-settlement && pnpm test:integration:benefit-snapshot && pnpm test:integration:benefit-snapshot-view && pnpm test:integration:dashboard-payment-facts",
+    "test:integration:aftersale-attachment-ownership": "ts-node --transpile-only -P tsconfig.json test/aftersale-attachment-ownership.integration.ts",
+    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale && pnpm test:integration:merchant-settlement && pnpm test:integration:benefit-snapshot && pnpm test:integration:benefit-snapshot-view && pnpm test:integration:dashboard-payment-facts && pnpm test:integration:aftersale-attachment-ownership",
     "test:ci": "jest --config jest.config.js && jest --config test/jest-e2e.config.js"
   },
   "dependencies": {
