@@ -75,8 +75,52 @@ function createFixture() {
       pointsDeductRate: 100,
     }),
   };
-  const service = new ActivityCheckoutService(prisma, promotionCheckout, systemConfig);
-  return { service, prisma, tx, promotionCheckout, activity, activityProduct, sku };
+  const multiItemCheckout: any = {
+    preview: jest.fn().mockResolvedValue({
+      activityId: '1',
+      activityProductId: '10',
+      activityType: '3',
+      promotionLabel: '满赠活动',
+      items: [
+        { skuId: '200', quantity: 2, subtotal: 2000, isGift: false },
+        { skuId: '201', quantity: 1, subtotal: 0, isGift: true },
+      ],
+      totalAmount: 2500,
+      activityDiscountAmount: 500,
+      freightAmount: 1000,
+      payAmount: 3000,
+      fulfillmentType: 'delivery',
+      isZeroPay: false,
+      promotionStackingDisabled: true,
+      maxQuantity: 2,
+    }),
+    createOrder: jest.fn().mockResolvedValue({
+      orderId: '990',
+      orderNo: 'O990',
+      payAmount: 3000,
+      isZeroPay: false,
+      status: 'pending_payment',
+      fulfillmentType: 'delivery',
+      activityId: '1',
+      activityProductId: '10',
+    }),
+  };
+  const service = new ActivityCheckoutService(
+    prisma,
+    promotionCheckout,
+    systemConfig,
+    multiItemCheckout,
+  );
+  return {
+    service,
+    prisma,
+    tx,
+    promotionCheckout,
+    multiItemCheckout,
+    activity,
+    activityProduct,
+    sku,
+  };
 }
 
 const deliveryDto = {
@@ -117,12 +161,39 @@ describe('ActivityCheckoutService', () => {
     expect(result.payAmount).toBe(2700);
   });
 
-  it('rejects unsupported activity types before order creation', async () => {
+  it('routes full-gift preview through the real multi-item checkout service', async () => {
     const fixture = createFixture();
     fixture.activity.type = '3';
 
-    await expect(fixture.service.preview('7', '1', deliveryDto))
-      .rejects.toThrow('该活动类型没有完整的可执行结算规则');
+    const result = await fixture.service.preview('7', '1', deliveryDto);
+
+    expect(fixture.multiItemCheckout.preview).toHaveBeenCalledWith(
+      7n,
+      1n,
+      10n,
+      200n,
+      deliveryDto,
+    );
+    expect(result.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ skuId: '201', isGift: true, subtotal: 0 }),
+    ]));
+  });
+
+  it('routes bundle order creation through one multi-item transaction boundary', async () => {
+    const fixture = createFixture();
+    fixture.activity.type = '4';
+
+    const result = await fixture.service.createOrder('7', '1', deliveryDto);
+
+    expect(fixture.multiItemCheckout.createOrder).toHaveBeenCalledWith(
+      7n,
+      1n,
+      10n,
+      200n,
+      deliveryDto,
+    );
+    expect(fixture.promotionCheckout.createOrder).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({ orderId: '990', activityId: '1' }));
   });
 
   it('rejects quota overflow in preview instead of waiting until submit', async () => {
