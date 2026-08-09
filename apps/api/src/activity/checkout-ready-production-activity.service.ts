@@ -6,7 +6,7 @@ import { ProductionActivityService } from './production-activity.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 
-const EXECUTABLE_TYPES = new Set(['1', '2', '5']);
+const EXECUTABLE_TYPES = new Set(['1', '2', '3', '4', '5']);
 
 @Injectable()
 export class CheckoutReadyProductionActivityService extends ProductionActivityService {
@@ -35,13 +35,13 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
   override async findPublishedById(id: string) {
     const result: any = await super.findPublishedById(id);
     if (!EXECUTABLE_TYPES.has(String(result.type))) {
-      throw new NotFoundException('活动不存在或当前类型尚未开放购买');
+      throw new NotFoundException('活动不存在或活动类型无效');
     }
     return this.normalizeActivityProducts(result);
   }
 
   override async create(data: CreateActivityDto) {
-    this.assertExecutableDefinition(data);
+    await this.assertExecutableDefinition(data);
     const result: any = await super.create(data);
     return this.normalizeActivityProducts(result);
   }
@@ -64,7 +64,7 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
         limitPerUser: item.limitPerUser,
       })),
     };
-    this.assertExecutableDefinition(finalDefinition);
+    await this.assertExecutableDefinition(finalDefinition);
     const result: any = await super.update(id, data);
     return this.normalizeActivityProducts(result);
   }
@@ -77,7 +77,7 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
         include: { activityProducts: true },
       });
       if (!current || current.status === 4) throw new NotFoundException('活动不存在');
-      this.assertExecutableDefinition({
+      await this.assertExecutableDefinition({
         type: current.type,
         rules: current.rules,
         products: current.activityProducts.map((item) => ({
@@ -112,6 +112,7 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
       const activityPrice = Number(item.activityPrice ?? originalPrice);
       const activityStock = Number(item.activityStock ?? 0);
       const skuStock = Number(sku.stock ?? activityStock);
+      const type = String(activity.type);
       return {
         activityProductId,
         id: productId,
@@ -120,7 +121,7 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
         name: item.name || product.name || '',
         image: normalizeAssetUrl(item.image || sku.image || product.mainImage || ''),
         originalPrice,
-        price: String(activity.type) === '2' ? originalPrice : activityPrice,
+        price: type === '1' || type === '5' ? activityPrice : originalPrice,
         activityPrice,
         activityStock,
         stock: Math.max(0, Math.min(activityStock, skuStock)),
@@ -139,7 +140,7 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
     return { ...activity, products };
   }
 
-  private assertExecutableDefinition(data: {
+  private async assertExecutableDefinition(data: {
     type: string;
     rules?: unknown;
     products?: Array<{
@@ -152,18 +153,29 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
   }) {
     const type = String(data.type || '');
     if (!EXECUTABLE_TYPES.has(type)) {
-      throw new BadRequestException('当前仅开放已完成真实结算链的限时折扣、满减活动和新人优惠');
+      throw new BadRequestException('活动类型无效');
     }
     const products = Array.isArray(data.products) ? data.products : [];
     if (products.length === 0) throw new BadRequestException('活动至少需要配置一个活动商品');
+
+    const skuIds: bigint[] = [];
+    const skuIdStrings = new Set<string>();
+    const activityStockBySku = new Map<string, number>();
     for (const product of products) {
       if (!product.skuId || !/^[1-9]\d*$/.test(String(product.skuId))) {
         throw new BadRequestException('可购买活动商品必须绑定具体SKU，不能使用模糊的商品级价格/库存');
       }
+      if (skuIdStrings.has(String(product.skuId))) {
+        throw new BadRequestException('同一活动不能重复配置同一SKU');
+      }
+      skuIdStrings.add(String(product.skuId));
+      skuIds.push(BigInt(product.skuId));
+
       const stock = Number(product.activityStock ?? 0);
       if (!Number.isSafeInteger(stock) || stock <= 0) {
         throw new BadRequestException('活动商品必须配置大于0的活动库存');
       }
+      activityStockBySku.set(String(product.skuId), stock);
       if (type === '1' || type === '5') {
         const price = Number(product.activityPrice);
         if (!Number.isSafeInteger(price) || price < 0) {
@@ -171,8 +183,22 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
         }
       }
     }
+
+    const skuRows = await this.checkoutPrisma.productSku.findMany({
+      where: { id: { in: skuIds }, status: 1 },
+      include: { product: true },
+    });
+    if (skuRows.length !== skuIds.length || skuRows.some((sku) => sku.product.status !== 1)) {
+      throw new BadRequestException('活动包含已下架或无效SKU');
+    }
+    const skuMap = new Map(skuRows.map((sku) => [sku.id.toString(), sku]));
+
+    let rules: any = data.rules || {};
+    if (typeof rules === 'string') {
+      try { rules = JSON.parse(rules); } catch { throw new BadRequestException('活动规则配置损坏'); }
+    }
+
     if (type === '2') {
-      const rules: any = data.rules;
       const entries = Array.isArray(rules?.fullReductionRules) ? rules.fullReductionRules : [];
       if (entries.length === 0) throw new BadRequestException('满减活动至少需要一条满减规则');
       for (const rule of entries) {
@@ -187,6 +213,72 @@ export class CheckoutReadyProductionActivityService extends ProductionActivitySe
         ) {
           throw new BadRequestException('满减规则必须满足“门槛金额 > 减免金额 > 0”，且金额必须精确到分');
         }
+      }
+    }
+
+    if (type === '3') {
+      const entries = Array.isArray(rules?.fullGiftRules) ? rules.fullGiftRules : [];
+      if (entries.length === 0) throw new BadRequestException('满赠活动至少需要一条赠品规则');
+      const fulfillmentTypes = new Set(skuRows.map((sku) => sku.product.fulfillmentType || 'delivery'));
+      if (fulfillmentTypes.size !== 1) {
+        throw new BadRequestException('满赠活动的主商品与赠品必须使用相同履约方式');
+      }
+      for (const rule of entries) {
+        const fullAmount = Number(rule?.fullAmount);
+        const giftSkuId = String(rule?.giftSkuId || '');
+        const giftQuantity = Number(rule?.giftQuantity);
+        if (!Number.isSafeInteger(fullAmount) || fullAmount <= 0) {
+          throw new BadRequestException('满赠门槛金额必须为大于0的整数分');
+        }
+        if (!/^[1-9]\d*$/.test(giftSkuId) || !skuIdStrings.has(giftSkuId)) {
+          throw new BadRequestException('满赠规则的赠品SKU必须来自当前活动商品');
+        }
+        if (!Number.isSafeInteger(giftQuantity) || giftQuantity <= 0 || giftQuantity > 99) {
+          throw new BadRequestException('满赠规则的赠品数量必须为1-99的整数');
+        }
+        if ((activityStockBySku.get(giftSkuId) || 0) < giftQuantity) {
+          throw new BadRequestException('赠品活动库存不能小于单次赠送数量');
+        }
+      }
+    }
+
+    if (type === '4') {
+      const bundlePrice = Number(rules?.bundlePrice);
+      const bundleItems = Array.isArray(rules?.bundleItems) ? rules.bundleItems : [];
+      if (!Number.isSafeInteger(bundlePrice) || bundlePrice < 0) {
+        throw new BadRequestException('组合套餐必须配置有效套餐总价');
+      }
+      if (bundleItems.length < 2) {
+        throw new BadRequestException('组合套餐至少需要2个SKU');
+      }
+      const fulfillmentTypes = new Set(skuRows.map((sku) => sku.product.fulfillmentType || 'delivery'));
+      if (fulfillmentTypes.size !== 1) {
+        throw new BadRequestException('组合套餐内商品必须使用相同履约方式');
+      }
+      const configured = new Set<string>();
+      let originalTotal = 0;
+      for (const item of bundleItems) {
+        const skuId = String(item?.skuId || '');
+        const quantity = Number(item?.quantity);
+        if (!/^[1-9]\d*$/.test(skuId) || !skuIdStrings.has(skuId)) {
+          throw new BadRequestException('组合套餐SKU必须来自当前活动商品');
+        }
+        if (configured.has(skuId)) throw new BadRequestException('组合套餐不能重复配置同一SKU');
+        configured.add(skuId);
+        if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > 99) {
+          throw new BadRequestException('组合套餐每个SKU数量必须为1-99的整数');
+        }
+        const sku = skuMap.get(skuId)!;
+        originalTotal += sku.price * quantity;
+        if ((activityStockBySku.get(skuId) || 0) < quantity) {
+          throw new BadRequestException('套餐SKU活动库存不能小于单套所需数量');
+        }
+      }
+      if (configured.size !== skuIdStrings.size) {
+        throw new BadRequestException('组合套餐规则必须覆盖当前活动中的全部SKU');
+      }
+      if (bundlePrice > originalTotal) {
+        throw new BadRequestException('组合套餐价不能高于套餐商品原价合计');
       }
     }
   }
