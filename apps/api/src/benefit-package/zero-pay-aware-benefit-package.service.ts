@@ -5,8 +5,35 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { SnapshotGuardedProductionBenefitPackageService } from './snapshot-guarded-production-benefit-package.service';
 
+interface ZeroPayAwareBenefitPackageServiceContract {
+  findAll(...args: any[]): Promise<any>;
+  findById(...args: any[]): Promise<any>;
+  findByProductId(...args: any[]): Promise<any>;
+  create(...args: any[]): Promise<any>;
+  update(...args: any[]): Promise<any>;
+  updateStatus(...args: any[]): Promise<any>;
+  delete(...args: any[]): Promise<any>;
+  findUserPackages(...args: any[]): Promise<any>;
+  findMyPackages(...args: any[]): Promise<any>;
+  findEntitlements(...args: any[]): Promise<any>;
+  findMyEntitlements(...args: any[]): Promise<any>;
+  findEntitlementForUser(...args: any[]): Promise<any>;
+  previewVerify(...args: any[]): Promise<any>;
+  verify(...args: any[]): Promise<any>;
+  findVerificationLogs(...args: any[]): Promise<any>;
+  getStats(...args: any[]): Promise<any>;
+  grantBenefitsForOrder(...args: any[]): Promise<any>;
+  reconcileOrderBenefits(...args: any[]): Promise<any>;
+  reconcileUsedEntitlementAuditGaps(...args: any[]): Promise<any>;
+  assertRefundable(...args: any[]): Promise<any>;
+  assertRefundAmountSupported(...args: any[]): Promise<any>;
+  freezeForRefund(...args: any[]): Promise<any>;
+  restoreAfterRefundClosed(...args: any[]): Promise<any>;
+  revokeAfterRefundSuccess(...args: any[]): Promise<any>;
+}
+
 @Injectable()
-export class ZeroPayAwareBenefitPackageService extends SnapshotGuardedProductionBenefitPackageService {
+class ZeroPayAwareBenefitPackageServiceRuntime extends SnapshotGuardedProductionBenefitPackageService {
   constructor(
     private readonly zeroPayBenefitPrisma: PrismaService,
     merchantSettlementService: MerchantSettlementService,
@@ -48,3 +75,11 @@ export class ZeroPayAwareBenefitPackageService extends SnapshotGuardedProduction
     return { affected: result.count };
   }
 }
+
+export type ZeroPayAwareBenefitPackageService = ZeroPayAwareBenefitPackageServiceContract;
+
+export const ZeroPayAwareBenefitPackageService =
+  ZeroPayAwareBenefitPackageServiceRuntime as unknown as new (
+    zeroPayBenefitPrisma: PrismaService,
+    merchantSettlementService: MerchantSettlementService,
+  ) => ZeroPayAwareBenefitPackageServiceContract;
