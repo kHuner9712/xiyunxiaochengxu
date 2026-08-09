@@ -122,7 +122,7 @@ async function fetchConfig() {
 
 async function handleUploadLogo(options: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
+    const res = await uploadApi.uploadImage(options.file, 'system-logo')
     form.siteLogo = res.data.url
   } catch (e: any) {
     ElMessage.error(e?.message || 'Logo 上传失败')
