@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
+import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { paginate } from '@baby-mall/shared';
 
 @Injectable()
@@ -28,7 +29,7 @@ export class SupplierService {
     ]);
     this.logger.log(`管理员查询供应商列表，共${total}条`);
     return paginate(
-      list.map((s) => ({ ...s, id: s.id.toString() })),
+      list.map((supplier) => ({ ...supplier, id: supplier.id.toString() })),
       total,
       dto.page,
       dto.pageSize,
@@ -53,10 +54,12 @@ export class SupplierService {
       name: dto.name,
       contactName: dto.contactName,
       contactPhone: dto.contactPhone,
+      email: dto.email,
       address: dto.address,
       businessLicense: dto.businessLicense,
       settlementType: dto.settlementType,
       remark: dto.remark,
+      status: dto.status ?? 1,
     };
 
     if (dto.cooperationStartDate) {
@@ -68,7 +71,7 @@ export class SupplierService {
     return { ...result, id: result.id.toString() };
   }
 
-  async update(id: string, dto: Partial<CreateSupplierDto>) {
+  async update(id: string, dto: UpdateSupplierDto) {
     const supplier = await this.prisma.supplier.findFirst({
       where: { id: BigInt(id), deletedAt: null },
     });
@@ -85,10 +88,12 @@ export class SupplierService {
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.contactName !== undefined) updateData.contactName = dto.contactName;
     if (dto.contactPhone !== undefined) updateData.contactPhone = dto.contactPhone;
+    if (dto.email !== undefined) updateData.email = dto.email;
     if (dto.address !== undefined) updateData.address = dto.address;
     if (dto.businessLicense !== undefined) updateData.businessLicense = dto.businessLicense;
     if (dto.settlementType !== undefined) updateData.settlementType = dto.settlementType;
     if (dto.remark !== undefined) updateData.remark = dto.remark;
+    if (dto.status !== undefined) updateData.status = dto.status;
     if (dto.cooperationStartDate !== undefined) {
       updateData.cooperationStartDate = dto.cooperationStartDate
         ? new Date(dto.cooperationStartDate)
