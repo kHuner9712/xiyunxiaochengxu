@@ -11,6 +11,7 @@ test('product workflows can read reference data without receiving reference writ
   const category = read('apps/api/src/category/category.controller.ts')
   const brand = read('apps/api/src/brand/brand.controller.ts')
   const supplier = read('apps/api/src/supplier/supplier.controller.ts')
+  const product = read('apps/api/src/product/product.controller.ts')
 
   assert.ok(category.includes("@Get('list')\n  @RequirePermission('product:category', 'product:list', 'product:create', 'product:edit')"))
   assert.ok(category.includes("@Get('detail/:id')\n  @RequirePermission('product:category', 'product:list', 'product:create', 'product:edit')"))
@@ -29,6 +30,12 @@ test('product workflows can read reference data without receiving reference writ
   assert.ok(supplier.includes("@Post('create')\n  @RequirePermission('supplier:create')"))
   assert.ok(supplier.includes("@Put('update/:id')\n  @RequirePermission('supplier:edit')"))
   assert.ok(supplier.includes("@Delete('delete/:id')\n  @RequirePermission('supplier:delete')"))
+
+  assert.ok(product.includes("@Get('list')\n  @RequirePermission('product:list', 'product:create', 'product:edit', 'marketing:activity')"))
+  assert.ok(product.includes("@Get('detail/:id')\n  @RequirePermission('product:list', 'product:edit', 'marketing:activity')"))
+  assert.ok(product.includes("@Post('create')\n  @RequirePermission('product:create')"))
+  assert.ok(product.includes("@Put('update/:id')\n  @RequirePermission('product:edit')"))
+  assert.ok(product.includes("@Delete('delete/:id')\n  @RequirePermission('product:delete')"))
 })
 
 test('business menus use operational permissions instead of unrelated system privileges', () => {
