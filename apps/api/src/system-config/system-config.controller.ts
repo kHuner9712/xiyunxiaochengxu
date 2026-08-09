@@ -2,7 +2,7 @@ import { Controller, Get, Put, Body, Param } from '@nestjs/common';
 import { SystemConfigService } from './system-config.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
-import { IsString, IsNotEmpty, IsArray, IsIn, IsOptional, ValidateNested } from 'class-validator';
+import { IsString, IsNotEmpty, IsArray, IsIn, IsOptional, ValidateNested, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class UpdateConfigDto {
@@ -50,27 +50,35 @@ class BatchUpdateDto {
 
 class CustomerServiceConfigDto {
   @IsString()
+  @IsIn(['true', 'false'])
   enabled!: string;
 
   @IsString()
+  @IsIn(['phone', 'wechat', 'both'])
   type!: string;
 
   @IsString()
+  @MaxLength(40)
   phone!: string;
 
   @IsString()
+  @MaxLength(500)
   wechatQrCode!: string;
 
   @IsString()
+  @MaxLength(100)
   serviceTime!: string;
 
   @IsString()
+  @MaxLength(1000)
   autoReplyText!: string;
 
   @IsString()
+  @MaxLength(50000)
   faqContent!: string;
 
   @IsString()
+  @MaxLength(500)
   notice!: string;
 }
 
