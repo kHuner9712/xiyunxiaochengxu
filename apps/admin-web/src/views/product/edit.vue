@@ -499,7 +499,7 @@ function validateComplianceBeforeSave(): boolean {
 }
 
 async function handleUploadImage(options: any) {
-  const res = await uploadApi.uploadImage(options.file)
+  const res = await uploadApi.uploadImage(options.file, 'product-image')
   const uploadedUrl = sanitizeUrl(res?.data?.url)
   if (!uploadedUrl) return
   if (!form.mainImage) form.mainImage = uploadedUrl
@@ -552,7 +552,7 @@ function handleRemoveImage(file: any) {
 
 async function handleUploadSkuImage(options: any, row: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file, 'product')
+    const res = await uploadApi.uploadImage(options.file, 'product-image')
     const uploadedUrl = extractUploadUrl(res)
     if (!uploadedUrl) {
       ElMessage.error('上传成功但未返回图片地址')
