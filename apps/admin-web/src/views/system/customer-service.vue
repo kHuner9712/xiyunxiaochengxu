@@ -123,7 +123,7 @@ async function fetchConfig() {
 
 async function handleUploadQrCode(options: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
+    const res = await uploadApi.uploadImage(options.file, 'customer-service')
     form.wechatQrCode = res.data.url
   } catch {}
 }
