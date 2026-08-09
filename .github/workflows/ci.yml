@@ -96,7 +96,26 @@ jobs:
         run: pnpm --filter @baby-mall/api test:ci
 
       - name: Run API integration tests against real MySQL
-        run: pnpm --filter @baby-mall/api test:integration
+        id: api-integration
+        run: |
+          set +e
+          pnpm --filter @baby-mall/api test:integration > api-integration.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 300 api-integration.log >&2
+            exit "$status"
+          fi
+          cat api-integration.log
+
+      - name: Preserve API integration failure diagnostics
+        if: failure() && steps.api-integration.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-integration-failure-log
+          path: api-integration.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Run Miniprogram unit/component tests
         run: pnpm --filter @baby-mall/miniprogram test
