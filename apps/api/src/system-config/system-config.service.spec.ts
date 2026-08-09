@@ -1,4 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { BadRequestException } from '@nestjs/common';
 import { SystemConfigService } from './system-config.service';
 
 function createMockPrisma() {
@@ -33,7 +34,7 @@ describe('SystemConfigService - CustomerService', () => {
   });
 
   describe('getCustomerServiceConfig', () => {
-    it('should return default values when no config exists', async () => {
+    it('should return safe default values when no config exists', async () => {
       prisma.systemConfig.findMany.mockResolvedValue([]);
       redis.get.mockResolvedValue(null);
       prisma.systemConfig.findFirst.mockResolvedValue(null);
@@ -46,7 +47,7 @@ describe('SystemConfigService - CustomerService', () => {
       expect(result.wechatQrCode).toBe('');
       expect(result.serviceTime).toBe('');
       expect(result.autoReplyText).toBe('');
-      expect(result.faqContent).toBe('');
+      expect(result.faqContent).toBe('[]');
       expect(result.notice).toBe('');
     });
 
@@ -58,7 +59,7 @@ describe('SystemConfigService - CustomerService', () => {
         { groupName: 'customer_service', configKey: 'wechatQrCode', configValue: 'https://example.com/qr.png', valueType: 'string' },
         { groupName: 'customer_service', configKey: 'serviceTime', configValue: '9:00-18:00', valueType: 'string' },
         { groupName: 'customer_service', configKey: 'autoReplyText', configValue: '请稍候', valueType: 'string' },
-        { groupName: 'customer_service', configKey: 'faqContent', configValue: '[]', valueType: 'json' },
+        { groupName: 'customer_service', configKey: 'faqContent', configValue: '[{"question":"Q1","answer":"A1"}]', valueType: 'string' },
         { groupName: 'customer_service', configKey: 'notice', configValue: '公告', valueType: 'string' },
       ]);
       redis.get.mockResolvedValue(null);
@@ -72,6 +73,7 @@ describe('SystemConfigService - CustomerService', () => {
       expect(result.wechatQrCode).toBe('https://example.com/qr.png');
       expect(result.serviceTime).toBe('9:00-18:00');
       expect(result.autoReplyText).toBe('请稍候');
+      expect(result.faqContent).toBe('[{"question":"Q1","answer":"A1"}]');
       expect(result.notice).toBe('公告');
     });
 
@@ -107,10 +109,25 @@ describe('SystemConfigService - CustomerService', () => {
 
       expect(result.phone).toBe('');
     });
+
+    it('should downgrade malformed historical FAQ and invalid type instead of propagating bad public config', async () => {
+      prisma.systemConfig.findMany.mockResolvedValue([
+        { groupName: 'customer_service', configKey: 'enabled', configValue: 'true', valueType: 'boolean' },
+        { groupName: 'customer_service', configKey: 'type', configValue: 'unknown', valueType: 'string' },
+        { groupName: 'customer_service', configKey: 'faqContent', configValue: '{bad-json', valueType: 'string' },
+      ]);
+      redis.get.mockResolvedValue(null);
+      prisma.systemConfig.findFirst.mockResolvedValue(null);
+
+      const result = await service.getCustomerServiceConfig();
+
+      expect(result.type).toBe('phone');
+      expect(result.faqContent).toBe('[]');
+    });
   });
 
   describe('updateCustomerServiceConfig', () => {
-    it('should batch update all customer_service config keys atomically', async () => {
+    it('should batch update normalized customer_service config keys atomically', async () => {
       prisma.systemConfig.upsert.mockResolvedValue({});
       prisma.systemConfig.findMany.mockResolvedValue([]);
       redis.get.mockResolvedValue(null);
@@ -119,12 +136,12 @@ describe('SystemConfigService - CustomerService', () => {
       const dto = {
         enabled: 'true',
         type: 'wechat',
-        phone: '400-999-8888',
+        phone: ' 400-999-8888 ',
         wechatQrCode: '',
-        serviceTime: '9:00-21:00',
-        autoReplyText: '您好',
-        faqContent: '[{"question":"Q1","answer":"A1"}]',
-        notice: '测试公告',
+        serviceTime: ' 9:00-21:00 ',
+        autoReplyText: ' 您好 ',
+        faqContent: '[{"question":" Q1 ","answer":" A1 "}]',
+        notice: ' 测试公告 ',
       };
 
       await service.updateCustomerServiceConfig(dto);
@@ -135,14 +152,42 @@ describe('SystemConfigService - CustomerService', () => {
         expect.objectContaining({
           where: { uk_group_key: { groupName: 'customer_service', configKey: 'enabled' } },
           update: { configValue: 'true', valueType: 'boolean' },
-          create: {
-            groupName: 'customer_service',
-            configKey: 'enabled',
-            configValue: 'true',
-            valueType: 'boolean',
-          },
         }),
       );
+      expect(prisma.systemConfig.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { uk_group_key: { groupName: 'customer_service', configKey: 'faqContent' } },
+          update: { configValue: '[{"question":"Q1","answer":"A1"}]', valueType: 'string' },
+        }),
+      );
+    });
+
+    it('should reject enabled phone customer service without a usable phone number', async () => {
+      await expect(service.updateCustomerServiceConfig({
+        enabled: 'true',
+        type: 'phone',
+        phone: '',
+        wechatQrCode: '',
+        serviceTime: '',
+        autoReplyText: '',
+        faqContent: '[]',
+        notice: '',
+      })).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should reject malformed or incomplete FAQ entries before any write', async () => {
+      await expect(service.updateCustomerServiceConfig({
+        enabled: 'false',
+        type: 'wechat',
+        phone: '',
+        wechatQrCode: '',
+        serviceTime: '',
+        autoReplyText: '',
+        faqContent: '[{"question":"只有问题","answer":""}]',
+        notice: '',
+      })).rejects.toThrow('第1条常见问题的问答内容无效');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });
