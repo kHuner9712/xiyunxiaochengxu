@@ -10,9 +10,11 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { PromotionCheckoutService } from '../order/promotion-checkout.service';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { ActivityMultiItemCheckoutService } from './activity-multi-item-checkout.service';
 import { ActivityCheckoutDto } from './dto/activity-checkout.dto';
 
-const CHECKOUT_ACTIVITY_TYPES = new Set(['1', '2', '5']);
+const SINGLE_ITEM_ACTIVITY_TYPES = new Set(['1', '2', '5']);
+const MULTI_ITEM_ACTIVITY_TYPES = new Set(['3', '4']);
 
 type LoadedActivity = {
   activity: any;
@@ -31,6 +33,7 @@ export class ActivityCheckoutService {
     private readonly prisma: PrismaService,
     private readonly promotionCheckoutService: PromotionCheckoutService,
     private readonly systemConfigService: SystemConfigService,
+    private readonly multiItemCheckoutService: ActivityMultiItemCheckoutService,
   ) {}
 
   async preview(userId: string, activityId: string, dto: ActivityCheckoutDto) {
@@ -38,6 +41,18 @@ export class ActivityCheckoutService {
     const activityIdValue = parsePositiveBigIntId(activityId, '活动');
     const activityProductId = parsePositiveBigIntId(dto.activityProductId, '活动商品');
     const skuId = parsePositiveBigIntId(dto.skuId, 'SKU');
+    const activityType = await this.findActivityType(activityIdValue);
+
+    if (MULTI_ITEM_ACTIVITY_TYPES.has(activityType)) {
+      return this.multiItemCheckoutService.preview(
+        userIdValue,
+        activityIdValue,
+        activityProductId,
+        skuId,
+        dto,
+      );
+    }
+
     const loaded = await this.loadAndValidate(
       this.prisma,
       userIdValue,
@@ -82,6 +97,7 @@ export class ActivityCheckoutService {
       activityType: loaded.activity.type,
       promotionLabel: loaded.promotionLabel,
       items: [{
+        activityProductId: loaded.activityProduct.id.toString(),
         productId: loaded.sku.productId.toString(),
         skuId: loaded.sku.id.toString(),
         productName: loaded.sku.product.name,
@@ -92,6 +108,7 @@ export class ActivityCheckoutService {
         originalPrice: loaded.sku.price,
         quantity: dto.quantity,
         subtotal: totalAmount - loaded.discountAmount,
+        isGift: false,
       }],
       totalAmount,
       discountAmount: 0,
@@ -108,6 +125,13 @@ export class ActivityCheckoutService {
       fulfillmentType,
       isZeroPay: payAmount === 0,
       promotionStackingDisabled: true,
+      maxQuantity: await this.resolveMaxQuantity(
+        this.prisma,
+        loaded.activity,
+        loaded.activityProduct,
+        loaded.sku,
+        userIdValue,
+      ),
     };
   }
 
@@ -116,6 +140,17 @@ export class ActivityCheckoutService {
     const activityIdValue = parsePositiveBigIntId(activityId, '活动');
     const activityProductId = parsePositiveBigIntId(dto.activityProductId, '活动商品');
     const skuId = parsePositiveBigIntId(dto.skuId, 'SKU');
+    const activityType = await this.findActivityType(activityIdValue);
+
+    if (MULTI_ITEM_ACTIVITY_TYPES.has(activityType)) {
+      return this.multiItemCheckoutService.createOrder(
+        userIdValue,
+        activityIdValue,
+        activityProductId,
+        skuId,
+        dto,
+      );
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       const userRows = await tx.$queryRaw<Array<{ id: bigint }>>`
@@ -168,6 +203,19 @@ export class ActivityCheckoutService {
     };
   }
 
+  private async findActivityType(activityId: bigint) {
+    const activity = await this.prisma.activity.findUnique({
+      where: { id: activityId },
+      select: { type: true },
+    });
+    if (!activity) throw new NotFoundException('活动不存在');
+    const type = String(activity.type);
+    if (!SINGLE_ITEM_ACTIVITY_TYPES.has(type) && !MULTI_ITEM_ACTIVITY_TYPES.has(type)) {
+      throw new BadRequestException('活动类型无效');
+    }
+    return type;
+  }
+
   private async loadAndValidate(
     client: PrismaService | Prisma.TransactionClient,
     userId: bigint,
@@ -189,8 +237,8 @@ export class ActivityCheckoutService {
     ) {
       throw new BadRequestException('活动不存在、未开始或已结束');
     }
-    if (!CHECKOUT_ACTIVITY_TYPES.has(String(activity.type))) {
-      throw new BadRequestException('该活动类型没有完整的可执行结算规则，不能下单');
+    if (!SINGLE_ITEM_ACTIVITY_TYPES.has(String(activity.type))) {
+      throw new BadRequestException('该活动应走多商品结算链，不能使用单商品结算');
     }
 
     const activityProduct = await (client as any).activityProduct.findFirst({
@@ -305,6 +353,37 @@ export class ActivityCheckoutService {
     if (limitPerUser > 0 && boughtByUser + quantity > limitPerUser) {
       throw new BadRequestException(`每位用户最多购买${limitPerUser}件活动商品`);
     }
+  }
+
+  private async resolveMaxQuantity(
+    client: QuotaQueryClient,
+    activity: any,
+    activityProduct: any,
+    sku: any,
+    userId: bigint,
+  ) {
+    const [soldRows, userRows] = await Promise.all([
+      client.$queryRaw<Array<{ quantity: bigint | number | string }>>`
+        SELECT COALESCE(SUM(oi.quantity), 0) AS quantity
+        FROM order_items oi INNER JOIN orders o ON o.id = oi.order_id
+        WHERE oi.activity_id = ${activity.id} AND oi.activity_type = 'activity'
+          AND oi.sku_id = ${sku.id} AND o.status <> 'cancelled'
+      `,
+      client.$queryRaw<Array<{ quantity: bigint | number | string }>>`
+        SELECT COALESCE(SUM(oi.quantity), 0) AS quantity
+        FROM order_items oi INNER JOIN orders o ON o.id = oi.order_id
+        WHERE oi.activity_id = ${activity.id} AND oi.activity_type = 'activity'
+          AND oi.sku_id = ${sku.id} AND o.user_id = ${userId} AND o.status <> 'cancelled'
+      `,
+    ]);
+    const sold = Number(soldRows[0]?.quantity ?? 0);
+    const bought = Number(userRows[0]?.quantity ?? 0);
+    const remainingActivity = Math.max(0, Number(activityProduct.activityStock || 0) - sold);
+    const limit = String(activity.type) === '5'
+      ? Math.max(1, Number(activityProduct.limitPerUser || 1))
+      : Number(activityProduct.limitPerUser || 0);
+    const remainingUser = limit > 0 ? Math.max(0, limit - bought) : 99;
+    return Math.max(0, Math.min(99, Number(sku.stock || 0), remainingActivity, remainingUser));
   }
 
   private resolveFullReduction(rawRules: unknown, amount: number) {
