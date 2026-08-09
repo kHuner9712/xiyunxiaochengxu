@@ -30,11 +30,15 @@ const HOT_CACHE_KEY = 'search:hot_keywords';
 
 async function main() {
   await prisma.$connect();
-  const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const suffix = `${Date.now().toString(36).slice(-6)}${Math.random().toString(36).slice(2, 6)}`;
   const manualOld = `人工旧热词_${suffix}`;
   const manualNew = `人工新热词_${suffix}`;
   const overlap = `人工自然重叠_${suffix}`;
   const organic = `自然热词_${suffix}`;
+  for (const keyword of [manualOld, manualNew, overlap, organic]) {
+    assert.ok(keyword.length <= 20, `integration keyword must obey the admin 20-character limit: ${keyword}`);
+  }
+
   const createdKeywords: string[] = [];
   const originalHomeDecor = await prisma.systemConfig.findFirst({
     where: { groupName: 'home_decor', configKey: 'config' },
