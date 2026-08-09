@@ -72,7 +72,11 @@ async function main() {
     assert.equal(first[1], overlap, '第二个人工热词必须保持配置顺序');
     assert.ok(first.includes(organic), '自然搜索热词必须在人工热词之后补位');
     assert.equal(first.filter((item) => item === overlap).length, 1, '人工/自然重叠热词必须去重');
-    assert.ok(await redisService.get(HOT_CACHE_KEY), '首次读取后必须写入热词缓存');
+    assert.deepEqual(
+      JSON.parse(String(await redisService.get(HOT_CACHE_KEY))),
+      first,
+      '首次读取后缓存内容必须与公开热词响应一致',
+    );
 
     await homeDecorController.updateConfig({
       hotKeywords: [manualNew, overlap],
@@ -90,7 +94,11 @@ async function main() {
     const afterCorruptCache = await searchService.getHotKeywords();
     assert.equal(afterCorruptCache[0], manualNew, '坏 Redis JSON 必须自愈并从数据库重建人工热词');
     assert.ok(afterCorruptCache.includes(organic), '坏 Redis JSON 自愈后仍应包含自然热词');
-    assert.doesNotThrow(() => JSON.parse(String(redisClient.status ? '[]' : '[]')));
+    assert.deepEqual(
+      JSON.parse(String(await redisService.get(HOT_CACHE_KEY))),
+      afterCorruptCache,
+      '坏缓存自愈后 Redis 必须被重写为合法且与响应一致的 JSON',
+    );
 
     console.log('[search-hot-keyword-lifecycle-integration] PASS');
   } finally {
