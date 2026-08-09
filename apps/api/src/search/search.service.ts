@@ -143,7 +143,6 @@ export class SearchService {
       update: { searchCount: { increment: 1 } },
       create: { keyword: normalizedKeyword, searchCount: 1, status: 1 },
     });
-    await this.redisService.del(HOT_KEYWORDS_CACHE_KEY).catch(() => undefined);
   }
 
   async clearSearchHistory(userId?: string) {
