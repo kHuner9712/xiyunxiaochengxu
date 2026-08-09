@@ -29,13 +29,13 @@ export class AdminBrandController {
   constructor(private readonly brandService: BrandService) {}
 
   @Get('list')
-  @RequirePermission('product:brand')
+  @RequirePermission('product:brand', 'product:list', 'product:create', 'product:edit')
   async list(@Query() dto: BrandQueryDto) {
     return this.brandService.findAllAdmin(dto);
   }
 
   @Get('detail/:id')
-  @RequirePermission('product:brand')
+  @RequirePermission('product:brand', 'product:list', 'product:create', 'product:edit')
   async detail(@Param('id') id: string) {
     return this.brandService.findById(id);
   }
