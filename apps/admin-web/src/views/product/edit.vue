@@ -63,14 +63,14 @@
         </el-form-item>
 
         <el-form-item label="商品主图" prop="mainImage">
-          <el-upload action="" :http-request="handleUploadImage" :show-file-list="false" accept="image/*">
+          <el-upload action="" :http-request="handleUploadMainImage" :show-file-list="false" accept="image/*">
             <el-image v-if="form.mainImage" :src="form.mainImage" style="width: 120px; height: 120px" fit="cover" />
             <el-icon v-else :size="28" style="width: 120px; height: 120px; line-height: 120px; border: 1px dashed #d9d9d9; text-align: center"><Plus /></el-icon>
           </el-upload>
         </el-form-item>
 
         <el-form-item label="商品图片">
-          <el-upload action="" :http-request="handleUploadImage" list-type="picture-card" :file-list="imageFileList" :on-remove="handleRemoveImage" accept="image/*">
+          <el-upload action="" :http-request="handleUploadGalleryImage" list-type="picture-card" :file-list="imageFileList" :on-remove="handleRemoveImage" accept="image/*">
             <el-icon><Plus /></el-icon>
           </el-upload>
         </el-form-item>
@@ -312,13 +312,6 @@ function extractUploadUrl(res: any): string {
   )
 }
 
-function syncMainImageAfterImagesChanged() {
-  const firstImage = form.images[0] || ''
-  if (!form.mainImage || !form.images.includes(form.mainImage)) {
-    form.mainImage = firstImage
-  }
-}
-
 function sanitizeUrlList(values: unknown): string[] {
   if (!Array.isArray(values)) return []
   return values.map((item) => sanitizeUrl(item)).filter((item) => !!item)
@@ -498,14 +491,32 @@ function validateComplianceBeforeSave(): boolean {
   return true
 }
 
-async function handleUploadImage(options: any) {
-  const res = await uploadApi.uploadImage(options.file, 'product-image')
-  const uploadedUrl = sanitizeUrl(res?.data?.url)
-  if (!uploadedUrl) return
-  if (!form.mainImage) form.mainImage = uploadedUrl
-  else {
-    form.images.push(uploadedUrl)
-    imageFileList.value.push({ url: uploadedUrl })
+async function handleUploadMainImage(options: any) {
+  try {
+    const res = await uploadApi.uploadImage(options.file, 'product-image')
+    const uploadedUrl = extractUploadUrl(res)
+    if (!uploadedUrl) throw new Error('上传成功但未返回图片地址')
+    form.mainImage = uploadedUrl
+    options.onSuccess?.(res)
+  } catch (error: any) {
+    options.onError?.(error)
+    ElMessage.error(error?.message || '商品主图上传失败')
+  }
+}
+
+async function handleUploadGalleryImage(options: any) {
+  try {
+    const res = await uploadApi.uploadImage(options.file, 'product-image')
+    const uploadedUrl = extractUploadUrl(res)
+    if (!uploadedUrl) throw new Error('上传成功但未返回图片地址')
+    if (!form.images.includes(uploadedUrl)) {
+      form.images.push(uploadedUrl)
+      imageFileList.value.push({ url: uploadedUrl })
+    }
+    options.onSuccess?.(res)
+  } catch (error: any) {
+    options.onError?.(error)
+    ElMessage.error(error?.message || '商品图片上传失败')
   }
 }
 
@@ -547,7 +558,6 @@ function handleRemoveImage(file: any) {
   const idx = form.images.indexOf(targetUrl)
   if (idx > -1) form.images.splice(idx, 1)
   imageFileList.value = imageFileList.value.filter((item: any) => sanitizeUrl(item.rawUrl || item.url) !== targetUrl)
-  syncMainImageAfterImagesChanged()
 }
 
 async function handleUploadSkuImage(options: any, row: any) {
