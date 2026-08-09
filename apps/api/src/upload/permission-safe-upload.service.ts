@@ -6,12 +6,44 @@ import { normalizeGroupName, UploadService } from './upload.service';
 const SYSTEM_FILE_PERMISSION = 'system:file';
 const USER_PUBLIC_UPLOAD_GROUPS = new Set(['user-avatar', 'baby-avatar']);
 const USER_PRIVATE_UPLOAD_GROUPS = new Set(['aftersale']);
+const ADMIN_TEMPORARY_PRIVATE_GROUPS = new Set(['cert', 'business_license']);
 const MAX_USER_IMAGE_SIZE = 10 * 1024 * 1024;
 
 type AdminFileAccess = {
   isSuperAdmin: boolean;
   permissions: Set<string>;
 };
+
+function allowedAdminUploadPermissionsForGroup(groupName?: string | null): string[] {
+  const group = normalizeGroupName(groupName);
+  switch (group) {
+    case 'product':
+    case 'product-image':
+    case 'product-video':
+    case 'cert':
+      return ['product:create', 'product:edit', SYSTEM_FILE_PERMISSION];
+    case 'category-icon':
+      return ['product:category', SYSTEM_FILE_PERMISSION];
+    case 'brand-logo':
+      return ['product:brand', SYSTEM_FILE_PERMISSION];
+    case 'marketing-banner':
+      return ['marketing:banner', SYSTEM_FILE_PERMISSION];
+    case 'home-decor':
+      return ['marketing:decor', SYSTEM_FILE_PERMISSION];
+    case 'content-cover':
+    case 'content-video':
+    case 'content-video-cover':
+      return ['content:edit', SYSTEM_FILE_PERMISSION];
+    case 'system-logo':
+      return ['system:config', SYSTEM_FILE_PERMISSION];
+    case 'customer-service':
+      return ['system:customer-service', SYSTEM_FILE_PERMISSION];
+    case 'business_license':
+      return ['supplier:create', 'supplier:edit', SYSTEM_FILE_PERMISSION];
+    default:
+      return [SYSTEM_FILE_PERMISSION];
+  }
+}
 
 function allowedAdminPermissionsForGroup(groupName?: string | null): string[] {
   const group = normalizeGroupName(groupName);
@@ -23,8 +55,10 @@ function allowedAdminPermissionsForGroup(groupName?: string | null): string[] {
         'order:aftersale:refund',
         SYSTEM_FILE_PERMISSION,
       ];
+    case 'cert':
+      return ['product:create', 'product:edit', SYSTEM_FILE_PERMISSION];
     case 'business_license':
-      return ['supplier:list', 'supplier:edit', SYSTEM_FILE_PERMISSION];
+      return ['supplier:list', 'supplier:create', 'supplier:edit', SYSTEM_FILE_PERMISSION];
     default:
       return [SYSTEM_FILE_PERMISSION];
   }
@@ -43,7 +77,10 @@ export class PermissionSafeUploadService extends UploadService {
     groupName?: string,
   ) {
     if (uploaderType === 'admin') {
-      await this.assertAdminHasAnyPermission(uploaderId, [SYSTEM_FILE_PERMISSION]);
+      await this.assertAdminHasAnyPermission(
+        uploaderId,
+        allowedAdminUploadPermissionsForGroup(groupName),
+      );
       return super.uploadFile(file, uploaderId, uploaderType, groupName);
     }
 
@@ -76,7 +113,7 @@ export class PermissionSafeUploadService extends UploadService {
     const fileId = parsePositiveBigIntId(id, '文件');
     const file = await this.permissionPrisma.fileAsset.findFirst({
       where: { id: fileId },
-      select: { id: true, groupName: true },
+      select: { id: true, groupName: true, uploaderId: true, uploaderType: true },
     });
 
     // Let the base service preserve the canonical not-found/private-file behavior.
@@ -96,6 +133,14 @@ export class PermissionSafeUploadService extends UploadService {
     }
 
     const group = normalizeGroupName(file.groupName);
+    const ownsTemporaryBusinessAsset = !!group
+      && ADMIN_TEMPORARY_PRIVATE_GROUPS.has(group)
+      && file.uploaderType === 'admin'
+      && file.uploaderId?.toString() === String(currentUser.id || '');
+    if (ownsTemporaryBusinessAsset) {
+      return super.findPrivateById(id, currentUser);
+    }
+
     const referenced = await this.isReferencedByAuthorizedBusiness(group, file.id);
     if (!referenced) {
       throw new ForbiddenException('该私有文件尚未进入可访问的业务记录');
@@ -119,6 +164,19 @@ export class PermissionSafeUploadService extends UploadService {
         select: { id: true },
       });
       return !!aftersale;
+    }
+    if (group === 'cert') {
+      const product = await this.permissionPrisma.product.findFirst({
+        where: {
+          deletedAt: null,
+          attributes: {
+            path: '$.compliance.certImages',
+            array_contains: privateUrl,
+          },
+        },
+        select: { id: true },
+      });
+      return !!product;
     }
     if (group === 'business_license') {
       const supplier = await this.permissionPrisma.supplier.findFirst({
@@ -171,6 +229,7 @@ export class PermissionSafeUploadService extends UploadService {
 
 export {
   allowedAdminPermissionsForGroup,
+  allowedAdminUploadPermissionsForGroup,
   USER_PRIVATE_UPLOAD_GROUPS,
   USER_PUBLIC_UPLOAD_GROUPS,
 };
