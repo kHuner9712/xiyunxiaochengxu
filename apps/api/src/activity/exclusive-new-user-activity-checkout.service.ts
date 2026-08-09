@@ -5,6 +5,7 @@ import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { PromotionCheckoutService } from '../order/promotion-checkout.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { ActivityCheckoutService } from './activity-checkout.service';
+import { ActivityMultiItemCheckoutService } from './activity-multi-item-checkout.service';
 import { ActivityCheckoutDto } from './dto/activity-checkout.dto';
 
 @Injectable()
@@ -14,8 +15,9 @@ export class ExclusiveNewUserActivityCheckoutService extends ActivityCheckoutSer
     private readonly eligibilityRedis: RedisService,
     promotionCheckoutService: PromotionCheckoutService,
     systemConfigService: SystemConfigService,
+    multiItemCheckoutService: ActivityMultiItemCheckoutService,
   ) {
-    super(eligibilityPrisma, promotionCheckoutService, systemConfigService);
+    super(eligibilityPrisma, promotionCheckoutService, systemConfigService, multiItemCheckoutService);
   }
 
   override async preview(userId: string, activityId: string, dto: ActivityCheckoutDto) {
