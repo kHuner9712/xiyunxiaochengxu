@@ -5,26 +5,20 @@
         <span>{{ isEdit ? '编辑活动' : '新增活动' }}</span>
       </template>
 
-      <el-alert
-        v-if="legacyUnsupportedType"
-        title="该历史活动类型没有完整结算规则，不能继续启用。请改为限时折扣、满减活动或新人优惠后重新配置商品。"
-        type="warning"
-        :closable="false"
-        style="margin-bottom: 18px"
-      />
-
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" style="max-width: 900px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" style="max-width: 980px">
         <el-form-item label="活动名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入活动名称" maxlength="100" />
         </el-form-item>
 
         <el-form-item label="活动类型" prop="type">
-          <el-select v-model="form.type" placeholder="请选择活动类型" style="width: 260px">
+          <el-select v-model="form.type" placeholder="请选择活动类型" style="width: 260px" @change="onTypeChange">
             <el-option label="限时折扣" value="1" />
             <el-option label="满减活动" value="2" />
-            <el-option label="新人优惠" value="5" />
+            <el-option label="满赠活动" value="3" />
+            <el-option label="组合套餐" value="4" />
+            <el-option label="新人礼包" value="5" />
           </el-select>
-          <span class="hint">只展示已经接入真实订单结算链的活动类型。</span>
+          <span class="hint">五种活动均接入真实订单、库存与支付链路。</span>
         </el-form-item>
 
         <el-form-item label="活动时间" prop="dateRange">
@@ -52,12 +46,40 @@
           </div>
         </el-form-item>
 
+        <el-form-item v-if="form.type === '3'" label="满赠规则">
+          <div class="rules-editor full-width">
+            <div v-for="(rule, idx) in form.fullGiftRules" :key="idx" class="gift-rule-row">
+              <span>满</span>
+              <el-input-number v-model="rule.fullAmount" :min="0.01" :precision="2" size="small" />
+              <span>元赠</span>
+              <el-select v-model="rule.giftSkuId" placeholder="选择赠品SKU" filterable style="width: 300px">
+                <el-option
+                  v-for="option in configuredSkuOptions"
+                  :key="option.id"
+                  :label="option.label"
+                  :value="option.id"
+                />
+              </el-select>
+              <el-input-number v-model="rule.giftQuantity" :min="1" :max="99" size="small" />
+              <span>件</span>
+              <el-button type="danger" link @click="form.fullGiftRules.splice(idx, 1)">删除</el-button>
+            </div>
+            <el-button size="small" @click="addFullGiftRule">添加规则</el-button>
+            <div class="hint block-hint">达到多个门槛时只执行最高门槛；赠品进入真实订单项并真实扣库存，赠品实付金额为 0。</div>
+          </div>
+        </el-form-item>
+
+        <el-form-item v-if="form.type === '4'" label="套餐总价">
+          <el-input-number v-model="form.bundlePriceYuan" :min="0" :precision="2" :step="1" />
+          <span class="hint">元 / 套；套餐优惠会按各 SKU 原价比例分摊到订单项。</span>
+        </el-form-item>
+
         <el-form-item label="活动商品">
           <div style="width: 100%">
             <el-button size="small" @click="selectProductVisible = true">选择商品</el-button>
             <el-table :data="form.products" stripe size="small" style="margin-top: 10px; width: 100%">
-              <el-table-column prop="name" label="商品名称" min-width="160" show-overflow-tooltip />
-              <el-table-column label="活动 SKU" min-width="210">
+              <el-table-column prop="name" label="商品名称" min-width="150" show-overflow-tooltip />
+              <el-table-column label="活动 SKU" min-width="230">
                 <template #default="{ row }">
                   <el-select v-model="row.skuId" placeholder="必须选择具体SKU" filterable style="width: 100%" @change="onSkuChange(row)">
                     <el-option
@@ -73,7 +95,7 @@
               <el-table-column label="SKU原价" width="105">
                 <template #default="{ row }">¥{{ formatPrice(row.originalPrice) }}</template>
               </el-table-column>
-              <el-table-column v-if="form.type !== '2'" label="活动价(元)" width="140">
+              <el-table-column v-if="form.type === '1' || form.type === '5'" label="活动价(元)" width="140">
                 <template #default="{ row }">
                   <el-input-number
                     v-model="row.activityPriceYuan"
@@ -84,8 +106,16 @@
                   />
                 </template>
               </el-table-column>
-              <el-table-column v-else label="结算方式" width="120">
+              <el-table-column v-else-if="form.type === '2'" label="结算方式" width="120">
                 <template #default>按满减规则</template>
+              </el-table-column>
+              <el-table-column v-else-if="form.type === '3'" label="结算方式" width="120">
+                <template #default>原价 / 可作赠品</template>
+              </el-table-column>
+              <el-table-column v-else label="每套数量" width="120">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.bundleQuantity" :min="1" :max="99" size="small" />
+                </template>
               </el-table-column>
               <el-table-column label="活动库存" width="120">
                 <template #default="{ row }">
@@ -94,16 +124,18 @@
               </el-table-column>
               <el-table-column label="每人限购" width="120">
                 <template #default="{ row }">
-                  <el-input-number v-model="row.limitPerUser" :min="form.type === '5' ? 1 : 0" :max="99" size="small" />
+                  <el-input-number v-model="row.limitPerUser" :min="form.type === '5' ? 1 : 0" :max="9999" size="small" />
                 </template>
               </el-table-column>
               <el-table-column width="70">
                 <template #default="{ $index }">
-                  <el-button type="danger" link @click="form.products.splice($index, 1)">移除</el-button>
+                  <el-button type="danger" link @click="removeProduct($index)">移除</el-button>
                 </template>
               </el-table-column>
             </el-table>
-            <div class="hint block-hint">活动库存和价格均针对选中的具体 SKU；新人优惠默认至少每人限购 1 件。</div>
+            <div class="hint block-hint">
+              活动库存针对具体 SKU；组合套餐会一次扣减所有套餐 SKU，满赠会同时扣减命中的赠品 SKU。
+            </div>
           </div>
         </el-form-item>
 
@@ -143,7 +175,6 @@ import { formatPrice, priceToFen } from '@/utils/format'
 import { asArray } from '@/utils/response'
 
 const POSITIVE_ID = /^[1-9]\d*$/
-const EXECUTABLE_TYPES = new Set(['1', '2', '5'])
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
@@ -152,7 +183,6 @@ const selectProductVisible = ref(false)
 const loadingSelectedProducts = ref(false)
 const productList = ref<any[]>([])
 const selectedProducts = ref<any[]>([])
-const legacyUnsupportedType = ref(false)
 const activityId = computed(() => String(route.params.id || '').trim())
 const isEdit = computed(() => POSITIVE_ID.test(activityId.value))
 
@@ -174,13 +204,22 @@ interface ActivityProductRow {
   activityStock: number
   stock: number
   limitPerUser: number
+  bundleQuantity: number
+}
+
+interface FullGiftRuleRow {
+  fullAmount: number
+  giftSkuId: string
+  giftQuantity: number
 }
 
 const form = reactive({
   name: '',
-  type: '1',
+  type: '1' as '1' | '2' | '3' | '4' | '5',
   dateRange: [] as string[],
   fullReductionRules: [] as { fullAmount: number; reduceAmount: number }[],
+  fullGiftRules: [] as FullGiftRuleRow[],
+  bundlePriceYuan: 0,
   products: [] as ActivityProductRow[],
   description: '',
 })
@@ -190,6 +229,16 @@ const rules: FormRules = {
   type: [{ required: true, message: '请选择活动类型', trigger: 'change' }],
   dateRange: [{ required: true, message: '请选择活动时间', trigger: 'change' }],
 }
+
+const configuredSkuOptions = computed(() => form.products
+  .filter((row) => POSITIVE_ID.test(row.skuId))
+  .map((row) => {
+    const sku = row.skuOptions.find((item) => item.id === row.skuId)
+    return {
+      id: row.skuId,
+      label: `${row.name} · ${sku?.label || `SKU ${row.skuId}`}`,
+    }
+  }))
 
 function pad(value: number) { return String(value).padStart(2, '0') }
 function toLocalPicker(value: unknown) {
@@ -224,6 +273,7 @@ async function loadSkuOptions(productId: string): Promise<SkuOption[]> {
 }
 
 function applySku(row: ActivityProductRow, skuId: string) {
+  const previousSkuId = row.skuId
   const sku = row.skuOptions.find((item) => item.id === skuId)
   if (!sku) return
   row.originalPrice = sku.price
@@ -232,10 +282,40 @@ function applySku(row: ActivityProductRow, skuId: string) {
   if (!Number.isFinite(row.activityPriceYuan) || row.activityPriceYuan > sku.price / 100) {
     row.activityPriceYuan = sku.price / 100
   }
+  if (previousSkuId && previousSkuId !== skuId) {
+    for (const rule of form.fullGiftRules) {
+      if (rule.giftSkuId === previousSkuId) rule.giftSkuId = skuId
+    }
+  }
 }
 
 function onSkuChange(row: ActivityProductRow) {
   applySku(row, row.skuId)
+}
+
+function onTypeChange() {
+  if (form.type === '5') {
+    for (const row of form.products) row.limitPerUser = Math.max(1, row.limitPerUser || 1)
+  }
+  if (form.type === '4') {
+    for (const row of form.products) row.bundleQuantity = Math.max(1, row.bundleQuantity || 1)
+  }
+}
+
+function addFullGiftRule() {
+  form.fullGiftRules.push({
+    fullAmount: 100,
+    giftSkuId: configuredSkuOptions.value[0]?.id || '',
+    giftQuantity: 1,
+  })
+}
+
+function removeProduct(index: number) {
+  const removed = form.products[index]
+  form.products.splice(index, 1)
+  if (removed?.skuId) {
+    form.fullGiftRules = form.fullGiftRules.filter((rule) => rule.giftSkuId !== removed.skuId)
+  }
 }
 
 async function fetchProducts() {
@@ -275,6 +355,7 @@ async function confirmProductSelect() {
         activityStock: selectedSku?.stock || 1,
         stock: selectedSku?.stock || 1,
         limitPerUser: form.type === '5' ? 1 : 0,
+        bundleQuantity: 1,
       })
       existing.add(productId)
     }
@@ -292,9 +373,11 @@ async function fetchDetail() {
   try {
     const res = await activityApi.getDetail(activityId.value)
     const d = res.data || {}
-    const type = String(d.type || '')
-    legacyUnsupportedType.value = !EXECUTABLE_TYPES.has(type)
+    const type = String(d.type || '1') as '1' | '2' | '3' | '4' | '5'
     const parsedRules = d.rules && typeof d.rules === 'object' ? d.rules : {}
+    const bundleQuantityBySku = new Map(
+      asArray((parsedRules as any).bundleItems).map((item: any) => [String(item.skuId || ''), Number(item.quantity || 1)]),
+    )
     const productRows = await Promise.all(asArray(d.products).map(async (p: any) => {
       const productId = String(p.productId || p.id || '')
       const skuOptions = POSITIVE_ID.test(productId) ? await loadSkuOptions(productId) : []
@@ -310,16 +393,23 @@ async function fetchDetail() {
         activityStock: Number(p.activityStock ?? p.stock ?? 0),
         stock: Number(sku?.stock ?? p.stock ?? 0),
         limitPerUser: Number(p.limitPerUser || (type === '5' ? 1 : 0)),
+        bundleQuantity: Number(bundleQuantityBySku.get(skuId) || 1),
       } as ActivityProductRow
     }))
     Object.assign(form, {
       name: d.name || '',
-      type: EXECUTABLE_TYPES.has(type) ? type : '',
+      type,
       dateRange: [toLocalPicker(d.startTime), toLocalPicker(d.endTime)],
       fullReductionRules: asArray((parsedRules as any).fullReductionRules).map((r: any) => ({
         fullAmount: Number(r.fullAmount || 0) / 100,
         reduceAmount: Number(r.reduceAmount || 0) / 100,
       })),
+      fullGiftRules: asArray((parsedRules as any).fullGiftRules).map((r: any) => ({
+        fullAmount: Number(r.fullAmount || 0) / 100,
+        giftSkuId: String(r.giftSkuId || ''),
+        giftQuantity: Number(r.giftQuantity || 1),
+      })),
+      bundlePriceYuan: Number((parsedRules as any).bundlePrice || 0) / 100,
       products: productRows,
       description: d.description || '',
     })
@@ -328,91 +418,128 @@ async function fetchDetail() {
   }
 }
 
-function buildPayload(): ActivityPayload {
-  if (!EXECUTABLE_TYPES.has(form.type)) throw new Error('请选择已开放真实结算的活动类型')
-  if (form.dateRange.length !== 2) throw new Error('请选择完整活动时间')
+function validateBusinessRules() {
   if (form.products.length === 0) throw new Error('请至少选择一个活动商品')
+  const skuIds = new Set<string>()
+  for (const row of form.products) {
+    if (!POSITIVE_ID.test(row.skuId)) throw new Error(`${row.name || '活动商品'}必须选择具体SKU`)
+    if (skuIds.has(row.skuId)) throw new Error('同一活动不能重复配置同一SKU')
+    skuIds.add(row.skuId)
+    if (!Number.isSafeInteger(row.activityStock) || row.activityStock <= 0 || row.activityStock > row.stock) {
+      throw new Error(`${row.name || '活动商品'}的活动库存无效`)
+    }
+    if ((form.type === '1' || form.type === '5') &&
+      (!Number.isFinite(row.activityPriceYuan) || row.activityPriceYuan < 0 || priceToFen(row.activityPriceYuan) > row.originalPrice)) {
+      throw new Error(`${row.name || '活动商品'}的活动价无效`)
+    }
+  }
+  if (form.type === '2') {
+    if (form.fullReductionRules.length === 0) throw new Error('满减活动至少需要一条满减规则')
+    for (const rule of form.fullReductionRules) {
+      const full = priceToFen(rule.fullAmount)
+      const reduce = priceToFen(rule.reduceAmount)
+      if (full <= 0 || reduce <= 0 || reduce >= full) throw new Error('满减规则必须满足门槛金额 > 减免金额 > 0')
+    }
+  }
+  if (form.type === '3') {
+    if (form.fullGiftRules.length === 0) throw new Error('满赠活动至少需要一条赠品规则')
+    for (const rule of form.fullGiftRules) {
+      if (priceToFen(rule.fullAmount) <= 0) throw new Error('满赠门槛必须大于0')
+      if (!skuIds.has(rule.giftSkuId)) throw new Error('满赠规则必须选择当前活动中的赠品SKU')
+      if (!Number.isSafeInteger(rule.giftQuantity) || rule.giftQuantity <= 0) throw new Error('赠品数量必须为正整数')
+      const giftRow = form.products.find((row) => row.skuId === rule.giftSkuId)
+      if (!giftRow || giftRow.activityStock < rule.giftQuantity) throw new Error('赠品活动库存不能小于单次赠送数量')
+    }
+  }
+  if (form.type === '4') {
+    if (form.products.length < 2) throw new Error('组合套餐至少需要2个SKU')
+    if (!Number.isFinite(form.bundlePriceYuan) || form.bundlePriceYuan < 0) throw new Error('套餐总价无效')
+    const originalTotal = form.products.reduce((sum, row) => sum + row.originalPrice * row.bundleQuantity, 0)
+    if (priceToFen(form.bundlePriceYuan) > originalTotal) throw new Error('套餐总价不能高于商品原价合计')
+    for (const row of form.products) {
+      if (!Number.isSafeInteger(row.bundleQuantity) || row.bundleQuantity <= 0) throw new Error('每个套餐SKU数量必须为正整数')
+      if (row.activityStock < row.bundleQuantity) throw new Error(`${row.name}活动库存不能小于单套所需数量`)
+    }
+  }
+}
+
+function buildPayload(): ActivityPayload {
+  if (form.dateRange.length !== 2) throw new Error('请选择完整活动时间')
+  validateBusinessRules()
   const startTime = pickerToIso(form.dateRange[0])
   const endTime = pickerToIso(form.dateRange[1])
   if (new Date(startTime).getTime() >= new Date(endTime).getTime()) throw new Error('活动结束时间必须晚于开始时间')
 
-  const fullReductionRules = form.type === '2'
-    ? form.fullReductionRules.map((r) => ({ fullAmount: priceToFen(r.fullAmount), reduceAmount: priceToFen(r.reduceAmount) }))
-    : []
-  if (form.type === '2' && fullReductionRules.length === 0) throw new Error('满减活动至少需要一条满减规则')
-  if (form.type === '2' && fullReductionRules.some((r) => r.fullAmount <= 0 || r.reduceAmount <= 0 || r.reduceAmount >= r.fullAmount)) {
-    throw new Error('满减规则必须满足“门槛>减免>0”')
+  let activityRules: Record<string, unknown> = {}
+  if (form.type === '2') {
+    activityRules = {
+      fullReductionRules: form.fullReductionRules.map((rule) => ({
+        fullAmount: priceToFen(rule.fullAmount),
+        reduceAmount: priceToFen(rule.reduceAmount),
+      })),
+    }
+  } else if (form.type === '3') {
+    activityRules = {
+      fullGiftRules: form.fullGiftRules.map((rule) => ({
+        fullAmount: priceToFen(rule.fullAmount),
+        giftSkuId: rule.giftSkuId,
+        giftQuantity: rule.giftQuantity,
+      })),
+    }
+  } else if (form.type === '4') {
+    activityRules = {
+      bundlePrice: priceToFen(form.bundlePriceYuan),
+      bundleItems: form.products.map((row) => ({
+        skuId: row.skuId,
+        quantity: row.bundleQuantity,
+      })),
+    }
   }
-
-  const products = form.products.map((p) => {
-    if (!POSITIVE_ID.test(p.productId) || !POSITIVE_ID.test(p.skuId)) throw new Error(`${p.name || '活动商品'}必须选择具体SKU`)
-    const sku = p.skuOptions.find((item) => item.id === p.skuId)
-    if (!sku || sku.status !== 1 || sku.stock <= 0) throw new Error(`${p.name || '活动商品'}所选SKU已不可售`)
-    if (!Number.isSafeInteger(p.activityStock) || p.activityStock <= 0 || p.activityStock > sku.stock) {
-      throw new Error(`${p.name || '活动商品'}活动库存必须在1-${sku.stock}之间`)
-    }
-    const activityPrice = form.type === '2' ? sku.price : priceToFen(p.activityPriceYuan)
-    if (!Number.isSafeInteger(activityPrice) || activityPrice < 0 || activityPrice > sku.price) {
-      throw new Error(`${p.name || '活动商品'}活动价不能高于SKU当前价`)
-    }
-    const limitPerUser = form.type === '5' ? Math.max(1, Number(p.limitPerUser || 1)) : Number(p.limitPerUser || 0)
-    if (!Number.isSafeInteger(limitPerUser) || limitPerUser < 0 || limitPerUser > 99) throw new Error('每人限购数量无效')
-    return {
-      productId: p.productId,
-      skuId: p.skuId,
-      activityPrice,
-      activityStock: p.activityStock,
-      limitPerUser,
-    }
-  })
 
   return {
     name: form.name.trim(),
-    type: form.type as '1' | '2' | '5',
+    type: form.type,
+    description: form.description.trim() || undefined,
     startTime,
     endTime,
-    description: form.description.trim(),
-    rules: { fullReductionRules },
-    products,
+    rules: activityRules,
+    products: form.products.map((row) => ({
+      productId: row.productId,
+      skuId: row.skuId,
+      activityPrice: form.type === '1' || form.type === '5' ? priceToFen(row.activityPriceYuan) : row.originalPrice,
+      activityStock: row.activityStock,
+      limitPerUser: form.type === '5' ? Math.max(1, row.limitPerUser || 1) : row.limitPerUser,
+    })),
   }
 }
 
 async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
-  let payload: ActivityPayload
-  try { payload = buildPayload() } catch (e: any) { ElMessage.warning(e?.message || '请检查活动配置'); return }
   submitting.value = true
   try {
+    const payload = buildPayload()
     if (isEdit.value) await activityApi.update(activityId.value, payload)
     else await activityApi.create(payload)
     ElMessage.success('保存成功')
     router.push('/marketing/activity-list')
   } catch (e: any) {
     ElMessage.error(e?.message || '保存失败')
-  } finally { submitting.value = false }
+  } finally {
+    submitting.value = false
+  }
 }
 
-onMounted(() => { fetchProducts(); fetchDetail() })
+onMounted(async () => {
+  await fetchProducts()
+  await fetchDetail()
+})
 </script>
 
 <style scoped>
-.hint {
-  margin-left: 8px;
-  color: #909399;
-  font-size: 12px;
-}
-.block-hint {
-  display: block;
-  margin: 8px 0 0;
-}
-.rules-editor {
-  width: 100%;
-}
-.rule-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-  align-items: center;
-}
+.hint { margin-left: 10px; color: #909399; font-size: 12px; }
+.block-hint { display: block; margin: 8px 0 0; }
+.rules-editor { display: flex; flex-direction: column; gap: 10px; }
+.full-width { width: 100%; }
+.rule-row, .gift-rule-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 </style>
