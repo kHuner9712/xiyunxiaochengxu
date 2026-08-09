@@ -24,7 +24,7 @@ function allowedAdminPermissionsForGroup(groupName?: string | null): string[] {
         SYSTEM_FILE_PERMISSION,
       ];
     case 'business_license':
-      return ['product:supplier', SYSTEM_FILE_PERMISSION];
+      return ['supplier:list', 'supplier:edit', SYSTEM_FILE_PERMISSION];
     default:
       return [SYSTEM_FILE_PERMISSION];
   }
