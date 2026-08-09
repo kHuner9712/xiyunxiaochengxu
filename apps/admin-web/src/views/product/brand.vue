@@ -155,7 +155,7 @@ async function handleDelete(row: any) {
 
 async function handleUploadLogo(options: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
+    const res = await uploadApi.uploadImage(options.file, 'brand-logo')
     form.logo = res.data.url
   } catch {}
 }
