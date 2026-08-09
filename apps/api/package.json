@@ -29,7 +29,8 @@
     "test:integration:payment-anomaly": "ts-node --transpile-only -P tsconfig.json test/historical-payment-anomaly.integration.ts",
     "test:integration:cancelled-created-payment": "ts-node --transpile-only -P tsconfig.json test/historical-cancelled-created-payment.integration.ts",
     "test:integration:zero-pay-aftersale": "ts-node --transpile-only -P tsconfig.json test/zero-pay-aftersale-lifecycle.integration.ts",
-    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale",
+    "test:integration:merchant-settlement": "ts-node --transpile-only -P tsconfig.json test/merchant-settlement-lifecycle.integration.ts",
+    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale && pnpm test:integration:merchant-settlement",
     "test:ci": "jest --config jest.config.js && jest --config test/jest-e2e.config.js"
   },
   "dependencies": {
