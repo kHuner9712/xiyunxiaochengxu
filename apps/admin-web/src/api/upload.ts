@@ -29,12 +29,15 @@ if (cleanupQueue.size > 0) {
   void flushPendingCleanup()
 }
 
-async function uploadFile(file: File, groupName?: string, onProgress?: UploadProgressHandler) {
+async function uploadFile(file: File, groupName: string, onProgress?: UploadProgressHandler) {
   await flushPendingCleanup()
+
+  const normalizedGroupName = groupName.trim()
+  if (!normalizedGroupName) throw new Error('后台上传必须指定业务用途')
 
   const formData = new FormData()
   formData.append('file', file)
-  if (groupName) formData.append('groupName', groupName)
+  formData.append('groupName', normalizedGroupName)
   return request.post('/admin/file/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000,
@@ -47,10 +50,10 @@ async function uploadFile(file: File, groupName?: string, onProgress?: UploadPro
 
 export const uploadApi = {
   uploadFile,
-  uploadImage(file: File, groupName?: string, onProgress?: UploadProgressHandler) {
+  uploadImage(file: File, groupName: string, onProgress?: UploadProgressHandler) {
     return uploadFile(file, groupName, onProgress)
   },
-  uploadVideo(file: File, groupName = 'video', onProgress?: UploadProgressHandler) {
+  uploadVideo(file: File, groupName: string, onProgress?: UploadProgressHandler) {
     return uploadFile(file, groupName, onProgress)
   },
   deleteFile(id: string) {
