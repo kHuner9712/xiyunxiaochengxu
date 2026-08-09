@@ -75,6 +75,50 @@
       </scroll-view>
     </view>
 
+    <view v-for="section in homeData.recommendations" :key="section.id" class="section">
+      <view class="section-header">
+        <view>
+          <text class="section-title">{{ section.name }}</text>
+          <text class="section-subtitle">{{ recommendationSubtitle(section) }}</text>
+        </view>
+      </view>
+
+      <view v-if="section.type === 1" class="product-grid">
+        <ProductCard v-for="item in recommendationProducts(section)" :key="item.id" :product="item" />
+      </view>
+
+      <scroll-view v-else scroll-x class="activity-scroll">
+        <view class="activity-list">
+          <view
+            v-for="item in recommendationActivities(section)"
+            v-if="section.type === 2"
+            :key="item.id"
+            class="activity-card"
+            @tap="goActivityDetail(item.id)"
+          >
+            <image class="activity-image" :src="item.image" mode="aspectFill" />
+            <view class="activity-info">
+              <text class="activity-name">{{ item.name }}</text>
+              <CountdownTimer :endTime="item.endTime" :showLabel="true" />
+            </view>
+          </view>
+          <view
+            v-for="item in recommendationContents(section)"
+            v-else
+            :key="item.id"
+            class="activity-card"
+            @tap="goContentDetail(item.id)"
+          >
+            <image class="activity-image" :src="item.image" mode="aspectFill" />
+            <view class="activity-info">
+              <text class="activity-name">{{ item.title }}</text>
+              <text class="section-subtitle">{{ item.summary || '查看精选内容' }}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
     <view v-if="homeData.hotProducts.length" class="section">
       <view class="section-header">
         <view>
@@ -154,7 +198,16 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShareAppMessage } from '@dcloudio/uni-app'
-import { getHomeData, getGuessProducts, type BannerItem, type QuickEntry, type ProductItem, type ActivityItem } from '@/api/home'
+import {
+  getHomeData,
+  getGuessProducts,
+  type BannerItem,
+  type QuickEntry,
+  type ProductItem,
+  type ActivityItem,
+  type ContentRecommendationItem,
+  type RecommendationSection,
+} from '@/api/home'
 import { useUserStore } from '@/stores/user'
 import ProductCard from '@/components/ProductCard.vue'
 import CountdownTimer from '@/components/CountdownTimer.vue'
@@ -173,6 +226,7 @@ const homeData = reactive<{
   banners: BannerItem[]
   quickEntries: QuickEntry[]
   announcement: string
+  recommendations: RecommendationSection[]
   monthRecommend: ProductItem[]
   hotProducts: ProductItem[]
   newProducts: ProductItem[]
@@ -181,6 +235,7 @@ const homeData = reactive<{
   banners: [],
   quickEntries: [],
   announcement: '',
+  recommendations: [],
   monthRecommend: [],
   hotProducts: [],
   newProducts: [],
@@ -214,6 +269,24 @@ async function loadGuessProducts() {
   } finally {
     guessLoading.value = false
   }
+}
+
+function recommendationSubtitle(section: RecommendationSection) {
+  if (section.type === 1) return '为你精选的商品'
+  if (section.type === 2) return '精选活动 · 限时参与'
+  return '精选内容 · 值得一读'
+}
+
+function recommendationProducts(section: RecommendationSection): ProductItem[] {
+  return section.type === 1 ? section.items as ProductItem[] : []
+}
+
+function recommendationActivities(section: RecommendationSection): ActivityItem[] {
+  return section.type === 2 ? section.items as ActivityItem[] : []
+}
+
+function recommendationContents(section: RecommendationSection): ContentRecommendationItem[] {
+  return section.type === 3 ? section.items as ContentRecommendationItem[] : []
 }
 
 function goSearch() {
@@ -254,6 +327,10 @@ function goActivityList() {
 
 function goActivityDetail(id: string) {
   uni.navigateTo({ url: `/pages/activity/detail?id=${encodeURIComponent(id)}` })
+}
+
+function goContentDetail(id: string) {
+  uni.navigateTo({ url: `/pages/content/detail?id=${encodeURIComponent(id)}` })
 }
 
 function goActivityContentList() {
