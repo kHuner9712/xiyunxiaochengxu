@@ -1,9 +1,12 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { normalizeGroupName, UploadService } from './upload.service';
 
 const SYSTEM_FILE_PERMISSION = 'system:file';
+const USER_PUBLIC_UPLOAD_GROUPS = new Set(['user-avatar', 'baby-avatar']);
+const USER_PRIVATE_UPLOAD_GROUPS = new Set(['aftersale']);
+const MAX_USER_IMAGE_SIZE = 10 * 1024 * 1024;
 
 function allowedAdminPermissionsForGroup(groupName?: string | null): string[] {
   const group = normalizeGroupName(groupName);
@@ -28,6 +31,35 @@ export class PermissionSafeUploadService extends UploadService {
     super(permissionPrisma);
   }
 
+  override async uploadFile(
+    file: Express.Multer.File,
+    uploaderId: string,
+    uploaderType: string,
+    groupName?: string,
+  ) {
+    if (uploaderType === 'admin') {
+      await this.assertAdminHasAnyPermission(uploaderId, [SYSTEM_FILE_PERMISSION]);
+      return super.uploadFile(file, uploaderId, uploaderType, groupName);
+    }
+
+    if (uploaderType !== 'user') {
+      throw new ForbiddenException('不支持的上传者类型');
+    }
+
+    const group = normalizeGroupName(groupName);
+    if (!group || (!USER_PUBLIC_UPLOAD_GROUPS.has(group) && !USER_PRIVATE_UPLOAD_GROUPS.has(group))) {
+      throw new BadRequestException('用户上传必须指定受支持的业务用途');
+    }
+    if (!file?.mimetype?.startsWith('image/')) {
+      throw new BadRequestException('当前用户上传场景仅支持图片');
+    }
+    if (file.size > MAX_USER_IMAGE_SIZE) {
+      throw new BadRequestException('用户图片大小不能超过10MB');
+    }
+
+    return super.uploadFile(file, uploaderId, uploaderType, group);
+  }
+
   override async findPrivateById(
     id: string,
     currentUser: { id?: string; roleType?: string },
@@ -37,7 +69,6 @@ export class PermissionSafeUploadService extends UploadService {
     }
 
     const fileId = parsePositiveBigIntId(id, '文件');
-    const adminUserId = parsePositiveBigIntId(currentUser.id, '管理员');
     const file = await this.permissionPrisma.fileAsset.findFirst({
       where: { id: fileId },
       select: { id: true, groupName: true },
@@ -48,6 +79,15 @@ export class PermissionSafeUploadService extends UploadService {
       return super.findPrivateById(id, currentUser);
     }
 
+    await this.assertAdminHasAnyPermission(
+      currentUser.id,
+      allowedAdminPermissionsForGroup(file.groupName),
+    );
+    return super.findPrivateById(id, currentUser);
+  }
+
+  private async assertAdminHasAnyPermission(adminId: unknown, allowed: string[]) {
+    const adminUserId = parsePositiveBigIntId(adminId, '管理员');
     const assignments = await this.permissionPrisma.adminUserRole.findMany({
       where: { adminUserId },
       include: {
@@ -62,7 +102,7 @@ export class PermissionSafeUploadService extends UploadService {
     });
     const activeRoles = assignments.filter((assignment) => assignment.role.status === 1);
     if (activeRoles.some((assignment) => assignment.role.code === 'super_admin')) {
-      return super.findPrivateById(id, currentUser);
+      return;
     }
 
     const permissions = new Set(
@@ -70,13 +110,14 @@ export class PermissionSafeUploadService extends UploadService {
         assignment.role.adminRolePermissions.map((entry) => entry.permission.code),
       ),
     );
-    const allowed = allowedAdminPermissionsForGroup(file.groupName);
     if (!allowed.some((permission) => permissions.has(permission))) {
-      throw new ForbiddenException(`无权访问该私有文件，需要权限：${allowed.join(' 或 ')}`);
+      throw new ForbiddenException(`无权执行该文件操作，需要权限：${allowed.join(' 或 ')}`);
     }
-
-    return super.findPrivateById(id, currentUser);
   }
 }
 
-export { allowedAdminPermissionsForGroup };
+export {
+  allowedAdminPermissionsForGroup,
+  USER_PRIVATE_UPLOAD_GROUPS,
+  USER_PUBLIC_UPLOAD_GROUPS,
+};
