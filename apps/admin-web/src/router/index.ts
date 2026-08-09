@@ -37,7 +37,7 @@ const routes: RouteRecordRaw[] = [
             path: 'edit',
             name: 'ProductEdit',
             component: () => import('@/views/product/edit.vue'),
-            meta: { title: '商品编辑', permission: 'product:edit', hidden: true },
+            meta: { title: '商品编辑', permission: 'product:create', hidden: true },
           },
           {
             path: 'edit/:id',
@@ -117,7 +117,7 @@ const routes: RouteRecordRaw[] = [
             path: 'reconcile',
             name: 'ReconcileCenter',
             component: () => import('@/views/order/reconcile-center.vue'),
-            meta: { title: '对账与补偿', permission: 'system:config' },
+            meta: { title: '对账与补偿', permission: 'order:aftersale:refund' },
           },
         ],
       },
