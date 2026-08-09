@@ -90,7 +90,9 @@ describe('production operation closure contracts', () => {
     const groupModule = read('apps/api/src/group-buy/group-buy.module.ts');
     const flashModule = read('apps/api/src/flash-sale/flash-sale.module.ts');
     const benefitModule = read('apps/api/src/benefit-package/benefit-package.module.ts');
+    const versionedBenefits = read('apps/api/src/benefit-package/versioned-benefit-package.service.ts');
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
+    const snapshotSettlement = read('apps/api/src/merchant-settlement/snapshot-aware-state-safe-merchant-settlement.service.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
 
     expect(paymentModule).toContain('ZeroPayAftersalePaymentService');
@@ -103,8 +105,10 @@ describe('production operation closure contracts', () => {
     expect(aftersaleModule).toContain('ProductionAftersaleService');
     expect(groupModule).toContain('ProductionGroupBuyService');
     expect(flashModule).toContain('ProductionFlashSaleService');
-    expect(benefitModule).toContain('ZeroPayAwareBenefitPackageService');
-    expect(settlementModule).toContain('ProductionMerchantSettlementService');
+    expect(benefitModule).toContain('VersionedBenefitPackageService');
+    expect(versionedBenefits).toContain('extends ZeroPayAwareBenefitPackageService');
+    expect(settlementModule).toContain('SnapshotAwareStateSafeMerchantSettlementService');
+    expect(snapshotSettlement).toContain('extends StateSafeProductionMerchantSettlementService');
     expect(shareModule).toContain('SafeShareProductionService');
   });
 
