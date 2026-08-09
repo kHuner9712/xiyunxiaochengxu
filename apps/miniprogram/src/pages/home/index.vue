@@ -209,6 +209,7 @@ import {
   type RecommendationSection,
 } from '@/api/home'
 import { useUserStore } from '@/stores/user'
+import { resolveBannerNavigation } from './banner-navigation'
 import ProductCard from '@/components/ProductCard.vue'
 import CountdownTimer from '@/components/CountdownTimer.vue'
 import Loading from '@/components/Loading.vue'
@@ -294,10 +295,12 @@ function goSearch() {
 }
 
 function handleBannerTap(banner: BannerItem) {
-  if (banner.linkType === 1) {
-    uni.navigateTo({ url: `/pages/product/detail?id=${banner.linkValue}` })
-  } else if (banner.linkType === 2) {
-    uni.navigateTo({ url: `/pages/activity/detail?id=${banner.linkValue}` })
+  const navigation = resolveBannerNavigation(banner)
+  if (!navigation) return
+  if (navigation.method === 'switchTab') {
+    uni.switchTab({ url: navigation.url })
+  } else {
+    uni.navigateTo({ url: navigation.url })
   }
 }
 
