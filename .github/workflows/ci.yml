@@ -128,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           : > real-api-runtime.log
-          PORT=3100 BUILD_SHA=${GITHUB_SHA} pnpm --filter @baby-mall/api start:prod >> real-api-runtime.log 2>&1 &
+          PORT=3100 BUILD_SHA=${GITHUB_SHA} node apps/api/dist/main.js >> real-api-runtime.log 2>&1 &
           api_pid=$!
 
           cleanup() {
