@@ -103,6 +103,13 @@ const statCards = ref([
   { label: '总商品数', value: '0', footer: '上架 0' },
 ])
 
+function toLocalDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 async function fetchOverview() {
   try {
     const res = await dashboardApi.getOverview()
@@ -118,12 +125,13 @@ async function fetchOverview() {
 
 async function fetchSalesTrend() {
   try {
+    const days = trendType.value === 'week' ? 7 : 30
     const end = new Date()
-    const start = new Date()
-    start.setDate(start.getDate() - (trendType.value === 'week' ? 7 : 30))
+    const start = new Date(end)
+    start.setDate(start.getDate() - (days - 1))
     const res = await dashboardApi.getSalesTrend({
-      startDate: start.toISOString().slice(0, 10),
-      endDate: end.toISOString().slice(0, 10),
+      startDate: toLocalDateKey(start),
+      endDate: toLocalDateKey(end),
     })
     trendData.value = asArray(res.data)
   } catch {}
