@@ -22,7 +22,21 @@ describe('Private upload access (e2e)', () => {
     fileAsset: {
       findFirst: jest.fn(({ where }: any) => fileAssets.get(where.id.toString()) || null),
     },
-    adminUserRole: { findMany: jest.fn().mockResolvedValue([]) },
+    adminUserRole: {
+      findMany: jest.fn(({ where }: any) =>
+        where.adminUserId === 1n
+          ? [{
+              role: {
+                code: 'super_admin',
+                status: 1,
+                adminRolePermissions: [],
+              },
+            }]
+          : [],
+      ),
+    },
+    aftersaleOrder: { findFirst: jest.fn().mockResolvedValue(null) },
+    supplier: { findFirst: jest.fn().mockResolvedValue(null) },
   };
 
   beforeAll(async () => {
@@ -120,7 +134,15 @@ describe('Private upload access (e2e)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('管理员可以访问敏感附件', async () => {
+  it('无文件/业务权限管理员访问敏感附件返回 403', async () => {
+    const token = sign({ id: '2', roleType: 'admin' });
+    const res = await request(app.getHttpServer())
+      .get('/api/common/file/private/2')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('super_admin 可以访问敏感附件', async () => {
     const token = sign({ id: '1', roleType: 'admin' });
     const res = await request(app.getHttpServer())
       .get('/api/common/file/private/2')
