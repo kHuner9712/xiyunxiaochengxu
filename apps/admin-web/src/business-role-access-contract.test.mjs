@@ -8,9 +8,9 @@ const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const read = (relativePath) => readFileSync(resolve(root, relativePath), 'utf8')
 
 test('product workflows can read reference data without receiving reference write permissions', () => {
-  const category = read('../api/src/category/category.controller.ts')
-  const brand = read('../api/src/brand/brand.controller.ts')
-  const supplier = read('../api/src/supplier/supplier.controller.ts')
+  const category = read('apps/api/src/category/category.controller.ts')
+  const brand = read('apps/api/src/brand/brand.controller.ts')
+  const supplier = read('apps/api/src/supplier/supplier.controller.ts')
 
   assert.ok(category.includes("@Get('list')\n  @RequirePermission('product:category', 'product:list', 'product:create', 'product:edit')"))
   assert.ok(category.includes("@Get('detail/:id')\n  @RequirePermission('product:category', 'product:list', 'product:create', 'product:edit')"))
@@ -32,9 +32,9 @@ test('product workflows can read reference data without receiving reference writ
 })
 
 test('business menus use operational permissions instead of unrelated system privileges', () => {
-  const router = read('router/index.ts')
-  const defaultRoles = read('../api/prisma/default-role-permissions.ts')
-  const roleMigration = read('../api/prisma/migrations/20260809154000_seed_default_role_permissions_if_empty/migration.sql')
+  const router = read('apps/admin-web/src/router/index.ts')
+  const defaultRoles = read('apps/api/prisma/default-role-permissions.ts')
+  const roleMigration = read('apps/api/prisma/migrations/20260809154000_seed_default_role_permissions_if_empty/migration.sql')
 
   assert.match(router, /path: 'edit',[\s\S]*?name: 'ProductEdit'[\s\S]*?permission: 'product:create'/)
   assert.match(router, /path: 'reconcile',[\s\S]*?name: 'ReconcileCenter'[\s\S]*?permission: 'order:aftersale:refund'/)
