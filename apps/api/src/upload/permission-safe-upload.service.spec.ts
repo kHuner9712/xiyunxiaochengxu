@@ -24,6 +24,12 @@ function createMockPrisma() {
     adminUserRole: {
       findMany: jest.fn() as any,
     },
+    aftersaleOrder: {
+      findFirst: jest.fn() as any,
+    },
+    supplier: {
+      findFirst: jest.fn() as any,
+    },
   };
 }
 
@@ -125,14 +131,51 @@ describe('PermissionSafeUploadService private-file access', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('allows aftersale operators to read aftersale private files', async () => {
+  it('requires an aftersale business reference even when the admin has aftersale permission', async () => {
     prisma.fileAsset.findFirst.mockResolvedValue(privateFile('aftersale'));
     prisma.adminUserRole.findMany.mockResolvedValue([
       activeRole('aftersale_operator', ['order:aftersale']),
     ]);
+    prisma.aftersaleOrder.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.findPrivateById('1', { id: '99', roleType: 'admin' }),
+    ).rejects.toThrow('尚未进入可访问的业务记录');
+    expect(prisma.aftersaleOrder.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        images: {
+          array_contains: '/api/common/file/private/1',
+        },
+      },
+    }));
+  });
+
+  it('allows aftersale operators to read aftersale private files only after business reference', async () => {
+    prisma.fileAsset.findFirst.mockResolvedValue(privateFile('aftersale'));
+    prisma.adminUserRole.findMany.mockResolvedValue([
+      activeRole('aftersale_operator', ['order:aftersale']),
+    ]);
+    prisma.aftersaleOrder.findFirst.mockResolvedValue({ id: 7n });
 
     const result = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
     await openAndClose(result.stream);
+  });
+
+  it('requires a supplier reference for product:supplier access to business licenses', async () => {
+    prisma.fileAsset.findFirst.mockResolvedValue(privateFile('business_license'));
+    prisma.adminUserRole.findMany.mockResolvedValue([
+      activeRole('supplier_operator', ['product:supplier']),
+    ]);
+    prisma.supplier.findFirst.mockResolvedValue({ id: 8n });
+
+    const result = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
+    await openAndClose(result.stream);
+    expect(prisma.supplier.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessLicense: '/api/common/file/private/1',
+        deletedAt: null,
+      },
+    }));
   });
 
   it('requires system:file for generic private/cert/admin groups while keeping super_admin bypass', async () => {
