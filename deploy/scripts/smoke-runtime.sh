@@ -145,6 +145,22 @@ limit_count="$(echo "$nginx_dump" | grep -c 'client_max_body_size 60m;' || true)
 [ "$limit_count" -ge 2 ] || fail "running Nginx does not expose the 60m upload limit in both virtual hosts"
 pass 'running Nginx configuration and upload limits are valid'
 
+public_smoke_name="runtime-smoke-${api_build_sha}.txt"
+public_smoke_body="baby-mall-public-upload-${api_build_sha}"
+docker exec baby-mall-api sh -c 'mkdir -p /app/apps/api/uploads/public'
+docker exec -i baby-mall-api sh -c "cat > /app/apps/api/uploads/public/${public_smoke_name}" <<< "$public_smoke_body"
+cleanup_public_smoke() {
+  docker exec baby-mall-api rm -f "/app/apps/api/uploads/public/${public_smoke_name}" >/dev/null 2>&1 || true
+}
+trap cleanup_public_smoke EXIT
+served_public_smoke="$(curl --fail --silent --show-error --insecure \
+  --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
+  "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/uploads/public/${public_smoke_name}")"
+[ "$served_public_smoke" = "$public_smoke_body" ] || fail "public upload shared-volume response mismatch: expected=$public_smoke_body actual=$served_public_smoke"
+cleanup_public_smoke
+trap - EXIT
+pass 'public upload volume written by API is served byte-for-byte through production HTTPS Nginx'
+
 private_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure \
   --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/uploads/private/runtime-smoke")"
