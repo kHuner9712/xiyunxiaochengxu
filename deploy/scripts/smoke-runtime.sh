@@ -99,6 +99,15 @@ nginx_build_sha="$(printf '%s' "$nginx_api_health" | sed -n 's/.*"buildSha":"\([
 [ "$nginx_build_sha" = "$api_build_sha" ] || fail "Nginx API build SHA mismatch: loopback=$api_build_sha nginx=$nginx_build_sha"
 pass 'HTTPS API virtual host proxies to the same API build'
 
+product_list_response="$(curl --fail --silent --show-error --insecure \
+  --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
+  "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/api/weapp/product/list?page=1&pageSize=1")"
+echo "$product_list_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0' || fail "public product list API did not return code=0: $product_list_response"
+echo "$product_list_response" | grep -Eq '"data"[[:space:]]*:' || fail "public product list API response has no data envelope: $product_list_response"
+echo "$product_list_response" | grep -Eq '"list"[[:space:]]*:' || fail "public product list API response has no data.list: $product_list_response"
+echo "$product_list_response" | grep -Eq '"total"[[:space:]]*:' || fail "public product list API response has no data.total: $product_list_response"
+pass 'public product list works through production HTTPS, controller, response envelope and database query path'
+
 admin_html="$(curl --fail --silent --show-error --insecure \
   --resolve "${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}/")"
