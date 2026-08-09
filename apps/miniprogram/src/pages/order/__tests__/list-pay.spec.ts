@@ -62,12 +62,12 @@ beforeEach(() => {
 })
 
 describe('订单列表支付处理', () => {
-  it('支付成功跳转成功结果页并标记 list 场景', async () => {
+  it('支付成功进入成功结果页并标记 list 场景', async () => {
     const wrapper = mountList()
 
     await (wrapper.vm as any).handlePay(order)
 
-    expect((globalThis as any).uni.redirectTo).toHaveBeenCalledWith({
+    expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith({
       url: '/pages/order/pay-result?orderId=order-1&payScene=list&payIntent=success',
     })
   })
@@ -78,14 +78,14 @@ describe('订单列表支付处理', () => {
 
     await (wrapper.vm as any).handlePay(order)
 
-    expect((globalThis as any).uni.redirectTo).not.toHaveBeenCalled()
+    expect((globalThis as any).uni.navigateTo).not.toHaveBeenCalled()
     expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
       title: '已取消支付，可稍后继续支付',
       icon: 'none',
     })
   })
 
-  it('支付客户端异常时提示去订单详情继续支付', async () => {
+  it('支付客户端异常时保留真实失败原因', async () => {
     vi.mocked(wxPay).mockRejectedValueOnce(new Error('requestPayment:fail system error'))
     const wrapper = mountList()
 
@@ -94,9 +94,26 @@ describe('订单列表支付处理', () => {
     expect((globalThis as any).uni.showModal).toHaveBeenCalledWith(
       expect.objectContaining({
         title: '支付未完成',
-        content: '支付客户端异常，请前往订单详情页继续支付。',
-        confirmText: '查看订单',
+        content: 'requestPayment:fail system error',
+        confirmText: '我知道了',
       }),
     )
+    expect((globalThis as any).uni.navigateTo).not.toHaveBeenCalled()
+  })
+
+  it('支付单创建失败时展示服务端真实原因', async () => {
+    vi.mocked(createPayment).mockRejectedValueOnce(new Error('订单状态已变化，请刷新后重试'))
+    const wrapper = mountList()
+
+    await (wrapper.vm as any).handlePay(order)
+
+    expect((globalThis as any).uni.showModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '支付未完成',
+        content: '订单状态已变化，请刷新后重试',
+        confirmText: '我知道了',
+      }),
+    )
+    expect(wxPay).not.toHaveBeenCalled()
   })
 })
