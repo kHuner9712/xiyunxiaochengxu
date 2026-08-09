@@ -61,7 +61,7 @@ async function main() {
   let fileId: bigint | null = null;
 
   try {
-    let permission = await prisma.adminPermission.findUnique({ where: { code: 'product:edit' } });
+    let permission = await prisma.adminPermission.findFirst({ where: { code: 'product:edit' } });
     if (!permission) {
       permission = await prisma.adminPermission.create({
         data: {
