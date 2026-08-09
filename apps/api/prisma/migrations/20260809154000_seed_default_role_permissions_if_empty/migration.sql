@@ -10,7 +10,8 @@ JOIN `admin_permissions` p ON p.`code` IN (
   'dashboard',
   'product', 'product:list', 'product:create', 'product:edit', 'product:delete', 'product:publish', 'product:stock', 'product:category', 'product:brand',
   'supplier', 'supplier:list', 'supplier:create', 'supplier:edit', 'supplier:delete',
-  'order', 'order:list', 'order:detail', 'order:deliver', 'order:remark', 'order:cancel', 'order:aftersale', 'order:aftersale:review', 'pickup:store', 'pickup:verify',
+  'order', 'order:list', 'order:detail', 'order:deliver', 'order:remark', 'order:cancel', 'order:aftersale', 'order:aftersale:review',
+  'pickup', 'pickup:store', 'pickup:verify',
   'marketing', 'marketing:coupon', 'marketing:activity', 'marketing:banner', 'marketing:recommendation', 'marketing:decor',
   'share', 'share:campaign', 'share:record', 'share:invite',
   'content', 'content:list', 'content:edit',
@@ -26,13 +27,14 @@ WHERE r.`code` = 'operator'
       'dashboard',
       'product', 'product:list', 'product:create', 'product:edit', 'product:delete', 'product:publish', 'product:stock', 'product:category', 'product:brand',
       'supplier', 'supplier:list', 'supplier:create', 'supplier:edit', 'supplier:delete',
-      'order', 'order:list', 'order:detail', 'order:deliver', 'order:remark', 'order:cancel', 'order:aftersale', 'order:aftersale:review', 'pickup:store', 'pickup:verify',
+      'order', 'order:list', 'order:detail', 'order:deliver', 'order:remark', 'order:cancel', 'order:aftersale', 'order:aftersale:review',
+      'pickup', 'pickup:store', 'pickup:verify',
       'marketing', 'marketing:coupon', 'marketing:activity', 'marketing:banner', 'marketing:recommendation', 'marketing:decor',
       'share', 'share:campaign', 'share:record', 'share:invite',
       'content', 'content:list', 'content:edit',
       'statistics', 'statistics:index'
     )
-  ) = 40;
+  ) = 41;
 
 INSERT INTO `admin_role_permissions` (`role_id`, `permission_id`)
 SELECT r.`id`, p.`id`
