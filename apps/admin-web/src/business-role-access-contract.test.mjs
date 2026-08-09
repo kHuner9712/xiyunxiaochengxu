@@ -36,9 +36,12 @@ test('business menus use operational permissions instead of unrelated system pri
   const defaultRoles = read('apps/api/prisma/default-role-permissions.ts')
   const roleMigration = read('apps/api/prisma/migrations/20260809154000_seed_default_role_permissions_if_empty/migration.sql')
 
-  assert.match(router, /path: 'edit',[\s\S]*?name: 'ProductEdit'[\s\S]*?permission: 'product:create'/)
-  assert.match(router, /path: 'reconcile',[\s\S]*?name: 'ReconcileCenter'[\s\S]*?permission: 'order:aftersale:refund'/)
-  assert.doesNotMatch(router, /path: 'reconcile',[\s\S]*?name: 'ReconcileCenter'[\s\S]*?permission: 'system:config'/)
+  const productCreateRoute = router.match(/path: 'edit',[\s\S]*?name: 'ProductEdit'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
+  const reconcileRoute = router.match(/path: 'reconcile',[\s\S]*?name: 'ReconcileCenter'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
+
+  assert.match(productCreateRoute, /permission: 'product:create'/)
+  assert.match(reconcileRoute, /permission: 'order:aftersale:refund'/)
+  assert.doesNotMatch(reconcileRoute, /permission: 'system:config'/)
 
   assert.match(defaultRoles, /'pickup',\s*'pickup:store',\s*'pickup:verify'/)
   assert.match(roleMigration, /'pickup', 'pickup:store', 'pickup:verify'/)
