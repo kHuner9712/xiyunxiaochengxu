@@ -23,12 +23,13 @@
     "test:e2e": "jest --config test/jest-e2e.config.js",
     "test:integration:content": "ts-node --transpile-only -P tsconfig.json test/content-lifecycle.integration.ts",
     "test:integration:promotion": "ts-node --transpile-only -P tsconfig.json test/promotion-order-lifecycle.integration.ts",
+    "test:integration:normal-order": "ts-node --transpile-only -P tsconfig.json test/normal-order-lifecycle.integration.ts",
     "test:integration:activity-multi-item": "ts-node --transpile-only -P tsconfig.json test/activity-multi-item-lifecycle.integration.ts",
     "test:integration:promotion-timeout": "ts-node --transpile-only -P tsconfig.json test/promotion-timeout-lifecycle.integration.ts",
     "test:integration:payment-anomaly": "ts-node --transpile-only -P tsconfig.json test/historical-payment-anomaly.integration.ts",
     "test:integration:cancelled-created-payment": "ts-node --transpile-only -P tsconfig.json test/historical-cancelled-created-payment.integration.ts",
     "test:integration:zero-pay-aftersale": "ts-node --transpile-only -P tsconfig.json test/zero-pay-aftersale-lifecycle.integration.ts",
-    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale",
+    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale",
     "test:ci": "jest --config jest.config.js && jest --config test/jest-e2e.config.js"
   },
   "dependencies": {
@@ -37,7 +38,7 @@
     "@nestjs/config": "^3.1.0",
     "@nestjs/core": "^10.3.0",
     "@nestjs/jwt": "^10.2.0",
-    "@nestjs/passport": "^10.0.3",
+    "@nestjs/passport": "^0.7.0",
     "@nestjs/platform-express": "^10.3.0",
     "@nestjs/schedule": "^4.0.0",
     "@nestjs/swagger": "^7.2.0",
