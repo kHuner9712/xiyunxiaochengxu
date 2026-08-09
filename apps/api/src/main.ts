@@ -16,6 +16,11 @@ async function bootstrap() {
     rawBody: true,
   });
 
+  // Docker/systemd/Kubernetes terminate services with SIGTERM/SIGINT. Enable Nest lifecycle
+  // hooks so Prisma, Redis and any future resource-owning providers can drain cleanly instead
+  // of waiting for the process manager to force-kill the API.
+  app.enableShutdownHooks(['SIGTERM', 'SIGINT']);
+
   const configService = app.get(ConfigService);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
