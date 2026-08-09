@@ -10,6 +10,7 @@ test('package.json exposes audited freeze and production gates', () => {
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
   const freeze = pkg.scripts['release:check:freeze']
   const production = pkg.scripts['release:check:prod']
+  const adminTests = pkg.scripts['test:admin']
 
   assert.match(freeze, /^pnpm audit:project && /)
   assert.match(freeze, /node deploy\/scripts\/run-release-check\.mjs/)
@@ -19,10 +20,19 @@ test('package.json exposes audited freeze and production gates', () => {
   assert.match(production, /node deploy\/scripts\/run-release-check\.mjs/)
   assert.match(production, /--strict-prod-gate/)
   assert.match(production, /--require-real-wx-appid/)
-  assert.equal(
-    pkg.scripts['test:admin'],
-    'node --test apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs apps/admin-web/src/core-operation-permissions.test.mjs apps/admin-web/src/batch-delivery-tracking.test.mjs apps/admin-web/src/aftersale-refund-retry.test.mjs apps/admin-web/src/reconcile-history-observability.test.mjs',
-  )
+
+  assert.match(adminTests, /^node --test /)
+  const requiredAdminContractTests = [
+    'apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs',
+    'apps/admin-web/src/core-operation-permissions.test.mjs',
+    'apps/admin-web/src/batch-delivery-tracking.test.mjs',
+    'apps/admin-web/src/aftersale-refund-retry.test.mjs',
+    'apps/admin-web/src/reconcile-history-observability.test.mjs',
+    'apps/admin-web/src/supplier-operation-contract.test.mjs',
+  ]
+  for (const requiredTest of requiredAdminContractTests) {
+    assert.ok(adminTests.includes(requiredTest), `test:admin must include ${requiredTest}`)
+  }
   assert.equal(pkg.scripts['test:admin:browser'], 'node deploy/scripts/run-admin-browser-e2e.mjs')
 })
 
