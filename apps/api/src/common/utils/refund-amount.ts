@@ -17,6 +17,23 @@ function getOrderItems(order: any, orderItem: any): any[] {
   return items.filter(Boolean);
 }
 
+/**
+ * Refund allocation basis for a multi-item order.
+ *
+ * - Ordinary items use their persisted subtotal.
+ * - A promotional item whose persisted subtotal is already the discounted amount adds its
+ *   item-level activityDiscount back so allocation is based on the pre-discount economic value.
+ * - A zero-subtotal gift always has a zero cash-refund basis even when originalPrice and
+ *   activityDiscount record the value of the gift. Otherwise a free gift could incorrectly
+ *   consume or receive part of the customer's paid amount.
+ */
+function getRefundAllocationBasis(item: any): number {
+  const subtotal = Math.max(0, toAmount(item?.subtotal));
+  if (subtotal === 0) return 0;
+  const activityDiscount = Math.max(0, toAmount(item?.activityDiscount));
+  return subtotal + activityDiscount;
+}
+
 export function calculateOrderItemRefundCap(order: any, orderItem: any, currentAftersaleId?: bigint | string) {
   const orderItems = getOrderItems(order, orderItem);
   const totalAmount = Math.max(
@@ -37,9 +54,22 @@ export function calculateOrderItemRefundCap(order: any, orderItem: any, currentA
   const itemSubtotal = Math.max(0, toAmount(orderItem?.subtotal));
   const itemIsWholeOrder = orderItems.length === 1 && sameId(orderItems[0]?.id, orderItem?.id);
 
+  const allocationBasisByItem = orderItems.map((item) => ({
+    id: item?.id,
+    basis: getRefundAllocationBasis(item),
+  }));
+  const totalAllocationBasis = allocationBasisByItem.reduce((sum, item) => sum + item.basis, 0);
+  const currentAllocationBasis = allocationBasisByItem.find((item) => sameId(item.id, orderItem?.id))?.basis
+    ?? getRefundAllocationBasis(orderItem);
+
   const maxRefundableAmount = itemIsWholeOrder
     ? payAmount
-    : Math.min(itemSubtotal, totalAmount > 0 ? Math.floor(nonFreightPaidAmount * itemSubtotal / totalAmount) : 0);
+    : Math.min(
+        itemSubtotal,
+        totalAllocationBasis > 0
+          ? Math.floor(nonFreightPaidAmount * currentAllocationBasis / totalAllocationBasis)
+          : 0,
+      );
 
   const aftersalesById = new Map<string, any>(
     (Array.isArray(order?.aftersaleOrders) ? order.aftersaleOrders : [])
