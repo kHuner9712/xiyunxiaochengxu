@@ -72,7 +72,20 @@ export class AdminUploadController {
   }
 
   @Post('upload')
-  @RequirePermission('system:file')
+  @RequirePermission(
+    'system:file',
+    'product:create',
+    'product:edit',
+    'product:category',
+    'product:brand',
+    'marketing:banner',
+    'marketing:decor',
+    'content:edit',
+    'system:config',
+    'system:customer-service',
+    'supplier:create',
+    'supplier:edit',
+  )
   @UseInterceptors(FileInterceptor('file', createUploadMulterOptions()))
   async upload(
     @UploadedFile() file: Express.Multer.File,
@@ -84,7 +97,7 @@ export class AdminUploadController {
   }
 
   @Delete(':id')
-  @RequirePermission('system:file')
+  @RequirePermission('system:file', 'content:edit')
   async delete(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
