@@ -83,6 +83,7 @@
         <view class="product-right">
           <PriceDisplay :price="item.price" />
           <text class="product-qty">x{{ item.quantity }}</text>
+          <text class="product-line-total">实付小计 ¥{{ formatPrice(item.subtotal ?? item.price * item.quantity) }}</text>
           <view
             v-if="order.status === 'completed' || order.status === 'delivered' || order.status === 'aftersale'"
             class="item-aftersale-btn"
@@ -269,16 +270,16 @@ async function handlePay() {
       }
       uni.showModal({
         title: '支付未完成',
-        content: '支付发起异常，请稍后重试或联系客服',
+        content: payClientErr?.message || payClientErr?.errMsg || '支付发起异常，请稍后重试或联系客服',
         showCancel: false,
         confirmText: '我知道了'
       })
     }
   } catch (e: any) {
-    const msg = e?.message || '支付发起失败'
+    const msg = e?.message || '支付发起失败，请稍后重试或联系客服'
     uni.showModal({
-      title: '提示',
-      content: msg.includes('暂未开通') ? msg : '支付功能暂未开放，请联系客服',
+      title: '支付未完成',
+      content: msg,
       showCancel: false,
       confirmText: '我知道了'
     })
@@ -504,6 +505,7 @@ defineExpose({
 .product-sku { font-size: $font-xs; color: $text-secondary; display: inline-flex; max-width: 100%; margin-top: 8rpx; padding: 6rpx 14rpx; border-radius: $radius-round; background: $bg-soft; @include text-ellipsis; }
 .product-right { text-align: right; margin-left: $spacing-sm; }
 .product-qty { font-size: $font-xs; color: $text-hint; display: block; }
+.product-line-total { margin-top: 4rpx; font-size: $font-xs; color: $price-color; display: block; font-weight: 700; }
 
 .item-aftersale-btn {
   margin-top: 8rpx;
