@@ -7,7 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
-import { ProductionMerchantSettlementService } from '../merchant-settlement/production-merchant-settlement.service';
+import { SnapshotAwareStateSafeMerchantSettlementService } from '../merchant-settlement/snapshot-aware-state-safe-merchant-settlement.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { ZeroPayAwareBenefitPackageService } from './zero-pay-aware-benefit-package.service';
@@ -117,23 +117,44 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
   override async update(id: string, data: any) {
     const packageId = parsePositiveBigIntId(id, '权益包');
     await this.versionPrisma.$transaction(async (tx) => {
+      const initial = await tx.benefitPackage.findFirst({
+        where: { id: packageId, deletedAt: null },
+      });
+      if (!initial) throw new NotFoundException('权益包不存在');
+      const requestedProductId = data.productId !== undefined
+        ? cleanId(data.productId, '商品')
+        : initial.productId;
+
+      const affectedProductIds = new Set<string>();
+      if (initial.productId) affectedProductIds.add(initial.productId.toString());
+      if (requestedProductId) affectedProductIds.add(requestedProductId.toString());
+      const sortedProductIds = [...affectedProductIds].sort((a, b) => {
+        const left = BigInt(a);
+        const right = BigInt(b);
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
+      for (const productIdText of sortedProductIds) {
+        await this.lockAndAssertProduct(tx, BigInt(productIdText));
+      }
+
       await tx.$queryRaw`SELECT id FROM benefit_packages WHERE id = ${packageId} FOR UPDATE`;
       const pkg = await tx.benefitPackage.findFirst({
         where: { id: packageId, deletedAt: null },
       });
       if (!pkg) throw new NotFoundException('权益包不存在');
-
+      if ((pkg.productId?.toString() ?? null) !== (initial.productId?.toString() ?? null)) {
+        throw new BadRequestException('权益包绑定商品已变化，请刷新后重试');
+      }
       const nextProductId = data.productId !== undefined
         ? cleanId(data.productId, '商品')
         : pkg.productId;
-      const affectedProductIds = new Set<string>();
-      if (pkg.productId) affectedProductIds.add(pkg.productId.toString());
-      if (nextProductId) affectedProductIds.add(nextProductId.toString());
-      const sortedProductIds = [...affectedProductIds].sort((a, b) => BigInt(a) < BigInt(b) ? -1 : 1);
+
       for (const productIdText of sortedProductIds) {
-        const productId = BigInt(productIdText);
-        await this.lockAndAssertProduct(tx, productId);
-        await this.recordProductConfigBeforeChange(tx, productId, `更新权益包${packageId}`);
+        await this.recordProductConfigBeforeChange(
+          tx,
+          BigInt(productIdText),
+          `更新权益包${packageId}`,
+        );
       }
 
       if (nextProductId) {
@@ -172,13 +193,20 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
     if (status !== 0 && status !== 1) throw new BadRequestException('权益包状态无效');
     const packageId = parsePositiveBigIntId(id, '权益包');
     await this.versionPrisma.$transaction(async (tx) => {
+      const initial = await tx.benefitPackage.findFirst({
+        where: { id: packageId, deletedAt: null },
+      });
+      if (!initial) throw new NotFoundException('权益包不存在');
+      if (initial.productId) await this.lockAndAssertProduct(tx, initial.productId);
       await tx.$queryRaw`SELECT id FROM benefit_packages WHERE id = ${packageId} FOR UPDATE`;
       const pkg = await tx.benefitPackage.findFirst({
         where: { id: packageId, deletedAt: null },
       });
       if (!pkg) throw new NotFoundException('权益包不存在');
+      if ((pkg.productId?.toString() ?? null) !== (initial.productId?.toString() ?? null)) {
+        throw new BadRequestException('权益包绑定商品已变化，请刷新后重试');
+      }
       if (pkg.productId) {
-        await this.lockAndAssertProduct(tx, pkg.productId);
         await this.recordProductConfigBeforeChange(tx, pkg.productId, `变更权益包${packageId}状态`);
       }
       await tx.benefitPackage.update({ where: { id: packageId }, data: { status } });
@@ -190,13 +218,20 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
   override async delete(id: string) {
     const packageId = parsePositiveBigIntId(id, '权益包');
     await this.versionPrisma.$transaction(async (tx) => {
+      const initial = await tx.benefitPackage.findFirst({
+        where: { id: packageId, deletedAt: null },
+      });
+      if (!initial) throw new NotFoundException('权益包不存在');
+      if (initial.productId) await this.lockAndAssertProduct(tx, initial.productId);
       await tx.$queryRaw`SELECT id FROM benefit_packages WHERE id = ${packageId} FOR UPDATE`;
       const pkg = await tx.benefitPackage.findFirst({
         where: { id: packageId, deletedAt: null },
       });
       if (!pkg) throw new NotFoundException('权益包不存在');
+      if ((pkg.productId?.toString() ?? null) !== (initial.productId?.toString() ?? null)) {
+        throw new BadRequestException('权益包绑定商品已变化，请刷新后重试');
+      }
       if (pkg.productId) {
-        await this.lockAndAssertProduct(tx, pkg.productId);
         await this.recordProductConfigBeforeChange(tx, pkg.productId, `删除权益包${packageId}`);
       }
       const deletedAt = new Date();
@@ -219,6 +254,20 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
 
   override async reconcileOrderBenefits(orderId: string | bigint, userId: string | bigint) {
     await this.ensureOrderBenefits(orderId, userId);
+  }
+
+  override async freezeForRefund(
+    orderId: bigint | string,
+    aftersaleId?: bigint | string | null,
+  ) {
+    const oid = parsePositiveBigIntId(orderId, '订单');
+    const order = await this.versionPrisma.order.findUnique({
+      where: { id: oid },
+      select: { userId: true },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    await this.ensureOrderBenefits(oid, order.userId);
+    return super.freezeForRefund(oid, aftersaleId);
   }
 
   override async previewVerify(verifyCode: string) {
@@ -372,8 +421,8 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
         },
       });
 
-      await (this.versionSettlementService as ProductionMerchantSettlementService)
-        .generateServiceCommissionInTransaction(tx, {
+      await (this.versionSettlementService as SnapshotAwareStateSafeMerchantSettlementService)
+        .generateSnapshotServiceCommissionInTransaction(tx, {
           verificationLogId: verificationLog.id,
           entitlementId: lockedEntitlement.id,
           packageItemId: lockedEntitlement.packageItemId,
@@ -382,6 +431,7 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
           merchantPromotionSourceId: item.merchantPromotionSourceId
             ? BigInt(item.merchantPromotionSourceId)
             : null,
+          sourceAmount: Math.max(0, item.originalValue ?? 0),
           occurredAt: now,
         });
 
@@ -461,8 +511,8 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
               createdAt: occurredAt,
             },
           });
-          await (this.versionSettlementService as ProductionMerchantSettlementService)
-            .generateServiceCommissionInTransaction(tx, {
+          await (this.versionSettlementService as SnapshotAwareStateSafeMerchantSettlementService)
+            .generateSnapshotServiceCommissionInTransaction(tx, {
               verificationLogId: log.id,
               entitlementId: row.entitlementId,
               packageItemId: row.packageItemId,
@@ -471,6 +521,7 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
               merchantPromotionSourceId: resolved.item.merchantPromotionSourceId
                 ? BigInt(resolved.item.merchantPromotionSourceId)
                 : null,
+              sourceAmount: Math.max(0, resolved.item.originalValue ?? 0),
               occurredAt,
             });
           return true;
@@ -509,13 +560,7 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
       if (!pkg || pkg.status !== 1) continue;
       const qty = orderItem.quantity > 0 ? orderItem.quantity : 1;
       for (let unit = 0; unit < qty; unit += 1) {
-        await this.ensureGrantFromSnapshot(
-          uid,
-          oid,
-          orderItem.id,
-          pkg,
-          unit,
-        );
+        await this.ensureGrantFromSnapshot(uid, oid, orderItem.id, pkg, unit);
       }
     }
 
@@ -523,12 +568,12 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
   }
 
   private async assertSnapshotBenefitsComplete(
-    order: { id: bigint; orderItems: Array<{ id: bigint; productId: bigint; quantity: number }> },
+    order: { id: bigint; createdAt: Date; orderItems: Array<{ id: bigint; productId: bigint; quantity: number }> },
     refundedItemIds: Set<string>,
   ) {
     for (const orderItem of order.orderItems) {
       if (refundedItemIds.has(orderItem.id.toString())) continue;
-      const snapshot = await this.resolveAndPersistOrderItemSnapshot(order as any, orderItem as any);
+      const snapshot = await this.resolveAndPersistOrderItemSnapshot(order, orderItem);
       const pkg = snapshot.package;
       if (!pkg || pkg.status !== 1) continue;
       const activeItems = pkg.items.filter((item) => item.status === 1);
@@ -609,7 +654,7 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
         package: pkg,
       });
 
-      if (!['active', 'refund_pending'].includes(userPkg.status)) return;
+      if (userPkg.status !== 'active') return;
       for (const item of pkg.items.filter((candidate) => candidate.status === 1)) {
         const expected = item.quantity > 0 ? item.quantity : 1;
         const existing = await tx.userBenefitEntitlement.findMany({
@@ -830,6 +875,27 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
         const parsed = this.parseProductSnapshot(orderSnapshot.payload, 0n);
         if (parsed.package) return parsed.package;
       }
+
+      const historicalOrderItem = await this.versionPrisma.orderItem.findUnique({
+        where: { id: userPkg.orderItemId },
+        include: { order: { select: { createdAt: true } } },
+      });
+      if (historicalOrderItem) {
+        const historical = await this.resolveProductConfigAt(
+          historicalOrderItem.productId,
+          historicalOrderItem.order.createdAt,
+        );
+        if (historical.package?.id === userPkg.packageId.toString()) {
+          await this.ensureSnapshotEvent(
+            client,
+            USER_PACKAGE_SNAPSHOT_EVENT,
+            USER_PACKAGE_BIZ_TYPE,
+            userPkg.id.toString(),
+            { version: 1, grantKey: null, package: historical.package },
+          );
+          return historical.package;
+        }
+      }
     }
 
     const currentPkg = await (client as any).benefitPackage.findFirst({
@@ -900,11 +966,11 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
 
     for (const item of items) {
       if (!item.id) continue;
-      const id = parsePositiveBigIntId(String(item.id), '权益项');
-      if (!existingById.has(id.toString())) {
-        throw new BadRequestException(`权益项${id}不属于当前权益包`);
+      const itemId = parsePositiveBigIntId(String(item.id), '权益项');
+      if (!existingById.has(itemId.toString())) {
+        throw new BadRequestException(`权益项${itemId}不属于当前权益包`);
       }
-      incomingIds.add(id.toString());
+      incomingIds.add(itemId.toString());
     }
 
     const toRemove = existing.filter((item) => !incomingIds.has(item.id.toString()));
@@ -979,9 +1045,11 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
     if (![0, 1].includes(status)) throw new BadRequestException('权益包状态无效');
     if (price !== undefined && price !== null && price < 0) throw new BadRequestException('权益包价格不能为负数');
     if (validDays !== undefined && validDays !== null && validDays <= 0) throw new BadRequestException('权益有效天数必须大于0');
+    const name = String(data.name || '').trim();
+    if (!name) throw new BadRequestException('权益包名称不能为空');
     return {
       productId,
-      name: String(data.name || '').trim(),
+      name,
       subtitle: data.subtitle ?? null,
       coverImage: data.coverImage ?? null,
       description: data.description ?? null,
@@ -1001,7 +1069,11 @@ export class VersionedBenefitPackageService extends ZeroPayAwareBenefitPackageSe
   ): Prisma.BenefitPackageUncheckedUpdateInput {
     const updateData: Prisma.BenefitPackageUncheckedUpdateInput = {};
     if (productSpecified) updateData.productId = productId;
-    if (data.name !== undefined) updateData.name = String(data.name || '').trim();
+    if (data.name !== undefined) {
+      const name = String(data.name || '').trim();
+      if (!name) throw new BadRequestException('权益包名称不能为空');
+      updateData.name = name;
+    }
     if (data.subtitle !== undefined) updateData.subtitle = data.subtitle ?? null;
     if (data.coverImage !== undefined) updateData.coverImage = data.coverImage ?? null;
     if (data.description !== undefined) updateData.description = data.description ?? null;
