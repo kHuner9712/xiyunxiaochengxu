@@ -406,7 +406,7 @@ onLoad(async (options) => {
 .amount-divider { height: 1rpx; margin: 8rpx 0; background: $border-color; }
 .amount-row.total { color: $text-color; font-size: $font-md; font-weight: 900; }
 .field-label { display: block; margin-bottom: 12rpx; color: $text-color; font-size: $font-sm; font-weight: 800; }
-.remark-input { width: 100%; min-height: 130rpx; padding: 18rpx; box-sizing: border-box; border-radius: $radius-lg; background: $bg-ivory; font-size: $font-sm; }
+.remark-input { width: 100%; min-height: 130rpx; padding: 18rpx; box-sizing: border-box; border-radius: $radius-lg; background: $bg-ivory; font-size: $font-sm; line-height: 1.6; }
 .legal-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4rpx; padding: 12rpx 4rpx; color: $text-secondary; font-size: $font-xs; }
 .legal-label { display: flex; align-items: center; }
 .legal-link { color: $primary-dark; }
