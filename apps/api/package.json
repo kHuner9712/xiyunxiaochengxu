@@ -23,11 +23,12 @@
     "test:e2e": "jest --config test/jest-e2e.config.js",
     "test:integration:content": "ts-node --transpile-only -P tsconfig.json test/content-lifecycle.integration.ts",
     "test:integration:promotion": "ts-node --transpile-only -P tsconfig.json test/promotion-order-lifecycle.integration.ts",
+    "test:integration:activity-multi-item": "ts-node --transpile-only -P tsconfig.json test/activity-multi-item-lifecycle.integration.ts",
     "test:integration:promotion-timeout": "ts-node --transpile-only -P tsconfig.json test/promotion-timeout-lifecycle.integration.ts",
     "test:integration:payment-anomaly": "ts-node --transpile-only -P tsconfig.json test/historical-payment-anomaly.integration.ts",
     "test:integration:cancelled-created-payment": "ts-node --transpile-only -P tsconfig.json test/historical-cancelled-created-payment.integration.ts",
     "test:integration:zero-pay-aftersale": "ts-node --transpile-only -P tsconfig.json test/zero-pay-aftersale-lifecycle.integration.ts",
-    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale",
+    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale",
     "test:ci": "jest --config jest.config.js && jest --config test/jest-e2e.config.js"
   },
   "dependencies": {
@@ -64,8 +65,7 @@
     "@types/jest": "^29.5.11",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.10.0",
-    "@types/passport-jwt": "^4.0.0",
-    "@types/supertest": "^7.2.0",
+    "@types/passport-jwt": "^7.0.5",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.57.1",
