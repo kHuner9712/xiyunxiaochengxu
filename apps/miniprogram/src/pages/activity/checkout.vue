@@ -2,7 +2,7 @@
   <view class="checkout-page page-shell">
     <view class="page-head">
       <text class="page-title">活动确认订单</text>
-      <text class="page-subtitle">活动价格、库存和限购均由服务器实时核验</text>
+      <text class="page-subtitle">价格、库存、赠品、套餐构成和限购均由服务器实时核验</text>
     </view>
 
     <view class="notice-card card">
@@ -39,25 +39,46 @@
       </template>
     </view>
 
-    <view class="card product-card" v-if="product">
-      <image class="product-image" :src="product.image || '/static/default-cover.png'" mode="aspectFill" />
-      <view class="product-main">
-        <text class="product-name">{{ product.name }}</text>
-        <text v-if="preview?.items?.[0]?.skuSpecText" class="sku-text">{{ preview.items[0].skuSpecText }}</text>
-        <view class="price-row">
-          <text class="activity-price">¥{{ formatPrice(displayUnitPrice) }}</text>
-          <text v-if="product.originalPrice > displayUnitPrice" class="original-price">¥{{ formatPrice(product.originalPrice) }}</text>
-        </view>
-        <view class="quantity-row">
-          <text class="quantity-label">数量</text>
-          <view class="stepper">
-            <button class="stepper-btn" :disabled="quantity <= 1 || loading" @tap.stop="changeQuantity(-1)">−</button>
-            <text class="stepper-value">{{ quantity }}</text>
-            <button class="stepper-btn" :disabled="quantity >= maxQuantity || loading" @tap.stop="changeQuantity(1)">+</button>
+    <view class="card items-card">
+      <view class="section-head">
+        <text class="section-title">{{ activity?.type === '4' ? '套餐商品' : '活动商品' }}</text>
+        <text v-if="activity?.type === '3'" class="section-tip">命中门槛后赠品自动加入</text>
+      </view>
+
+      <view v-if="displayItems.length" class="item-list">
+        <view v-for="item in displayItems" :key="`${item.skuId}-${item.isGift ? 'gift' : 'paid'}`" class="order-item">
+          <image class="product-image" :src="item.productImage || '/static/default-cover.png'" mode="aspectFill" />
+          <view class="product-main">
+            <view class="name-row">
+              <text class="product-name">{{ item.productName }}</text>
+              <text v-if="item.isGift" class="gift-tag">赠品</text>
+            </view>
+            <text v-if="item.skuSpecText" class="sku-text">{{ item.skuSpecText }}</text>
+            <view class="price-row">
+              <text class="activity-price">{{ item.isGift ? '¥0.00' : `¥${formatPrice(item.price)}` }}</text>
+              <text v-if="item.originalPrice > item.price" class="original-price">¥{{ formatPrice(item.originalPrice) }}</text>
+              <text class="item-qty">× {{ item.quantity }}</text>
+            </view>
           </view>
         </view>
-        <text class="stock-note">活动可购上限 {{ maxQuantity }} 件</text>
       </view>
+      <view v-else-if="product" class="order-item">
+        <image class="product-image" :src="product.image || '/static/default-cover.png'" mode="aspectFill" />
+        <view class="product-main">
+          <text class="product-name">{{ product.name }}</text>
+          <view class="price-row"><text class="activity-price">¥{{ formatPrice(product.price) }}</text></view>
+        </view>
+      </view>
+
+      <view class="quantity-row">
+        <text class="quantity-label">{{ activity?.type === '4' ? '套餐数量' : '购买数量' }}</text>
+        <view class="stepper">
+          <button class="stepper-btn" :disabled="quantity <= 1 || loading" @tap.stop="changeQuantity(-1)">−</button>
+          <text class="stepper-value">{{ quantity }}</text>
+          <button class="stepper-btn" :disabled="quantity >= maxQuantity || loading" @tap.stop="changeQuantity(1)">+</button>
+        </view>
+      </view>
+      <text class="stock-note">当前最多可购 {{ maxQuantity }} {{ activity?.type === '4' ? '套' : '件' }}</text>
     </view>
 
     <view class="card amount-card">
@@ -96,7 +117,7 @@
         <text class="submit-label">应付</text>
         <text class="submit-amount">¥{{ formatPrice(preview?.payAmount || 0) }}</text>
       </view>
-      <button class="submit-btn" :disabled="submitting || loading || !preview" @tap="handleSubmit">
+      <button class="submit-btn" :disabled="submitting || loading || !preview || maxQuantity <= 0" @tap="handleSubmit">
         {{ submitting ? '提交中...' : (preview?.isZeroPay ? '确认下单' : '立即支付') }}
       </button>
     </view>
@@ -138,19 +159,14 @@ const loading = ref(false)
 const submitting = ref(false)
 const agreedToLegal = ref(false)
 
+const displayItems = computed(() => Array.isArray(preview.value?.items) ? preview.value!.items : [])
 const maxQuantity = computed(() => {
+  if (Number.isSafeInteger(preview.value?.maxQuantity) && Number(preview.value?.maxQuantity) >= 0) {
+    return Math.min(99, Number(preview.value?.maxQuantity))
+  }
   const stock = Math.max(0, Number(product.value?.stock || product.value?.activityStock || 0))
   const limit = Number(product.value?.limitPerUser || 0)
-  return Math.max(1, Math.min(99, stock || 1, limit > 0 ? limit : 99))
-})
-
-const displayUnitPrice = computed(() => {
-  const item = preview.value?.items?.[0]
-  if (!item) return Number(product.value?.price || product.value?.activityPrice || 0)
-  if (preview.value?.activityType === '2') {
-    return Math.max(0, Math.floor((item.subtotal || 0) / Math.max(1, item.quantity)))
-  }
-  return item.price
+  return Math.max(0, Math.min(99, stock, limit > 0 ? limit : 99))
 })
 
 function buildCheckoutInput() {
@@ -269,14 +285,17 @@ async function handleSubmit() {
     uni.showToast({ title: '请选择自提点', icon: 'none' })
     return
   }
-  if (!preview.value) {
-    uni.showToast({ title: '活动金额尚未确认，请重试', icon: 'none' })
+  if (!preview.value || maxQuantity.value <= 0) {
+    uni.showToast({ title: '活动金额或库存尚未确认，请重试', icon: 'none' })
     await loadPreview()
     return
   }
 
   submitting.value = true
   try {
+    // Re-preview immediately before create. The server will perform the same checks again inside
+    // the write transaction, but this gives the user the newest amount before payment creation.
+    preview.value = await previewActivityOrder(activityId.value, buildCheckoutInput())
     const order = await createActivityOrder(activityId.value, buildCheckoutInput())
     if (order.isZeroPay || order.payAmount === 0) {
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.orderId}&payIntent=success&zeroPay=1` })
@@ -350,50 +369,51 @@ onLoad(async (options) => {
 </script>
 
 <style lang="scss" scoped>
-.checkout-page {
-  min-height: 100vh;
-  padding: 24rpx 24rpx 190rpx;
-}
+.checkout-page { min-height: 100vh; padding: 24rpx 24rpx 190rpx; }
 .page-head { padding: 8rpx 4rpx 20rpx; }
 .page-title { display: block; font-size: 40rpx; font-weight: 900; color: $text-color; }
 .page-subtitle { display: block; margin-top: 8rpx; font-size: $font-sm; color: $text-secondary; }
 .card { margin-bottom: 18rpx; padding: 24rpx; border-radius: $radius-xl; background: #fff; box-shadow: $shadow-xs; }
 .notice-card { background: rgba($primary-color, .08); }
 .notice-title { display: block; color: $primary-dark; font-size: $font-md; font-weight: 800; }
-.notice-desc { display: block; margin-top: 8rpx; color: $text-secondary; font-size: $font-sm; line-height: 1.6; }
-.selector-card { position: relative; }
-.selector-topline { display: flex; justify-content: space-between; gap: 16rpx; }
-.selector-title { font-size: $font-md; color: $text-color; font-weight: 800; }
-.selector-action { color: $primary-color; font-size: $font-sm; }
-.selector-desc, .selector-extra { display: block; margin-top: 10rpx; color: $text-secondary; font-size: $font-sm; line-height: 1.5; }
-.product-card { display: flex; gap: 20rpx; }
-.product-image { width: 176rpx; height: 176rpx; border-radius: $radius-lg; background: $bg-ivory; flex-shrink: 0; }
+.notice-desc { display: block; margin-top: 8rpx; color: $text-secondary; font-size: $font-xs; line-height: 1.6; }
+.selector-topline, .section-head, .quantity-row, .amount-row, .name-row { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; }
+.selector-title { color: $text-color; font-size: $font-md; font-weight: 800; }
+.selector-action { color: $primary-dark; font-size: $font-sm; }
+.selector-desc, .selector-extra { display: block; margin-top: 8rpx; color: $text-secondary; font-size: $font-sm; line-height: 1.6; }
+.section-title { color: $text-color; font-size: $font-md; font-weight: 900; }
+.section-tip { color: $primary-dark; font-size: $font-xs; }
+.item-list { margin-top: 12rpx; }
+.order-item { display: flex; gap: 18rpx; padding: 16rpx 0; border-bottom: 1rpx solid $border-color; }
+.order-item:last-child { border-bottom: 0; }
+.product-image { width: 150rpx; height: 150rpx; flex-shrink: 0; border-radius: $radius-lg; background: $bg-ivory; }
 .product-main { flex: 1; min-width: 0; }
-.product-name { display: block; font-size: $font-md; font-weight: 800; color: $text-color; line-height: 1.45; }
+.product-name { color: $text-color; font-size: $font-md; font-weight: 800; line-height: 1.45; }
+.gift-tag { flex-shrink: 0; padding: 4rpx 10rpx; border-radius: $radius-round; background: $primary-soft; color: $primary-dark; font-size: $font-xs; font-weight: 800; }
 .sku-text, .stock-note { display: block; margin-top: 8rpx; color: $text-hint; font-size: $font-xs; }
 .price-row { display: flex; align-items: baseline; gap: 10rpx; margin-top: 12rpx; }
-.activity-price { color: $primary-dark; font-weight: 900; font-size: $font-lg; }
+.activity-price { color: $primary-dark; font-size: $font-lg; font-weight: 900; }
 .original-price { color: $text-hint; font-size: $font-xs; text-decoration: line-through; }
-.quantity-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14rpx; }
-.quantity-label { color: $text-secondary; font-size: $font-sm; }
-.stepper { display: flex; align-items: center; border: 1rpx solid $border-color; border-radius: $radius-round; overflow: hidden; }
-.stepper-btn { width: 64rpx; height: 52rpx; padding: 0; border: 0; border-radius: 0; background: $bg-ivory; line-height: 52rpx; font-size: 32rpx; }
+.item-qty { margin-left: auto; color: $text-secondary; font-size: $font-sm; }
+.quantity-row { margin-top: 20rpx; padding-top: 18rpx; border-top: 1rpx solid $border-color; }
+.quantity-label { color: $text-color; font-weight: 800; }
+.stepper { display: flex; align-items: center; gap: 16rpx; }
+.stepper-btn { width: 60rpx; height: 54rpx; padding: 0; border: 0; border-radius: 14rpx; background: $bg-ivory; color: $text-color; line-height: 54rpx; }
 .stepper-btn::after { border: 0; }
-.stepper-value { min-width: 62rpx; text-align: center; font-size: $font-sm; font-weight: 800; }
-.amount-row { display: flex; justify-content: space-between; margin: 14rpx 0; color: $text-secondary; font-size: $font-sm; }
+.stepper-value { min-width: 44rpx; text-align: center; font-weight: 800; }
+.amount-row { padding: 10rpx 0; color: $text-secondary; font-size: $font-sm; }
 .amount-row.discount { color: $primary-dark; }
+.amount-divider { height: 1rpx; margin: 8rpx 0; background: $border-color; }
 .amount-row.total { color: $text-color; font-size: $font-md; font-weight: 900; }
-.amount-divider { height: 1rpx; background: $border-color; margin: 18rpx 0; }
-.field-label { display: block; font-size: $font-md; font-weight: 800; color: $text-color; }
-.remark-input { width: 100%; min-height: 120rpx; box-sizing: border-box; margin-top: 14rpx; padding: 18rpx; border-radius: $radius-lg; background: $bg-ivory; font-size: $font-sm; line-height: 1.5; }
-.legal-row { display: flex; align-items: center; flex-wrap: wrap; padding: 10rpx 6rpx 28rpx; color: $text-secondary; font-size: $font-xs; }
+.field-label { display: block; margin-bottom: 12rpx; color: $text-color; font-size: $font-sm; font-weight: 800; }
+.remark-input { width: 100%; min-height: 130rpx; padding: 18rpx; box-sizing: border-box; border-radius: $radius-lg; background: $bg-ivory; font-size: $font-sm; }
+.legal-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4rpx; padding: 12rpx 4rpx; color: $text-secondary; font-size: $font-xs; }
 .legal-label { display: flex; align-items: center; }
 .legal-link { color: $primary-dark; }
-.submit-bar { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 20rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); background: rgba(255,255,255,.96); box-shadow: 0 -8rpx 30rpx rgba(0,0,0,.06); }
-.submit-price { flex: 1; }
-.submit-label { color: $text-secondary; font-size: $font-xs; }
-.submit-amount { margin-left: 8rpx; color: $primary-dark; font-size: 36rpx; font-weight: 900; }
-.submit-btn { width: 260rpx; height: 82rpx; border: 0; border-radius: $radius-round; background: $gradient-coral; color: #fff; font-size: $font-md; font-weight: 900; line-height: 82rpx; }
+.submit-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom)); background: rgba(255,255,255,.98); box-shadow: 0 -8rpx 24rpx rgba(0,0,0,.06); }
+.submit-label { display: block; color: $text-hint; font-size: $font-xs; }
+.submit-amount { display: block; margin-top: 2rpx; color: $primary-dark; font-size: 38rpx; font-weight: 900; }
+.submit-btn { min-width: 260rpx; height: 82rpx; border: 0; border-radius: $radius-round; background: $gradient-coral; color: #fff; font-size: $font-md; font-weight: 900; line-height: 82rpx; }
 .submit-btn::after { border: 0; }
-.submit-btn[disabled] { opacity: .55; }
+.submit-btn[disabled] { opacity: .48; }
 </style>
