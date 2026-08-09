@@ -108,6 +108,24 @@ echo "$product_list_response" | grep -Eq '"list"[[:space:]]*:' || fail "public p
 echo "$product_list_response" | grep -Eq '"total"[[:space:]]*:' || fail "public product list API response has no data.total: $product_list_response"
 pass 'public product list works through production HTTPS, controller, response envelope and database query path'
 
+callback_payload='{"id":"runtime-smoke-invalid-signature","event_type":"TRANSACTION.SUCCESS","resource":{"algorithm":"AEAD_AES_256_GCM","ciphertext":"invalid-runtime-smoke","nonce":"invalidnonce"}}'
+for callback_path in callback refund-callback; do
+  callback_body_file="$(mktemp)"
+  callback_status="$(curl --silent --show-error --insecure \
+    --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
+    --output "$callback_body_file" \
+    --write-out '%{http_code}' \
+    --request POST \
+    --header 'Content-Type: application/json' \
+    --data "$callback_payload" \
+    "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/api/weapp/pay/${callback_path}")"
+  callback_response="$(cat "$callback_body_file")"
+  rm -f "$callback_body_file"
+  [ "$callback_status" = '200' ] || fail "${callback_path} route returned HTTP $callback_status instead of 200: $callback_response"
+  echo "$callback_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*"FAIL"' || fail "${callback_path} invalid-signature smoke did not reach callback failure contract: $callback_response"
+done
+pass 'payment and refund callback routes are publicly reachable through production HTTPS and reject invalid signatures safely'
+
 admin_html="$(curl --fail --silent --show-error --insecure \
   --resolve "${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}/")"
