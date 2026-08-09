@@ -13,6 +13,9 @@ function createMockPrisma() {
     activity: {
       findMany: jest.fn() as any,
     },
+    content: {
+      findMany: jest.fn() as any,
+    },
     babyProfile: {
       findFirst: jest.fn() as any,
     },
@@ -21,6 +24,7 @@ function createMockPrisma() {
     },
     homeSection: {
       findFirst: jest.fn() as any,
+      findMany: jest.fn() as any,
     },
   };
 }
@@ -32,11 +36,15 @@ describe('HomeService', () => {
   beforeEach(() => {
     process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     prisma = createMockPrisma();
+    prisma.homeSection.findMany.mockResolvedValue([]);
+    prisma.homeSection.findFirst.mockResolvedValue(null);
+    prisma.systemConfig.findFirst.mockResolvedValue(null);
+    prisma.content.findMany.mockResolvedValue([]);
     service = new HomeService(prisma as any);
   });
 
   describe('getHomeData', () => {
-    it('should return quickEntries and monthRecommend fields', async () => {
+    it('should return quickEntries, recommendations and monthRecommend fields', async () => {
       prisma.banner.findMany.mockResolvedValue([]);
       prisma.product.findMany.mockResolvedValue([]);
       prisma.activity.findMany.mockResolvedValue([]);
@@ -45,21 +53,60 @@ describe('HomeService', () => {
 
       expect(result).toHaveProperty('banners');
       expect(result).toHaveProperty('quickEntries');
+      expect(result).toHaveProperty('recommendations');
       expect(result).toHaveProperty('monthRecommend');
       expect(result).toHaveProperty('hotProducts');
       expect(result).toHaveProperty('newProducts');
       expect(result).toHaveProperty('activities');
       expect(result.quickEntries).toEqual([]);
+      expect(result.recommendations).toEqual([]);
     });
 
-    it('should not return recommendations or monthAgeRecommend fields', async () => {
+    it('should expose managed recommendations without restoring the obsolete monthAgeRecommend alias', async () => {
       prisma.banner.findMany.mockResolvedValue([]);
-      prisma.product.findMany.mockResolvedValue([]);
       prisma.activity.findMany.mockResolvedValue([]);
+      prisma.homeSection.findMany.mockResolvedValue([{
+        id: 9n,
+        type: 'recommendation',
+        title: '首页精选',
+        sortOrder: 10,
+        status: 1,
+        config: {
+          code: 'home_featured',
+          recommendationType: 1,
+          items: [{ targetId: '7', targetName: '旧客户端名称不会被信任', sort: 1 }],
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }]);
+      prisma.product.findMany.mockImplementation((args: any) => {
+        if (args.where?.id?.in) {
+          return Promise.resolve([{
+            id: 7n,
+            name: '服务端商品名',
+            mainImage: '/uploads/recommendation.jpg',
+            minPrice: 8800,
+            totalSales: 12,
+          }]);
+        }
+        return Promise.resolve([]);
+      });
 
       const result = await service.getHomeData();
 
-      expect(result).not.toHaveProperty('recommendations');
+      expect(result.recommendations).toHaveLength(1);
+      expect(result.recommendations[0]).toMatchObject({
+        id: '9',
+        name: '首页精选',
+        code: 'home_featured',
+        type: 1,
+      });
+      expect(result.recommendations[0]?.items[0]).toMatchObject({
+        id: '7',
+        name: '服务端商品名',
+        image: 'https://api.example.com/uploads/recommendation.jpg',
+        price: 8800,
+      });
       expect(result).not.toHaveProperty('monthAgeRecommend');
     });
   });
