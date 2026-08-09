@@ -105,7 +105,7 @@ async function handleDelete(row: any) {
 }
 
 async function handleUploadImage(options: any) {
-  try { const res = await uploadApi.uploadImage(options.file); form.image = res.data.url }
+  try { const res = await uploadApi.uploadImage(options.file, 'marketing-banner'); form.image = res.data.url }
   catch (e: any) { ElMessage.error(e?.message || '图片上传失败') }
 }
 
