@@ -9,6 +9,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import {
   PermissionSafeUploadService,
   allowedAdminPermissionsForGroup,
+  allowedAdminUploadPermissionsForGroup,
   USER_PRIVATE_UPLOAD_GROUPS,
   USER_PUBLIC_UPLOAD_GROUPS,
 } from './permission-safe-upload.service';
@@ -25,6 +26,9 @@ function createMockPrisma() {
       findMany: jest.fn() as any,
     },
     aftersaleOrder: {
+      findFirst: jest.fn() as any,
+    },
+    product: {
       findFirst: jest.fn() as any,
     },
     supplier: {
@@ -72,7 +76,11 @@ describe('PermissionSafeUploadService private-file access', () => {
     delete process.env.UPLOAD_DIR;
   });
 
-  function privateFile(groupName = 'aftersale', uploaderId = 10n) {
+  function privateFile(
+    groupName = 'aftersale',
+    uploaderId = 10n,
+    uploaderType = 'user',
+  ) {
     return {
       id: 1n,
       fileName: 'secret.jpg',
@@ -86,7 +94,7 @@ describe('PermissionSafeUploadService private-file access', () => {
       url: null,
       groupName,
       uploaderId,
-      uploaderType: 'user',
+      uploaderType,
       createdAt: new Date(),
     };
   }
@@ -178,9 +186,51 @@ describe('PermissionSafeUploadService private-file access', () => {
     }));
   });
 
-  it('requires system:file for generic private/cert/admin groups while keeping super_admin bypass', async () => {
-    expect(allowedAdminPermissionsForGroup('cert')).toEqual(['system:file']);
-    prisma.fileAsset.findFirst.mockResolvedValue(privateFile('cert'));
+  it('lets product editors preview only their own unreferenced cert uploads', async () => {
+    expect(allowedAdminPermissionsForGroup('cert')).toEqual([
+      'product:create',
+      'product:edit',
+      'system:file',
+    ]);
+    prisma.fileAsset.findFirst.mockResolvedValue(privateFile('cert', 99n, 'admin'));
+    prisma.adminUserRole.findMany.mockResolvedValue([
+      activeRole('product_editor', ['product:edit']),
+    ]);
+
+    const own = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
+    await openAndClose(own.stream);
+    expect(prisma.product.findFirst).not.toHaveBeenCalled();
+
+    prisma.fileAsset.findFirst.mockResolvedValue(privateFile('cert', 98n, 'admin'));
+    prisma.product.findFirst.mockResolvedValue(null);
+    await expect(
+      service.findPrivateById('1', { id: '99', roleType: 'admin' }),
+    ).rejects.toThrow('尚未进入可访问的业务记录');
+  });
+
+  it('allows another product editor to read certs only after product reference', async () => {
+    prisma.fileAsset.findFirst.mockResolvedValue(privateFile('cert', 98n, 'admin'));
+    prisma.adminUserRole.findMany.mockResolvedValue([
+      activeRole('product_editor', ['product:edit']),
+    ]);
+    prisma.product.findFirst.mockResolvedValue({ id: 18n });
+
+    const result = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
+    await openAndClose(result.stream);
+    expect(prisma.product.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        deletedAt: null,
+        attributes: {
+          path: '$.compliance.certImages',
+          array_contains: '/api/common/file/private/1',
+        },
+      },
+    }));
+  });
+
+  it('keeps generic private/admin groups system:file-only while preserving super_admin bypass', async () => {
+    expect(allowedAdminPermissionsForGroup('private')).toEqual(['system:file']);
+    prisma.fileAsset.findFirst.mockResolvedValue(privateFile('private'));
     prisma.adminUserRole.findMany.mockResolvedValue([
       activeRole('file_manager', ['system:file']),
     ]);
@@ -192,6 +242,45 @@ describe('PermissionSafeUploadService private-file access', () => {
     ]);
     const superAdminResult = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
     await openAndClose(superAdminResult.stream);
+  });
+
+  it('maps business upload groups to least-privilege permissions', () => {
+    expect(allowedAdminUploadPermissionsForGroup('product-image')).toEqual([
+      'product:create',
+      'product:edit',
+      'system:file',
+    ]);
+    expect(allowedAdminUploadPermissionsForGroup('brand-logo')).toEqual([
+      'product:brand',
+      'system:file',
+    ]);
+    expect(allowedAdminUploadPermissionsForGroup('content-cover')).toEqual([
+      'content:edit',
+      'system:file',
+    ]);
+    expect(allowedAdminUploadPermissionsForGroup('customer-service')).toEqual([
+      'system:customer-service',
+      'system:file',
+    ]);
+    expect(allowedAdminUploadPermissionsForGroup('unknown')).toEqual(['system:file']);
+  });
+
+  it('allows only matching business admins to upload a business group', async () => {
+    prisma.fileAsset.create.mockImplementation(async ({ data }: any) => ({
+      id: 3n,
+      ...data,
+      createdAt: new Date(),
+    }));
+    prisma.adminUserRole.findMany.mockResolvedValue([
+      activeRole('product_editor', ['product:edit']),
+    ]);
+
+    const uploaded = await service.uploadFile(jpegUpload(), '99', 'admin', 'product-image');
+    expect(uploaded.groupName).toBe('product-image');
+
+    await expect(
+      service.uploadFile(jpegUpload(), '99', 'admin', 'marketing-banner'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('only permits explicit user upload purposes and image content', async () => {
@@ -231,7 +320,7 @@ describe('PermissionSafeUploadService private-file access', () => {
     expect(aftersale.url).toBe('/api/common/file/private/2');
   });
 
-  it('does not let admins bypass admin upload permissions through the common endpoint', async () => {
+  it('does not let admins bypass business upload permissions through the common endpoint', async () => {
     prisma.adminUserRole.findMany.mockResolvedValue([
       activeRole('content_editor', ['content:list']),
     ]);
