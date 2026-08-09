@@ -128,8 +128,17 @@ jobs:
         run: |
           set -euo pipefail
           : > real-api-runtime.log
-          PORT=3100 BUILD_SHA=${GITHUB_SHA} node apps/api/dist/main.js >> real-api-runtime.log 2>&1 &
+          PORT=3100 BUILD_SHA=${GITHUB_SHA} NODE_OPTIONS="--report-on-signal --report-signal=SIGUSR2 --report-directory=." node apps/api/dist/main.js >> real-api-runtime.log 2>&1 &
           api_pid=$!
+
+          capture_shutdown_report() {
+            if kill -0 "$api_pid" 2>/dev/null; then
+              echo "Capturing Node diagnostic report for stuck API pid=$api_pid" | tee -a real-api-runtime.log
+              kill -USR2 "$api_pid" 2>/dev/null || true
+              sleep 2
+              ls -1 report.*.json 2>/dev/null | tee -a real-api-runtime.log || true
+            fi
+          }
 
           cleanup() {
             if kill -0 "$api_pid" 2>/dev/null; then
@@ -142,6 +151,7 @@ jobs:
               done
               if kill -0 "$api_pid" 2>/dev/null; then
                 echo "API did not exit after SIGTERM" | tee -a real-api-runtime.log
+                capture_shutdown_report
                 kill -KILL "$api_pid" 2>/dev/null || true
                 wait "$api_pid" 2>/dev/null || true
                 return 1
@@ -188,6 +198,7 @@ jobs:
           done
           if kill -0 "$api_pid" 2>/dev/null; then
             echo "API did not shut down cleanly after SIGTERM" >&2
+            capture_shutdown_report
             tail -n 200 real-api-runtime.log >&2
             exit 1
           fi
@@ -208,6 +219,7 @@ jobs:
           path: |
             real-api-runtime.log
             real-api-health.json
+            report.*.json
           if-no-files-found: warn
           retention-days: 1
 
