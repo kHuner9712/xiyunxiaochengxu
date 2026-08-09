@@ -1,5 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Cron, SchedulerRegistry } from '@nestjs/schedule';
 import { AFTERSALE_APPLY_DAYS } from '@baby-mall/shared';
 import { PAYMENT_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -22,8 +22,11 @@ import { BenefitPackageService } from '../benefit-package/benefit-package.servic
 import { SnapshotGuardedProductionBenefitPackageService } from '../benefit-package/snapshot-guarded-production-benefit-package.service';
 
 @Injectable()
-export class ScheduleService {
+export class ScheduleService implements OnModuleDestroy {
   private readonly logger = new Logger(ScheduleService.name);
+  private shuttingDown = false;
+  private activeExecutions = 0;
+  private readonly drainWaiters = new Set<() => void>();
 
   constructor(
     private readonly redisService: RedisService,
@@ -44,16 +47,94 @@ export class ScheduleService {
     private readonly shareService: ProductionShareService,
     @Inject(BenefitPackageService)
     private readonly benefitPackageService: SnapshotGuardedProductionBenefitPackageService,
+    private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
 
+  async onModuleDestroy(): Promise<void> {
+    if (this.shuttingDown) return;
+    this.shuttingDown = true;
+
+    let stopped = 0;
+    for (const [name, cronJob] of this.schedulerRegistry.getCronJobs()) {
+      try {
+        cronJob.stop();
+        stopped += 1;
+      } catch (error) {
+        this.logger.warn(`停止定时任务失败：name=${name}, error=${(error as Error).message}`);
+      }
+    }
+
+    this.logger.log(
+      `API 正在关闭：已停止 ${stopped} 个 Cron，等待 ${this.activeExecutions} 个已进入的调度任务排空`,
+    );
+    await this.waitForActiveExecutions();
+    this.logger.log('调度任务已全部排空，可以关闭 Redis/Prisma');
+  }
+
+  private beginExecution(): boolean {
+    if (this.shuttingDown) return false;
+    this.activeExecutions += 1;
+    return true;
+  }
+
+  private finishExecution(): void {
+    if (this.activeExecutions > 0) {
+      this.activeExecutions -= 1;
+    }
+    if (this.activeExecutions === 0 && this.drainWaiters.size > 0) {
+      for (const resolve of this.drainWaiters) resolve();
+      this.drainWaiters.clear();
+    }
+  }
+
+  private async waitForActiveExecutions(): Promise<void> {
+    if (this.activeExecutions === 0) return;
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        this.drainWaiters.delete(done);
+        resolve();
+      };
+      this.drainWaiters.add(done);
+      if (this.activeExecutions === 0) done();
+    });
+  }
+
   private async acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
+    if (!this.beginExecution()) return null;
+
     const value = `${process.pid}-${Date.now()}-${Math.random().toString(36).substring(2)}`;
-    const acquired = await this.redisService.setNX(key, value, ttlSeconds);
-    return acquired ? value : null;
+    try {
+      const acquired = await this.redisService.setNX(key, value, ttlSeconds);
+      if (!acquired) {
+        this.finishExecution();
+        return null;
+      }
+
+      // SIGTERM may arrive while SET NX is in flight. Do not let a new business task start after
+      // shutdown begins; release the just-acquired lock while Redis is still alive.
+      if (this.shuttingDown) {
+        try {
+          await this.redisService.releaseLockWithLua(key, value);
+        } finally {
+          this.finishExecution();
+        }
+        return null;
+      }
+      return value;
+    } catch (error) {
+      this.finishExecution();
+      throw error;
+    }
   }
 
   private async releaseLock(key: string, value: string): Promise<void> {
-    await this.redisService.releaseLockWithLua(key, value);
+    try {
+      await this.redisService.releaseLockWithLua(key, value);
+    } catch (error) {
+      this.logger.warn(`释放定时任务锁失败：key=${key}, error=${(error as Error).message}`);
+    } finally {
+      this.finishExecution();
+    }
   }
 
   @Cron('*/1 * * * *')
