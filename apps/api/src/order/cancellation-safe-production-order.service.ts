@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
@@ -15,6 +15,8 @@ const PAYMENT_CANCEL_LOCK_TTL_SECONDS = 90;
 
 @Injectable()
 export class CancellationSafeProductionOrderService extends ProductionOrderService {
+  private readonly cancellationLogger = new Logger(CancellationSafeProductionOrderService.name);
+
   constructor(
     private readonly cancellationPrisma: PrismaService,
     businessEventService: BusinessEventService,
@@ -235,6 +237,51 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     }
 
     return { closedCount };
+  }
+
+  override async autoCompleteOrders() {
+    const candidates = await this.cancellationPrisma.order.findMany({
+      where: {
+        status: OrderStatus.delivered,
+        autoCompleteAt: { lte: new Date() },
+      },
+      include: { orderItems: true },
+    });
+
+    let completedCount = 0;
+    for (const order of candidates) {
+      try {
+        await (this as any).completeOrderAndReward({
+          order,
+          claimWhere: {
+            id: order.id,
+            status: OrderStatus.delivered,
+            autoCompleteAt: { lte: new Date() },
+          },
+          orderUpdateData: { status: OrderStatus.completed, completedAt: new Date() },
+          operatorType: 'system',
+          action: 'auto_complete',
+          logContent: '超时未确认收货，系统自动完成',
+          completeReason: '自动完成',
+          rewardSource: 'order_auto_complete',
+          swallowClaimFailure: true,
+        });
+        completedCount += 1;
+      } catch (error) {
+        if (
+          error instanceof BadRequestException &&
+          error.message === '订单抢占失败'
+        ) {
+          continue;
+        }
+        this.cancellationLogger.error(
+          `自动完成订单失败：orderId=${order.id}, orderNo=${order.orderNo}, error=${(error as Error).message}`,
+          (error as Error).stack,
+        );
+      }
+    }
+
+    return { completedCount };
   }
 
   private async assertManualCancelHasNoUnsafePayment(orderId: string) {
