@@ -41,7 +41,8 @@ test('supplier buttons and API routes use the same seeded granular permissions',
   assert.match(page, /v-permission="'supplier:edit'"[^>]*>编辑/)
   assert.match(page, /v-permission="'supplier:delete'"[^>]*>删除/)
 
-  assert.match(controller, /@RequirePermission\('supplier:list'\)/)
+  assert.match(controller, /@Get\('list'\)\s+@RequirePermission\('supplier:list', 'product:create', 'product:edit'\)/)
+  assert.match(controller, /@Get\('detail\/:id'\)\s+@RequirePermission\('supplier:list', 'product:create', 'product:edit'\)/)
   assert.match(controller, /@RequirePermission\('supplier:create'\)/)
   assert.match(controller, /@RequirePermission\('supplier:edit'\)/)
   assert.match(controller, /@RequirePermission\('supplier:delete'\)/)
