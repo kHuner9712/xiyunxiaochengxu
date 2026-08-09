@@ -21,13 +21,13 @@ export class AdminCategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Get('list')
-  @RequirePermission('product:category')
+  @RequirePermission('product:category', 'product:list', 'product:create', 'product:edit')
   async list() {
     return this.categoryService.findAllAdmin();
   }
 
   @Get('detail/:id')
-  @RequirePermission('product:category')
+  @RequirePermission('product:category', 'product:list', 'product:create', 'product:edit')
   async detail(@Param('id') id: string) {
     return this.categoryService.findById(id);
   }
