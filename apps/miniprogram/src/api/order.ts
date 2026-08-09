@@ -126,6 +126,8 @@ export interface OrderProductItem {
   skuName: string
   price: number
   quantity: number
+  subtotal?: number
+  activityDiscount?: number
   canApplyAftersale?: boolean
   aftersaleStatus?: number | string
   aftersaleDisabledReason?: string
