@@ -31,6 +31,7 @@ export interface ActivityOrderPreview {
   activityType: string
   promotionLabel: string
   items: Array<{
+    activityProductId?: string
     productId: string
     skuId: string
     productName: string
@@ -40,6 +41,7 @@ export interface ActivityOrderPreview {
     originalPrice: number
     quantity: number
     subtotal: number
+    isGift?: boolean
   }>
   totalAmount: number
   discountAmount: number
@@ -56,6 +58,7 @@ export interface ActivityOrderPreview {
   fulfillmentType: 'delivery' | 'pickup'
   isZeroPay: boolean
   promotionStackingDisabled: true
+  maxQuantity?: number
 }
 
 export function previewActivityOrder(activityId: string, data: ActivityCheckoutInput) {
