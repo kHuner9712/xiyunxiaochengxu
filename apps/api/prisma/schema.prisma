@@ -186,6 +186,7 @@ model Supplier {
   name                 String    @db.VarChar(100) @map("name")
   contactName          String?   @db.VarChar(50) @map("contact_name")
   contactPhone         String?   @db.VarChar(20) @map("contact_phone")
+  email                String?   @db.VarChar(100) @map("email")
   address              String?   @db.VarChar(300) @map("address")
   businessLicense      String?   @db.VarChar(500) @map("business_license")
   cooperationStartDate DateTime? @db.Date @map("cooperation_start_date")
@@ -997,7 +998,6 @@ model Content {
   deletedAt          DateTime? @map("deleted_at")
 
   category ContentCategory? @relation(fields: [categoryId], references: [id])
-
   @@index([categoryId], name: "idx_category_id")
   @@index([contentType], name: "idx_content_type")
   @@index([status], name: "idx_status")
