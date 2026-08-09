@@ -5,6 +5,7 @@ export function getHomeData() {
     banners: BannerItem[]
     quickEntries: QuickEntry[]
     announcement?: string
+    recommendations: RecommendationSection[]
     monthRecommend: ProductItem[]
     hotProducts: ProductItem[]
     newProducts: ProductItem[]
@@ -50,4 +51,22 @@ export interface ActivityItem {
   type: number
   startTime: number | string | Date
   endTime: number | string | Date
+}
+
+export interface ContentRecommendationItem {
+  id: string
+  title: string
+  image: string
+  summary: string
+  contentType: string
+  publishedAt?: string | Date | null
+}
+
+export interface RecommendationSection {
+  id: string
+  name: string
+  code: string
+  type: 1 | 2 | 3
+  sort: number
+  items: Array<ProductItem | ActivityItem | ContentRecommendationItem>
 }
