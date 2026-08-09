@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import type { ReadStream } from 'fs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import {
   PermissionSafeUploadService,
@@ -36,6 +37,14 @@ function activeRole(code: string, permissions: string[]) {
       })),
     },
   };
+}
+
+async function openAndClose(stream: ReadStream) {
+  await new Promise<void>((resolve, reject) => {
+    stream.once('error', reject);
+    stream.once('close', resolve);
+    stream.once('open', () => stream.destroy());
+  });
 }
 
 describe('PermissionSafeUploadService private-file access', () => {
@@ -97,7 +106,7 @@ describe('PermissionSafeUploadService private-file access', () => {
   it('keeps user access owner-only', async () => {
     prisma.fileAsset.findFirst.mockResolvedValue(privateFile('aftersale', 10n));
     const own = await service.findPrivateById('1', { id: '10', roleType: 'user' });
-    own.stream.destroy();
+    await openAndClose(own.stream);
 
     await expect(
       service.findPrivateById('1', { id: '11', roleType: 'user' }),
@@ -123,7 +132,7 @@ describe('PermissionSafeUploadService private-file access', () => {
     ]);
 
     const result = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
-    result.stream.destroy();
+    await openAndClose(result.stream);
   });
 
   it('requires system:file for generic private/cert/admin groups while keeping super_admin bypass', async () => {
@@ -133,13 +142,13 @@ describe('PermissionSafeUploadService private-file access', () => {
       activeRole('file_manager', ['system:file']),
     ]);
     const fileManagerResult = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
-    fileManagerResult.stream.destroy();
+    await openAndClose(fileManagerResult.stream);
 
     prisma.adminUserRole.findMany.mockResolvedValue([
       activeRole('super_admin', []),
     ]);
     const superAdminResult = await service.findPrivateById('1', { id: '99', roleType: 'admin' });
-    superAdminResult.stream.destroy();
+    await openAndClose(superAdminResult.stream);
   });
 
   it('only permits explicit user upload purposes and image content', async () => {
