@@ -21,6 +21,18 @@ pass() {
   printf 'PASS %s\n' "$1"
 }
 
+read_env_value() {
+  local key="$1"
+  local value
+  value="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "$ENV_FILE" 2>/dev/null | tail -1 | sed -E "s/^[[:space:]]*(export[[:space:]]+)?${key}=//" || true)"
+  value="${value%$'\r'}"
+  value="${value#\"}"
+  value="${value%\"}"
+  value="${value#\'}"
+  value="${value%\'}"
+  printf '%s' "$value"
+}
+
 wait_healthy() {
   local container="$1"
   local attempts="${2:-60}"
@@ -40,6 +52,15 @@ command -v docker >/dev/null 2>&1 || fail 'docker is not installed'
 command -v gzip >/dev/null 2>&1 || fail 'gzip is not installed'
 docker compose version >/dev/null 2>&1 || fail 'docker compose is unavailable'
 [ -r "$ENV_FILE" ] || fail "production env file is not readable: $ENV_FILE"
+
+EXPECTED_API_DOMAIN="${API_DOMAIN:-api.yunxixiaochengxu.com.cn}"
+EXPECTED_PAY_NOTIFY_URL="https://${EXPECTED_API_DOMAIN}/api/weapp/pay/callback"
+EXPECTED_REFUND_NOTIFY_URL="https://${EXPECTED_API_DOMAIN}/api/weapp/pay/refund-callback"
+CONFIGURED_PAY_NOTIFY_URL="$(read_env_value WECHAT_NOTIFY_URL)"
+CONFIGURED_REFUND_NOTIFY_URL="$(read_env_value WECHAT_REFUND_NOTIFY_URL)"
+[ "$CONFIGURED_PAY_NOTIFY_URL" = "$EXPECTED_PAY_NOTIFY_URL" ] || fail "WECHAT_NOTIFY_URL must exactly match $EXPECTED_PAY_NOTIFY_URL; configured=${CONFIGURED_PAY_NOTIFY_URL:-empty}"
+[ "$CONFIGURED_REFUND_NOTIFY_URL" = "$EXPECTED_REFUND_NOTIFY_URL" ] || fail "WECHAT_REFUND_NOTIFY_URL must exactly match $EXPECTED_REFUND_NOTIFY_URL; configured=${CONFIGURED_REFUND_NOTIFY_URL:-empty}"
+pass 'WeChat payment and refund callback URLs exactly match the deployed public API routes'
 
 cd "$ROOT_DIR"
 [ -z "$(git status --porcelain)" ] || fail 'Git worktree is not clean; stop before production deployment'
