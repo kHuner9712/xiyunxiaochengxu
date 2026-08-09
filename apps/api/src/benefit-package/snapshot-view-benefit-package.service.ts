@@ -107,6 +107,25 @@ export class SnapshotViewBenefitPackageService extends VersionedBenefitPackageSe
       select: { id: true, packageItemId: true },
     });
 
+    const entitlementIds = usedEntitlements.map((row) => row.id.toString());
+    const snapshotEvents = entitlementIds.length
+      ? await this.viewPrisma.businessEvent.findMany({
+          where: {
+            eventType: ENTITLEMENT_SNAPSHOT_EVENT,
+            bizType: ENTITLEMENT_BIZ_TYPE,
+            bizId: { in: entitlementIds },
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        })
+      : [];
+    const snapshotItemMap = new Map<string, SnapshotItem>();
+    for (const event of snapshotEvents) {
+      if (snapshotItemMap.has(event.bizId)) continue;
+      const payload = (event.payload ?? {}) as Record<string, any>;
+      const item = this.parseItem(payload.item);
+      if (item) snapshotItemMap.set(event.bizId, item);
+    }
+
     const currentItemIds = Array.from(
       new Set(usedEntitlements.map((row) => row.packageItemId.toString())),
     ).map((id) => BigInt(id));
@@ -121,10 +140,10 @@ export class SnapshotViewBenefitPackageService extends VersionedBenefitPackageSe
     const byStore = new Map<string, number>();
     const byMerchant = new Map<string, number>();
     for (const entitlement of usedEntitlements) {
-      const snapshot = await this.loadEntitlementSnapshot(entitlement.id.toString());
+      const snapshotItem = snapshotItemMap.get(entitlement.id.toString());
       const current = currentItemMap.get(entitlement.packageItemId.toString());
-      const storeId = snapshot?.item?.pickupStoreId ?? current?.pickupStoreId?.toString() ?? null;
-      const merchantId = snapshot?.item?.merchantPromotionSourceId
+      const storeId = snapshotItem?.pickupStoreId ?? current?.pickupStoreId?.toString() ?? null;
+      const merchantId = snapshotItem?.merchantPromotionSourceId
         ?? current?.merchantPromotionSourceId?.toString()
         ?? null;
       if (storeId) byStore.set(storeId, (byStore.get(storeId) ?? 0) + 1);
