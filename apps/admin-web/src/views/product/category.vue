@@ -218,7 +218,7 @@ async function handleDelete(row: CategoryRecord) {
 
 async function handleUploadIcon(options: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
+    const res = await uploadApi.uploadImage(options.file, 'category-icon')
     form.icon = res.data.url
   } catch (e: any) {
     ElMessage.error(e?.message || '图标上传失败')
