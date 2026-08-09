@@ -33,6 +33,7 @@
           <view class="product-right">
             <PriceDisplay :price="item.price" />
             <text class="product-qty">x{{ item.quantity }}</text>
+            <text class="product-line-total">实付小计 ¥{{ formatPrice(item.subtotal ?? item.price * item.quantity) }}</text>
           </view>
         </view>
         <view class="order-footer">
@@ -186,39 +187,29 @@ async function handlePay(order: OrderItem) {
     const payment = await createPayment({ orderId: order.id })
     try {
       await wxPay(payment)
-      uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.id}&payScene=list&payIntent=success` })
+      uni.navigateTo({ url: `/pages/order/pay-result?orderId=${order.id}&payScene=list&payIntent=success` })
     } catch (payClientErr: any) {
-      if (isUserCancelPayError(payClientErr)) {
+      const detail = String(payClientErr?.errMsg || payClientErr?.message || '')
+      if (detail.toLowerCase().includes('cancel')) {
         uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
         return
       }
       uni.showModal({
         title: '支付未完成',
-        content: '支付客户端异常，请前往订单详情页继续支付。',
+        content: payClientErr?.message || payClientErr?.errMsg || '支付发起异常，请稍后重试或联系客服',
         showCancel: false,
-        confirmText: '查看订单',
-        success: () => {
-          uni.navigateTo({ url: `/pages/order/detail?id=${order.id}` })
-        }
+        confirmText: '我知道了'
       })
     }
   } catch (e: any) {
-    const msg = e?.message || '支付发起失败'
+    const message = e?.message || '支付发起失败，请稍后重试或联系客服'
     uni.showModal({
-      title: '支付发起失败',
-      content: msg.includes('暂未开通') ? msg : '支付功能暂未开放，请进入订单详情页稍后再试。',
+      title: '支付未完成',
+      content: message,
       showCancel: false,
-      confirmText: '查看订单',
-      success: () => {
-        uni.navigateTo({ url: `/pages/order/detail?id=${order.id}` })
-      }
+      confirmText: '我知道了'
     })
   }
-}
-
-function isUserCancelPayError(err: any): boolean {
-  const msg = String(err?.errMsg || err?.message || '').toLowerCase()
-  return msg.includes('cancel')
 }
 
 async function handleConfirm(id: string) {
@@ -231,7 +222,7 @@ async function handleConfirm(id: string) {
           await confirmReceive(id)
           loadOrders(true)
         } catch {
-          uni.showToast({ title: '确认收货失败', icon: 'none' })
+          uni.showToast({ title: '确认失败', icon: 'none' })
         }
       }
     }
@@ -239,76 +230,67 @@ async function handleConfirm(id: string) {
 }
 
 onLoad((options) => {
-  const status = normalizeOrderStatus(options?.status as string | undefined)
-  if (status) currentTab.value = status
-  loadOrders()
+  const status = normalizeOrderStatus(Array.isArray(options?.status) ? options?.status[0] : options?.status)
+  currentTab.value = status || ''
+  loadOrders(true)
 })
+
+onReachBottom(() => loadOrders())
 
 onPullDownRefresh(async () => {
   await loadOrders(true)
   uni.stopPullDownRefresh()
-})
-
-onReachBottom(() => {
-  loadOrders()
-})
-
-defineExpose({
-  handlePay,
-  handleAftersale,
-  orders
 })
 </script>
 
 <style lang="scss" scoped>
 .order-list-page {
   min-height: 100vh;
-  padding-bottom: $spacing-md;
 }
 
 .order-hero {
-  padding: 34rpx $spacing-md $spacing-sm;
-}
+  padding: 28rpx $spacing-md 18rpx;
 
-.hero-title {
-  display: block;
-  font-size: $font-xl;
-  font-weight: 900;
-  color: $text-color;
-}
+  .hero-title {
+    display: block;
+    font-size: 42rpx;
+    font-weight: 800;
+    color: $text-color;
+  }
 
-.hero-subtitle {
-  display: block;
-  margin-top: 8rpx;
-  font-size: $font-sm;
-  color: $text-secondary;
+  .hero-subtitle {
+    display: block;
+    margin-top: 8rpx;
+    font-size: $font-sm;
+    color: $text-hint;
+  }
 }
 
 .tab-scroll {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  background: transparent;
   white-space: nowrap;
-  background: rgba($bg-page, 0.94);
-  padding: $spacing-sm $spacing-md;
+  padding-bottom: 8rpx;
 }
 
 .tab-bar {
   display: inline-flex;
   min-width: 100%;
+  gap: 8rpx;
+  padding: 0 $spacing-md 10rpx;
+  box-sizing: border-box;
 }
 
 .tab-item {
-  flex: 0 0 auto;
+  flex-shrink: 0;
+  min-width: 116rpx;
+  height: 62rpx;
+  @include flex-center;
   position: relative;
-  min-width: 112rpx;
+}
 
-  &.active {
-    .tab-text {
-      color: $primary-dark;
-      font-weight: 700;
-    }
-  }
+.tab-item.active .tab-text {
+  color: $primary-dark;
+  font-weight: 700;
 }
 
 .tab-text {
@@ -316,11 +298,14 @@ defineExpose({
   color: $text-secondary;
 }
 
+.order-list {
+  padding: 0 $spacing-md $spacing-lg;
+}
+
 .order-card {
-  margin: $spacing-sm $spacing-md $spacing-md;
-  padding: $spacing-md;
-  background: $gradient-card;
-  border-radius: $radius-xxl;
+  margin: $spacing-sm 0;
+  padding: 24rpx;
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .order-header {
@@ -331,36 +316,43 @@ defineExpose({
 
 .order-no {
   font-size: $font-xs;
-  color: $text-hint;
-  @include text-ellipsis;
-  max-width: 430rpx;
+  color: $text-secondary;
+  letter-spacing: 1rpx;
 }
 
 .order-status {
-  @include status-badge;
   font-size: $font-sm;
-  font-weight: 500;
+  color: $primary-dark;
+  font-weight: 700;
+  padding: 6rpx 16rpx;
+  border-radius: $radius-round;
+  background: $primary-soft;
 
-  &.status-unpaid { @include status-warning; }
-  &.status-grouping { @include status-primary; }
-  &.status-shipping { @include status-info; }
-  &.status-pickup { @include status-primary; }
-  &.status-receiving { background: $secondary-soft; color: $secondary-color; }
-  &.status-done { @include status-success; }
-  &.status-cancelled { background: $bg-gray; color: $text-hint; }
-  &.status-aftersale { @include status-danger; }
+  &.status-unpaid { color: $warning-color; background: $warning-soft; }
+  &.status-grouping { color: $primary-dark; background: $primary-soft; }
+  &.status-shipping { color: $info-color; background: $info-soft; }
+  &.status-pickup { color: $primary-dark; background: $primary-soft; }
+  &.status-receiving { color: $secondary-color; background: $secondary-soft; }
+  &.status-done { color: $success-color; background: $success-soft; }
+  &.status-cancelled { color: $text-hint; background: $bg-gray; }
+  &.status-aftersale { color: $danger-color; background: $danger-soft; }
 }
 
 .order-product {
   display: flex;
-  align-items: center;
-  padding: 18rpx 0;
+  align-items: flex-start;
+  padding: $spacing-sm 0;
+  border-bottom: 1rpx solid $divider-color;
+
+  &:last-of-type {
+    border-bottom: none;
+  }
 }
 
 .product-image {
   width: 148rpx;
   height: 148rpx;
-  border-radius: 28rpx;
+  border-radius: 26rpx;
   flex-shrink: 0;
   background: $bg-gray;
 }
@@ -383,9 +375,9 @@ defineExpose({
 .product-sku {
   font-size: $font-xs;
   color: $text-secondary;
+  margin-top: 8rpx;
   display: inline-flex;
   max-width: 100%;
-  margin-top: 8rpx;
   padding: 6rpx 14rpx;
   border-radius: $radius-round;
   background: $bg-soft;
@@ -401,34 +393,46 @@ defineExpose({
   font-size: $font-xs;
   color: $text-hint;
   display: block;
+  margin-top: 4rpx;
+}
+
+.product-line-total {
+  margin-top: 4rpx;
+  font-size: $font-xs;
+  color: $price-color;
+  display: block;
+  font-weight: 700;
 }
 
 .order-footer {
   @include flex-between;
-  padding: $spacing-sm 0;
-  border-top: 1rpx solid $divider-color;
+  padding-top: $spacing-sm;
 }
 
-.order-count,
-.total-label {
-  font-size: $font-sm;
-  color: $text-secondary;
+.order-count {
+  font-size: $font-xs;
+  color: $text-hint;
 }
 
 .order-total {
   display: flex;
   align-items: baseline;
-  gap: 8rpx;
+}
+
+.total-label {
+  font-size: $font-sm;
+  color: $text-secondary;
+  margin-right: 8rpx;
 }
 
 .total-price {
+  font-size: $font-lg;
   color: $price-color;
   font-weight: 800;
-  font-size: $font-lg;
 }
 
 .group-waiting-tip {
-  margin-top: 8rpx;
+  margin-top: $spacing-sm;
   padding: 14rpx 18rpx;
   border-radius: $radius-lg;
   background: $primary-soft;
@@ -441,30 +445,31 @@ defineExpose({
   display: flex;
   justify-content: flex-end;
   gap: $spacing-sm;
+  margin-top: $spacing-sm;
   padding-top: $spacing-sm;
+  border-top: 1rpx solid $divider-color;
 }
 
 .action-btn {
   min-height: 60rpx;
   padding: 0 28rpx;
   border-radius: $radius-round;
-  font-size: $font-xs;
+  font-size: $font-sm;
   color: $text-secondary;
   border: 2rpx solid $border-color;
+  background: $bg-white;
   @include flex-center;
-  background: rgba(255, 255, 255, 0.88);
 
   &.primary {
     color: #FFFFFF;
     border-color: transparent;
     background: $gradient-coral;
-    font-weight: 700;
     box-shadow: $shadow-coral;
+    font-weight: 700;
   }
 
   &.cancel {
     color: $text-hint;
-    border-color: $border-color;
   }
 }
 </style>
