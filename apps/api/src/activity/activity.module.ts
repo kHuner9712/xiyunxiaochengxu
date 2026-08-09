@@ -3,6 +3,7 @@ import { WeappActivityController, AdminActivityController } from './activity.con
 import { ActivityService } from './activity.service';
 import { CheckoutReadyProductionActivityService } from './checkout-ready-production-activity.service';
 import { ActivityCheckoutService } from './activity-checkout.service';
+import { ActivityMultiItemCheckoutService } from './activity-multi-item-checkout.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { ContentModule } from '../content/content.module';
 import { OrderModule } from '../order/order.module';
@@ -13,6 +14,7 @@ import { SystemConfigModule } from '../system-config/system-config.module';
   controllers: [WeappActivityController, AdminActivityController],
   providers: [
     ActivityCheckoutService,
+    ActivityMultiItemCheckoutService,
     { provide: ActivityService, useClass: CheckoutReadyProductionActivityService },
   ],
   exports: [ActivityService, ActivityCheckoutService],
