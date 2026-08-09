@@ -20,11 +20,13 @@ function fixture(type = '5', existingOrders = 0, lockResult = true) {
   };
   const promotionCheckout: any = {};
   const systemConfig: any = {};
+  const multiItemCheckout: any = {};
   const service = new ExclusiveNewUserActivityCheckoutService(
     prisma,
     redis,
     promotionCheckout,
     systemConfig,
+    multiItemCheckout,
   );
   return { service, prisma, redis };
 }
