@@ -21,6 +21,22 @@ export type RuntimeBusinessConfig = {
   pointsDeductMaxPercent: number;
 };
 
+export type CustomerServiceConfigInput = {
+  enabled: string;
+  type: string;
+  phone: string;
+  wechatQrCode: string;
+  serviceTime: string;
+  autoReplyText: string;
+  faqContent: string;
+  notice: string;
+};
+
+type CustomerFaqItem = {
+  question: string;
+  answer: string;
+};
+
 const DEFAULT_RUNTIME_CONFIG: RuntimeBusinessConfig = {
   orderAutoCloseMinutes: ORDER_AUTO_CLOSE_MINUTES,
   orderAutoCompleteDays: ORDER_AUTO_COMPLETE_DAYS,
@@ -30,6 +46,9 @@ const DEFAULT_RUNTIME_CONFIG: RuntimeBusinessConfig = {
   pointsDeductRate: POINTS_DEDUCT_RATE,
   pointsDeductMaxPercent: POINTS_DEDUCT_MAX_PERCENT,
 };
+
+const CUSTOMER_SERVICE_TYPES = new Set(['phone', 'wechat', 'both']);
+const MAX_CUSTOMER_FAQS = 50;
 
 @Injectable()
 export class SystemConfigService implements OnModuleInit {
@@ -187,30 +206,92 @@ export class SystemConfigService implements OnModuleInit {
     const configMap: Record<string, any> = {};
     for (const item of group) configMap[item.configKey] = item.value;
     const fallbackPhone = await this.getValue('basic', 'customer_service_phone');
-    const phone = this.isPlaceholderContact(configMap.phone) ? '' : (configMap.phone ?? '');
-    const basicPhone = this.isPlaceholderContact(fallbackPhone) ? '' : (fallbackPhone ?? '');
+    const phone = this.isPlaceholderContact(configMap.phone) ? '' : String(configMap.phone ?? '').trim();
+    const basicPhone = this.isPlaceholderContact(fallbackPhone) ? '' : String(fallbackPhone ?? '').trim();
+    const type = CUSTOMER_SERVICE_TYPES.has(String(configMap.type || '')) ? String(configMap.type) : 'phone';
     return {
       enabled: configMap.enabled === 'true' || configMap.enabled === true,
-      type: configMap.type ?? 'phone',
+      type,
       phone: phone || basicPhone,
-      wechatQrCode: configMap.wechatQrCode ?? '',
-      serviceTime: configMap.serviceTime ?? '',
-      autoReplyText: configMap.autoReplyText ?? '',
-      faqContent: configMap.faqContent ?? '',
-      notice: configMap.notice ?? '',
+      wechatQrCode: String(configMap.wechatQrCode ?? '').trim(),
+      serviceTime: String(configMap.serviceTime ?? '').trim(),
+      autoReplyText: String(configMap.autoReplyText ?? '').trim(),
+      faqContent: this.normalizeCustomerFaq(configMap.faqContent, false),
+      notice: String(configMap.notice ?? '').trim(),
     };
   }
 
-  async updateCustomerServiceConfig(dto: any) {
+  async updateCustomerServiceConfig(dto: CustomerServiceConfigInput) {
+    const enabled = String(dto.enabled) === 'true';
+    const type = String(dto.type || '').trim();
+    if (!CUSTOMER_SERVICE_TYPES.has(type)) throw new BadRequestException('客服类型无效');
+
+    const phone = String(dto.phone || '').trim();
+    const wechatQrCode = String(dto.wechatQrCode || '').trim();
+    const serviceTime = String(dto.serviceTime || '').trim();
+    const autoReplyText = String(dto.autoReplyText || '').trim();
+    const notice = String(dto.notice || '').trim();
+    if (enabled && (type === 'phone' || type === 'both') && this.isPlaceholderContact(phone)) {
+      throw new BadRequestException('启用电话客服时必须填写有效客服电话');
+    }
+    const faqContent = this.normalizeCustomerFaq(dto.faqContent, true);
+
+    const normalized: Record<string, string> = {
+      enabled: String(enabled),
+      type,
+      phone,
+      wechatQrCode,
+      serviceTime,
+      autoReplyText,
+      faqContent,
+      notice,
+    };
     const keys = ['enabled', 'type', 'phone', 'wechatQrCode', 'serviceTime', 'autoReplyText', 'faqContent', 'notice'];
     const configs = keys.map((key) => ({
       groupName: 'customer_service',
       configKey: key,
-      configValue: String(dto[key] ?? ''),
+      configValue: normalized[key],
       valueType: key === 'enabled' ? 'boolean' : 'string',
     }));
     await this.batchUpdate(configs);
     return this.getCustomerServiceConfig();
+  }
+
+  private normalizeCustomerFaq(rawValue: unknown, strict: boolean): string {
+    const source = typeof rawValue === 'string' ? rawValue.trim() : '';
+    if (!source) return '[]';
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(source);
+    } catch {
+      if (strict) throw new BadRequestException('常见问题内容不是合法JSON');
+      return '[]';
+    }
+    if (!Array.isArray(parsed)) {
+      if (strict) throw new BadRequestException('常见问题必须是数组');
+      return '[]';
+    }
+    if (parsed.length > MAX_CUSTOMER_FAQS) {
+      if (strict) throw new BadRequestException(`常见问题最多${MAX_CUSTOMER_FAQS}条`);
+      parsed = parsed.slice(0, MAX_CUSTOMER_FAQS);
+    }
+
+    const normalized: CustomerFaqItem[] = [];
+    for (const [index, item] of parsed.entries()) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        if (strict) throw new BadRequestException(`第${index + 1}条常见问题格式无效`);
+        continue;
+      }
+      const question = String((item as any).question ?? '').trim();
+      const answer = String((item as any).answer ?? '').trim();
+      if (!question || !answer || question.length > 200 || answer.length > 2000) {
+        if (strict) throw new BadRequestException(`第${index + 1}条常见问题的问答内容无效`);
+        continue;
+      }
+      normalized.push({ question, answer });
+    }
+    return JSON.stringify(normalized);
   }
 
   private validateRuntimeConfigValue(groupName: string, configKey: string, rawValue: string) {
