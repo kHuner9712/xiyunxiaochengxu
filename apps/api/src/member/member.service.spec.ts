@@ -55,7 +55,7 @@ describe('MemberService weapp benefits', () => {
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   });
 
-  it('getBenefits returns front-end MemberRight array from the active database level', async () => {
+  it('getBenefits returns only capabilities that have real production execution paths', async () => {
     prisma.user.findFirst.mockResolvedValue({
       id: 1n,
       growthValue: 0,
@@ -75,13 +75,55 @@ describe('MemberService weapp benefits', () => {
         id: expect.any(String),
         name: '会员价',
         icon: expect.stringMatching(/^\/static\//),
-        description: expect.any(String),
+        description: expect.stringContaining('普通商品按会员价结算'),
         level: 0,
       }),
-      expect.objectContaining({ name: '积分成长' }),
-      expect.objectContaining({ name: '售后优先' }),
-      expect.objectContaining({ name: '生日/孕产期关怀' }),
+      expect.objectContaining({ name: '积分成长', description: expect.stringContaining('订单完成后') }),
+      expect.objectContaining({ name: '会员专享券' }),
+      expect.objectContaining({ name: '自动等级升级' }),
     ]));
+    expect(result.map((item) => item.name)).not.toContain('售后优先');
+    expect(result.map((item) => item.name)).not.toContain('生日/孕产期关怀');
+  });
+
+  it('historical system-generated unsupported defaults are mapped to truthful implemented rights', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      id: 1n,
+      growthValue: 0,
+      memberLevelId: 1n,
+      deletedAt: null,
+    });
+    prisma.memberLevel.findMany.mockResolvedValue([
+      {
+        ...activeLevels[0],
+        maxGrowthValue: null,
+        benefits: JSON.stringify([
+          {
+            id: 'priority_service_0',
+            name: '售后优先',
+            icon: '/static/tab/user-active.png',
+            description: '售后咨询与处理优先响应',
+            level: 0,
+          },
+          {
+            id: 'care_0',
+            name: '生日/孕产期关怀',
+            icon: '/static/default-baby.png',
+            description: '按宝宝生日或孕产阶段推送关怀福利',
+            level: 0,
+          },
+        ]),
+      },
+    ]);
+
+    const result = await service.getBenefits('1');
+
+    expect(result).toEqual([
+      expect.objectContaining({ id: 'member_coupon_0', name: '会员专享券' }),
+      expect.objectContaining({ id: 'auto_upgrade_0', name: '自动等级升级' }),
+    ]);
+    expect(JSON.stringify(result)).not.toContain('优先响应');
+    expect(JSON.stringify(result)).not.toContain('推送关怀福利');
   });
 
   it('getMemberInfo derives level thresholds and names from database configuration', async () => {
@@ -103,7 +145,7 @@ describe('MemberService weapp benefits', () => {
       currentLevelGrowth: 120,
       currentLevelMinGrowth: 0,
       nextLevelGrowth: 1000,
-      rights: expect.arrayContaining(['会员价']),
+      rights: expect.arrayContaining(['会员价', '会员专享券', '自动等级升级']),
       currentLevel: '普通会员',
       currentLevelCode: 0,
       nextLevel: '银卡会员',
