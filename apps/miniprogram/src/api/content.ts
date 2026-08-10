@@ -28,6 +28,22 @@ export interface ContentItem {
   publishedAt: string
 }
 
+export interface RelatedContentProduct {
+  id: string
+  name: string
+  image: string
+  price: number
+}
+
+export interface RelatedContentActivity {
+  id: string
+  name: string
+  image: string
+  type: string
+  startTime: string
+  endTime: string
+}
+
 export interface ContentDetail {
   id: string
   title: string
@@ -43,6 +59,8 @@ export interface ContentDetail {
   tags?: string[]
   relatedProductIds?: string[]
   relatedActivityId?: string
+  relatedProducts?: RelatedContentProduct[]
+  relatedActivity?: RelatedContentActivity | null
   viewCount: number
   publishedAt: string
 }
