@@ -11,31 +11,30 @@ function createProductionEnv(overrides: Record<string, unknown> = {}) {
   fs.writeFileSync(privateKeyPath, 'test-private-key');
   fs.writeFileSync(platformCertPath, 'test-platform-cert');
 
-  return {
-    tmpDir,
-    env: {
-      NODE_ENV: 'production',
-      DATABASE_URL: 'mysql://root:strong_password@localhost:3306/baby_mall',
-      REDIS_HOST: 'localhost',
-      REDIS_PASSWORD: 'Redis_Strong_Password_2026!',
-      JWT_SECRET: 'JwTk_qwertyuiopasdfghjklzxcvbnm9081726354',
-      REFRESH_TOKEN_SECRET: 'RfTk_mnbvcxzlkjhgfdsapoiuytrewq9081726354',
-      WECHAT_APP_ID: 'wx1234567890abcdef',
-      WECHAT_APP_SECRET: 'test_app_secret',
-      WECHAT_MCH_ID: '1234567890',
-      WECHAT_MCH_SERIAL_NO: 'merchant-serial-123',
-      WECHAT_API_V3_KEY: '0123456789abcdef0123456789abcdef',
-      WECHAT_PRIVATE_KEY_PATH: privateKeyPath,
-      WECHAT_PLATFORM_CERT_PATH: platformCertPath,
-      WECHAT_PLATFORM_CERT_SERIAL_NO: 'platform-serial-123',
-      WECHAT_NOTIFY_URL: 'https://api.example.com/api/weapp/pay/callback',
-      WECHAT_REFUND_NOTIFY_URL: 'https://api.example.com/api/weapp/pay/refund-callback',
-      UPLOAD_PUBLIC_URL: 'https://api.example.com',
-      CORS_ORIGINS: 'https://admin.example.com',
-      ADMIN_DEFAULT_PASSWORD: 'R9$KlmnoPQrsTuv1!',
-      ...overrides,
-    },
+  const env: Record<string, any> = {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'mysql://root:strong_password@localhost:3306/baby_mall',
+    REDIS_HOST: 'localhost',
+    REDIS_PASSWORD: 'Redis_Strong_Password_2026!',
+    JWT_SECRET: 'JwTk_qwertyuiopasdfghjklzxcvbnm9081726354',
+    REFRESH_TOKEN_SECRET: 'RfTk_mnbvcxzlkjhgfdsapoiuytrewq9081726354',
+    WECHAT_APP_ID: 'wx1234567890abcdef',
+    WECHAT_APP_SECRET: 'test_app_secret',
+    WECHAT_MCH_ID: '1234567890',
+    WECHAT_MCH_SERIAL_NO: 'merchant-serial-123',
+    WECHAT_API_V3_KEY: '0123456789abcdef0123456789abcdef',
+    WECHAT_PRIVATE_KEY_PATH: privateKeyPath,
+    WECHAT_PLATFORM_CERT_PATH: platformCertPath,
+    WECHAT_PLATFORM_CERT_SERIAL_NO: 'platform-serial-123',
+    WECHAT_NOTIFY_URL: 'https://api.example.com/api/weapp/pay/callback',
+    WECHAT_REFUND_NOTIFY_URL: 'https://api.example.com/api/weapp/pay/refund-callback',
+    UPLOAD_PUBLIC_URL: 'https://api.example.com',
+    CORS_ORIGINS: 'https://admin.example.com',
+    ADMIN_DEFAULT_PASSWORD: 'R9$KlmnoPQrsTuv1!',
+    ...overrides,
   };
+
+  return { tmpDir, env };
 }
 
 describe('validateEnv platform certificate rotation map', () => {
@@ -81,7 +80,7 @@ describe('validateEnv platform certificate rotation map', () => {
     env.WECHAT_PLATFORM_CERT_MAP = JSON.stringify({
       'ROTATED-SERIAL': rotatedCertPath,
     });
-    const exitSpy = jest.spyOn(process, 'exit');
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => undefined as never) as never);
 
     const result = validateEnv(env);
 
