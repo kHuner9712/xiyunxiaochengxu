@@ -116,7 +116,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getAftersaleDetail, cancelAftersale, fillReturnLogistics, type AftersaleDetail } from '@/api/aftersale'
 import { formatAftersaleStatus, formatPrice, normalizeAftersaleStatus } from '@/utils/format'
 import { resolvePrivateFileUrls } from '@/utils/private-file'
@@ -135,6 +135,8 @@ const returnLogisticsForm = ref({
   contactPhone: '',
   remark: ''
 })
+const loadedAftersaleId = ref('')
+let skipInitialShowRefresh = true
 
 const normalizedStatus = computed(() => normalizeAftersaleStatus(detail.value.status))
 const canCancelAftersale = computed(() => normalizedStatus.value === 'pending_review')
@@ -294,7 +296,20 @@ async function submitReturnLogistics() {
 
 onLoad((options) => {
   const id = Array.isArray(options?.id) ? options?.id[0] : options?.id
-  if (id) loadDetail(String(id))
+  if (id) {
+    loadedAftersaleId.value = String(id)
+    loadDetail(loadedAftersaleId.value)
+  }
+})
+
+onShow(() => {
+  if (skipInitialShowRefresh) {
+    skipInitialShowRefresh = false
+    return
+  }
+  if (loadedAftersaleId.value) {
+    loadDetail(loadedAftersaleId.value)
+  }
 })
 
 defineExpose({
