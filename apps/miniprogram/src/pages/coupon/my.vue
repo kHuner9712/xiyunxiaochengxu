@@ -46,8 +46,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onReachBottom, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { getMyCoupons, type MyCouponItem } from '@/api/coupon'
 import { useUserStore } from '@/stores/user'
 import { formatDate, formatPrice, formatCouponValue } from '@/utils/format'
@@ -98,7 +98,7 @@ async function loadCoupons(reset = false) {
 
 function switchTab(value: number) {
   currentTab.value = value
-  loadCoupons(true)
+  void loadCoupons(true)
 }
 
 function goUse() {
@@ -125,48 +125,25 @@ onPullDownRefresh(async () => {
 })
 
 onReachBottom(() => {
-  loadCoupons()
+  void loadCoupons()
 })
 
-onMounted(() => {
-  loadCoupons()
+onShow(() => {
+  void loadCoupons(true)
 })
 </script>
 
 <style lang="scss" scoped>
-.my-coupon-page {
-  min-height: 100vh;
-}
-
-.tab-wrap {
-  padding: $spacing-md $spacing-md $spacing-sm;
-}
-
-.tab-bar {
-  display: flex;
-}
-
+.my-coupon-page { min-height: 100vh; }
+.tab-wrap { padding: $spacing-md $spacing-md $spacing-sm; }
+.tab-bar { display: flex; }
 .tab-item {
   flex: 1;
   position: relative;
-
-  &.active {
-    .tab-text {
-      color: $primary-dark;
-      font-weight: 700;
-    }
-  }
+  &.active { .tab-text { color: $primary-dark; font-weight: 700; } }
 }
-
-.tab-text {
-  font-size: $font-sm;
-  color: $text-secondary;
-}
-
-.coupon-list {
-  padding: $spacing-md;
-}
-
+.tab-text { font-size: $font-sm; color: $text-secondary; }
+.coupon-list { padding: $spacing-md; }
 .coupon-card {
   display: flex;
   background: $gradient-card;
@@ -175,12 +152,8 @@ onMounted(() => {
   margin-bottom: $spacing-md;
   border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
-
-  &.used, &.expired, &.locked {
-    opacity: 0.68;
-  }
+  &.used, &.expired, &.locked { opacity: 0.68; }
 }
-
 .coupon-left {
   width: 200rpx;
   @include flex-center;
@@ -189,56 +162,19 @@ onMounted(() => {
   padding: $spacing-md;
   flex-shrink: 0;
 }
-
-.coupon-value {
-  color: #FFFFFF;
-  font-weight: 700;
-  display: flex;
-  align-items: baseline;
-}
-
-.value-num {
-  font-size: $font-xxl;
-}
-
-.coupon-condition {
-  font-size: $font-xs;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 4rpx;
-}
-
-.coupon-right {
-  flex: 1;
-  padding: $spacing-md;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.coupon-name {
-  font-size: $font-md;
-  font-weight: 800;
-  color: $text-color;
-  display: block;
-  margin-bottom: 8rpx;
-}
-
-.coupon-time {
-  font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-  margin-bottom: $spacing-sm;
-}
-
+.coupon-value { color: #FFFFFF; font-weight: 700; display: flex; align-items: baseline; }
+.value-num { font-size: $font-xxl; }
+.coupon-condition { font-size: $font-xs; color: rgba(255, 255, 255, 0.8); margin-top: 4rpx; }
+.coupon-right { flex: 1; padding: $spacing-md; display: flex; flex-direction: column; justify-content: center; }
+.coupon-name { font-size: $font-md; font-weight: 800; color: $text-color; display: block; margin-bottom: 8rpx; }
+.coupon-time { font-size: $font-xs; color: $text-hint; display: block; margin-bottom: $spacing-sm; }
 .coupon-status {
   @include status-badge;
   font-size: $font-xs;
-
   &.used { background: $bg-gray; color: $text-hint; }
   &.expired { background: $danger-soft; color: $danger-color; }
   &.locked { background: $warning-soft; color: $warning-color; }
 }
-
 .coupon-use-btn {
   align-self: flex-start;
   min-height: 56rpx;
@@ -248,10 +184,5 @@ onMounted(() => {
   @include flex-center;
   background: rgba(255, 255, 255, 0.9);
 }
-
-.use-text {
-  font-size: $font-xs;
-  color: $primary-dark;
-  font-weight: 700;
-}
+.use-text { font-size: $font-xs; color: $primary-dark; font-weight: 700; }
 </style>
