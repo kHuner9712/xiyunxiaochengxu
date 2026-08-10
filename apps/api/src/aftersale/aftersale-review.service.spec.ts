@@ -50,7 +50,9 @@ describe('AftersaleReviewService return destination', () => {
     prisma = createMockPrisma();
     prisma.aftersaleOrder.updateMany.mockResolvedValue({ count: 1 });
     prisma.aftersaleLog.create.mockResolvedValue({});
-    detailService = { findAdminDetail: jest.fn().mockResolvedValue({ id: '10' }) };
+    detailService = {
+      findAdminDetail: jest.fn().mockResolvedValue({ id: '10' } as never),
+    };
     service = new AftersaleReviewService(prisma as any, detailService as any);
   });
 
