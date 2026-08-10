@@ -62,6 +62,30 @@ export class ProductionFlashSaleService extends TransactionalFlashSaleService {
     };
   }
 
+  override async weappFindMyOrders(
+    userId: string,
+    query: { page?: number; pageSize?: number },
+  ) {
+    parsePositiveBigIntId(userId, '用户');
+    const result: any = await super.weappFindMyOrders(userId, query);
+    return {
+      ...result,
+      list: (result.list ?? []).map((order: any) => ({
+        id: order.id.toString(),
+        activityId: order.activityId.toString(),
+        orderId: order.orderId.toString(),
+        quantity: order.quantity,
+        flashPrice: order.flashPrice,
+        status: order.status,
+        lockExpireAt: order.lockExpireAt,
+        paidAt: order.paidAt ?? null,
+        cancelledAt: order.cancelledAt ?? null,
+        expiredAt: order.expiredAt ?? null,
+        createdAt: order.createdAt,
+      })),
+    };
+  }
+
   private async assertActivityCanBeEnabled(id: string) {
     const activityId = parsePositiveBigIntId(id, '活动');
     const activity = await this.productionPrisma.flashSaleActivity.findFirst({
