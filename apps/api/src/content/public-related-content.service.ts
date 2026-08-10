@@ -6,6 +6,13 @@ import { ContentService } from './content.service';
 const POSITIVE_ID = /^[1-9]\d*$/;
 const MAX_SIGNED_BIGINT = 9223372036854775807n;
 
+type PublicRelatedProductRow = {
+  id: bigint;
+  name: string;
+  mainImage: string | null;
+  minPrice: number | null;
+};
+
 /**
  * Public content view enrichment for the relation fields managed by the admin editor.
  *
@@ -28,7 +35,7 @@ export class PublicRelatedContentService extends ContentService {
       : [];
 
     const productIdValues = relatedProductIds.map((value: string) => BigInt(value));
-    const products = productIdValues.length > 0
+    const products: PublicRelatedProductRow[] = productIdValues.length > 0
       ? await this.viewPrisma.product.findMany({
           where: {
             id: { in: productIdValues },
@@ -46,7 +53,7 @@ export class PublicRelatedContentService extends ContentService {
     const productById = new Map(products.map((product) => [product.id.toString(), product]));
     const relatedProducts = relatedProductIds
       .map((productId: string) => productById.get(productId))
-      .filter((product): product is NonNullable<typeof product> => !!product)
+      .filter((product): product is PublicRelatedProductRow => product !== undefined)
       .map((product) => ({
         id: product.id.toString(),
         name: product.name,
