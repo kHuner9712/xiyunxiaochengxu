@@ -33,6 +33,28 @@ read_env_value() {
   printf '%s' "$value"
 }
 
+container_payment_path_to_host() {
+  local container_path="$1"
+  local label="$2"
+  local prefix='/app/apps/api/certs/'
+  local relative_path
+
+  [ -n "$container_path" ] || fail "$label container path is empty"
+  case "$container_path" in
+    "$prefix"*) ;;
+    *) fail "$label must be inside the mounted certificate directory $prefix; configured=$container_path" ;;
+  esac
+
+  relative_path="${container_path#"$prefix"}"
+  case "$relative_path" in
+    ''|/*|..|../*|*/..|*/../*) fail "$label contains an unsafe certificate path: $container_path" ;;
+  esac
+
+  local host_path="$ROOT_DIR/deploy/certs/$relative_path"
+  [ -r "$host_path" ] || fail "$label is not readable at the host path mapped from $container_path: $host_path"
+  printf '%s' "$host_path"
+}
+
 wait_healthy() {
   local container="$1"
   local attempts="${2:-60}"
@@ -65,6 +87,24 @@ validate_tls_pair() {
   [ "$cert_pubkey" = "$key_pubkey" ] || fail "$label TLS certificate and private key do not match"
 }
 
+validate_wechat_payment_material() {
+  local private_key="$1"
+  local platform_cert="$2"
+  local configured_serial="$3"
+  local actual_serial
+  local normalized_configured_serial
+
+  openssl pkey -in "$private_key" -noout >/dev/null 2>&1 || fail "WeChat merchant private key is not a valid readable PEM private key: $private_key"
+  openssl x509 -in "$platform_cert" -noout >/dev/null 2>&1 || fail "WeChat platform certificate is not a valid X.509 PEM certificate: $platform_cert"
+  openssl x509 -in "$platform_cert" -checkend 604800 -noout >/dev/null 2>&1 || fail "WeChat platform certificate is expired or expires within 7 days: $platform_cert"
+
+  actual_serial="$(openssl x509 -in "$platform_cert" -noout -serial | sed -E 's/^serial=//' | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+  normalized_configured_serial="$(printf '%s' "$configured_serial" | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+  [ -n "$normalized_configured_serial" ] || fail 'WECHAT_PLATFORM_CERT_SERIAL_NO is empty'
+  [ -n "$actual_serial" ] || fail "cannot read WeChat platform certificate serial number: $platform_cert"
+  [ "$actual_serial" = "$normalized_configured_serial" ] || fail "WECHAT_PLATFORM_CERT_SERIAL_NO does not match the configured platform certificate: configured=$normalized_configured_serial actual=$actual_serial"
+}
+
 command -v git >/dev/null 2>&1 || fail 'git is not installed'
 command -v docker >/dev/null 2>&1 || fail 'docker is not installed'
 command -v gzip >/dev/null 2>&1 || fail 'gzip is not installed'
@@ -83,6 +123,11 @@ CONFIGURED_UPLOAD_PUBLIC_URL="$(read_env_value UPLOAD_PUBLIC_URL)"
 CONFIGURED_UPLOAD_PUBLIC_URL="${CONFIGURED_UPLOAD_PUBLIC_URL%/}"
 CONFIGURED_PAY_NOTIFY_URL="$(read_env_value WECHAT_NOTIFY_URL)"
 CONFIGURED_REFUND_NOTIFY_URL="$(read_env_value WECHAT_REFUND_NOTIFY_URL)"
+CONFIGURED_WECHAT_PRIVATE_KEY_PATH="$(read_env_value WECHAT_PRIVATE_KEY_PATH)"
+CONFIGURED_WECHAT_PRIVATE_KEY_PATH="${CONFIGURED_WECHAT_PRIVATE_KEY_PATH:-/app/apps/api/certs/apiclient_key.pem}"
+CONFIGURED_WECHAT_PLATFORM_CERT_PATH="$(read_env_value WECHAT_PLATFORM_CERT_PATH)"
+CONFIGURED_WECHAT_PLATFORM_CERT_PATH="${CONFIGURED_WECHAT_PLATFORM_CERT_PATH:-/app/apps/api/certs/wechatpay_platform.pem}"
+CONFIGURED_WECHAT_PLATFORM_CERT_SERIAL_NO="$(read_env_value WECHAT_PLATFORM_CERT_SERIAL_NO)"
 [ "$CONFIGURED_WECHAT_APP_ID" = "$EXPECTED_MINIPROGRAM_APP_ID" ] || fail "WECHAT_APP_ID must match the miniprogram AppID $EXPECTED_MINIPROGRAM_APP_ID; configured=${CONFIGURED_WECHAT_APP_ID:-empty}"
 [ "$CONFIGURED_UPLOAD_PUBLIC_URL" = "$EXPECTED_UPLOAD_PUBLIC_URL" ] || fail "UPLOAD_PUBLIC_URL must exactly match $EXPECTED_UPLOAD_PUBLIC_URL so generated public asset URLs use the deployed API origin; configured=${CONFIGURED_UPLOAD_PUBLIC_URL:-empty}"
 [ "$CONFIGURED_PAY_NOTIFY_URL" = "$EXPECTED_PAY_NOTIFY_URL" ] || fail "WECHAT_NOTIFY_URL must exactly match $EXPECTED_PAY_NOTIFY_URL; configured=${CONFIGURED_PAY_NOTIFY_URL:-empty}"
@@ -122,16 +167,22 @@ printf 'Deploy commit: %s (%s)\n' "$SHORT_SHA" "$FULL_SHA"
 "${COMPOSE[@]}" config --quiet
 pass 'docker compose configuration is valid'
 
+WECHAT_PRIVATE_KEY_HOST_PATH="$(container_payment_path_to_host "$CONFIGURED_WECHAT_PRIVATE_KEY_PATH" 'WECHAT_PRIVATE_KEY_PATH')"
+WECHAT_PLATFORM_CERT_HOST_PATH="$(container_payment_path_to_host "$CONFIGURED_WECHAT_PLATFORM_CERT_PATH" 'WECHAT_PLATFORM_CERT_PATH')"
 for cert in \
-  "$ROOT_DIR/deploy/certs/apiclient_key.pem" \
-  "$ROOT_DIR/deploy/certs/wechatpay_platform.pem" \
   "$ROOT_DIR/deploy/nginx/ssl/api/fullchain.pem" \
   "$ROOT_DIR/deploy/nginx/ssl/api/privkey.pem" \
   "$ROOT_DIR/deploy/nginx/ssl/admin/fullchain.pem" \
   "$ROOT_DIR/deploy/nginx/ssl/admin/privkey.pem"; do
-  [ -r "$cert" ] || fail "required certificate is not readable: $cert"
+  [ -r "$cert" ] || fail "required TLS certificate material is not readable: $cert"
 done
-pass 'payment and TLS certificate files are readable'
+pass 'configured payment and TLS certificate files are readable'
+
+validate_wechat_payment_material \
+  "$WECHAT_PRIVATE_KEY_HOST_PATH" \
+  "$WECHAT_PLATFORM_CERT_HOST_PATH" \
+  "$CONFIGURED_WECHAT_PLATFORM_CERT_SERIAL_NO"
+pass 'WeChat merchant private key and platform certificate are valid, current, and serial-consistent'
 
 validate_tls_pair \
   "$ROOT_DIR/deploy/nginx/ssl/api/fullchain.pem" \
