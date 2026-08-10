@@ -110,9 +110,21 @@ describe('PublicGroupBuyViewService', () => {
     expect(result.members[0]).toMatchObject({
       role: 'leader',
       status: 'paid',
+      isCurrentUser: false,
       user: { nickname: '公开成员', avatarUrl: 'member.jpg' },
     });
     expect(result.members[0]).not.toHaveProperty('id');
+    expect(result.members[0]).not.toHaveProperty('userId');
+    expect(result.members[0]).not.toHaveProperty('orderId');
+    expect(result.members[0].user).not.toHaveProperty('id');
+  });
+
+  it('登录用户只得到 isCurrentUser 布尔标记，仍不暴露任何成员 ID', async () => {
+    const { view } = createViewService();
+
+    const result = await view.findGroupById('9007199254740993', '101');
+
+    expect(result.members[0].isCurrentUser).toBe(true);
     expect(result.members[0]).not.toHaveProperty('userId');
     expect(result.members[0]).not.toHaveProperty('orderId');
     expect(result.members[0].user).not.toHaveProperty('id');
