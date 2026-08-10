@@ -40,6 +40,14 @@ export class ProductionFlashSaleService extends TransactionalFlashSaleService {
     return super.updateActivityStatus(id, dto);
   }
 
+  override async weappFindActivityById(id: string) {
+    const activity = await super.weappFindActivityById(id);
+    if (activity.status !== 1) {
+      throw new NotFoundException('秒杀活动不存在或已下架');
+    }
+    return activity;
+  }
+
   override async weappBuy(userId: string, dto: FlashSaleBuyDto) {
     const result: any = await super.weappBuy(userId, dto);
     const order = await this.productionPrisma.order.findUnique({
