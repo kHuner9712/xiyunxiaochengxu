@@ -93,4 +93,37 @@ describe('积分中心', () => {
     expect(getPointsBalance).toHaveBeenCalledTimes(2)
     expect(getPointsDetail).toHaveBeenLastCalledWith({ page: 1, pageSize: 10 })
   })
+
+  it('服务端已签到时提示幂等状态并重新同步，不显示+0奖励', async () => {
+    vi.mocked(checkIn).mockResolvedValueOnce({
+      points: 0,
+      continuous: 4,
+      consecutiveDays: 4,
+      alreadySigned: true,
+    })
+    vi.mocked(getCheckInStatus)
+      .mockResolvedValueOnce({ checked: false, continuous: 3, todayPoints: 16 })
+      .mockResolvedValueOnce({ checked: true, continuous: 4, todayPoints: 16 })
+
+    const wrapper = mount(PointsPage, {
+      global: { stubs: { Loading: true } },
+    })
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+
+    await wrapper.find('.checkin-btn').trigger('tap')
+    await flushPromises()
+
+    expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
+      title: '今日已签到',
+      icon: 'none',
+    })
+    expect((globalThis as any).uni.showToast).not.toHaveBeenCalledWith({
+      title: '签到成功，+0积分',
+      icon: 'none',
+    })
+    expect(wrapper.find('.checkin-text').text()).toBe('已签到')
+    expect(wrapper.text()).toContain('已连续签到4天')
+    expect(getCheckInStatus).toHaveBeenCalledTimes(2)
+  })
 })
