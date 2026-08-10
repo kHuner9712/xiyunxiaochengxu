@@ -39,6 +39,9 @@ function aftersaleDetail(overrides: Record<string, any> = {}) {
     skuName: '默认规格',
     price: 9900,
     quantity: 1,
+    returnReceiverName: '售后仓',
+    returnReceiverPhone: '021-12345678',
+    returnAddress: '上海市浦东新区测试路88号',
     logs: [{ time: '2026-06-06', content: '审核通过', status: 'approved' }],
     createTime: '2026-06-06',
     ...overrides,
@@ -65,16 +68,19 @@ beforeEach(() => {
     showModal: vi.fn(),
     navigateTo: vi.fn(),
     previewImage: vi.fn(),
+    setClipboardData: vi.fn(),
+    makePhoneCall: vi.fn(),
   }
 })
 
 describe('售后退货物流填写', () => {
-  it('待退货状态显示填写物流入口', async () => {
+  it('待退货状态且已有审核退货地址时显示填写物流入口', async () => {
     const wrapper = mountDetail()
     await uniAppMock.onLoadCallbacks.at(-1)?.({ id: '50' })
     await flushPromises()
 
     expect(wrapper.text()).toContain('已通过/待退货')
+    expect(wrapper.text()).toContain('上海市浦东新区测试路88号')
     expect(wrapper.find('.return-logistics-btn').exists()).toBe(true)
   })
 
