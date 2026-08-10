@@ -11,6 +11,7 @@ import {
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { FlashSaleService } from './flash-sale.service';
 import {
   FlashSaleActivityQueryDto,
@@ -91,10 +92,10 @@ export class WeappFlashSaleController {
 
   @Public()
   @Get('list')
-  async list(@Query() query: { page?: string; pageSize?: string }) {
+  async list(@Query() query: PaginationDto) {
     return this.service.weappFindActivities({
-      page: query.page ? Number(query.page) : 1,
-      pageSize: query.pageSize ? Number(query.pageSize) : 10,
+      page: query.page,
+      pageSize: query.pageSize,
     });
   }
 
@@ -112,11 +113,11 @@ export class WeappFlashSaleController {
   @Get('my-orders')
   async myOrders(
     @CurrentUser('id') userId: string,
-    @Query() query: { page?: string; pageSize?: string },
+    @Query() query: PaginationDto,
   ) {
     return this.service.weappFindMyOrders(userId, {
-      page: query.page ? Number(query.page) : 1,
-      pageSize: query.pageSize ? Number(query.pageSize) : 10,
+      page: query.page,
+      pageSize: query.pageSize,
     });
   }
 }
