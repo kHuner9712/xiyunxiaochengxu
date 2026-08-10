@@ -31,6 +31,38 @@ export class BigintSafeProductionGroupBuyService extends ProductionGroupBuyServi
     return super.weappFindGroupById(id);
   }
 
+  override async weappFindMyGroups(
+    userId: string,
+    query: { page?: number; pageSize?: number },
+  ) {
+    parsePositiveBigIntId(userId, '用户');
+    const result: any = await super.weappFindMyGroups(userId, query);
+    return {
+      ...result,
+      list: (result.list ?? []).map((group: any) => ({
+        id: group.id.toString(),
+        activityId: group.activityId.toString(),
+        status: group.status,
+        groupNo: group.groupNo,
+        currentCount: group.currentCount,
+        targetCount: group.targetCount,
+        expiresAt: group.expiresAt,
+        successAt: group.successAt ?? null,
+        failedAt: group.failedAt ?? null,
+        createdAt: group.createdAt,
+        activity: group.activity
+          ? {
+              id: group.activity.id.toString(),
+              name: group.activity.name,
+              coverImage: group.activity.coverImage ?? null,
+              groupPrice: group.activity.groupPrice,
+              groupSize: group.activity.groupSize,
+            }
+          : null,
+      })),
+    };
+  }
+
   override async weappFindAvailableGroups(activityIdInput: string) {
     const activityId = parsePositiveBigIntId(activityIdInput, '活动');
     const activity = await this.bigintSafePrisma.groupBuyActivity.findFirst({
