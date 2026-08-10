@@ -23,7 +23,7 @@ export interface GroupBuyActivity {
 export interface GroupBuyGroup {
   id: string
   activityId: string
-  leaderUserId: string
+  leaderUserId?: string
   status: string
   groupNo: string
   currentCount: number
@@ -33,7 +33,7 @@ export interface GroupBuyGroup {
   failedAt?: string
   createdAt: string
   members?: any[]
-  leader?: { id: string; nickname: string; avatar?: string; avatarUrl?: string } | null
+  leader?: { id?: string; nickname: string; avatar?: string; avatarUrl?: string } | null
   activity?: { id: string; name: string; coverImage?: string; groupPrice: number; groupSize: number } | null
 }
 
