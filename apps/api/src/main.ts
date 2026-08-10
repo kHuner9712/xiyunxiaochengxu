@@ -4,16 +4,12 @@ import { Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { PrismaService } from './common/prisma/prisma.service';
 import * as path from 'path';
+import { configureOutboundHttpTimeout } from './common/http/outbound-http-timeout';
 import { configurePublicUploadStaticAssets } from './common/utils/upload-static-assets';
-
-const DEFAULT_OUTBOUND_HTTP_TIMEOUT_MS = 10_000;
-const MIN_OUTBOUND_HTTP_TIMEOUT_MS = 1_000;
-const MAX_OUTBOUND_HTTP_TIMEOUT_MS = 60_000;
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -28,26 +24,15 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
-  const outboundHttpTimeoutRaw = configService.get<string>(
-    'OUTBOUND_HTTP_TIMEOUT_MS',
-    String(DEFAULT_OUTBOUND_HTTP_TIMEOUT_MS),
-  );
-  const outboundHttpTimeoutMs = Number(outboundHttpTimeoutRaw);
-  if (
-    !Number.isInteger(outboundHttpTimeoutMs) ||
-    outboundHttpTimeoutMs < MIN_OUTBOUND_HTTP_TIMEOUT_MS ||
-    outboundHttpTimeoutMs > MAX_OUTBOUND_HTTP_TIMEOUT_MS
-  ) {
-    logger.error(
-      `OUTBOUND_HTTP_TIMEOUT_MS 必须是 ${MIN_OUTBOUND_HTTP_TIMEOUT_MS}-${MAX_OUTBOUND_HTTP_TIMEOUT_MS} 之间的整数毫秒值`,
+
+  try {
+    configureOutboundHttpTimeout(
+      configService.get<string>('OUTBOUND_HTTP_TIMEOUT_MS', '10000'),
     );
+  } catch (error) {
+    logger.error((error as Error).message);
     process.exit(1);
   }
-
-  // Axios defaults to timeout=0 (no timeout). Every current backend axios call is an outbound
-  // platform dependency (WeChat login/pay/refund/close and alert delivery). Bound them globally
-  // before the HTTP server starts so a stalled upstream cannot pin application requests forever.
-  axios.defaults.timeout = outboundHttpTimeoutMs;
 
   if (nodeEnv === 'production') {
     app.set('trust proxy', 1);
