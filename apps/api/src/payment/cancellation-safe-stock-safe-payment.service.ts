@@ -17,6 +17,13 @@ import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recov
 
 const PAYMENT_CANCEL_LOCK_TTL_SECONDS = 90;
 
+export interface GroupBuyFailureRefundResult {
+  status: string;
+  refundId?: string;
+  refundNo?: string;
+  outRefundNo?: string;
+}
+
 @Injectable()
 export class CancellationSafeStockSafePaymentService extends StockSafeRecoverableProductionPaymentService {
   private readonly cancellationPrivateKey: string | null;
@@ -82,7 +89,7 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   override async createGroupBuyFailureRefund(
     orderId: bigint | string,
     reason = '拼团失败自动退款',
-  ) {
+  ): Promise<GroupBuyFailureRefundResult> {
     const normalizedOrderId = String(orderId);
     return this.withPaymentCancelLock(normalizedOrderId, () =>
       super.createGroupBuyFailureRefund(orderId, reason),
@@ -145,8 +152,6 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
     }
 
     if (wechatStatus !== WECHAT_REFUND_STATUS.SUCCESS) {
-      // Keep ABNORMAL frozen but refresh updatedAt/rawResponse through updateMany so the
-      // scheduler's oldest-first scan rotates long-lived abnormal refunds fairly.
       await this.cancellationPrisma.orderRefund.updateMany({
         where: { id: refund.id, status: REFUND_STATUS.ABNORMAL },
         data: {
