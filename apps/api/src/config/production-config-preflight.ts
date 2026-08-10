@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import type { ConfigService } from '@nestjs/config';
 import { createPrivateKey, X509Certificate } from 'crypto';
 import * as fs from 'fs';
+import { configureOutboundHttpTimeout } from '../common/http/outbound-http-timeout';
 import { PaymentService } from '../payment/payment.service';
 import { validateEnv } from './env.validation';
 
@@ -145,6 +146,12 @@ export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.en
   if ((env.NODE_ENV || 'development') !== 'production') {
     return;
   }
+
+  // This value is consumed by every Axios-based external integration. Validate it here so an
+  // invalid production setting cannot survive until after a live Prisma migration or until Nest
+  // providers have already connected to MySQL/Redis. The mutation of axios.defaults is harmless
+  // in the standalone preflight process and is reused directly when preflight runs in main.ts.
+  configureOutboundHttpTimeout(env.OUTBOUND_HTTP_TIMEOUT_MS);
 
   validateMerchantPrivateKey(String(env.WECHAT_PRIVATE_KEY_PATH || ''));
   validatePlatformCertificate(
