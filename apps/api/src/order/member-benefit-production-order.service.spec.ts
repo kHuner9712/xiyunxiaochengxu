@@ -135,7 +135,7 @@ describe('MemberBenefitProductionOrderService', () => {
     });
   });
 
-  it('完成订单按当前会员1.5倍积分发放并在同一事务同步升级等级', async () => {
+  it('完成订单按当前会员1.5倍发积分，但成长值仍按基础实付值升级', async () => {
     const { service } = createService();
     const userUpdate = jest.fn(async () => ({}));
     const memberRecordCreate = jest.fn(async () => ({}));
@@ -171,7 +171,7 @@ describe('MemberBenefitProductionOrderService', () => {
       data: {
         availablePoints: { increment: 15 },
         totalPoints: { increment: 15 },
-        growthValue: { increment: 15 },
+        growthValue: { increment: 10 },
       },
     });
     expect(userUpdate).toHaveBeenCalledWith({
