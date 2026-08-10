@@ -6,13 +6,16 @@ import { getOrderDetail } from '@/api/order'
 
 const uniAppMock = vi.hoisted(() => ({
   onLoadCallbacks: [] as Array<(options?: Record<string, any>) => void>,
+  onShowCallbacks: [] as Array<() => void>,
 }))
 
 vi.mock('@dcloudio/uni-app', () => ({
   onLoad: vi.fn((callback: (options?: Record<string, any>) => void) => {
     uniAppMock.onLoadCallbacks.push(callback)
   }),
-  onShow: vi.fn(),
+  onShow: vi.fn((callback: () => void) => {
+    uniAppMock.onShowCallbacks.push(callback)
+  }),
   onReachBottom: vi.fn(),
   onPullDownRefresh: vi.fn(),
 }))
@@ -52,9 +55,33 @@ function mountDetail() {
   })
 }
 
+function orderDetail(status: 'completed' | 'aftersale' = 'completed') {
+  return {
+    id: 'order-2',
+    orderNo: 'XY20260606002',
+    status,
+    totalAmount: 2000,
+    payAmount: 2000,
+    freightAmount: 0,
+    discountAmount: 0,
+    activityDiscountAmount: 0,
+    couponAmount: 0,
+    pointsAmount: 0,
+    addressName: '',
+    addressPhone: '',
+    addressDetail: '',
+    items: [
+      { id: 'item-1', productId: 'p1', skuId: 's1', productName: '商品1', productImage: '', skuName: '', price: 1000, quantity: 1, canApplyAftersale: true },
+      { id: 'item-2', productId: 'p2', skuId: 's2', productName: '商品2', productImage: '', skuName: '', price: 1000, quantity: 1, canApplyAftersale: true },
+    ],
+    createTime: '2026-06-06 12:00:00',
+  } as any
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   uniAppMock.onLoadCallbacks = []
+  uniAppMock.onShowCallbacks = []
   ;(globalThis as any).uni = {
     navigateTo: vi.fn(),
     showToast: vi.fn(),
@@ -78,24 +105,7 @@ describe('订单售后入口', () => {
   })
 
   it('多商品订单进入详情并提示选择要售后的商品', async () => {
-    vi.mocked(getOrderDetail).mockResolvedValue({
-      id: 'order-2',
-      orderNo: 'XY20260606002',
-      status: 'completed',
-      totalAmount: 2000,
-      payAmount: 2000,
-      freightAmount: 0,
-      couponAmount: 0,
-      pointsAmount: 0,
-      addressName: '',
-      addressPhone: '',
-      addressDetail: '',
-      items: [
-        { id: 'item-1', productId: 'p1', skuId: 's1', productName: '商品1', productImage: '', skuName: '', price: 1000, quantity: 1, canApplyAftersale: true },
-        { id: 'item-2', productId: 'p2', skuId: 's2', productName: '商品2', productImage: '', skuName: '', price: 1000, quantity: 1, canApplyAftersale: true },
-      ],
-      createTime: '2026-06-06 12:00:00',
-    } as any)
+    vi.mocked(getOrderDetail).mockResolvedValue(orderDetail())
 
     const wrapper = mountDetail()
     uniAppMock.onLoadCallbacks.at(-1)?.({ id: 'order-2', selectAftersale: '1' })
@@ -110,6 +120,27 @@ describe('订单售后入口', () => {
       duration: 300,
     })
     expect((wrapper.vm as any).selectAftersaleMode).toBe(true)
+  })
+
+  it('从售后子页返回订单详情时重新读取最新订单状态', async () => {
+    vi.mocked(getOrderDetail)
+      .mockResolvedValueOnce(orderDetail('completed'))
+      .mockResolvedValueOnce(orderDetail('aftersale'))
+
+    const wrapper = mountDetail()
+    uniAppMock.onLoadCallbacks.at(-1)?.({ id: 'order-2' })
+    await flushPromises()
+    expect(getOrderDetail).toHaveBeenCalledTimes(1)
+    expect((wrapper.vm as any).order.status).toBe('completed')
+
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+    expect(getOrderDetail).toHaveBeenCalledTimes(1)
+
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+    expect(getOrderDetail).toHaveBeenCalledTimes(2)
+    expect((wrapper.vm as any).order.status).toBe('aftersale')
   })
 
   it('不可售后商品点击后展示原因', () => {
