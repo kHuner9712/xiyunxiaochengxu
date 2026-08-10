@@ -4,6 +4,9 @@ import { RedisService } from '../common/redis/redis.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { PointsService } from './points.service';
 
+const CHINA_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class ProductionPointsService extends PointsService {
   private readonly productionLogger = new Logger(ProductionPointsService.name);
@@ -57,12 +60,12 @@ export class ProductionPointsService extends PointsService {
 
   override async getSignInStatus(userId: string) {
     const canonicalUserId = parsePositiveBigIntId(userId, '用户').toString();
-    const status = await super.getSignInStatus(canonicalUserId);
-    if (!status.todaySigned) return status;
+    const [status, previousConsecutiveDays] = await Promise.all([
+      super.getSignInStatus(canonicalUserId),
+      this.getFullPreviousConsecutiveSignInDays(canonicalUserId),
+    ]);
 
-    // The base helper counts the consecutive days before today because it starts at yesterday.
-    // Once today is signed, the current streak includes today as one additional day.
-    const continuous = (status.consecutiveDays ?? 0) + 1;
+    const continuous = previousConsecutiveDays + (status.todaySigned ? 1 : 0);
     return {
       ...status,
       continuous,
@@ -73,16 +76,53 @@ export class ProductionPointsService extends PointsService {
   override async signIn(userId: string) {
     const canonicalUserId = parsePositiveBigIntId(userId, '用户').toString();
     const result = await super.signIn(canonicalUserId);
-    if (!result.alreadySigned) return result;
 
-    // A retry from another device or a stale foreground page is an idempotent success. Return the
-    // actual streak instead of the base fallback of zero so clients cannot regress the UI state.
-    const status = await this.getSignInStatus(canonicalUserId);
-    return {
-      ...result,
-      continuous: status.continuous,
-      consecutiveDays: status.consecutiveDays,
-    };
+    // The base implementation intentionally keeps its historical scan small. Enrich the response
+    // with the full streak after the idempotent/new sign-in transaction has committed, without ever
+    // turning a successful sign-in into a client-visible failure if this read-back is unavailable.
+    try {
+      const status = await this.getSignInStatus(canonicalUserId);
+      return {
+        ...result,
+        continuous: status.continuous,
+        consecutiveDays: status.consecutiveDays,
+      };
+    } catch (error: any) {
+      this.productionLogger.warn(
+        `签到成功后刷新完整连续天数失败，保留事务返回值: user=${canonicalUserId} message=${error?.message || error}`,
+      );
+      return result;
+    }
+  }
+
+  private async getFullPreviousConsecutiveSignInDays(userId: string): Promise<number> {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const records = await this.productionPrisma.pointsRecord.findMany({
+      where: {
+        userId: userIdValue,
+        source: 'sign_in',
+        type: 1,
+      },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // At most one successful sign-in exists per China calendar day. Reading the user's sign-in
+    // history is bounded in practice by account age (one row/day), and removes the old arbitrary
+    // 30-day cap. A Set also tolerates legacy duplicate rows without inflating the streak.
+    const signedDays = new Set(records.map((record) => this.toChinaDayKey(record.createdAt)));
+    const now = Date.now();
+    let consecutiveDays = 0;
+    for (let offset = -1; ; offset -= 1) {
+      const expectedDay = this.toChinaDayKey(new Date(now + offset * DAY_MS));
+      if (!signedDays.has(expectedDay)) break;
+      consecutiveDays += 1;
+    }
+    return consecutiveDays;
+  }
+
+  private toChinaDayKey(value: Date): string {
+    return new Date(value.getTime() + CHINA_UTC_OFFSET_MS).toISOString().slice(0, 10);
   }
 
   override async cleanExpiredPoints() {
