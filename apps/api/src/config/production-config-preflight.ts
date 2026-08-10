@@ -1,14 +1,143 @@
 import 'reflect-metadata';
 import type { ConfigService } from '@nestjs/config';
+import { createPrivateKey, X509Certificate } from 'crypto';
+import * as fs from 'fs';
 import { PaymentService } from '../payment/payment.service';
 import { validateEnv } from './env.validation';
+
+const MIN_PLATFORM_CERT_VALIDITY_MS = 24 * 60 * 60 * 1000;
+const CANONICAL_CERT_SERIAL = /^[0-9A-F]+$/;
+
+function fail(message: string): never {
+  throw new Error(`生产配置预检失败: ${message}`);
+}
+
+function normalizeCertificateSerial(serial: string): string {
+  const normalized = String(serial || '')
+    .trim()
+    .toUpperCase()
+    .replace(/^0X/, '')
+    .replace(/[^0-9A-F]/g, '')
+    .replace(/^0+(?=[0-9A-F])/, '');
+  return normalized;
+}
+
+function requireCanonicalSerial(serial: string, label: string): string {
+  const value = String(serial || '').trim();
+  if (!value || !CANONICAL_CERT_SERIAL.test(value)) {
+    fail(`${label} 必须使用大写十六进制且不能包含 0x、冒号、空格或其他分隔符`);
+  }
+  const normalized = normalizeCertificateSerial(value);
+  if (value !== normalized) {
+    fail(`${label} 不是 canonical 证书序列号: configured=${value}, canonical=${normalized}`);
+  }
+  return normalized;
+}
+
+function readTextFile(path: string, label: string): string {
+  try {
+    const content = fs.readFileSync(path, 'utf8');
+    if (!content.trim()) fail(`${label} 文件为空: ${path}`);
+    return content;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('生产配置预检失败:')) throw error;
+    fail(`${label} 文件不可读: ${path}`);
+  }
+}
+
+function validateMerchantPrivateKey(path: string): void {
+  const pem = readTextFile(path, '微信支付商户私钥');
+  try {
+    const key = createPrivateKey(pem);
+    if (key.type !== 'private' || key.asymmetricKeyType !== 'rsa') {
+      fail(`WECHAT_PRIVATE_KEY_PATH 必须是 RSA 私钥: ${path}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('生产配置预检失败:')) throw error;
+    fail(`WECHAT_PRIVATE_KEY_PATH 不是可解析的 RSA 私钥: ${path}`);
+  }
+}
+
+function validatePlatformCertificate(path: string, configuredSerial: string, label: string): void {
+  const pem = readTextFile(path, label);
+  let certificate: X509Certificate;
+  try {
+    certificate = new X509Certificate(pem);
+  } catch {
+    fail(`${label} 不是可解析的 X.509 证书: ${path}`);
+  }
+
+  if (certificate.publicKey.asymmetricKeyType !== 'rsa') {
+    fail(`${label} 必须使用 RSA 公钥: ${path}`);
+  }
+
+  const canonicalConfiguredSerial = requireCanonicalSerial(configuredSerial, `${label}序列号`);
+  const actualSerial = normalizeCertificateSerial(certificate.serialNumber);
+  if (!actualSerial || canonicalConfiguredSerial !== actualSerial) {
+    fail(`${label}序列号与证书不匹配: configured=${canonicalConfiguredSerial}, actual=${actualSerial || 'unknown'}`);
+  }
+
+  const validFrom = Date.parse(certificate.validFrom);
+  const validTo = Date.parse(certificate.validTo);
+  const now = Date.now();
+  if (!Number.isFinite(validFrom) || !Number.isFinite(validTo)) {
+    fail(`${label}有效期无法解析: ${path}`);
+  }
+  if (now < validFrom) {
+    fail(`${label}尚未生效: validFrom=${certificate.validFrom}`);
+  }
+  if (validTo - now < MIN_PLATFORM_CERT_VALIDITY_MS) {
+    fail(`${label}已过期或将在 24 小时内过期: validTo=${certificate.validTo}`);
+  }
+}
+
+function validatePlatformCertificateMap(raw: string | undefined): void {
+  const value = String(raw || '').trim();
+  if (!value) return;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    fail('WECHAT_PLATFORM_CERT_MAP 必须是合法 JSON 对象');
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    fail('WECHAT_PLATFORM_CERT_MAP 必须是 {"SERIAL":"/path/to/cert.pem"} 形式的 JSON 对象');
+  }
+
+  for (const [serial, filePath] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+      fail(`WECHAT_PLATFORM_CERT_MAP 中 ${serial || '(empty serial)'} 的证书路径无效`);
+    }
+    validatePlatformCertificate(filePath.trim(), serial, `微信支付轮换平台证书(${serial})`);
+  }
+}
+
+function validateOptionalHttpsUrl(value: string | undefined, label: string): void {
+  const raw = String(value || '').trim();
+  if (!raw) return;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    fail(`${label} 不是合法 URL`);
+  }
+  if (parsed.protocol !== 'https:') {
+    fail(`${label} 在生产环境必须使用 HTTPS`);
+  }
+  if (parsed.username || parsed.password) {
+    fail(`${label} 不允许在 URL 中内嵌用户名或密码`);
+  }
+}
 
 /**
  * Validate production configuration without opening database/Redis connections or starting
  * Nest schedulers. This is intentionally safe to run before a live database migration.
  *
- * It reuses the exact runtime EnvValidator and PaymentService constructor checks so deployment
- * cannot drift into a second, weaker set of configuration rules.
+ * It reuses the exact runtime EnvValidator and PaymentService constructor checks, then adds
+ * offline-verifiable cryptographic identity checks that the runtime otherwise cannot safely
+ * defer until the first real payment/callback.
  */
 export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.env): void {
   validateEnv({ ...env });
@@ -17,6 +146,15 @@ export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.en
     return;
   }
 
+  validateMerchantPrivateKey(String(env.WECHAT_PRIVATE_KEY_PATH || ''));
+  validatePlatformCertificate(
+    String(env.WECHAT_PLATFORM_CERT_PATH || ''),
+    String(env.WECHAT_PLATFORM_CERT_SERIAL_NO || ''),
+    '微信支付平台证书',
+  );
+  validatePlatformCertificateMap(env.WECHAT_PLATFORM_CERT_MAP);
+  validateOptionalHttpsUrl(env.ALERT_WEBHOOK_URL, 'ALERT_WEBHOOK_URL');
+
   const configService = {
     get<T = any>(key: string, defaultValue?: T): T | undefined {
       const value = env[key];
@@ -24,10 +162,9 @@ export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.en
     },
   } as ConfigService;
 
-  // PaymentService performs additional production checks beyond validateEnv, including
-  // actually reading the merchant private key and WeChat platform certificate contents.
-  // Its other dependencies are not accessed by the constructor, so null placeholders keep
-  // this preflight free of database, Redis, HTTP, cron or other runtime side effects.
+  // PaymentService performs the remaining production payment checks. Its other dependencies
+  // are not accessed by the constructor, so null placeholders keep this preflight free of
+  // database, Redis, HTTP, cron or other runtime side effects.
   new PaymentService(
     null as any,
     configService,
