@@ -114,6 +114,7 @@ command -v git >/dev/null 2>&1 || fail 'git is not installed'
 command -v docker >/dev/null 2>&1 || fail 'docker is not installed'
 command -v gzip >/dev/null 2>&1 || fail 'gzip is not installed'
 command -v openssl >/dev/null 2>&1 || fail 'openssl is not installed'
+command -v curl >/dev/null 2>&1 || fail 'curl is not installed'
 docker compose version >/dev/null 2>&1 || fail 'docker compose is unavailable'
 [ -r "$ENV_FILE" ] || fail "production env file is not readable: $ENV_FILE"
 
@@ -228,8 +229,6 @@ if [ "$OLD_API_WAS_RUNNING" = true ]; then
   esac
 fi
 
-# Build and validate the exact candidate before entering maintenance mode. This keeps the outage
-# limited to the immutable database verification + migration + startup window.
 "${COMPOSE[@]}" build --pull api
 pass "API and admin image built with BUILD_SHA=$BUILD_SHA"
 API_IMAGE_ID="$("${COMPOSE[@]}" images -q api | head -n 1)"
@@ -306,8 +305,6 @@ on_exit() {
     "${COMPOSE[@]}" stop api >/dev/null 2>&1 || true
 
     if [ "$PUBLIC_EXPOSED" = true ]; then
-      # Once the public Nginx has reopened, new production writes may already exist. Restoring the
-      # pre-deploy backup automatically could destroy real customer data. Fail closed instead.
       printf 'RECOVERY public traffic had already been reopened; automatic database rollback is disabled to avoid losing post-exposure writes\n' >&2
       printf 'RECOVERY candidate API and Nginx are stopped; inspect the migrated database before choosing rollback or resume\n' >&2
       RECOVERY_FAILED=true
@@ -332,9 +329,6 @@ on_exit() {
 trap on_exit EXIT
 cleanup_migration_clone
 
-# Enter a true write-quiesced maintenance window. Nginx is stopped first so no new inbound
-# mutations arrive; API is then stopped gracefully so in-flight requests and cron/reconciliation
-# writers drain before the backup is taken.
 MAINTENANCE_ACTIVE=true
 if [ "$OLD_NGINX_WAS_RUNNING" = true ]; then
   docker stop -t 10 baby-mall-nginx >/dev/null
@@ -346,8 +340,6 @@ container_is_running baby-mall-nginx && fail 'Nginx is still running after maint
 container_is_running baby-mall-api && fail 'API is still running after maintenance stop'
 pass 'maintenance mode entered: public Nginx and API/background writers are stopped'
 
-# Take the migration proof backup only after all application writers are quiesced. The exact same
-# immutable snapshot is used for clone verification and any pre-publication disaster recovery.
 mkdir -p "$BACKUP_DIR"
 "${COMPOSE[@]}" exec -T mysql sh -c '
   exec mysqldump \
@@ -365,8 +357,6 @@ gzip -t "$BACKUP_FILE"
 BACKUP_READY=true
 pass "write-quiesced database backup created: $BACKUP_FILE"
 
-# Restore the fresh quiesced production snapshot into a disposable MySQL clone and run migrations
-# with the exact candidate image that will be deployed.
 docker network create "$DRY_RUN_NETWORK" >/dev/null
 docker run -d \
   --name "$DRY_RUN_DB_CONTAINER" \
@@ -402,8 +392,6 @@ docker run --rm \
 pass 'fresh production-backup clone passed migrations and schema drift verification with the deployment image'
 cleanup_migration_clone
 
-# From this point a failed migration may have partially changed the live schema, so the EXIT trap
-# must restore the exact quiesced backup before the previous API is allowed to run again.
 LIVE_DB_TOUCHED=true
 "${COMPOSE[@]}" run --rm --no-deps api npx prisma migrate deploy
 pass 'Prisma migrations completed on live database'
@@ -416,7 +404,6 @@ if ! wait_healthy baby-mall-api 60; then
 fi
 pass 'candidate API is healthy while public Nginx remains stopped'
 
-# Validate critical business/API behavior directly before the public listener is reopened.
 API_HOST_PORT="$(read_env_value API_HOST_PORT)"
 API_HOST_PORT="${API_HOST_PORT:-3001}"
 api_health="$(curl --fail --silent --show-error "http://127.0.0.1:${API_HOST_PORT}/api/health")"
@@ -426,8 +413,6 @@ echo "$product_list_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0' || f
 "${COMPOSE[@]}" run --rm --no-deps nginx nginx -t >/dev/null
 pass 'candidate API business route and Nginx configuration pass before public exposure'
 
-# This is the publication commit point. Before it, failures automatically restore DB + old runtime.
-# After it, automatic DB restore is deliberately disabled because real customer writes may occur.
 "${COMPOSE[@]}" up -d --no-deps --force-recreate nginx
 PUBLIC_EXPOSED=true
 sleep 3
