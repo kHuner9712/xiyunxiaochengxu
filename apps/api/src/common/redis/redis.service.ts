@@ -31,6 +31,31 @@ export class RedisService implements OnApplicationShutdown {
     await this.client.del(key);
   }
 
+  async delByPattern(pattern: string, scanCount = 200): Promise<number> {
+    let cursor = '0';
+    let deleted = 0;
+    const count = Number.isInteger(scanCount) && scanCount > 0
+      ? Math.min(scanCount, 1000)
+      : 200;
+
+    do {
+      const result = await this.client.scan(
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        count,
+      );
+      cursor = String(result?.[0] ?? '0');
+      const keys = Array.isArray(result?.[1]) ? result[1] : [];
+      if (keys.length > 0) {
+        deleted += Number(await this.client.del(...keys)) || 0;
+      }
+    } while (cursor !== '0');
+
+    return deleted;
+  }
+
   async incr(key: string): Promise<number> {
     return this.client.incr(key);
   }
