@@ -61,7 +61,7 @@ vi.mock('@/api/pickup-store', () => ({
 }))
 
 vi.mock('@/api/coupon', () => ({
-  getAvailableCoupons: vi.fn(),
+  getAvailableCoupons: vi.fn(async () => []),
 }))
 
 const orderApiMock = vi.mocked(await import('@/api/order'))
