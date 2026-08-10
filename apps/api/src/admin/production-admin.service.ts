@@ -1,12 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { RedisService } from '../common/redis/redis.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { AdminService } from './admin.service';
 
 @Injectable()
 export class ProductionAdminService extends AdminService {
-  constructor(private readonly productionPrisma: PrismaService) {
+  private readonly productionAdminLogger = new Logger(ProductionAdminService.name);
+
+  constructor(
+    private readonly productionPrisma: PrismaService,
+    private readonly productionRedis: RedisService,
+  ) {
     super(productionPrisma);
   }
 
@@ -87,6 +93,10 @@ export class ProductionAdminService extends AdminService {
 
       return tx.adminUser.update({ where: { id: adminId }, data: updateData });
     });
+
+    if (passwordHash || requestedRoleIds || data.status !== undefined) {
+      await this.revokeAdminSessionsOrThrow(adminId, '管理员密码/角色/状态已变更');
+    }
     return { id: result.id.toString(), username: result.username };
   }
 
@@ -103,6 +113,7 @@ export class ProductionAdminService extends AdminService {
       if (isSuper && status !== 1) await this.assertAnotherActiveSuperAdmin(tx, adminId);
       return tx.adminUser.update({ where: { id: adminId }, data: { status } });
     });
+    await this.revokeAdminSessionsOrThrow(adminId, '管理员启停状态已变更');
     return { id: result.id.toString(), status: result.status };
   }
 
@@ -122,6 +133,7 @@ export class ProductionAdminService extends AdminService {
         data: { deletedAt: new Date(), status: 0 },
       });
     });
+    await this.revokeAdminSessionsOrThrow(adminId, '管理员账号已删除');
     return { id: result.id.toString() };
   }
 
@@ -223,6 +235,25 @@ export class ProductionAdminService extends AdminService {
     });
     if (count === 0) {
       throw new BadRequestException('至少必须保留一个启用的超级管理员账号');
+    }
+  }
+
+  private async revokeAdminSessionsOrThrow(adminId: bigint, reason: string) {
+    try {
+      const revoked = await this.productionRedis.delByPattern(
+        `admin_refresh_token:${adminId.toString()}:*`,
+      );
+      this.productionAdminLogger.log(
+        `${reason}: adminId=${adminId}, revokedSessions=${revoked}`,
+      );
+    } catch (error) {
+      this.productionAdminLogger.error(
+        `管理员安全信息已变更但会话撤销失败: adminId=${adminId}, reason=${reason}, error=${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException(
+        '管理员信息已更新，但旧登录会话撤销失败；请检查 Redis 后要求该账号重新登录',
+      );
     }
   }
 }
