@@ -47,13 +47,33 @@ wait_healthy() {
   return 1
 }
 
+validate_tls_pair() {
+  local cert="$1"
+  local key="$2"
+  local domain="$3"
+  local label="$4"
+  local cert_pubkey
+  local key_pubkey
+
+  openssl x509 -in "$cert" -noout >/dev/null 2>&1 || fail "$label TLS certificate is not a valid X.509 certificate: $cert"
+  openssl pkey -in "$key" -noout >/dev/null 2>&1 || fail "$label TLS private key is invalid or unreadable: $key"
+  openssl x509 -in "$cert" -checkend 604800 -noout >/dev/null 2>&1 || fail "$label TLS certificate is expired or expires within 7 days: $cert"
+  openssl x509 -in "$cert" -checkhost "$domain" -noout >/dev/null 2>&1 || fail "$label TLS certificate does not cover domain $domain"
+
+  cert_pubkey="$(openssl x509 -in "$cert" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform PEM 2>/dev/null)" || fail "$label TLS certificate public key cannot be read"
+  key_pubkey="$(openssl pkey -in "$key" -pubout -outform PEM 2>/dev/null)" || fail "$label TLS private key public key cannot be derived"
+  [ "$cert_pubkey" = "$key_pubkey" ] || fail "$label TLS certificate and private key do not match"
+}
+
 command -v git >/dev/null 2>&1 || fail 'git is not installed'
 command -v docker >/dev/null 2>&1 || fail 'docker is not installed'
 command -v gzip >/dev/null 2>&1 || fail 'gzip is not installed'
+command -v openssl >/dev/null 2>&1 || fail 'openssl is not installed'
 docker compose version >/dev/null 2>&1 || fail 'docker compose is unavailable'
 [ -r "$ENV_FILE" ] || fail "production env file is not readable: $ENV_FILE"
 
 EXPECTED_API_DOMAIN="${API_DOMAIN:-api.yunxixiaochengxu.com.cn}"
+EXPECTED_ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.yunxixiaochengxu.com.cn}"
 EXPECTED_MINIPROGRAM_APP_ID="wxe40f76a33427090f"
 EXPECTED_UPLOAD_PUBLIC_URL="https://${EXPECTED_API_DOMAIN}"
 EXPECTED_PAY_NOTIFY_URL="https://${EXPECTED_API_DOMAIN}/api/weapp/pay/callback"
@@ -113,9 +133,21 @@ for cert in \
 done
 pass 'payment and TLS certificate files are readable'
 
+validate_tls_pair \
+  "$ROOT_DIR/deploy/nginx/ssl/api/fullchain.pem" \
+  "$ROOT_DIR/deploy/nginx/ssl/api/privkey.pem" \
+  "$EXPECTED_API_DOMAIN" \
+  'API'
+validate_tls_pair \
+  "$ROOT_DIR/deploy/nginx/ssl/admin/fullchain.pem" \
+  "$ROOT_DIR/deploy/nginx/ssl/admin/privkey.pem" \
+  "$EXPECTED_ADMIN_DOMAIN" \
+  'Admin'
+pass 'TLS certificates cover production domains, match their private keys, and remain valid for at least 7 days'
+
 if [ -n "${EXPECTED_SERVER_IP:-}" ]; then
   command -v getent >/dev/null 2>&1 || fail 'getent is required when EXPECTED_SERVER_IP is set'
-  for domain in "${API_DOMAIN:-api.yunxixiaochengxu.com.cn}" "${ADMIN_DOMAIN:-admin.yunxixiaochengxu.com.cn}"; do
+  for domain in "$EXPECTED_API_DOMAIN" "$EXPECTED_ADMIN_DOMAIN"; do
     resolved="$(getent ahostsv4 "$domain" | awk '{print $1}' | sort -u || true)"
     echo "$resolved" | grep -qx "$EXPECTED_SERVER_IP" || fail "$domain does not resolve to EXPECTED_SERVER_IP=$EXPECTED_SERVER_IP"
   done
@@ -227,8 +259,8 @@ docker exec baby-mall-nginx nginx -t >/dev/null
 pass 'Nginx configuration is valid'
 
 ENV_FILE="$ENV_FILE" \
-API_DOMAIN="${API_DOMAIN:-api.yunxixiaochengxu.com.cn}" \
-ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.yunxixiaochengxu.com.cn}" \
+API_DOMAIN="$EXPECTED_API_DOMAIN" \
+ADMIN_DOMAIN="$EXPECTED_ADMIN_DOMAIN" \
 bash "$SCRIPT_DIR/smoke-runtime.sh"
 
 printf 'DEPLOYMENT PASS\n'
