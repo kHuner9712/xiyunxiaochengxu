@@ -47,6 +47,19 @@ export class HealthController {
       isHealthy = false;
     }
 
+    try {
+      const schedulerPaused = this.redis.isSchedulerPausedForCurrentBuild?.() ?? false;
+      result.services.scheduler = schedulerPaused ? 'paused' : 'ok';
+      if (schedulerPaused) {
+        result.status = 'degraded';
+        isHealthy = false;
+      }
+    } catch {
+      result.services.scheduler = 'error';
+      result.status = 'degraded';
+      isHealthy = false;
+    }
+
     const statusCode = isHealthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
     return res.status(statusCode).json(result);
   }
