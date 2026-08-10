@@ -9,6 +9,7 @@ import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
 import {
+  calculateOrderGrowthValue,
   loadActiveMemberLevels,
   reconcileMemberLevelForGrowth,
 } from '../member/member-level-runtime';
@@ -16,10 +17,8 @@ import { MerchantSettlementService } from '../merchant-settlement/merchant-settl
 import { OrderService } from '../order/order.service';
 import { ShareService } from '../share/share.service';
 import { PromotionRecoveringDurableZeroPayAftersalePaymentService } from './promotion-recovering-durable-zero-pay-aftersale-payment.service';
-import { calculateRefundPointTargets } from './refund-points-conservation';
 
 const REFUND_GROWTH_CONSERVATION_REASON = 'refund_growth_conservation';
-const COMPLETION_REWARD_SOURCES = ['order_complete', 'order_auto_complete'];
 
 @Injectable()
 export class MemberGrowthConservingPaymentService extends PromotionRecoveringDurableZeroPayAftersalePaymentService {
@@ -226,6 +225,7 @@ export class MemberGrowthConservingPaymentService extends PromotionRecoveringDur
           orderNo: true,
           userId: true,
           payAmount: true,
+          completedAt: true,
         },
       });
       if (!order) throw new Error('退款成长值对账对应订单不存在');
@@ -253,29 +253,29 @@ export class MemberGrowthConservingPaymentService extends PromotionRecoveringDur
 
       const successfulRefunds = await tx.orderRefund.findMany({
         where: { orderId: order.id, status: REFUND_STATUS.SUCCESS },
-        select: { refundAmount: true },
+        select: { refundAmount: true, updatedAt: true },
         orderBy: { id: 'asc' },
       });
-      const rewardAggregate = await tx.pointsRecord.aggregate({
-        where: {
-          userId: order.userId,
-          type: 1,
-          source: { in: COMPLETION_REWARD_SOURCES },
-          sourceId: order.id,
-        },
-        _sum: { points: true },
-      });
-      const originalRewardPoints = Math.max(0, rewardAggregate._sum.points ?? 0);
       const cumulativeRefundAmount = successfulRefunds.reduce(
         (sum, refund) => sum + Math.max(0, refund.refundAmount),
         0,
       );
-      const target = calculateRefundPointTargets({
-        payAmount: Math.max(0, order.payAmount || 0),
-        cumulativeRefundAmount,
-        originalDeductedPoints: 0,
-        originalRewardPoints,
-      }).clawbackRewardTarget;
+      const preCompletionRefundAmount = order.completedAt
+        ? successfulRefunds
+          .filter((refund) => refund.updatedAt.getTime() <= order.completedAt!.getTime())
+          .reduce((sum, refund) => sum + Math.max(0, refund.refundAmount), 0)
+        : cumulativeRefundAmount;
+      const growthGrantedAtCompletion = order.completedAt
+        ? calculateOrderGrowthValue(
+          Math.max(0, (order.payAmount || 0) - preCompletionRefundAmount),
+        )
+        : 0;
+      const growthThatShouldRemain = order.completedAt
+        ? calculateOrderGrowthValue(
+          Math.max(0, (order.payAmount || 0) - cumulativeRefundAmount),
+        )
+        : 0;
+      const target = Math.max(0, growthGrantedAtCompletion - growthThatShouldRemain);
 
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${order.userId} FOR UPDATE`;
       const user = await tx.user.findFirst({
@@ -312,6 +312,9 @@ export class MemberGrowthConservingPaymentService extends PromotionRecoveringDur
         ...payload,
         orderId: order.id.toString(),
         cumulativeRefundAmount,
+        preCompletionRefundAmount,
+        growthGrantedAtCompletion,
+        growthThatShouldRemain,
         growthClawbackTarget: target,
         clawedGrowthValue,
         outstandingGrowthClawback,
