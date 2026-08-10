@@ -69,6 +69,11 @@ wait_healthy() {
   return 1
 }
 
+container_is_running() {
+  local container="$1"
+  [ "$(docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null || true)" = 'true' ]
+}
+
 validate_tls_pair() {
   local cert="$1"
   local key="$2"
@@ -128,6 +133,10 @@ CONFIGURED_WECHAT_PRIVATE_KEY_PATH="${CONFIGURED_WECHAT_PRIVATE_KEY_PATH:-/app/a
 CONFIGURED_WECHAT_PLATFORM_CERT_PATH="$(read_env_value WECHAT_PLATFORM_CERT_PATH)"
 CONFIGURED_WECHAT_PLATFORM_CERT_PATH="${CONFIGURED_WECHAT_PLATFORM_CERT_PATH:-/app/apps/api/certs/wechatpay_platform.pem}"
 CONFIGURED_WECHAT_PLATFORM_CERT_SERIAL_NO="$(read_env_value WECHAT_PLATFORM_CERT_SERIAL_NO)"
+LIVE_DB_NAME="$(read_env_value DB_NAME)"
+LIVE_DB_NAME="${LIVE_DB_NAME:-baby_mall}"
+[[ "$LIVE_DB_NAME" =~ ^[A-Za-z0-9_]+$ ]] || fail "DB_NAME contains unsafe characters for disaster recovery SQL: $LIVE_DB_NAME"
+
 [ "$CONFIGURED_WECHAT_APP_ID" = "$EXPECTED_MINIPROGRAM_APP_ID" ] || fail "WECHAT_APP_ID must match the miniprogram AppID $EXPECTED_MINIPROGRAM_APP_ID; configured=${CONFIGURED_WECHAT_APP_ID:-empty}"
 [ "$CONFIGURED_UPLOAD_PUBLIC_URL" = "$EXPECTED_UPLOAD_PUBLIC_URL" ] || fail "UPLOAD_PUBLIC_URL must exactly match $EXPECTED_UPLOAD_PUBLIC_URL so generated public asset URLs use the deployed API origin; configured=${CONFIGURED_UPLOAD_PUBLIC_URL:-empty}"
 [ "$CONFIGURED_PAY_NOTIFY_URL" = "$EXPECTED_PAY_NOTIFY_URL" ] || fail "WECHAT_NOTIFY_URL must exactly match $EXPECTED_PAY_NOTIFY_URL; configured=${CONFIGURED_PAY_NOTIFY_URL:-empty}"
@@ -148,14 +157,11 @@ EXPECTED_DEPLOY_SHA="${EXPECTED_DEPLOY_SHA:-}"
 EXPECTED_DEPLOY_SHA="$(printf '%s' "$EXPECTED_DEPLOY_SHA" | tr 'A-F' 'a-f')"
 [ "$FULL_SHA" = "$EXPECTED_DEPLOY_SHA" ] || fail "HEAD $FULL_SHA does not match EXPECTED_DEPLOY_SHA $EXPECTED_DEPLOY_SHA"
 
-# A production deploy must use the current remote main tip, not an arbitrary local checkout.
 git fetch --quiet origin main || fail 'failed to refresh origin/main before production deployment'
 REMOTE_MAIN_SHA="$(git rev-parse origin/main)"
 [ "$FULL_SHA" = "$REMOTE_MAIN_SHA" ] || fail "HEAD $FULL_SHA is not the current origin/main tip $REMOTE_MAIN_SHA"
 pass "release identity verified: main@$FULL_SHA"
 
-# BUILD_SHA is an externally observable deployment identity and must remain the exact commit.
-# SHORT_SHA is only for local operational resource names where the full hash is unnecessarily long.
 export BUILD_SHA
 DEPLOY_TIME="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$ROOT_DIR/deploy/backups"
@@ -205,16 +211,143 @@ if [ -n "${EXPECTED_SERVER_IP:-}" ]; then
   pass 'production DNS matches EXPECTED_SERVER_IP'
 fi
 
+OLD_API_WAS_RUNNING=false
+OLD_NGINX_WAS_RUNNING=false
+container_is_running baby-mall-api && OLD_API_WAS_RUNNING=true
+container_is_running baby-mall-nginx && OLD_NGINX_WAS_RUNNING=true
 OLD_API_IMAGE="$(docker inspect --format '{{.Image}}' baby-mall-api 2>/dev/null || true)"
+OLD_API_IMAGE_REF="$(docker inspect --format '{{.Config.Image}}' baby-mall-api 2>/dev/null || true)"
 if [ -n "$OLD_API_IMAGE" ]; then
   docker image tag "$OLD_API_IMAGE" "$ROLLBACK_TAG"
   pass "previous API image tagged as $ROLLBACK_TAG"
 fi
+if [ "$OLD_API_WAS_RUNNING" = true ]; then
+  [ -n "$OLD_API_IMAGE_REF" ] || fail 'cannot determine previous API image reference required for automatic rollback'
+  case "$OLD_API_IMAGE_REF" in
+    sha256:*) fail "previous API image reference is an immutable digest and cannot be retagged for rollback: $OLD_API_IMAGE_REF" ;;
+  esac
+fi
+
+# Build and validate the exact candidate before entering maintenance mode. This keeps the outage
+# limited to the immutable database verification + migration + startup window.
+"${COMPOSE[@]}" build --pull api
+pass "API and admin image built with BUILD_SHA=$BUILD_SHA"
+API_IMAGE_ID="$("${COMPOSE[@]}" images -q api | head -n 1)"
+[ -n "$API_IMAGE_ID" ] || fail 'cannot resolve newly built API image for migration clone verification'
+"${COMPOSE[@]}" run --rm --no-deps api true
+pass 'candidate image passed full production config/payment preflight before maintenance'
 
 "${COMPOSE[@]}" up -d mysql redis
 wait_healthy baby-mall-mysql 60 || fail 'MySQL did not become healthy'
 wait_healthy baby-mall-redis 60 || fail 'Redis did not become healthy'
 
+DRY_RUN_NETWORK="baby-mall-migrate-check-${SHORT_SHA}-${DEPLOY_TIME}"
+DRY_RUN_DB_CONTAINER="baby-mall-migrate-db-${SHORT_SHA}-${DEPLOY_TIME}"
+DRY_RUN_DB_NAME="baby_mall_migrate_verify"
+DRY_RUN_DB_PASSWORD="verify${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
+DRY_RUN_DATABASE_URL="mysql://root:${DRY_RUN_DB_PASSWORD}@mysql-check:3306/${DRY_RUN_DB_NAME}"
+MAINTENANCE_ACTIVE=false
+BACKUP_READY=false
+LIVE_DB_TOUCHED=false
+CANDIDATE_REPLACED_OLD_API=false
+PUBLIC_EXPOSED=false
+DEPLOYMENT_SUCCEEDED=false
+RECOVERY_FAILED=false
+
+cleanup_migration_clone() {
+  docker rm -f "$DRY_RUN_DB_CONTAINER" >/dev/null 2>&1 || true
+  docker network rm "$DRY_RUN_NETWORK" >/dev/null 2>&1 || true
+}
+
+restore_live_database() {
+  [ "$BACKUP_READY" = true ] || return 1
+  printf 'RECOVERY restoring production database from %s\n' "$BACKUP_FILE" >&2
+  "${COMPOSE[@]}" exec -T mysql sh -c '
+    mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  ' || return 1
+  gzip -dc "$BACKUP_FILE" | "${COMPOSE[@]}" exec -T mysql sh -c '
+    exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"
+  ' || return 1
+  printf 'RECOVERY production database restored successfully\n' >&2
+}
+
+restore_previous_runtime() {
+  if [ "$OLD_API_WAS_RUNNING" = true ]; then
+    if [ "$CANDIDATE_REPLACED_OLD_API" = true ]; then
+      [ -n "$OLD_API_IMAGE" ] && [ -n "$OLD_API_IMAGE_REF" ] || return 1
+      docker image tag "$OLD_API_IMAGE" "$OLD_API_IMAGE_REF" || return 1
+      SKIP_MIGRATE=true "${COMPOSE[@]}" up -d --no-deps --force-recreate api || return 1
+    else
+      docker start baby-mall-api >/dev/null 2>&1 || return 1
+    fi
+    wait_healthy baby-mall-api 60 || return 1
+  else
+    "${COMPOSE[@]}" stop api >/dev/null 2>&1 || true
+  fi
+
+  if [ "$OLD_NGINX_WAS_RUNNING" = true ]; then
+    "${COMPOSE[@]}" up -d --no-deps --force-recreate nginx || return 1
+    sleep 2
+    docker exec baby-mall-nginx nginx -t >/dev/null || return 1
+  else
+    "${COMPOSE[@]}" stop nginx >/dev/null 2>&1 || true
+  fi
+}
+
+on_exit() {
+  local status=$?
+  trap - EXIT
+  set +e
+  cleanup_migration_clone
+
+  if [ "$status" -ne 0 ] && [ "$MAINTENANCE_ACTIVE" = true ]; then
+    printf 'RECOVERY deployment failed during maintenance; blocking public traffic\n' >&2
+    "${COMPOSE[@]}" stop nginx >/dev/null 2>&1 || true
+    "${COMPOSE[@]}" stop api >/dev/null 2>&1 || true
+
+    if [ "$PUBLIC_EXPOSED" = true ]; then
+      # Once the public Nginx has reopened, new production writes may already exist. Restoring the
+      # pre-deploy backup automatically could destroy real customer data. Fail closed instead.
+      printf 'RECOVERY public traffic had already been reopened; automatic database rollback is disabled to avoid losing post-exposure writes\n' >&2
+      printf 'RECOVERY candidate API and Nginx are stopped; inspect the migrated database before choosing rollback or resume\n' >&2
+      RECOVERY_FAILED=true
+    else
+      if [ "$LIVE_DB_TOUCHED" = true ]; then
+        restore_live_database || RECOVERY_FAILED=true
+      fi
+      if [ "$RECOVERY_FAILED" = false ]; then
+        restore_previous_runtime || RECOVERY_FAILED=true
+      fi
+    fi
+
+    if [ "$RECOVERY_FAILED" = true ]; then
+      printf 'RECOVERY FAILED: manual intervention required; do not restart public traffic until database/runtime state is verified\n' >&2
+    else
+      printf 'RECOVERY PASS: previous database/runtime restored after failed deployment\n' >&2
+    fi
+  fi
+
+  exit "$status"
+}
+trap on_exit EXIT
+cleanup_migration_clone
+
+# Enter a true write-quiesced maintenance window. Nginx is stopped first so no new inbound
+# mutations arrive; API is then stopped gracefully so in-flight requests and cron/reconciliation
+# writers drain before the backup is taken.
+MAINTENANCE_ACTIVE=true
+if [ "$OLD_NGINX_WAS_RUNNING" = true ]; then
+  docker stop -t 10 baby-mall-nginx >/dev/null
+fi
+if [ "$OLD_API_WAS_RUNNING" = true ]; then
+  docker stop -t 30 baby-mall-api >/dev/null
+fi
+container_is_running baby-mall-nginx && fail 'Nginx is still running after maintenance stop'
+container_is_running baby-mall-api && fail 'API is still running after maintenance stop'
+pass 'maintenance mode entered: public Nginx and API/background writers are stopped'
+
+# Take the migration proof backup only after all application writers are quiesced. The exact same
+# immutable snapshot is used for clone verification and any pre-publication disaster recovery.
 mkdir -p "$BACKUP_DIR"
 "${COMPOSE[@]}" exec -T mysql sh -c '
   exec mysqldump \
@@ -227,32 +360,13 @@ mkdir -p "$BACKUP_DIR"
     --events \
     "$MYSQL_DATABASE"
 ' | gzip -9 > "$BACKUP_FILE"
-
 gzip -t "$BACKUP_FILE"
 [ -s "$BACKUP_FILE" ] || fail 'database backup is empty'
-pass "database backup created: $BACKUP_FILE"
+BACKUP_READY=true
+pass "write-quiesced database backup created: $BACKUP_FILE"
 
-"${COMPOSE[@]}" build --pull api
-pass "API and admin image built with BUILD_SHA=$BUILD_SHA"
-
-# Before touching the live schema, restore the actual production backup into a disposable
-# MySQL clone and run migrations with the exact image that will be deployed.
-API_IMAGE_ID="$("${COMPOSE[@]}" images -q api | head -n 1)"
-[ -n "$API_IMAGE_ID" ] || fail 'cannot resolve newly built API image for migration clone verification'
-
-DRY_RUN_NETWORK="baby-mall-migrate-check-${SHORT_SHA}-${DEPLOY_TIME}"
-DRY_RUN_DB_CONTAINER="baby-mall-migrate-db-${SHORT_SHA}-${DEPLOY_TIME}"
-DRY_RUN_DB_NAME="baby_mall_migrate_verify"
-DRY_RUN_DB_PASSWORD="verify${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
-DRY_RUN_DATABASE_URL="mysql://root:${DRY_RUN_DB_PASSWORD}@mysql-check:3306/${DRY_RUN_DB_NAME}"
-
-cleanup_migration_clone() {
-  docker rm -f "$DRY_RUN_DB_CONTAINER" >/dev/null 2>&1 || true
-  docker network rm "$DRY_RUN_NETWORK" >/dev/null 2>&1 || true
-}
-trap cleanup_migration_clone EXIT
-cleanup_migration_clone
-
+# Restore the fresh quiesced production snapshot into a disposable MySQL clone and run migrations
+# with the exact candidate image that will be deployed.
 docker network create "$DRY_RUN_NETWORK" >/dev/null
 docker run -d \
   --name "$DRY_RUN_DB_CONTAINER" \
@@ -269,7 +383,7 @@ wait_healthy "$DRY_RUN_DB_CONTAINER" 60 || fail 'migration verification MySQL cl
 
 gzip -dc "$BACKUP_FILE" | docker exec -i "$DRY_RUN_DB_CONTAINER" \
   mysql -uroot -p"$DRY_RUN_DB_PASSWORD" "$DRY_RUN_DB_NAME"
-pass 'production backup restored into disposable migration clone'
+pass 'write-quiesced production backup restored into disposable migration clone'
 
 docker run --rm \
   --network "$DRY_RUN_NETWORK" \
@@ -281,39 +395,52 @@ docker run --rm \
   -e DATABASE_URL="$DRY_RUN_DATABASE_URL" \
   "$API_IMAGE_ID" npx prisma migrate status
 
-# migrate status only proves migration history. A historical production database can still carry
-# manual/legacy schema drift, so compare the migrated clone itself against the release schema.
 docker run --rm \
   --network "$DRY_RUN_NETWORK" \
   -e DATABASE_URL="$DRY_RUN_DATABASE_URL" \
   "$API_IMAGE_ID" sh -c 'npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code'
-pass 'production-backup migration clone passed migrations and schema drift verification with the deployment image'
-
+pass 'fresh production-backup clone passed migrations and schema drift verification with the deployment image'
 cleanup_migration_clone
-trap - EXIT
 
-# Only after the production-backup clone passes do we migrate the live database.
+# From this point a failed migration may have partially changed the live schema, so the EXIT trap
+# must restore the exact quiesced backup before the previous API is allowed to run again.
+LIVE_DB_TOUCHED=true
 "${COMPOSE[@]}" run --rm --no-deps api npx prisma migrate deploy
 pass 'Prisma migrations completed on live database'
 
-SKIP_MIGRATE=true "${COMPOSE[@]}" up -d --no-deps api
+SKIP_MIGRATE=true "${COMPOSE[@]}" up -d --no-deps --force-recreate api
+CANDIDATE_REPLACED_OLD_API=true
 if ! wait_healthy baby-mall-api 60; then
   docker logs --tail 250 baby-mall-api >&2 || true
-  [ -z "$OLD_API_IMAGE" ] || printf 'Rollback image: %s\n' "$ROLLBACK_TAG" >&2
-  fail 'API did not become healthy after deployment'
+  fail 'candidate API did not become healthy after deployment'
 fi
-pass 'API container is healthy'
+pass 'candidate API is healthy while public Nginx remains stopped'
 
+# Validate critical business/API behavior directly before the public listener is reopened.
+API_HOST_PORT="$(read_env_value API_HOST_PORT)"
+API_HOST_PORT="${API_HOST_PORT:-3001}"
+api_health="$(curl --fail --silent --show-error "http://127.0.0.1:${API_HOST_PORT}/api/health")"
+echo "$api_health" | grep -q '"status":"ok"' || fail "candidate API direct health response is not ok: $api_health"
+product_list_response="$(curl --fail --silent --show-error "http://127.0.0.1:${API_HOST_PORT}/api/weapp/product/list?page=1&pageSize=1")"
+echo "$product_list_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0' || fail "candidate public product list did not return code=0: $product_list_response"
+"${COMPOSE[@]}" run --rm --no-deps nginx nginx -t >/dev/null
+pass 'candidate API business route and Nginx configuration pass before public exposure'
+
+# This is the publication commit point. Before it, failures automatically restore DB + old runtime.
+# After it, automatic DB restore is deliberately disabled because real customer writes may occur.
 "${COMPOSE[@]}" up -d --no-deps --force-recreate nginx
+PUBLIC_EXPOSED=true
 sleep 3
 docker exec baby-mall-nginx nginx -t >/dev/null
-pass 'Nginx configuration is valid'
+pass 'production Nginx is running with the candidate API'
 
 ENV_FILE="$ENV_FILE" \
 API_DOMAIN="$EXPECTED_API_DOMAIN" \
 ADMIN_DOMAIN="$EXPECTED_ADMIN_DOMAIN" \
 bash "$SCRIPT_DIR/smoke-runtime.sh"
 
+DEPLOYMENT_SUCCEEDED=true
+MAINTENANCE_ACTIVE=false
 printf 'DEPLOYMENT PASS\n'
 printf 'Commit: %s\n' "$FULL_SHA"
 printf 'Database backup: %s\n' "$BACKUP_FILE"
