@@ -61,7 +61,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
 import { useUserStore } from '@/stores/user'
 import { getPromotionSourceForOrder } from '@/utils/share'
@@ -73,6 +73,23 @@ const userStore = useUserStore()
 const activity = ref<FlashSaleActivity | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
@@ -85,7 +102,7 @@ const remainStock = computed(() => {
 
 const statusText = computed(() => {
   if (!activity.value) return ''
-  const now = Date.now()
+  const now = nowMs.value
   const start = new Date(activity.value.startTime).getTime()
   const end = new Date(activity.value.endTime).getTime()
   if (now < start) return '未开始'
@@ -113,7 +130,7 @@ const buttonText = computed(() => {
 })
 
 function remainTime(timeStr: string): string {
-  const ms = new Date(timeStr).getTime() - Date.now()
+  const ms = new Date(timeStr).getTime() - nowMs.value
   if (ms <= 0) return '已结束'
   const days = Math.floor(ms / 86400000)
   const hours = Math.floor((ms % 86400000) / 3600000)
@@ -215,6 +232,9 @@ onLoad((options) => {
     loadDetail(String(options.id))
   }
 })
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 
 onShareAppMessage(() => ({
   title: activity.value?.name || '限时秒杀，手慢无',
