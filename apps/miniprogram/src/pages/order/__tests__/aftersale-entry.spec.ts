@@ -143,6 +143,34 @@ describe('订单售后入口', () => {
     expect((wrapper.vm as any).order.status).toBe('aftersale')
   })
 
+  it('完成一次商品选择后返回不会自动跳进剩余商品售后', async () => {
+    const refreshed = orderDetail('aftersale')
+    refreshed.items[0].canApplyAftersale = false
+    refreshed.items[0].aftersaleDisabledReason = '该商品已申请售后'
+    vi.mocked(getOrderDetail)
+      .mockResolvedValueOnce(orderDetail('completed'))
+      .mockResolvedValueOnce(refreshed)
+
+    const wrapper = mountDetail()
+    uniAppMock.onLoadCallbacks.at(-1)?.({ id: 'order-2', selectAftersale: '1' })
+    await flushPromises()
+
+    ;(wrapper.vm as any).goAftersale((wrapper.vm as any).order.items[0])
+    expect((globalThis as any).uni.navigateTo).toHaveBeenCalledTimes(1)
+    expect((globalThis as any).uni.navigateTo).toHaveBeenLastCalledWith({
+      url: '/pages/aftersale/apply?orderId=order-2&orderItemId=item-1',
+    })
+
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+
+    expect(getOrderDetail).toHaveBeenCalledTimes(2)
+    expect((globalThis as any).uni.navigateTo).toHaveBeenCalledTimes(1)
+    expect((wrapper.vm as any).order.status).toBe('aftersale')
+  })
+
   it('不可售后商品点击后展示原因', () => {
     const wrapper = mountDetail()
     ;(wrapper.vm as any).order = {
