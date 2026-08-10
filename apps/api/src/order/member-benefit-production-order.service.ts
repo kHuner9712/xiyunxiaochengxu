@@ -10,6 +10,7 @@ import { GroupBuyService } from '../group-buy/group-buy.service';
 import {
   calculateMemberDiscountAmount,
   calculateMemberRewardPoints,
+  calculateOrderGrowthValue,
   loadActiveMemberLevels,
   reconcileMemberLevelForGrowth,
   resolveMemberLevel,
@@ -229,15 +230,16 @@ export class MemberBenefitProductionOrderService extends CancellationSafeProduct
     const levels = await loadActiveMemberLevels(tx);
     const currentLevel = resolveMemberLevel(levels, user.growthValue);
     const earnedPoints = calculateMemberRewardPoints(netPayAmount, currentLevel?.pointsRate);
-    if (earnedPoints <= 0) return 0;
+    const earnedGrowthValue = calculateOrderGrowthValue(netPayAmount);
+    if (earnedPoints <= 0 && earnedGrowthValue <= 0) return 0;
 
-    const nextGrowthValue = user.growthValue + earnedPoints;
+    const nextGrowthValue = user.growthValue + earnedGrowthValue;
     await tx.user.update({
       where: { id: order.userId },
       data: {
         availablePoints: { increment: earnedPoints },
         totalPoints: { increment: earnedPoints },
-        growthValue: { increment: earnedPoints },
+        growthValue: { increment: earnedGrowthValue },
       },
     });
     await reconcileMemberLevelForGrowth(tx, {
@@ -247,17 +249,19 @@ export class MemberBenefitProductionOrderService extends CancellationSafeProduct
       reason: `订单${order.orderNo || order.id.toString()}完成，成长值更新为${nextGrowthValue}`,
       levels,
     });
-    await tx.pointsRecord.create({
-      data: {
-        userId: order.userId,
-        type: 1,
-        points: earnedPoints,
-        balance: user.availablePoints + earnedPoints,
-        source: rewardSource,
-        sourceId: order.id,
-        description: `完成订单奖励${earnedPoints}积分`,
-      },
-    });
+    if (earnedPoints > 0) {
+      await tx.pointsRecord.create({
+        data: {
+          userId: order.userId,
+          type: 1,
+          points: earnedPoints,
+          balance: user.availablePoints + earnedPoints,
+          source: rewardSource,
+          sourceId: order.id,
+          description: `完成订单奖励${earnedPoints}积分`,
+        },
+      });
+    }
     return earnedPoints;
   }
 }
