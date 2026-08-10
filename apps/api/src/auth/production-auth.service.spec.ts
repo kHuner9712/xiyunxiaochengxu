@@ -1,12 +1,22 @@
 import axios from 'axios';
+import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { ProductionAuthService } from './production-auth.service';
 
 jest.mock('axios');
+jest.mock('bcrypt', () => ({
+  compare: jest.fn(),
+  hash: jest.fn(),
+}));
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
 
 describe('ProductionAuthService', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('recovers when another request wins the first-login openid create race', async () => {
     const durableUser = {
       id: 123n,
@@ -74,5 +84,46 @@ describe('ProductionAuthService', () => {
       }),
       { expiresIn: '7d' },
     );
+  });
+
+  it('revokes every existing admin refresh session after a successful password change', async () => {
+    const prisma: any = {
+      adminUser: {
+        findFirst: jest.fn().mockResolvedValue({ id: 7n, password: 'old-hash' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const jwt: any = {};
+    const config: any = {
+      get: jest.fn((key: string, defaultValue?: unknown) => {
+        const values: Record<string, string> = {
+          NODE_ENV: 'test',
+          JWT_SECRET: 'test-jwt-secret-long-enough-for-unit-test',
+          REFRESH_TOKEN_SECRET: 'test-refresh-secret-long-enough-for-unit-test',
+          REFRESH_TOKEN_EXPIRES_IN: '30d',
+          JWT_ADMIN_EXPIRES_IN: '2h',
+        };
+        return values[key] ?? defaultValue;
+      }),
+    };
+    const redis: any = {
+      delByPattern: jest.fn().mockResolvedValue(3),
+    };
+    mockedBcrypt.compare.mockResolvedValue(true as never);
+    mockedBcrypt.hash.mockResolvedValue('new-hash' as never);
+
+    const service = new ProductionAuthService(prisma, jwt, config, redis);
+    await service.changePassword(
+      '7',
+      'OldPassword1!',
+      'NewPassword2@',
+      'NewPassword2@',
+    );
+
+    expect(prisma.adminUser.update).toHaveBeenCalledWith({
+      where: { id: 7n },
+      data: { password: 'new-hash', mustChangePassword: false },
+    });
+    expect(redis.delByPattern).toHaveBeenCalledWith('admin_refresh_token:7:*');
   });
 });
