@@ -19,6 +19,11 @@
             <el-descriptions-item label="申请时间">{{ formatDate(detail.createdAt) }}</el-descriptions-item>
             <el-descriptions-item label="售后原因" :span="2">{{ detail.reason || '-' }}</el-descriptions-item>
             <el-descriptions-item label="售后描述" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
+            <template v-if="detail.type === 2 && detail.returnAddress">
+              <el-descriptions-item label="退货收件人">{{ detail.returnReceiverName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="退货联系电话">{{ detail.returnReceiverPhone || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="退货地址" :span="2">{{ detail.returnAddress }}</el-descriptions-item>
+            </template>
           </el-descriptions>
 
           <div v-if="asArray(detail.images).length" style="margin-top: 16px">
@@ -87,6 +92,19 @@
                 {{ isZeroPayOrder ? '该订单实付为0元，将执行本地售后结算，不调用微信退款' : '系统会校验可退金额上限' }}
               </div>
             </el-form-item>
+            <template v-if="auditResult === 'approve' && detail.type === 2">
+              <el-divider content-position="left">退货收件信息</el-divider>
+              <el-form-item label="收件人" required>
+                <el-input v-model="returnReceiverName" maxlength="50" placeholder="请输入退货收件人" />
+              </el-form-item>
+              <el-form-item label="联系电话" required>
+                <el-input v-model="returnReceiverPhone" maxlength="30" placeholder="请输入退货联系电话" />
+              </el-form-item>
+              <el-form-item label="退货地址" required>
+                <el-input v-model="returnAddress" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请输入用户实际寄回商品的完整地址" />
+              </el-form-item>
+              <el-alert title="该地址会作为本次售后审核快照展示给用户，请确认准确后再通过审核。" type="warning" :closable="false" show-icon style="margin-bottom: 16px" />
+            </template>
             <el-form-item v-if="auditResult === 'reject'" label="拒绝原因">
               <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝原因" />
             </el-form-item>
@@ -163,6 +181,9 @@ const detail = ref<any>({})
 const auditResult = ref('approve')
 const rejectReason = ref('')
 const refundAmountYuan = ref(0)
+const returnReceiverName = ref('')
+const returnReceiverPhone = ref('')
+const returnAddress = ref('')
 const displayImages = ref<string[]>([])
 
 const orderItems = computed(() => (detail.value.orderItem ? [detail.value.orderItem] : []))
@@ -201,6 +222,9 @@ async function fetchDetail() {
     const orderIsZeroPay = Number(detail.value.order?.payAmount ?? 0) === 0
     const defaultRefundAmount = detail.value.refundAmount ?? (orderIsZeroPay ? 0 : (detail.value.orderItem?.subtotal || 0))
     refundAmountYuan.value = Number(defaultRefundAmount || 0) / 100
+    returnReceiverName.value = String(detail.value.returnReceiverName || '')
+    returnReceiverPhone.value = String(detail.value.returnReceiverPhone || '')
+    returnAddress.value = String(detail.value.returnAddress || '')
     displayImages.value = await resolvePrivateFileUrls(asArray(detail.value.images))
   } catch (e: any) {
     ElMessage.error(e?.message || '获取售后详情失败')
@@ -217,6 +241,20 @@ async function handleAudit() {
   if (auditResult.value === 'approve' && !isZeroPayOrder.value && refundAmount <= 0) {
     ElMessage.warning('请输入正确的退款金额')
     return
+  }
+  if (auditResult.value === 'approve' && detail.value.type === 2) {
+    if (!returnReceiverName.value.trim()) {
+      ElMessage.warning('请输入退货收件人')
+      return
+    }
+    if (!returnReceiverPhone.value.trim()) {
+      ElMessage.warning('请输入退货联系电话')
+      return
+    }
+    if (!returnAddress.value.trim()) {
+      ElMessage.warning('请输入退货地址')
+      return
+    }
   }
 
   const actionLabel = auditResult.value === 'approve'
@@ -237,7 +275,14 @@ async function handleAudit() {
   submitting.value = true
   try {
     if (auditResult.value === 'approve') {
-      await aftersaleApi.approve(String(detail.value.id), refundAmount)
+      await aftersaleApi.approve(String(detail.value.id), {
+        refundAmount,
+        ...(detail.value.type === 2 ? {
+          returnReceiverName: returnReceiverName.value.trim(),
+          returnReceiverPhone: returnReceiverPhone.value.trim(),
+          returnAddress: returnAddress.value.trim(),
+        } : {}),
+      })
       ElMessage.success('审核通过')
     } else {
       await aftersaleApi.reject(String(detail.value.id), rejectReason.value.trim())
