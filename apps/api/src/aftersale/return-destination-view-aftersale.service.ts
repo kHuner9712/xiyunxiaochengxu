@@ -1,8 +1,9 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaymentService } from '../payment/payment.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AttachmentSafeProductionAftersaleService } from './attachment-safe-production-aftersale.service';
+import { ReturnLogisticsDto } from './dto/return-logistics.dto';
 import {
   RETURN_DESTINATION_ACTION,
   type ReturnDestinationSnapshot,
@@ -24,6 +25,14 @@ export class ReturnDestinationViewAftersaleService extends AttachmentSafeProduct
 
   override async findAdminDetail(id: string) {
     return this.withReturnDestination(await super.findAdminDetail(id));
+  }
+
+  override async fillReturnLogistics(userId: string, id: string, dto: ReturnLogisticsDto) {
+    const detail = await this.findUserDetail(userId, id);
+    if (detail?.type === 2 && !String(detail.returnAddress || '').trim()) {
+      throw new BadRequestException('退货地址尚未补齐，请先联系客服确认退货收件信息');
+    }
+    return super.fillReturnLogistics(userId, id, dto);
   }
 
   private withReturnDestination(detail: any) {
