@@ -1,12 +1,12 @@
 #!/bin/sh
 set -e
 
+if [ "${NODE_ENV:-}" = "production" ]; then
+  echo "生产环境预检: 验证完整运行时与微信支付配置..."
+  node dist/config/production-config-preflight.js
+fi
+
 if [ $# -gt 0 ]; then
-  if [ "${NODE_ENV:-}" = "production" ]; then
-    echo "生产环境预检: 验证完整运行时配置..."
-    node -e "const { validateEnv } = require('./dist/config/env.validation'); validateEnv(process.env);"
-    echo "生产环境预检: 通过"
-  fi
   exec "$@"
 fi
 
