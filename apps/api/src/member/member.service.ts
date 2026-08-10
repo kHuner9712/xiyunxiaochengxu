@@ -273,13 +273,20 @@ export class MemberService {
   }
 
   private serializeLevel(level: any, index: number) {
+    const normalizedBenefits = this.getLevelBenefits(
+      level.benefits,
+      index,
+      level.name,
+      level.pointsRate,
+    );
     return {
       ...level,
       id: level.id.toString(),
       level: index,
       discountRate: level.discountRate,
       pointsMultiplier: level.pointsRate / 10,
-      description: this.extractBenefitDescription(level.benefits),
+      benefits: JSON.stringify(normalizedBenefits),
+      description: normalizedBenefits.map((benefit) => benefit.name).join('、'),
     };
   }
 
