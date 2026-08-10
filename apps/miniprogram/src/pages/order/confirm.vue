@@ -232,9 +232,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { createOrder, previewOrder, type OrderPreview, type OrderPreviewItem } from '@/api/order'
+import { createOrder, previewOrder, type OrderPreview } from '@/api/order'
 import { getPromotionSourceForOrder } from '@/utils/share'
-import { getPickupStoreList, type PickupStoreItem } from '@/api/pickup-store'
+import { type PickupStoreItem } from '@/api/pickup-store'
 import { getAddressList, type AddressItem } from '@/api/address'
 import { getAvailableCoupons, type MyCouponItem } from '@/api/coupon'
 import { createPayment, wxPay } from '@/api/payment'
@@ -445,9 +445,17 @@ function closeCouponPicker() {
 }
 
 async function selectCoupon(coupon: MyCouponItem | null) {
+  const shouldRestorePoints = usePoints.value
   selectedCoupon.value = coupon
   showCouponPicker.value = false
+
+  if (shouldRestorePoints) usePoints.value = false
   await loadPreview()
+
+  if (shouldRestorePoints && preview.value && canUsePoints.value) {
+    usePoints.value = true
+    await loadPreview()
+  }
 }
 
 function togglePoints(e: any) {
@@ -588,6 +596,7 @@ defineExpose({
   loadPreview,
   selectAddress,
   selectPickupStore,
+  selectCoupon,
   agreedToLegal,
   fulfillmentType,
   address,
