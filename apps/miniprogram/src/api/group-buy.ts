@@ -20,10 +20,21 @@ export interface GroupBuyActivity {
   coverImage?: string
 }
 
+export interface PublicGroupBuyMember {
+  role: string
+  status: string
+  paidAt?: string | null
+  createdAt?: string
+  isCurrentUser?: boolean
+  user?: {
+    nickname: string
+    avatarUrl?: string
+  } | null
+}
+
 export interface GroupBuyGroup {
   id: string
   activityId: string
-  leaderUserId?: string
   status: string
   groupNo: string
   currentCount: number
@@ -32,8 +43,8 @@ export interface GroupBuyGroup {
   successAt?: string
   failedAt?: string
   createdAt: string
-  members?: any[]
-  leader?: { id?: string; nickname: string; avatar?: string; avatarUrl?: string } | null
+  members?: PublicGroupBuyMember[]
+  leader?: { nickname: string; avatarUrl?: string } | null
   activity?: { id: string; name: string; coverImage?: string; groupPrice: number; groupSize: number } | null
 }
 
