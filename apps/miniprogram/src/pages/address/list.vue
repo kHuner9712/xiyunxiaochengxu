@@ -86,13 +86,10 @@ async function deleteAddress(item: AddressItem) {
     success: async (res) => {
       if (res.confirm) {
         try {
+          // AddressService.delete already reassigns the default address transactionally when the
+          // deleted row was the default. A second client-side setDefault call used to create a
+          // false "删除失败" after a successful delete whenever that follow-up request failed.
           await deleteAddressApi(item.id)
-          if (item.isDefault) {
-            const remaining = addresses.value.filter(a => a.id !== item.id)
-            if (remaining.length > 0) {
-              await setDefaultAddress(remaining[0].id)
-            }
-          }
           await loadAddresses()
         } catch {
           uni.showToast({ title: '删除失败', icon: 'none' })
