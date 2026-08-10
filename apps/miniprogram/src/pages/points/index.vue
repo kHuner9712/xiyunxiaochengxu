@@ -131,6 +131,12 @@ async function handleCheckIn() {
   if (checkInStatus.value.checked) return
   try {
     const data = await checkIn()
+    if (data.alreadySigned) {
+      uni.showToast({ title: '今日已签到', icon: 'none' })
+      await refreshPage()
+      return
+    }
+
     checkInStatus.value.checked = true
     checkInStatus.value.continuous = data.continuous ?? data.consecutiveDays ?? checkInStatus.value.continuous
     checkInStatus.value.todayPoints = data.points
