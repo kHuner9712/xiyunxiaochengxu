@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { UploadModule } from '../src/upload/upload.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { RedisService } from '../src/common/redis/redis.service';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../src/common/guards/permission.guard';
 import { configurePublicUploadStaticAssets } from '../src/common/utils/upload-static-assets';
@@ -21,6 +22,16 @@ describe('Private upload access (e2e)', () => {
   const mockPrisma = {
     fileAsset: {
       findFirst: jest.fn(({ where }: any) => fileAssets.get(where.id.toString()) || null),
+    },
+    user: {
+      findFirst: jest.fn(({ where }: any) =>
+        where?.id === 8n || where?.id === 9n ? { id: where.id } : null,
+      ),
+    },
+    adminUser: {
+      findFirst: jest.fn(({ where }: any) =>
+        where?.id === 1n || where?.id === 2n ? { id: where.id } : null,
+      ),
     },
     adminUserRole: {
       findMany: jest.fn(({ where }: any) =>
@@ -37,6 +48,9 @@ describe('Private upload access (e2e)', () => {
     },
     aftersaleOrder: { findFirst: jest.fn().mockResolvedValue(null) },
     supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+  };
+  const mockRedis = {
+    exists: jest.fn().mockResolvedValue(true),
   };
 
   beforeAll(async () => {
@@ -66,6 +80,7 @@ describe('Private upload access (e2e)', () => {
         UploadModule,
       ],
       providers: [
+        { provide: RedisService, useValue: mockRedis },
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: PermissionGuard },
       ],
@@ -82,12 +97,16 @@ describe('Private upload access (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
     fs.rmSync(tempUploadDir, { recursive: true, force: true });
   });
 
   function sign(payload: any) {
-    return jwtService.sign({ ...payload, tokenType: 'access' });
+    return jwtService.sign({
+      ...payload,
+      ...(payload.roleType === 'admin' ? { tokenId: `session-${payload.id}` } : {}),
+      tokenType: 'access',
+    });
   }
 
   it('未登录访问敏感组文件返回 401', async () => {
