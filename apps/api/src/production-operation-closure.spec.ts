@@ -87,6 +87,8 @@ describe('production operation closure contracts', () => {
     const orderModule = read('apps/api/src/order/order.module.ts');
     const netRewardOrder = read('apps/api/src/order/cancellation-safe-production-order.service.ts');
     const aftersaleModule = read('apps/api/src/aftersale/aftersale.module.ts');
+    const returnDestinationAftersale = read('apps/api/src/aftersale/return-destination-view-aftersale.service.ts');
+    const attachmentSafeAftersale = read('apps/api/src/aftersale/attachment-safe-production-aftersale.service.ts');
     const groupModule = read('apps/api/src/group-buy/group-buy.module.ts');
     const flashModule = read('apps/api/src/flash-sale/flash-sale.module.ts');
     const benefitModule = read('apps/api/src/benefit-package/benefit-package.module.ts');
@@ -103,7 +105,11 @@ describe('production operation closure contracts', () => {
     expect(netRewardOrder).toContain('status: REFUND_STATUS.SUCCESS');
     expect(netRewardOrder).toContain('successfulRefundAmount');
     expect(netRewardOrder).toContain('netPayAmount');
-    expect(aftersaleModule).toContain('ProductionAftersaleService');
+    expect(aftersaleModule).toContain('useClass: ReturnDestinationViewAftersaleService');
+    expect(aftersaleModule).toContain('AftersaleReviewService');
+    expect(returnDestinationAftersale).toContain('extends AttachmentSafeProductionAftersaleService');
+    expect(returnDestinationAftersale).toContain('override async fillReturnLogistics');
+    expect(attachmentSafeAftersale).toContain('extends ProductionAftersaleService');
     expect(groupModule).toContain('ProductionGroupBuyService');
     expect(flashModule).toContain('ProductionFlashSaleService');
     expect(benefitModule).toContain('SnapshotViewBenefitPackageService');
