@@ -16,7 +16,7 @@
       <view v-for="pkg in packageList" :key="pkg.id" class="pkg-card card">
         <view class="pkg-header">
           <view class="pkg-name">{{ pkg.packageName }}</view>
-          <view class="pkg-status" :class="`status-${pkg.status}`">{{ statusText(pkg.status) }}</view>
+          <view class="pkg-status" :class="`status-${effectivePackageStatus(pkg)}`">{{ statusText(effectivePackageStatus(pkg)) }}</view>
         </view>
         <view class="pkg-meta">
           <text class="meta-label">有效期：</text>
@@ -32,7 +32,7 @@
       <view v-for="e in entitlementList" :key="e.id" class="ent-card card" @tap="goEntitlementDetail(e.id)">
         <view class="ent-header">
           <view class="ent-name">{{ e.itemName }}</view>
-          <view class="ent-status" :class="`status-${e.status}`">{{ statusText(e.status) }}</view>
+          <view class="ent-status" :class="`status-${effectiveEntitlementStatus(e)}`">{{ statusText(effectiveEntitlementStatus(e)) }}</view>
         </view>
         <view class="ent-pkg">{{ e.packageName }}</view>
         <view class="ent-code">核销码：{{ e.verifyCode }}</view>
@@ -46,7 +46,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { onHide, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import {
   getMyBenefitPackages,
   getMyBenefitEntitlements,
@@ -68,10 +68,13 @@ const entitlementList = ref<UserBenefitEntitlementSummary[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
 
 function statusText(status: string): string {
   switch (status) {
     case 'active': return '有效'
+    case 'not_started': return '未生效'
     case 'expired': return '已过期'
     case 'refunded': return '已退款'
     case 'cancelled': return '已取消'
@@ -79,6 +82,24 @@ function statusText(status: string): string {
     case 'used': return '已使用'
     default: return status
   }
+}
+
+function effectivePackageStatus(pkg: UserBenefitPackageSummary): string {
+  if (pkg.status !== 'active') return pkg.status
+  const validFrom = pkg.validFrom ? new Date(pkg.validFrom).getTime() : Number.NaN
+  const validTo = pkg.validTo ? new Date(pkg.validTo).getTime() : Number.NaN
+  if (Number.isFinite(validFrom) && nowMs.value < validFrom) return 'not_started'
+  if (Number.isFinite(validTo) && nowMs.value > validTo) return 'expired'
+  return pkg.status
+}
+
+function effectiveEntitlementStatus(e: UserBenefitEntitlementSummary): string {
+  if (e.status !== 'unused') return e.status
+  const validFrom = e.validFrom ? new Date(e.validFrom).getTime() : Number.NaN
+  const validTo = e.validTo ? new Date(e.validTo).getTime() : Number.NaN
+  if (Number.isFinite(validFrom) && nowMs.value < validFrom) return 'not_started'
+  if (Number.isFinite(validTo) && nowMs.value > validTo) return 'expired'
+  return e.status
 }
 
 function formatDate(s: string): string {
@@ -91,6 +112,20 @@ function formatDateTime(s: string): string {
   const d = new Date(s)
   if (isNaN(d.getTime())) return s
   return `${formatDate(s)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+function startClock() {
+  nowMs.value = Date.now()
+  if (clockTimer) return
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 30000)
+}
+
+function stopClock() {
+  if (!clockTimer) return
+  clearInterval(clockTimer)
+  clockTimer = null
 }
 
 async function loadList(reset = false) {
@@ -135,7 +170,12 @@ function goEntitlementDetail(id: string) {
   uni.navigateTo({ url: `/pages/benefit-package/entitlement?id=${id}` })
 }
 
-onShow(() => loadList(true))
+onShow(() => {
+  startClock()
+  loadList(true)
+})
+onHide(() => stopClock())
+onUnload(() => stopClock())
 onReachBottom(() => loadList())
 </script>
 
@@ -210,6 +250,11 @@ onReachBottom(() => loadList())
   &.status-unused {
     background: rgba($success-color, 0.15);
     color: $success-color;
+  }
+
+  &.status-not_started {
+    background: rgba($info-color, 0.12);
+    color: $info-color;
   }
 
   &.status-expired,
