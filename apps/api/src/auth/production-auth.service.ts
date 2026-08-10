@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
@@ -18,6 +18,42 @@ export class ProductionAuthService extends AuthService {
     private readonly productionRedis: RedisService,
   ) {
     super(productionPrisma, productionJwt, productionConfig, productionRedis);
+  }
+
+  override async changePassword(
+    adminId: string,
+    oldPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
+    const result = await super.changePassword(
+      adminId,
+      oldPassword,
+      newPassword,
+      confirmPassword,
+    );
+
+    try {
+      const revoked = await this.productionRedis.delByPattern(
+        `admin_refresh_token:${adminId}:*`,
+      );
+      this.productionLogger.log(
+        `管理员修改密码后已撤销全部登录会话: adminId=${adminId}, revokedSessions=${revoked}`,
+      );
+    } catch (error) {
+      // The password is already changed at this point. Do not falsely report a clean security
+      // transition if session revocation could not be completed; operations must repair Redis
+      // and require a fresh login before considering the change fully closed.
+      this.productionLogger.error(
+        `管理员密码已修改但旧会话撤销失败: adminId=${adminId}, error=${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException(
+        '密码已修改，但旧登录会话撤销失败；请联系管理员检查 Redis 后重新登录',
+      );
+    }
+
+    return result;
   }
 
   override async weappLogin(code: string) {
