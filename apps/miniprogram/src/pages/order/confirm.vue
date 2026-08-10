@@ -338,6 +338,8 @@ async function loadPreview() {
         price: item.price
       }))
     }
+    const canonicalProductIds = (data.items?.length ? data.items : orderItems.value).map(item => item.productId)
+    await loadCoupons(data.totalAmount, canonicalProductIds)
   } catch (e: any) {
     console.error('[baby-mall] order confirm loadPreview failed:', e)
     if (usePoints.value) usePoints.value = false
@@ -357,11 +359,12 @@ async function loadDefaultAddress() {
   }
 }
 
-async function loadCoupons() {
+async function loadCoupons(
+  amount = orderItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  productIds = orderItems.value.map(item => item.productId),
+) {
   try {
-    const totalAmount = orderItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
-    const productIds = orderItems.value.map(item => item.productId)
-    couponList.value = await getAvailableCoupons({ amount: totalAmount, productIds })
+    couponList.value = await getAvailableCoupons({ amount, productIds })
   } catch {
     couponList.value = []
   }
@@ -599,7 +602,6 @@ onLoad(async (options) => {
   if (fulfillmentType.value === 'delivery' ? !!address.value : !!selectedPickupStore.value) {
     await loadPreview()
   }
-  loadCoupons()
 })
 </script>
 
