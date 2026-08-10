@@ -29,6 +29,32 @@
       </view>
     </view>
 
+    <view v-if="detail.type === 2 && normalizedStatus !== 'pending_review' && normalizedStatus !== 'rejected' && normalizedStatus !== 'closed'" class="return-destination-section card">
+      <view class="return-title-row">
+        <text class="section-title return-title">退货寄送信息</text>
+        <text v-if="detail.returnAddress" class="copy-address" @tap="copyReturnAddress">复制地址</text>
+      </view>
+      <template v-if="detail.returnAddress">
+        <view class="info-row">
+          <text class="info-label">收件人</text>
+          <text class="info-value">{{ detail.returnReceiverName || '-' }}</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">联系电话</text>
+          <text class="info-value phone-value" @tap="callReturnPhone">{{ detail.returnReceiverPhone || '-' }}</text>
+        </view>
+        <view class="info-row vertical">
+          <text class="info-label">退货地址</text>
+          <text class="return-address">{{ detail.returnAddress }}</text>
+        </view>
+        <text v-if="normalizedStatus === 'approved'" class="return-tip">请确认商品、配件和赠品齐全后寄回，并在下方提交真实物流公司与单号。</text>
+      </template>
+      <view v-else class="missing-return-destination">
+        <text class="missing-title">退货地址尚未补齐</text>
+        <text class="missing-desc">请先联系客服确认退货收件信息。在地址补齐前请勿自行寄回商品。</text>
+      </view>
+    </view>
+
     <view class="info-section card">
       <view class="info-row">
         <text class="info-label">售后类型</text>
@@ -42,7 +68,7 @@
         <text class="info-label">问题描述</text>
         <text class="info-value">{{ detail.description }}</text>
       </view>
-      <view v-if="detail.refundAmount" class="info-row">
+      <view v-if="detail.refundAmount !== undefined && detail.refundAmount !== null" class="info-row">
         <text class="info-label">退款金额</text>
         <text class="info-value price">¥{{ formatPrice(detail.refundAmount) }}</text>
       </view>
@@ -112,7 +138,11 @@ const returnLogisticsForm = ref({
 
 const normalizedStatus = computed(() => normalizeAftersaleStatus(detail.value.status))
 const canCancelAftersale = computed(() => normalizedStatus.value === 'pending_review')
-const canFillReturnLogistics = computed(() => detail.value.type === 2 && normalizedStatus.value === 'approved')
+const canFillReturnLogistics = computed(() =>
+  detail.value.type === 2
+  && normalizedStatus.value === 'approved'
+  && !!String(detail.value.returnAddress || '').trim()
+)
 const displayStatusText = computed(() => {
   if (normalizedStatus.value === 'approved') {
     return detail.value.type === 2 ? '已通过/待退货' : '已通过/待退款'
@@ -149,6 +179,9 @@ function normalizeDetail(data: any): AftersaleDetail {
     price: data.price ?? data.orderItem?.price ?? 0,
     quantity: data.quantity ?? data.orderItem?.quantity ?? 0,
     refundAmount: data.refundAmount ?? 0,
+    returnReceiverName: data.returnReceiverName ?? null,
+    returnReceiverPhone: data.returnReceiverPhone ?? null,
+    returnAddress: data.returnAddress ?? null,
     images: Array.isArray(data.images) ? data.images : [],
     logs,
     createTime: data.createTime || data.createdAt || '',
@@ -198,7 +231,27 @@ function goCustomerService() {
   uni.navigateTo({ url: '/pages/customer-service/index' })
 }
 
+function copyReturnAddress() {
+  const addressText = [
+    detail.value.returnReceiverName,
+    detail.value.returnReceiverPhone,
+    detail.value.returnAddress,
+  ].filter(Boolean).join(' ')
+  if (!addressText) return
+  uni.setClipboardData({ data: addressText })
+}
+
+function callReturnPhone() {
+  const phoneNumber = String(detail.value.returnReceiverPhone || '').trim()
+  if (!phoneNumber) return
+  uni.makePhoneCall({ phoneNumber })
+}
+
 function openReturnLogisticsForm() {
+  if (!detail.value.returnAddress) {
+    uni.showToast({ title: '退货地址尚未补齐，请先联系客服', icon: 'none' })
+    return
+  }
   returnLogisticsForm.value = {
     returnLogisticsCompany: detail.value.returnLogisticsCompany || '',
     returnLogisticsNo: detail.value.returnLogisticsNo || '',
@@ -282,9 +335,69 @@ defineExpose({
 
 .progress-section,
 .product-section,
-.info-section {
+.info-section,
+.return-destination-section {
   margin: $spacing-sm $spacing-md;
   background: rgba(255, 255, 255, 0.9);
+}
+
+.return-destination-section {
+  border: 1rpx solid rgba($primary-color, 0.16);
+  background: rgba($primary-color, 0.05);
+}
+
+.return-title-row {
+  @include flex-between;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+}
+
+.return-title {
+  margin-bottom: 0 !important;
+}
+
+.copy-address {
+  font-size: $font-xs;
+  color: $primary-dark;
+  font-weight: 700;
+  padding: 8rpx 16rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.return-address {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-color;
+  line-height: 1.7;
+}
+
+.phone-value {
+  color: $primary-dark;
+  text-decoration: underline;
+}
+
+.return-tip,
+.missing-desc {
+  display: block;
+  margin-top: $spacing-sm;
+  font-size: $font-xs;
+  color: $text-secondary;
+  line-height: 1.6;
+}
+
+.missing-return-destination {
+  padding: $spacing-sm;
+  border-radius: $radius-lg;
+  background: rgba($warning-color, 0.1);
+}
+
+.missing-title {
+  display: block;
+  font-size: $font-sm;
+  color: $warning-color;
+  font-weight: 800;
 }
 
 .section-title {
