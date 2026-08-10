@@ -108,6 +108,37 @@ echo "$product_list_response" | grep -Eq '"list"[[:space:]]*:' || fail "public p
 echo "$product_list_response" | grep -Eq '"total"[[:space:]]*:' || fail "public product list API response has no data.total: $product_list_response"
 pass 'public product list works through trusted production HTTPS, controller, response envelope and database query path'
 
+customer_service_response="$(curl --fail --silent --show-error \
+  --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
+  "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/api/weapp/customer-service/config")"
+customer_service_type=''
+if ! customer_service_type="$(printf '%s' "$customer_service_response" | docker exec -i baby-mall-api node -e '
+let raw = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { raw += chunk; });
+process.stdin.on("end", () => {
+  try {
+    const payload = JSON.parse(raw);
+    if (payload?.code !== 0) throw new Error(`code=${payload?.code}`);
+    const data = payload?.data;
+    if (!data || data.enabled !== true) throw new Error("customer service is disabled");
+    const type = String(data.type || "").trim();
+    if (!["phone", "wechat", "both"].includes(type)) throw new Error(`invalid type=${type || "empty"}`);
+    if (type === "phone" || type === "both") {
+      const phone = String(data.phone || "").trim();
+      if (!/^[0-9+().\-\s]{5,40}$/.test(phone)) throw new Error("phone mode has no usable phone number");
+    }
+    process.stdout.write(type);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+});
+')"; then
+  fail "production customer service config is not launch-usable: $customer_service_response"
+fi
+pass "customer service production data is enabled and usable for configured mode ($customer_service_type); native WeChat contact still requires real-device acceptance"
+
 callback_payload='{"id":"runtime-smoke-invalid-signature","event_type":"TRANSACTION.SUCCESS","resource":{"algorithm":"AEAD_AES_256_GCM","ciphertext":"invalid-runtime-smoke","nonce":"invalidnonce"}}'
 for callback_path in callback refund-callback; do
   callback_body_file="$(mktemp)"
