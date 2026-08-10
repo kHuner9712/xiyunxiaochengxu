@@ -7,9 +7,11 @@ interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
 
+const ADMIN_HTTP_TIMEOUT_MS = 30000
+
 const request = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: ADMIN_HTTP_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -94,8 +96,12 @@ async function handleUnauthorized() {
 
   refreshPromise = (async () => {
     try {
+      // Do not use the intercepted request instance here or a 401 would recurse into refresh.
+      // The raw axios call still needs an explicit timeout; axios defaults to no timeout.
       const res = await axios.post('/api/admin/auth/refresh', {
         refreshToken,
+      }, {
+        timeout: ADMIN_HTTP_TIMEOUT_MS,
       })
       if (res.data.code === 0) {
         const { accessToken: newAccessToken, refreshToken: newRefreshToken } = res.data.data
