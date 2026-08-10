@@ -54,7 +54,7 @@
       </view>
     </view>
 
-    <view v-if="showBottomBar" class="bottom-bar bottom-action-bar">
+    <view class="bottom-bar bottom-action-bar">
       <view class="cs-btn" @tap="goCustomerService">联系客服</view>
       <view v-if="canCancelAftersale" class="cancel-btn" @tap="handleCancel">取消申请</view>
       <view v-if="canFillReturnLogistics" class="return-logistics-btn" @tap="openReturnLogisticsForm">填写退货物流</view>
@@ -113,7 +113,6 @@ const returnLogisticsForm = ref({
 const normalizedStatus = computed(() => normalizeAftersaleStatus(detail.value.status))
 const canCancelAftersale = computed(() => normalizedStatus.value === 'pending_review')
 const canFillReturnLogistics = computed(() => detail.value.type === 2 && normalizedStatus.value === 'approved')
-const showBottomBar = computed(() => canCancelAftersale.value || canFillReturnLogistics.value)
 const displayStatusText = computed(() => {
   if (normalizedStatus.value === 'approved') {
     return detail.value.type === 2 ? '已通过/待退货' : '已通过/待退款'
@@ -342,20 +341,18 @@ defineExpose({
 .progress-time {
   font-size: $font-xs;
   color: $text-hint;
-  display: block;
   margin-top: 4rpx;
+  display: block;
 }
 
 .product-row {
   display: flex;
-  align-items: flex-start;
 }
 
 .product-image {
-  width: 156rpx;
-  height: 156rpx;
-  border-radius: 28rpx;
-  flex-shrink: 0;
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 26rpx;
   background: $bg-gray;
 }
 
@@ -367,40 +364,32 @@ defineExpose({
 .product-name {
   font-size: $font-sm;
   color: $text-color;
-  font-weight: 600;
   @include text-ellipsis-2;
   display: block;
-  line-height: 1.4;
 }
 
 .product-sku {
   font-size: $font-xs;
   color: $text-secondary;
-  display: inline-flex;
-  max-width: 100%;
   margin-top: 8rpx;
-  padding: 6rpx 14rpx;
-  border-radius: $radius-round;
-  background: $bg-soft;
-  @include text-ellipsis;
+  display: block;
 }
 
 .product-bottom {
-  @include flex-between;
-  margin-top: 8rpx;
+  display: flex;
+  align-items: center;
+  margin-top: $spacing-sm;
 }
 
 .product-qty {
   font-size: $font-xs;
   color: $text-hint;
+  margin-left: $spacing-sm;
 }
 
 .info-row {
   @include flex-between;
-  padding: 12rpx 0;
-  border-bottom: 1rpx solid $divider-color;
-
-  &:last-child { border-bottom: none; }
+  padding: 8rpx 0;
 
   &.vertical {
     flex-direction: column;
@@ -416,10 +405,8 @@ defineExpose({
 .info-value {
   font-size: $font-sm;
   color: $text-color;
-  text-align: right;
-  max-width: 460rpx;
 
-  &.price { color: $price-color; font-weight: 800; }
+  &.price { color: $price-color; font-weight: 700; }
 }
 
 .image-list {
@@ -430,131 +417,118 @@ defineExpose({
 }
 
 .evidence-image {
-  width: 160rpx;
-  height: 160rpx;
+  width: 150rpx;
+  height: 150rpx;
   border-radius: $radius-lg;
 }
 
 .bottom-bar {
-  justify-content: center;
+  justify-content: flex-end;
+  gap: $spacing-sm;
 }
 
+.cs-btn,
 .cancel-btn,
 .return-logistics-btn {
-  min-height: 76rpx;
-  padding: 0 80rpx;
-  border: 2rpx solid $border-color;
+  min-height: 64rpx;
+  padding: 0 32rpx;
   border-radius: $radius-round;
-  font-size: $font-md;
-  color: $text-secondary;
   @include flex-center;
+  font-size: $font-sm;
+}
+
+.cs-btn,
+.cancel-btn {
+  color: $text-secondary;
+  border: 2rpx solid $border-color;
+  background: $bg-white;
 }
 
 .return-logistics-btn {
-  border-color: transparent;
-  background: $gradient-coral;
   color: #FFFFFF;
-  box-shadow: $shadow-coral;
-}
-
-.cs-btn {
-  min-height: 76rpx;
-  padding: 0 80rpx;
+  border: 2rpx solid transparent;
   background: $gradient-coral;
-  border-radius: $radius-round;
-  font-size: $font-md;
-  color: #FFFFFF;
-  margin-right: $spacing-sm;
-  @include flex-center;
+  font-weight: 700;
   box-shadow: $shadow-coral;
 }
 
 .logistics-modal-mask {
   position: fixed;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 300;
-  padding: $spacing-md;
-  background: rgba(58, 48, 44, 0.36);
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.46);
   @include flex-center;
+  padding: $spacing-md;
 }
 
 .logistics-modal {
   width: 100%;
   max-width: 680rpx;
-  background: #FFFFFF;
-  border-radius: $radius-xxl;
 }
 
 .modal-title {
   display: block;
-  margin-bottom: $spacing-md;
   font-size: $font-lg;
   font-weight: 800;
   color: $text-color;
+  margin-bottom: $spacing-md;
 }
 
 .modal-field {
-  margin-bottom: $spacing-sm;
+  margin-bottom: $spacing-md;
 }
 
 .modal-label {
   display: block;
-  margin-bottom: 8rpx;
   font-size: $font-sm;
   color: $text-secondary;
-  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.modal-input,
+.modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: $radius-lg;
+  background: $bg-soft;
+  border: 1rpx solid $border-color;
+  padding: 18rpx 20rpx;
+  font-size: $font-sm;
+  color: $text-color;
 }
 
 .modal-input {
-  width: 100%;
-  height: 72rpx;
-  min-height: 72rpx;
-  line-height: 72rpx;
-  padding: 0 20rpx;
-  border-radius: $radius-lg;
-  background: $bg-soft;
-  font-size: $font-sm;
-  color: $text-color;
+  min-height: 80rpx;
 }
 
 .modal-textarea {
-  width: 100%;
-  min-height: 132rpx;
-  padding: 18rpx 20rpx;
-  border-radius: $radius-lg;
-  background: $bg-soft;
-  font-size: $font-sm;
-  color: $text-color;
-  line-height: 1.6;
+  min-height: 150rpx;
 }
 
 .modal-actions {
   display: flex;
+  justify-content: flex-end;
   gap: $spacing-sm;
   margin-top: $spacing-md;
 }
 
 .modal-cancel-btn,
 .modal-submit-btn {
-  flex: 1;
-  min-height: 76rpx;
+  min-height: 64rpx;
+  padding: 0 32rpx;
   border-radius: $radius-round;
   @include flex-center;
-  font-size: $font-md;
-  font-weight: 700;
+  font-size: $font-sm;
 }
 
 .modal-cancel-btn {
-  background: $bg-gray;
+  border: 1rpx solid $border-color;
   color: $text-secondary;
 }
 
 .modal-submit-btn {
   background: $gradient-coral;
   color: #FFFFFF;
-  box-shadow: $shadow-coral;
+  font-weight: 700;
 }
 </style>
