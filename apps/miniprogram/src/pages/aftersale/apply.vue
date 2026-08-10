@@ -97,7 +97,7 @@ function removeImage(index: number) {
 
 async function handleSubmit() {
   if (!userStore.isLoggedIn) {
-    userStore.requireLogin(() => {})
+    userStore.requireLogin(() => handleSubmit())
     return
   }
   if (!userStore.phone) {
@@ -135,24 +135,25 @@ async function handleSubmit() {
     })
     uni.showToast({ title: '申请已提交', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1500)
-  } catch {
-    uni.showToast({ title: '提交失败', icon: 'none' })
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
   }
 }
 
 onLoad(async (options) => {
-  if (options?.orderId) orderId.value = options.orderId
-  if (options?.orderItemId) orderItemId.value = options.orderItemId
+  if (options?.orderId) orderId.value = String(options.orderId)
+  if (options?.orderItemId) orderItemId.value = String(options.orderItemId)
   if (orderId.value) {
     try {
       const order = await getOrderDetail(orderId.value)
-      if (order.status !== 'completed' && order.status !== 'delivered') {
+      if (!['completed', 'delivered', 'aftersale'].includes(order.status)) {
         uni.showModal({
           title: '提示',
           content: '当前订单状态不允许申请售后',
           showCancel: false,
           success: () => uni.navigateBack()
         })
+        return
       }
       const selectedItem = order.items.find((item) => item.id === orderItemId.value)
       if (!selectedItem) {
@@ -172,8 +173,8 @@ onLoad(async (options) => {
           success: () => uni.navigateBack()
         })
       }
-    } catch {
-      uni.showToast({ title: '订单信息获取失败', icon: 'none' })
+    } catch (error: any) {
+      uni.showToast({ title: error?.message || '订单信息获取失败', icon: 'none' })
     }
   }
 })
