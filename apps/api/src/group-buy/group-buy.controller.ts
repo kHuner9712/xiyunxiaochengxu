@@ -12,6 +12,7 @@ import { GroupBuyService } from './group-buy.service';
 import { PublicGroupBuyViewService } from './public-group-buy-view.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { OptionalAuth } from '../common/decorators/optional-auth.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import {
@@ -136,9 +137,13 @@ export class WeappGroupBuyController {
   }
 
   @Public()
+  @OptionalAuth()
   @Get('group/:id')
-  async groupDetail(@Param('id') id: string) {
-    return this.publicView.findGroupById(id);
+  async groupDetail(
+    @Param('id') id: string,
+    @CurrentUser('id') userId?: string,
+  ) {
+    return this.publicView.findGroupById(id, userId);
   }
 
   @Post('start')
