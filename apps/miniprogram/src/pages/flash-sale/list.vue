@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad, onReachBottom } from '@dcloudio/uni-app'
+import { onHide, onLoad, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -39,6 +39,23 @@ const activityList = ref<FlashSaleActivity[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
@@ -49,7 +66,7 @@ function remainStock(act: FlashSaleActivity): number {
 }
 
 function activityStatusText(act: FlashSaleActivity): string {
-  const now = Date.now()
+  const now = nowMs.value
   const start = new Date(act.startTime).getTime()
   const end = new Date(act.endTime).getTime()
   if (now < start) return '未开始'
@@ -66,7 +83,7 @@ function activityStatusClass(act: FlashSaleActivity): string {
 }
 
 function remainTime(timeStr: string): string {
-  const ms = new Date(timeStr).getTime() - Date.now()
+  const ms = new Date(timeStr).getTime() - nowMs.value
   if (ms <= 0) return '已结束'
   const days = Math.floor(ms / 86400000)
   const hours = Math.floor((ms % 86400000) / 3600000)
@@ -102,6 +119,9 @@ function goDetail(id: string) {
 }
 
 onLoad(() => loadList())
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 onReachBottom(() => loadList())
 </script>
 
