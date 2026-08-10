@@ -1,7 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { AftersaleStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { AftersaleReviewService, RETURN_DESTINATION_ACTION } from './aftersale-review.service';
+import { AftersaleReviewService } from './aftersale-review.service';
+import { RETURN_DESTINATION_ACTION } from './return-destination';
 
 function createMockPrisma() {
   const prisma: any = {
