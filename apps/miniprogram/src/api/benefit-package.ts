@@ -64,6 +64,12 @@ export interface UserBenefitEntitlementDetail extends UserBenefitEntitlementSumm
   packageSubtitle: string | null
   itemDescription: string | null
   originalValue: number | null
+  merchantName?: string | null
+  merchantContactPhone?: string | null
+  storeName?: string | null
+  storeAddress?: string | null
+  storePhone?: string | null
+  businessHours?: string | null
 }
 
 export function getBenefitPackageList(params: { page: number; pageSize: number }) {
