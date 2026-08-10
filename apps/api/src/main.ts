@@ -10,9 +10,18 @@ import { PrismaService } from './common/prisma/prisma.service';
 import * as path from 'path';
 import { configureOutboundHttpTimeout } from './common/http/outbound-http-timeout';
 import { configurePublicUploadStaticAssets } from './common/utils/upload-static-assets';
+import { runProductionConfigPreflight } from './config/production-config-preflight';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  // Keep direct production starts (for example `node dist/main.js`) under the same preflight
+  // contract as the Docker entrypoint. This runs before Nest providers connect to MySQL/Redis
+  // or register schedulers, and therefore remains safe before any runtime side effects.
+  if ((process.env.NODE_ENV || 'development') === 'production') {
+    runProductionConfigPreflight(process.env);
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
