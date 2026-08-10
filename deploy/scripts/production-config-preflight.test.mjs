@@ -137,3 +137,63 @@ test('direct production bootstrap invokes preflight before NestFactory creates p
   assert.ok(nestCreateIndex >= 0, 'main.ts must create the Nest application')
   assert.ok(preflightIndex < nestCreateIndex, 'production preflight must run before Nest providers and schedulers start')
 })
+
+test('production deploy quiesces all writers before the proof backup and rolls back safely before public exposure', () => {
+  const deploy = readFileSync(resolve(root, 'deploy/scripts/deploy-production.sh'), 'utf8')
+  const entrypoint = readFileSync(resolve(root, 'deploy/scripts/entrypoint.sh'), 'utf8')
+  const redis = readFileSync(resolve(root, 'apps/api/src/common/redis/redis.service.ts'), 'utf8')
+  const smoke = readFileSync(resolve(root, 'deploy/scripts/smoke-runtime.sh'), 'utf8')
+
+  const buildIndex = deploy.indexOf('build --pull api')
+  const maintenanceIndex = deploy.indexOf('MAINTENANCE_ACTIVE=true')
+  const stopNginxIndex = deploy.indexOf('docker stop -t 10 baby-mall-nginx')
+  const stopApiIndex = deploy.indexOf('docker stop -t 30 baby-mall-api')
+  const backupIndex = deploy.indexOf('write-quiesced database backup created')
+  const cloneIndex = deploy.indexOf('write-quiesced production backup restored into disposable migration clone')
+  const liveTouchedIndex = deploy.lastIndexOf('LIVE_DB_TOUCHED=true')
+  const liveMigrationIndex = deploy.lastIndexOf('run --rm --no-deps api npx prisma migrate deploy')
+  const candidateHealthIndex = deploy.indexOf('candidate API is healthy while public Nginx remains stopped')
+  const publicExposeIndex = deploy.indexOf('PUBLIC_EXPOSED=true')
+  const smokeIndex = deploy.indexOf('smoke-runtime.sh')
+
+  for (const [label, value] of Object.entries({
+    buildIndex,
+    maintenanceIndex,
+    stopNginxIndex,
+    stopApiIndex,
+    backupIndex,
+    cloneIndex,
+    liveTouchedIndex,
+    liveMigrationIndex,
+    candidateHealthIndex,
+    publicExposeIndex,
+    smokeIndex,
+  })) {
+    assert.ok(value >= 0, `deployment contract missing ${label}`)
+  }
+
+  assert.ok(buildIndex < maintenanceIndex, 'candidate image must build before downtime starts')
+  assert.ok(maintenanceIndex < stopNginxIndex, 'maintenance state must be armed before stopping public ingress')
+  assert.ok(stopNginxIndex < stopApiIndex, 'public ingress must stop before API/background writers drain')
+  assert.ok(stopApiIndex < backupIndex, 'proof backup must be taken only after API/background writers stop')
+  assert.ok(backupIndex < cloneIndex, 'the exact quiesced backup must feed migration-clone verification')
+  assert.ok(cloneIndex < liveTouchedIndex, 'clone verification must finish before the live database is marked mutable')
+  assert.ok(liveTouchedIndex < liveMigrationIndex, 'rollback trap must be armed before live migration starts')
+  assert.ok(liveMigrationIndex < candidateHealthIndex, 'candidate API health comes after the live schema migration')
+  assert.ok(candidateHealthIndex < publicExposeIndex, 'candidate must be healthy before Nginx is reopened')
+  assert.ok(publicExposeIndex < smokeIndex, 'full trusted-HTTPS smoke runs only after publication')
+
+  assert.match(deploy, /restore_live_database\(\)/)
+  assert.match(deploy, /DROP DATABASE IF EXISTS/)
+  assert.match(deploy, /restore_previous_runtime\(\)/)
+  assert.match(deploy, /PUBLIC_EXPOSED.*automatic database rollback is disabled/s)
+  assert.match(deploy, /candidate API business route and Nginx configuration pass before public exposure/)
+
+  assert.match(entrypoint, /\.scheduler-paused/)
+  assert.match(entrypoint, /\$\{BUILD_SHA:-unknown\}/)
+  assert.match(redis, /key\.startsWith\('schedule:'\)/)
+  assert.match(redis, /markerBuild === currentBuild/)
+  assert.match(smoke, /scheduler_pause_marker/)
+  assert.match(smoke, /scheduler_pause_marker.*api_build_sha/s)
+  assert.match(smoke, /rm -f.*\.scheduler-paused/)
+})
