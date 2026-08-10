@@ -119,3 +119,12 @@ test('production compose files pass certificate rotation and critical alert sett
   assert.match(productionEnv, /ALERT_WEBHOOK_URL=/)
   assert.match(productionEnv, /秘密值含 \$ 时优先使用单引号/)
 })
+
+test('production HTTPS smoke never disables certificate verification', () => {
+  const smoke = readFileSync(resolve(root, 'deploy/scripts/smoke-runtime.sh'), 'utf8')
+
+  assert.doesNotMatch(smoke, /--insecure/)
+  assert.match(smoke, /--resolve "\$\{API_DOMAIN\}:\$\{HTTPS_HOST_PORT\}:127\.0\.0\.1"/)
+  assert.match(smoke, /--resolve "\$\{ADMIN_DOMAIN\}:\$\{HTTPS_HOST_PORT\}:127\.0\.0\.1"/)
+  assert.match(smoke, /trusted production HTTPS/)
+})
