@@ -5,11 +5,15 @@ import { getAftersaleDetail } from '@/api/aftersale'
 
 const uniAppMock = vi.hoisted(() => ({
   onLoadCallbacks: [] as Array<(options?: Record<string, any>) => void | Promise<void>>,
+  onShowCallbacks: [] as Array<() => void | Promise<void>>,
 }))
 
 vi.mock('@dcloudio/uni-app', () => ({
   onLoad: vi.fn((callback: (options?: Record<string, any>) => void | Promise<void>) => {
     uniAppMock.onLoadCallbacks.push(callback)
+  }),
+  onShow: vi.fn((callback: () => void | Promise<void>) => {
+    uniAppMock.onShowCallbacks.push(callback)
   }),
 }))
 
@@ -51,6 +55,7 @@ function detail(overrides: Record<string, any> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   uniAppMock.onLoadCallbacks = []
+  uniAppMock.onShowCallbacks = []
   vi.mocked(getAftersaleDetail).mockResolvedValue(detail() as any)
   ;(globalThis as any).uni = {
     showToast: vi.fn(),
