@@ -34,16 +34,14 @@ export interface FlashSaleBuyResult {
 export interface FlashSaleOrder {
   id: string
   activityId: string
-  userId: string
   orderId: string
-  orderItemId?: string
   quantity: number
   flashPrice: number
   status: string
   lockExpireAt: string
-  paidAt?: string
-  cancelledAt?: string
-  expiredAt?: string
+  paidAt?: string | null
+  cancelledAt?: string | null
+  expiredAt?: string | null
   createdAt: string
 }
 
