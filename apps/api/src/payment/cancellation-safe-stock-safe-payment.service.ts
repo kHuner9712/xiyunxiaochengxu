@@ -74,6 +74,22 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   }
 
   /**
+   * Group-expiry reconciliation and paid-order recovery run under different scheduler locks.
+   * Serialize the complete group-failure refund state machine on the same per-order lock used by
+   * payment/cancellation so two workers cannot both observe "no refund" and create separate
+   * full-refund intentions for the same order.
+   */
+  override async createGroupBuyFailureRefund(
+    orderId: bigint | string,
+    reason = '拼团失败自动退款',
+  ) {
+    const normalizedOrderId = String(orderId);
+    return this.withPaymentCancelLock(normalizedOrderId, () =>
+      super.createGroupBuyFailureRefund(orderId, reason),
+    );
+  }
+
+  /**
    * ABNORMAL is not retryable, but it is observable: after an operator resolves the refund in
    * the WeChat merchant platform, the authoritative query may move to PROCESSING/CLOSED/SUCCESS.
    * Re-open only that ABNORMAL record into a state the existing refund state machine already
@@ -242,7 +258,7 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       PAYMENT_CANCEL_LOCK_TTL_SECONDS,
     );
     if (!acquired) {
-      throw new BadRequestException('订单支付或取消状态处理中，请稍后重试');
+      throw new BadRequestException('订单支付、取消或退款状态处理中，请稍后重试');
     }
 
     try {
