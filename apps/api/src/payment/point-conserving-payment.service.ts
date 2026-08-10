@@ -225,6 +225,7 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
           userId: true,
           payAmount: true,
           pointsDeducted: true,
+          completedAt: true,
         },
       });
       if (!order) throw new Error('退款积分对账对应订单不存在');
@@ -232,7 +233,7 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
       const transactionId = `refund-points:${order.id}`;
       const successfulRefunds = await tx.orderRefund.findMany({
         where: { orderId: order.id, status: REFUND_STATUS.SUCCESS },
-        select: { id: true, refundAmount: true },
+        select: { id: true, refundAmount: true, updatedAt: true },
         orderBy: { id: 'asc' },
       });
       if (successfulRefunds.length === 0 || !order.payAmount || order.payAmount <= 0) {
@@ -259,6 +260,17 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
         (sum, current) => sum + Math.max(0, current.refundAmount),
         0,
       );
+      const preCompletionRefundAmount = order.completedAt
+        ? successfulRefunds
+          .filter((refund) => refund.updatedAt.getTime() <= order.completedAt!.getTime())
+          .reduce((sum, refund) => sum + Math.max(0, refund.refundAmount), 0)
+        : cumulativeRefundAmount;
+      const rewardPayAmount = order.completedAt
+        ? Math.max(0, order.payAmount - preCompletionRefundAmount)
+        : 0;
+      const rewardRefundAmount = order.completedAt
+        ? Math.max(0, cumulativeRefundAmount - preCompletionRefundAmount)
+        : 0;
       const latestRefund = successfulRefunds[successfulRefunds.length - 1];
       const refundIds = successfulRefunds.map((item) => item.id);
       const aftersales = await tx.aftersaleOrder.findMany({
@@ -335,6 +347,8 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
         cumulativeRefundAmount,
         originalDeductedPoints: Math.max(0, order.pointsDeducted),
         originalRewardPoints,
+        rewardPayAmount,
+        rewardRefundAmount,
       });
 
       const restoreDelta = Math.max(0, targets.restoreDeductedTarget - restoredPoints);
@@ -389,6 +403,9 @@ export class PointConservingPaymentService extends CancellationSafeStockSafePaym
       const payload = {
         orderId: order.id.toString(),
         cumulativeRefundAmount: targets.cumulativeRefundAmount,
+        preCompletionRefundAmount,
+        rewardPayAmount,
+        rewardRefundAmount,
         restoreDeductedTarget: targets.restoreDeductedTarget,
         restoredPoints,
         clawbackRewardTarget: targets.clawbackRewardTarget,
