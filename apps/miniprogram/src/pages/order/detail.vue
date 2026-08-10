@@ -60,7 +60,7 @@
       </view>
     </view>
 
-    <view v-if="order.status !== 'paid' && order.logistics" class="logistics-section card" @tap="showLogistics = true">
+    <view v-if="order.status !== 'paid' && order.logistics" class="logistics-section card" @tap="openLogistics">
       <text class="section-label">物流信息</text>
       <text class="logistics-company">{{ order.logistics.company }}</text>
       <text class="section-arrow">›</text>
@@ -171,7 +171,6 @@ const order = ref<OrderDetail>({
   items: [], createTime: ''
 })
 
-const showLogistics = ref(false)
 const selectAftersaleMode = ref(false)
 const shouldSelectAftersale = ref(false)
 
@@ -313,6 +312,40 @@ function goAftersale(item: OrderProductItem) {
     return
   }
   uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${item.id}` })
+}
+
+function openLogistics() {
+  const logistics = order.value.logistics
+  if (!logistics) {
+    uni.showToast({ title: '暂无物流信息', icon: 'none' })
+    return
+  }
+
+  const traceText = (logistics.traces || [])
+    .slice(0, 3)
+    .map((trace) => `${trace.time} ${trace.content}`)
+    .join('\n')
+  const content = [
+    `物流公司：${logistics.company || '-'}`,
+    `运单号：${logistics.trackingNo || '-'}`,
+    traceText ? `最新轨迹：\n${traceText}` : '最新轨迹：暂无物流轨迹',
+  ].join('\n')
+
+  uni.showModal({
+    title: '物流详情',
+    content,
+    showCancel: !!logistics.trackingNo,
+    cancelText: '关闭',
+    confirmText: logistics.trackingNo ? '复制单号' : '我知道了',
+    success: (res) => {
+      if (res.confirm && logistics.trackingNo) {
+        uni.setClipboardData({
+          data: logistics.trackingNo,
+          success: () => uni.showToast({ title: '运单号已复制', icon: 'success' })
+        })
+      }
+    }
+  })
 }
 
 function goCustomerService() {
