@@ -24,6 +24,7 @@
     "test:integration:content": "ts-node --transpile-only -P tsconfig.json test/content-lifecycle.integration.ts",
     "test:integration:promotion": "ts-node --transpile-only -P tsconfig.json test/promotion-order-lifecycle.integration.ts",
     "test:integration:normal-order": "ts-node --transpile-only -P tsconfig.json test/normal-order-lifecycle.integration.ts",
+    "test:integration:member-benefit": "ts-node --transpile-only -P tsconfig.json test/member-benefit-lifecycle.integration.ts",
     "test:integration:activity-multi-item": "ts-node --transpile-only -P tsconfig.json test/activity-multi-item-lifecycle.integration.ts",
     "test:integration:promotion-timeout": "ts-node --transpile-only -P tsconfig.json test/promotion-timeout-lifecycle.integration.ts",
     "test:integration:payment-anomaly": "ts-node --transpile-only -P tsconfig.json test/historical-payment-anomaly.integration.ts",
@@ -39,7 +40,7 @@
     "test:integration:default-role-permissions": "ts-node --transpile-only -P tsconfig.json test/default-role-permissions.integration.ts",
     "test:integration:recommendation-home": "ts-node --transpile-only -P tsconfig.json test/recommendation-home-lifecycle.integration.ts",
     "test:integration:search-hot-keywords": "ts-node --transpile-only -P tsconfig.json test/search-hot-keyword-lifecycle.integration.ts",
-    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale && pnpm test:integration:merchant-settlement && pnpm test:integration:benefit-snapshot && pnpm test:integration:benefit-snapshot-view && pnpm test:integration:dashboard-payment-facts && pnpm test:integration:aftersale-attachment-ownership && pnpm test:integration:supplier-admin && pnpm test:integration:product-cert-private-access && pnpm test:integration:default-role-permissions && pnpm test:integration:recommendation-home && pnpm test:integration:search-hot-keywords",
+    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:member-benefit && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale && pnpm test:integration:merchant-settlement && pnpm test:integration:benefit-snapshot && pnpm test:integration:benefit-snapshot-view && pnpm test:integration:dashboard-payment-facts && pnpm test:integration:aftersale-attachment-ownership && pnpm test:integration:supplier-admin && pnpm test:integration:product-cert-private-access && pnpm test:integration:default-role-permissions && pnpm test:integration:recommendation-home && pnpm test:integration:search-hot-keywords",
     "test:ci": "jest --config jest.config.js && jest --config test/jest-e2e.config.js"
   },
   "dependencies": {
@@ -48,7 +49,7 @@
     "@nestjs/config": "^3.1.0",
     "@nestjs/core": "^10.3.0",
     "@nestjs/jwt": "^10.2.0",
-    "@nestjs/passport": "^10.0.3",
+    "@nestjs/passport": "^0.7.0",
     "@nestjs/platform-express": "^10.3.0",
     "@nestjs/schedule": "^4.0.0",
     "@nestjs/swagger": "^7.2.0",
@@ -61,7 +62,7 @@
     "ioredis": "^5.3.2",
     "multer": "^1.4.5-lts.1",
     "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1",
+    "passport-jwt": "^0.4.1",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
     "svg-captcha": "^1.4.0"
