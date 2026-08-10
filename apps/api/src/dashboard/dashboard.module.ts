@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
-import { PaymentFactDashboardService } from './payment-fact-dashboard.service';
+import { NetPaidProductDashboardService } from './net-paid-product-dashboard.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 
 @Module({
@@ -10,7 +10,7 @@ import { PrismaModule } from '../common/prisma/prisma.module';
   providers: [
     {
       provide: DashboardService,
-      useClass: PaymentFactDashboardService,
+      useClass: NetPaidProductDashboardService,
     },
   ],
   exports: [DashboardService],
