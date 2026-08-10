@@ -94,7 +94,7 @@ describe('权益核销详情', () => {
     expect(wrapper.text()).not.toContain('门店ID：12')
     expect(wrapper.text()).not.toContain('商家ID：18')
 
-    await wrapper.find('.phone-row').trigger('click')
+    await wrapper.find('.phone-row').trigger('tap')
     expect((globalThis as any).uni.makePhoneCall).toHaveBeenCalledWith({
       phoneNumber: '021-12345678',
     })
