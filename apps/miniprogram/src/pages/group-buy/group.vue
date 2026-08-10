@@ -39,12 +39,12 @@
 
       <view class="members-section">
         <view class="section-title">团成员</view>
-        <view v-for="m in group.members" :key="m.id" class="member-item">
-          <image v-if="m.user?.avatar" class="avatar" :src="m.user.avatar" mode="aspectFill" />
+        <view v-for="(m, index) in group.members" :key="`${m.role}-${m.createdAt || index}-${index}`" class="member-item">
+          <image v-if="m.user?.avatarUrl" class="avatar" :src="m.user.avatarUrl" mode="aspectFill" />
           <view v-else class="avatar avatar-placeholder" />
           <view class="member-info">
             <view class="member-top">
-              <text class="member-name">{{ m.user?.nickname || '用户' + m.userId }}</text>
+              <text class="member-name">{{ m.user?.nickname || '用户' }}</text>
               <text v-if="m.role === 'leader'" class="role-tag leader">团长</text>
               <text v-else class="role-tag member">团员</text>
             </view>
@@ -135,9 +135,7 @@ const canJoin = computed(() => {
   if (group.value.status !== 'forming') return false
   if (new Date(group.value.expiresAt).getTime() <= Date.now()) return false
   if (group.value.currentCount >= group.value.targetCount) return false
-  const meId = String(userStore.userInfo?.id || '')
-  if (!meId) return true
-  return !group.value.members?.some((m: any) => String(m.userId) === meId)
+  return !group.value.members?.some((member) => member.isCurrentUser)
 })
 
 async function loadDetail(id: string) {
