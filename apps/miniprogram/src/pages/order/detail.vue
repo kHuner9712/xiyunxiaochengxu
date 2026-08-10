@@ -83,7 +83,7 @@
         <view class="product-right">
           <PriceDisplay :price="item.price" />
           <text class="product-qty">x{{ item.quantity }}</text>
-          <text class="product-line-total">实付小计 ¥{{ formatPrice(item.subtotal ?? item.price * item.quantity) }}</text>
+          <text class="product-line-total">商品小计 ¥{{ formatPrice(item.subtotal ?? item.price * item.quantity) }}</text>
           <view
             v-if="order.status === 'completed' || order.status === 'delivered' || order.status === 'aftersale'"
             class="item-aftersale-btn"
@@ -105,6 +105,14 @@
       <view class="price-row">
         <text class="price-label">运费</text>
         <text class="price-value">{{ order.freightAmount > 0 ? `¥${formatPrice(order.freightAmount)}` : '免运费' }}</text>
+      </view>
+      <view v-if="order.discountAmount > 0" class="price-row">
+        <text class="price-label">会员优惠</text>
+        <text class="price-value discount">-¥{{ formatPrice(order.discountAmount) }}</text>
+      </view>
+      <view v-if="order.activityDiscountAmount > 0" class="price-row">
+        <text class="price-label">活动优惠</text>
+        <text class="price-value discount">-¥{{ formatPrice(order.activityDiscountAmount) }}</text>
       </view>
       <view v-if="order.couponAmount > 0" class="price-row">
         <text class="price-label">优惠券</text>
@@ -165,7 +173,7 @@ import PriceDisplay from '@/components/PriceDisplay.vue'
 
 const order = ref<OrderDetail>({
   id: '', orderNo: '', status: '' as any, totalAmount: 0, payAmount: 0,
-  freightAmount: 0, couponAmount: 0, pointsAmount: 0,
+  freightAmount: 0, discountAmount: 0, activityDiscountAmount: 0, couponAmount: 0, pointsAmount: 0,
   addressName: '', addressPhone: '', addressDetail: '',
   fulfillmentType: 'delivery',
   items: [], createTime: ''
