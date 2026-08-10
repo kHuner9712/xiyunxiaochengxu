@@ -10,6 +10,8 @@ import { GroupBuyModule } from '../group-buy/group-buy.module';
 import { MerchantSettlementModule } from '../merchant-settlement/merchant-settlement.module';
 import { ShareModule } from '../share/share.module';
 import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
+import { PointsModule } from '../points/points.module';
+import { PointsExpiryScheduleService } from '../points/points-expiry-schedule.service';
 
 @Module({
   imports: [
@@ -22,8 +24,9 @@ import { BenefitPackageModule } from '../benefit-package/benefit-package.module'
     MerchantSettlementModule,
     ShareModule,
     BenefitPackageModule,
+    PointsModule,
     forwardRef(() => PaymentModule),
   ],
-  providers: [ScheduleService],
+  providers: [ScheduleService, PointsExpiryScheduleService],
 })
 export class ScheduleModule {}
