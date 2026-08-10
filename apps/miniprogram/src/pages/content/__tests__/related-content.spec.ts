@@ -64,12 +64,12 @@ describe('内容关联目标', () => {
     expect(wrapper.text()).toContain('关联商品')
     expect(wrapper.text()).toContain('¥99.00')
 
-    await wrapper.find('.activity-link').trigger('click')
+    await wrapper.find('.activity-link').trigger('tap')
     expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith({
       url: '/pages/activity/detail?id=4',
     })
 
-    await wrapper.find('.related-product').trigger('click')
+    await wrapper.find('.related-product').trigger('tap')
     expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith({
       url: '/pages/product/detail?id=2',
     })
