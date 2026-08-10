@@ -116,4 +116,52 @@ describe('AttachmentSafeProductionAftersaleService', () => {
       images: ['/api/common/file/private/88'],
     }));
   });
+
+  it('returns the flattened fields the mini-program aftersale list actually renders', async () => {
+    const prisma: any = {
+      aftersaleOrder: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 501n,
+            type: 2,
+            reason: '商品损坏',
+            status: 'pending_review',
+            refundAmount: 9900,
+            createdAt: new Date('2026-08-10T03:00:00.000Z'),
+            order: { orderNo: 'XY202608100001' },
+            orderItem: {
+              productName: '婴儿推车',
+              productImage: 'https://cdn.example/product.jpg',
+            },
+          },
+        ]),
+        count: jest.fn().mockResolvedValue(1),
+      },
+    };
+    const service = new AttachmentSafeProductionAftersaleService(prisma, {} as any);
+
+    const result: any = await service.findByUser('10', {
+      page: 1,
+      pageSize: 10,
+      skip: 0,
+      take: 10,
+    });
+
+    expect(result.list).toEqual([
+      expect.objectContaining({
+        id: '501',
+        orderNo: 'XY202608100001',
+        productName: '婴儿推车',
+        productImage: 'https://cdn.example/product.jpg',
+        refundAmount: 9900,
+        status: 'pending_review',
+      }),
+    ]);
+    expect(prisma.aftersaleOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: {
+        order: { select: { orderNo: true } },
+        orderItem: { select: { productName: true, productImage: true } },
+      },
+    }));
+  });
 });
