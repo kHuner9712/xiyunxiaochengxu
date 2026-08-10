@@ -26,6 +26,11 @@ export class BigintSafeProductionGroupBuyService extends ProductionGroupBuyServi
     return activity;
   }
 
+  override async weappFindGroupById(id: string) {
+    parsePositiveBigIntId(id, '团');
+    return super.weappFindGroupById(id);
+  }
+
   override async weappFindAvailableGroups(activityIdInput: string) {
     const activityId = parsePositiveBigIntId(activityIdInput, '活动');
     const activity = await this.bigintSafePrisma.groupBuyActivity.findFirst({
