@@ -58,4 +58,42 @@ describe('calculateRefundPointTargets', () => {
     expect(target.restoreDeductedTarget).toBe(200);
     expect(target.clawbackRewardTarget).toBe(25);
   });
+
+  it('does not claw completion rewards for refunds that were already excluded before completion', () => {
+    const preCompletionOnly = calculateRefundPointTargets({
+      payAmount: 10000,
+      cumulativeRefundAmount: 5000,
+      originalDeductedPoints: 1000,
+      originalRewardPoints: 75,
+      rewardPayAmount: 5000,
+      rewardRefundAmount: 0,
+    });
+
+    expect(preCompletionOnly.restoreDeductedTarget).toBe(500);
+    expect(preCompletionOnly.clawbackRewardTarget).toBe(0);
+
+    const laterRefund = calculateRefundPointTargets({
+      payAmount: 10000,
+      cumulativeRefundAmount: 7500,
+      originalDeductedPoints: 1000,
+      originalRewardPoints: 75,
+      rewardPayAmount: 5000,
+      rewardRefundAmount: 2500,
+    });
+
+    expect(laterRefund.restoreDeductedTarget).toBe(750);
+    expect(laterRefund.clawbackRewardTarget).toBe(37);
+
+    const fullyRefunded = calculateRefundPointTargets({
+      payAmount: 10000,
+      cumulativeRefundAmount: 10000,
+      originalDeductedPoints: 1000,
+      originalRewardPoints: 75,
+      rewardPayAmount: 5000,
+      rewardRefundAmount: 5000,
+    });
+
+    expect(fullyRefunded.restoreDeductedTarget).toBe(1000);
+    expect(fullyRefunded.clawbackRewardTarget).toBe(75);
+  });
 });
