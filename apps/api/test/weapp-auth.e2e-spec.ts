@@ -142,6 +142,9 @@ describe('Weapp Auth (e2e)', () => {
     axios.default.get.mockResolvedValue({
       data: { session_key: 'new_session_key' },
     });
+    // The live guard re-checks account state on every authenticated request. Reflect the user
+    // created by the preceding login instead of leaving the pre-login "not found" mock active.
+    mockPrisma.user.findFirst.mockResolvedValue({ id: BigInt(1) });
 
     const res = await request(app.getHttpServer())
       .post('/api/weapp/auth/phone')
