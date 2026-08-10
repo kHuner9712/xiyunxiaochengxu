@@ -493,16 +493,20 @@ defineExpose({
   background: $bg-soft;
   border: 1rpx solid $border-color;
   padding: 18rpx 20rpx;
+  min-height: 80rpx;
+  line-height: 44rpx;
   font-size: $font-sm;
   color: $text-color;
 }
 
 .modal-input {
   min-height: 80rpx;
+  line-height: 44rpx;
 }
 
 .modal-textarea {
   min-height: 150rpx;
+  line-height: 44rpx;
 }
 
 .modal-actions {
