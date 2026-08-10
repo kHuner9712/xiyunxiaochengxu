@@ -27,6 +27,13 @@ describe('订单金额明细展示契约', () => {
     expect(source).not.toContain('实付小计')
   })
 
+  it('订单列表不把未分摊优惠的商品行小计标成实付金额', () => {
+    const source = read('../list.vue')
+
+    expect(source).toContain('商品小计')
+    expect(source).not.toContain('实付小计')
+  })
+
   it('订单详情类型暴露后端真实折扣字段', () => {
     const source = read('../../../api/order.ts')
 
