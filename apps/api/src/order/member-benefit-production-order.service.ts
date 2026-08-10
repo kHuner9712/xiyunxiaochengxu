@@ -22,6 +22,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 interface MemberPricingContext {
   userId: bigint;
   discountRate: number | null;
+  couponAmount: number;
 }
 
 /**
@@ -29,7 +30,7 @@ interface MemberPricingContext {
  *
  * The legacy core checkout already owns inventory, coupon, points, payment and cancellation
  * invariants. Rather than duplicating that state machine, this wrapper injects the current member
- * price into the two private pricing calculators and into the transaction's order.create call.
+ * price into the private pricing calculators and into the transaction's order.create call.
  * AsyncLocalStorage keeps the pricing context request-local even though Nest services are singletons.
  *
  * Promotion orders do not enter this context; flash-sale/group-buy/activity checkout remains solely
@@ -99,19 +100,29 @@ export class MemberBenefitProductionOrderService extends CancellationSafeProduct
     return {
       userId: userIdValue,
       discountRate: level?.discountRate ?? null,
+      couponAmount: 0,
     };
   }
 
   private installMemberPricingHooks() {
     const runtime = this as any;
     const originalCalculatePayAmount = runtime.calculatePayAmount?.bind(this);
+    const originalCalculateCouponAmount = runtime.calculateCouponAmount?.bind(this);
     const originalCalculatePointsDeduction = runtime.calculatePointsDeduction?.bind(this);
     if (
       typeof originalCalculatePayAmount !== 'function' ||
+      typeof originalCalculateCouponAmount !== 'function' ||
       typeof originalCalculatePointsDeduction !== 'function'
     ) {
       throw new Error('OrderService member pricing hooks are unavailable');
     }
+
+    runtime.calculateCouponAmount = (coupon: any, orderAmount: number) => {
+      const couponAmount = originalCalculateCouponAmount(coupon, orderAmount);
+      const context = this.memberPricing.getStore();
+      if (context) context.couponAmount = Math.max(0, Number(couponAmount || 0));
+      return couponAmount;
+    };
 
     runtime.calculatePayAmount = (amounts: any) => {
       const context = this.memberPricing.getStore();
@@ -135,8 +146,9 @@ export class MemberBenefitProductionOrderService extends CancellationSafeProduct
       const memberDiscount = context
         ? calculateMemberDiscountAmount(baseAmount, context.discountRate)
         : 0;
+      const couponAmount = context?.couponAmount ?? 0;
       return originalCalculatePointsDeduction(
-        Math.max(0, baseAmount - memberDiscount),
+        Math.max(0, baseAmount - memberDiscount - couponAmount),
         availablePoints,
         requestedPoints,
       );
