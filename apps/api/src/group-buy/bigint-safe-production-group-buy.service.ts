@@ -78,10 +78,43 @@ export class BigintSafeProductionGroupBuyService extends ProductionGroupBuyServi
       : [];
     const leaderMap = new Map(leaders.map((leader) => [leader.id.toString(), leader]));
 
-    return groups.map((group) => ({
-      ...group,
-      members: memberMap.get(group.id.toString()) ?? [],
-      leader: leaderMap.get(group.leaderUserId.toString()) ?? null,
-    }));
+    return groups.map((group) => {
+      const { leaderUserId, ...publicGroup } = group;
+      const leader = leaderMap.get(leaderUserId.toString());
+      const publicMembers = (memberMap.get(group.id.toString()) ?? []).map((member) => ({
+        role: member.role,
+        status: member.status,
+        paidAt: member.paidAt,
+      }));
+      return {
+        ...publicGroup,
+        members: publicMembers,
+        leader: leader
+          ? { nickname: leader.nickname, avatarUrl: leader.avatarUrl }
+          : null,
+      };
+    });
+  }
+
+  override async weappFindGroupById(id: string) {
+    const group: any = await super.weappFindGroupById(id);
+    const { leaderUserId: _leaderUserId, members, ...publicGroup } = group;
+    return {
+      ...publicGroup,
+      members: Array.isArray(members)
+        ? members.map((member: any) => ({
+            role: member.role,
+            status: member.status,
+            paidAt: member.paidAt,
+            createdAt: member.createdAt,
+            user: member.user
+              ? {
+                  nickname: member.user.nickname || '',
+                  avatarUrl: member.user.avatarUrl || '',
+                }
+              : null,
+          }))
+        : [],
+    };
   }
 }
