@@ -135,6 +135,14 @@
         <text class="price-label">运费</text>
         <text class="price-value">{{ freightAmount > 0 ? `¥${formatPrice(freightAmount)}` : '免运费' }}</text>
       </view>
+      <view v-if="memberDiscount > 0" class="price-row">
+        <text class="price-label">会员优惠</text>
+        <text class="price-value discount">-¥{{ formatPrice(memberDiscount) }}</text>
+      </view>
+      <view v-if="activityDiscount > 0" class="price-row">
+        <text class="price-label">活动优惠</text>
+        <text class="price-value discount">-¥{{ formatPrice(activityDiscount) }}</text>
+      </view>
       <view v-if="couponDiscount > 0" class="price-row">
         <text class="price-label">优惠券</text>
         <text class="price-value discount">-¥{{ formatPrice(couponDiscount) }}</text>
@@ -267,6 +275,16 @@ const totalProductPrice = computed(() => {
   return orderItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
 })
 
+const memberDiscount = computed(() => {
+  if (preview.value) return preview.value.discountAmount || 0
+  return 0
+})
+
+const activityDiscount = computed(() => {
+  if (preview.value) return preview.value.activityDiscountAmount || 0
+  return 0
+})
+
 const couponDiscount = computed(() => {
   if (preview.value) return preview.value.couponAmount
   return 0
@@ -300,7 +318,7 @@ const freightAmount = computed(() => {
 
 const payAmount = computed(() => {
   if (preview.value) return preview.value.payAmount
-  return Math.max(0, totalProductPrice.value + freightAmount.value - couponDiscount.value - pointsDeduct.value)
+  return Math.max(0, totalProductPrice.value + freightAmount.value - memberDiscount.value - activityDiscount.value - couponDiscount.value - pointsDeduct.value)
 })
 
 async function loadPreview() {
@@ -579,6 +597,8 @@ defineExpose({
   usePoints,
   availablePoints,
   maxPointsDeduct,
+  memberDiscount,
+  activityDiscount,
   pointsDeduct,
   payAmount,
   togglePoints
