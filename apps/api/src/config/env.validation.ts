@@ -412,6 +412,38 @@ export function validateEnv(env: Record<string, any>) {
       }
     }
 
+    const platformCertMapRaw = typeof env.WECHAT_PLATFORM_CERT_MAP === 'string'
+      ? env.WECHAT_PLATFORM_CERT_MAP.trim()
+      : '';
+    if (platformCertMapRaw) {
+      let platformCertMap: Record<string, unknown>;
+      try {
+        const parsed = JSON.parse(platformCertMapRaw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('map must be an object');
+        }
+        platformCertMap = parsed as Record<string, unknown>;
+      } catch {
+        logger.error('WECHAT_PLATFORM_CERT_MAP 必须是合法的 JSON 对象');
+        process.exit(1);
+      }
+
+      for (const [serialNo, certPathValue] of Object.entries(platformCertMap)) {
+        const serial = serialNo.trim();
+        const certPath = typeof certPathValue === 'string' ? certPathValue.trim() : '';
+        if (!serial || !certPath) {
+          logger.error('WECHAT_PLATFORM_CERT_MAP 的每个序列号和证书路径都必须为非空字符串');
+          process.exit(1);
+        }
+        try {
+          fs.accessSync(certPath, fs.constants.R_OK);
+        } catch {
+          logger.error(`WECHAT_PLATFORM_CERT_MAP 证书文件不可读: serial=${serial} path=${certPath}`);
+          process.exit(1);
+        }
+      }
+    }
+
     const jwtSecret = env.JWT_SECRET;
     if (jwtSecret) {
       const lowerSecret = jwtSecret.toLowerCase();
