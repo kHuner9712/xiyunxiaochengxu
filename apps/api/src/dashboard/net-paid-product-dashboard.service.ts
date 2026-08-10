@@ -94,21 +94,28 @@ export class NetPaidProductDashboardService extends PaymentFactDashboardService 
     const products = productIds.length
       ? await this.netPaidPrisma.product.findMany({
           where: { id: { in: productIds }, deletedAt: null, status: 1 },
-          select: { id: true, name: true, mainImage: true },
+          select: {
+            id: true,
+            name: true,
+            mainImage: true,
+            totalSales: true,
+            minPrice: true,
+          },
         })
       : [];
     const productMap = new Map(products.map((product) => [product.id.toString(), product]));
 
     return rows.flatMap((row) => {
       const product = productMap.get(row.productId.toString());
-      if (!product) return [];
-      return [{
-        id: row.productId.toString(),
-        name: product.name,
-        image: product.mainImage || '',
-        salesCount: Number(row.salesCount || 0),
-        salesAmount: Number(row.salesAmount || 0),
-      }];
+      return product
+        ? [{
+            ...product,
+            id: product.id.toString(),
+            image: product.mainImage || '',
+            salesCount: Number(row.salesCount || 0),
+            salesAmount: Number(row.salesAmount || 0),
+          }]
+        : [];
     });
   }
 }
