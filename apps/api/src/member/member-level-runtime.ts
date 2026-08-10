@@ -92,14 +92,18 @@ export function calculateMemberDiscountAmount(
   return Math.max(0, totalAmount - memberPrice);
 }
 
+export function calculateOrderGrowthValue(payAmount: number): number {
+  if (!Number.isSafeInteger(payAmount) || payAmount < 0) {
+    throw new Error('payAmount must be a non-negative safe integer');
+  }
+  return Math.floor(payAmount / 100);
+}
+
 export function calculateMemberRewardPoints(
   payAmount: number,
   pointsRate: number | null | undefined,
 ): number {
-  if (!Number.isSafeInteger(payAmount) || payAmount < 0) {
-    throw new Error('payAmount must be a non-negative safe integer');
-  }
-  const basePoints = Math.floor(payAmount / 100);
+  const basePoints = calculateOrderGrowthValue(payAmount);
   if (basePoints <= 0) return 0;
   const normalizedRate = Number.isSafeInteger(pointsRate) && (pointsRate as number) > 0
     ? (pointsRate as number)
