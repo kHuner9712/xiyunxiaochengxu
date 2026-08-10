@@ -69,7 +69,7 @@ export function formatAftersaleStatus(status: AftersaleStatusValue): string {
     approved: '已通过/待处理',
     returned: '待退款',
     pending_refund: '待退款',
-    refunded: '已完成',
+    refunded: '已退款',
     rejected: '已拒绝',
     closed: '已取消'
   }
