@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { paginate } from '@baby-mall/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { PaymentService } from '../payment/payment.service';
@@ -24,6 +25,46 @@ export class AttachmentSafeProductionAftersaleService extends ProductionAftersal
       ...dto,
       images,
     });
+  }
+
+  override async findByUser(
+    userId: string,
+    dto: { skip?: number; take?: number; page?: number; pageSize?: number },
+  ) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const where = { userId: userIdValue };
+    const [records, total] = await Promise.all([
+      this.attachmentPrisma.aftersaleOrder.findMany({
+        where,
+        skip: dto.skip,
+        take: dto.take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          order: { select: { orderNo: true } },
+          orderItem: {
+            select: {
+              productName: true,
+              productImage: true,
+            },
+          },
+        },
+      }),
+      this.attachmentPrisma.aftersaleOrder.count({ where }),
+    ]);
+
+    const list = records.map((record) => ({
+      id: record.id.toString(),
+      orderNo: record.order?.orderNo || '',
+      type: record.type,
+      reason: record.reason,
+      status: record.status,
+      refundAmount: record.refundAmount ?? 0,
+      productName: record.orderItem?.productName || '',
+      productImage: record.orderItem?.productImage || '',
+      createTime: record.createdAt,
+    }));
+
+    return paginate(list, total, dto.page ?? 1, dto.pageSize ?? 10);
   }
 
   private async validateOwnedAftersaleImages(userId: string, images?: string[]) {
