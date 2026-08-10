@@ -58,6 +58,9 @@ export interface AftersaleDetail {
   quantity: number
   logs: AftersaleLog[]
   aftersaleLogs?: any[]
+  returnReceiverName?: string | null
+  returnReceiverPhone?: string | null
+  returnAddress?: string | null
   returnLogisticsCompany?: string
   returnLogisticsNo?: string
   createTime: string
