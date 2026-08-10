@@ -95,15 +95,23 @@ test('release-check.sh treats public placeholders as external production config'
   assert.doesNotMatch(script, /legal\.ts 仍包含待确认联系方式占位：\$pattern（生产严格门禁下不可发布）/)
 })
 
-test('production custom container commands validate env before exec', () => {
+test('production container runs full config/payment preflight before custom commands and migrations', () => {
   const entrypoint = readFileSync(resolve(root, 'deploy/scripts/entrypoint.sh'), 'utf8')
-  const validationIndex = entrypoint.indexOf('validateEnv(process.env)')
+  const preflight = readFileSync(resolve(root, 'apps/api/src/config/production-config-preflight.ts'), 'utf8')
+  const preflightIndex = entrypoint.indexOf('node dist/config/production-config-preflight.js')
   const customExecIndex = entrypoint.indexOf('exec "$@"')
+  const migrationIndex = entrypoint.indexOf('npx prisma migrate deploy')
 
   assert.match(entrypoint, /\[ "\$\{NODE_ENV:-\}" = "production" \]/)
-  assert.ok(validationIndex >= 0, 'production entrypoint must call validateEnv(process.env)')
+  assert.ok(preflightIndex >= 0, 'production entrypoint must run the compiled production config preflight')
   assert.ok(customExecIndex >= 0, 'production entrypoint must execute custom commands')
-  assert.ok(validationIndex < customExecIndex, 'production env validation must run before custom command exec')
+  assert.ok(migrationIndex >= 0, 'production entrypoint must contain the Prisma migration command')
+  assert.ok(preflightIndex < customExecIndex, 'production config preflight must run before custom command exec')
+  assert.ok(preflightIndex < migrationIndex, 'production config preflight must run before Prisma migration')
+
+  assert.match(preflight, /validateEnv\(\{ \.\.\.env \}\)/)
+  assert.match(preflight, /new PaymentService\(/)
+  assert.doesNotMatch(preflight, /NestFactory|createApplicationContext/)
 })
 
 test('production compose files pass certificate rotation and critical alert settings', () => {
