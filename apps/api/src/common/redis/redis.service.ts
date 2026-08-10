@@ -33,6 +33,10 @@ export class RedisService implements OnApplicationShutdown {
     return result === 'OK';
   }
 
+  isSchedulerPausedForCurrentBuild(): boolean {
+    return this.isSchedulerPaused('schedule:health-check');
+  }
+
   async del(key: string): Promise<void> {
     await this.client.del(key);
   }
