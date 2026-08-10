@@ -89,9 +89,31 @@ describe('MemberBenefitProductionOrderService', () => {
     expect(result.payAmount).toBe(9000);
   });
 
+  it('优惠券已覆盖的金额不会再次计入积分抵扣上限', () => {
+    const { service } = createService();
+    const context = { userId: 7n, discountRate: 90, couponAmount: 0 };
+
+    expect(() => (service as any).memberPricing.run(context, () => {
+      const runtime = service as any;
+      expect(runtime.calculateCouponAmount({ type: 1, value: 8000 }, 10000)).toBe(8000);
+      runtime.calculatePointsDeduction(10000, 10000, 2000);
+    })).toThrow('积分抵扣超过订单可用上限');
+
+    const safeDeduction = (service as any).memberPricing.run(
+      { userId: 7n, discountRate: 90, couponAmount: 0 },
+      () => {
+        const runtime = service as any;
+        runtime.calculateCouponAmount({ type: 1, value: 8000 }, 10000);
+        return runtime.calculatePointsDeduction(10000, 10000, 200);
+      },
+    );
+    expect(safeDeduction.pointsDeducted).toBe(200);
+    expect(safeDeduction.pointsAmount).toBe(200);
+  });
+
   it('事务内创建订单时持久化会员优惠，而不是只修改前端预览金额', async () => {
     const { service, prisma, txOrderCreate } = createService();
-    const context = { userId: 7n, discountRate: 90 };
+    const context = { userId: 7n, discountRate: 90, couponAmount: 0 };
 
     await (service as any).memberPricing.run(context, () =>
       prisma.$transaction((tx: any) => tx.order.create({
