@@ -5,15 +5,10 @@ import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
 import { AftersaleService } from './aftersale.service';
 import { ApproveAftersaleDto } from './dto/approve-aftersale.dto';
-
-export type ReturnDestinationSnapshot = {
-  version: 1;
-  receiverName: string;
-  receiverPhone: string;
-  address: string;
-};
-
-export const RETURN_DESTINATION_ACTION = 'return_destination';
+import {
+  RETURN_DESTINATION_ACTION,
+  type ReturnDestinationSnapshot,
+} from './return-destination';
 
 @Injectable()
 export class AftersaleReviewService {
