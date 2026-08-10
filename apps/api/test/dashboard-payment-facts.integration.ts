@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { PAYMENT_STATUS } from '../src/common/constants/payment';
-import { PaymentFactDashboardService } from '../src/dashboard/payment-fact-dashboard.service';
+import { NetPaidProductDashboardService } from '../src/dashboard/net-paid-product-dashboard.service';
 
 function assertSafeIntegrationDatabase() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -69,7 +69,8 @@ async function main() {
         userId: user.id,
         status: 'aftersale',
         totalAmount: 10000,
-        payAmount: 10000,
+        discountAmount: 1000,
+        payAmount: 9000,
         receiverName: 'Dashboard支付事实用户',
         receiverPhone: '13800138000',
         province: '上海市',
@@ -95,7 +96,7 @@ async function main() {
       data: {
         orderId: paidOrder.id,
         paymentNo: `DASHPAY${suffix}`.slice(0, 64),
-        amount: 10000,
+        amount: 9000,
         status: PAYMENT_STATUS.SUCCESS,
         paidAt,
       },
@@ -129,22 +130,22 @@ async function main() {
       },
     });
 
-    const service = new PaymentFactDashboardService(prisma as any);
+    const service = new NetPaidProductDashboardService(prisma as any);
     const stats: any = await service.getStats();
-    assert.ok(stats.todaySales >= 10000, '成功支付订单必须进入今日销售额');
+    assert.ok(stats.todaySales >= 9000, '成功支付订单必须按真实实付进入今日销售额');
     assert.ok(stats.todayOrders >= 1, '成功支付订单必须进入今日订单数');
 
     const today = dateKey(paidAt);
     const trend: any[] = await service.getSalesChartByDateRange(today, today);
     assert.equal(trend.length, 1);
-    assert.ok(trend[0].salesAmount >= 10000, '售后状态不能让已成功支付金额从趋势消失');
+    assert.ok(trend[0].salesAmount >= 9000, '售后状态不能让已成功支付金额从趋势消失');
     assert.ok(trend[0].orderCount >= 1, '售后状态不能让已成功支付订单从趋势消失');
 
     const topProducts: any[] = await service.getTopProducts(100);
     const row = topProducts.find((item) => item.id === product.id.toString());
     assert.ok(row, '成功支付商品必须进入热销商品聚合');
     assert.equal(row.salesCount, 1, '未支付订单的99件商品不能进入热销销量');
-    assert.equal(row.salesAmount, 10000, '未支付订单金额不能进入热销销售额');
+    assert.equal(row.salesAmount, 9000, '热销商品销售额必须按会员优惠后的真实非运费实付统计');
 
     console.log('[dashboard-payment-facts-integration] PASS');
   } finally {
