@@ -128,3 +128,18 @@ test('production HTTPS smoke never disables certificate verification', () => {
   assert.match(smoke, /--resolve "\$\{ADMIN_DOMAIN\}:\$\{HTTPS_HOST_PORT\}:127\.0\.0\.1"/)
   assert.match(smoke, /trusted production HTTPS/)
 })
+
+test('production deploy validates TLS identity before starting database work', () => {
+  const deploy = readFileSync(resolve(root, 'deploy/scripts/deploy-production.sh'), 'utf8')
+  const tlsCheckIndex = deploy.indexOf("pass 'TLS certificates cover production domains")
+  const databaseStartIndex = deploy.indexOf('up -d mysql redis')
+
+  assert.match(deploy, /command -v openssl/)
+  assert.match(deploy, /validate_tls_pair\(\)/)
+  assert.match(deploy, /-checkend 604800/)
+  assert.match(deploy, /-checkhost "\$domain"/)
+  assert.match(deploy, /TLS certificate and private key do not match/)
+  assert.ok(tlsCheckIndex >= 0, 'TLS preflight must report a successful identity check')
+  assert.ok(databaseStartIndex >= 0, 'deployment must contain database startup')
+  assert.ok(tlsCheckIndex < databaseStartIndex, 'TLS preflight must finish before database work starts')
+})
