@@ -27,6 +27,17 @@ interface GroupBuyPaymentOutcome {
   reason?: string;
 }
 
+interface RefundBenefitEffectCapability {
+  assertRefundable(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  freezeForRefund(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  restoreAfterRefundClosed(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+  revokeAfterRefundSuccess(orderId: bigint | string, aftersaleId?: bigint | string | null): Promise<unknown>;
+}
+
+interface RefundGroupBuyEffectCapability {
+  handleRefundSuccess(orderId: bigint | string): Promise<unknown>;
+}
+
 /**
  * Outermost payment runtime provider.
  *
@@ -52,10 +63,10 @@ export class PromotionRecoveringDurableZeroPayAftersalePaymentService extends Du
     businessEvent: BusinessEventService,
     orderService: OrderService,
     shareService: ShareService,
-    benefitPackageService: BenefitPackageService,
+    benefitPackageService: BenefitPackageService & RefundBenefitEffectCapability,
     merchantSettlementService: MerchantSettlementService,
     @Inject(GroupBuyService)
-    private readonly promotionRecoveryGroupBuyService: GroupBuyService,
+    private readonly promotionRecoveryGroupBuyService: GroupBuyService & RefundGroupBuyEffectCapability,
     flashSaleService: FlashSaleService,
     redisService: RedisService,
   ) {
