@@ -172,6 +172,7 @@ test('production deploy quiesces all writers before the proof backup and rolls b
     assert.ok(value >= 0, `deployment contract missing ${label}`)
   }
 
+  assert.match(deploy, /command -v curl[^\n]*fail 'curl is not installed'/)
   assert.ok(buildIndex < maintenanceIndex, 'candidate image must build before downtime starts')
   assert.ok(maintenanceIndex < stopNginxIndex, 'maintenance state must be armed before stopping public ingress')
   assert.ok(stopNginxIndex < stopApiIndex, 'public ingress must stop before API/background writers drain')
