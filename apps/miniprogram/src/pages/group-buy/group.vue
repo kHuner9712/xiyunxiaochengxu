@@ -3,7 +3,8 @@
     <view v-if="group" class="group-detail-card card">
       <view class="status-banner" :class="`status-${group.status}`">
         <text class="status-text">{{ statusText(group.status) }}</text>
-        <text v-if="group.status === 'forming'" class="status-sub">剩 {{ remainTime(group.expiresAt) }}</text>
+        <text v-if="group.status === 'forming' && !groupExpired" class="status-sub">剩 {{ remainTime(group.expiresAt) }}</text>
+        <text v-else-if="group.status === 'forming' && groupExpired" class="status-sub">系统正在处理拼团结果</text>
         <text v-else-if="group.status === 'success' && group.successAt" class="status-sub">成团时间 {{ formatDateTime(group.successAt) }}</text>
         <text v-else-if="group.status === 'failed' && group.failedAt" class="status-sub">失败时间 {{ formatDateTime(group.failedAt) }}</text>
       </view>
@@ -59,7 +60,7 @@
           {{ submitting ? '参团中...' : '参与此团' }}
         </button>
       </view>
-      <button v-else-if="group.status === 'forming'" class="share-btn" open-type="share">邀请好友拼团</button>
+      <button v-else-if="canShare" class="share-btn" open-type="share">邀请好友拼团</button>
     </view>
 
     <Loading v-if="loading" />
@@ -68,7 +69,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from '@dcloudio/uni-app'
 import { groupBuyApi, type GroupBuyGroup } from '@/api/group-buy'
 import { useUserStore } from '@/stores/user'
 import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
@@ -79,17 +80,37 @@ const userStore = useUserStore()
 const group = ref<GroupBuyGroup | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
 }
 
 function remainTime(expiresAt: string): string {
-  const ms = new Date(expiresAt).getTime() - Date.now()
+  const ms = new Date(expiresAt).getTime() - nowMs.value
   if (ms <= 0) return '已过期'
   const hours = Math.floor(ms / 3600000)
   const mins = Math.floor((ms % 3600000) / 60000)
-  return hours > 0 ? `${hours}h${mins}m` : `${mins}m`
+  const secs = Math.floor((ms % 60000) / 1000)
+  if (hours > 0) return `${hours}h${mins}m`
+  if (mins > 0) return `${mins}m${secs}s`
+  return `${secs}s`
 }
 
 function formatDate(s: string): string {
@@ -105,6 +126,7 @@ function formatDateTime(s: string): string {
 }
 
 function statusText(status: string): string {
+  if (status === 'forming' && groupExpired.value) return '拼团已到期'
   switch (status) {
     case 'forming': return '组团中'
     case 'success': return '已成团'
@@ -130,12 +152,24 @@ const progressPercent = computed(() => {
   return Math.min(100, Math.round((group.value.currentCount / target) * 100))
 })
 
+const groupExpired = computed(() => {
+  if (!group.value) return false
+  return new Date(group.value.expiresAt).getTime() <= nowMs.value
+})
+
 const canJoin = computed(() => {
   if (!group.value) return false
   if (group.value.status !== 'forming') return false
-  if (new Date(group.value.expiresAt).getTime() <= Date.now()) return false
+  if (groupExpired.value) return false
   if (group.value.currentCount >= group.value.targetCount) return false
   return !group.value.members?.some((member) => member.isCurrentUser)
+})
+
+const canShare = computed(() => {
+  if (!group.value) return false
+  return group.value.status === 'forming'
+    && !groupExpired.value
+    && group.value.currentCount < group.value.targetCount
 })
 
 async function loadDetail(id: string) {
@@ -155,8 +189,6 @@ async function handleJoinCurrentGroup() {
   if (!userStore.isLoggedIn) {
     const targetGroupId = group.value.id
     userStore.requireLogin(async () => {
-      // The public group view is anonymous before login. Reload it after authentication so
-      // `isCurrentUser` reflects the newly authenticated account before allowing a join.
       await loadDetail(targetGroupId)
       if (!canJoin.value) {
         uni.showToast({ title: '您已参与此团或该团已不可加入', icon: 'none' })
@@ -218,6 +250,9 @@ onLoad((options) => {
     loadDetail(String(options.id))
   }
 })
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 
 onShareAppMessage(() => ({
   title: group.value?.activity?.name || '快来一起拼团',
