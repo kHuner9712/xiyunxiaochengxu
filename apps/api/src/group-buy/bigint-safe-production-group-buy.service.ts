@@ -91,7 +91,7 @@ export class BigintSafeProductionGroupBuyService extends ProductionGroupBuyServi
         members: publicMembers,
         leader: leader
           ? { nickname: leader.nickname, avatarUrl: leader.avatarUrl }
-          : null,
+          : { nickname: '用户', avatarUrl: '' },
       };
     });
   }
