@@ -140,6 +140,8 @@ export interface OrderDetail {
   totalAmount: number
   payAmount: number
   freightAmount: number
+  discountAmount: number
+  activityDiscountAmount: number
   couponAmount: number
   pointsAmount: number
   groupBuyGroupId?: string
