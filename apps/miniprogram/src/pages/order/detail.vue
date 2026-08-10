@@ -210,6 +210,7 @@ function getOptionValue(value: unknown): string {
 function guideAftersaleSelection() {
   const canApplyItems = (order.value.items || []).filter((item) => item.canApplyAftersale !== false)
   if (canApplyItems.length === 0) {
+    shouldSelectAftersale.value = false
     const reason = order.value.items?.find((item) => item.aftersaleDisabledReason)?.aftersaleDisabledReason || '当前订单暂无可申请售后的商品'
     uni.showToast({ title: reason, icon: 'none' })
     return
@@ -322,6 +323,8 @@ function goAftersale(item: OrderProductItem) {
     uni.showToast({ title: '缺少商品信息，请刷新后重试', icon: 'none' })
     return
   }
+  shouldSelectAftersale.value = false
+  selectAftersaleMode.value = false
   uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${item.id}` })
 }
 
@@ -397,6 +400,7 @@ onShow(() => {
     skipInitialShowRefresh = false
     return
   }
+  shouldSelectAftersale.value = false
   selectAftersaleMode.value = false
   if (loadedOrderNo.value) {
     loadOrderByNo(loadedOrderNo.value)
