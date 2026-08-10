@@ -25,13 +25,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
-import { getCouponCenter, receiveCoupon, type CouponItem } from '@/api/coupon'
+import { ref } from 'vue'
+import { onReachBottom, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
+import { getClaimableCoupons, getCouponCenter, receiveCoupon, type CouponItem } from '@/api/coupon'
 import { formatPrice, formatCouponValue } from '@/utils/format'
+import { useUserStore } from '@/stores/user'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
+const userStore = useUserStore()
 const coupons = ref<CouponItem[]>([])
 const loading = ref(false)
 const page = ref(1)
@@ -47,6 +49,17 @@ async function loadCoupons(reset = false) {
   }
   loading.value = true
   try {
+    if (userStore.isLoggedIn) {
+      // /available has already applied member-level, new-customer, stock and per-user-limit rules.
+      // It only contains coupons this account can still claim. Ignore its historical `received`
+      // flag because a perLimit > 1 coupon may legitimately have been received before and still be
+      // claimable now.
+      const data = await getClaimableCoupons()
+      coupons.value = data.map((item) => ({ ...item, received: false }))
+      finished.value = true
+      return
+    }
+
     const data = await getCouponCenter({ page: page.value, pageSize: 10 })
     coupons.value.push(...data.list)
     finished.value = coupons.value.length >= data.total
@@ -60,13 +73,36 @@ async function loadCoupons(reset = false) {
 
 async function handleReceive(item: CouponItem) {
   if (item.received || item.remainCount <= 0) return
+
+  if (!userStore.isLoggedIn) {
+    userStore.requireLogin(async () => {
+      try {
+        // Re-read claimability after authentication instead of retrying the anonymous card blindly.
+        const claimable = await getClaimableCoupons()
+        coupons.value = claimable.map((coupon) => ({ ...coupon, received: false }))
+        finished.value = true
+        const current = coupons.value.find((coupon) => coupon.id === item.id)
+        if (!current) {
+          uni.showToast({ title: '当前账号不符合该优惠券领取条件', icon: 'none' })
+          return
+        }
+        await handleReceive(current)
+      } catch {
+        uni.showToast({ title: '优惠券资格刷新失败', icon: 'none' })
+      }
+    })
+    return
+  }
+
   try {
     await receiveCoupon(item.id)
     uni.showToast({ title: '领取成功', icon: 'success' })
-    item.received = true
-    item.remainCount--
-  } catch {
-    uni.showToast({ title: '领取失败', icon: 'none' })
+    // Server is authoritative for per-user limits. A coupon with perLimit > 1 should remain in the
+    // center until the account actually reaches that limit; a fully claimed coupon disappears.
+    await loadCoupons(true)
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '领取失败', icon: 'none' })
+    await loadCoupons(true)
   }
 }
 
@@ -79,8 +115,8 @@ onReachBottom(() => {
   loadCoupons()
 })
 
-onMounted(() => {
-  loadCoupons()
+onShow(() => {
+  loadCoupons(true)
 })
 </script>
 
