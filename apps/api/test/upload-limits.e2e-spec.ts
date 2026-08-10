@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { UploadModule } from '../src/upload/upload.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { RedisService } from '../src/common/redis/redis.service';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../src/common/guards/permission.guard';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
@@ -23,6 +24,9 @@ describe('Upload limits and MIME guard (e2e)', () => {
     fileAsset: {
       create: jest.fn(({ data }: any) => ({ id: BigInt(1), ...data })),
       findFirst: jest.fn(),
+    },
+    user: {
+      findFirst: jest.fn(({ where }: any) => where?.id === 9n ? { id: 9n } : null),
     },
     adminUserRole: { findMany: jest.fn().mockResolvedValue([]) },
   };
@@ -40,6 +44,7 @@ describe('Upload limits and MIME guard (e2e)', () => {
         UploadModule,
       ],
       providers: [
+        { provide: RedisService, useValue: { exists: jest.fn().mockResolvedValue(true) } },
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: PermissionGuard },
       ],
@@ -56,7 +61,7 @@ describe('Upload limits and MIME guard (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
     if (previousUploadDir === undefined) delete process.env.UPLOAD_DIR;
     else process.env.UPLOAD_DIR = previousUploadDir;
     if (previousAssetBase === undefined) delete process.env.UPLOAD_PUBLIC_URL;
