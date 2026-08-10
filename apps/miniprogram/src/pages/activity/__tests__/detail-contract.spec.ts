@@ -7,11 +7,23 @@ const now = new Date('2026-06-06T00:00:00.000Z')
 
 const uniAppMock = vi.hoisted(() => ({
   onLoadCallbacks: [] as Array<(options?: Record<string, any>) => void | Promise<void>>,
+  onShowCallbacks: [] as Array<() => void>,
+  onHideCallbacks: [] as Array<() => void>,
+  onUnloadCallbacks: [] as Array<() => void>,
 }))
 
 vi.mock('@dcloudio/uni-app', () => ({
   onLoad: vi.fn((callback: (options?: Record<string, any>) => void | Promise<void>) => {
     uniAppMock.onLoadCallbacks.push(callback)
+  }),
+  onShow: vi.fn((callback: () => void) => {
+    uniAppMock.onShowCallbacks.push(callback)
+  }),
+  onHide: vi.fn((callback: () => void) => {
+    uniAppMock.onHideCallbacks.push(callback)
+  }),
+  onUnload: vi.fn((callback: () => void) => {
+    uniAppMock.onUnloadCallbacks.push(callback)
   }),
   onShareAppMessage: vi.fn(),
 }))
@@ -55,9 +67,13 @@ beforeEach(() => {
   vi.setSystemTime(now)
   vi.clearAllMocks()
   uniAppMock.onLoadCallbacks = []
+  uniAppMock.onShowCallbacks = []
+  uniAppMock.onHideCallbacks = []
+  uniAppMock.onUnloadCallbacks = []
   vi.mocked(getActivityDetail).mockResolvedValue(activityDetail() as any)
   ;(globalThis as any).uni = {
     showToast: vi.fn(),
+    navigateTo: vi.fn(),
   }
 })
 
@@ -111,5 +127,36 @@ describe('活动详情字段契约', () => {
       activityPrice: 8900,
       stock: 5,
     })
+  })
+
+  it('跨过开始时间后无需刷新页面即可自动解锁购买', async () => {
+    vi.mocked(getActivityDetail).mockResolvedValue(activityDetail({
+      startTime: new Date(now.getTime() + 1000).toISOString(),
+      endTime: new Date(now.getTime() + 60 * 1000).toISOString(),
+    }) as any)
+
+    const wrapper = mount(ActivityDetailPage, {
+      global: {
+        stubs: {
+          CountdownTimer: true,
+        },
+      },
+    })
+    await uniAppMock.onLoadCallbacks.at(-1)?.({ id: '1' })
+    await flushPromises()
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('即将开始')
+    expect(wrapper.find('button.buy-btn').attributes('disabled')).toBeDefined()
+
+    await vi.advanceTimersByTimeAsync(1500)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('进行中')
+    expect(wrapper.find('button.buy-btn').attributes('disabled')).toBeUndefined()
+
+    uniAppMock.onHideCallbacks.at(-1)?.()
+    wrapper.unmount()
   })
 })
