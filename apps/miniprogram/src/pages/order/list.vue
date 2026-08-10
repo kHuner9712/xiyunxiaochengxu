@@ -33,7 +33,7 @@
           <view class="product-right">
             <PriceDisplay :price="item.price" />
             <text class="product-qty">x{{ item.quantity }}</text>
-            <text class="product-line-total">实付小计 ¥{{ formatPrice(item.subtotal ?? item.price * item.quantity) }}</text>
+            <text class="product-line-total">商品小计 ¥{{ formatPrice(item.subtotal ?? item.price * item.quantity) }}</text>
           </view>
         </view>
         <view class="order-footer">
