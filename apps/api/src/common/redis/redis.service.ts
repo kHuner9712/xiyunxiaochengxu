@@ -106,13 +106,36 @@ export class RedisService implements OnApplicationShutdown {
 
     const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
     const markerPath = process.env.SCHEDULER_PAUSE_FILE || path.join(uploadDir, '.scheduler-paused');
-    const paused = fs.existsSync(markerPath);
+    if (!fs.existsSync(markerPath)) {
+      if (this.schedulerPauseLogged) {
+        this.schedulerPauseLogged = false;
+        this.logger.log('调度维护标记已解除，Cron 任务恢复获取新锁');
+      }
+      return false;
+    }
+
+    let markerBuild = '';
+    try {
+      markerBuild = fs.readFileSync(markerPath, 'utf8').trim();
+    } catch (error) {
+      // A marker that exists but cannot be read is safer to treat as active for the current build.
+      this.logger.warn(`调度维护标记不可读，按暂停处理：${(error as Error).message}`);
+      return true;
+    }
+
+    const currentBuild = String(process.env.BUILD_SHA || '').trim();
+    const paused = !markerBuild
+      || markerBuild === '*'
+      || !currentBuild
+      || currentBuild === 'unknown'
+      || markerBuild === currentBuild;
+
     if (paused && !this.schedulerPauseLogged) {
       this.schedulerPauseLogged = true;
-      this.logger.warn(`检测到调度维护标记，Cron 任务暂停获取新锁：${markerPath}`);
+      this.logger.warn(`检测到当前构建的调度维护标记，Cron 任务暂停获取新锁：${markerPath}`);
     } else if (!paused && this.schedulerPauseLogged) {
       this.schedulerPauseLogged = false;
-      this.logger.log('调度维护标记已解除，Cron 任务恢复获取新锁');
+      this.logger.log('调度维护标记属于其他构建，当前 Cron 正常运行');
     }
     return paused;
   }
