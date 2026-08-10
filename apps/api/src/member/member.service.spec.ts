@@ -86,7 +86,7 @@ describe('MemberService weapp benefits', () => {
     expect(result.map((item) => item.name)).not.toContain('生日/孕产期关怀');
   });
 
-  it('historical system-generated unsupported defaults are mapped to truthful implemented rights', async () => {
+  it('historical system-generated unsupported defaults are normalized in both mini app and admin APIs', async () => {
     prisma.user.findFirst.mockResolvedValue({
       id: 1n,
       growthValue: 0,
@@ -117,13 +117,17 @@ describe('MemberService weapp benefits', () => {
     ]);
 
     const result = await service.getBenefits('1');
+    const adminLevels = await service.findAllLevels();
+    const adminBenefits = JSON.parse(adminLevels[0].benefits);
 
     expect(result).toEqual([
       expect.objectContaining({ id: 'member_coupon_0', name: '会员专享券' }),
       expect.objectContaining({ id: 'auto_upgrade_0', name: '自动等级升级' }),
     ]);
-    expect(JSON.stringify(result)).not.toContain('优先响应');
-    expect(JSON.stringify(result)).not.toContain('推送关怀福利');
+    expect(adminBenefits).toEqual(result);
+    expect(adminLevels[0].description).toBe('会员专享券、自动等级升级');
+    expect(JSON.stringify(adminLevels)).not.toContain('优先响应');
+    expect(JSON.stringify(adminLevels)).not.toContain('推送关怀福利');
   });
 
   it('getMemberInfo derives level thresholds and names from database configuration', async () => {
