@@ -91,27 +91,27 @@ if [ -n "${BUILD_SHA:-}" ]; then
 fi
 pass "loopback API health, database, Redis and build identity checks pass ($api_build_sha)"
 
-nginx_api_health="$(curl --fail --silent --show-error --insecure \
+nginx_api_health="$(curl --fail --silent --show-error \
   --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/api/health")"
 echo "$nginx_api_health" | grep -q '"status":"ok"' || fail "Nginx API proxy health is not ok: $nginx_api_health"
 nginx_build_sha="$(printf '%s' "$nginx_api_health" | sed -n 's/.*"buildSha":"\([^"]*\)".*/\1/p')"
 [ "$nginx_build_sha" = "$api_build_sha" ] || fail "Nginx API build SHA mismatch: loopback=$api_build_sha nginx=$nginx_build_sha"
-pass 'HTTPS API virtual host proxies to the same API build'
+pass 'HTTPS API virtual host presents trusted TLS and proxies to the same API build'
 
-product_list_response="$(curl --fail --silent --show-error --insecure \
+product_list_response="$(curl --fail --silent --show-error \
   --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/api/weapp/product/list?page=1&pageSize=1")"
 echo "$product_list_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0' || fail "public product list API did not return code=0: $product_list_response"
 echo "$product_list_response" | grep -Eq '"data"[[:space:]]*:' || fail "public product list API response has no data envelope: $product_list_response"
 echo "$product_list_response" | grep -Eq '"list"[[:space:]]*:' || fail "public product list API response has no data.list: $product_list_response"
 echo "$product_list_response" | grep -Eq '"total"[[:space:]]*:' || fail "public product list API response has no data.total: $product_list_response"
-pass 'public product list works through production HTTPS, controller, response envelope and database query path'
+pass 'public product list works through trusted production HTTPS, controller, response envelope and database query path'
 
 callback_payload='{"id":"runtime-smoke-invalid-signature","event_type":"TRANSACTION.SUCCESS","resource":{"algorithm":"AEAD_AES_256_GCM","ciphertext":"invalid-runtime-smoke","nonce":"invalidnonce"}}'
 for callback_path in callback refund-callback; do
   callback_body_file="$(mktemp)"
-  callback_status="$(curl --silent --show-error --insecure \
+  callback_status="$(curl --silent --show-error \
     --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
     --output "$callback_body_file" \
     --write-out '%{http_code}' \
@@ -124,21 +124,21 @@ for callback_path in callback refund-callback; do
   [ "$callback_status" = '200' ] || fail "${callback_path} route returned HTTP $callback_status instead of 200: $callback_response"
   echo "$callback_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*"FAIL"' || fail "${callback_path} invalid-signature smoke did not reach callback failure contract: $callback_response"
 done
-pass 'payment and refund callback routes are publicly reachable through production HTTPS and reject invalid signatures safely'
+pass 'payment and refund callback routes are reachable through trusted production HTTPS and reject invalid signatures safely'
 
-admin_html="$(curl --fail --silent --show-error --insecure \
+admin_html="$(curl --fail --silent --show-error \
   --resolve "${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}/")"
 echo "$admin_html" | grep -Eqi '<!doctype html|<html' || fail 'admin virtual host did not return the SPA entry page'
-pass 'HTTPS admin virtual host serves the SPA'
+pass 'trusted HTTPS admin virtual host serves the SPA'
 
-admin_captcha_response="$(curl --fail --silent --show-error --insecure \
+admin_captcha_response="$(curl --fail --silent --show-error \
   --resolve "${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}/api/admin/auth/captcha")"
 echo "$admin_captcha_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0' || fail "admin captcha API did not return code=0: $admin_captcha_response"
 echo "$admin_captcha_response" | grep -Eq '"captchaId"[[:space:]]*:[[:space:]]*"captcha:' || fail "admin captcha API response has no valid captchaId: $admin_captcha_response"
 echo "$admin_captcha_response" | grep -Eq '"captchaSvg"[[:space:]]*:[[:space:]]*"' || fail "admin captcha API response has no captchaSvg: $admin_captcha_response"
-pass 'admin HTTPS host reaches the real captcha controller and Redis-backed auth path'
+pass 'admin trusted HTTPS host reaches the real captcha controller and Redis-backed auth path'
 
 redirect_code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
   --resolve "${API_DOMAIN}:${HTTP_HOST_PORT}:127.0.0.1" \
@@ -161,22 +161,22 @@ cleanup_public_smoke() {
   docker exec baby-mall-api rm -f "/app/apps/api/uploads/public/${public_smoke_name}" >/dev/null 2>&1 || true
 }
 trap cleanup_public_smoke EXIT
-served_public_smoke="$(curl --fail --silent --show-error --insecure \
+served_public_smoke="$(curl --fail --silent --show-error \
   --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/uploads/public/${public_smoke_name}")"
 [ "$served_public_smoke" = "$public_smoke_body" ] || fail "public upload shared-volume response mismatch: expected=$public_smoke_body actual=$served_public_smoke"
 cleanup_public_smoke
 trap - EXIT
-pass 'public upload volume written by API is served byte-for-byte through production HTTPS Nginx'
+pass 'public upload volume written by API is served byte-for-byte through trusted production HTTPS Nginx'
 
-private_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure \
+private_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
   --resolve "${API_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/uploads/private/runtime-smoke")"
 [ "$private_status" = '403' ] || fail "private upload path returned HTTP $private_status instead of 403"
-pass 'private uploads are blocked by Nginx'
+pass 'private uploads are blocked by Nginx over trusted HTTPS'
 
 image_hash="$(docker exec baby-mall-api cat /app/admin-dist/.build-hash 2>/dev/null | tr -d '\r\n' || true)"
-served_hash="$(curl --fail --silent --show-error --insecure \
+served_hash="$(curl --fail --silent --show-error \
   --resolve "${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}:127.0.0.1" \
   "https://${ADMIN_DOMAIN}:${HTTPS_HOST_PORT}/.build-hash" | tr -d '\r\n')"
 [ -n "$image_hash" ] || fail 'API image does not contain /app/admin-dist/.build-hash'
