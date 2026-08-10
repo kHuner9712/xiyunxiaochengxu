@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, NotFoundException } from '@nestjs/common';
 import { PickupStoreService } from './pickup-store.service';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
@@ -25,7 +25,11 @@ export class WeappPickupStoreController {
   @Public()
   @Get(':id')
   async detail(@Param('id') id: string) {
-    return this.service.findById(id);
+    const store = await this.service.findById(id);
+    if (store.status !== 1) {
+      throw new NotFoundException('自提点不存在或已停用');
+    }
+    return store;
   }
 }
 
