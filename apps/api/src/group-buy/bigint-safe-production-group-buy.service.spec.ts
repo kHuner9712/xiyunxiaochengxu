@@ -60,4 +60,12 @@ describe('BigintSafeProductionGroupBuyService', () => {
     expect(result[1].members.map((member) => member.userId)).toEqual([202n]);
     expect(result[1].leader?.nickname).toBe('团长B');
   });
+
+  it.each(['abc', '0', '-1', '9223372036854775808'])(
+    '公开团详情拒绝非法 ID %s，而不是让 BigInt 转换异常逃逸为 500',
+    async (id) => {
+      const { service } = createService();
+      await expect(service.weappFindGroupById(id)).rejects.toThrow(/团ID(无效|超出范围)/);
+    },
+  );
 });
