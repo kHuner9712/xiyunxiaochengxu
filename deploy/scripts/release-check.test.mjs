@@ -94,3 +94,14 @@ test('release-check.sh treats public placeholders as external production config'
   assert.match(script, /run_pnpm_with_node_env development "\$MINI_BUILD_SCRIPT"/)
   assert.doesNotMatch(script, /legal\.ts 仍包含待确认联系方式占位：\$pattern（生产严格门禁下不可发布）/)
 })
+
+test('production custom container commands validate env before exec', () => {
+  const entrypoint = readFileSync(resolve(root, 'deploy/scripts/entrypoint.sh'), 'utf8')
+  const validationIndex = entrypoint.indexOf('validateEnv(process.env)')
+  const customExecIndex = entrypoint.indexOf('exec "$@"')
+
+  assert.match(entrypoint, /\[ "\$\{NODE_ENV:-\}" = "production" \]/)
+  assert.ok(validationIndex >= 0, 'production entrypoint must call validateEnv(process.env)')
+  assert.ok(customExecIndex >= 0, 'production entrypoint must execute custom commands')
+  assert.ok(validationIndex < customExecIndex, 'production env validation must run before custom command exec')
+})
