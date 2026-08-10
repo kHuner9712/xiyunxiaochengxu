@@ -8,8 +8,9 @@ export function getCouponCenter(params: { page: number; pageSize: number }) {
  * Logged-in coupon center source. The backend only returns coupons the current account can still
  * claim after member-level, new-customer, stock and per-user-limit checks.
  */
-export function getClaimableCoupons() {
-  return get<CouponItem[]>('/weapp/coupon/available')
+export async function getClaimableCoupons() {
+  const data = await get<CouponItem[]>('/weapp/coupon/available')
+  return Array.isArray(data) ? data : []
 }
 
 export function getMyCoupons(params: { status?: number; page: number; pageSize: number }) {
@@ -20,12 +21,13 @@ export function receiveCoupon(couponId: string) {
   return post(`/weapp/coupon/receive/${encodeURIComponent(couponId)}`)
 }
 
-export function getAvailableCoupons(params: { amount: number; productIds: string[] }) {
-  return get<MyCouponItem[]>('/weapp/coupon/usable', {
+export async function getAvailableCoupons(params: { amount: number; productIds: string[] }) {
+  const data = await get<MyCouponItem[]>('/weapp/coupon/usable', {
     amount: params.amount,
     // Explicit CSV avoids platform-specific array query serialization differences.
     productIds: params.productIds.join(',')
   })
+  return Array.isArray(data) ? data : []
 }
 
 export interface CouponItem {
