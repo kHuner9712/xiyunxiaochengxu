@@ -61,6 +61,64 @@ describe('BigintSafeProductionGroupBuyService', () => {
     expect(result[1].leader?.nickname).toBe('团长B');
   });
 
+  it('我的拼团仅返回页面所需字段，不泄露团长内部用户 ID', async () => {
+    const leaderUserId = 9100000000000001n;
+    const groupId = 9007199254740993n;
+    const activityId = 8000000000000001n;
+    const now = new Date();
+    const prisma = {
+      groupBuyMember: {
+        findMany: jest.fn<any>().mockResolvedValue([{ groupId }]),
+      },
+      groupBuyGroup: {
+        findMany: jest.fn<any>().mockResolvedValue([{
+          id: groupId,
+          activityId,
+          leaderUserId,
+          status: 'forming',
+          groupNo: 'GB001',
+          currentCount: 1,
+          targetCount: 2,
+          expiresAt: new Date(now.getTime() + 60_000),
+          successAt: null,
+          failedAt: null,
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+        }]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+      groupBuyActivity: {
+        findMany: jest.fn<any>().mockResolvedValue([{
+          id: activityId,
+          name: '测试拼团',
+          coverImage: 'cover.jpg',
+          groupPrice: 9900,
+          groupSize: 2,
+        }]),
+      },
+    };
+    const service = new BigintSafeProductionGroupBuyService(
+      prisma as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const result: any = await service.weappFindMyGroups('123', { page: 1, pageSize: 20 });
+
+    expect(result.list[0]).toMatchObject({
+      id: groupId.toString(),
+      activityId: activityId.toString(),
+      groupNo: 'GB001',
+      status: 'forming',
+    });
+    expect(result.list[0]).not.toHaveProperty('leaderUserId');
+    expect(result.list[0]).not.toHaveProperty('deletedAt');
+    expect(result.list[0]).not.toHaveProperty('updatedAt');
+    expect(result.list[0].activity.id).toBe(activityId.toString());
+  });
+
   it.each(['abc', '0', '-1', '9223372036854775808'])(
     '公开团详情拒绝非法 ID %s，而不是让 BigInt 转换异常逃逸为 500',
     async (id) => {
