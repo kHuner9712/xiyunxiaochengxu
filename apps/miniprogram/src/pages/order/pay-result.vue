@@ -79,6 +79,9 @@ const pollAttempt = ref(0)
 const maxPollCount = 6
 const pollIntervalMs = 2000
 let pollTimer: ReturnType<typeof setTimeout> | null = null
+let pollSleepResolve: (() => void) | null = null
+let pollGeneration = 0
+let pollingActive = false
 const payIntent = ref('')
 const zeroPay = ref(false)
 
@@ -105,10 +108,36 @@ const resultSubtext = computed(() => {
 })
 
 function stopPolling() {
+  pollGeneration += 1
+  pollingActive = false
   if (pollTimer) {
     clearTimeout(pollTimer)
     pollTimer = null
   }
+  if (pollSleepResolve) {
+    const resolve = pollSleepResolve
+    pollSleepResolve = null
+    resolve()
+  }
+}
+
+function waitForNextPoll(generation: number): Promise<void> {
+  if (generation !== pollGeneration) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      if (pollSleepResolve === finish) pollSleepResolve = null
+      if (pollTimer) {
+        clearTimeout(pollTimer)
+        pollTimer = null
+      }
+      resolve()
+    }
+    pollSleepResolve = finish
+    pollTimer = setTimeout(finish, pollIntervalMs)
+  })
 }
 
 function mapStatusToState(status: any): PaymentState {
@@ -129,66 +158,86 @@ function mapStatusToState(status: any): PaymentState {
   return 'unknown'
 }
 
-async function checkPaymentStatusOnce() {
+async function checkPaymentStatusOnce(generation: number) {
   try {
     const status = await getPaymentStatus(orderId.value)
+    if (generation !== pollGeneration) return null
     paymentState.value = mapStatusToState(status)
     return status
   } catch {
+    if (generation !== pollGeneration) return null
     paymentState.value = 'unknown'
     return null
   }
 }
 
-async function loadOrder() {
+async function loadOrder(generation?: number) {
   try {
-    orderInfo.value = await getOrderDetail(orderId.value)
+    const detail = await getOrderDetail(orderId.value)
+    if (generation !== undefined && generation !== pollGeneration) return
+    orderInfo.value = detail
   } catch (e: any) {
+    if (generation !== undefined && generation !== pollGeneration) return
     uni.showToast({ title: e.message || '订单信息加载失败', icon: 'none' })
   }
 }
 
 async function startPollingStatus() {
+  if (pollingActive || zeroPay.value || !orderId.value) return
+
+  const generation = ++pollGeneration
+  pollingActive = true
   checking.value = true
-  stopPolling()
   pollAttempt.value = 0
 
-  while (pollAttempt.value < maxPollCount) {
-    pollAttempt.value++
-    const status = await checkPaymentStatusOnce()
-    if (paymentState.value === 'success') {
-      checking.value = false
-      await loadOrder()
-      return
-    }
-    if (paymentState.value === 'failed') {
-      checking.value = false
-      await loadOrder()
-      return
-    }
-    if (status?.displayStatus === 'pending' || status?.displayStatus === 'confirming' || status?.confirming || paymentState.value === 'confirming') {
-      await new Promise<void>((resolve) => {
-        pollTimer = setTimeout(() => resolve(), pollIntervalMs)
-      })
-      continue
-    }
-    await new Promise<void>((resolve) => {
-      pollTimer = setTimeout(() => resolve(), pollIntervalMs)
-    })
-  }
+  try {
+    while (generation === pollGeneration && pollAttempt.value < maxPollCount) {
+      pollAttempt.value++
+      const status = await checkPaymentStatusOnce(generation)
+      if (generation !== pollGeneration) return
 
-  checking.value = false
-  if (paymentState.value !== 'success' && paymentState.value !== 'failed') {
-    paymentState.value = 'pending'
+      if (paymentState.value === 'success' || paymentState.value === 'failed') {
+        checking.value = false
+        await loadOrder(generation)
+        return
+      }
+
+      if (
+        status?.displayStatus === 'pending'
+        || status?.displayStatus === 'confirming'
+        || status?.confirming
+        || paymentState.value === 'confirming'
+        || paymentState.value === 'unknown'
+      ) {
+        await waitForNextPoll(generation)
+      }
+    }
+
+    if (generation !== pollGeneration) return
+    checking.value = false
+    if (paymentState.value !== 'success' && paymentState.value !== 'failed') {
+      paymentState.value = 'pending'
+    }
+    await loadOrder(generation)
+  } finally {
+    if (generation === pollGeneration) {
+      pollingActive = false
+      if (pollTimer) {
+        clearTimeout(pollTimer)
+        pollTimer = null
+      }
+      pollSleepResolve = null
+    }
   }
-  await loadOrder()
 }
 
 function goOrderDetail() {
+  stopPolling()
   uni.redirectTo({ url: `/pages/order/detail?id=${orderId.value}` })
 }
 
 function goGroupProgress() {
+  stopPolling()
   if (!resolvedGroupId.value) {
     goOrderDetail()
     return
@@ -205,6 +254,7 @@ function goPrimaryDetail() {
 }
 
 function goHome() {
+  stopPolling()
   uni.switchTab({ url: '/pages/home/index' })
 }
 
