@@ -13,6 +13,7 @@ import { PublicGroupBuyViewService } from './public-group-buy-view.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import {
   GroupBuyActivityQueryDto,
   GroupBuyActivityDto,
@@ -104,10 +105,10 @@ export class WeappGroupBuyController {
 
   @Public()
   @Get('list')
-  async list(@Query() query: { page?: string; pageSize?: string }) {
+  async list(@Query() query: PaginationDto) {
     return this.service.weappFindActivities({
-      page: query.page ? Number(query.page) : 1,
-      pageSize: query.pageSize ? Number(query.pageSize) : 10,
+      page: query.page,
+      pageSize: query.pageSize,
     });
   }
 
@@ -126,11 +127,11 @@ export class WeappGroupBuyController {
   @Get('my-groups')
   async myGroups(
     @CurrentUser('id') userId: string,
-    @Query() query: { page?: string; pageSize?: string },
+    @Query() query: PaginationDto,
   ) {
     return this.service.weappFindMyGroups(userId, {
-      page: query.page ? Number(query.page) : 1,
-      pageSize: query.pageSize ? Number(query.pageSize) : 10,
+      page: query.page,
+      pageSize: query.pageSize,
     });
   }
 
