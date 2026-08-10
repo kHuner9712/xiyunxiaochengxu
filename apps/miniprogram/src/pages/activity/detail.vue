@@ -92,7 +92,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from '@dcloudio/uni-app'
 import { getActivityDetail, type ActivityDetail, type ActivityProduct } from '@/api/activity'
 import { normalizeTimeToTimestamp, type CompatibleTime } from '@/utils/time'
 import { formatPrice } from '@/utils/format'
@@ -110,6 +110,8 @@ const activity = ref<ActivityDetail>({
   rules: null,
   products: [],
 })
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
 
 const activityBanner = computed(() => activity.value.image || activity.value.bannerImage || '/static/default-cover.png')
 const activityProducts = computed<ActivityProduct[]>(() => Array.isArray(activity.value.products) ? activity.value.products : [])
@@ -144,7 +146,7 @@ const giftSkuIds = computed(() => {
 })
 
 const activityStatusText = computed(() => {
-  const now = Date.now()
+  const now = nowMs.value
   const start = normalizeActivityTime(activity.value.startTime)
   const end = normalizeActivityTime(activity.value.endTime)
   if (Number.isFinite(start) && now < start) return '即将开始'
@@ -212,6 +214,20 @@ function isGiftSku(skuId?: string | null) {
   return giftSkuIds.value.has(String(skuId || ''))
 }
 
+function startClock() {
+  nowMs.value = Date.now()
+  if (clockTimer) return
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (!clockTimer) return
+  clearInterval(clockTimer)
+  clockTimer = null
+}
+
 async function loadActivity(id: string) {
   try {
     activity.value = await getActivityDetail(id)
@@ -271,6 +287,10 @@ onLoad((options) => {
   }
   loadActivity(id)
 })
+
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 </script>
 
 <style lang="scss" scoped>
