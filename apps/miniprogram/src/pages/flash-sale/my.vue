@@ -4,7 +4,7 @@
       <view class="info">
         <view class="row-1">
           <text class="name">秒杀订单 #{{ o.id }}</text>
-          <text class="status-tag" :class="`status-${o.status}`">{{ statusText(o.status) }}</text>
+          <text class="status-tag" :class="`status-${displayStatus(o)}`">{{ statusText(o) }}</text>
         </view>
         <view class="row-2">
           <text class="price">¥{{ formatPrice(o.flashPrice) }}</text>
@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { onHide, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleOrder } from '@/api/flash-sale'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -36,6 +36,23 @@ const orderList = ref<FlashSaleOrder[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
@@ -54,21 +71,28 @@ function formatDateTime(s: string): string {
 }
 
 function remainTime(lockExpireAt: string): string {
-  const ms = new Date(lockExpireAt).getTime() - Date.now()
+  const ms = new Date(lockExpireAt).getTime() - nowMs.value
   if (ms <= 0) return '已过期'
   const mins = Math.floor(ms / 60000)
   const secs = Math.floor((ms % 60000) / 1000)
   return mins > 0 ? `${mins}m${secs}s` : `${secs}s`
 }
 
-function statusText(status: string): string {
-  switch (status) {
+function displayStatus(order: FlashSaleOrder): string {
+  if (order.status === 'pending_payment' && new Date(order.lockExpireAt).getTime() <= nowMs.value) {
+    return 'expired'
+  }
+  return order.status
+}
+
+function statusText(order: FlashSaleOrder): string {
+  switch (displayStatus(order)) {
     case 'pending_payment': return '待支付'
     case 'paid': return '已支付'
     case 'cancelled': return '已取消'
     case 'expired': return '已过期'
     case 'refunded': return '已退款'
-    default: return status
+    default: return order.status
   }
 }
 
@@ -97,7 +121,12 @@ function goOrderDetail(orderId: string) {
   uni.navigateTo({ url: `/pages/order/detail?id=${orderId}` })
 }
 
-onShow(() => loadList(true))
+onShow(() => {
+  startClock()
+  loadList(true)
+})
+onHide(() => stopClock())
+onUnload(() => stopClock())
 onReachBottom(() => loadList())
 </script>
 
