@@ -165,7 +165,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getOrderDetail, getOrderDetailByNo, cancelOrder, confirmReceive, type OrderDetail, type OrderProductItem } from '@/api/order'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatOrderStatus, formatPrice } from '@/utils/format'
@@ -181,6 +181,9 @@ const order = ref<OrderDetail>({
 
 const selectAftersaleMode = ref(false)
 const shouldSelectAftersale = ref(false)
+const loadedOrderId = ref('')
+const loadedOrderNo = ref('')
+let skipInitialShowRefresh = true
 
 async function loadOrder(id: string) {
   try {
@@ -379,11 +382,26 @@ onLoad((options) => {
     options?.orderNo || options?.out_trade_no || options?.outTradeNo || options?.order_no
   )
   if (orderNo) {
+    loadedOrderNo.value = orderNo
     loadOrderByNo(orderNo)
   } else if (id) {
+    loadedOrderId.value = id
     loadOrder(id)
   } else {
     uni.redirectTo({ url: '/pages/order/list' })
+  }
+})
+
+onShow(() => {
+  if (skipInitialShowRefresh) {
+    skipInitialShowRefresh = false
+    return
+  }
+  selectAftersaleMode.value = false
+  if (loadedOrderNo.value) {
+    loadOrderByNo(loadedOrderNo.value)
+  } else if (loadedOrderId.value) {
+    loadOrder(loadedOrderId.value)
   }
 })
 
