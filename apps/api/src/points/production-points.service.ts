@@ -55,6 +55,36 @@ export class ProductionPointsService extends PointsService {
     };
   }
 
+  override async getSignInStatus(userId: string) {
+    const canonicalUserId = parsePositiveBigIntId(userId, '用户').toString();
+    const status = await super.getSignInStatus(canonicalUserId);
+    if (!status.todaySigned) return status;
+
+    // The base helper counts the consecutive days before today because it starts at yesterday.
+    // Once today is signed, the current streak includes today as one additional day.
+    const continuous = (status.consecutiveDays ?? 0) + 1;
+    return {
+      ...status,
+      continuous,
+      consecutiveDays: continuous,
+    };
+  }
+
+  override async signIn(userId: string) {
+    const canonicalUserId = parsePositiveBigIntId(userId, '用户').toString();
+    const result = await super.signIn(canonicalUserId);
+    if (!result.alreadySigned) return result;
+
+    // A retry from another device or a stale foreground page is an idempotent success. Return the
+    // actual streak instead of the base fallback of zero so clients cannot regress the UI state.
+    const status = await this.getSignInStatus(canonicalUserId);
+    return {
+      ...result,
+      continuous: status.continuous,
+      consecutiveDays: status.consecutiveDays,
+    };
+  }
+
   override async cleanExpiredPoints() {
     const now = new Date();
     const candidates = await this.productionPrisma.$queryRaw<Array<{
