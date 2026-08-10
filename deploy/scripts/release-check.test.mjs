@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import './production-config-preflight.test.mjs'
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 
@@ -111,6 +112,9 @@ test('production container runs full config/payment preflight before custom comm
 
   assert.match(preflight, /validateEnv\(\{ \.\.\.env \}\)/)
   assert.match(preflight, /new PaymentService\(/)
+  assert.match(preflight, /createPrivateKey\(/)
+  assert.match(preflight, /new X509Certificate\(/)
+  assert.match(preflight, /WECHAT_PLATFORM_CERT_MAP/)
   assert.doesNotMatch(preflight, /NestFactory|createApplicationContext/)
 })
 
