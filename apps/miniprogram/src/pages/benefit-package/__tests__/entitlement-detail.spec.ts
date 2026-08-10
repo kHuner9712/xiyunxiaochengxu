@@ -1,11 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EntitlementPage from '../entitlement.vue'
 import { getBenefitEntitlement } from '@/api/benefit-package'
+
+const now = new Date('2026-08-10T12:00:00.000Z')
 
 const uniAppMock = vi.hoisted(() => ({
   onLoadCallbacks: [] as Array<(options?: Record<string, any>) => void | Promise<void>>,
   onShowCallbacks: [] as Array<() => void>,
+  onHideCallbacks: [] as Array<() => void>,
 }))
 
 vi.mock('@dcloudio/uni-app', () => ({
@@ -15,7 +18,9 @@ vi.mock('@dcloudio/uni-app', () => ({
   onShow: vi.fn((callback: () => void) => {
     uniAppMock.onShowCallbacks.push(callback)
   }),
-  onHide: vi.fn(),
+  onHide: vi.fn((callback: () => void) => {
+    uniAppMock.onHideCallbacks.push(callback)
+  }),
   onUnload: vi.fn(),
   onReachBottom: vi.fn(),
 }))
@@ -26,9 +31,12 @@ vi.mock('@/api/benefit-package', () => ({
 }))
 
 beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(now)
   vi.clearAllMocks()
   uniAppMock.onLoadCallbacks = []
   uniAppMock.onShowCallbacks = []
+  uniAppMock.onHideCallbacks = []
   vi.mocked(getBenefitEntitlement).mockResolvedValue({
     id: '9',
     userBenefitPackageId: '7',
@@ -61,6 +69,10 @@ beforeEach(() => {
   }
 })
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('权益核销详情', () => {
   it('展示真实门店和商家信息，而不是只暴露内部 ID', async () => {
     const wrapper = mount(EntitlementPage, {
@@ -86,5 +98,8 @@ describe('权益核销详情', () => {
     expect((globalThis as any).uni.makePhoneCall).toHaveBeenCalledWith({
       phoneNumber: '021-12345678',
     })
+
+    uniAppMock.onHideCallbacks.at(-1)?.()
+    wrapper.unmount()
   })
 })
