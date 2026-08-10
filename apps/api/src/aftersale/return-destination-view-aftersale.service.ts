@@ -6,7 +6,7 @@ import { AttachmentSafeProductionAftersaleService } from './attachment-safe-prod
 import {
   RETURN_DESTINATION_ACTION,
   type ReturnDestinationSnapshot,
-} from './aftersale-review.service';
+} from './return-destination';
 
 @Injectable()
 export class ReturnDestinationViewAftersaleService extends AttachmentSafeProductionAftersaleService {
