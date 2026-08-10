@@ -64,7 +64,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
+import { onLoad, onShow, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { getOrderList, cancelOrder, confirmReceive, normalizeOrderStatus, type OrderItem, type OrderStatus } from '@/api/order'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatOrderStatus, formatPrice } from '@/utils/format'
@@ -232,8 +232,9 @@ async function handleConfirm(id: string) {
 onLoad((options) => {
   const status = normalizeOrderStatus(Array.isArray(options?.status) ? options?.status[0] : options?.status)
   currentTab.value = status || ''
-  loadOrders(true)
 })
+
+onShow(() => loadOrders(true))
 
 onReachBottom(() => loadOrders())
 
