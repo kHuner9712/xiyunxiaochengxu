@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
+import { RecoverableProductionPaymentService } from './recoverable-production-payment.service';
 import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recoverable-production-payment.service';
 import { CancellationSafeStockSafePaymentService } from './cancellation-safe-stock-safe-payment.service';
 
@@ -69,6 +70,39 @@ describe('CancellationSafeStockSafePaymentService', () => {
 
     await expect(service.createPayment('42', '8')).rejects.toBeInstanceOf(BadRequestException);
     expect(baseCreatePayment).not.toHaveBeenCalled();
+  });
+
+  it('serializes group failure refund creation on the same per-order lock', async () => {
+    const baseCreateRefund = jest
+      .spyOn(RecoverableProductionPaymentService.prototype, 'createGroupBuyFailureRefund')
+      .mockResolvedValue({ status: REFUND_STATUS.PENDING } as any);
+    const { service, redis } = createService(true);
+
+    const result = await service.createGroupBuyFailureRefund('42', '拼团失败自动退款');
+
+    expect(redis.setNX).toHaveBeenCalledWith(
+      'order:payment-cancel:42',
+      expect.any(String),
+      90,
+    );
+    expect(baseCreateRefund).toHaveBeenCalledTimes(1);
+    expect(baseCreateRefund).toHaveBeenCalledWith('42', '拼团失败自动退款');
+    expect(redis.releaseLockWithLua).toHaveBeenCalled();
+    expect(result).toEqual({ status: REFUND_STATUS.PENDING });
+  });
+
+  it('does not enter the group failure refund state machine when the order lock is occupied', async () => {
+    const baseCreateRefund = jest.spyOn(
+      RecoverableProductionPaymentService.prototype,
+      'createGroupBuyFailureRefund',
+    );
+    const { service } = createService(false);
+
+    await expect(
+      service.createGroupBuyFailureRefund('42', '拼团失败自动退款'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(baseCreateRefund).not.toHaveBeenCalled();
   });
 
   it('does not reopen a payment record that has already reached FAILED terminal state', async () => {
