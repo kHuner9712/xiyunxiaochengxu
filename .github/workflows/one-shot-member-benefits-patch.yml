@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'chore: stage exact member benefits source patch'
+    if: github.event.head_commit.message == 'chore: trigger exact member benefits source patch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +30,6 @@ jobs:
                   raise SystemExit(f'{label}: expected exactly one match, got {count}')
               return text.replace(old, new, 1)
 
-          # Normal orders: apply current member price to preview/create and points-deduction base.
           p = Path('apps/api/src/order/order.service.ts')
           s = p.read_text()
           s = replace_once(
@@ -71,7 +70,6 @@ jobs:
           )
           p.write_text(s)
 
-          # Production order completion: use member points multiplier and atomically sync level ID.
           p = Path('apps/api/src/order/production-order.service.ts')
           s = p.read_text()
           s = replace_once(
@@ -106,7 +104,6 @@ jobs:
           )
           p.write_text(s)
 
-          # Coupon eligibility: derive current membership from growth, and repair stale persisted level on receive.
           p = Path('apps/api/src/coupon/coupon.service.ts')
           s = p.read_text()
           s = replace_once(
@@ -141,7 +138,6 @@ jobs:
           )
           p.write_text(s)
 
-          # Refund conservation: claw back growth using the same cumulative, rounding-safe target as reward points.
           p = Path('apps/api/src/payment/point-conserving-payment.service.ts')
           s = p.read_text()
           s = replace_once(
