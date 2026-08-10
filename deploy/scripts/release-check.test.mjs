@@ -105,3 +105,17 @@ test('production custom container commands validate env before exec', () => {
   assert.ok(customExecIndex >= 0, 'production entrypoint must execute custom commands')
   assert.ok(validationIndex < customExecIndex, 'production env validation must run before custom command exec')
 })
+
+test('production compose files pass certificate rotation and critical alert settings', () => {
+  const compose = readFileSync(resolve(root, 'deploy/docker-compose.yml'), 'utf8')
+  const btCompose = readFileSync(resolve(root, 'deploy/docker-compose.bt.yml'), 'utf8')
+  const productionEnv = readFileSync(resolve(root, '.env.production.example'), 'utf8')
+
+  for (const source of [compose, btCompose]) {
+    assert.match(source, /WECHAT_PLATFORM_CERT_MAP: \$\{WECHAT_PLATFORM_CERT_MAP:-\}/)
+    assert.match(source, /ALERT_WEBHOOK_URL: \$\{ALERT_WEBHOOK_URL:-\}/)
+  }
+  assert.match(productionEnv, /WECHAT_PLATFORM_CERT_MAP=/)
+  assert.match(productionEnv, /ALERT_WEBHOOK_URL=/)
+  assert.match(productionEnv, /秘密值含 \$ 时优先使用单引号/)
+})
