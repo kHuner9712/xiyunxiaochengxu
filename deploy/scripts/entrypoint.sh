@@ -7,6 +7,16 @@ if [ "${NODE_ENV:-}" = "production" ]; then
 fi
 
 if [ $# -gt 0 ]; then
+  if [ "${NODE_ENV:-}" = "production" ] \
+    && [ "${1:-}" = "npx" ] \
+    && [ "${2:-}" = "prisma" ] \
+    && [ "${3:-}" = "migrate" ] \
+    && [ "${4:-}" = "deploy" ]; then
+    pause_dir="${UPLOAD_DIR:-/app/apps/api/uploads}"
+    mkdir -p "$pause_dir"
+    printf '%s\n' "${BUILD_SHA:-unknown}" > "$pause_dir/.scheduler-paused"
+    echo "生产迁移维护模式: 已暂停当前 BUILD_SHA 的 Cron 新任务"
+  fi
   exec "$@"
 fi
 
