@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { calculateOrderGrowthValue } from '../src/member/member-level-runtime';
 import { MemberBenefitProductionOrderService } from '../src/order/member-benefit-production-order.service';
 import { MemberGrowthConservingPaymentService } from '../src/payment/member-growth-conserving-payment.service';
+import { PointConservingPaymentService } from '../src/payment/point-conserving-payment.service';
 
 function assertSafeIntegrationDatabase() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -164,18 +165,39 @@ async function main() {
       where: { id: order.id },
       data: {
         status: 'delivered',
-        deliveredAt: new Date(Date.now() - 60_000),
+        deliveredAt: new Date(Date.now() - 120_000),
         autoCompleteAt: new Date(Date.now() - 1_000),
+      },
+    });
+
+    const preCompletionRefundAmount = 3000;
+    await prisma.orderRefund.create({
+      data: {
+        refundNo: `MEMBER-PRE-COMPLETE-${Date.now()}`,
+        orderId: order.id,
+        paymentId: order.payment?.id,
+        outTradeNo: order.orderNo,
+        transactionId: order.payment?.transactionId,
+        outRefundNo: `MEMBER-PRE-COMPLETE-OUT-${Date.now()}`,
+        refundId: `MEMBER-PRE-COMPLETE-WX-${Date.now()}`,
+        refundAmount: preCompletionRefundAmount,
+        totalAmount: order.payAmount,
+        status: 'success',
+        reason: '订单完成前部分退款真实库测试',
+        updatedAt: new Date(Date.now() - 60_000),
       },
     });
 
     const completed = await orderService.autoCompleteOrders();
     assert.equal(completed.completedCount, 1, '真实订单必须可进入自动完成奖励链');
 
-    const expectedReward = Math.floor(Math.floor(order.payAmount / 100) * 15 / 10);
-    const expectedGrowth = calculateOrderGrowthValue(order.payAmount);
+    const completedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    assert.ok(completedOrder.completedAt, '自动完成订单必须记录 completedAt');
+    const netPayAtCompletion = order.payAmount - preCompletionRefundAmount;
+    const expectedReward = Math.floor(Math.floor(netPayAtCompletion / 100) * 15 / 10);
+    const expectedGrowth = calculateOrderGrowthValue(netPayAtCompletion);
     const rewardedUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    assert.equal(rewardedUser.availablePoints, expectedReward, '会员积分倍率必须真实发放');
+    assert.equal(rewardedUser.availablePoints, expectedReward, '会员积分倍率必须只按完成时净实付真实发放');
     assert.equal(rewardedUser.totalPoints, expectedReward);
     assert.equal(rewardedUser.growthValue, initialGrowth + expectedGrowth, '积分倍率不能放大订单成长值');
     assert.equal(rewardedUser.memberLevelId, upgradedLevel.id, '成长值跨门槛必须同步持久化会员等级');
@@ -189,33 +211,51 @@ async function main() {
     });
     assert.match(upgradeRecord.changeReason || '', /成长值更新/);
 
-    const halfRefundAmount = Math.floor(order.payAmount / 2);
+    const growthService = Object.create(MemberGrowthConservingPaymentService.prototype) as any;
+    growthService.memberGrowthPrisma = prisma;
+    const pointService = Object.create(PointConservingPaymentService.prototype) as any;
+    pointService.conservationPrisma = prisma;
+
+    const preOnlyGrowth = await growthService.reconcileOrderRefundGrowth(order.id);
+    assert.equal(preOnlyGrowth.clawedDelta, 0, '完成前已从奖励基数排除的退款不能再次回退成长值');
+    const preOnlyPoints = await pointService.reconcileOrderRefundPoints(order.id);
+    assert.equal(preOnlyPoints.clawedDelta, 0, '完成前已从奖励基数排除的退款不能再次扣订单奖励积分');
+
+    const postCompletionRefundAmount = 3000;
     await prisma.orderRefund.create({
       data: {
-        refundNo: `MEMBER-HALF-${Date.now()}`,
+        refundNo: `MEMBER-POST-COMPLETE-${Date.now()}`,
         orderId: order.id,
         paymentId: order.payment?.id,
         outTradeNo: order.orderNo,
         transactionId: order.payment?.transactionId,
-        outRefundNo: `MEMBER-HALF-OUT-${Date.now()}`,
-        refundId: `MEMBER-HALF-WX-${Date.now()}`,
-        refundAmount: halfRefundAmount,
+        outRefundNo: `MEMBER-POST-COMPLETE-OUT-${Date.now()}`,
+        refundId: `MEMBER-POST-COMPLETE-WX-${Date.now()}`,
+        refundAmount: postCompletionRefundAmount,
         totalAmount: order.payAmount,
         status: 'success',
-        reason: '会员成长值50%退款真实库测试',
+        reason: '订单完成后部分退款真实库测试',
+        updatedAt: new Date(completedOrder.completedAt!.getTime() + 60_000),
       },
     });
 
-    const growthService = Object.create(MemberGrowthConservingPaymentService.prototype) as any;
-    growthService.memberGrowthPrisma = prisma;
-    const halfTarget = expectedGrowth - calculateOrderGrowthValue(order.payAmount - halfRefundAmount);
-    const halfResult = await growthService.reconcileOrderRefundGrowth(order.id);
-    assert.equal(halfResult.clawedDelta, halfTarget);
+    const expectedRemainingCash = netPayAtCompletion - postCompletionRefundAmount;
+    const growthClawTarget = expectedGrowth - calculateOrderGrowthValue(expectedRemainingCash);
+    const growthResult = await growthService.reconcileOrderRefundGrowth(order.id);
+    assert.equal(growthResult.clawedDelta, growthClawTarget);
 
-    const afterHalfRefund = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    assert.equal(afterHalfRefund.growthValue, initialGrowth + expectedGrowth - halfTarget);
+    const rewardClawTarget = Math.floor(
+      expectedReward * postCompletionRefundAmount / netPayAtCompletion,
+    );
+    const pointResult = await pointService.reconcileOrderRefundPoints(order.id);
+    assert.equal(pointResult.clawedDelta, rewardClawTarget);
+    assert.equal(pointResult.outstandingRewardClawback, 0);
 
-    const remainingRefundAmount = order.payAmount - halfRefundAmount;
+    const afterPartialRefund = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    assert.equal(afterPartialRefund.growthValue, initialGrowth + expectedGrowth - growthClawTarget);
+    assert.equal(afterPartialRefund.availablePoints, expectedReward - rewardClawTarget);
+
+    const finalRefundAmount = order.payAmount - preCompletionRefundAmount - postCompletionRefundAmount;
     await prisma.orderRefund.create({
       data: {
         refundNo: `MEMBER-FULL-${Date.now()}`,
@@ -225,20 +265,25 @@ async function main() {
         transactionId: order.payment?.transactionId,
         outRefundNo: `MEMBER-FULL-OUT-${Date.now()}`,
         refundId: `MEMBER-FULL-WX-${Date.now()}`,
-        refundAmount: remainingRefundAmount,
+        refundAmount: finalRefundAmount,
         totalAmount: order.payAmount,
         status: 'success',
-        reason: '会员成长值100%累计退款真实库测试',
+        reason: '会员100%累计退款真实库测试',
+        updatedAt: new Date(completedOrder.completedAt!.getTime() + 120_000),
       },
     });
 
-    const fullResult = await growthService.reconcileOrderRefundGrowth(order.id);
-    assert.equal(fullResult.clawedDelta, expectedGrowth - halfTarget);
-    assert.equal(fullResult.outstandingGrowthClawback, 0);
+    const fullGrowthResult = await growthService.reconcileOrderRefundGrowth(order.id);
+    assert.equal(fullGrowthResult.clawedDelta, expectedGrowth - growthClawTarget);
+    assert.equal(fullGrowthResult.outstandingGrowthClawback, 0);
+    const fullPointResult = await pointService.reconcileOrderRefundPoints(order.id);
+    assert.equal(fullPointResult.clawedDelta, expectedReward - rewardClawTarget);
+    assert.equal(fullPointResult.outstandingRewardClawback, 0);
 
     const fullyRefundedUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
     assert.equal(fullyRefundedUser.growthValue, initialGrowth, '全额累计退款必须完整回退订单成长值');
     assert.equal(fullyRefundedUser.memberLevelId, baseLevel.id, '成长值回退后会员等级必须同步降级');
+    assert.equal(fullyRefundedUser.availablePoints, 0, '全额累计退款必须完整扣回实际发放的订单奖励积分');
 
     const growthTask = await prisma.paymentCompensationTask.findFirstOrThrow({
       where: {
@@ -248,12 +293,28 @@ async function main() {
       },
     });
     assert.equal(growthTask.status, 'resolved');
+    assert.equal((growthTask.callbackPayload as any)?.preCompletionRefundAmount, preCompletionRefundAmount);
     assert.equal((growthTask.callbackPayload as any)?.clawedGrowthValue, expectedGrowth);
 
-    const retry = await growthService.reconcileOrderRefundGrowth(order.id);
-    assert.equal(retry.clawedDelta, 0, '重复对账不能再次扣成长值');
+    const pointTask = await prisma.paymentCompensationTask.findFirstOrThrow({
+      where: {
+        orderNo: order.orderNo,
+        reason: 'refund_points_conservation',
+        transactionId: `refund-points:${order.id}`,
+      },
+    });
+    assert.equal(pointTask.status, 'resolved');
+    assert.equal((pointTask.callbackPayload as any)?.preCompletionRefundAmount, preCompletionRefundAmount);
+    assert.equal((pointTask.callbackPayload as any)?.rewardPayAmount, netPayAtCompletion);
+    assert.equal((pointTask.callbackPayload as any)?.clawbackRewardTarget, expectedReward);
+
+    const growthRetry = await growthService.reconcileOrderRefundGrowth(order.id);
+    const pointRetry = await pointService.reconcileOrderRefundPoints(order.id);
+    assert.equal(growthRetry.clawedDelta, 0, '重复对账不能再次扣成长值');
+    assert.equal(pointRetry.clawedDelta, 0, '重复对账不能再次扣奖励积分');
     const afterRetryUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
     assert.equal(afterRetryUser.growthValue, initialGrowth);
+    assert.equal(afterRetryUser.availablePoints, 0);
 
     console.log('[member-benefit-lifecycle-integration] PASS');
   } finally {
