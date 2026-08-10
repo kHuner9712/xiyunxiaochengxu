@@ -118,7 +118,26 @@ jobs:
           retention-days: 1
 
       - name: Run Miniprogram unit/component tests
-        run: pnpm --filter @baby-mall/miniprogram test
+        id: miniprogram-tests
+        run: |
+          set +e
+          pnpm --filter @baby-mall/miniprogram test > miniprogram-tests.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 300 miniprogram-tests.log >&2
+            exit "$status"
+          fi
+          cat miniprogram-tests.log
+
+      - name: Preserve Miniprogram test failure diagnostics
+        if: failure() && steps.miniprogram-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: miniprogram-tests-failure-log
+          path: miniprogram-tests.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Build API
         id: build-api
