@@ -1,10 +1,13 @@
 import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class RedisService implements OnApplicationShutdown {
   private readonly logger = new Logger(RedisService.name);
   private readonly client: any;
   private closing = false;
+  private schedulerPauseLogged = false;
 
   constructor(@Inject('REDIS_CLIENT') client: any) {
     this.client = client;
@@ -23,6 +26,9 @@ export class RedisService implements OnApplicationShutdown {
   }
 
   async setNX(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    if (this.isSchedulerPaused(key)) {
+      return false;
+    }
     const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
     return result === 'OK';
   }
@@ -93,6 +99,22 @@ export class RedisService implements OnApplicationShutdown {
     const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
     const result = await this.client.eval(lua, 1, key, value);
     return result === 1;
+  }
+
+  private isSchedulerPaused(key: string): boolean {
+    if (!key.startsWith('schedule:')) return false;
+
+    const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+    const markerPath = process.env.SCHEDULER_PAUSE_FILE || path.join(uploadDir, '.scheduler-paused');
+    const paused = fs.existsSync(markerPath);
+    if (paused && !this.schedulerPauseLogged) {
+      this.schedulerPauseLogged = true;
+      this.logger.warn(`检测到调度维护标记，Cron 任务暂停获取新锁：${markerPath}`);
+    } else if (!paused && this.schedulerPauseLogged) {
+      this.schedulerPauseLogged = false;
+      this.logger.log('调度维护标记已解除，Cron 任务恢复获取新锁');
+    }
+    return paused;
   }
 
   async onApplicationShutdown(): Promise<void> {
