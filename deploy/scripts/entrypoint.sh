@@ -13,10 +13,24 @@ if [ $# -gt 0 ]; then
     && [ "${3:-}" = "migrate" ] \
     && [ "${4:-}" = "deploy" ]; then
     pause_dir="${UPLOAD_DIR:-/app/apps/api/uploads}"
+    pause_marker="$pause_dir/.scheduler-paused"
     mkdir -p "$pause_dir"
-    printf '%s\n' "${BUILD_SHA:-unknown}" > "$pause_dir/.scheduler-paused"
+    printf '%s\n' "${BUILD_SHA:-unknown}" > "$pause_marker"
     echo "生产迁移维护模式: 已暂停当前 BUILD_SHA 的 Cron 新任务"
+
+    cleanup_scheduler_pause() {
+      rm -f "$pause_marker"
+      echo "生产迁移维护模式: 已解除 Cron 暂停标记"
+    }
+    trap cleanup_scheduler_pause EXIT HUP INT TERM
+
+    # Do not exec the migration command: this shell must stay alive so the EXIT trap removes the
+    # shared-volume pause marker on both success and failure. Otherwise a one-off live migration
+    # can leave every current/future API instance permanently unable to acquire schedule:* locks.
+    "$@"
+    exit $?
   fi
+
   exec "$@"
 fi
 
