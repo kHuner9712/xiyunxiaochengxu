@@ -62,24 +62,25 @@
 import { ref } from 'vue'
 import { onLoad, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { getProductList } from '@/api/product'
+import { normalizeProductCategoryId, normalizeProductListSort, type ProductListSort } from './product-list-query'
 import ProductCard from '@/components/ProductCard.vue'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
-const filters = [
+const filters: Array<{ label: string; value: ProductListSort }> = [
   { label: '综合', value: 'default' },
   { label: '销量', value: 'sales' },
   { label: '新品', value: 'new' },
   { label: '价格', value: 'price_asc' }
 ]
 
-const currentSort = ref('default')
+const currentSort = ref<ProductListSort>('default')
 const products = ref<any[]>([])
 const total = ref(0)
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
-const categoryId = ref(0)
+const categoryId = ref('')
 const keyword = ref('')
 
 async function loadProducts(reset = false) {
@@ -93,7 +94,13 @@ async function loadProducts(reset = false) {
   }
   loading.value = true
   try {
-    const params: any = {
+    const params: {
+      categoryId?: string
+      keyword?: string
+      sort: ProductListSort
+      page: number
+      pageSize: number
+    } = {
       sort: currentSort.value,
       page: page.value,
       pageSize: 10
@@ -112,7 +119,7 @@ async function loadProducts(reset = false) {
   }
 }
 
-function switchSort(value: string) {
+function switchSort(value: ProductListSort) {
   if (currentSort.value === value) return
   currentSort.value = value
   loadProducts(true)
@@ -123,9 +130,9 @@ function goSearch() {
 }
 
 onLoad((options) => {
-  if (options?.categoryId) categoryId.value = Number(options.categoryId)
-  if (options?.sort) currentSort.value = options.sort
-  if (options?.keyword) keyword.value = options.keyword
+  categoryId.value = normalizeProductCategoryId(options?.categoryId)
+  currentSort.value = normalizeProductListSort(options?.sort)
+  if (options?.keyword) keyword.value = String(options.keyword)
   loadProducts()
 })
 
