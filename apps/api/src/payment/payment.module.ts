@@ -1,7 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PaymentController, RefundController, PaymentReconcileController, RefundReconcileController, PaymentCompensationController } from './payment.controller';
 import { PaymentService } from './payment.service';
-import { DurableZeroPayAftersalePaymentService } from './durable-zero-pay-aftersale-payment.service';
+import { PromotionRecoveringDurableZeroPayAftersalePaymentService } from './promotion-recovering-durable-zero-pay-aftersale-payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { HistoricalAnomalyPaymentReconcileService } from './historical-anomaly-payment-reconcile.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
@@ -18,7 +18,7 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
   providers: [
     {
       provide: PaymentService,
-      useClass: DurableZeroPayAftersalePaymentService,
+      useClass: PromotionRecoveringDurableZeroPayAftersalePaymentService,
     },
     {
       provide: PaymentReconcileService,
