@@ -32,8 +32,9 @@ export class PublicGroupBuyViewService {
     }));
   }
 
-  async findGroupById(id: string) {
+  async findGroupById(id: string, currentUserId?: string) {
     const group = await this.groupBuyService.weappFindGroupById(id);
+    const normalizedCurrentUserId = currentUserId ? String(currentUserId) : '';
     return {
       id: group.id.toString(),
       activityId: group.activityId.toString(),
@@ -59,6 +60,8 @@ export class PublicGroupBuyViewService {
         status: member.status,
         paidAt: member.paidAt,
         createdAt: member.createdAt,
+        isCurrentUser: !!normalizedCurrentUserId
+          && member.userId.toString() === normalizedCurrentUserId,
         user: member.user
           ? {
               nickname: member.user.nickname || '用户',
