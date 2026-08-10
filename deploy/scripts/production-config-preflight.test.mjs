@@ -68,6 +68,7 @@ function buildProductionEnv(fixture) {
     UPLOAD_PUBLIC_URL: 'https://api.example.com',
     CORS_ORIGINS: 'https://admin.example.com',
     ALERT_WEBHOOK_URL: 'https://alerts.example.com/hook',
+    OUTBOUND_HTTP_TIMEOUT_MS: '10000',
     SMOKE_TEST_BYPASS_CAPTCHA: 'false',
   }
 }
@@ -84,6 +85,16 @@ test('production config preflight executes real crypto checks and rejects danger
     const valid = runPreflight(validEnv)
     assert.equal(valid.status, 0, `valid production preflight failed:\n${valid.stderr}\n${valid.stdout}`)
     assert.match(valid.stdout, /PRODUCTION_CONFIG_PREFLIGHT_PASS/)
+
+    const invalidOutboundTimeout = runPreflight({
+      ...validEnv,
+      OUTBOUND_HTTP_TIMEOUT_MS: '999',
+    })
+    assert.notEqual(
+      invalidOutboundTimeout.status,
+      0,
+      'invalid outbound HTTP timeout must fail before production runtime or migration side effects',
+    )
 
     const wrongSerial = runPreflight({
       ...validEnv,
