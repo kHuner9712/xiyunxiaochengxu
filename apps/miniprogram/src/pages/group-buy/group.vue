@@ -153,7 +153,17 @@ async function loadDetail(id: string) {
 async function handleJoinCurrentGroup() {
   if (!group.value || !canJoin.value || submitting.value) return
   if (!userStore.isLoggedIn) {
-    userStore.requireLogin(() => handleJoinCurrentGroup())
+    const targetGroupId = group.value.id
+    userStore.requireLogin(async () => {
+      // The public group view is anonymous before login. Reload it after authentication so
+      // `isCurrentUser` reflects the newly authenticated account before allowing a join.
+      await loadDetail(targetGroupId)
+      if (!canJoin.value) {
+        uni.showToast({ title: '您已参与此团或该团已不可加入', icon: 'none' })
+        return
+      }
+      await handleJoinCurrentGroup()
+    })
     return
   }
 
