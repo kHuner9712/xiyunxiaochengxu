@@ -12,6 +12,7 @@ vi.mock('@dcloudio/uni-app', () => ({
   onLoad: vi.fn((callback: (options?: Record<string, any>) => void) => {
     uniAppMock.onLoadCallbacks.push(callback)
   }),
+  onShow: vi.fn(),
   onReachBottom: vi.fn(),
   onPullDownRefresh: vi.fn(),
 }))
