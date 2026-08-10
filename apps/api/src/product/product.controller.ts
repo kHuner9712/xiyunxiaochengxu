@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, NotFoundException } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
@@ -20,7 +20,11 @@ export class WeappProductController {
   @Public()
   @Get('detail/:id')
   async detail(@Param('id') id: string) {
-    return this.productService.findById(id);
+    const product = await this.productService.findById(id);
+    if (product.status !== 1) {
+      throw new NotFoundException('商品不存在或已下架');
+    }
+    return product;
   }
 
   @Public()
