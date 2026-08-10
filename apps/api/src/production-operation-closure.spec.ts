@@ -83,8 +83,12 @@ describe('production operation closure contracts', () => {
 
   it('uses the outermost hardened runtime providers rather than leaving safety wrappers unused', () => {
     const paymentModule = read('apps/api/src/payment/payment.module.ts');
+    const memberGrowthPayment = read('apps/api/src/payment/member-growth-conserving-payment.service.ts');
+    const promotionRecoveringPayment = read('apps/api/src/payment/promotion-recovering-durable-zero-pay-aftersale-payment.service.ts');
+    const durableZeroPayPayment = read('apps/api/src/payment/durable-zero-pay-aftersale-payment.service.ts');
     const historicalReconcile = read('apps/api/src/payment/historical-anomaly-payment-reconcile.service.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
+    const memberBenefitOrder = read('apps/api/src/order/member-benefit-production-order.service.ts');
     const netRewardOrder = read('apps/api/src/order/cancellation-safe-production-order.service.ts');
     const aftersaleModule = read('apps/api/src/aftersale/aftersale.module.ts');
     const returnDestinationAftersale = read('apps/api/src/aftersale/return-destination-view-aftersale.service.ts');
@@ -98,13 +102,22 @@ describe('production operation closure contracts', () => {
     const snapshotSettlement = read('apps/api/src/merchant-settlement/snapshot-aware-state-safe-merchant-settlement.service.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
 
-    expect(paymentModule).toContain('ZeroPayAftersalePaymentService');
+    expect(paymentModule).toContain('useClass: MemberGrowthConservingPaymentService');
+    expect(memberGrowthPayment).toContain('extends PromotionRecoveringDurableZeroPayAftersalePaymentService');
+    expect(promotionRecoveringPayment).toContain('extends DurableZeroPayAftersalePaymentService');
+    expect(durableZeroPayPayment).toContain('extends ZeroPayAftersalePaymentService');
+    expect(memberGrowthPayment).toContain('refund_growth_conservation');
     expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
     expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
-    expect(orderModule).toContain('CancellationSafeProductionOrderService');
+
+    expect(orderModule).toContain('useClass: MemberBenefitProductionOrderService');
+    expect(memberBenefitOrder).toContain('extends CancellationSafeProductionOrderService');
+    expect(memberBenefitOrder).toContain('calculateMemberDiscountAmount');
+    expect(memberBenefitOrder).toContain('calculateMemberRewardPoints');
     expect(netRewardOrder).toContain('status: REFUND_STATUS.SUCCESS');
     expect(netRewardOrder).toContain('successfulRefundAmount');
     expect(netRewardOrder).toContain('netPayAmount');
+
     expect(aftersaleModule).toContain('useClass: ReturnDestinationViewAftersaleService');
     expect(aftersaleModule).toContain('AftersaleReviewService');
     expect(returnDestinationAftersale).toContain('extends AttachmentSafeProductionAftersaleService');
