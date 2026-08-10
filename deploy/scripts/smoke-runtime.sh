@@ -216,4 +216,11 @@ served_hash="$(curl --fail --silent --show-error \
 [[ "$served_hash" =~ ^[0-9a-fA-F]{40}$ ]] || fail "admin build hash must be the exact 40-character Git commit SHA: ${served_hash:-empty}"
 pass "API and admin static volume match image build $served_hash"
 
+scheduler_pause_marker="$(docker exec baby-mall-api sh -c 'marker="${UPLOAD_DIR:-/app/apps/api/uploads}/.scheduler-paused"; if [ -f "$marker" ]; then cat "$marker"; fi' 2>/dev/null | tr -d '\r\n' || true)"
+if [ -n "$scheduler_pause_marker" ]; then
+  [ "$scheduler_pause_marker" = "$api_build_sha" ] || fail "scheduler pause marker belongs to a different build: marker=$scheduler_pause_marker api=$api_build_sha"
+  docker exec baby-mall-api sh -c 'rm -f "${UPLOAD_DIR:-/app/apps/api/uploads}/.scheduler-paused"'
+  pass 'deployment scheduler pause marker matched the candidate build and was cleared after full smoke success'
+fi
+
 printf 'RUNTIME SMOKE PASS (%d checks)\n' "$PASS_COUNT"
