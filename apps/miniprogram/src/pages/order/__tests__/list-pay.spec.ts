@@ -5,6 +5,7 @@ import { createPayment, wxPay } from '@/api/payment'
 
 vi.mock('@dcloudio/uni-app', () => ({
   onLoad: vi.fn(),
+  onShow: vi.fn(),
   onReachBottom: vi.fn(),
   onPullDownRefresh: vi.fn(),
 }))
