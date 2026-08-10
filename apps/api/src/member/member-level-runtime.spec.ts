@@ -1,6 +1,7 @@
 import {
   calculateMemberDiscountAmount,
   calculateMemberRewardPoints,
+  calculateOrderGrowthValue,
   resolveMemberLevel,
   type RuntimeMemberLevel,
 } from './member-level-runtime';
@@ -25,7 +26,8 @@ describe('member-level-runtime', () => {
     expect(calculateMemberDiscountAmount(10000, null)).toBe(0);
   });
 
-  it('1.5倍积分按整数向下取整且默认倍率为1倍', () => {
+  it('积分倍率只影响积分奖励，成长值始终按实付基础值累计', () => {
+    expect(calculateOrderGrowthValue(2500)).toBe(25);
     expect(calculateMemberRewardPoints(2500, 15)).toBe(37);
     expect(calculateMemberRewardPoints(2500, 10)).toBe(25);
     expect(calculateMemberRewardPoints(2500, null)).toBe(25);
