@@ -40,6 +40,11 @@ if [ -d /app/admin-dist ]; then
   echo "管理后台静态资源: 已同步到 /usr/share/nginx/admin"
 fi
 
+run_seed() {
+  echo "数据库初始化: running database seed..."
+  npx prisma db seed
+}
+
 if [ "$NODE_ENV" = "production" ]; then
   if [ "$SKIP_MIGRATE" = "true" ]; then
     echo "SKIP_MIGRATE=true: 跳过数据库迁移"
@@ -47,9 +52,42 @@ if [ "$NODE_ENV" = "production" ]; then
     echo "数据库迁移: 执行 prisma migrate deploy..."
     npx prisma migrate deploy
   fi
-  if [ "$RUN_SEED" = "true" ]; then
-    echo "RUN_SEED=true: running database seed..."
-    npx prisma db seed
+
+  # A brand-new production database has schema after migrations but no administrator. Requiring an
+  # operator to remember RUN_SEED=true creates a deployment that can be perfectly healthy yet have
+  # no usable admin login. Detect only the unambiguous fresh-bootstrap condition: zero admin users.
+  # Existing databases never auto-seed, so deployment cannot reset or recreate an established admin.
+  admin_count="$(node - <<'NODE'
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+(async () => {
+  try {
+    const count = await prisma.adminUser.count();
+    process.stdout.write(String(count));
+  } finally {
+    await prisma.$disconnect();
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+NODE
+)"
+  case "$admin_count" in
+    ''|*[!0-9]*)
+      echo "生产数据库管理员数量检查返回非法结果: $admin_count" >&2
+      exit 1
+      ;;
+  esac
+
+  if [ "$admin_count" = "0" ]; then
+    echo "检测到全新生产数据库（admin_users=0），执行首次安全初始化"
+    run_seed
+  elif [ "$RUN_SEED" = "true" ]; then
+    echo "RUN_SEED=true: 显式执行幂等数据库 seed"
+    run_seed
+  else
+    echo "检测到已有管理员账号（admin_users=$admin_count），跳过自动 seed"
   fi
 else
   echo "数据库迁移: 执行 prisma db push..."
