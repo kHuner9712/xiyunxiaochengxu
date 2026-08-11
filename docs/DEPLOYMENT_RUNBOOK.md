@@ -29,7 +29,7 @@ chmod 600 .env.production
 - `DATABASE_URL` 必须与 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` 完全一致；密码含 URI 保留字符时必须 percent-encode。
 - `HTTP_HOST_PORT=80`、`HTTPS_HOST_PORT=443`。
 - 回调、CORS、上传公网基址必须使用仓库规定的正式域名。
-- JWT、刷新令牌、数据库、Redis、后台初始密码必须满足生产强度门禁。
+- DB/Redis 必须使用独立强随机密码；当前自动门禁负责必填、拒绝模板占位值和数据库连接串一致性。JWT/Refresh secret 还会强制至少 32 字符并拒绝弱值，后台初始密码会强制至少 12 字符并拒绝弱值。
 - 微信商户私钥和平台证书必须是真实可解析文件；平台证书序列号必须匹配。
 - `WECHAT_SKIP_VERIFY=false`，`SMOKE_TEST_BYPASS_CAPTCHA=false`。
 - 订单自动关单/自动收货、售后期限、包邮门槛、默认运费、积分抵扣等**可变业务参数由数据库 `system_configs` 与后台“系统配置”控制，不由生产 env 控制**。
