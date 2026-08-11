@@ -27,8 +27,12 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
 fi
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-DB_FILE="$BACKUP_DIR/db_${TIMESTAMP}.sql.gz"
-UPLOAD_FILE="$BACKUP_DIR/uploads_${TIMESTAMP}.tar.gz"
+DB_BASENAME="db_${TIMESTAMP}.sql.gz"
+UPLOAD_BASENAME="uploads_${TIMESTAMP}.tar.gz"
+CHECKSUM_BASENAME="checksums_${TIMESTAMP}.sha256"
+DB_FILE="$BACKUP_DIR/$DB_BASENAME"
+UPLOAD_FILE="$BACKUP_DIR/$UPLOAD_BASENAME"
+CHECKSUM_FILE="$BACKUP_DIR/$CHECKSUM_BASENAME"
 DB_TMP="${DB_FILE}.tmp"
 UPLOAD_TMP="${UPLOAD_FILE}.tmp"
 
@@ -69,7 +73,7 @@ gzip -t "$DB_TMP"
 test -s "$DB_TMP"
 mv "$DB_TMP" "$DB_FILE"
 chmod 600 "$DB_FILE"
-echo "数据库备份成功: $(basename "$DB_FILE")"
+echo "数据库备份成功: $DB_BASENAME"
 
 echo "[2/3] 备份上传文件..."
 "${COMPOSE[@]}" run --rm --no-deps --entrypoint sh api -lc '
@@ -81,10 +85,15 @@ tar -tzf "$UPLOAD_TMP" >/dev/null
 test -s "$UPLOAD_TMP"
 mv "$UPLOAD_TMP" "$UPLOAD_FILE"
 chmod 600 "$UPLOAD_FILE"
-echo "上传文件备份成功: $(basename "$UPLOAD_FILE")"
+echo "上传文件备份成功: $UPLOAD_BASENAME"
 
-sha256sum "$DB_FILE" "$UPLOAD_FILE" > "$BACKUP_DIR/checksums_${TIMESTAMP}.sha256"
-chmod 600 "$BACKUP_DIR/checksums_${TIMESTAMP}.sha256"
+# Store relative names so a complete backup set can be copied to a different server/path and
+# still be verified there during disaster recovery.
+(
+  cd "$BACKUP_DIR"
+  sha256sum "$DB_BASENAME" "$UPLOAD_BASENAME" > "$CHECKSUM_BASENAME"
+)
+chmod 600 "$CHECKSUM_FILE"
 
 echo "[3/3] 清理 ${RETENTION_DAYS} 天前的备份..."
 find "$BACKUP_DIR" -maxdepth 1 -type f \
@@ -92,4 +101,4 @@ find "$BACKUP_DIR" -maxdepth 1 -type f \
   -mtime "+$RETENTION_DAYS" -delete
 
 echo "备份完成："
-ls -lh "$DB_FILE" "$UPLOAD_FILE" "$BACKUP_DIR/checksums_${TIMESTAMP}.sha256"
+ls -lh "$DB_FILE" "$UPLOAD_FILE" "$CHECKSUM_FILE"
