@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger, HttpCode, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { PaymentService } from './payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -90,12 +91,21 @@ export class PaymentController {
   @SkipThrottle()
   @Post('callback')
   @HttpCode(200)
-  async callback(@Body() body: WechatCallbackBodyDto, @Headers() headers: any, @Req() req: any) {
+  async callback(
+    @Body() body: WechatCallbackBodyDto,
+    @Headers() headers: any,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const rawBody = req.rawBody;
     try {
       return await this.paymentService.handleCallback(body, headers, rawBody);
     } catch (error: any) {
       this.logger.error(`支付回调处理异常: ${error?.message}`, error?.stack);
+      // WeChat Pay treats a 2xx callback response as successfully received and stops retrying.
+      // Preserve a non-2xx status when verification or durable business processing fails so the
+      // notification can be retried instead of being silently lost.
+      res.status(500);
       return { code: 'FAIL', message: error?.message || '支付回调处理失败' };
     }
   }
@@ -105,12 +115,18 @@ export class PaymentController {
   @SkipThrottle()
   @Post('refund-callback')
   @HttpCode(200)
-  async refundCallback(@Body() body: WechatCallbackBodyDto, @Headers() headers: any, @Req() req: any) {
+  async refundCallback(
+    @Body() body: WechatCallbackBodyDto,
+    @Headers() headers: any,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const rawBody = req.rawBody;
     try {
       return await this.paymentService.handleRefundCallback(body, headers, rawBody);
     } catch (error: any) {
       this.logger.error(`退款回调处理异常: ${error?.message}`, error?.stack);
+      res.status(500);
       return { code: 'FAIL', message: error?.message || '退款回调处理失败' };
     }
   }
