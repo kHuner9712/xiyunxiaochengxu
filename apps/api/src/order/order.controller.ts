@@ -40,6 +40,7 @@ export class WeappOrderController {
   @Post('create')
   async create(@CurrentUser('id') userId: string, @Body() dto: CreateOrderDto) {
     return this.orderService.create(userId, {
+      clientRequestId: dto.clientRequestId,
       addressId: dto.addressId,
       pickupStoreId: dto.pickupStoreId || undefined,
       fulfillmentType: dto.fulfillmentType || undefined,
@@ -52,7 +53,7 @@ export class WeappOrderController {
       referrerUserId: dto.referrerUserId,
       remark: dto.remark,
       items: dto.items.map((i) => ({ skuId: i.skuId, quantity: i.quantity })),
-    });
+    } as CreateOrderDto);
   }
 
   @Get('list')
