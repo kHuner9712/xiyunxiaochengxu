@@ -97,8 +97,11 @@ const entitlementList = ref<UserBenefitEntitlementSummary[]>([])
 const page = ref(1)
 const finished = ref(false)
 const nowMs = ref(Date.now())
+let currentEntitlementId = ''
 let currentPackageId = ''
 let clockTimer: ReturnType<typeof setInterval> | null = null
+let requestVersion = 0
+let loadingVersion = -1
 
 const effectiveDetailStatus = computed(() => detail.value ? effectiveStatus(detail.value) : '')
 
@@ -149,41 +152,69 @@ function stopClock() {
   clockTimer = null
 }
 
-async function loadDetail(id: string) {
+async function loadDetail(id: string, version = requestVersion) {
+  if (loading.value && loadingVersion === version) return
   loading.value = true
+  loadingVersion = version
   try {
-    detail.value = await getBenefitEntitlement(id)
+    const data = await getBenefitEntitlement(id)
+    if (version !== requestVersion || mode.value !== 'detail' || id !== currentEntitlementId) return
+    detail.value = data
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === requestVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === requestVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
+async function loadList(reset = false, version = requestVersion) {
+  if (!reset && finished.value && version === requestVersion) return
+  if (loading.value && loadingVersion === version) return
   if (reset) {
     page.value = 1
     finished.value = false
     entitlementList.value = []
   }
   if (!currentPackageId) return
+
+  const requestPage = page.value
+  const packageId = currentPackageId
   loading.value = true
+  loadingVersion = version
   try {
     const data = await getMyBenefitEntitlements({
-      page: page.value,
+      page: requestPage,
       pageSize: 50,
-      packageId: currentPackageId
+      packageId
     })
+    if (version !== requestVersion || mode.value !== 'list' || packageId !== currentPackageId) return
     entitlementList.value.push(...data.list)
     finished.value = entitlementList.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === requestVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === requestVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshCurrent() {
+  const version = ++requestVersion
+  if (mode.value === 'detail') {
+    if (!currentEntitlementId) return Promise.resolve()
+    return loadDetail(currentEntitlementId, version)
+  }
+  return loadList(true, version)
 }
 
 function goDetail(id: string) {
@@ -201,20 +232,34 @@ onLoad((options) => {
   const packageId = options?.packageId
   if (id) {
     mode.value = 'detail'
-    loadDetail(String(id))
+    currentEntitlementId = String(id)
+    currentPackageId = ''
   } else if (packageId) {
     mode.value = 'list'
     currentPackageId = String(packageId)
-    loadList(true)
+    currentEntitlementId = ''
   }
 })
 
-onShow(() => startClock())
+onShow(() => {
+  startClock()
+  void refreshCurrent()
+})
 onHide(() => stopClock())
 onUnload(() => stopClock())
 
 onReachBottom(() => {
-  if (mode.value === 'list') loadList()
+  if (mode.value === 'list') void loadList(false, requestVersion)
+})
+
+defineExpose({
+  mode,
+  detail,
+  entitlementList,
+  loading,
+  loadDetail,
+  loadList,
+  refreshCurrent,
 })
 </script>
 
