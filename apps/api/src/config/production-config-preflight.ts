@@ -99,6 +99,17 @@ function validateDatabaseUrlConsistency(env: NodeJS.ProcessEnv): void {
   }
 }
 
+function validatePublicPortContract(env: NodeJS.ProcessEnv): void {
+  const httpPort = String(env.HTTP_HOST_PORT || '80').trim();
+  const httpsPort = String(env.HTTPS_HOST_PORT || '443').trim();
+  if (httpPort !== '80') {
+    fail(`HTTP_HOST_PORT 必须为 80；当前为 ${httpPort || '(empty)'}，否则公开域名 HTTP 重定向入口与标准 URL 不一致`);
+  }
+  if (httpsPort !== '443') {
+    fail(`HTTPS_HOST_PORT 必须为 443；当前为 ${httpsPort || '(empty)'}，微信支付/退款回调使用无端口 HTTPS URL，只会访问标准 443 端口`);
+  }
+}
+
 function normalizeCertificateSerial(serial: string): string {
   const normalized = String(serial || '')
     .trim()
@@ -235,6 +246,7 @@ export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.en
 
   rejectObviousPlaceholderValues(env);
   validateDatabaseUrlConsistency(env);
+  validatePublicPortContract(env);
 
   // This value is consumed by every Axios-based external integration. Validate it here so an
   // invalid production setting cannot survive until after a live Prisma migration or until Nest
