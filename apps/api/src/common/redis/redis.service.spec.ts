@@ -75,6 +75,15 @@ describe('RedisService token-safe locks', () => {
 });
 
 describe('RedisService scheduler lease heartbeat', () => {
+  async function advance(ms: number) {
+    jest.advanceTimersByTime(ms);
+    // The interval callback intentionally launches the async renewal without awaiting it. Flush the
+    // promise microtasks explicitly because this repository's Jest fake-timer build does not expose
+    // advanceTimersByTimeAsync.
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -99,7 +108,7 @@ describe('RedisService scheduler lease heartbeat', () => {
       'NX',
     );
 
-    await jest.advanceTimersByTimeAsync(1100);
+    await advance(1100);
 
     expect(client.eval).toHaveBeenCalledTimes(1);
     const [lua, keyCount, key, token, ttl] = client.eval.mock.calls[0];
@@ -118,14 +127,14 @@ describe('RedisService scheduler lease heartbeat', () => {
     const service = new RedisService(client);
 
     await service.setNX('schedule:refund_reconcile', 'owner-token', 3);
-    await jest.advanceTimersByTimeAsync(1100);
+    await advance(1100);
     expect(client.eval).toHaveBeenCalledTimes(1);
 
     await expect(service.releaseLockWithLua('schedule:refund_reconcile', 'owner-token'))
       .resolves.toBe(true);
     const evalCallsAfterRelease = client.eval.mock.calls.length;
 
-    await jest.advanceTimersByTimeAsync(5000);
+    await advance(5000);
     expect(client.eval).toHaveBeenCalledTimes(evalCallsAfterRelease);
   });
 
@@ -138,10 +147,10 @@ describe('RedisService scheduler lease heartbeat', () => {
     jest.spyOn((service as any).logger, 'error').mockImplementation(() => undefined);
 
     await service.setNX('schedule:expire_group_buys', 'old-token', 3);
-    await jest.advanceTimersByTimeAsync(1100);
+    await advance(1100);
     expect(client.eval).toHaveBeenCalledTimes(1);
 
-    await jest.advanceTimersByTimeAsync(5000);
+    await advance(5000);
     expect(client.eval).toHaveBeenCalledTimes(1);
     expect((service as any).logger.error).toHaveBeenCalledWith(
       expect.stringContaining('已不再持有该锁'),
@@ -156,7 +165,7 @@ describe('RedisService scheduler lease heartbeat', () => {
     const service = new RedisService(client);
 
     await service.setNX('payment:callback:123', 'owner-token', 3);
-    await jest.advanceTimersByTimeAsync(5000);
+    await advance(5000);
 
     expect(client.eval).not.toHaveBeenCalled();
   });
