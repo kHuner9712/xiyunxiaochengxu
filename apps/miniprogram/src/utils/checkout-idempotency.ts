@@ -79,8 +79,8 @@ function clear(scope: string, clientRequestId: string) {
 
 /**
  * Persist one request identity until the server returns a concrete success response. Network
- * failures and process/page re-entry therefore retry the exact same logical purchase. A changed
- * payload gets a new identity because it represents a new purchase intent.
+ * failures and process/page re-entry therefore retry the exact same logical action. A changed
+ * payload gets a new identity because it represents a new user intent.
  */
 export async function runIdempotentCheckout<T>(
   scope: string,
@@ -93,3 +93,5 @@ export async function runIdempotentCheckout<T>(
   clear(scope, clientRequestId)
   return result
 }
+
+export const runPersistentIdempotentAction = runIdempotentCheckout

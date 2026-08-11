@@ -1,10 +1,12 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { CouponService } from './coupon.service';
+import { IdempotentGrowthAwareCouponService } from './idempotent-growth-aware-coupon.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateCouponDto } from './dto/create-coupon.dto';
 import { UpdateCouponDto } from './dto/update-coupon.dto';
+import { ReceiveCouponDto } from './dto/receive-coupon.dto';
 import {
   CouponQueryDto,
   CouponListQueryDto,
@@ -14,7 +16,7 @@ import {
 
 @Controller('weapp/coupon')
 export class WeappCouponController {
-  constructor(private readonly couponService: CouponService) {}
+  constructor(private readonly couponService: IdempotentGrowthAwareCouponService) {}
 
   @Public()
   @Get('center')
@@ -39,8 +41,9 @@ export class WeappCouponController {
   async receive(
     @CurrentUser('id') userId: string,
     @Param('couponId') couponId: string,
+    @Body() body: ReceiveCouponDto,
   ) {
-    return this.couponService.receive(userId, couponId);
+    return this.couponService.receiveIdempotent(userId, couponId, body.clientRequestId);
   }
 
   @Get('usable')
