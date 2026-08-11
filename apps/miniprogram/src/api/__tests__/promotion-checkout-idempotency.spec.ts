@@ -86,7 +86,7 @@ describe('promotion checkout request identities', () => {
     expect(second.clientRequestId).not.toBe(first.clientRequestId)
   })
 
-  it('keeps start and join group-buy identities isolated by operation and target', async () => {
+  it('keeps start and join group-buy pending state isolated by operation and target', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1786449600000)
     vi.spyOn(Math, 'random').mockReturnValue(0.333333333)
     vi.mocked(post)
@@ -105,15 +105,24 @@ describe('promotion checkout request identities', () => {
       addressId: '10',
       fulfillmentType: 'delivery',
     })).rejects.toThrow('请求超时')
-    const startRequestId = (vi.mocked(post).mock.calls[0][1] as any).clientRequestId
+
+    const startKey = 'baby_mall_pending_promotion_checkout:group-buy:start:401'
+    const joinKey = 'baby_mall_pending_promotion_checkout:group-buy:join:501'
+    const startPending = storage.get(startKey)
+    expect(startPending?.clientRequestId).toMatch(/^\d{13}-[a-z0-9]{16,40}$/i)
+    expect(storage.has(joinKey)).toBe(false)
 
     await groupBuyApi.join({
       groupId: '501',
       addressId: '10',
       fulfillmentType: 'delivery',
     })
-    const joinRequestId = (vi.mocked(post).mock.calls[1][1] as any).clientRequestId
-    expect(joinRequestId).not.toBe(startRequestId)
+
+    // The join operation may coincidentally generate the same random request-id string, but its
+    // persisted scope and server-side deterministic-order scope are distinct. Clearing a successful
+    // join must therefore never erase the unresolved start request.
+    expect(storage.has(joinKey)).toBe(false)
+    expect(storage.get(startKey)).toEqual(startPending)
   })
 
   it('adds request identity only to activity create, not preview', async () => {
