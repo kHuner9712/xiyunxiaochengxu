@@ -14,6 +14,7 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 
 const POSITIVE_ID_PATTERN = /^[1-9]\d*$/;
 const EXPLICIT_TIMEZONE_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/i;
+const CLIENT_REQUEST_ID_PATTERN = /^\d{13}-[a-z0-9]{16,40}$/i;
 
 function normalizeId(value: unknown): unknown {
   if (value === undefined || value === null) return value;
@@ -138,6 +139,11 @@ export class GroupBuyMemberQueryDto extends PaginationDto {
 
 // ============ 小程序：开团/参团 ============
 export class StartGroupBuyDto {
+  @IsString()
+  @Matches(CLIENT_REQUEST_ID_PATTERN, { message: '下单请求标识无效' })
+  @MaxLength(54, { message: '下单请求标识过长' })
+  clientRequestId!: string;
+
   @Transform(({ value }) => normalizeId(value))
   @IsString()
   @Matches(POSITIVE_ID_PATTERN, { message: '活动ID无效' })
@@ -172,6 +178,11 @@ export class StartGroupBuyDto {
 }
 
 export class JoinGroupBuyDto {
+  @IsString()
+  @Matches(CLIENT_REQUEST_ID_PATTERN, { message: '下单请求标识无效' })
+  @MaxLength(54, { message: '下单请求标识过长' })
+  clientRequestId!: string;
+
   @Transform(({ value }) => normalizeId(value))
   @IsString()
   @Matches(POSITIVE_ID_PATTERN, { message: '团ID无效' })
