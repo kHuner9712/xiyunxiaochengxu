@@ -69,6 +69,8 @@ const pointsRules = ref<PointsRule[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let detailVersion = 0
+let loadingVersion = -1
 
 async function loadBalance() {
   try {
@@ -86,27 +88,41 @@ async function loadCheckInStatus() {
   }
 }
 
-async function loadPointsDetail(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
+async function loadPointsDetail(reset = false, version = detailVersion) {
+  if (!reset && finished.value && version === detailVersion) return
+  if (loading.value && loadingVersion === version) return
   if (reset) {
     page.value = 1
     finished.value = false
     pointsDetail.value = []
   }
 
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await getPointsDetail({ page: page.value, pageSize: 10 })
+    const data = await getPointsDetail({ page: requestPage, pageSize: 10 })
+    if (version !== detailVersion) return
+
     const list = Array.isArray(data?.list) ? data.list : []
     pointsDetail.value.push(...list)
     finished.value = pointsDetail.value.length >= Number(data?.total || 0)
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '明细加载失败', icon: 'none' })
+    if (version === detailVersion) {
+      uni.showToast({ title: '明细加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === detailVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshPointsDetail() {
+  const version = ++detailVersion
+  return loadPointsDetail(true, version)
 }
 
 async function loadRules() {
@@ -122,7 +138,7 @@ async function refreshPage() {
   await Promise.all([
     loadBalance(),
     loadCheckInStatus(),
-    loadPointsDetail(true),
+    refreshPointsDetail(),
     loadRules(),
   ])
 }
@@ -142,7 +158,7 @@ async function handleCheckIn() {
     checkInStatus.value.todayPoints = data.points
     uni.showToast({ title: `签到成功，+${data.points}积分`, icon: 'none' })
     await loadBalance()
-    void loadPointsDetail(true)
+    void refreshPointsDetail()
   } catch {
     uni.showToast({ title: '签到失败', icon: 'none' })
   }
@@ -163,11 +179,18 @@ onPullDownRefresh(async () => {
 })
 
 onReachBottom(() => {
-  void loadPointsDetail()
+  void loadPointsDetail(false, detailVersion)
 })
 
 onShow(() => {
   void refreshPage()
+})
+
+defineExpose({
+  pointsDetail,
+  loading,
+  loadPointsDetail,
+  refreshPointsDetail,
 })
 </script>
 
