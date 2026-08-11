@@ -5,6 +5,8 @@ import { validateSync } from 'class-validator';
 import { ConfirmOrderDto } from './confirm-order.dto';
 import { CreateOrderDto } from './create-order.dto';
 
+const VALID_CLIENT_REQUEST_ID = '1786449600000-abcdefghijklmnopqrstuvwx';
+
 describe('ConfirmOrderDto', () => {
   it('rejects empty items', () => {
     const dto = plainToInstance(ConfirmOrderDto, { items: [] });
@@ -65,18 +67,39 @@ describe('ConfirmOrderDto', () => {
 });
 
 describe('CreateOrderDto', () => {
+  it('rejects missing clientRequestId', () => {
+    const dto = plainToInstance(CreateOrderDto, {
+      items: [{ skuId: '1001', quantity: 1 }],
+    });
+    const errors = validateSync(dto);
+    expect(errors.some((error) => error.property === 'clientRequestId')).toBe(true);
+  });
+
+  it('rejects malformed clientRequestId', () => {
+    const dto = plainToInstance(CreateOrderDto, {
+      clientRequestId: 'retry-me',
+      items: [{ skuId: '1001', quantity: 1 }],
+    });
+    const errors = validateSync(dto);
+    expect(errors.some((error) => error.property === 'clientRequestId')).toBe(true);
+  });
+
   it('rejects items exceeding max size (100 items)', () => {
     const items = Array.from({ length: 100 }, (_, i) => ({
       skuId: String(1000 + i),
       quantity: 1,
     }));
-    const dto = plainToInstance(CreateOrderDto, { items });
+    const dto = plainToInstance(CreateOrderDto, {
+      clientRequestId: VALID_CLIENT_REQUEST_ID,
+      items,
+    });
     const errors = validateSync(dto);
     expect(errors.length).toBeGreaterThan(0);
   });
 
   it('rejects quantity exceeding max (100)', () => {
     const dto = plainToInstance(CreateOrderDto, {
+      clientRequestId: VALID_CLIENT_REQUEST_ID,
       items: [{ skuId: '1001', quantity: 100 }],
     });
     const errors = validateSync(dto);
@@ -85,6 +108,7 @@ describe('CreateOrderDto', () => {
 
   it('rejects duplicate skuId', () => {
     const dto = plainToInstance(CreateOrderDto, {
+      clientRequestId: VALID_CLIENT_REQUEST_ID,
       items: [
         { skuId: '1001', quantity: 1 },
         { skuId: '1001', quantity: 2 },
@@ -97,8 +121,9 @@ describe('CreateOrderDto', () => {
     expect(itemsError!.constraints).toHaveProperty('uniqueSkuIds');
   });
 
-  it('accepts valid items', () => {
+  it('accepts valid items with a durable clientRequestId', () => {
     const dto = plainToInstance(CreateOrderDto, {
+      clientRequestId: VALID_CLIENT_REQUEST_ID,
       items: [{ skuId: '1001', quantity: 1 }],
     });
     const errors = validateSync(dto);
