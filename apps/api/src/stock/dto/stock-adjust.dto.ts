@@ -23,6 +23,12 @@ export class StockAdjustDto {
 
   @Type(() => Number)
   @IsInt()
+  @Min(0)
+  @Max(2147483647)
+  expectedStock!: number;
+
+  @Type(() => Number)
+  @IsInt()
   @Min(1)
   @Max(100000000)
   quantity!: number;
