@@ -21,6 +21,28 @@ vi.mock('@/api/points', () => ({
   getPointsRules: vi.fn(),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function record(id: string, description: string) {
+  return {
+    id,
+    type: 1,
+    points: 10,
+    balance: 10,
+    source: 'test',
+    description,
+    createdAt: '2026-08-11T00:00:00.000Z',
+  } as any
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   uniAppMock.onShowCallbacks = []
@@ -54,5 +76,35 @@ describe('积分中心前台刷新', () => {
     expect(wrapper.find('.balance-value').text()).toBe('20')
     expect(wrapper.find('.checkin-text').text()).toBe('签到')
     expect(getCheckInStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('新的积分明细先返回后，旧分页请求晚到不能恢复旧账本', async () => {
+    const first = deferred<any>()
+    const second = deferred<any>()
+    vi.mocked(getPointsDetail)
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+
+    const wrapper = mount(PointsPage, {
+      global: { stubs: { Loading: true } },
+    })
+
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+    expect(getPointsDetail).toHaveBeenCalledTimes(2)
+
+    second.resolve({ list: [record('new', '最新积分记录')], total: 1 })
+    await flushPromises()
+    expect((wrapper.vm as any).pointsDetail.map((item: any) => item.id)).toEqual(['new'])
+    expect(wrapper.text()).toContain('最新积分记录')
+
+    first.resolve({ list: [record('old', '旧积分记录')], total: 1 })
+    await flushPromises()
+
+    expect((wrapper.vm as any).pointsDetail.map((item: any) => item.id)).toEqual(['new'])
+    expect(wrapper.text()).not.toContain('旧积分记录')
+    expect((wrapper.vm as any).loading).toBe(false)
   })
 })
