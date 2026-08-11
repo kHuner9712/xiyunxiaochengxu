@@ -74,7 +74,12 @@ describe('Upload limits and MIME guard (e2e)', () => {
   });
 
   function token() {
-    return jwtService.sign({ id: '9', roleType: 'user', tokenType: 'access' });
+    return jwtService.sign({
+      id: '9',
+      roleType: 'user',
+      tokenType: 'access',
+      tokenId: 'upload-limit-session-9',
+    });
   }
 
   it('超限文件被 413 拒绝', async () => {
