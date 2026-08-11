@@ -104,7 +104,7 @@ describe('Private upload access (e2e)', () => {
   function sign(payload: any) {
     return jwtService.sign({
       ...payload,
-      ...(payload.roleType === 'admin' ? { tokenId: `session-${payload.id}` } : {}),
+      tokenId: `session-${payload.roleType}-${payload.id}`,
       tokenType: 'access',
     });
   }
