@@ -18,6 +18,12 @@ requireText(smoke, '["phone", "wechat", "both"]', 'production smoke must validat
 requireText(smoke, 'phone mode has no usable phone number', 'phone customer-service modes must require a usable phone number')
 requireText(smoke, 'native WeChat contact still requires real-device acceptance', 'WeChat-only customer service must retain the real-device acceptance boundary')
 
+requireText(smoke, `[ "$callback_status" = '500' ]`, 'invalid payment/refund signatures must produce HTTP 500 so WeChat keeps retrying failed notifications')
+requireText(smoke, 'instead of 500', 'callback smoke failure message must preserve the non-2xx retry contract')
+if (smoke.includes(`[ "$callback_status" = '200' ]`)) {
+  failures.push('production smoke must not treat failed payment/refund callback processing as HTTP 200 success')
+}
+
 requireText(deploy, 'container_payment_path_to_host', 'production deploy must map configured payment certificate container paths back to the mounted host directory')
 requireText(deploy, 'CONFIGURED_WECHAT_PRIVATE_KEY_PATH', 'production deploy must read the configured merchant private-key path')
 requireText(deploy, 'CONFIGURED_WECHAT_PLATFORM_CERT_PATH', 'production deploy must read the configured platform-certificate path')
