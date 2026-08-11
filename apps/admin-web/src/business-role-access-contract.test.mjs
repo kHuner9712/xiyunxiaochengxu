@@ -41,6 +41,8 @@ test('product workflows can read reference data without receiving reference writ
 test('business menus use operational permissions instead of unrelated system privileges', () => {
   const router = read('apps/admin-web/src/router/index.ts')
   const layout = read('apps/admin-web/src/layouts/AdminLayout.vue')
+  const routePermissionGuard = read('apps/admin-web/src/router/permission-guard.ts')
+  const main = read('apps/admin-web/src/main.ts')
   const defaultRoles = read('apps/api/prisma/default-role-permissions.ts')
   const roleMigration = read('apps/api/prisma/migrations/20260809154000_seed_default_role_permissions_if_empty/migration.sql')
   const pickupMigration = read('apps/api/prisma/migrations/20260811174000_repair_pickup_permission_hierarchy/migration.sql')
@@ -73,6 +75,16 @@ test('business menus use operational permissions instead of unrelated system pri
   assert.match(layout, /function hasVisibleAuthorizedChild\(route: RouteRecordRaw\)/)
   assert.match(layout, /hasMenuPermission\(route\) \|\| hasVisibleAuthorizedChild\(route\)/)
   assert.match(layout, /children\.filter\(\(child\) => !child\.meta\?\.hidden && hasMenuPermission\(child\)\)/)
+
+  assert.match(routePermissionGuard, /router\.beforeResolve/)
+  assert.match(routePermissionGuard, /typeof to\.meta\.permission === 'string'/)
+  assert.match(routePermissionGuard, /userStore\.hasPermission\(required\)/)
+  assert.match(routePermissionGuard, /path: '\/403'/)
+  assert.match(main, /setupRoutePermissionGuard\(router, pinia\)/)
+  assert.ok(
+    main.indexOf('setupRoutePermissionGuard(router, pinia)') < main.indexOf('app.use(router)'),
+    'route permission guard must be registered before the router starts initial navigation',
+  )
 
   assert.match(defaultRoles, /'pickup',\s*'pickup:store',\s*'pickup:verify'/)
   assert.match(roleMigration, /'pickup', 'pickup:store', 'pickup:verify'/)
