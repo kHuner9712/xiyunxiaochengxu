@@ -1,5 +1,4 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../common/prisma/prisma.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { SystemConfigService } from '../system-config/system-config.service';
 import {
   PromotionCheckoutInput,
@@ -7,13 +6,14 @@ import {
   PromotionCheckoutService,
 } from './promotion-checkout.service';
 import { Prisma } from '@prisma/client';
+import {
+  resolveCreateOrderAttribution,
+  type MerchantPromotionSourceLookup,
+} from './order-attribution';
 
 @Injectable()
 export class AttributionAwarePromotionCheckoutService extends PromotionCheckoutService {
-  constructor(
-    private readonly attributionPrisma: PrismaService,
-    systemConfigService: SystemConfigService,
-  ) {
+  constructor(@Optional() systemConfigService?: SystemConfigService) {
     super(systemConfigService);
   }
 
@@ -21,13 +21,16 @@ export class AttributionAwarePromotionCheckoutService extends PromotionCheckoutS
     tx: Prisma.TransactionClient,
     input: PromotionCheckoutInput,
   ): Promise<PromotionCheckoutResult> {
-    let enriched = input;
+    let enriched = await resolveCreateOrderAttribution(
+      tx as unknown as MerchantPromotionSourceLookup,
+      input,
+    );
     const shouldRecoverAttribution =
-      input.sourceType === 'user_referral' ||
-      input.sourceType === 'campaign' ||
-      !!input.referrerUserId ||
-      !!input.shareRecordId ||
-      !!input.shareCampaignId;
+      enriched.sourceType === 'user_referral' ||
+      enriched.sourceType === 'campaign' ||
+      !!enriched.referrerUserId ||
+      !!enriched.shareRecordId ||
+      !!enriched.shareCampaignId;
 
     if (shouldRecoverAttribution) {
       const relation = await tx.userInviteRelation.findFirst({
@@ -44,10 +47,10 @@ export class AttributionAwarePromotionCheckoutService extends PromotionCheckoutS
 
       if (relation) {
         enriched = {
-          ...input,
-          referrerUserId: input.referrerUserId || relation.inviterUserId.toString(),
-          shareRecordId: input.shareRecordId || relation.sourceShareRecordId?.toString(),
-          shareCampaignId: input.shareCampaignId || relation.sourceCampaignId?.toString(),
+          ...enriched,
+          referrerUserId: enriched.referrerUserId || relation.inviterUserId.toString(),
+          shareRecordId: enriched.shareRecordId || relation.sourceShareRecordId?.toString(),
+          shareCampaignId: enriched.shareCampaignId || relation.sourceCampaignId?.toString(),
         };
       }
     }
