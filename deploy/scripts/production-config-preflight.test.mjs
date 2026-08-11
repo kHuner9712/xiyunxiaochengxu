@@ -96,6 +96,27 @@ test('production config preflight executes real crypto checks and rejects danger
       'invalid outbound HTTP timeout must fail before production runtime or migration side effects',
     )
 
+    const placeholderMerchant = runPreflight({
+      ...validEnv,
+      WECHAT_MCH_ID: 'REPLACE_WITH_REAL_MCH_ID',
+    })
+    assert.notEqual(
+      placeholderMerchant.status,
+      0,
+      'obvious production template placeholders must fail before payment/runtime side effects',
+    )
+    assert.match(`${placeholderMerchant.stderr}\n${placeholderMerchant.stdout}`, /模板占位值/)
+
+    const placeholderDatabaseUrl = runPreflight({
+      ...validEnv,
+      DATABASE_URL: 'mysql://root:REPLACE_WITH_PERCENT_ENCODED_DB_PASSWORD@mysql:3306/baby_mall',
+    })
+    assert.notEqual(
+      placeholderDatabaseUrl.status,
+      0,
+      'placeholder database credentials must fail before any database connection or migration',
+    )
+
     const wrongSerial = runPreflight({
       ...validEnv,
       WECHAT_PLATFORM_CERT_SERIAL_NO: 'ABCDEF123457',
