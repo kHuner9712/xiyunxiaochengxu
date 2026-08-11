@@ -25,7 +25,13 @@ for (const [pattern, message] of [
 for (const file of ['deploy/docker-compose.yml', 'deploy/docker-compose.bt.yml']) {
   requireText(file, './redis/redis.conf:/etc/redis/redis.conf:ro', 'production Redis must mount the audited redis.conf read-only')
   requireText(file, 'redis_data:/data', 'production Redis must keep a persistent data volume')
+  requireText(file, './scripts/redis-entrypoint.sh:/usr/local/bin/redis-entrypoint.sh:ro', 'production Redis must use the audited host-safety entrypoint')
 }
+
+requireText('deploy/scripts/redis-entrypoint.sh', '/proc/sys/vm/overcommit_memory', 'Redis startup must inspect the host overcommit setting')
+requireText('deploy/scripts/redis-entrypoint.sh', '[ "$OVERCOMMIT_VALUE" != "1" ]', 'Redis startup must fail closed unless vm.overcommit_memory=1')
+requireText('deploy/scripts/redis-entrypoint.sh', 'exit 1', 'unsafe Redis host settings must stop the container instead of logging and continuing')
+requireText('deploy/scripts/redis-entrypoint.sh', '/sys/kernel/mm/transparent_hugepage/enabled', 'Redis startup should surface unsafe Transparent Huge Pages host tuning')
 
 requireText('apps/api/src/common/redis/redis.service.ts', "getConfigValue('maxmemory-policy')", 'runtime must inspect Redis eviction policy')
 requireText('apps/api/src/common/redis/redis.service.ts', "getConfigValue('appendonly')", 'runtime must inspect AOF enablement')
