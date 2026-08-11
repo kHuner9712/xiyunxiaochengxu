@@ -5,7 +5,7 @@ import { CheckoutReadyProductionActivityService } from './checkout-ready-product
 import { ActivityCheckoutService } from './activity-checkout.service';
 import { ActivityMultiItemCheckoutService } from './activity-multi-item-checkout.service';
 import { ExclusiveNewUserActivityCheckoutService } from './exclusive-new-user-activity-checkout.service';
-import { AttributionSafeQuotaActivityMultiItemCheckoutService } from './attribution-safe-quota-activity-multi-item-checkout.service';
+import { IdempotentAttributionSafeQuotaActivityMultiItemCheckoutService } from './idempotent-attribution-safe-quota-activity-multi-item-checkout.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { RedisModule } from '../common/redis/redis.module';
 import { ContentModule } from '../content/content.module';
@@ -18,7 +18,7 @@ import { SystemConfigModule } from '../system-config/system-config.module';
   providers: [
     {
       provide: ActivityMultiItemCheckoutService,
-      useClass: AttributionSafeQuotaActivityMultiItemCheckoutService,
+      useClass: IdempotentAttributionSafeQuotaActivityMultiItemCheckoutService,
     },
     { provide: ActivityCheckoutService, useClass: ExclusiveNewUserActivityCheckoutService },
     { provide: ActivityService, useClass: CheckoutReadyProductionActivityService },
