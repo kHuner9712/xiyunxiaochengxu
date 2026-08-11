@@ -19,6 +19,7 @@ interface CartItem {
 export const useCartStore = defineStore('cart', () => {
   const items = ref<CartItem[]>([])
   const loading = ref(false)
+  let fetchVersion = 0
 
   function isPurchasable(item: CartItem) {
     return item.isValid !== false
@@ -65,9 +66,12 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   async function fetchCart() {
+    const version = ++fetchVersion
     loading.value = true
     try {
       const data = await get<CartItem[]>('/weapp/cart/list')
+      if (version !== fetchVersion) return
+
       const prevCheckedIds = new Set(items.value.filter(i => i.checked).map(i => i.id))
       const hadPreviousState = items.value.length > 0
       items.value = data.map(item => {
@@ -79,10 +83,13 @@ export const useCartStore = defineStore('cart', () => {
       })
       updateTabBadge()
     } catch {
+      if (version !== fetchVersion) return
       items.value = []
       updateTabBadge()
     } finally {
-      loading.value = false
+      if (version === fetchVersion) {
+        loading.value = false
+      }
     }
   }
 
