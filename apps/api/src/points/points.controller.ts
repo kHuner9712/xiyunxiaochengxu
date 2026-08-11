@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Query } from '@nestjs/common';
 import { PointsService } from './points.service';
+import { AdminPointsAdjustmentService } from './admin-points-adjustment.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { SignInDto } from './dto/sign-in.dto';
@@ -38,7 +39,10 @@ export class WeappPointsController {
 
 @Controller('admin/points')
 export class AdminPointsController {
-  constructor(private readonly pointsService: PointsService) {}
+  constructor(
+    private readonly pointsService: PointsService,
+    private readonly adminPointsAdjustmentService: AdminPointsAdjustmentService,
+  ) {}
 
   @Get('records')
   @RequirePermission('user:points')
@@ -52,7 +56,12 @@ export class AdminPointsController {
   @Post('adjust')
   @RequirePermission('user:points')
   async adjust(@Body() dto: AdminAdjustPointsDto) {
-    return this.pointsService.adminAdjust(dto.userId, dto.points, dto.description);
+    return this.adminPointsAdjustmentService.adjust(
+      dto.userId,
+      dto.points,
+      dto.description,
+      dto.expectedAvailablePoints,
+    );
   }
 
   @Post('expire-clean')
