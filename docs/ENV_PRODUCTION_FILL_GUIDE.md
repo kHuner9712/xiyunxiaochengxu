@@ -1,87 +1,173 @@
-# .env.production 填写辅助清单（ENV_PRODUCTION_FILL_GUIDE）
+# `.env.production` 填写指南
 
-默认约定：以下内容用于服务器本地 `.env.production` 填写，所有真实值均**不得提交 Git**。
+真实 `.env.production` 只保存在生产服务器，不提交 Git。以仓库根目录 `.env.production.example` 为唯一字段模板；本指南只解释真实运行时契约，不额外发明配置项。
 
-## 1. 关键安全规则
+## 1. 基本规则
 
-1. `WECHAT_API_V3_KEY` 必须为 **32 字节**。
-2. `JWT_SECRET` / `REFRESH_TOKEN_SECRET` / `DB_PASSWORD` / `REDIS_PASSWORD` / `ADMIN_DEFAULT_PASSWORD` 至少 16 位，且包含大小写字母、数字、特殊字符。
-3. `WECHAT_PRIVATE_KEY_PATH`、`WECHAT_PLATFORM_CERT_PATH` 必须使用模板约定的容器内路径：`/app/apps/api/certs/apiclient_key.pem`、`/app/apps/api/certs/wechatpay_platform.pem`。
-4. `.env.production` 仅在服务器本地保存，权限建议 `chmod 600 .env.production`。
+```bash
+cp .env.production.example .env.production
+chmod 600 .env.production
+```
 
-## 2. 生产必填字段（部署门禁）
+- Node 运行时满足 `>=22.13.0 <25`。
+- Docker 使用 Compose v2，即 `docker compose`。
+- 密钥、密码、AppSecret、私钥、证书不得提交仓库。
+- `DATABASE_URL` 必须显式填写；数据库密码含 `@ : / # % ? &` 等 URI 保留字符时，对 URL 中用户名/密码部分 percent-encode。
+- Docker Compose 会处理 `$` 插值；秘密值含 `$` 时优先按模板说明正确引用/转义。
 
-| 字段 | 含义 | 从哪里获取 | 示例格式 | 是否敏感 | 是否可提交 Git |
-|---|---|---|---|---|---|
-| `NODE_ENV` | 运行环境标识 | 运维约定 | `production` | 否 | 否（生产文件不提交） |
-| `PORT` | API 监听端口 | 运维约定 | `3000` | 否 | 否 |
-| `DB_PASSWORD` | MySQL 密码 | DBA/运维生成 | `XyMall@2026!DbPwd` | 是 | 否 |
-| `DATABASE_URL` | 数据库连接串 | 运维按数据库信息组装 | `mysql://root:***@mysql:3306/baby_mall` | 是 | 否 |
-| `REDIS_HOST` | Redis 主机名 | 运维部署信息 | `redis` | 否 | 否 |
-| `REDIS_PASSWORD` | Redis 密码 | 运维生成 | `XyMall@2026!Redis` | 是 | 否 |
-| `JWT_SECRET` | 用户访问令牌签名密钥 | 后端/运维生成 | `随机强密钥` | 是 | 否 |
-| `REFRESH_TOKEN_SECRET` | 刷新令牌签名密钥 | 后端/运维生成 | `随机强密钥` | 是 | 否 |
-| `WECHAT_APP_ID` | 微信小程序 AppID | 微信公众平台 | `wx1234567890abcd` | 中 | 否 |
-| `WECHAT_APP_SECRET` | 小程序 AppSecret | 微信公众平台 | `xxxxxxxxxxxxxxxx` | 是 | 否 |
-| `WECHAT_MCH_ID` | 微信支付商户号 | 微信商户平台 | `16位数字` | 中 | 否 |
-| `WECHAT_MCH_SERIAL_NO` | 商户证书序列号 | 微信商户平台证书信息 | `十六进制串` | 中 | 否 |
-| `WECHAT_API_V3_KEY` | 微信支付 APIv3 密钥 | 微信商户平台 | `32字节字符串` | 是 | 否 |
-| `WECHAT_PRIVATE_KEY_PATH` | 商户私钥容器内读取路径 | 模板固定（不要改） | `/app/apps/api/certs/apiclient_key.pem` | 是（路径本身可公开，文件敏感） | 否 |
-| `WECHAT_PLATFORM_CERT_PATH` | 微信支付平台证书容器内读取路径 | 模板固定（不要改） | `/app/apps/api/certs/wechatpay_platform.pem` | 中 | 否 |
-| `WECHAT_PLATFORM_CERT_SERIAL_NO` | 平台证书序列号 | 微信商户平台/证书内容 | `十六进制串` | 中 | 否 |
-| `WECHAT_NOTIFY_URL` | 支付回调地址 | 运维/后端约定 | `https://api.xxx.com/api/weapp/pay/callback` | 否 | 否 |
-| `WECHAT_REFUND_NOTIFY_URL` | 退款回调地址 | 运维/后端约定 | `https://api.xxx.com/api/weapp/pay/refund-callback` | 否 | 否 |
-| `CORS_ORIGINS` | 后台跨域白名单 | 运维域名配置 | `https://admin.xxx.com` | 否 | 否 |
-| `ADMIN_DEFAULT_PASSWORD` | 初始管理员密码 | 运维生成 | `XyMall@2026!Admin` | 是 | 否 |
-| `SSL_FULLCHAIN_PATH` | HTTPS 证书链路径 | 运维证书部署 | `deploy/nginx/ssl/fullchain.pem` | 中 | 否 |
-| `SSL_PRIVKEY_PATH` | HTTPS 私钥路径 | 运维证书部署 | `deploy/nginx/ssl/privkey.pem` | 是（路径本身可公开，文件敏感） | 否 |
+## 2. 数据库与 Redis
 
-## 3. 建议同步填写字段（运行配置）
+必须正确填写：
 
-| 字段 | 含义 | 从哪里获取 | 示例格式 | 是否敏感 | 是否可提交 Git |
-|---|---|---|---|---|---|
-| `LOG_LEVEL` | 日志级别 | 运维约定 | `info` | 否 | 否 |
-| `DB_HOST` | 数据库主机 | 运维部署信息 | `mysql` | 否 | 否 |
-| `DB_PORT` | 数据库端口 | 运维部署信息 | `3306` | 否 | 否 |
-| `DB_NAME` | 数据库名称 | DBA/运维 | `baby_mall` | 否 | 否 |
-| `DB_USER` | 数据库用户名 | DBA/运维 | `root` | 中 | 否 |
-| `REDIS_PORT` | Redis 端口 | 运维部署信息 | `6379` | 否 | 否 |
-| `JWT_EXPIRES_IN` | 用户令牌过期时间 | 后端约定 | `7d` | 否 | 否 |
-| `JWT_ADMIN_EXPIRES_IN` | 后台令牌过期时间 | 后端约定 | `2h` | 否 | 否 |
-| `REFRESH_TOKEN_EXPIRES_IN` | 刷新令牌过期时间 | 后端约定 | `30d` | 否 | 否 |
-| `WECHAT_SKIP_VERIFY` | 是否跳过微信回调验签 | 后端约定（生产应 `false`） | `false` | 否 | 否 |
-| `ADMIN_DEFAULT_USERNAME` | 初始管理员用户名 | 运维约定 | `admin` | 中 | 否 |
-| `SMOKE_TEST_BYPASS_CAPTCHA` | 冒烟测试验证码开关 | 测试约定 | `false` | 中 | 否 |
-| `UPLOAD_DIR` | 上传目录 | 运维约定 | `/app/apps/api/uploads` | 否 | 否 |
-| `UPLOAD_MAX_SIZE` | 上传大小上限（字节） | 后端约定 | `10485760` | 否 | 否 |
-| `UPLOAD_ALLOWED_TYPES` | 允许上传 MIME 列表 | 后端约定 | `image/jpeg,image/png,...` | 否 | 否 |
-| `UPLOAD_PUBLIC_URL` | 上传资源公网基址 | 运维域名配置 | `https://api.xxx.com` | 否 | 否 |
-| `STORAGE_PROVIDER` | 上传存储提供方预留配置 | 运维约定 | `local` / `oss` / `cos` / `s3` | 否 | 否 |
-| `STORAGE_PRIVATE_ASSET_POLICY` | 敏感资质图片访问策略 | 运维/法务约定 | `private` | 否 | 否 |
-| `ORDER_AUTO_CLOSE_MINUTES` | 未支付自动关闭分钟数 | 业务运营约定 | `30` | 否 | 否 |
-| `ORDER_AUTO_COMPLETE_DAYS` | 自动确认收货天数 | 业务运营约定 | `15` | 否 | 否 |
-| `FREIGHT_FREE_AMOUNT` | 包邮门槛 | 运营定价规则 | `99` | 否 | 否 |
-| `FREIGHT_DEFAULT_FEE` | 默认运费 | 运营定价规则 | `10` | 否 | 否 |
-| `FREIGHT_REMOTE_FEE` | 偏远地区运费 | 运营定价规则 | `20` | 否 | 否 |
-| `POINTS_DEDUCT_RATE` | 积分抵扣比例 | 运营规则 | `100` | 否 | 否 |
-| `POINTS_DEDUCT_MAX_PERCENT` | 积分抵扣上限百分比 | 运营规则 | `30` | 否 | 否 |
+- `DB_HOST=mysql`
+- `DB_PORT=3306`
+- `DB_NAME`
+- `DB_USER=root`（当前 Compose 契约）
+- `DB_PASSWORD`
+- `DATABASE_URL`
+- `REDIS_HOST=redis`
+- `REDIS_PORT=6379`
+- `REDIS_PASSWORD`
 
-## 4. 填写完成后的检查
+production preflight 会把 `DATABASE_URL` 解析后与 `DB_*` 逐项比较，任何 host/port/database/user/password 漂移都会阻断启动。
 
-证书路径说明（务必区分）：
-1. `.env.production` 中的 `WECHAT_PRIVATE_KEY_PATH` / `WECHAT_PLATFORM_CERT_PATH` 是**容器内路径**。
-2. 真实证书文件由运维放在宿主机：
+Redis 容器启动时还会验证宿主机 `vm.overcommit_memory=1`；不满足时拒绝启动。
+
+## 3. 鉴权
+
+必填：
+
+- `JWT_SECRET`
+- `REFRESH_TOKEN_SECRET`
+- `ADMIN_DEFAULT_USERNAME`
+- `ADMIN_DEFAULT_PASSWORD`
+
+JWT/Refresh secret 生产至少 32 字符且不得命中弱值；后台初始密码必须满足生产强度门禁。Fresh database 自动创建首管理员并要求首次改密，无需手工 `RUN_SEED=true`。
+
+## 4. 微信小程序与支付
+
+必填真实值：
+
+- `WECHAT_APP_ID`
+- `WECHAT_APP_SECRET`
+- `WECHAT_MCH_ID`
+- `WECHAT_MCH_SERIAL_NO`
+- `WECHAT_API_V3_KEY`（32 字节）
+- `WECHAT_PRIVATE_KEY_PATH=/app/apps/api/certs/apiclient_key.pem`
+- `WECHAT_PLATFORM_CERT_PATH=/app/apps/api/certs/wechatpay_platform.pem`
+- `WECHAT_PLATFORM_CERT_SERIAL_NO`
+
+宿主机文件：
+
 - `deploy/certs/apiclient_key.pem`
 - `deploy/certs/wechatpay_platform.pem`
-3. Docker Compose 会把宿主机 `deploy/certs` 目录挂载到容器 `/app/apps/api/certs`。
 
-上传存储说明：
-1. 生产建议接入对象存储/CDN；当前本地 `uploads` 仅作为可持久化部署方案，不等同于高可用长期存储。
-2. 暂用本地 `uploads` 时，必须配置持久化卷、备份策略、只读静态访问、目录权限和文件大小上限。
-3. 营业执照、食品资质等敏感资质图片不建议直接公开在 `/uploads/`；需要公开展示前必须由运营/法务确认。
+平台证书轮换可通过模板中的 `WECHAT_PLATFORM_CERT_MAP` 同时信任多个序列号。
 
-1. 运行：`pnpm release:check`
-2. 严格门禁：`pnpm release:check:prod`
-3. 部署前检查：`ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh`
+必须保持：
 
-> **注意**：生产环境 API 路径固定为 `/api`，Nginx 代理、小程序和管理后台 baseURL 均依赖此路径，不可更改。
+- `WECHAT_SKIP_VERIFY=false`
+- `WECHAT_NOTIFY_URL=https://api.yunxixiaochengxu.com.cn/api/weapp/pay/callback`
+- `WECHAT_REFUND_NOTIFY_URL=https://api.yunxixiaochengxu.com.cn/api/weapp/pay/refund-callback`
+
+production preflight 会真实解析 RSA 私钥和 X.509 平台证书、校验证书有效期与序列号。
+
+## 5. 正式域名、端口与 CORS
+
+当前生产契约固定：
+
+- `API_DOMAIN=api.yunxixiaochengxu.com.cn`
+- `ADMIN_DOMAIN=admin.yunxixiaochengxu.com.cn`
+- `HTTP_HOST_PORT=80`
+- `HTTPS_HOST_PORT=443`
+- `CORS_ORIGINS=https://admin.yunxixiaochengxu.com.cn`
+- `UPLOAD_PUBLIC_URL=https://api.yunxixiaochengxu.com.cn`
+
+不要填写任意其他生产域名或非标准公网端口；preflight 会直接拒绝漂移。
+
+## 6. 上传
+
+当前模板：
+
+- `UPLOAD_DIR=/app/apps/api/uploads`
+- `UPLOAD_MAX_SIZE=52428800`（50MB）
+- `UPLOAD_ALLOWED_TYPES=image/jpeg,image/png,image/gif,image/webp,video/mp4`
+- `UPLOAD_PUBLIC_URL=https://api.yunxixiaochengxu.com.cn`
+
+Nginx `client_max_body_size` 为 60MB，用于容纳 multipart 开销。
+
+访问边界：
+
+- `/uploads/public/...` 可静态公开。
+- `/uploads/private/...` 返回 403。
+- 其他 `/uploads/...` 返回 403。
+- 售后图片、营业执照、食品/经营资质等敏感文件通过后端鉴权接口访问。
+
+当前仓库没有 `STORAGE_PROVIDER` 或 `STORAGE_PRIVATE_ASSET_POLICY` 这类生产 env 契约；不要自行添加并假定会生效。
+
+## 7. 可变业务参数不属于 `.env.production`
+
+以下可变业务参数由数据库 `system_configs` 与 Admin “系统配置”控制：
+
+- 未支付订单自动关闭分钟数；
+- 发货后自动确认收货天数；
+- 售后申请期限；
+- 默认运费与包邮门槛；
+- 积分抵扣比例与抵扣上限。
+
+不要在生产 env 中填写：
+
+- `ORDER_AUTO_CLOSE_MINUTES`
+- `ORDER_AUTO_COMPLETE_DAYS`
+- `FREIGHT_FREE_AMOUNT`
+- `FREIGHT_DEFAULT_FEE`
+- `FREIGHT_REMOTE_FEE`
+- `POINTS_DEDUCT_RATE`
+- `POINTS_DEDUCT_MAX_PERCENT`
+
+这些名称不是当前生产业务配置入口。偏远地区名单与附加运费当前为代码版本化常量，变更必须经过代码审查与发布。
+
+## 8. HTTPS 证书不是 env 字段
+
+当前 Nginx 证书使用固定宿主机目录，不存在 `SSL_FULLCHAIN_PATH` / `SSL_PRIVKEY_PATH` 生产 env：
+
+API：
+
+- `deploy/nginx/ssl/api/fullchain.pem`
+- `deploy/nginx/ssl/api/privkey.pem`
+
+Admin：
+
+- `deploy/nginx/ssl/admin/fullchain.pem`
+- `deploy/nginx/ssl/admin/privkey.pem`
+
+## 9. 其他运行参数
+
+模板中可按实际需要确认：
+
+- `LOG_LEVEL`
+- `OUTBOUND_HTTP_TIMEOUT_MS`（允许 1000–60000ms）
+- `JWT_EXPIRES_IN`
+- `JWT_ADMIN_EXPIRES_IN`
+- `REFRESH_TOKEN_EXPIRES_IN`
+- `ALERT_WEBHOOK_URL`（可选）
+
+保持：
+
+- `SMOKE_TEST_BYPASS_CAPTCHA=false`
+- 正常生产启动 `RUN_SEED=false`
+- 正常部署不要自行设置 `SKIP_MIGRATE=true` 绕过正式部署流程；正式脚本会在正确阶段控制该值。
+
+## 10. 填完后的唯一部署方式
+
+不要直接 `docker compose up`。
+
+先确认批准的最新 main 40 位 SHA，然后执行：
+
+```bash
+EXPECTED_DEPLOY_SHA=<批准的40位main SHA> \
+ENV_FILE=.env.production \
+bash deploy/scripts/deploy-production.sh
+```
+
+生产脚本会再次做配置、证书、数据库连接、迁移克隆、运行时和 smoke 门禁；这些失败都应被视为正确阻断，不得绕过。
