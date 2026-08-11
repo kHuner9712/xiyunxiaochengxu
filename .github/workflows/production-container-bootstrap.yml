@@ -41,6 +41,11 @@ jobs:
           deploy/scripts/backup.sh
           deploy/scripts/restore.sh
           deploy/scripts/smoke-runtime.sh
+          deploy/scripts/smoke-public.sh
+          deploy/scripts/smoke-admin-login.sh
+          deploy/scripts/entrypoint.sh
+          deploy/scripts/redis-entrypoint.sh
+          deploy/scripts/prisma-migrate-dry-run.sh
           deploy/scripts/test-production-container-bootstrap.sh
 
       - name: Build production API image
