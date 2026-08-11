@@ -19,6 +19,8 @@ export class ProductionProductService extends ProductService {
     const supplierId = dto.supplierId ? parsePositiveBigIntId(String(dto.supplierId), '供应商') : null;
 
     const productId = await this.productionPrisma.$transaction(async (tx) => {
+      await this.assertCategoryAssignable(tx, categoryId);
+      if (brandId) await this.assertBrandAssignable(tx, brandId);
       if (supplierId) await this.assertSupplierAssignable(tx, supplierId);
 
       const product = await tx.product.create({
@@ -79,8 +81,17 @@ export class ProductionProductService extends ProductService {
     const productId = parsePositiveBigIntId(id, '商品');
 
     await this.productionPrisma.$transaction(async (tx) => {
-      const productLock = await tx.$queryRaw<Array<{ id: bigint; supplierId: bigint | null }>>`
-        SELECT id, supplier_id AS supplierId
+      const productLock = await tx.$queryRaw<Array<{
+        id: bigint;
+        categoryId: bigint;
+        brandId: bigint | null;
+        supplierId: bigint | null;
+      }>>`
+        SELECT
+          id,
+          category_id AS categoryId,
+          brand_id AS brandId,
+          supplier_id AS supplierId
         FROM products
         WHERE id = ${productId} AND deleted_at IS NULL
         FOR UPDATE
@@ -96,17 +107,27 @@ export class ProductionProductService extends ProductService {
 
       const updateData: any = {};
       if (dto.name !== undefined) updateData.name = dto.name;
-      if (dto.categoryId !== undefined) updateData.categoryId = parsePositiveBigIntId(String(dto.categoryId), '分类');
+      if (dto.categoryId !== undefined) {
+        const nextCategoryId = parsePositiveBigIntId(String(dto.categoryId), '分类');
+        if (nextCategoryId.toString() !== productLock[0].categoryId.toString()) {
+          await this.assertCategoryAssignable(tx, nextCategoryId);
+        }
+        updateData.categoryId = nextCategoryId;
+      }
       if (dto.productType !== undefined) updateData.productType = dto.productType;
       if (dto.fulfillmentType !== undefined) updateData.fulfillmentType = dto.fulfillmentType;
       if (dto.businessCategory !== undefined) updateData.businessCategory = dto.businessCategory;
-      if (dto.brandId !== undefined) updateData.brandId = dto.brandId ? parsePositiveBigIntId(String(dto.brandId), '品牌') : null;
+      if (dto.brandId !== undefined) {
+        const nextBrandId = dto.brandId ? parsePositiveBigIntId(String(dto.brandId), '品牌') : null;
+        const brandChanged = String(nextBrandId ?? '') !== String(productLock[0].brandId ?? '');
+        if (nextBrandId && brandChanged) await this.assertBrandAssignable(tx, nextBrandId);
+        updateData.brandId = nextBrandId;
+      }
       if (dto.supplierId !== undefined) {
         const nextSupplierId = dto.supplierId
           ? parsePositiveBigIntId(String(dto.supplierId), '供应商')
           : null;
-        const currentSupplierId = productLock[0].supplierId;
-        const supplierChanged = String(nextSupplierId ?? '') !== String(currentSupplierId ?? '');
+        const supplierChanged = String(nextSupplierId ?? '') !== String(productLock[0].supplierId ?? '');
         if (nextSupplierId && supplierChanged) {
           await this.assertSupplierAssignable(tx, nextSupplierId);
         }
@@ -216,6 +237,32 @@ export class ProductionProductService extends ProductService {
     });
 
     return super.findAdminById(id);
+  }
+
+  private async assertCategoryAssignable(tx: Prisma.TransactionClient, categoryId: bigint) {
+    const rows = await tx.$queryRaw<Array<{ id: bigint }>>`
+      SELECT id
+      FROM product_categories
+      WHERE id = ${categoryId}
+        AND deleted_at IS NULL
+      FOR UPDATE
+    `;
+    if (rows.length === 0) {
+      throw new BadRequestException('分类不存在或已删除，请重新选择分类');
+    }
+  }
+
+  private async assertBrandAssignable(tx: Prisma.TransactionClient, brandId: bigint) {
+    const rows = await tx.$queryRaw<Array<{ id: bigint }>>`
+      SELECT id
+      FROM brands
+      WHERE id = ${brandId}
+        AND deleted_at IS NULL
+      FOR UPDATE
+    `;
+    if (rows.length === 0) {
+      throw new BadRequestException('品牌不存在或已删除，请重新选择品牌');
+    }
   }
 
   private async assertSupplierAssignable(tx: Prisma.TransactionClient, supplierId: bigint) {
