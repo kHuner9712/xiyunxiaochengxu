@@ -16,12 +16,76 @@ interface OrderCreateIdempotencyContext {
   orderNo: string;
 }
 
+function proxyTransactionOrderCreate(tx: any, context: OrderCreateIdempotencyContext) {
+  const orderDelegate = tx.order;
+  const orderProxy = new Proxy(orderDelegate, {
+    get(target, property) {
+      if (property === 'create') {
+        return async (args: any) => {
+          const sameUser = args?.data?.userId?.toString?.() === context.userId;
+          if (!sameUser) return target.create(args);
+          return target.create({
+            ...args,
+            data: {
+              ...args.data,
+              orderNo: context.orderNo,
+            },
+          });
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  return new Proxy(tx, {
+    get(target, property) {
+      if (property === 'order') return orderProxy;
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+export function createOrderIdempotencyPrismaProxy(
+  prisma: PrismaService,
+  storage: AsyncLocalStorage<OrderCreateIdempotencyContext>,
+): PrismaService {
+  return new Proxy(prisma as any, {
+    get(target, property) {
+      if (property !== '$transaction') {
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+
+      return (input: any, ...rest: any[]) => {
+        const originalTransaction = Reflect.get(target, '$transaction', target);
+        if (typeof originalTransaction !== 'function') {
+          throw new TypeError('PrismaService.$transaction is not available');
+        }
+
+        const context = storage.getStore();
+        if (!context || typeof input !== 'function') {
+          return originalTransaction.call(target, input, ...rest);
+        }
+
+        return originalTransaction.call(
+          target,
+          async (tx: any) => input(proxyTransactionOrderCreate(tx, context)),
+          ...rest,
+        );
+      };
+    },
+  }) as PrismaService;
+}
+
 @Injectable()
 export class IdempotentAttributionSafeMemberBenefitOrderService extends AttributionSafeMemberBenefitOrderService {
-  private readonly orderCreateIdempotency = new AsyncLocalStorage<OrderCreateIdempotencyContext>();
+  private readonly orderCreateIdempotency: AsyncLocalStorage<OrderCreateIdempotencyContext>;
+  private readonly idempotentPrisma: PrismaService;
 
   constructor(
-    private readonly idempotentPrisma: PrismaService,
+    idempotentPrisma: PrismaService,
     businessEventService: BusinessEventService,
     benefitPackageService: BenefitPackageService,
     groupBuyService: GroupBuyService,
@@ -29,8 +93,9 @@ export class IdempotentAttributionSafeMemberBenefitOrderService extends Attribut
     redisService: RedisService,
     @Optional() systemConfigService?: SystemConfigService,
   ) {
+    const orderCreateIdempotency = new AsyncLocalStorage<OrderCreateIdempotencyContext>();
     super(
-      idempotentPrisma,
+      createOrderIdempotencyPrismaProxy(idempotentPrisma, orderCreateIdempotency),
       businessEventService,
       benefitPackageService,
       groupBuyService,
@@ -38,7 +103,8 @@ export class IdempotentAttributionSafeMemberBenefitOrderService extends Attribut
       redisService,
       systemConfigService,
     );
-    this.installDeterministicOrderNumberHook();
+    this.idempotentPrisma = idempotentPrisma;
+    this.orderCreateIdempotency = orderCreateIdempotency;
   }
 
   override async create(userId: string, dto: CreateOrderDto) {
@@ -115,46 +181,5 @@ export class IdempotentAttributionSafeMemberBenefitOrderService extends Attribut
       .digest('hex')
       .slice(0, 12);
     return `XY${timestamp}${suffix}`;
-  }
-
-  private installDeterministicOrderNumberHook() {
-    const originalTransaction = this.idempotentPrisma.$transaction.bind(this.idempotentPrisma) as any;
-    (this.idempotentPrisma as any).$transaction = ((input: any, ...rest: any[]) => {
-      const context = this.orderCreateIdempotency.getStore();
-      if (!context || typeof input !== 'function') {
-        return originalTransaction(input, ...rest);
-      }
-
-      return originalTransaction(async (tx: any) => {
-        const orderDelegate = tx.order;
-        const orderProxy = new Proxy(orderDelegate, {
-          get(target, property) {
-            if (property === 'create') {
-              return async (args: any) => {
-                const sameUser = args?.data?.userId?.toString?.() === context.userId;
-                if (!sameUser) return target.create(args);
-                return target.create({
-                  ...args,
-                  data: {
-                    ...args.data,
-                    orderNo: context.orderNo,
-                  },
-                });
-              };
-            }
-            const value = Reflect.get(target, property, target);
-            return typeof value === 'function' ? value.bind(target) : value;
-          },
-        });
-        const txProxy = new Proxy(tx, {
-          get(target, property) {
-            if (property === 'order') return orderProxy;
-            const value = Reflect.get(target, property, target);
-            return typeof value === 'function' ? value.bind(target) : value;
-          },
-        });
-        return input(txProxy);
-      }, ...rest);
-    }) as any;
   }
 }
