@@ -51,8 +51,18 @@ export function createOrderIdempotencyPrismaProxy(
   prisma: PrismaService,
   storage: AsyncLocalStorage<OrderCreateIdempotencyContext>,
 ): PrismaService {
+  // Parent production wrappers also install request-local Prisma hooks by assigning to
+  // `this.*Prisma.$transaction`. Those assignments must stay local to this OrderService instance;
+  // allowing a Proxy assignment to write through would mutate the singleton PrismaService shared by
+  // every Nest module. Keep all assigned properties in a local overlay instead.
+  const localOverrides = new Map<PropertyKey, any>();
+
   return new Proxy(prisma as any, {
     get(target, property) {
+      if (localOverrides.has(property)) {
+        return localOverrides.get(property);
+      }
+
       if (property !== '$transaction') {
         const value = Reflect.get(target, property, target);
         return typeof value === 'function' ? value.bind(target) : value;
@@ -75,6 +85,20 @@ export function createOrderIdempotencyPrismaProxy(
           ...rest,
         );
       };
+    },
+    set(_target, property, value) {
+      localOverrides.set(property, value);
+      return true;
+    },
+    defineProperty(_target, property, descriptor) {
+      if ('value' in descriptor) {
+        localOverrides.set(property, descriptor.value);
+        return true;
+      }
+      return false;
+    },
+    deleteProperty(_target, property) {
+      return localOverrides.delete(property);
     },
   }) as PrismaService;
 }
