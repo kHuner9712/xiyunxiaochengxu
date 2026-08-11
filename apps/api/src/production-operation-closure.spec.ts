@@ -89,6 +89,7 @@ describe('production operation closure contracts', () => {
     const historicalReconcile = read('apps/api/src/payment/historical-anomaly-payment-reconcile.service.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
     const attributionSafeOrder = read('apps/api/src/order/attribution-safe-member-benefit-order.service.ts');
+    const attributionAwarePromotion = read('apps/api/src/order/attribution-aware-promotion-checkout.service.ts');
     const memberBenefitOrder = read('apps/api/src/order/member-benefit-production-order.service.ts');
     const netRewardOrder = read('apps/api/src/order/cancellation-safe-production-order.service.ts');
     const aftersaleModule = read('apps/api/src/aftersale/aftersale.module.ts');
@@ -121,6 +122,10 @@ describe('production operation closure contracts', () => {
     expect(netRewardOrder).toContain('status: REFUND_STATUS.SUCCESS');
     expect(netRewardOrder).toContain('successfulRefundAmount');
     expect(netRewardOrder).toContain('netPayAmount');
+    expect(orderModule).toContain('provide: PromotionCheckoutService');
+    expect(orderModule).toContain('useClass: AttributionAwarePromotionCheckoutService');
+    expect(attributionAwarePromotion).toContain('extends PromotionCheckoutService');
+    expect(attributionAwarePromotion).toContain('resolveCreateOrderAttribution');
 
     expect(aftersaleModule).toContain('useClass: ReturnDestinationViewAftersaleService');
     expect(aftersaleModule).toContain('AftersaleReviewService');
