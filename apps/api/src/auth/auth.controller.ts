@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Put, Body, HttpCode } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
+import { RedisService } from '../common/redis/redis.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SkipMustChangePassword } from '../common/decorators/skip-must-change-password.decorator';
@@ -71,7 +72,10 @@ export class AdminAuthController {
 
 @Controller('weapp/auth')
 export class WeappAuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly redisService: RedisService,
+  ) {}
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -92,5 +96,18 @@ export class WeappAuthController {
       dto.encryptedData,
       dto.iv,
     );
+  }
+
+  @Post('logout')
+  @HttpCode(200)
+  async logout(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('tokenId') tokenId: string,
+  ) {
+    const normalizedTokenId = String(tokenId || '').trim();
+    if (normalizedTokenId) {
+      await this.redisService.del(`weapp_access_token:${userId}:${normalizedTokenId}`);
+    }
+    return null;
   }
 }
