@@ -40,15 +40,18 @@ test('product workflows can read reference data without receiving reference writ
 
 test('business menus use operational permissions instead of unrelated system privileges', () => {
   const router = read('apps/admin-web/src/router/index.ts')
+  const layout = read('apps/admin-web/src/layouts/AdminLayout.vue')
   const defaultRoles = read('apps/api/prisma/default-role-permissions.ts')
   const roleMigration = read('apps/api/prisma/migrations/20260809154000_seed_default_role_permissions_if_empty/migration.sql')
   const pickupMigration = read('apps/api/prisma/migrations/20260811174000_repair_pickup_permission_hierarchy/migration.sql')
   const settlementController = read('apps/api/src/merchant-settlement/merchant-settlement.controller.ts')
+  const benefitController = read('apps/api/src/benefit-package/benefit-package.controller.ts')
 
   const productCreateRoute = router.match(/path: 'edit',[\s\S]*?name: 'ProductEdit'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
   const reconcileRoute = router.match(/path: 'reconcile',[\s\S]*?name: 'ReconcileCenter'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
   const settlementRecordsRoute = router.match(/path: 'merchant-settlement-records',[\s\S]*?name: 'MerchantSettlementRecords'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
   const settlementBatchesRoute = router.match(/path: 'merchant-settlement-batches',[\s\S]*?name: 'MerchantSettlementBatches'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
+  const benefitVerifyRoute = router.match(/path: 'benefit-package-verify',[\s\S]*?name: 'BenefitPackageVerify'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
   const orderBlock = router.match(/path: 'order',[\s\S]*?\n      \},\n      \{\n        path: 'user'/)?.[0] || ''
   const marketingBlock = router.match(/path: 'marketing',[\s\S]*?\n      \},\n      \{\n        path: 'content'/)?.[0] || ''
 
@@ -63,6 +66,13 @@ test('business menus use operational permissions instead of unrelated system pri
   assert.doesNotMatch(marketingBlock, /name: 'MerchantSettlementRecords'/)
   assert.doesNotMatch(marketingBlock, /name: 'MerchantSettlementBatches'/)
   assert.match(settlementController, /const SETTLEMENT_PERMISSION = 'order:merchant-settlement'/)
+
+  assert.match(benefitVerifyRoute, /permission: 'pickup:verify'/)
+  assert.match(benefitController, /@Get\('verify\/preview'\)[\s\S]*?@RequirePermission\('pickup:verify'\)/)
+  assert.match(benefitController, /@Post\('verify'\)[\s\S]*?@RequirePermission\('pickup:verify'\)/)
+  assert.match(layout, /function hasVisibleAuthorizedChild\(route: RouteRecordRaw\)/)
+  assert.match(layout, /hasMenuPermission\(route\) \|\| hasVisibleAuthorizedChild\(route\)/)
+  assert.match(layout, /children\.filter\(\(child\) => !child\.meta\?\.hidden && hasMenuPermission\(child\)\)/)
 
   assert.match(defaultRoles, /'pickup',\s*'pickup:store',\s*'pickup:verify'/)
   assert.match(roleMigration, /'pickup', 'pickup:store', 'pickup:verify'/)
