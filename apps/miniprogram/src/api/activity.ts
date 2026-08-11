@@ -1,4 +1,5 @@
 import { get, post } from '@/utils/request'
+import { runIdempotentCheckout } from '@/utils/checkout-idempotency'
 
 export function getActivityList(params: { type?: string; page: number; pageSize: number }) {
   return get<ActivityDetail[]>('/weapp/activity/active', params)
@@ -65,8 +66,8 @@ export function previewActivityOrder(activityId: string, data: ActivityCheckoutI
   return post<ActivityOrderPreview>(`/weapp/activity/${encodeURIComponent(activityId)}/preview`, data)
 }
 
-export function createActivityOrder(activityId: string, data: ActivityCheckoutInput) {
-  return post<{
+export async function createActivityOrder(activityId: string, data: ActivityCheckoutInput) {
+  const result = await runIdempotentCheckout<{
     orderId: string
     orderNo: string
     payAmount: number
@@ -75,7 +76,18 @@ export function createActivityOrder(activityId: string, data: ActivityCheckoutIn
     fulfillmentType: string
     activityId: string
     activityProductId: string
-  }>(`/weapp/activity/${encodeURIComponent(activityId)}/order`, data)
+  }>(
+    `activity:${activityId}:${data.activityProductId}:${data.skuId}`,
+    data,
+    (clientRequestId) => post(`/weapp/activity/${encodeURIComponent(activityId)}/order`, {
+      ...data,
+      clientRequestId,
+    }),
+  )
+  if (result.status === 'cancelled') {
+    throw new Error('上次提交对应活动订单已取消，请重新提交')
+  }
+  return result
 }
 
 export interface ActivityDetail {
