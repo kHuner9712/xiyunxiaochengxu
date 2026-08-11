@@ -88,6 +88,7 @@ describe('production operation closure contracts', () => {
     const durableZeroPayPayment = read('apps/api/src/payment/durable-zero-pay-aftersale-payment.service.ts');
     const historicalReconcile = read('apps/api/src/payment/historical-anomaly-payment-reconcile.service.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
+    const attributionSafeOrder = read('apps/api/src/order/attribution-safe-member-benefit-order.service.ts');
     const memberBenefitOrder = read('apps/api/src/order/member-benefit-production-order.service.ts');
     const netRewardOrder = read('apps/api/src/order/cancellation-safe-production-order.service.ts');
     const aftersaleModule = read('apps/api/src/aftersale/aftersale.module.ts');
@@ -111,7 +112,9 @@ describe('production operation closure contracts', () => {
     expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
     expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
 
-    expect(orderModule).toContain('useClass: MemberBenefitProductionOrderService');
+    expect(orderModule).toContain('useClass: AttributionSafeMemberBenefitOrderService');
+    expect(attributionSafeOrder).toContain('extends MemberBenefitProductionOrderService');
+    expect(attributionSafeOrder).toContain('resolveCreateOrderAttribution');
     expect(memberBenefitOrder).toContain('extends CancellationSafeProductionOrderService');
     expect(memberBenefitOrder).toContain('calculateMemberDiscountAmount');
     expect(memberBenefitOrder).toContain('calculateMemberRewardPoints');
