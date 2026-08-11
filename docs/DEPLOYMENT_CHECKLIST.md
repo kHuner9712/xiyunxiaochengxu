@@ -1,175 +1,151 @@
-# 部署前收口清单（Go/No-Go）
+# 部署前收口清单（Go / No-Go）
 
-适用阶段：正式部署前最后检查。  
-目标：保证部署可靠性、配置一致性、回滚可执行。  
-注意：禁止把真实密钥、证书、AppID、联系方式、证照号提交到 Git。
+适用阶段：仓库代码审计完成后、进入服务器生产门禁前。任何一项未满足均为 No-Go。
 
-## 1. 服务器要求
+## 1. 发布身份
 
-- 系统建议：Ubuntu 22.04 LTS（或同级 Linux）
-- 资源建议：4C8G 起步，系统盘可用空间 >= 50GB
-- 必备软件：Docker、Docker Compose、curl、git
-- 网络端口：`80`、`443` 对公网开放；`3306`、`6379` 仅内网
+- [ ] 从 `main` 部署。
+- [ ] 本地 HEAD、最新 `origin/main`、批准发布的完整 40 位 SHA 三者完全一致。
+- [ ] 目标 SHA 的 CI、Release Gate、API Diagnostics、Production Bootstrap Diagnostic 全部成功。
+- [ ] 发布时显式传入 `EXPECTED_DEPLOY_SHA=<40位SHA>`。
 
-## 2. 域名解析要求
+## 2. 主机与 Docker
 
-- `API_DOMAIN` 指向 API 服务器公网 IP
-- `ADMIN_DOMAIN` 指向同一公网 IP（或负载均衡）
-- A 记录生效后执行：
-  - `dig <API_DOMAIN>`
-  - `dig <ADMIN_DOMAIN>`
+- [ ] Linux 主机具备 Docker 与 Docker Compose v2（`docker compose`）。
+- [ ] Node.js 满足 `>=22.13.0 <25`；仓库 CI 基线为 22.13.0。
+- [ ] `vm.overcommit_memory=1`；Redis entrypoint 会 fail-closed 检查。
+- [ ] 80/443 可对公网提供服务。
+- [ ] MySQL、Redis、API 宿主机端口仅绑定回环地址，不直接暴露公网。
+- [ ] 磁盘空间、内存、日志与备份目录容量满足上线需求。
 
-## 3. HTTPS 证书路径
+## 3. 正式域名与 DNS
 
-- Nginx 证书文件放置：
-  - `deploy/nginx/ssl/fullchain.pem`
-  - `deploy/nginx/ssl/privkey.pem`
-- 文件可读权限检查：
-  - `ls -l deploy/nginx/ssl`
+生产域名固定：
 
-## 4. 微信小程序后台合法域名
+- API：`api.yunxixiaochengxu.com.cn`
+- Admin：`admin.yunxixiaochengxu.com.cn`
 
-在微信公众平台配置并保存：
+- [ ] 两个域名均解析到本次部署目标。
+- [ ] 不依赖 Runbook 中历史 IP；以部署当天 DNS 实际结果为准。
+- [ ] `HTTP_HOST_PORT=80`、`HTTPS_HOST_PORT=443`。
 
-- `request` 合法域名：`https://<API_DOMAIN>`
-- `uploadFile` 合法域名：`https://<API_DOMAIN>`
-- `downloadFile` 合法域名：`https://<API_DOMAIN>`
+## 4. HTTPS 与微信支付证书
 
-## 5. 微信支付回调域名
-
-- 支付回调：`https://<API_DOMAIN>/api/weapp/pay/callback`
-- 退款回调：`https://<API_DOMAIN>/api/weapp/pay/refund-callback`
-- 要求：公网可达、HTTPS 证书有效、路径与后端路由一致
-
-## 6. 上传文件公网访问规则
-
-- `UPLOAD_PUBLIC_URL` 建议填写 API 域名根地址：`https://<API_DOMAIN>`。
-- 公开文件只允许访问 `/uploads/public/...`。
-- `/uploads/private/...` 必须返回 403；售后图片、营业执照、资质图片、后台敏感上传文件不得被静态 URL 直接打开。
-- 兜底 `/uploads/...` 必须返回 403，避免未来新增目录误公开。
-- API 容器如被误直连公网，也不得由 NestJS 静态资源暴露整个 `UPLOAD_DIR`；仅允许后端公开 `uploads/public`。
-- 私有文件验收路径：本人/管理员通过 `/api/common/file/private/:id` 鉴权访问成功，其他普通用户访问失败。
-
-## 7. .env 必填项（生产）
-
-至少确认以下变量已填写真实值（不可占位）：
-
-- `DB_PASSWORD`
-- `REDIS_PASSWORD`
-- `JWT_SECRET`
-- `REFRESH_TOKEN_SECRET`
-- `WECHAT_APP_ID`
-- `WECHAT_APP_SECRET`
-- `WECHAT_MCH_ID`
-- `WECHAT_MCH_SERIAL_NO`
-- `WECHAT_API_V3_KEY`
-- `WECHAT_PRIVATE_KEY_PATH`（容器内路径）
-- `WECHAT_PLATFORM_CERT_PATH`（容器内路径）
-- `WECHAT_PLATFORM_CERT_SERIAL_NO`
-- `WECHAT_NOTIFY_URL`
-- `WECHAT_REFUND_NOTIFY_URL`
-- `CORS_ORIGINS`
-- `UPLOAD_PUBLIC_URL`
-- `ADMIN_DEFAULT_USERNAME`
-- `ADMIN_DEFAULT_PASSWORD`
-
-建议顺序：
-
-1. `cp .env.production.example .env.production`
-2. 填写真实值（仅服务器本地保存）
-3. 执行 `pnpm release:check:prod`
-
-## 8. 微信支付证书文件放置路径
-
-宿主机路径（不进 Git）：
+微信支付宿主机文件：
 
 - `deploy/certs/apiclient_key.pem`
 - `deploy/certs/wechatpay_platform.pem`
 
-容器内映射路径（与 `.env` 保持一致）：
+Nginx API 证书：
 
-- `/app/apps/api/certs/apiclient_key.pem`
-- `/app/apps/api/certs/wechatpay_platform.pem`
+- `deploy/nginx/ssl/api/fullchain.pem`
+- `deploy/nginx/ssl/api/privkey.pem`
 
-## 9. 首次启动步骤
+Nginx Admin 证书：
 
-1. 首次启动前执行：
-   - `pnpm release:check`
-   - `pnpm release:check:prod`
-2. 启动：
-   - `cd deploy && docker compose --env-file ../.env.production up -d --build`
-3. 首次初始化如需 seed：
-   - `RUN_SEED=true` 启动 API 一次
-4. 后续部署默认：
-   - `RUN_SEED=false`
+- `deploy/nginx/ssl/admin/fullchain.pem`
+- `deploy/nginx/ssl/admin/privkey.pem`
 
-## 10. 数据库迁移
+- [ ] 商户私钥可解析。
+- [ ] 平台证书可解析且序列号与环境变量匹配。
+- [ ] API/Admin TLS 证书链公网可信且未临近过期。
 
-- 生产使用 `prisma migrate deploy`，不使用 `db push`
-- 当前 entrypoint 在 `NODE_ENV=production` 下会自动执行迁移
-- 发布后核验：
-  - `docker compose logs api | grep -i migrate`
+## 5. `.env.production`
 
-## 11. 管理后台访问地址
+- [ ] 从 `.env.production.example` 创建，文件权限建议 `600`，不提交 Git。
+- [ ] `DATABASE_URL` 与 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` 完全一致。
+- [ ] DB/Redis/JWT/Refresh/Admin 密码通过生产强度门禁。
+- [ ] `WECHAT_APP_ID / WECHAT_APP_SECRET / WECHAT_MCH_ID / WECHAT_MCH_SERIAL_NO / WECHAT_API_V3_KEY` 为真实值。
+- [ ] `WECHAT_SKIP_VERIFY=false`。
+- [ ] `SMOKE_TEST_BYPASS_CAPTCHA=false`。
+- [ ] 支付回调：`https://api.yunxixiaochengxu.com.cn/api/weapp/pay/callback`。
+- [ ] 退款回调：`https://api.yunxixiaochengxu.com.cn/api/weapp/pay/refund-callback`。
+- [ ] `CORS_ORIGINS=https://admin.yunxixiaochengxu.com.cn`。
+- [ ] `UPLOAD_PUBLIC_URL=https://api.yunxixiaochengxu.com.cn`。
 
-- `https://<ADMIN_DOMAIN>/`
-- 登录后必须验证：
-  - 首次登录强制改密流程
-  - 关键页面可正常加载
+订单自动关闭/完成、售后期限、默认运费/包邮门槛、积分抵扣等可变业务参数不属于生产 env；它们由数据库 `system_configs` 与后台系统配置控制。
 
-## 12. 小程序构建与上传
+## 6. 上传与私有文件
 
-1. 生产构建必须走脚本：`pnpm build:mini:prod`
-2. 使用真实 AppID 在微信开发者工具上传体验版
-3. 确认请求域名、上传下载域名与线上一致
-4. 禁止直接使用源码 `apps/miniprogram/src/manifest.json` 上传体验版/正式版
-5. 生产 `VITE_API_BASE_URL` 必须为 `https://<API_DOMAIN>/api`，不得使用 localhost、127.0.0.1、example.com、your-domain 等本地或占位地址
+- [ ] API 与 Nginx 使用同一持久化 `upload_data` 卷。
+- [ ] Nginx 对该卷只读。
+- [ ] `/uploads/public/...` 可公开访问。
+- [ ] `/uploads/private/...` 返回 403。
+- [ ] 其他 `/uploads/...` 返回 403。
+- [ ] 售后图片、营业执照、食品/经营资质等私有文件通过后端鉴权接口访问。
+- [ ] API 默认上传上限 50MB；Nginx 请求体上限 60MB，给 multipart 预留空间。
 
-## 13. 真机验收清单
+## 7. 唯一部署入口
 
-- 微信登录、浏览商品、加购、下单、支付发起
-- 支付取消分流是否正确（不误导为失败）
-- 支付结果确认页是否显示“确认中/成功/待支付”
-- 订单详情继续支付、退款申请、退款状态更新
-- 商品公开图片是否可访问，售后/资质/营业执照私有图片是否不可被静态 URL 直接访问
+禁止直接生产执行 `docker compose up -d --build` 或手工 `prisma migrate deploy`。
 
-## 14. 回滚方案
-
-- 代码回滚到上一个稳定 tag/commit
-- 重新 `docker compose up -d --build`
-- 数据库回滚前必须先备份；优先前向修复
-- 回滚后立即跑 `smoke` 与健康检查
-
-## 15. 数据备份建议
-
-- 每日自动备份 MySQL（至少保留 7 天）
-- 发布前手动做一次全量备份
-- 备份文件异地存储并定期做恢复演练
-
-## 16. 必须人工准备的真实资质/信息
-
-以下信息不得由代码仓库占位替代，必须由运营/老板/法务线下提供并在上线前确认：
-
-- 真实微信小程序 AppID / AppSecret
-- 真实微信支付商户信息与证书
-- 客服电话、客服微信、售后退货地址
-- 备案号、许可证号、主体资质信息
-- 法务确认后的隐私协议/用户协议正式文本
-
-## 附：Nginx 域名模板化说明
-
-本仓库已保留现用配置：`deploy/nginx/conf.d/default.conf`。  
-同时提供模板：`deploy/nginx/conf.d/default.conf.template`。
-
-推荐生产生成方式（示例）：
+正式入口：
 
 ```bash
-export API_DOMAIN=api.example.com
-export ADMIN_DOMAIN=admin.example.com
-export UPLOAD_PUBLIC_URL=https://api.example.com
-envsubst '${API_DOMAIN} ${ADMIN_DOMAIN} ${UPLOAD_PUBLIC_URL}' \
-  < deploy/nginx/conf.d/default.conf.template \
-  > deploy/nginx/conf.d/default.conf
+EXPECTED_DEPLOY_SHA=<批准的40位main SHA> \
+ENV_FILE=.env.production \
+bash deploy/scripts/deploy-production.sh
 ```
 
-若不使用模板，也必须手工核对 `default.conf` 中 `server_name` 与证书路径。
+- [ ] production preflight 成功。
+- [ ] 候选镜像构建成功。
+- [ ] 维护窗口成功停止公网/API writers。
+- [ ] 数据库备份成功。
+- [ ] 临时 MySQL clone migration/status/schema drift 成功。
+- [ ] live migration 成功。
+- [ ] 候选 API health 与 build SHA 成功。
+- [ ] Nginx `nginx -t` 成功。
+- [ ] full runtime smoke 成功。
+
+Fresh database 无需手工 `RUN_SEED=true`：entrypoint 会在 `admin_users=0` 时自动生产 seed；已有管理员的数据库不会被自动重复 seed。
+
+## 8. 备份与恢复
+
+一致性备份：
+
+```bash
+ENV_FILE=.env.production bash deploy/scripts/backup.sh
+```
+
+- [ ] 每个备份包含同一时间戳的 DB、uploads、checksum 三件套。
+- [ ] DB 与 uploads 均在 API/background writers 停止的同一维护窗口取得。
+- [ ] 备份文件异地保存并定期做恢复演练。
+
+恢复：
+
+```bash
+ENV_FILE=.env.production bash deploy/scripts/restore.sh YYYYMMDD_HHMMSS
+```
+
+- [ ] restore 校验 checksum。
+- [ ] 同批次恢复 DB 与 uploads。
+- [ ] 恢复后 migration、API health、Nginx、full smoke 全部成功。
+- [ ] 破坏性恢复失败时公网保持关闭。
+
+## 9. 微信平台
+
+- [ ] request 合法域名：`https://api.yunxixiaochengxu.com.cn`。
+- [ ] uploadFile 合法域名：同上。
+- [ ] downloadFile 合法域名：同上。
+- [ ] 支付与退款回调公网可达且证书可信。
+- [ ] 小程序生产构建使用真实 AppID 和 `https://api.yunxixiaochengxu.com.cn/api`。
+
+## 10. 真机验收
+
+服务器门禁全部通过后才进入：
+
+- [ ] 微信登录。
+- [ ] 商品浏览/搜索/购物车。
+- [ ] 优惠券领取与使用。
+- [ ] 普通订单。
+- [ ] 团购/秒杀/活动订单。
+- [ ] 微信支付、支付取消、支付回调。
+- [ ] 发货/自提/核销。
+- [ ] 售后申请。
+- [ ] 退款发起、退款回调、退款状态恢复。
+- [ ] 积分/会员权益。
+- [ ] 客服。
+- [ ] Admin 各角色菜单与 API 权限。
+- [ ] 私有文件越权访问失败。
+
+真机完整链未通过前，仍然是 No-Go。
