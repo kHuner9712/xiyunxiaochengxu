@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
+import { CategoryService } from '../src/category/category.service';
 import { ProductionProductService } from '../src/product/production-product.service';
 import { SupplierService } from '../src/supplier/supplier.service';
 
@@ -28,6 +29,7 @@ async function main() {
 
   try {
     const service = new SupplierService(prisma as any);
+    const categoryService = new CategoryService(prisma as any);
     const productService = new ProductionProductService(prisma as any);
     const supplierName = `供应商真库-${suffix}`;
 
@@ -40,6 +42,38 @@ async function main() {
       data: { name: `已删除分类-${suffix}`, deletedAt: new Date() },
     });
     categoryIds.push(deletedCategory.id);
+
+    await assert.rejects(
+      categoryService.create({
+        parentId: deletedCategory.id.toString(),
+        name: `挂到已删除父级-${suffix}`,
+      } as any),
+      /父级分类不存在或已删除，请重新选择父级分类/,
+      '软删除分类不能继续作为新分类父级',
+    );
+
+    const missingParentId = '9223372036854775807';
+    await assert.rejects(
+      categoryService.create({
+        parentId: missingParentId,
+        name: `挂到不存在父级-${suffix}`,
+      } as any),
+      /父级分类不存在或已删除，请重新选择父级分类/,
+      '不存在的合法BIGINT ID不能生成不可见的孤儿分类',
+    );
+
+    const child: any = await categoryService.create({
+      parentId: activeCategory.id.toString(),
+      name: `真实分类子节点-${suffix}`,
+    } as any);
+    const childId = BigInt(child.id);
+    categoryIds.push(childId);
+
+    await assert.rejects(
+      categoryService.update(activeCategory.id.toString(), { parentId: child.id } as any),
+      /不能将分类移动到自己的子孙分类下/,
+      '父分类不能改挂到自己的后代，否则分类树会形成环并从根树消失',
+    );
 
     const deletedBrand = await prisma.brand.create({
       data: { name: `已删除品牌-${suffix}`, deletedAt: new Date() },
