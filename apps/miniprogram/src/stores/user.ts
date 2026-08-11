@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { get, getToken, setToken, removeToken, redirectToLoginTab } from '@/utils/request'
-import { wxLogin as wxLoginApi, bindPhone as bindPhoneApi, updateProfile as updateProfileApi } from '@/api/auth'
+import { wxLogin as wxLoginApi, logout as logoutApi, bindPhone as bindPhoneApi, updateProfile as updateProfileApi } from '@/api/auth'
 import { handleShareBindOnLogin } from '@/utils/share'
 
 interface UserInfo {
@@ -117,6 +117,14 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function logout() {
+    // request() snapshots the Authorization header synchronously when logoutApi() is invoked, so
+    // the server revocation request can run in the background while the UI clears local state
+    // immediately. A network failure must not trap the user in a locally logged-in UI.
+    if (token.value) {
+      void logoutApi().catch((err) => {
+        console.warn('[baby-mall] server session revoke failed during logout:', err)
+      })
+    }
     token.value = ''
     userInfo.value = null
     removeToken()
