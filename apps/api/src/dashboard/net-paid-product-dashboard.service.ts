@@ -12,73 +12,176 @@ export class NetPaidProductDashboardService extends PaymentFactDashboardService 
   override async getTopProducts(limit = 10) {
     const safeLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 10;
 
-    // Allocate each order's actual non-freight paid cents back to its items with the same
-    // largest-remainder principle used by refund accounting. This keeps every order exact to the
-    // cent after member discounts, coupons, points and activity discounts instead of reporting
-    // gross item subtotal as "sales amount".
+    // Keep product sales accounting aligned with item-level refund allocation:
+    // 1. allocate only the order's successful non-freight paid amount;
+    // 2. use subtotal + item activity discount as the economic basis;
+    // 3. zero-subtotal gifts have zero cash basis;
+    // 4. never allocate more cash to an item than its persisted subtotal;
+    // 5. distribute remaining cents round-robin in largest-remainder order.
+    //
+    // All order items remain in the allocation denominator even when a product is later
+    // disabled/deleted. Product visibility is filtered only after allocation so historical money
+    // is not reassigned to a different product merely because catalog state changed.
     const rows = await this.netPaidPrisma.$queryRaw<Array<{
       productId: bigint;
       salesCount: bigint | number;
       salesAmount: bigint | number;
     }>>`
-      WITH item_base AS (
+      WITH item_rows AS (
         SELECT
-          oi.id,
+          oi.id AS item_id,
           oi.order_id,
           oi.product_id,
           oi.quantity,
-          oi.subtotal,
-          GREATEST(oi.subtotal + COALESCE(oi.activity_discount, 0), 0) AS economic_basis,
-          GREATEST(COALESCE(o.pay_amount, 0) - COALESCE(o.freight_amount, 0), 0) AS non_freight_paid,
-          SUM(oi.subtotal) OVER (PARTITION BY oi.order_id) AS item_subtotal_sum,
-          SUM(GREATEST(oi.subtotal + COALESCE(oi.activity_discount, 0), 0))
-            OVER (PARTITION BY oi.order_id) AS basis_sum
+          GREATEST(COALESCE(oi.subtotal, 0), 0) AS subtotal,
+          CASE
+            WHEN GREATEST(COALESCE(oi.subtotal, 0), 0) = 0 THEN 0
+            ELSE GREATEST(COALESCE(oi.subtotal, 0) + COALESCE(oi.activity_discount, 0), 0)
+          END AS economic_basis,
+          GREATEST(COALESCE(op.amount, 0) - COALESCE(o.freight_amount, 0), 0) AS non_freight_paid
         FROM order_items oi
         INNER JOIN orders o ON o.id = oi.order_id
         INNER JOIN order_payments op ON op.order_id = o.id
-        INNER JOIN products p ON p.id = oi.product_id
         WHERE op.status = ${PAYMENT_STATUS.SUCCESS}
-          AND p.deleted_at IS NULL
-          AND p.status = 1
-      ), floor_alloc AS (
+      ), order_totals AS (
         SELECT
-          item_base.*,
+          order_id,
+          MAX(non_freight_paid) AS non_freight_paid,
+          SUM(subtotal) AS subtotal_sum,
+          SUM(economic_basis) AS basis_sum
+        FROM item_rows
+        GROUP BY order_id
+      ), exact_alloc AS (
+        SELECT
+          ir.item_id,
+          ir.order_id,
+          ir.product_id,
+          ir.quantity,
+          ir.subtotal AS allocated_paid
+        FROM item_rows ir
+        INNER JOIN order_totals ot ON ot.order_id = ir.order_id
+        WHERE ot.subtotal_sum = ot.non_freight_paid
+      ), proportional_base AS (
+        SELECT
+          ir.item_id,
+          ir.order_id,
+          ir.product_id,
+          ir.quantity,
+          ir.subtotal,
+          ir.economic_basis,
+          ot.non_freight_paid,
           CASE
-            WHEN item_subtotal_sum = non_freight_paid THEN subtotal
-            WHEN basis_sum > 0 THEN FLOOR(non_freight_paid * economic_basis / basis_sum)
+            WHEN ot.basis_sum > 0 THEN LEAST(
+              ir.subtotal,
+              FLOOR(ot.non_freight_paid * ir.economic_basis / ot.basis_sum)
+            )
             ELSE 0
           END AS base_alloc,
           CASE
-            WHEN item_subtotal_sum = non_freight_paid OR basis_sum <= 0 THEN 0
-            ELSE
-              non_freight_paid * economic_basis
-              - FLOOR(non_freight_paid * economic_basis / basis_sum) * basis_sum
+            WHEN ot.basis_sum > 0 THEN
+              ot.non_freight_paid * ir.economic_basis
+              - FLOOR(ot.non_freight_paid * ir.economic_basis / ot.basis_sum) * ot.basis_sum
+            ELSE 0
           END AS remainder_num
-        FROM item_base
+        FROM item_rows ir
+        INNER JOIN order_totals ot ON ot.order_id = ir.order_id
+        WHERE ot.subtotal_sum <> ot.non_freight_paid
+      ), with_capacity AS (
+        SELECT
+          pb.*,
+          GREATEST(pb.subtotal - pb.base_alloc, 0) AS capacity
+        FROM proportional_base pb
+      ), base_totals AS (
+        SELECT
+          order_id,
+          MAX(non_freight_paid) AS non_freight_paid,
+          SUM(base_alloc) AS base_sum,
+          GREATEST(MAX(non_freight_paid) - SUM(base_alloc), 0) AS residue
+        FROM with_capacity
+        GROUP BY order_id
+      ), capacity_thresholds AS (
+        SELECT
+          a.order_id,
+          a.capacity AS threshold_capacity,
+          SUM(LEAST(b.capacity, a.capacity)) AS distributed_at_threshold
+        FROM with_capacity a
+        INNER JOIN with_capacity b ON b.order_id = a.order_id
+        WHERE a.capacity > 0
+        GROUP BY a.order_id, a.capacity
+      ), baseline AS (
+        SELECT
+          bt.order_id,
+          bt.residue,
+          COALESCE(MAX(ct.threshold_capacity), 0) AS baseline_rounds
+        FROM base_totals bt
+        LEFT JOIN capacity_thresholds ct
+          ON ct.order_id = bt.order_id
+         AND ct.distributed_at_threshold <= bt.residue
+        GROUP BY bt.order_id, bt.residue
+      ), baseline_stats AS (
+        SELECT
+          wc.order_id,
+          b.residue,
+          b.baseline_rounds,
+          SUM(LEAST(wc.capacity, b.baseline_rounds)) AS distributed_at_baseline,
+          SUM(CASE WHEN wc.capacity > b.baseline_rounds THEN 1 ELSE 0 END) AS active_count
+        FROM with_capacity wc
+        INNER JOIN baseline b ON b.order_id = wc.order_id
+        GROUP BY wc.order_id, b.residue, b.baseline_rounds
+      ), round_plan AS (
+        SELECT
+          bs.order_id,
+          CASE
+            WHEN bs.active_count > 0 THEN
+              bs.baseline_rounds
+              + FLOOR(
+                  GREATEST(bs.residue - bs.distributed_at_baseline, 0)
+                  / bs.active_count
+                )
+            ELSE bs.baseline_rounds
+          END AS full_round_level,
+          CASE
+            WHEN bs.active_count > 0 THEN
+              MOD(
+                GREATEST(bs.residue - bs.distributed_at_baseline, 0),
+                bs.active_count
+              )
+            ELSE 0
+          END AS partial_round_count
+        FROM baseline_stats bs
       ), ranked AS (
         SELECT
-          floor_alloc.*,
-          SUM(base_alloc) OVER (PARTITION BY order_id) AS base_sum,
-          ROW_NUMBER() OVER (
-            PARTITION BY order_id
-            ORDER BY remainder_num DESC, id ASC
-          ) AS remainder_rank
-        FROM floor_alloc
-      ), allocated AS (
+          wc.*,
+          rp.full_round_level,
+          rp.partial_round_count,
+          SUM(
+            CASE WHEN wc.capacity > rp.full_round_level THEN 1 ELSE 0 END
+          ) OVER (
+            PARTITION BY wc.order_id
+            ORDER BY wc.remainder_num DESC, wc.item_id ASC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          ) AS active_remainder_rank
+        FROM with_capacity wc
+        INNER JOIN round_plan rp ON rp.order_id = wc.order_id
+      ), proportional_alloc AS (
         SELECT
+          item_id,
+          order_id,
           product_id,
           quantity,
-          CASE
-            WHEN item_subtotal_sum = non_freight_paid THEN subtotal
-            WHEN basis_sum <= 0 THEN 0
-            ELSE
-              base_alloc
-              + CASE
-                  WHEN remainder_rank <= GREATEST(non_freight_paid - base_sum, 0) THEN 1
-                  ELSE 0
-                END
-          END AS allocated_paid
+          base_alloc
+            + LEAST(capacity, full_round_level)
+            + CASE
+                WHEN capacity > full_round_level
+                 AND active_remainder_rank <= partial_round_count
+                THEN 1
+                ELSE 0
+              END AS allocated_paid
         FROM ranked
+      ), allocated AS (
+        SELECT product_id, quantity, allocated_paid FROM exact_alloc
+        UNION ALL
+        SELECT product_id, quantity, allocated_paid FROM proportional_alloc
       )
       SELECT
         product_id AS productId,
