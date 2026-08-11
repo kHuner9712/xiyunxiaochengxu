@@ -38,6 +38,8 @@ const page = ref(1)
 const finished = ref(false)
 const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
+let listVersion = 0
+let loadingVersion = -1
 
 function startClock() {
   stopClock()
@@ -96,25 +98,42 @@ function statusText(order: FlashSaleOrder): string {
   }
 }
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    orderList.value = []
-  }
+function resetList() {
+  page.value = 1
+  finished.value = false
+  orderList.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await flashSaleApi.getMyOrders({ page: page.value, pageSize: 20 })
+    const data = await flashSaleApi.getMyOrders({ page: requestPage, pageSize: 20 })
+    if (version !== listVersion) return
+
     orderList.value.push(...data.list)
     finished.value = orderList.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshList() {
+  const version = ++listVersion
+  resetList()
+  return loadList(version)
 }
 
 function goOrderDetail(orderId: string) {
@@ -123,11 +142,18 @@ function goOrderDetail(orderId: string) {
 
 onShow(() => {
   startClock()
-  loadList(true)
+  void refreshList()
 })
 onHide(() => stopClock())
 onUnload(() => stopClock())
-onReachBottom(() => loadList())
+onReachBottom(() => void loadList(listVersion))
+
+defineExpose({
+  orderList,
+  loading,
+  loadList,
+  refreshList,
+})
 </script>
 
 <style lang="scss" scoped>
