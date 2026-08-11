@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
+import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductService } from './product.service';
 
@@ -11,12 +13,77 @@ export class ProductionProductService extends ProductService {
     super(productionPrisma);
   }
 
+  override async create(dto: CreateProductDto) {
+    const categoryId = parsePositiveBigIntId(String(dto.categoryId), '分类');
+    const brandId = dto.brandId ? parsePositiveBigIntId(String(dto.brandId), '品牌') : null;
+    const supplierId = dto.supplierId ? parsePositiveBigIntId(String(dto.supplierId), '供应商') : null;
+
+    const productId = await this.productionPrisma.$transaction(async (tx) => {
+      if (supplierId) await this.assertSupplierAssignable(tx, supplierId);
+
+      const product = await tx.product.create({
+        data: {
+          name: dto.name,
+          categoryId,
+          productType: dto.productType ?? 'physical',
+          fulfillmentType: dto.fulfillmentType ?? 'delivery',
+          businessCategory: dto.businessCategory ?? 'other',
+          brandId,
+          supplierId,
+          mainImage: dto.mainImage,
+          videoUrl: dto.videoUrl,
+          images: dto.images,
+          description: dto.description,
+          attributes: dto.attributes,
+          servicePromise: dto.servicePromise,
+          recommendAgeMin: dto.recommendAgeMin,
+          recommendAgeMax: dto.recommendAgeMax,
+          isPeriodPurchase: dto.isPeriodPurchase ?? 0,
+          sortOrder: dto.sortOrder ?? 0,
+          isRecommend: dto.isRecommend ?? 0,
+          status: 3,
+          skus: {
+            create: dto.skus.map((sku) => ({
+              skuCode: sku.skuCode?.trim() || this.generateProductionCreateSkuCode(),
+              specs: sku.specs,
+              price: sku.price,
+              originalPrice: sku.originalPrice,
+              costPrice: sku.costPrice,
+              stock: sku.stock ?? 0,
+              image: sku.image,
+              weight: sku.weight,
+              barcode: sku.barcode,
+            })),
+          },
+        },
+        include: { skus: true },
+      });
+
+      const prices = product.skus.map((sku) => sku.price);
+      if (prices.length > 0) {
+        await tx.product.update({
+          where: { id: product.id },
+          data: {
+            minPrice: Math.min(...prices),
+            maxPrice: Math.max(...prices),
+          },
+        });
+      }
+      return product.id;
+    });
+
+    return super.findAdminById(productId.toString());
+  }
+
   override async update(id: string, dto: UpdateProductDto) {
     const productId = parsePositiveBigIntId(id, '商品');
 
     await this.productionPrisma.$transaction(async (tx) => {
-      const productLock = await tx.$queryRaw<Array<{ id: bigint }>>`
-        SELECT id FROM products WHERE id = ${productId} AND deleted_at IS NULL FOR UPDATE
+      const productLock = await tx.$queryRaw<Array<{ id: bigint; supplierId: bigint | null }>>`
+        SELECT id, supplier_id AS supplierId
+        FROM products
+        WHERE id = ${productId} AND deleted_at IS NULL
+        FOR UPDATE
       `;
       if (productLock.length === 0) throw new NotFoundException('商品不存在');
 
@@ -29,12 +96,22 @@ export class ProductionProductService extends ProductService {
 
       const updateData: any = {};
       if (dto.name !== undefined) updateData.name = dto.name;
-      if (dto.categoryId !== undefined) updateData.categoryId = parsePositiveBigIntId(dto.categoryId, '分类');
+      if (dto.categoryId !== undefined) updateData.categoryId = parsePositiveBigIntId(String(dto.categoryId), '分类');
       if (dto.productType !== undefined) updateData.productType = dto.productType;
       if (dto.fulfillmentType !== undefined) updateData.fulfillmentType = dto.fulfillmentType;
       if (dto.businessCategory !== undefined) updateData.businessCategory = dto.businessCategory;
-      if (dto.brandId !== undefined) updateData.brandId = dto.brandId ? parsePositiveBigIntId(dto.brandId, '品牌') : null;
-      if (dto.supplierId !== undefined) updateData.supplierId = dto.supplierId ? parsePositiveBigIntId(dto.supplierId, '供应商') : null;
+      if (dto.brandId !== undefined) updateData.brandId = dto.brandId ? parsePositiveBigIntId(String(dto.brandId), '品牌') : null;
+      if (dto.supplierId !== undefined) {
+        const nextSupplierId = dto.supplierId
+          ? parsePositiveBigIntId(String(dto.supplierId), '供应商')
+          : null;
+        const currentSupplierId = productLock[0].supplierId;
+        const supplierChanged = String(nextSupplierId ?? '') !== String(currentSupplierId ?? '');
+        if (nextSupplierId && supplierChanged) {
+          await this.assertSupplierAssignable(tx, nextSupplierId);
+        }
+        updateData.supplierId = nextSupplierId;
+      }
       if (dto.mainImage !== undefined) updateData.mainImage = dto.mainImage;
       if (dto.videoUrl !== undefined) updateData.videoUrl = dto.videoUrl;
       if (dto.images !== undefined) updateData.images = dto.images;
@@ -139,6 +216,25 @@ export class ProductionProductService extends ProductService {
     });
 
     return super.findAdminById(id);
+  }
+
+  private async assertSupplierAssignable(tx: Prisma.TransactionClient, supplierId: bigint) {
+    const rows = await tx.$queryRaw<Array<{ id: bigint }>>`
+      SELECT id
+      FROM suppliers
+      WHERE id = ${supplierId}
+        AND deleted_at IS NULL
+        AND status = 1
+      FOR UPDATE
+    `;
+    if (rows.length === 0) {
+      throw new BadRequestException('供应商不存在或已停用，请选择合作中的供应商');
+    }
+  }
+
+  private generateProductionCreateSkuCode() {
+    const random = crypto.randomUUID().replace(/-/g, '').slice(0, 22).toUpperCase();
+    return `SKU-NEW-${random}`;
   }
 
   private generateProductionSkuCode(productId: bigint) {
