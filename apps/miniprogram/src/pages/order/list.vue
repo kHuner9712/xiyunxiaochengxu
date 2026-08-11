@@ -91,33 +91,57 @@ const orders = ref<OrderItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let orderVersion = 0
+let loadingVersion = -1
 
-async function loadOrders(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    orders.value = []
-  }
+function resetOrders() {
+  page.value = 1
+  finished.value = false
+  orders.value = []
+}
+
+async function loadOrders(version = orderVersion) {
+  if (finished.value && version === orderVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
+  const requestStatus = currentTab.value
   loading.value = true
+  loadingVersion = version
   try {
-    const params: { page: number; pageSize: number; status?: OrderStatus } = { page: page.value, pageSize: 10 }
-    if (currentTab.value) params.status = currentTab.value
+    const params: { page: number; pageSize: number; status?: OrderStatus } = {
+      page: requestPage,
+      pageSize: 10,
+    }
+    if (requestStatus) params.status = requestStatus
     const data = await getOrderList(params)
+    if (version !== orderVersion) return
+
     orders.value.push(...data.list)
     finished.value = orders.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '订单加载失败', icon: 'none' })
+    if (version === orderVersion) {
+      uni.showToast({ title: '订单加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === orderVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
+function refreshOrders() {
+  const version = ++orderVersion
+  resetOrders()
+  return loadOrders(version)
+}
+
 function switchTab(value: OrderTabValue) {
+  if (currentTab.value === value) return
   currentTab.value = value
-  loadOrders(true)
+  refreshOrders()
 }
 
 function goDetail(id: string) {
@@ -173,7 +197,7 @@ async function handleCancel(id: string) {
       if (res.confirm) {
         try {
           await cancelOrder(id)
-          loadOrders(true)
+          refreshOrders()
         } catch {
           uni.showToast({ title: '取消失败', icon: 'none' })
         }
@@ -220,7 +244,7 @@ async function handleConfirm(id: string) {
       if (res.confirm) {
         try {
           await confirmReceive(id)
-          loadOrders(true)
+          refreshOrders()
         } catch {
           uni.showToast({ title: '确认失败', icon: 'none' })
         }
@@ -234,13 +258,24 @@ onLoad((options) => {
   currentTab.value = status || ''
 })
 
-onShow(() => loadOrders(true))
+onShow(() => {
+  refreshOrders()
+})
 
-onReachBottom(() => loadOrders())
+onReachBottom(() => loadOrders(orderVersion))
 
 onPullDownRefresh(async () => {
-  await loadOrders(true)
+  await refreshOrders()
   uni.stopPullDownRefresh()
+})
+
+defineExpose({
+  currentTab,
+  orders,
+  loading,
+  switchTab,
+  loadOrders,
+  refreshOrders,
 })
 </script>
 
