@@ -8,6 +8,11 @@ import { OrderStatus } from '@prisma/client';
 const PAYMENT_RECONCILE_BATCH_SIZE = 20;
 const REFUND_RECONCILE_BATCH_SIZE = 20;
 const TIMEOUT_CLOSE_CONFIRM_BATCH_SIZE = 20;
+const ACTIVE_REFUND_RECONCILE_STATUSES = [
+  REFUND_STATUS.INITIATING,
+  REFUND_STATUS.PENDING,
+  REFUND_STATUS.PROCESSING,
+];
 
 @Injectable()
 export class PaymentReconcileService {
@@ -31,7 +36,7 @@ export class PaymentReconcileService {
         createdAt: { lt: fiveMinutesAgo },
       },
       include: { order: true },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
       take: PAYMENT_RECONCILE_BATCH_SIZE,
     });
 
@@ -52,6 +57,7 @@ export class PaymentReconcileService {
     for (const payment of pendingPayments) {
       if (!payment.order || payment.order.status !== OrderStatus.pending_payment) {
         skipped++;
+        await this.rotatePaymentReconcileAttempt(payment.id, PAYMENT_STATUS.CREATED);
         continue;
       }
 
@@ -69,14 +75,17 @@ export class PaymentReconcileService {
           fixed++;
           this.logger.log(`支付对账修复: 订单${payment.order.orderNo}已从 pending_payment 转为 pending_delivery`);
           this.businessEvent.emitInfo('payment_reconcile_fix', 'reconcile', `支付对账修复: 订单${payment.order.orderNo}`, payment.order.orderNo, { paymentId: payment.id.toString(), transactionId: wechatResult.transaction_id });
-        } else if (['CLOSED', 'REVOKED', 'PAYERROR'].includes(wechatResult.trade_state)) {
-          this.logger.warn(`支付对账发现异常状态: 订单${payment.order.orderNo}微信状态=${wechatResult.trade_state}，本地保留等待业务超时`);
-          skipped++;
         } else {
-          this.logger.log(`支付对账跳过: 订单${payment.order.orderNo}微信状态=${wechatResult.trade_state}`);
+          await this.rotatePaymentReconcileAttempt(payment.id, PAYMENT_STATUS.CREATED);
+          if (['CLOSED', 'REVOKED', 'PAYERROR'].includes(wechatResult.trade_state)) {
+            this.logger.warn(`支付对账发现异常状态: 订单${payment.order.orderNo}微信状态=${wechatResult.trade_state}，本地保留等待业务超时`);
+          } else {
+            this.logger.log(`支付对账跳过: 订单${payment.order.orderNo}微信状态=${wechatResult.trade_state}`);
+          }
           skipped++;
         }
       } catch (error) {
+        await this.rotatePaymentReconcileAttempt(payment.id, PAYMENT_STATUS.CREATED);
         this.logger.error(`支付对账查询失败: 订单${payment.order.orderNo}`, (error as Error).message);
         failed++;
       }
@@ -85,6 +94,7 @@ export class PaymentReconcileService {
     for (const payment of halfSuccessPayments) {
       if (!payment.order) {
         skipped++;
+        await this.rotatePaymentReconcileAttempt(payment.id, PAYMENT_STATUS.SUCCESS);
         continue;
       }
 
@@ -101,6 +111,7 @@ export class PaymentReconcileService {
         this.logger.log(`支付半成功对账修复: 订单${payment.order.orderNo}已从 pending_payment 修复为 pending_delivery`);
         this.businessEvent.emitInfo('payment_half_success_reconcile_fix', 'reconcile', `支付半成功对账修复: 订单${payment.order.orderNo}`, payment.order.orderNo, { paymentId: payment.id.toString() });
       } catch (error) {
+        await this.rotatePaymentReconcileAttempt(payment.id, PAYMENT_STATUS.SUCCESS);
         this.logger.error(`支付半成功对账修复失败: 订单${payment.order.orderNo}`, (error as Error).message);
         failed++;
       }
@@ -206,7 +217,7 @@ export class PaymentReconcileService {
 
     const pendingRefunds = await this.prisma.orderRefund.findMany({
       where: {
-        status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] },
+        status: { in: ACTIVE_REFUND_RECONCILE_STATUSES },
         updatedAt: { lt: fiveMinutesAgo },
       },
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
@@ -225,6 +236,7 @@ export class PaymentReconcileService {
         if (wechatStatus === WECHAT_REFUND_STATUS.SUCCESS) {
           const successAmount = wechatResult.amount?.refund;
           if (successAmount !== undefined && successAmount !== refund.refundAmount) {
+            await this.rotateRefundReconcileAttempt(refund.id, wechatResult);
             this.logger.error(`退款对账金额不匹配: ${refund.outRefundNo}期望${refund.refundAmount}分, 微信${successAmount}分`);
             skipped++;
             continue;
@@ -271,14 +283,17 @@ export class PaymentReconcileService {
             fixed++;
             this.logger.log(`退款对账修复: ${refund.outRefundNo}从 initiating 更新为 pending`);
           } else {
+            await this.rotateRefundReconcileAttempt(refund.id, wechatResult);
             skipped++;
             this.logger.log(`退款对账跳过: ${refund.outRefundNo}微信处理中，本地${refund.status}`);
           }
         } else {
+          await this.rotateRefundReconcileAttempt(refund.id, wechatResult);
           this.logger.warn(`退款对账未知微信状态: ${refund.outRefundNo} status=${wechatStatus}`);
           skipped++;
         }
       } catch (error) {
+        await this.rotateRefundReconcileAttempt(refund.id);
         this.logger.error(`退款对账查询失败: ${refund.outRefundNo}`, (error as Error).message);
         failed++;
       }
@@ -287,5 +302,45 @@ export class PaymentReconcileService {
     const summary = { total: pendingRefunds.length, fixed, failed, skipped };
     this.logger.log(`退款对账完成: ${JSON.stringify(summary)}`);
     return summary;
+  }
+
+  private async rotatePaymentReconcileAttempt(
+    paymentId: bigint,
+    expectedStatus: number,
+  ): Promise<void> {
+    try {
+      await this.prisma.orderPayment.updateMany({
+        where: { id: paymentId, status: expectedStatus },
+        data: { updatedAt: new Date() },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `支付对账轮转时间更新失败: paymentId=${paymentId.toString()}, error=${(error as Error).message}`,
+      );
+    }
+  }
+
+  private async rotateRefundReconcileAttempt(
+    refundId: bigint,
+    rawResponse?: unknown,
+  ): Promise<void> {
+    const data: { updatedAt: Date; rawResponse?: unknown } = {
+      updatedAt: new Date(),
+    };
+    if (rawResponse !== undefined) data.rawResponse = rawResponse;
+
+    try {
+      await this.prisma.orderRefund.updateMany({
+        where: {
+          id: refundId,
+          status: { in: ACTIVE_REFUND_RECONCILE_STATUSES },
+        },
+        data: data as any,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `退款对账轮转时间更新失败: refundId=${refundId.toString()}, error=${(error as Error).message}`,
+      );
+    }
   }
 }
