@@ -8,9 +8,42 @@ import { validateEnv } from './env.validation';
 
 const MIN_PLATFORM_CERT_VALIDITY_MS = 24 * 60 * 60 * 1000;
 const CANONICAL_CERT_SERIAL = /^[0-9A-F]+$/;
+const PLACEHOLDER_SENSITIVE_KEYS = [
+  'DATABASE_URL',
+  'DB_PASSWORD',
+  'REDIS_PASSWORD',
+  'JWT_SECRET',
+  'REFRESH_TOKEN_SECRET',
+  'WECHAT_APP_ID',
+  'WECHAT_APP_SECRET',
+  'WECHAT_MCH_ID',
+  'WECHAT_MCH_SERIAL_NO',
+  'WECHAT_API_V3_KEY',
+  'WECHAT_PLATFORM_CERT_SERIAL_NO',
+  'ADMIN_DEFAULT_PASSWORD',
+] as const;
+const PLACEHOLDER_MARKERS = [
+  'REPLACE_WITH_',
+  'CHANGE_ME',
+  'CHANGE_THIS',
+  'CHANGEME',
+  '<REPLACE',
+  'YOUR_',
+] as const;
 
 function fail(message: string): never {
   throw new Error(`生产配置预检失败: ${message}`);
+}
+
+function rejectObviousPlaceholderValues(env: NodeJS.ProcessEnv): void {
+  for (const key of PLACEHOLDER_SENSITIVE_KEYS) {
+    const raw = String(env[key] || '').trim();
+    if (!raw) continue;
+    const normalized = raw.toUpperCase();
+    if (PLACEHOLDER_MARKERS.some((marker) => normalized.includes(marker))) {
+      fail(`${key} 仍是模板占位值，必须在生产部署前替换为真实配置`);
+    }
+  }
 }
 
 function normalizeCertificateSerial(serial: string): string {
@@ -146,6 +179,8 @@ export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.en
   if ((env.NODE_ENV || 'development') !== 'production') {
     return;
   }
+
+  rejectObviousPlaceholderValues(env);
 
   // This value is consumed by every Axios-based external integration. Validate it here so an
   // invalid production setting cannot survive until after a live Prisma migration or until Nest
