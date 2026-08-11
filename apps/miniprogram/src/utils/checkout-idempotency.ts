@@ -84,7 +84,7 @@ function clear(scope: string, clientRequestId: string) {
  */
 export async function runIdempotentCheckout<T>(
   scope: string,
-  payload: Record<string, unknown>,
+  payload: unknown,
   submit: (clientRequestId: string) => Promise<T>,
 ): Promise<T> {
   const fingerprint = stableSerialize(payload)
