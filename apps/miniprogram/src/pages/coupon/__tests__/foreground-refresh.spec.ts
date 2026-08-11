@@ -21,7 +21,17 @@ vi.mock('@/api/coupon', () => ({
   getMyCoupons: vi.fn(),
 }))
 
-function coupon(name: string) {
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function coupon(name: string, status = 1) {
   return {
     id: name,
     couponId: name,
@@ -31,7 +41,7 @@ function coupon(name: string) {
     minAmount: 5000,
     startTime: '2026-08-01T00:00:00.000Z',
     endTime: '2026-08-31T00:00:00.000Z',
-    status: 1,
+    status,
   }
 }
 
@@ -64,5 +74,39 @@ describe('我的优惠券前台刷新', () => {
     expect(wrapper.text()).not.toContain('首次可用券')
     expect(wrapper.text()).toContain('重新计算后的可用券')
     expect(getMyCoupons).toHaveBeenCalledTimes(2)
+  })
+
+  it('切换优惠券状态后旧可用券响应晚到不能污染当前 Tab', async () => {
+    const first = deferred<any>()
+    const second = deferred<any>()
+    vi.mocked(getMyCoupons)
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+
+    const wrapper = mount(CouponPage, {
+      global: { stubs: { Loading: true, Empty: true } },
+    })
+
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+
+    const vm = wrapper.vm as any
+    vm.switchTab(2)
+    await Promise.resolve()
+
+    expect(getMyCoupons).toHaveBeenNthCalledWith(1, { status: 1, page: 1, pageSize: 10 })
+    expect(getMyCoupons).toHaveBeenNthCalledWith(2, { status: 2, page: 1, pageSize: 10 })
+
+    second.resolve({ list: [coupon('已使用新券', 2)], total: 1 })
+    await flushPromises()
+    expect(vm.currentTab).toBe(2)
+    expect(vm.coupons.map((item: any) => item.name)).toEqual(['已使用新券'])
+
+    first.resolve({ list: [coupon('旧可用券', 1)], total: 1 })
+    await flushPromises()
+
+    expect(vm.currentTab).toBe(2)
+    expect(vm.coupons.map((item: any) => item.name)).toEqual(['已使用新券'])
+    expect(wrapper.text()).not.toContain('旧可用券')
   })
 })
