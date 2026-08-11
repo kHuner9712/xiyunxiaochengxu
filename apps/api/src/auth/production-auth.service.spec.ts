@@ -17,7 +17,7 @@ describe('ProductionAuthService', () => {
     jest.clearAllMocks();
   });
 
-  it('recovers when another request wins the first-login openid create race', async () => {
+  it('recovers when another request wins the first-login openid create race and issues a revocable access session', async () => {
     const durableUser = {
       id: 123n,
       openid: 'openid-race',
@@ -74,15 +74,24 @@ describe('ProductionAuthService', () => {
       where: { id: 123n },
       data: expect.objectContaining({ lastLoginAt: expect.any(Date) }),
     });
-    expect(redis.set).toHaveBeenCalledWith('wechat_session:123', 'session-key', 86400 * 7);
+    expect(redis.set).toHaveBeenNthCalledWith(1, 'wechat_session:123', 'session-key', 86400 * 7);
     expect(jwt.signAsync).toHaveBeenCalledWith(
       expect.objectContaining({
         id: '123',
         roleType: 'user',
         type: 'user',
         tokenType: 'access',
+        tokenId: expect.any(String),
       }),
       { expiresIn: '7d' },
+    );
+    const accessPayload = jwt.signAsync.mock.calls[0][0];
+    expect(accessPayload.tokenId).toBeTruthy();
+    expect(redis.set).toHaveBeenNthCalledWith(
+      2,
+      `weapp_access_token:123:${accessPayload.tokenId}`,
+      '1',
+      86400 * 7,
     );
   });
 
