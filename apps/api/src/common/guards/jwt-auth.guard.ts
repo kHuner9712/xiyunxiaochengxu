@@ -125,6 +125,19 @@ export class JwtAuthGuard implements CanActivate {
       if (!user) {
         throw new UnauthorizedException('账号已停用或删除，请重新登录');
       }
+
+      const tokenId = typeof payload.tokenId === 'string' ? payload.tokenId.trim() : '';
+      if (!tokenId) {
+        // Access tokens issued before revocable user sessions existed are intentionally forced to
+        // log in again after rollout rather than remaining valid for the rest of their 7-day TTL.
+        throw new UnauthorizedException('登录会话无效，请重新登录');
+      }
+      const accessSessionExists = await this.redisService.exists(
+        `weapp_access_token:${accountId.toString()}:${tokenId}`,
+      );
+      if (!accessSessionExists) {
+        throw new UnauthorizedException('登录会话已失效，请重新登录');
+      }
       return;
     }
 
