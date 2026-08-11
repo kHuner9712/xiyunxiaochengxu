@@ -46,4 +46,24 @@ describe('production migration entrypoint contract', () => {
     expect(freshSeedIndex).toBeGreaterThan(countIndex);
     expect(startIndex).toBeGreaterThan(freshSeedIndex);
   });
+
+  it('makes a fresh production customer-service config smoke-compatible without fake phone data', () => {
+    const entrypoint = readEntrypoint();
+
+    expect(entrypoint).toContain('finalize_fresh_production_seed()');
+    expect(entrypoint).toContain("configKey: 'type'");
+    expect(entrypoint).toContain("configValue: 'wechat'");
+    expect(entrypoint).toContain("configKey: 'enabled'");
+    expect(entrypoint).toContain("configValue: 'true'");
+
+    const freshSeedBranch = entrypoint.indexOf('if [ "$admin_count" = "0" ]; then');
+    const runSeedIndex = entrypoint.indexOf('run_seed', freshSeedBranch);
+    const finalizeIndex = entrypoint.indexOf('finalize_fresh_production_seed', runSeedIndex);
+    const explicitSeedBranch = entrypoint.indexOf('elif [ "$RUN_SEED" = "true" ]; then');
+
+    expect(freshSeedBranch).toBeGreaterThanOrEqual(0);
+    expect(runSeedIndex).toBeGreaterThan(freshSeedBranch);
+    expect(finalizeIndex).toBeGreaterThan(runSeedIndex);
+    expect(explicitSeedBranch).toBeGreaterThan(finalizeIndex);
+  });
 });
