@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CouponCenterPage from '../center.vue'
-import { getClaimableCoupons } from '@/api/coupon'
+import { getClaimableCoupons, receiveCoupon } from '@/api/coupon'
 
 const uniAppMock = vi.hoisted(() => ({
   onShowCallbacks: [] as Array<() => void>,
@@ -45,7 +45,7 @@ function coupon(id: string, name: string) {
     minAmount: 5000,
     startTime: '2026-08-01',
     endTime: '2026-08-31',
-    remainCount: 1,
+    remainCount: 10,
     received: false,
   } as any
 }
@@ -88,5 +88,32 @@ describe('优惠券中心资格刷新并发', () => {
     expect((wrapper.vm as any).coupons.map((item: any) => item.id)).toEqual(['new'])
     expect(wrapper.text()).not.toContain('旧资格优惠券')
     expect((wrapper.vm as any).loading).toBe(false)
+  })
+
+  it('同一张可多领优惠券快速重复点击只发起一次领取请求', async () => {
+    vi.mocked(getClaimableCoupons).mockResolvedValue([coupon('coupon-1', '可多领优惠券')])
+    const claim = deferred<any>()
+    vi.mocked(receiveCoupon).mockImplementation(() => claim.promise)
+
+    const wrapper = mount(CouponCenterPage, {
+      global: { stubs: { Loading: true, Empty: true } },
+    })
+    await (wrapper.vm as any).refreshCoupons()
+
+    const current = (wrapper.vm as any).coupons[0]
+    const first = (wrapper.vm as any).handleReceive(current)
+    const second = (wrapper.vm as any).handleReceive(current)
+    await Promise.resolve()
+
+    expect(receiveCoupon).toHaveBeenCalledTimes(1)
+    expect((wrapper.vm as any).receivingCouponIds.has('coupon-1')).toBe(true)
+
+    claim.resolve({ success: true })
+    await first
+    await second
+    await flushPromises()
+
+    expect(receiveCoupon).toHaveBeenCalledTimes(1)
+    expect((wrapper.vm as any).receivingCouponIds.has('coupon-1')).toBe(false)
   })
 })
