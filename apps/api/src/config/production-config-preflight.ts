@@ -46,6 +46,59 @@ function rejectObviousPlaceholderValues(env: NodeJS.ProcessEnv): void {
   }
 }
 
+function decodeDatabaseUrlPart(value: string, label: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    fail(`DATABASE_URL 的 ${label} 不是合法的 percent-encoding`);
+  }
+}
+
+function validateDatabaseUrlConsistency(env: NodeJS.ProcessEnv): void {
+  const raw = String(env.DATABASE_URL || '').trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    fail('DATABASE_URL 不是合法 URL');
+  }
+
+  if (parsed.protocol !== 'mysql:') {
+    fail(`DATABASE_URL 协议必须为 mysql:，当前为 ${parsed.protocol || '(empty)'}`);
+  }
+
+  const expectedHost = String(env.DB_HOST || '').trim();
+  if (expectedHost && parsed.hostname.toLowerCase() !== expectedHost.toLowerCase()) {
+    fail(`DATABASE_URL host 与 DB_HOST 不一致: url=${parsed.hostname || '(empty)'} DB_HOST=${expectedHost}`);
+  }
+
+  const actualPort = parsed.port || '3306';
+  const expectedPort = String(env.DB_PORT || '3306').trim() || '3306';
+  if (actualPort !== expectedPort) {
+    fail(`DATABASE_URL port 与 DB_PORT 不一致: url=${actualPort} DB_PORT=${expectedPort}`);
+  }
+
+  const actualDatabase = decodeDatabaseUrlPart(parsed.pathname.replace(/^\/+/, ''), '数据库名');
+  const expectedDatabase = String(env.DB_NAME || '').trim();
+  if (expectedDatabase && actualDatabase !== expectedDatabase) {
+    fail(`DATABASE_URL 数据库名与 DB_NAME 不一致: url=${actualDatabase || '(empty)'} DB_NAME=${expectedDatabase}`);
+  }
+
+  const actualUser = decodeDatabaseUrlPart(parsed.username, '用户名');
+  const expectedUser = String(env.DB_USER || '').trim();
+  if (expectedUser && actualUser !== expectedUser) {
+    fail(`DATABASE_URL 用户名与 DB_USER 不一致: url=${actualUser || '(empty)'} DB_USER=${expectedUser}`);
+  }
+
+  const expectedPassword = String(env.DB_PASSWORD || '');
+  if (expectedPassword) {
+    const actualPassword = decodeDatabaseUrlPart(parsed.password, '密码');
+    if (actualPassword !== expectedPassword) {
+      fail('DATABASE_URL 密码与 DB_PASSWORD 不一致');
+    }
+  }
+}
+
 function normalizeCertificateSerial(serial: string): string {
   const normalized = String(serial || '')
     .trim()
@@ -181,6 +234,7 @@ export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.en
   }
 
   rejectObviousPlaceholderValues(env);
+  validateDatabaseUrlConsistency(env);
 
   // This value is consumed by every Axios-based external integration. Validate it here so an
   // invalid production setting cannot survive until after a live Prisma migration or until Nest
