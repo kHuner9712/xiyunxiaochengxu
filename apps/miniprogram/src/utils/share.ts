@@ -19,6 +19,7 @@ export interface PromotionSourcePayload {
 }
 
 const PROMOTION_SOURCE_STORAGE_KEY = 'xy_promotion_source'
+const SHARE_VISIT_DEDUPE_WINDOW_MS = 2000
 
 function normalizeString(value: any): string | undefined {
   if (value === undefined || value === null) return undefined
@@ -45,7 +46,18 @@ function toShareApiParams(params: ShareParams): ShareParams {
   }
 }
 
+function createVisitKey(params: ShareParams): string {
+  return [
+    params.shareRecordId || '',
+    params.sceneCode || '',
+    params.inviter || '',
+    params.campaignId || '',
+  ].join('|')
+}
+
 let isBindingInvite = false
+let lastVisitKey = ''
+let lastVisitAt = 0
 
 export function parseShareParams(query: Record<string, any>): ShareParams {
   const sourceCode = normalizeString(
@@ -72,7 +84,25 @@ export function parseShareParams(query: Record<string, any>): ShareParams {
 
 export function handleShareVisit(params: ShareParams) {
   if (params.inviter || params.shareRecordId || params.sceneCode) {
-    recordVisit(toShareApiParams(params)).catch(() => {})
+    const apiParams = toShareApiParams(params)
+    const visitKey = createVisitKey(apiParams)
+    const now = Date.now()
+    const isDuplicateLifecycleReport =
+      visitKey === lastVisitKey &&
+      now - lastVisitAt >= 0 &&
+      now - lastVisitAt < SHARE_VISIT_DEDUPE_WINDOW_MS
+
+    if (!isDuplicateLifecycleReport) {
+      lastVisitKey = visitKey
+      lastVisitAt = now
+      recordVisit(apiParams).catch(() => {
+        // Network/API failure must not consume the local dedupe window permanently. A later
+        // lifecycle event or foreground retry is allowed to report the visit again.
+        if (lastVisitKey === visitKey) {
+          lastVisitAt = 0
+        }
+      })
+    }
   }
   savePromotionSource(params)
 }
