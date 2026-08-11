@@ -2,8 +2,16 @@ import request from '@/utils/request'
 
 type SupplierMutation = { id: string; [key: string]: any }
 
+type SupplierListParams = {
+  page: number
+  pageSize: number
+  name?: string
+  contactPhone?: string
+  status?: number
+}
+
 export const supplierApi = {
-  getList(params: { page: number; pageSize: number; name?: string; contactPhone?: string }) {
+  getList(params: SupplierListParams) {
     return request.get('/admin/supplier/list', { params })
   },
   getDetail(id: string) {
