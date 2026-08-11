@@ -8,12 +8,19 @@ export interface RedisRuntimeSafetyConfig {
   appendfsync: string;
 }
 
+type SchedulerLockHeartbeat = {
+  value: string;
+  ttlSeconds: number;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
 @Injectable()
 export class RedisService implements OnApplicationShutdown {
   private readonly logger = new Logger(RedisService.name);
   private readonly client: any;
   private closing = false;
   private schedulerPauseLogged = false;
+  private readonly schedulerLockHeartbeats = new Map<string, SchedulerLockHeartbeat>();
 
   constructor(@Inject('REDIS_CLIENT') client: any) {
     this.client = client;
@@ -36,7 +43,11 @@ export class RedisService implements OnApplicationShutdown {
       return false;
     }
     const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
-    return result === 'OK';
+    const acquired = result === 'OK';
+    if (acquired && key.startsWith('schedule:')) {
+      this.startSchedulerLockHeartbeat(key, value, ttlSeconds);
+    }
+    return acquired;
   }
 
   isSchedulerPausedForCurrentBuild(): boolean {
@@ -114,10 +125,70 @@ export class RedisService implements OnApplicationShutdown {
     return { maxmemoryPolicy, appendonly, appendfsync };
   }
 
+  async extendLockWithLua(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("expire", KEYS[1], ARGV[2]) else return 0 end`;
+    const result = await this.client.eval(lua, 1, key, value, String(ttlSeconds));
+    return result === 1;
+  }
+
   async releaseLockWithLua(key: string, value: string): Promise<boolean> {
     const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
-    const result = await this.client.eval(lua, 1, key, value);
-    return result === 1;
+    try {
+      const result = await this.client.eval(lua, 1, key, value);
+      return result === 1;
+    } finally {
+      this.stopSchedulerLockHeartbeat(key, value);
+    }
+  }
+
+  private startSchedulerLockHeartbeat(key: string, value: string, ttlSeconds: number): void {
+    if (this.closing || ttlSeconds <= 0) return;
+
+    this.stopSchedulerLockHeartbeat(key);
+    const heartbeat: SchedulerLockHeartbeat = {
+      value,
+      ttlSeconds,
+      timer: null,
+    };
+    this.schedulerLockHeartbeats.set(key, heartbeat);
+
+    const delayMs = Math.max(100, Math.floor((ttlSeconds * 1000) / 3));
+    const renew = async () => {
+      if (this.closing || this.schedulerLockHeartbeats.get(key) !== heartbeat) return;
+
+      try {
+        const renewed = await this.extendLockWithLua(key, value, ttlSeconds);
+        if (!renewed) {
+          this.schedulerLockHeartbeats.delete(key);
+          this.logger.error(`定时任务锁续租失败，已失去锁所有权：key=${key}`);
+          return;
+        }
+      } catch (error) {
+        this.logger.warn(`定时任务锁续租异常：key=${key}, error=${(error as Error).message}`);
+      }
+
+      if (this.closing || this.schedulerLockHeartbeats.get(key) !== heartbeat) return;
+      heartbeat.timer = setTimeout(renew, delayMs);
+      heartbeat.timer.unref?.();
+    };
+
+    heartbeat.timer = setTimeout(renew, delayMs);
+    heartbeat.timer.unref?.();
+  }
+
+  private stopSchedulerLockHeartbeat(key: string, value?: string): void {
+    const heartbeat = this.schedulerLockHeartbeats.get(key);
+    if (!heartbeat || (value !== undefined && heartbeat.value !== value)) return;
+
+    if (heartbeat.timer) clearTimeout(heartbeat.timer);
+    this.schedulerLockHeartbeats.delete(key);
+  }
+
+  private stopAllSchedulerLockHeartbeats(): void {
+    for (const heartbeat of this.schedulerLockHeartbeats.values()) {
+      if (heartbeat.timer) clearTimeout(heartbeat.timer);
+    }
+    this.schedulerLockHeartbeats.clear();
   }
 
   private async getConfigValue(name: string): Promise<string> {
@@ -172,6 +243,7 @@ export class RedisService implements OnApplicationShutdown {
   async onApplicationShutdown(): Promise<void> {
     if (this.closing || !this.client) return;
     this.closing = true;
+    this.stopAllSchedulerLockHeartbeats();
 
     const status = String(this.client.status || '');
     if (status === 'end' || status === 'close') return;
