@@ -181,6 +181,7 @@ async function handleAdjustSubmit() {
     await request.post('/admin/stock/adjust', {
       productId: adjustForm.productId,
       skuId: adjustForm.skuId,
+      expectedStock: adjustForm.currentStock,
       type: adjustForm.type,
       quantity: adjustForm.quantity,
       reason: adjustForm.reason.trim(),
@@ -189,7 +190,11 @@ async function handleAdjustSubmit() {
     adjustVisible.value = false
     fetchList()
     fetchLogs()
-  } catch {} finally {
+  } catch {
+    // A lost success response must not leave the operator looking at stale stock. Refresh the
+    // authoritative list/logs so they can immediately see whether the previous operation landed.
+    await Promise.allSettled([fetchList(), fetchLogs()])
+  } finally {
     submitting.value = false
   }
 }
