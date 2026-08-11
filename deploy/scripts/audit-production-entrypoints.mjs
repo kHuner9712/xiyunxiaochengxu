@@ -13,6 +13,7 @@ const backup = read('deploy/scripts/backup.sh');
 const restore = read('deploy/scripts/restore.sh');
 const bootstrap = read('deploy/scripts/test-production-container-bootstrap.sh');
 const bootstrapWorkflow = read('.github/workflows/production-container-bootstrap.yml');
+const productionEnvExample = read('.env.production.example');
 
 assert.match(legacyDeploy, /exec bash "\$SCRIPT_DIR\/deploy-production\.sh" "\$@"/);
 assert.doesNotMatch(legacyDeploy, /git\s+(pull|merge|checkout)/);
@@ -66,5 +67,22 @@ assert.match(bootstrap, /customer_service/);
 assert.match(bootstrap, /_prisma_migrations/);
 assert.match(bootstrapWorkflow, /Build production API image/);
 assert.match(bootstrapWorkflow, /test-production-container-bootstrap\.sh baby-mall-api:bootstrap-ci/);
+
+// Production business knobs are persisted runtime configuration, not environment overrides.
+// Keeping inactive ORDER/FREIGHT/POINTS keys in the env template is dangerous because operators
+// can change a value, restart successfully, and falsely believe pricing/timeout behavior changed.
+for (const key of [
+  'ORDER_AUTO_CLOSE_MINUTES',
+  'ORDER_AUTO_COMPLETE_DAYS',
+  'FREIGHT_FREE_AMOUNT',
+  'FREIGHT_DEFAULT_FEE',
+  'FREIGHT_REMOTE_FEE',
+  'POINTS_DEDUCT_RATE',
+  'POINTS_DEDUCT_MAX_PERCENT',
+]) {
+  assert.doesNotMatch(productionEnvExample, new RegExp(`^${key}=`, 'm'));
+}
+assert.match(productionEnvExample, /由数据库 system_configs \+ 管理后台“系统配置”控制/);
+assert.match(productionEnvExample, /金额型配置（如运费、包邮门槛）在数据库中使用“分”/);
 
 console.log('[audit-production-entrypoints] PASS');
