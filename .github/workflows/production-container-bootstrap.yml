@@ -1,0 +1,44 @@
+name: Production Container Bootstrap
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  fresh-production-bootstrap:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: baby_mall_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+
+      - name: Build production API image
+        run: >-
+          docker build --pull
+          --file deploy/Dockerfile.api
+          --tag baby-mall-api:bootstrap-ci
+          --build-arg BUILD_SHA=${{ github.sha }}
+          .
+
+      - name: Exercise empty-database production entrypoint
+        run: bash deploy/scripts/test-production-container-bootstrap.sh baby-mall-api:bootstrap-ci
