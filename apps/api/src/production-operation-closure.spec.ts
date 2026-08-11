@@ -89,6 +89,7 @@ describe('production operation closure contracts', () => {
     const durableZeroPayPayment = read('apps/api/src/payment/durable-zero-pay-aftersale-payment.service.ts');
     const historicalReconcile = read('apps/api/src/payment/historical-anomaly-payment-reconcile.service.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
+    const idempotentOrder = read('apps/api/src/order/idempotent-attribution-safe-member-benefit-order.service.ts');
     const attributionSafeOrder = read('apps/api/src/order/attribution-safe-member-benefit-order.service.ts');
     const attributionAwarePromotion = read('apps/api/src/order/attribution-aware-promotion-checkout.service.ts');
     const memberBenefitOrder = read('apps/api/src/order/member-benefit-production-order.service.ts');
@@ -117,7 +118,10 @@ describe('production operation closure contracts', () => {
     expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
     expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
 
-    expect(orderModule).toContain('useClass: AttributionSafeMemberBenefitOrderService');
+    expect(orderModule).toContain('useClass: IdempotentAttributionSafeMemberBenefitOrderService');
+    expect(idempotentOrder).toContain('extends AttributionSafeMemberBenefitOrderService');
+    expect(idempotentOrder).toContain('buildDeterministicOrderNo');
+    expect(idempotentOrder).toContain('orderCreateIdempotency');
     expect(attributionSafeOrder).toContain('extends MemberBenefitProductionOrderService');
     expect(attributionSafeOrder).toContain('resolveCreateOrderAttribution');
     expect(memberBenefitOrder).toContain('extends CancellationSafeProductionOrderService');
