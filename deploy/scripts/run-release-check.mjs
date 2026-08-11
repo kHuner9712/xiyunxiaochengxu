@@ -36,7 +36,30 @@ function isClearlyTestDatabase(databaseUrl) {
   return /(^|[_-])test($|[_-])/i.test(getDatabaseName(databaseUrl))
 }
 
+function isReservedProductionApiHost(rawUrl) {
+  if (!rawUrl) return false
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase().replace(/\.$/, '')
+    if (!hostname) return false
+    if (hostname === 'localhost' || hostname === '::1' || hostname === '0.0.0.0') return true
+    if (hostname === 'example.com' || hostname === 'example.net' || hostname === 'example.org') return true
+    if (hostname.startsWith('127.')) return true
+    return ['.invalid', '.test', '.example', '.localhost'].some(
+      (suffix) => hostname === suffix.slice(1) || hostname.endsWith(suffix),
+    )
+  } catch {
+    return false
+  }
+}
+
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const strictProductionGate = args.includes('--strict-prod-gate')
+if (strictProductionGate && isReservedProductionApiHost(env.VITE_API_BASE_URL)) {
+  console.error(
+    `[run-release-check] strict production gate refuses reserved/local VITE_API_BASE_URL: ${env.VITE_API_BASE_URL}`,
+  )
+  process.exit(1)
+}
 
 console.log('[release-gate-boundary] API test:ci covers unit tests and mocked HTTP tests; it is not a real-database end-to-end test.')
 console.log('[release-gate-boundary] Admin browser E2E uses a built frontend and controlled mock API; production runtime, WeChat DevTools, real-device and payment acceptance remain separate evidence gates.')
