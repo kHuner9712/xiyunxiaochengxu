@@ -1,4 +1,5 @@
 import { get, post } from '@/utils/request'
+import { runIdempotentCheckout } from '@/utils/checkout-idempotency'
 
 export interface FlashSaleActivity {
   id: string
@@ -29,6 +30,7 @@ export interface FlashSaleBuyResult {
   lockExpireAt: string
   isZeroPay: boolean
   orderStatus?: string | null
+  fulfillmentType?: string | null
 }
 
 export interface FlashSaleOrder {
@@ -45,6 +47,20 @@ export interface FlashSaleOrder {
   createdAt: string
 }
 
+type FlashSaleBuyInput = {
+  activityId: string
+  quantity?: number
+  addressId?: string
+  pickupStoreId?: string
+  fulfillmentType?: string
+  couponId?: string
+  pointsDeduct?: number
+  sourceType?: string
+  sourceCode?: string
+  referrerUserId?: string
+  remark?: string
+}
+
 export const flashSaleApi = {
   getList(params: { page?: number; pageSize?: number }) {
     return get<{ list: FlashSaleActivity[]; total: number }>('/weapp/flash-sale/list', params)
@@ -52,20 +68,19 @@ export const flashSaleApi = {
   getDetail(id: string) {
     return get<FlashSaleActivity>(`/weapp/flash-sale/detail/${id}`)
   },
-  buy(data: {
-    activityId: string
-    quantity?: number
-    addressId?: string
-    pickupStoreId?: string
-    fulfillmentType?: string
-    couponId?: string
-    pointsDeduct?: number
-    sourceType?: string
-    sourceCode?: string
-    referrerUserId?: string
-    remark?: string
-  }) {
-    return post<FlashSaleBuyResult>('/weapp/flash-sale/buy', data)
+  async buy(data: FlashSaleBuyInput) {
+    const result = await runIdempotentCheckout<FlashSaleBuyResult>(
+      `flash-sale:${data.activityId}`,
+      data,
+      (clientRequestId) => post<FlashSaleBuyResult>('/weapp/flash-sale/buy', {
+        ...data,
+        clientRequestId,
+      }),
+    )
+    if (result.orderStatus === 'cancelled') {
+      throw new Error('上次提交对应秒杀订单已取消，请重新下单')
+    }
+    return result
   },
   getMyOrders(params: { page?: number; pageSize?: number }) {
     return get<{ list: FlashSaleOrder[]; total: number }>('/weapp/flash-sale/my-orders', params)
