@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WeappShareController, AdminShareController } from './share.controller';
 import { ShareService } from './share.service';
-import { SafeShareProductionService } from './safe-share-production.service';
+import { AtomicShareProductionService } from './atomic-share-production.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { RedisModule } from '../common/redis/redis.module';
 import { PointsModule } from '../points/points.module';
@@ -14,7 +14,7 @@ import { SystemConfigModule } from '../system-config/system-config.module';
   providers: [
     {
       provide: ShareService,
-      useClass: SafeShareProductionService,
+      useClass: AtomicShareProductionService,
     },
   ],
   exports: [ShareService],
