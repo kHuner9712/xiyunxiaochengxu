@@ -37,27 +37,46 @@ const list = ref<AftersaleItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let listVersion = 0
+let loadingVersion = -1
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    list.value = []
-  }
+function resetList() {
+  page.value = 1
+  finished.value = false
+  list.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await getAftersaleList({ page: page.value, pageSize: 10 })
+    const data = await getAftersaleList({ page: requestPage, pageSize: 10 })
+    if (version !== listVersion) return
+
     const rows = Array.isArray(data?.list) ? data.list : []
     list.value.push(...rows)
     finished.value = list.value.length >= Number(data?.total || 0)
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshList() {
+  const version = ++listVersion
+  resetList()
+  return loadList(version)
 }
 
 function goDetail(id: string) {
@@ -83,16 +102,23 @@ function getStatusClass(status: string | number): string {
 }
 
 onPullDownRefresh(async () => {
-  await loadList(true)
+  await refreshList()
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  void loadList()
+  void loadList(listVersion)
 })
 
 onShow(() => {
-  void loadList(true)
+  void refreshList()
+})
+
+defineExpose({
+  list,
+  loading,
+  loadList,
+  refreshList,
 })
 </script>
 
