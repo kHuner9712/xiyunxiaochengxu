@@ -6,6 +6,9 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { PaymentService } from './payment.service';
 
+const PRODUCTION_TIMEOUT_CONFIRM_BATCH_SIZE = 20;
+const ABNORMAL_REFUND_RECONCILE_BATCH_SIZE = 20;
+
 @Injectable()
 export class ProductionPaymentReconcileService extends PaymentReconcileService {
   private readonly productionLogger = new Logger(ProductionPaymentReconcileService.name);
@@ -26,6 +29,8 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
         autoCloseAt: { lte: new Date() },
       },
       include: { payment: true },
+      orderBy: [{ autoCloseAt: 'asc' }, { id: 'asc' }],
+      take: PRODUCTION_TIMEOUT_CONFIRM_BATCH_SIZE,
     });
 
     if (timeoutOrders.length === 0) {
@@ -112,8 +117,8 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
     const staleBefore = new Date(Date.now() - 5 * 60 * 1000);
     const abnormalRefunds = await this.productionPrisma.orderRefund.findMany({
       where: { status: REFUND_STATUS.ABNORMAL, updatedAt: { lt: staleBefore } },
-      orderBy: { updatedAt: 'asc' },
-      take: 100,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: ABNORMAL_REFUND_RECONCILE_BATCH_SIZE,
       select: { id: true, outRefundNo: true },
     });
     let abnormalRecovered = 0;
