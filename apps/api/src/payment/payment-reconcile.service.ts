@@ -34,6 +34,7 @@ export class PaymentReconcileService {
       where: {
         status: PAYMENT_STATUS.CREATED,
         createdAt: { lt: fiveMinutesAgo },
+        order: { status: OrderStatus.pending_payment },
       },
       include: { order: true },
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
