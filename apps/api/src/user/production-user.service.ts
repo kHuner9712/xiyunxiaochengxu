@@ -32,20 +32,21 @@ export class ProductionUserService extends UserService {
       if (!user) throw new NotFoundException('用户不存在');
 
       const newStatus = user.status === 1 ? 0 : 1;
-      if (newStatus === 0) {
-        try {
-          await this.productionRedis.delByPattern(
-            `weapp_access_token:${userId.toString()}:*`,
-          );
-          await this.productionRedis.del(`wechat_session:${userId.toString()}`);
-        } catch (error) {
-          // Do not report a successful disable while revocable access sessions remain live. The
-          // database transaction is intentionally left uncommitted so the operator can retry once
-          // Redis is healthy instead of creating a future session-resurrection window.
-          throw new InternalServerErrorException(
-            `用户会话撤销失败，账号未停用：${(error as Error)?.message || 'Redis error'}`,
-          );
-        }
+
+      // Revoke sessions on both transitions. During a disable transaction, a concurrent login can
+      // still observe the last committed active row before this transaction commits and create a
+      // fresh Redis access key after the first revocation pass. The DB status keeps that key unusable
+      // while disabled, and revoking again before a later re-enable prevents that stale key from ever
+      // becoming valid again.
+      try {
+        await this.productionRedis.delByPattern(
+          `weapp_access_token:${userId.toString()}:*`,
+        );
+        await this.productionRedis.del(`wechat_session:${userId.toString()}`);
+      } catch (error) {
+        throw new InternalServerErrorException(
+          `用户会话撤销失败，账号状态未变更：${(error as Error)?.message || 'Redis error'}`,
+        );
       }
 
       await tx.user.update({
