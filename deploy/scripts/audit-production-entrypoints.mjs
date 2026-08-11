@@ -11,6 +11,8 @@ const legacyDeploy = read('deploy/scripts/deploy.sh');
 const productionDeploy = read('deploy/scripts/deploy-production.sh');
 const backup = read('deploy/scripts/backup.sh');
 const restore = read('deploy/scripts/restore.sh');
+const bootstrap = read('deploy/scripts/test-production-container-bootstrap.sh');
+const bootstrapWorkflow = read('.github/workflows/production-container-bootstrap.yml');
 
 assert.match(legacyDeploy, /exec bash "\$SCRIPT_DIR\/deploy-production\.sh" "\$@"/);
 assert.doesNotMatch(legacyDeploy, /git\s+(pull|merge|checkout)/);
@@ -52,5 +54,17 @@ const success = restore.indexOf('完整 runtime smoke 已通过');
 assert.ok(apiStart >= 0 && health > apiStart && nginxStart > health, 'Nginx must reopen only after restored API health succeeds');
 assert.ok(smoke > nginxStart && success > smoke, 'Restore must declare success only after the full runtime smoke passes');
 assert.match(restore, /恢复失败且公网保持关闭/);
+
+assert.match(bootstrap, /BOOTSTRAP_DB="baby_mall_bootstrap"/);
+assert.match(bootstrap, /docker image inspect "\$IMAGE_NAME"/);
+assert.match(bootstrap, /NODE_ENV=production/);
+assert.match(bootstrap, /SKIP_MIGRATE=false/);
+assert.match(bootstrap, /RUN_SEED=false/);
+assert.match(bootstrap, /检测到全新生产数据库/);
+assert.match(bootstrap, /must_change_password/);
+assert.match(bootstrap, /customer_service/);
+assert.match(bootstrap, /_prisma_migrations/);
+assert.match(bootstrapWorkflow, /Build production API image/);
+assert.match(bootstrapWorkflow, /test-production-container-bootstrap\.sh baby-mall-api:bootstrap-ci/);
 
 console.log('[audit-production-entrypoints] PASS');
