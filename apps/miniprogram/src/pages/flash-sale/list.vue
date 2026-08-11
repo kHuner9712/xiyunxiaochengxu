@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onHide, onLoad, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
+import { onHide, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -41,6 +41,8 @@ const page = ref(1)
 const finished = ref(false)
 const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
+let listVersion = 0
+let loadingVersion = -1
 
 function startClock() {
   stopClock()
@@ -93,36 +95,63 @@ function remainTime(timeStr: string): string {
   return `${mins}m`
 }
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    activityList.value = []
-  }
+function resetList() {
+  page.value = 1
+  finished.value = false
+  activityList.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await flashSaleApi.getList({ page: page.value, pageSize: 20 })
+    const data = await flashSaleApi.getList({ page: requestPage, pageSize: 20 })
+    if (version !== listVersion) return
+
     activityList.value.push(...data.list)
     finished.value = activityList.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshList() {
+  const version = ++listVersion
+  resetList()
+  return loadList(version)
 }
 
 function goDetail(id: string) {
   uni.navigateTo({ url: `/pages/flash-sale/detail?id=${id}` })
 }
 
-onLoad(() => loadList())
-onShow(() => startClock())
+onShow(() => {
+  startClock()
+  void refreshList()
+})
 onHide(() => stopClock())
 onUnload(() => stopClock())
-onReachBottom(() => loadList())
+onReachBottom(() => void loadList(listVersion))
+
+defineExpose({
+  activityList,
+  loading,
+  remainStock,
+  loadList,
+  refreshList,
+})
 </script>
 
 <style lang="scss" scoped>
