@@ -33,6 +33,10 @@ export class OrderItemDto {
 }
 
 export class CreateOrderDto {
+  @IsString()
+  @Matches(/^\d{13}-[a-z0-9]{16,40}$/i, { message: '下单请求标识格式无效' })
+  clientRequestId!: string;
+
   @IsOptional()
   @IsString()
   @Matches(/^\d+$/)
