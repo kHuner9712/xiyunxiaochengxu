@@ -24,9 +24,6 @@ if [ $# -gt 0 ]; then
     }
     trap cleanup_scheduler_pause EXIT HUP INT TERM
 
-    # Do not exec the migration command: this shell must stay alive so the EXIT trap removes the
-    # shared-volume pause marker on both success and failure. Otherwise a one-off live migration
-    # can leave every current/future API instance permanently unable to acquire schedule:* locks.
     "$@"
     exit $?
   fi
@@ -45,6 +42,49 @@ run_seed() {
   npx prisma db seed
 }
 
+finalize_fresh_production_seed() {
+  # The generic seed intentionally leaves phone contact blank. A fresh production install must not
+  # start in enabled phone mode with an unusable placeholder because production smoke would reject
+  # it before an operator can reach Admin. Default only the fresh install to native WeChat contact;
+  # real-device acceptance remains a separate launch gate.
+  node - <<'NODE'
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+(async () => {
+  try {
+    await prisma.systemConfig.upsert({
+      where: { uk_group_key: { groupName: 'customer_service', configKey: 'type' } },
+      update: { configValue: 'wechat', valueType: 'string' },
+      create: {
+        groupName: 'customer_service',
+        configKey: 'type',
+        configValue: 'wechat',
+        valueType: 'string',
+        description: '客服类型 wechat/phone/both',
+      },
+    });
+    await prisma.systemConfig.upsert({
+      where: { uk_group_key: { groupName: 'customer_service', configKey: 'enabled' } },
+      update: { configValue: 'true', valueType: 'boolean' },
+      create: {
+        groupName: 'customer_service',
+        configKey: 'enabled',
+        configValue: 'true',
+        valueType: 'boolean',
+        description: '客服功能启用',
+      },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+NODE
+  echo "全新生产数据库: 默认启用原生微信客服模式，待真机验收"
+}
+
 if [ "$NODE_ENV" = "production" ]; then
   if [ "$SKIP_MIGRATE" = "true" ]; then
     echo "SKIP_MIGRATE=true: 跳过数据库迁移"
@@ -53,10 +93,6 @@ if [ "$NODE_ENV" = "production" ]; then
     npx prisma migrate deploy
   fi
 
-  # A brand-new production database has schema after migrations but no administrator. Requiring an
-  # operator to remember RUN_SEED=true creates a deployment that can be perfectly healthy yet have
-  # no usable admin login. Detect only the unambiguous fresh-bootstrap condition: zero admin users.
-  # Existing databases never auto-seed, so deployment cannot reset or recreate an established admin.
   admin_count="$(node - <<'NODE'
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
@@ -83,6 +119,7 @@ NODE
   if [ "$admin_count" = "0" ]; then
     echo "检测到全新生产数据库（admin_users=0），执行首次安全初始化"
     run_seed
+    finalize_fresh_production_seed
   elif [ "$RUN_SEED" = "true" ]; then
     echo "RUN_SEED=true: 显式执行幂等数据库 seed"
     run_seed
