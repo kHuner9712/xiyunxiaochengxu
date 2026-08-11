@@ -5,6 +5,8 @@ import { paginate } from '@baby-mall/shared';
 import { StockQueryDto } from './dto/stock-query.dto';
 import { StockAdjustDto } from './dto/stock-adjust.dto';
 
+const MYSQL_SIGNED_INT_MAX = 2_147_483_647;
+
 @Injectable()
 export class StockService {
   private readonly logger = new Logger(StockService.name);
@@ -104,7 +106,13 @@ export class StockService {
 
     const beforeStock = sku.stock;
     const afterStock = dto.type === 'in' ? beforeStock + dto.quantity : beforeStock - dto.quantity;
-    if (!Number.isSafeInteger(afterStock) || afterStock < 0) throw new BadRequestException('调整后的库存无效');
+    if (
+      !Number.isSafeInteger(afterStock) ||
+      afterStock < 0 ||
+      afterStock > MYSQL_SIGNED_INT_MAX
+    ) {
+      throw new BadRequestException(`调整后的库存必须在0-${MYSQL_SIGNED_INT_MAX}之间`);
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Compare-and-swap preserves concurrent user order deductions: if any order changes this
