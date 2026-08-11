@@ -30,13 +30,14 @@ describe('IdSafeProductionProductService', () => {
     expect(baseSpy).not.toHaveBeenCalled();
   });
 
-  it('passes canonical decimal identifiers to the inherited product implementation', async () => {
+  it('passes a valid bigint identifier beyond the JS safe-integer range without Number coercion', async () => {
+    const validBigIntId = '9007199254740993';
     const detailSpy = jest
       .spyOn(ProductionProductService.prototype, 'findById')
-      .mockResolvedValue({ id: '900719925474099312345' } as any);
+      .mockResolvedValue({ id: validBigIntId } as any);
 
-    await service().findById('900719925474099312345');
+    await service().findById(validBigIntId);
 
-    expect(detailSpy).toHaveBeenCalledWith('900719925474099312345');
+    expect(detailSpy).toHaveBeenCalledWith(validBigIntId);
   });
 });
