@@ -114,6 +114,6 @@ describe('IdempotentAttributionSafeMemberBenefitOrderService', () => {
 
   it('constructing the local Prisma proxy does not require $transaction until a transaction is actually used', () => {
     const partialPrisma = { order: { findFirst: jest.fn() } } as any;
-    expect(() => createOrderIdempotencyPrismaProxy(partialPrisma, new AsyncLocalStorage())).not.toThrow();
+    expect(() => createOrderIdempotencyPrismaProxy(partialPrisma, new AsyncLocalStorage<any>())).not.toThrow();
   });
 });
