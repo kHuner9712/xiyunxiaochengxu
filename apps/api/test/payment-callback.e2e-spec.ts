@@ -93,7 +93,12 @@ describe('PaymentController callback (e2e)', () => {
     await app.close();
   });
 
-  it('POST /api/weapp/pay/callback returns raw response not wrapped by TransformInterceptor', async () => {
+  beforeEach(() => {
+    paymentService.handleCallback.mockReset();
+    paymentService.handleRefundCallback.mockReset();
+  });
+
+  it('POST /api/weapp/pay/callback returns raw success response with HTTP 200', async () => {
     paymentService.handleCallback.mockResolvedValue({ code: 'SUCCESS', message: '' });
 
     const res = await request(app.getHttpServer())
@@ -110,20 +115,7 @@ describe('PaymentController callback (e2e)', () => {
     });
   });
 
-  it('POST /api/weapp/pay/callback with missing rawBody returns FAIL', async () => {
-    paymentService.handleCallback.mockResolvedValue({ code: 'FAIL', message: '缺少rawBody' });
-
-    const res = await request(app.getHttpServer())
-      .post('/api/weapp/pay/callback')
-      .send({})
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-    expect(res.body.code).toBe('FAIL');
-    expect(res.body.message).toBe('缺少rawBody');
-  });
-
-  it('POST /api/weapp/pay/callback with amount mismatch returns FAIL', async () => {
+  it('POST /api/weapp/pay/callback returns HTTP 500 when service resolves FAIL', async () => {
     paymentService.handleCallback.mockResolvedValue({ code: 'FAIL', message: '金额不一致' });
 
     const res = await request(app.getHttpServer())
@@ -131,8 +123,57 @@ describe('PaymentController callback (e2e)', () => {
       .send({})
       .set('Content-Type', 'application/json');
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ code: 'FAIL', message: '金额不一致' });
+  });
+
+  it('POST /api/weapp/pay/callback returns HTTP 500 when processing throws', async () => {
+    paymentService.handleCallback.mockRejectedValue(new Error('database unavailable'));
+
+    const res = await request(app.getHttpServer())
+      .post('/api/weapp/pay/callback')
+      .send({})
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(500);
     expect(res.body.code).toBe('FAIL');
-    expect(res.body.message).toBe('金额不一致');
+    expect(res.body.message).toContain('database unavailable');
+  });
+
+  it('POST /api/weapp/pay/refund-callback returns raw success response with HTTP 200', async () => {
+    paymentService.handleRefundCallback.mockResolvedValue({ code: 'SUCCESS', message: '' });
+
+    const res = await request(app.getHttpServer())
+      .post('/api/weapp/pay/refund-callback')
+      .send({})
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ code: 'SUCCESS', message: '' });
+  });
+
+  it('POST /api/weapp/pay/refund-callback returns HTTP 500 when service resolves FAIL', async () => {
+    paymentService.handleRefundCallback.mockResolvedValue({ code: 'FAIL', message: '退款验签失败' });
+
+    const res = await request(app.getHttpServer())
+      .post('/api/weapp/pay/refund-callback')
+      .send({})
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ code: 'FAIL', message: '退款验签失败' });
+  });
+
+  it('POST /api/weapp/pay/refund-callback returns HTTP 500 when processing throws', async () => {
+    paymentService.handleRefundCallback.mockRejectedValue(new Error('refund persistence failed'));
+
+    const res = await request(app.getHttpServer())
+      .post('/api/weapp/pay/refund-callback')
+      .send({})
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(500);
+    expect(res.body.code).toBe('FAIL');
+    expect(res.body.message).toContain('refund persistence failed');
   });
 });
