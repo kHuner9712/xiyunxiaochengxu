@@ -2,16 +2,19 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { AddressService } from './address.service';
 
 function createMockPrisma() {
-  return {
+  const prisma: any = {
     userAddress: {
-      findMany: jest.fn() as any,
-      findFirst: jest.fn() as any,
-      create: jest.fn() as any,
-      update: jest.fn() as any,
-      updateMany: jest.fn() as any,
-      count: jest.fn() as any,
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      count: jest.fn(),
     },
+    $queryRaw: jest.fn(),
   };
+  prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
+  return prisma;
 }
 
 describe('AddressService', () => {
@@ -20,6 +23,7 @@ describe('AddressService', () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    prisma.$queryRaw.mockResolvedValue([{ id: 100n }]);
     service = new AddressService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   });
@@ -55,7 +59,7 @@ describe('AddressService', () => {
   });
 
   describe('create', () => {
-    it('should map name/phone/detail to receiverName/receiverPhone/detailAddress', async () => {
+    it('should map name/phone/detail to receiverName/receiverPhone/detailAddress atomically', async () => {
       prisma.userAddress.count.mockResolvedValue(0);
       prisma.userAddress.create.mockResolvedValue({
         id: 1n,
@@ -66,7 +70,7 @@ describe('AddressService', () => {
         city: '北京市',
         district: '朝阳区',
         detailAddress: '建国门外大街1号',
-        isDefault: 0,
+        isDefault: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -81,14 +85,17 @@ describe('AddressService', () => {
         isDefault: false,
       });
 
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.$queryRaw).toHaveBeenCalled();
       expect(prisma.userAddress.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             receiverName: '李四',
             receiverPhone: '13900139000',
             detailAddress: '建国门外大街1号',
+            isDefault: 1,
           }),
-        })
+        }),
       );
     });
 
@@ -125,8 +132,23 @@ describe('AddressService', () => {
             receiverPhone: '13700137000',
             detailAddress: '陆家嘴环路1号',
           }),
-        })
+        }),
       );
+    });
+
+    it('rejects a missing user before writing any address', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+
+      await expect(service.create('100', {
+        name: '测试',
+        phone: '13800138000',
+        province: '广东省',
+        city: '深圳市',
+        district: '南山区',
+        detail: '测试地址',
+      })).rejects.toThrow('用户不存在');
+
+      expect(prisma.userAddress.create).not.toHaveBeenCalled();
     });
   });
 

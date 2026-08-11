@@ -61,7 +61,7 @@ vi.mock('@/api/pickup-store', () => ({
 }))
 
 vi.mock('@/api/coupon', () => ({
-  getAvailableCoupons: vi.fn(),
+  getAvailableCoupons: vi.fn(async () => []),
 }))
 
 const orderApiMock = vi.mocked(await import('@/api/order'))
@@ -245,6 +245,8 @@ describe('支付结果页 0 元订单展示', () => {
       orderNo: 'XY20260531003',
       status: 'pending_pickup',
       totalAmount: 0,
+      discountAmount: 0,
+      activityDiscountAmount: 0,
       payAmount: 0,
       freightAmount: 0,
       couponAmount: 0,

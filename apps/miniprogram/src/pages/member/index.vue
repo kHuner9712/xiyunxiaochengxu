@@ -33,7 +33,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
 import { getMemberInfo, getMemberRights, type MemberInfo, type MemberRight } from '@/api/member'
 import Empty from '@/components/Empty.vue'
@@ -72,13 +73,13 @@ async function loadMemberInfo() {
 async function loadRights() {
   try {
     const data = await getMemberRights()
-    rights.value = data.map(normalizeRightCopy)
+    rights.value = Array.isArray(data) ? data.map(normalizeRightCopy) : []
   } catch {
     uni.showToast({ title: '权益加载失败', icon: 'none' })
   }
 }
 
-onMounted(() => {
+onShow(() => {
   if (!userStore.isLoggedIn) {
     uni.showModal({
       title: '需要登录',
@@ -88,16 +89,12 @@ onMounted(() => {
     })
     return
   }
-  loadMemberInfo()
-  loadRights()
+  void Promise.all([loadMemberInfo(), loadRights()])
 })
 </script>
 
 <style lang="scss" scoped>
-.member-page {
-  min-height: 100vh;
-}
-
+.member-page { min-height: 100vh; }
 .member-header {
   background:
     radial-gradient(circle at 82% 18%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 240rpx),
@@ -105,120 +102,21 @@ onMounted(() => {
   padding: $spacing-xl $spacing-md $spacing-lg;
   border-radius: 0 0 $radius-xxl $radius-xxl;
 }
-
-.member-card {
-  background: rgba(255, 255, 255, 0.84);
-  border-radius: $radius-xxl;
-  padding: $spacing-lg;
-  border: 1rpx solid rgba(255, 255, 255, 0.82);
-  box-shadow: $shadow-md;
-}
-
-.card-top {
-  display: flex;
-  align-items: center;
-  margin-bottom: $spacing-md;
-}
-
-.member-avatar {
-  width: 100rpx;
-  height: 100rpx;
-  border-radius: 50%;
-  border: 4rpx solid rgba(255, 255, 255, 0.5);
-}
-
-.member-info {
-  margin-left: $spacing-md;
-}
-
-.member-name {
-  font-size: $font-lg;
-  color: $text-color;
-  font-weight: 800;
-  display: block;
-}
-
-.level-badge {
-  display: inline-flex;
-  background: $primary-soft;
-  border-radius: $radius-round;
-  padding: 4rpx 16rpx;
-  margin-top: 8rpx;
-}
-
-.level-text {
-  font-size: $font-xs;
-  color: $primary-dark;
-}
-
-.growth-bar {
-  height: 12rpx;
-  background: rgba($primary-color, 0.14);
-  border-radius: 6rpx;
-  overflow: hidden;
-}
-
-.growth-progress {
-  height: 100%;
-  background: linear-gradient(90deg, $primary-color, $secondary-color);
-  border-radius: 6rpx;
-  transition: width 0.3s;
-}
-
-.growth-text {
-  font-size: $font-xs;
-  color: $text-secondary;
-  margin-top: 8rpx;
-  display: block;
-}
-
-.rights-section {
-  margin: $spacing-md;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.section-title {
-  font-size: $font-lg;
-  font-weight: 800;
-  color: $text-color;
-  display: block;
-  margin-bottom: $spacing-md;
-}
-
-.rights-list {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-md;
-}
-
-.right-item {
-  @include flex-center;
-  @include flex-column;
-  min-height: 168rpx;
-  border-radius: $radius-xl;
-  background: linear-gradient(180deg, $bg-soft 0%, #FFFFFF 100%);
-  border: 1rpx solid rgba($border-color, 0.68);
-  padding: $spacing-sm;
-}
-
-.right-icon {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 28rpx;
-  background: $primary-soft;
-  margin-bottom: 8rpx;
-}
-
-.right-name {
-  font-size: $font-xs;
-  color: $text-color;
-  font-weight: 500;
-}
-
-.right-desc {
-  font-size: 20rpx;
-  color: $text-hint;
-  margin-top: 4rpx;
-  text-align: center;
-}
+.member-card { background: rgba(255, 255, 255, 0.84); border-radius: $radius-xxl; padding: $spacing-lg; border: 1rpx solid rgba(255, 255, 255, 0.82); box-shadow: $shadow-md; }
+.card-top { display: flex; align-items: center; margin-bottom: $spacing-md; }
+.member-avatar { width: 100rpx; height: 100rpx; border-radius: 50%; border: 4rpx solid rgba(255, 255, 255, 0.5); }
+.member-info { margin-left: $spacing-md; }
+.member-name { font-size: $font-lg; color: $text-color; font-weight: 800; display: block; }
+.level-badge { display: inline-flex; background: $primary-soft; border-radius: $radius-round; padding: 4rpx 16rpx; margin-top: 8rpx; }
+.level-text { font-size: $font-xs; color: $primary-dark; }
+.growth-bar { height: 12rpx; background: rgba($primary-color, 0.14); border-radius: 6rpx; overflow: hidden; }
+.growth-progress { height: 100%; background: linear-gradient(90deg, $primary-color, $secondary-color); border-radius: 6rpx; transition: width 0.3s; }
+.growth-text { font-size: $font-xs; color: $text-secondary; margin-top: 8rpx; display: block; }
+.rights-section { margin: $spacing-md; background: rgba(255, 255, 255, 0.9); }
+.section-title { font-size: $font-lg; font-weight: 800; color: $text-color; display: block; margin-bottom: $spacing-md; }
+.rights-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: $spacing-md; }
+.right-item { @include flex-center; @include flex-column; min-height: 168rpx; border-radius: $radius-xl; background: linear-gradient(180deg, $bg-soft 0%, #FFFFFF 100%); border: 1rpx solid rgba($border-color, 0.68); padding: $spacing-sm; }
+.right-icon { width: 72rpx; height: 72rpx; border-radius: 28rpx; background: $primary-soft; margin-bottom: 8rpx; }
+.right-name { font-size: $font-xs; color: $text-color; font-weight: 500; }
+.right-desc { font-size: 20rpx; color: $text-hint; margin-top: 4rpx; text-align: center; }
 </style>

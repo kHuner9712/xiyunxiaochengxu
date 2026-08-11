@@ -12,6 +12,7 @@
           maxlength="8"
           size="large"
           style="max-width: 300px"
+          @input="handleCodeInput"
           @keyup.enter="handlePreview"
         >
           <template #append>
@@ -81,25 +82,42 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { pickupStoreApi, type PickupOrderPreview } from '@/api/pickup-store'
 import { formatPrice, formatOrderStatus, getOrderStatusTagType } from '@/utils/format'
 
 const pickupCode = ref('')
+const previewedPickupCode = ref('')
 const previewing = ref(false)
 const verifying = ref(false)
 const preview = ref<PickupOrderPreview | null>(null)
 
+function handleCodeInput(value: string) {
+  const normalized = String(value || '').replace(/\D/g, '').slice(0, 8)
+  pickupCode.value = normalized
+  if (previewedPickupCode.value && normalized !== previewedPickupCode.value) {
+    resetPreview()
+  }
+}
+
 async function handlePreview() {
-  if (!pickupCode.value || pickupCode.value.length !== 8) {
-    ElMessage.warning('请输入8位自提码')
+  const code = pickupCode.value.trim()
+  if (!/^\d{8}$/.test(code)) {
+    ElMessage.warning('请输入8位数字自提码')
     return
   }
+
+  pickupCode.value = code
   previewing.value = true
-  preview.value = null
+  resetPreview()
   try {
-    const res = await pickupStoreApi.previewPickupCode(pickupCode.value)
-    preview.value = res.data || res
+    const res = await pickupStoreApi.previewPickupCode(code)
+    const data = (res.data || res) as PickupOrderPreview
+    if (String(data.pickupCode || '') !== code) {
+      throw new Error('自提码查询结果不一致，请重新查询')
+    }
+    preview.value = data
+    previewedPickupCode.value = code
   } catch (e: any) {
     const msg = e?.response?.data?.message || e?.message || '查询失败'
     ElMessage.error(msg)
@@ -110,12 +128,30 @@ async function handlePreview() {
 
 async function handleVerify() {
   if (!preview.value) return
+
+  const code = previewedPickupCode.value
+  if (!code || pickupCode.value !== code || String(preview.value.pickupCode || '') !== code) {
+    ElMessage.warning('自提码已变更，请重新查询订单')
+    resetPreview()
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认核销订单 ${preview.value.orderNo} 吗？核销后订单将完成。`,
+      '核销确认',
+      { type: 'warning', confirmButtonText: '确认核销', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+
   verifying.value = true
   try {
-    await pickupStoreApi.verifyPickupCode(pickupCode.value)
+    await pickupStoreApi.verifyPickupCode(code)
     ElMessage.success('核销成功')
-    resetPreview()
     pickupCode.value = ''
+    resetPreview()
   } catch (e: any) {
     const msg = e?.response?.data?.message || e?.message || '核销失败'
     ElMessage.error(msg)
@@ -126,6 +162,7 @@ async function handleVerify() {
 
 function resetPreview() {
   preview.value = null
+  previewedPickupCode.value = ''
 }
 </script>
 

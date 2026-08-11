@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad, onReachBottom } from '@dcloudio/uni-app'
+import { onHide, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -39,6 +39,25 @@ const activityList = ref<FlashSaleActivity[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+let listVersion = 0
+let loadingVersion = -1
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
@@ -49,7 +68,7 @@ function remainStock(act: FlashSaleActivity): number {
 }
 
 function activityStatusText(act: FlashSaleActivity): string {
-  const now = Date.now()
+  const now = nowMs.value
   const start = new Date(act.startTime).getTime()
   const end = new Date(act.endTime).getTime()
   if (now < start) return '未开始'
@@ -66,7 +85,7 @@ function activityStatusClass(act: FlashSaleActivity): string {
 }
 
 function remainTime(timeStr: string): string {
-  const ms = new Date(timeStr).getTime() - Date.now()
+  const ms = new Date(timeStr).getTime() - nowMs.value
   if (ms <= 0) return '已结束'
   const days = Math.floor(ms / 86400000)
   const hours = Math.floor((ms % 86400000) / 3600000)
@@ -76,33 +95,63 @@ function remainTime(timeStr: string): string {
   return `${mins}m`
 }
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    activityList.value = []
-  }
+function resetList() {
+  page.value = 1
+  finished.value = false
+  activityList.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await flashSaleApi.getList({ page: page.value, pageSize: 20 })
+    const data = await flashSaleApi.getList({ page: requestPage, pageSize: 20 })
+    if (version !== listVersion) return
+
     activityList.value.push(...data.list)
     finished.value = activityList.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshList() {
+  const version = ++listVersion
+  resetList()
+  return loadList(version)
 }
 
 function goDetail(id: string) {
   uni.navigateTo({ url: `/pages/flash-sale/detail?id=${id}` })
 }
 
-onLoad(() => loadList())
-onReachBottom(() => loadList())
+onShow(() => {
+  startClock()
+  void refreshList()
+})
+onHide(() => stopClock())
+onUnload(() => stopClock())
+onReachBottom(() => void loadList(listVersion))
+
+defineExpose({
+  activityList,
+  loading,
+  remainStock,
+  loadList,
+  refreshList,
+})
 </script>
 
 <style lang="scss" scoped>

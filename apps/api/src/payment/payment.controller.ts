@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger, HttpCode, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { PaymentService } from './payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -6,63 +7,66 @@ import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { SkipThrottle } from '@nestjs/throttler';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max, IsIn } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+const POSITIVE_ID = /^[1-9]\d*$/;
 
 class CreatePaymentDto {
   @IsString()
-  @IsNotEmpty()
+  @Matches(POSITIVE_ID, { message: '订单ID格式无效' })
   orderId!: string;
 }
 
+class WechatCallbackResourceDto {
+  @IsOptional() @IsString() @MaxLength(64) original_type?: string;
+  @IsString() @IsNotEmpty() @MaxLength(64) algorithm!: string;
+  @IsString() @IsNotEmpty() ciphertext!: string;
+  @IsOptional() @IsString() associated_data?: string;
+  @IsString() @IsNotEmpty() @MaxLength(64) nonce!: string;
+}
+
+class WechatCallbackBodyDto {
+  @IsOptional() @IsString() @MaxLength(64) id?: string;
+  @IsOptional() @IsString() @MaxLength(64) create_time?: string;
+  @IsOptional() @IsString() @MaxLength(64) resource_type?: string;
+  @IsOptional() @IsString() @MaxLength(64) event_type?: string;
+  @IsOptional() @IsString() @MaxLength(500) summary?: string;
+  @ValidateNested()
+  @Type(() => WechatCallbackResourceDto)
+  resource!: WechatCallbackResourceDto;
+}
+
 class GetRefundListDto {
-  @IsNumber()
-  @IsOptional()
-  @Min(1)
-  page?: number = 1;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(1)
-  @Max(100)
-  pageSize?: number = 20;
-
-  @IsString()
-  @IsOptional()
-  orderId?: string;
-
-  @IsString()
-  @IsOptional()
-  status?: string;
-
-  @IsString()
-  @IsOptional()
-  refundNo?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number = 1;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number = 20;
+  @IsOptional() @IsString() @Matches(POSITIVE_ID, { message: '订单ID格式无效' }) orderId?: string;
+  @IsOptional() @IsString() @MaxLength(30) status?: string;
+  @IsOptional() @IsString() @MaxLength(64) refundNo?: string;
 }
 
 class GetCompensationTaskListDto {
-  @IsNumber()
-  @IsOptional()
-  @Min(1)
-  page?: number = 1;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(1)
-  @Max(100)
-  pageSize?: number = 20;
-
-  @IsString()
-  @IsOptional()
-  status?: string;
-
-  @IsString()
-  @IsOptional()
-  orderNo?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number = 1;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number = 20;
+  @IsOptional() @IsString() @MaxLength(30) status?: string;
+  @IsOptional() @IsString() @MaxLength(64) orderNo?: string;
 }
 
 class ResolveCompensationTaskDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(1000)
   resolution!: string;
 
   @IsIn(['resolved', 'ignored'])
@@ -87,12 +91,23 @@ export class PaymentController {
   @SkipThrottle()
   @Post('callback')
   @HttpCode(200)
-  async callback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
+  async callback(
+    @Body() body: WechatCallbackBodyDto,
+    @Headers() headers: any,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const rawBody = req.rawBody;
     try {
-      return await this.paymentService.handleCallback(body, headers, rawBody);
+      const result = await this.paymentService.handleCallback(body, headers, rawBody);
+      if (result?.code === 'FAIL') res.status(500);
+      return result;
     } catch (error: any) {
       this.logger.error(`支付回调处理异常: ${error?.message}`, error?.stack);
+      // WeChat Pay treats a 2xx callback response as successfully received and stops retrying.
+      // Preserve a non-2xx status when verification or durable business processing fails so the
+      // notification can be retried instead of being silently lost.
+      res.status(500);
       return { code: 'FAIL', message: error?.message || '支付回调处理失败' };
     }
   }
@@ -102,12 +117,20 @@ export class PaymentController {
   @SkipThrottle()
   @Post('refund-callback')
   @HttpCode(200)
-  async refundCallback(@Body() body: any, @Headers() headers: any, @Req() req: any) {
+  async refundCallback(
+    @Body() body: WechatCallbackBodyDto,
+    @Headers() headers: any,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const rawBody = req.rawBody;
     try {
-      return await this.paymentService.handleRefundCallback(body, headers, rawBody);
+      const result = await this.paymentService.handleRefundCallback(body, headers, rawBody);
+      if (result?.code === 'FAIL') res.status(500);
+      return result;
     } catch (error: any) {
       this.logger.error(`退款回调处理异常: ${error?.message}`, error?.stack);
+      res.status(500);
       return { code: 'FAIL', message: error?.message || '退款回调处理失败' };
     }
   }

@@ -11,6 +11,9 @@ function createMockPrisma() {
       findMany: jest.fn() as any,
       upsert: jest.fn() as any,
     },
+    systemConfig: {
+      findFirst: jest.fn() as any,
+    },
   };
 }
 
@@ -32,7 +35,10 @@ describe('SearchService', () => {
     prisma = createMockPrisma();
     redis = createMockRedis();
     redis.get.mockResolvedValue(null);
+    redis.del.mockResolvedValue(undefined);
+    prisma.systemConfig.findFirst.mockResolvedValue(null);
     service = new SearchService(prisma as any, redis as any);
+    jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
   });
 
   it('should return ProductCardVO fields with normalized image urls', async () => {
@@ -85,7 +91,27 @@ describe('SearchService', () => {
     });
   });
 
-  it('should return hot keywords as string array and cache the same contract', async () => {
+  it('should prioritize configured home-decor hot keywords and fill with organic search terms without duplicates', async () => {
+    prisma.systemConfig.findFirst.mockResolvedValue({
+      configValue: JSON.stringify({ hotKeywords: [' 奶粉 ', '纸尿裤', '奶粉'] }),
+    });
+    prisma.searchKeyword.findMany.mockResolvedValue([
+      { keyword: '奶粉' },
+      { keyword: '湿巾' },
+      { keyword: '奶瓶' },
+    ]);
+
+    const result = await service.getHotKeywords();
+
+    expect(result).toEqual(['奶粉', '纸尿裤', '湿巾', '奶瓶']);
+    expect(redis.set).toHaveBeenCalledWith(
+      'search:hot_keywords',
+      JSON.stringify(['奶粉', '纸尿裤', '湿巾', '奶瓶']),
+      3600,
+    );
+  });
+
+  it('should return organic hot keywords when no manual configuration exists', async () => {
     prisma.searchKeyword.findMany.mockResolvedValue([
       { keyword: '奶粉' },
       { keyword: '纸尿裤' },
@@ -97,7 +123,7 @@ describe('SearchService', () => {
     expect(redis.set).toHaveBeenCalledWith('search:hot_keywords', JSON.stringify(['奶粉', '纸尿裤']), 3600);
   });
 
-  it('should normalize legacy cached hot keyword objects to strings', async () => {
+  it('should normalize legacy cached hot keyword objects to strings without querying database', async () => {
     redis.get.mockResolvedValueOnce(JSON.stringify([
       { id: '1', keyword: '奶瓶', searchCount: 12 },
       '湿巾',
@@ -107,6 +133,34 @@ describe('SearchService', () => {
 
     expect(result).toEqual(['奶瓶', '湿巾']);
     expect(prisma.searchKeyword.findMany).not.toHaveBeenCalled();
+    expect(prisma.systemConfig.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('should rebuild malformed hot keyword cache instead of throwing a public 500', async () => {
+    redis.get.mockResolvedValueOnce('{bad-json');
+    prisma.systemConfig.findFirst.mockResolvedValue({
+      configValue: JSON.stringify({ hotKeywords: ['人工热词'] }),
+    });
+    prisma.searchKeyword.findMany.mockResolvedValue([{ keyword: '自然热词' }]);
+
+    const result = await service.getHotKeywords();
+
+    expect(result).toEqual(['人工热词', '自然热词']);
+    expect(redis.del).toHaveBeenCalledWith('search:hot_keywords');
+    expect(redis.set).toHaveBeenCalledWith(
+      'search:hot_keywords',
+      JSON.stringify(['人工热词', '自然热词']),
+      3600,
+    );
+  });
+
+  it('should ignore malformed home-decor JSON and still serve organic keywords', async () => {
+    prisma.systemConfig.findFirst.mockResolvedValue({ configValue: '{bad-home-config' });
+    prisma.searchKeyword.findMany.mockResolvedValue([{ keyword: '自然热词' }]);
+
+    const result = await service.getHotKeywords();
+
+    expect(result).toEqual(['自然热词']);
   });
 
   it('should return empty history for anonymous users without reading redis', async () => {
@@ -114,6 +168,33 @@ describe('SearchService', () => {
 
     expect(result).toEqual([]);
     expect(redis.get).not.toHaveBeenCalled();
+  });
+
+  it('should clear malformed search history cache instead of throwing', async () => {
+    redis.get.mockResolvedValueOnce('{bad-history');
+
+    const result = await service.getSearchHistory('88');
+
+    expect(result).toEqual([]);
+    expect(redis.del).toHaveBeenCalledWith('search:history:88');
+  });
+
+  it('should rebuild malformed history when adding a new search keyword', async () => {
+    redis.get.mockResolvedValueOnce('{bad-history');
+    prisma.searchKeyword.upsert.mockResolvedValue({});
+
+    await service.addSearchHistory('88', ' 奶粉 ');
+
+    expect(redis.set).toHaveBeenCalledWith(
+      'search:history:88',
+      JSON.stringify(['奶粉']),
+      7 * 24 * 3600,
+    );
+    expect(prisma.searchKeyword.upsert).toHaveBeenCalledWith({
+      where: { keyword: '奶粉' },
+      update: { searchCount: { increment: 1 } },
+      create: { keyword: '奶粉', searchCount: 1, status: 1 },
+    });
   });
 
   it('should treat anonymous clear history as a no-op', async () => {

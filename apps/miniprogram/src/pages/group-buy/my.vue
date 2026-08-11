@@ -12,7 +12,7 @@
       <view class="info">
         <view class="name">{{ g.activity?.name || '拼团活动' }}</view>
         <view class="meta-row">
-          <text class="status-tag" :class="`status-${g.status}`">{{ statusText(g.status) }}</text>
+          <text class="status-tag" :class="`status-${displayStatus(g)}`">{{ statusText(g) }}</text>
           <text class="progress">{{ g.currentCount }}/{{ g.targetCount }}人</text>
         </view>
         <view class="meta-bottom">
@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { onHide, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import { groupBuyApi, type GroupBuyGroup } from '@/api/group-buy'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -38,9 +38,28 @@ const groupList = ref<GroupBuyGroup[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+let listVersion = 0
+let loadingVersion = -1
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function remainTime(expiresAt: string): string {
-  const ms = new Date(expiresAt).getTime() - Date.now()
+  const ms = new Date(expiresAt).getTime() - nowMs.value
   if (ms <= 0) return '已过期'
   const hours = Math.floor(ms / 3600000)
   const mins = Math.floor((ms % 3600000) / 60000)
@@ -59,43 +78,78 @@ function formatDateTime(s: string): string {
   return `${formatDate(s)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-function statusText(status: string): string {
-  switch (status) {
+function displayStatus(group: GroupBuyGroup): string {
+  if (group.status === 'forming' && new Date(group.expiresAt).getTime() <= nowMs.value) return 'expired'
+  return group.status
+}
+
+function statusText(group: GroupBuyGroup): string {
+  switch (displayStatus(group)) {
     case 'forming': return '组团中'
     case 'success': return '已成团'
     case 'failed': return '已失败'
     case 'cancelled': return '已取消'
-    default: return status
+    case 'expired': return '已过期'
+    default: return group.status
   }
 }
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    groupList.value = []
-  }
+function resetList() {
+  page.value = 1
+  finished.value = false
+  groupList.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await groupBuyApi.getMyGroups({ page: page.value, pageSize: 20 })
+    const data = await groupBuyApi.getMyGroups({ page: requestPage, pageSize: 20 })
+    if (version !== listVersion) return
+
     groupList.value.push(...data.list)
     finished.value = groupList.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshList() {
+  const version = ++listVersion
+  resetList()
+  return loadList(version)
 }
 
 function goGroupDetail(id: string) {
   uni.navigateTo({ url: `/pages/group-buy/group?id=${id}` })
 }
 
-onShow(() => loadList(true))
-onReachBottom(() => loadList())
+onShow(() => {
+  startClock()
+  void refreshList()
+})
+onHide(() => stopClock())
+onUnload(() => stopClock())
+onReachBottom(() => void loadList(listVersion))
+
+defineExpose({
+  groupList,
+  loading,
+  loadList,
+  refreshList,
+})
 </script>
 
 <style lang="scss" scoped>
@@ -177,7 +231,8 @@ onReachBottom(() => loadList())
 }
 
 .status-tag.status-failed,
-.status-tag.status-cancelled {
+.status-tag.status-cancelled,
+.status-tag.status-expired {
   background: $info-soft;
   color: $text-hint;
 }

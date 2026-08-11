@@ -135,6 +135,14 @@
         <text class="price-label">运费</text>
         <text class="price-value">{{ freightAmount > 0 ? `¥${formatPrice(freightAmount)}` : '免运费' }}</text>
       </view>
+      <view v-if="memberDiscount > 0" class="price-row">
+        <text class="price-label">会员优惠</text>
+        <text class="price-value discount">-¥{{ formatPrice(memberDiscount) }}</text>
+      </view>
+      <view v-if="activityDiscount > 0" class="price-row">
+        <text class="price-label">活动优惠</text>
+        <text class="price-value discount">-¥{{ formatPrice(activityDiscount) }}</text>
+      </view>
       <view v-if="couponDiscount > 0" class="price-row">
         <text class="price-label">优惠券</text>
         <text class="price-value discount">-¥{{ formatPrice(couponDiscount) }}</text>
@@ -224,9 +232,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { createOrder, previewOrder, type OrderPreview, type OrderPreviewItem } from '@/api/order'
+import { createOrder, previewOrder, type OrderPreview } from '@/api/order'
 import { getPromotionSourceForOrder } from '@/utils/share'
-import { getPickupStoreList, type PickupStoreItem } from '@/api/pickup-store'
+import { type PickupStoreItem } from '@/api/pickup-store'
 import { getAddressList, type AddressItem } from '@/api/address'
 import { getAvailableCoupons, type MyCouponItem } from '@/api/coupon'
 import { createPayment, wxPay } from '@/api/payment'
@@ -267,6 +275,16 @@ const totalProductPrice = computed(() => {
   return orderItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
 })
 
+const memberDiscount = computed(() => {
+  if (preview.value) return preview.value.discountAmount || 0
+  return 0
+})
+
+const activityDiscount = computed(() => {
+  if (preview.value) return preview.value.activityDiscountAmount || 0
+  return 0
+})
+
 const couponDiscount = computed(() => {
   if (preview.value) return preview.value.couponAmount
   return 0
@@ -300,7 +318,7 @@ const freightAmount = computed(() => {
 
 const payAmount = computed(() => {
   if (preview.value) return preview.value.payAmount
-  return Math.max(0, totalProductPrice.value + freightAmount.value - couponDiscount.value - pointsDeduct.value)
+  return Math.max(0, totalProductPrice.value + freightAmount.value - memberDiscount.value - activityDiscount.value - couponDiscount.value - pointsDeduct.value)
 })
 
 async function loadPreview() {
@@ -338,6 +356,8 @@ async function loadPreview() {
         price: item.price
       }))
     }
+    const canonicalProductIds = (data.items?.length ? data.items : orderItems.value).map(item => item.productId)
+    await loadCoupons(data.totalAmount, canonicalProductIds)
   } catch (e: any) {
     console.error('[baby-mall] order confirm loadPreview failed:', e)
     if (usePoints.value) usePoints.value = false
@@ -357,11 +377,12 @@ async function loadDefaultAddress() {
   }
 }
 
-async function loadCoupons() {
+async function loadCoupons(
+  amount = orderItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  productIds = orderItems.value.map(item => item.productId),
+) {
   try {
-    const totalAmount = orderItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
-    const productIds = orderItems.value.map(item => item.productId)
-    couponList.value = await getAvailableCoupons({ amount: totalAmount, productIds })
+    couponList.value = await getAvailableCoupons({ amount, productIds })
   } catch {
     couponList.value = []
   }
@@ -424,9 +445,17 @@ function closeCouponPicker() {
 }
 
 async function selectCoupon(coupon: MyCouponItem | null) {
+  const shouldRestorePoints = usePoints.value
   selectedCoupon.value = coupon
   showCouponPicker.value = false
+
+  if (shouldRestorePoints) usePoints.value = false
   await loadPreview()
+
+  if (shouldRestorePoints && preview.value && canUsePoints.value) {
+    usePoints.value = true
+    await loadPreview()
+  }
 }
 
 function togglePoints(e: any) {
@@ -567,6 +596,7 @@ defineExpose({
   loadPreview,
   selectAddress,
   selectPickupStore,
+  selectCoupon,
   agreedToLegal,
   fulfillmentType,
   address,
@@ -576,6 +606,8 @@ defineExpose({
   usePoints,
   availablePoints,
   maxPointsDeduct,
+  memberDiscount,
+  activityDiscount,
   pointsDeduct,
   payAmount,
   togglePoints
@@ -599,7 +631,6 @@ onLoad(async (options) => {
   if (fulfillmentType.value === 'delivery' ? !!address.value : !!selectedPickupStore.value) {
     await loadPreview()
   }
-  loadCoupons()
 })
 </script>
 

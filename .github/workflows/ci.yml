@@ -22,9 +22,24 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
     env:
       PRISMA_SKIP_POSTINSTALL_GENERATE: true
       DATABASE_URL: mysql://root:root@127.0.0.1:3306/baby_mall_test
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      NODE_ENV: test
+      JWT_SECRET: ci-runtime-jwt-secret-not-for-production-2026
+      REFRESH_TOKEN_SECRET: ci-runtime-refresh-secret-not-for-production-2026
 
     strategy:
       matrix:
@@ -62,6 +77,9 @@ jobs:
       - name: Apply migrations to CI MySQL
         run: pnpm --filter @baby-mall/api prisma:migrate:deploy
 
+      - name: Verify migration-built database matches Prisma schema
+        run: pnpm --filter @baby-mall/api prisma:migrate:drift-check
+
       - name: Audit runtime configuration contracts
         run: pnpm audit:runtime
 
@@ -71,26 +89,227 @@ jobs:
       - name: Validate deployment shell scripts
         run: bash -n deploy/scripts/deploy-production.sh deploy/scripts/deploy-prod-check.sh deploy/scripts/smoke-runtime.sh
 
-      - name: Run Admin pending asset cleanup tests
+      - name: Run Admin operation contract tests
         run: pnpm test:admin
 
       - name: Run API tests (unit + mocked HTTP e2e)
         run: pnpm --filter @baby-mall/api test:ci
 
       - name: Run API integration tests against real MySQL
-        run: pnpm --filter @baby-mall/api test:integration
+        id: api-integration
+        run: |
+          set +e
+          pnpm --filter @baby-mall/api test:integration > api-integration.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 300 api-integration.log >&2
+            exit "$status"
+          fi
+          cat api-integration.log
+
+      - name: Preserve API integration failure diagnostics
+        if: failure() && steps.api-integration.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-integration-failure-log
+          path: api-integration.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Run Miniprogram unit/component tests
-        run: pnpm --filter @baby-mall/miniprogram test
+        id: miniprogram-tests
+        run: |
+          set +e
+          pnpm --filter @baby-mall/miniprogram test > miniprogram-tests.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 300 miniprogram-tests.log >&2
+            exit "$status"
+          fi
+          cat miniprogram-tests.log
+
+      - name: Preserve Miniprogram test failure diagnostics
+        if: failure() && steps.miniprogram-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: miniprogram-tests-failure-log
+          path: miniprogram-tests.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Build API
-        run: pnpm build:api
+        id: build-api
+        run: |
+          set +e
+          pnpm build:api > api-build.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 200 api-build.log
+            exit "$status"
+          fi
+          cat api-build.log
+
+      - name: Preserve API build failure diagnostics
+        if: failure() && steps.build-api.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-build-failure-log
+          path: api-build.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Start real API and verify MySQL/Redis runtime
+        id: real-api-runtime
+        run: |
+          set -euo pipefail
+          : > real-api-runtime.log
+          PORT=3100 BUILD_SHA=${GITHUB_SHA} NODE_OPTIONS="--report-on-signal --report-signal=SIGUSR2 --report-directory=." node apps/api/dist/main.js >> real-api-runtime.log 2>&1 &
+          api_pid=$!
+
+          capture_shutdown_report() {
+            if kill -0 "$api_pid" 2>/dev/null; then
+              echo "Capturing Node diagnostic report for stuck API pid=$api_pid" | tee -a real-api-runtime.log
+              kill -USR2 "$api_pid" 2>/dev/null || true
+              sleep 2
+              ls -1 report.*.json 2>/dev/null | tee -a real-api-runtime.log || true
+            fi
+          }
+
+          cleanup() {
+            if kill -0 "$api_pid" 2>/dev/null; then
+              kill -TERM "$api_pid" 2>/dev/null || true
+              for _ in $(seq 1 20); do
+                if ! kill -0 "$api_pid" 2>/dev/null; then
+                  break
+                fi
+                sleep 1
+              done
+              if kill -0 "$api_pid" 2>/dev/null; then
+                echo "API did not exit after SIGTERM" | tee -a real-api-runtime.log
+                capture_shutdown_report
+                kill -KILL "$api_pid" 2>/dev/null || true
+                wait "$api_pid" 2>/dev/null || true
+                return 1
+              fi
+            fi
+            wait "$api_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          healthy=0
+          for _ in $(seq 1 30); do
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "API process exited before becoming healthy" >&2
+              tail -n 200 real-api-runtime.log >&2
+              exit 1
+            fi
+            if curl --silent --show-error --fail http://127.0.0.1:3100/api/health > real-api-health.json; then
+              healthy=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$healthy" -ne 1 ]; then
+            echo "API health endpoint did not become ready" >&2
+            tail -n 200 real-api-runtime.log >&2
+            exit 1
+          fi
+
+          node -e '
+            const fs = require("fs");
+            const health = JSON.parse(fs.readFileSync("real-api-health.json", "utf8"));
+            if (health.status !== "ok") throw new Error(`health status=${health.status}`);
+            if (health.services?.database !== "ok") throw new Error("database health is not ok");
+            if (health.services?.redis !== "ok") throw new Error("redis health is not ok");
+            if (health.buildSha !== process.env.GITHUB_SHA) throw new Error(`buildSha mismatch: ${health.buildSha}`);
+          '
+
+          kill -TERM "$api_pid"
+          for _ in $(seq 1 20); do
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if kill -0 "$api_pid" 2>/dev/null; then
+            echo "API did not shut down cleanly after SIGTERM" >&2
+            capture_shutdown_report
+            tail -n 200 real-api-runtime.log >&2
+            exit 1
+          fi
+          set +e
+          wait "$api_pid"
+          status=$?
+          set -e
+          echo "API_WAIT_STATUS=$status" | tee -a real-api-runtime.log
+          if [ "$status" -ne 0 ] && [ "$status" -ne 143 ]; then
+            echo "API exited with unexpected status $status after SIGTERM" >&2
+            tail -n 200 real-api-runtime.log >&2
+            exit "$status"
+          fi
+          trap - EXIT
+
+      - name: Preserve real API runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-api-runtime
+          path: |
+            real-api-runtime.log
+            real-api-health.json
+            report.*.json
+          if-no-files-found: warn
+          retention-days: 1
 
       - name: Build Admin Web
-        run: pnpm build:admin
+        id: build-admin
+        run: |
+          set +e
+          pnpm build:admin > admin-build.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 200 admin-build.log
+            exit "$status"
+          fi
+          cat admin-build.log
+
+      - name: Preserve Admin build failure diagnostics
+        if: failure() && steps.build-admin.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-build-failure-log
+          path: admin-build.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Run Admin browser operation flow
+        run: pnpm test:admin:browser
 
       - name: Build Miniprogram
-        run: VITE_API_BASE_URL=https://example.invalid/api pnpm build:mini
+        id: build-mini
+        run: |
+          set +e
+          VITE_API_BASE_URL=https://example.invalid/api pnpm build:mini > mini-build.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 200 mini-build.log
+            exit "$status"
+          fi
+          cat mini-build.log
+
+      - name: Preserve Miniprogram build failure diagnostics
+        if: failure() && steps.build-mini.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mini-build-failure-log
+          path: mini-build.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Build production Docker image
         run: >-
@@ -99,6 +318,3 @@ jobs:
           --tag baby-mall-api:ci
           --build-arg BUILD_SHA=${{ github.sha }}
           .
-
-      - name: Release Gate Check (non-strict)
-        run: pnpm release:check

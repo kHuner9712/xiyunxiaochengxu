@@ -8,13 +8,26 @@ describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
   let reflector: Reflector;
   let jwtService: JwtService;
+  let prisma: any;
+  let redisService: any;
 
   beforeEach(() => {
     reflector = new Reflector();
     jwtService = new JwtService({
       secret: 'test_jwt_secret_key_that_is_long_enough_32chars',
     });
-    guard = new JwtAuthGuard(reflector, jwtService);
+    prisma = {
+      adminUser: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: 1n }),
+      },
+      user: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: 1n }),
+      },
+    };
+    redisService = {
+      exists: jest.fn<any>().mockResolvedValue(true),
+    };
+    guard = new JwtAuthGuard(reflector, jwtService, prisma, redisService);
   });
 
   const createMockExecutionContext = (options: {
@@ -46,6 +59,7 @@ describe('JwtAuthGuard', () => {
 
       const result = await guard.canActivate(mockContext);
       expect(result).toBe(true);
+      expect(prisma.adminUser.findFirst).not.toHaveBeenCalled();
     });
   });
 
@@ -72,7 +86,7 @@ describe('JwtAuthGuard', () => {
 
     it('过期的 token 应该抛出 UnauthorizedException', async () => {
       const expiredToken = await jwtService.signAsync(
-        { id: '1', roleType: 'admin', tokenType: 'access' },
+        { id: '1', roleType: 'admin', tokenType: 'access', tokenId: 'expired-token' },
         { expiresIn: '-1s' },
       );
 
@@ -89,6 +103,7 @@ describe('JwtAuthGuard', () => {
       const tokenWithoutType = await jwtService.signAsync({
         id: '1',
         roleType: 'admin',
+        tokenId: 'test-token-id',
       });
 
       const mockContext = createMockExecutionContext({
@@ -98,6 +113,92 @@ describe('JwtAuthGuard', () => {
       jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
 
       await expect(guard.canActivate(mockContext)).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('实时账号与会话状态', () => {
+    it('已停用管理员即使 JWT 尚未过期也应该立即失效', async () => {
+      prisma.adminUser.findFirst.mockResolvedValue(null);
+      const token = await jwtService.signAsync({
+        id: '1',
+        roleType: 'admin',
+        tokenType: 'access',
+        tokenId: 'admin-session',
+      });
+      const context = createMockExecutionContext({
+        url: '/api/admin/dashboard/overview',
+        authorization: `Bearer ${token}`,
+      });
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+
+      await expect(guard.canActivate(context)).rejects.toThrow('管理员账号已停用或删除');
+    });
+
+    it('管理员 refresh 会话已撤销时 access token 也应该立即失效', async () => {
+      redisService.exists.mockResolvedValue(false);
+      const token = await jwtService.signAsync({
+        id: '1',
+        roleType: 'admin',
+        tokenType: 'access',
+        tokenId: 'revoked-session',
+      });
+      const context = createMockExecutionContext({
+        url: '/api/admin/dashboard/overview',
+        authorization: `Bearer ${token}`,
+      });
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+
+      await expect(guard.canActivate(context)).rejects.toThrow('管理员登录会话已失效');
+    });
+
+    it('已停用小程序用户即使 JWT 尚未过期也应该立即失效', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      const token = await jwtService.signAsync({
+        id: '1',
+        roleType: 'user',
+        tokenType: 'access',
+        tokenId: 'user-session',
+      });
+      const context = createMockExecutionContext({
+        url: '/api/weapp/order/list',
+        authorization: `Bearer ${token}`,
+      });
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+
+      await expect(guard.canActivate(context)).rejects.toThrow('账号已停用或删除');
+    });
+
+    it('小程序 access 会话被撤销后旧 JWT 应立即失效', async () => {
+      redisService.exists.mockResolvedValue(false);
+      const token = await jwtService.signAsync({
+        id: '1',
+        roleType: 'user',
+        tokenType: 'access',
+        tokenId: 'revoked-weapp-session',
+      });
+      const context = createMockExecutionContext({
+        url: '/api/weapp/order/list',
+        authorization: `Bearer ${token}`,
+      });
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+
+      await expect(guard.canActivate(context)).rejects.toThrow('登录会话已失效');
+      expect(redisService.exists).toHaveBeenCalledWith('weapp_access_token:1:revoked-weapp-session');
+    });
+
+    it('升级前不含 tokenId 的普通用户 JWT 应强制重新登录', async () => {
+      const token = await jwtService.signAsync({
+        id: '1',
+        roleType: 'user',
+        tokenType: 'access',
+      });
+      const context = createMockExecutionContext({
+        url: '/api/weapp/order/list',
+        authorization: `Bearer ${token}`,
+      });
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+
+      await expect(guard.canActivate(context)).rejects.toThrow('登录会话无效');
     });
   });
 
@@ -121,6 +222,7 @@ describe('JwtAuthGuard', () => {
 
       const result = await guard.canActivate(mockContext);
       expect(result).toBe(true);
+      expect(redisService.exists).toHaveBeenCalledWith('admin_refresh_token:1:test-token-id');
     });
 
     it('admin refresh token 不应该允许访问业务接口', async () => {
@@ -150,6 +252,7 @@ describe('JwtAuthGuard', () => {
         roleType: 'user',
         type: 'user',
         tokenType: 'access',
+        tokenId: 'user-session',
       });
 
       const mockContext = createMockExecutionContext({
@@ -160,6 +263,7 @@ describe('JwtAuthGuard', () => {
 
       const result = await guard.canActivate(mockContext);
       expect(result).toBe(true);
+      expect(redisService.exists).toHaveBeenCalledWith('weapp_access_token:1:user-session');
     });
 
     it('user token 缺少 tokenType 应该被拒绝', async () => {
@@ -168,6 +272,7 @@ describe('JwtAuthGuard', () => {
         openid: 'test_openid',
         roleType: 'user',
         type: 'user',
+        tokenId: 'user-session',
       });
 
       const mockContext = createMockExecutionContext({
@@ -185,6 +290,7 @@ describe('JwtAuthGuard', () => {
         roleType: 'admin',
         type: 'admin',
         tokenType: 'access',
+        tokenId: 'test-token-id',
       });
 
       const mockContext = createMockExecutionContext({
@@ -202,6 +308,7 @@ describe('JwtAuthGuard', () => {
         roleType: 'user',
         type: 'user',
         tokenType: 'access',
+        tokenId: 'user-session',
       });
 
       const mockContext = createMockExecutionContext({
@@ -215,12 +322,13 @@ describe('JwtAuthGuard', () => {
   });
 
   describe('通用接口', () => {
-    it('/api/common/* 应该允许任何有效 token', async () => {
+    it('/api/common/* 应该允许任何有效且仍存活的 token', async () => {
       const adminToken = await jwtService.signAsync({
         id: '1',
         roleType: 'admin',
         type: 'admin',
         tokenType: 'access',
+        tokenId: 'test-token-id',
       });
 
       const mockContext = createMockExecutionContext({
@@ -250,6 +358,7 @@ describe('JwtAuthGuard', () => {
         id: '1',
         roleType: 'user',
         tokenType: 'access',
+        tokenId: 'user-session',
       });
       const mockContext = createMockExecutionContext({
         url: '/api/weapp/home/data',
@@ -260,6 +369,7 @@ describe('JwtAuthGuard', () => {
       const request = mockContext.switchToHttp().getRequest();
       expect(result).toBe(true);
       expect(request.user?.id).toBe('1');
+      expect(redisService.exists).toHaveBeenCalledWith('weapp_access_token:1:user-session');
     });
   });
 });

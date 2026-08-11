@@ -117,8 +117,8 @@ const searchForm = reactive({ name: '', stockStatus: undefined as string | undef
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const adjustForm = reactive({
-  productId: undefined as number | undefined,
-  skuId: undefined as number | undefined,
+  productId: undefined as string | undefined,
+  skuId: undefined as string | undefined,
   productName: '',
   currentStock: 0,
   type: 'in',
@@ -162,8 +162,8 @@ function resetSearch() {
 }
 
 function handleAdjust(row: any) {
-  adjustForm.productId = row.productId
-  adjustForm.skuId = row.skuId
+  adjustForm.productId = String(row.productId)
+  adjustForm.skuId = String(row.skuId)
   adjustForm.productName = row.name
   adjustForm.currentStock = row.stock
   adjustForm.type = 'in'
@@ -174,16 +174,27 @@ function handleAdjust(row: any) {
 
 async function handleAdjustSubmit() {
   const valid = await adjustFormRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!valid || !adjustForm.skuId) return
 
   submitting.value = true
   try {
-    await request.post('/admin/stock/adjust', adjustForm)
+    await request.post('/admin/stock/adjust', {
+      productId: adjustForm.productId,
+      skuId: adjustForm.skuId,
+      expectedStock: adjustForm.currentStock,
+      type: adjustForm.type,
+      quantity: adjustForm.quantity,
+      reason: adjustForm.reason.trim(),
+    })
     ElMessage.success('调整成功')
     adjustVisible.value = false
     fetchList()
     fetchLogs()
-  } catch {} finally {
+  } catch {
+    // A lost success response must not leave the operator looking at stale stock. Refresh the
+    // authoritative list/logs so they can immediately see whether the previous operation landed.
+    await Promise.allSettled([fetchList(), fetchLogs()])
+  } finally {
     submitting.value = false
   }
 }

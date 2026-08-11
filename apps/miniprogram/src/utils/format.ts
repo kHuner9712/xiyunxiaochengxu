@@ -38,7 +38,7 @@ export function formatDate(timestamp: CompatibleTime, format = 'YYYY-MM-DD HH:mm
 export function formatOrderStatus(status: string): string {
   const statusMap: Record<string, string> = {
     pending_payment: '待付款',
-    paid: '已付款',
+    paid: '已付款待成团',
     pending_delivery: '待发货',
     pending_pickup: '待自提',
     delivered: '待收货',
@@ -69,7 +69,7 @@ export function formatAftersaleStatus(status: AftersaleStatusValue): string {
     approved: '已通过/待处理',
     returned: '待退款',
     pending_refund: '待退款',
-    refunded: '已完成',
+    refunded: '已退款',
     rejected: '已拒绝',
     closed: '已取消'
   }

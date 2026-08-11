@@ -26,8 +26,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onReachBottom, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { getAftersaleList, type AftersaleItem } from '@/api/aftersale'
 import { formatAftersaleStatus, formatPrice } from '@/utils/format'
 import Loading from '@/components/Loading.vue'
@@ -37,26 +37,46 @@ const list = ref<AftersaleItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let listVersion = 0
+let loadingVersion = -1
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    list.value = []
-  }
+function resetList() {
+  page.value = 1
+  finished.value = false
+  list.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await getAftersaleList({ page: page.value, pageSize: 10 })
-    list.value.push(...data.list)
-    finished.value = list.value.length >= data.total
-    page.value++
+    const data = await getAftersaleList({ page: requestPage, pageSize: 10 })
+    if (version !== listVersion) return
+
+    const rows = Array.isArray(data?.list) ? data.list : []
+    list.value.push(...rows)
+    finished.value = list.value.length >= Number(data?.total || 0)
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshList() {
+  const version = ++listVersion
+  resetList()
+  return loadList(version)
 }
 
 function goDetail(id: string) {
@@ -82,109 +102,47 @@ function getStatusClass(status: string | number): string {
 }
 
 onPullDownRefresh(async () => {
-  await loadList(true)
+  await refreshList()
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadList()
+  void loadList(listVersion)
 })
 
-onMounted(() => {
-  loadList()
+onShow(() => {
+  void refreshList()
+})
+
+defineExpose({
+  list,
+  loading,
+  loadList,
+  refreshList,
 })
 </script>
 
 <style lang="scss" scoped>
-.aftersale-list-page {
-  min-height: 100vh;
-  padding-top: $spacing-sm;
-}
-
-.aftersale-card {
-  margin: $spacing-sm $spacing-md $spacing-md;
-  border-radius: $radius-xxl;
-  background: $gradient-card;
-}
-
-.card-header {
-  @include flex-between;
-  padding-bottom: $spacing-sm;
-  border-bottom: 1rpx solid $divider-color;
-}
-
-.order-no {
-  font-size: $font-xs;
-  color: $text-hint;
-}
-
+.aftersale-list-page { min-height: 100vh; padding-top: $spacing-sm; }
+.aftersale-card { margin: $spacing-sm $spacing-md $spacing-md; border-radius: $radius-xxl; background: $gradient-card; }
+.card-header { @include flex-between; padding-bottom: $spacing-sm; border-bottom: 1rpx solid $divider-color; }
+.order-no { font-size: $font-xs; color: $text-hint; }
 .status-text {
   @include status-badge;
   font-size: $font-sm;
   font-weight: 500;
-
   &.pending { @include status-warning; }
   &.processing { @include status-info; }
   &.completed { @include status-success; }
   &.rejected { @include status-danger; }
   &.cancelled { background: $bg-gray; color: $text-hint; }
 }
-
-.card-content {
-  display: flex;
-  align-items: flex-start;
-  padding-top: $spacing-md;
-}
-
-.product-image {
-  width: 156rpx;
-  height: 156rpx;
-  border-radius: 28rpx;
-  flex-shrink: 0;
-  background: $bg-gray;
-}
-
-.product-info {
-  flex: 1;
-  margin-left: $spacing-sm;
-  overflow: hidden;
-}
-
-.product-name {
-  font-size: $font-sm;
-  color: $text-color;
-  font-weight: 600;
-  @include text-ellipsis-2;
-  display: block;
-  line-height: 1.4;
-}
-
-.aftersale-reason {
-  font-size: $font-xs;
-  color: $text-secondary;
-  display: inline-flex;
-  max-width: 100%;
-  margin-top: 8rpx;
-  padding: 6rpx 14rpx;
-  border-radius: $radius-round;
-  background: $bg-soft;
-  @include text-ellipsis;
-}
-
-.refund-amount {
-  text-align: right;
-  margin-left: $spacing-sm;
-}
-
-.amount-label {
-  font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-}
-
-.amount-value {
-  font-size: $font-md;
-  color: $price-color;
-  font-weight: 800;
-}
+.card-content { display: flex; align-items: flex-start; padding-top: $spacing-md; }
+.product-image { width: 156rpx; height: 156rpx; border-radius: 28rpx; flex-shrink: 0; background: $bg-gray; }
+.product-info { flex: 1; margin-left: $spacing-sm; overflow: hidden; }
+.product-name { font-size: $font-sm; color: $text-color; font-weight: 600; @include text-ellipsis-2; display: block; line-height: 1.4; }
+.aftersale-reason { font-size: $font-xs; color: $text-secondary; display: inline-flex; max-width: 100%; margin-top: 8rpx; padding: 6rpx 14rpx; border-radius: $radius-round; background: $bg-soft; @include text-ellipsis; }
+.refund-amount { text-align: right; margin-left: $spacing-sm; }
+.amount-label { font-size: $font-xs; color: $text-hint; display: block; }
+.amount-value { font-size: $font-md; color: $price-color; font-weight: 800; }
 </style>

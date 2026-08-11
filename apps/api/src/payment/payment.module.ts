@@ -1,7 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PaymentController, RefundController, PaymentReconcileController, RefundReconcileController, PaymentCompensationController } from './payment.controller';
 import { PaymentService } from './payment.service';
+import { OrphanSafeMemberGrowthPaymentService } from './orphan-safe-member-growth-payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
+import { HistoricalAnomalyPaymentReconcileService } from './historical-anomaly-payment-reconcile.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
 import { ShareModule } from '../share/share.module';
@@ -13,7 +15,16 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
 @Module({
   imports: [PrismaModule, forwardRef(() => OrderModule), ShareModule, BenefitPackageModule, MerchantSettlementModule, GroupBuyModule, FlashSaleModule],
   controllers: [PaymentController, RefundController, PaymentReconcileController, RefundReconcileController, PaymentCompensationController],
-  providers: [PaymentService, PaymentReconcileService],
+  providers: [
+    {
+      provide: PaymentService,
+      useClass: OrphanSafeMemberGrowthPaymentService,
+    },
+    {
+      provide: PaymentReconcileService,
+      useClass: HistoricalAnomalyPaymentReconcileService,
+    },
+  ],
   exports: [PaymentService, PaymentReconcileService],
 })
 export class PaymentModule {}

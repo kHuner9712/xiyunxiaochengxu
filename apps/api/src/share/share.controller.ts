@@ -3,103 +3,17 @@ import { ShareService } from './share.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { IsString, IsNotEmpty, IsOptional, IsInt } from 'class-validator';
-import { Type } from 'class-transformer';
-
-class ShareRecordDto {
-  @IsString()
-  @IsNotEmpty()
-  shareType!: string;
-
-  @IsOptional()
-  @IsString()
-  shareTargetId?: string;
-
-  @IsOptional()
-  @IsString()
-  shareChannel?: string;
-
-  @IsOptional()
-  @IsString()
-  campaignId?: string;
-
-  @IsOptional()
-  @IsString()
-  shareScene?: string;
-
-  @IsOptional()
-  @IsString()
-  sharePath?: string;
-}
-
-class ShareVisitDto {
-  @IsOptional()
-  @IsString()
-  shareRecordId?: string;
-
-  @IsOptional()
-  @IsString()
-  inviter?: string;
-
-  @IsOptional()
-  @IsString()
-  campaignId?: string;
-
-  @IsOptional()
-  @IsString()
-  sceneCode?: string;
-}
-
-class BindInviteDto {
-  @IsOptional()
-  @IsString()
-  inviter?: string;
-
-  @IsOptional()
-  @IsString()
-  shareRecordId?: string;
-
-  @IsOptional()
-  @IsString()
-  campaignId?: string;
-}
-
-class CreateCampaignDto {
-  @IsString()
-  @IsNotEmpty()
-  name!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  type!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  rewardType!: string;
-
-  @IsOptional()
-  inviterRewardConfig?: any;
-
-  @IsOptional()
-  inviteeRewardConfig?: any;
-
-  @IsNotEmpty()
-  startTime!: string;
-
-  @IsNotEmpty()
-  endTime!: string;
-
-  @IsOptional()
-  @IsInt()
-  @Type(() => Number)
-  status?: number;
-}
-
-class UpdateCampaignStatusDto {
-  @IsInt()
-  @Type(() => Number)
-  status!: number;
-}
+import {
+  BindInviteDto,
+  CreateCampaignDto,
+  PaginationQueryDto,
+  PosterQueryDto,
+  RewardQueryDto,
+  ShareRecordDto,
+  ShareVisitDto,
+  UpdateCampaignDto,
+  UpdateCampaignStatusDto,
+} from './dto/share.dto';
 
 @Controller('weapp/share')
 export class WeappShareController {
@@ -130,10 +44,9 @@ export class WeappShareController {
   @Get('poster')
   async getPoster(
     @CurrentUser('id') userId: string,
-    @Query('type') type: string,
-    @Query('targetId') targetId?: string,
+    @Query() query: PosterQueryDto,
   ) {
-    return this.shareService.getPoster(userId, type, targetId);
+    return this.shareService.getPoster(userId, query.type, query.targetId);
   }
 
   @Get('my-stats')
@@ -144,10 +57,9 @@ export class WeappShareController {
   @Get('my-rewards')
   async getMyRewards(
     @CurrentUser('id') userId: string,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
+    @Query() query: PaginationQueryDto,
   ) {
-    return this.shareService.getMyRewards(userId, page ? Number(page) : 1, pageSize ? Number(pageSize) : 20);
+    return this.shareService.getMyRewards(userId, query.page, query.pageSize);
   }
 }
 
@@ -157,14 +69,8 @@ export class AdminShareController {
 
   @Get('campaign/list')
   @RequirePermission('share:campaign')
-  async listCampaigns(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-  ) {
-    return this.shareService.findAllCampaigns(
-      page ? Number(page) : 1,
-      pageSize ? Number(pageSize) : 10,
-    );
+  async listCampaigns(@Query() query: PaginationQueryDto) {
+    return this.shareService.findAllCampaigns(query.page, query.pageSize);
   }
 
   @Post('campaign')
@@ -175,7 +81,7 @@ export class AdminShareController {
 
   @Put('campaign/:id')
   @RequirePermission('share:campaign')
-  async updateCampaign(@Param('id') id: string, @Body() dto: Partial<CreateCampaignDto>) {
+  async updateCampaign(@Param('id') id: string, @Body() dto: UpdateCampaignDto) {
     return this.shareService.updateCampaign(id, dto);
   }
 
@@ -187,26 +93,14 @@ export class AdminShareController {
 
   @Get('records')
   @RequirePermission('share:record')
-  async listRecords(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-  ) {
-    return this.shareService.findShareRecords(
-      page ? Number(page) : 1,
-      pageSize ? Number(pageSize) : 10,
-    );
+  async listRecords(@Query() query: PaginationQueryDto) {
+    return this.shareService.findShareRecords(query.page, query.pageSize);
   }
 
   @Get('invite-relations')
   @RequirePermission('share:invite')
-  async listInviteRelations(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-  ) {
-    return this.shareService.findInviteRelations(
-      page ? Number(page) : 1,
-      pageSize ? Number(pageSize) : 10,
-    );
+  async listInviteRelations(@Query() query: PaginationQueryDto) {
+    return this.shareService.findInviteRelations(query.page, query.pageSize);
   }
 
   @Get('stats')
@@ -217,23 +111,15 @@ export class AdminShareController {
 
   @Get('rewards')
   @RequirePermission('share:record')
-  async findRewards(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('userId') userId?: string,
-    @Query('campaignId') campaignId?: string,
-    @Query('rewardType') rewardType?: string,
-    @Query('status') status?: string,
-    @Query('sourceType') sourceType?: string,
-  ) {
+  async findRewards(@Query() query: RewardQueryDto) {
     return this.shareService.findAllRewards({
-      page: page ? Number(page) : 1,
-      pageSize: pageSize ? Number(pageSize) : 10,
-      userId,
-      campaignId,
-      rewardType,
-      status,
-      sourceType,
+      page: query.page,
+      pageSize: query.pageSize,
+      userId: query.userId,
+      campaignId: query.campaignId,
+      rewardType: query.rewardType,
+      status: query.status,
+      sourceType: query.sourceType,
     });
   }
 }

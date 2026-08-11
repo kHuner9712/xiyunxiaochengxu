@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { REQUIRE_PERMISSION_KEY } from '../decorators/require-permission.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { parsePositiveBigIntId } from '../utils/bigint-id';
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
@@ -27,17 +28,13 @@ export class PermissionGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-
-    if (!user || !user.id) {
+    if (!user?.id || user.roleType !== 'admin') {
       throw new ForbiddenException('无权限访问');
     }
 
-    if (user.roleType !== 'admin') {
-      throw new ForbiddenException('无权限访问');
-    }
-
+    const adminUserId = parsePositiveBigIntId(user.id, '管理员');
     const adminUserRoles = await this.prisma.adminUserRole.findMany({
-      where: { adminUserId: BigInt(user.id) },
+      where: { adminUserId },
       include: {
         role: {
           include: {
@@ -49,18 +46,20 @@ export class PermissionGuard implements CanActivate {
       },
     });
 
-    const roleCodes = adminUserRoles.map((ur) => ur.role.code);
+    // Role deletion is a soft state change. Never let a disabled/deleted role continue granting
+    // permissions merely because its historical admin_user_roles rows still exist.
+    const activeRoles = adminUserRoles.filter((assignment) => assignment.role.status === 1);
+    const roleCodes = activeRoles.map((assignment) => assignment.role.code);
     if (roleCodes.includes('super_admin')) {
       return true;
     }
 
-    const permissions = adminUserRoles.flatMap((ur) =>
-      ur.role.adminRolePermissions.map((rp) => rp.permission.code),
+    const permissions = new Set(
+      activeRoles.flatMap((assignment) =>
+        assignment.role.adminRolePermissions.map((rp) => rp.permission.code),
+      ),
     );
-
-    // 检查用户是否拥有任一需要的权限
-    const hasPermission = requiredPermissions.some(perm => permissions.includes(perm));
-    if (hasPermission) {
+    if (requiredPermissions.some((permission) => permissions.has(permission))) {
       return true;
     }
 

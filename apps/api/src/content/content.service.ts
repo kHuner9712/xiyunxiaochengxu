@@ -7,6 +7,7 @@ import { paginate } from '@baby-mall/shared';
 import { getAssetBaseUrl, normalizeAssetUrl } from '../common/utils/asset-url';
 
 const MAX_SIGNED_BIGINT = 9223372036854775807n;
+const EXECUTABLE_ACTIVITY_TYPES = ['1', '2', '5'];
 
 @Injectable()
 export class ContentService {
@@ -299,8 +300,6 @@ export class ContentService {
       return this.getContentByType('video', page, pageSize);
     } else if (tab === 'article') {
       return this.getContentByType('article', page, pageSize);
-    } else if (tab === 'offline') {
-      return this.getOfflineFeed(page, pageSize);
     }
     return this.getRecommendFeed(page, pageSize);
   }
@@ -311,7 +310,12 @@ export class ContentService {
 
     const [activities, contents] = await Promise.all([
       this.prisma.activity.findMany({
-        where: { status: 2, startTime: { lte: now }, endTime: { gte: now } },
+        where: {
+          status: 1,
+          type: { in: EXECUTABLE_ACTIVITY_TYPES },
+          startTime: { lte: now },
+          endTime: { gte: now },
+        },
         orderBy: { sortOrder: 'asc' },
         take: 5,
         select: { id: true, name: true, type: true, bannerImage: true, startTime: true, endTime: true },
@@ -371,7 +375,12 @@ export class ContentService {
 
   private async getDiscountFeed(page: number, pageSize: number) {
     const now = new Date();
-    const where = { status: 2, startTime: { lte: now }, endTime: { gte: now } };
+    const where = {
+      status: 1,
+      type: { in: EXECUTABLE_ACTIVITY_TYPES },
+      startTime: { lte: now },
+      endTime: { gte: now },
+    };
 
     const [list, total] = await Promise.all([
       this.prisma.activity.findMany({
@@ -431,33 +440,6 @@ export class ContentService {
         viewCount: c.viewCount,
         publishTime: c.publishedAt,
         isFeatured: c.isFeatured,
-      })),
-      total, page, pageSize,
-    );
-  }
-
-  private async getOfflineFeed(page: number, pageSize: number) {
-    const now = new Date();
-    const where = { status: 2, startTime: { lte: now }, endTime: { gte: now }, type: 'offline' };
-
-    const [list, total] = await Promise.all([
-      this.prisma.activity.findMany({
-        where, orderBy: { sortOrder: 'asc' },
-        skip: (page - 1) * pageSize, take: pageSize,
-        select: { id: true, name: true, type: true, bannerImage: true, startTime: true, endTime: true },
-      }),
-      this.prisma.activity.count({ where }),
-    ]);
-
-    return paginate(
-      list.map((a) => ({
-        type: 'activity' as const,
-        id: a.id.toString(),
-        title: a.name,
-        image: normalizeAssetUrl(a.bannerImage, this.assetBaseUrl),
-        startTime: a.startTime,
-        endTime: a.endTime,
-        activityType: a.type,
       })),
       total, page, pageSize,
     );
@@ -534,7 +516,9 @@ export class ContentService {
       videoDuration: c.videoDuration,
       placement: c.placement,
       tags: c.tags,
-      relatedProductIds: c.relatedProductIds,
+      relatedProductIds: Array.isArray(c.relatedProductIds)
+        ? c.relatedProductIds.map((id: unknown) => String(id))
+        : c.relatedProductIds,
       relatedActivityId: c.relatedActivityId?.toString(),
       isFeatured: c.isFeatured ?? 0,
       viewCount: c.viewCount,

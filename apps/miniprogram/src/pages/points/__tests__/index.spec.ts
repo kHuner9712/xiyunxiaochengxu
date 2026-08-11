@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PointsPage from '../index.vue'
 import { checkIn, getCheckInStatus, getPointsBalance, getPointsDetail, getPointsRules } from '@/api/points'
 
+const uniAppMock = vi.hoisted(() => ({
+  onShowCallbacks: [] as Array<() => void>,
+}))
+
 vi.mock('@dcloudio/uni-app', () => ({
+  onShow: vi.fn((callback: () => void) => uniAppMock.onShowCallbacks.push(callback)),
   onReachBottom: vi.fn(),
   onPullDownRefresh: vi.fn(),
 }))
@@ -18,6 +23,7 @@ vi.mock('@/api/points', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  uniAppMock.onShowCallbacks = []
   vi.mocked(getPointsBalance).mockResolvedValue({ balance: 88, totalEarned: 120, totalSpent: 32 })
   vi.mocked(getCheckInStatus).mockResolvedValue({ checked: false, continuous: 3, todayPoints: 16 })
   vi.mocked(getPointsDetail).mockResolvedValue({
@@ -50,6 +56,7 @@ describe('积分中心', () => {
         },
       },
     })
+    uniAppMock.onShowCallbacks.at(-1)?.()
     await flushPromises()
 
     expect(wrapper.text()).toContain('88')
@@ -71,6 +78,7 @@ describe('积分中心', () => {
         },
       },
     })
+    uniAppMock.onShowCallbacks.at(-1)?.()
     await flushPromises()
 
     await wrapper.find('.checkin-btn').trigger('tap')
@@ -84,5 +92,38 @@ describe('积分中心', () => {
     })
     expect(getPointsBalance).toHaveBeenCalledTimes(2)
     expect(getPointsDetail).toHaveBeenLastCalledWith({ page: 1, pageSize: 10 })
+  })
+
+  it('服务端已签到时提示幂等状态并重新同步，不显示+0奖励', async () => {
+    vi.mocked(checkIn).mockResolvedValueOnce({
+      points: 0,
+      continuous: 4,
+      consecutiveDays: 4,
+      alreadySigned: true,
+    })
+    vi.mocked(getCheckInStatus)
+      .mockResolvedValueOnce({ checked: false, continuous: 3, todayPoints: 16 })
+      .mockResolvedValueOnce({ checked: true, continuous: 4, todayPoints: 16 })
+
+    const wrapper = mount(PointsPage, {
+      global: { stubs: { Loading: true } },
+    })
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+
+    await wrapper.find('.checkin-btn').trigger('tap')
+    await flushPromises()
+
+    expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
+      title: '今日已签到',
+      icon: 'none',
+    })
+    expect((globalThis as any).uni.showToast).not.toHaveBeenCalledWith({
+      title: '签到成功，+0积分',
+      icon: 'none',
+    })
+    expect(wrapper.find('.checkin-text').text()).toBe('已签到')
+    expect(wrapper.text()).toContain('已连续签到4天')
+    expect(getCheckInStatus).toHaveBeenCalledTimes(2)
   })
 })

@@ -1,7 +1,13 @@
-import { getApiBaseUrl, getToken } from '@/utils/request'
+import {
+  getApiBaseUrl,
+  getToken,
+  redirectToLoginTab,
+  removeToken,
+} from '@/utils/request'
 
 const UPLOAD_MODULE = '[baby-mall][upload]'
 const UPLOAD_PATH = '/common/file/upload'
+const AUTH_ERROR_CODES = new Set([40101, 40102, 40103])
 
 export function uploadImage(filePath: string, groupName?: string): Promise<{ url: string }> {
   return new Promise((resolve, reject) => {
@@ -33,6 +39,14 @@ export function uploadImage(filePath: string, groupName?: string): Promise<{ url
             error: res.data
           })
           reject(new Error('上传响应解析失败'))
+          return
+        }
+
+        const responseCode = typeof data?.code === 'number' ? data.code : undefined
+        if (res.statusCode === 401 || (responseCode !== undefined && AUTH_ERROR_CODES.has(responseCode))) {
+          removeToken()
+          redirectToLoginTab('登录已过期，请重新登录')
+          reject(new Error('登录已过期，请重新登录'))
           return
         }
 

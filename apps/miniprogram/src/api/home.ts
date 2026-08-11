@@ -2,9 +2,11 @@ import { get } from '@/utils/request'
 
 export function getHomeData() {
   return get<{
+    brand: StorefrontBrand
     banners: BannerItem[]
     quickEntries: QuickEntry[]
     announcement?: string
+    recommendations: RecommendationSection[]
     monthRecommend: ProductItem[]
     hotProducts: ProductItem[]
     newProducts: ProductItem[]
@@ -16,15 +18,21 @@ export function getGuessProducts(params: { page: number; pageSize: number }) {
   return get<{ list: ProductItem[]; total: number }>('/weapp/home/guess', params)
 }
 
+export interface StorefrontBrand {
+  name: string
+  logo: string
+}
+
 export interface BannerItem {
-  id: number
+  id: string
   image: string
-  linkType: number
+  /** 0 none, 1 product detail, 2 activity detail, 3 mini-program page path. */
+  linkType: 0 | 1 | 2 | 3
   linkValue: string
 }
 
 export interface QuickEntry {
-  id: number
+  id: string
   name: string
   icon: string
   linkType: number
@@ -33,7 +41,7 @@ export interface QuickEntry {
 }
 
 export interface ProductItem {
-  id: string | number
+  id: string
   name: string
   image: string
   price: number
@@ -43,10 +51,28 @@ export interface ProductItem {
 }
 
 export interface ActivityItem {
-  id: number
+  id: string
   name: string
   image: string
   type: number
   startTime: number | string | Date
   endTime: number | string | Date
+}
+
+export interface ContentRecommendationItem {
+  id: string
+  title: string
+  image: string
+  summary: string
+  contentType: string
+  publishedAt?: string | Date | null
+}
+
+export interface RecommendationSection {
+  id: string
+  name: string
+  code: string
+  type: 1 | 2 | 3
+  sort: number
+  items: Array<ProductItem | ActivityItem | ContentRecommendationItem>
 }

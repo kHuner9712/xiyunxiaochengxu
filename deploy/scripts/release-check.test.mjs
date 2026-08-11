@@ -1,8 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import './production-config-preflight.test.mjs'
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 
@@ -10,6 +12,7 @@ test('package.json exposes audited freeze and production gates', () => {
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
   const freeze = pkg.scripts['release:check:freeze']
   const production = pkg.scripts['release:check:prod']
+  const adminTests = pkg.scripts['test:admin']
 
   assert.match(freeze, /^pnpm audit:project && /)
   assert.match(freeze, /node deploy\/scripts\/run-release-check\.mjs/)
@@ -19,7 +22,20 @@ test('package.json exposes audited freeze and production gates', () => {
   assert.match(production, /node deploy\/scripts\/run-release-check\.mjs/)
   assert.match(production, /--strict-prod-gate/)
   assert.match(production, /--require-real-wx-appid/)
-  assert.equal(pkg.scripts['test:admin'], 'node --test apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs')
+
+  assert.match(adminTests, /^node --test /)
+  const requiredAdminContractTests = [
+    'apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs',
+    'apps/admin-web/src/core-operation-permissions.test.mjs',
+    'apps/admin-web/src/batch-delivery-tracking.test.mjs',
+    'apps/admin-web/src/aftersale-refund-retry.test.mjs',
+    'apps/admin-web/src/reconcile-history-observability.test.mjs',
+    'apps/admin-web/src/supplier-operation-contract.test.mjs',
+  ]
+  for (const requiredTest of requiredAdminContractTests) {
+    assert.ok(adminTests.includes(requiredTest), `test:admin must include ${requiredTest}`)
+  }
+  assert.equal(pkg.scripts['test:admin:browser'], 'node deploy/scripts/run-admin-browser-e2e.mjs')
 })
 
 test('release gate wrapper preserves env, reports boundaries and runs supplemental tests safely', () => {
@@ -29,11 +45,57 @@ test('release gate wrapper preserves env, reports boundaries and runs supplement
   assert.match(wrapper, /run\('bash', \['deploy\/scripts\/release-check\.sh', \.\.\.args\]\)/)
   assert.match(wrapper, /env: \{ \.\.\.env, \.\.\.extraEnv \}/)
   assert.match(wrapper, /unit tests and mocked HTTP tests/)
+  assert.match(wrapper, /controlled mock API/)
   assert.match(wrapper, /run\(pnpmCommand, \['test:admin'\]\)/)
+  assert.match(wrapper, /run\(pnpmCommand, \['test:admin:browser'\]\)/)
   assert.match(wrapper, /@baby-mall\/miniprogram', 'test'/)
+  assert.match(wrapper, /@baby-mall\/api', 'prisma:migrate:drift-check'/)
   assert.match(wrapper, /@baby-mall\/api', 'test:integration'/)
   assert.match(wrapper, /isClearlyTestDatabase\(env\.DATABASE_URL\)/)
   assert.match(wrapper, /does not constitute production runtime or real-device acceptance/)
+})
+
+test('strict production gate rejects reserved or local miniprogram API hosts before running repository checks', () => {
+  const wrapperPath = resolve(root, 'deploy/scripts/run-release-check.mjs')
+  for (const apiBaseUrl of [
+    'https://example.invalid/api',
+    'https://service.test/api',
+    'https://localhost/api',
+    'https://127.0.0.1/api',
+  ]) {
+    const result = spawnSync(process.execPath, [wrapperPath, '--strict-prod-gate'], {
+      cwd: root,
+      env: {
+        ...process.env,
+        VITE_API_BASE_URL: apiBaseUrl,
+      },
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 1, `${apiBaseUrl} must fail strict production gate`)
+    assert.match(result.stderr, /refuses reserved\/local VITE_API_BASE_URL/)
+    assert.doesNotMatch(result.stdout, /Release Gate Check/)
+  }
+})
+
+test('admin browser gate uses a built SPA, Chrome DevTools and grouped config refresh persistence evidence', () => {
+  const browserGate = readFileSync(resolve(root, 'deploy/scripts/admin-browser-e2e.mjs'), 'utf8')
+  const browserRunner = readFileSync(resolve(root, 'deploy/scripts/run-admin-browser-e2e.mjs'), 'utf8')
+
+  assert.match(browserGate, /apps\/admin-web\/dist/)
+  assert.match(browserGate, /remote-debugging-port=0/)
+  assert.match(browserGate, /\/api\/admin\/auth\/login/)
+  assert.match(browserGate, /\/api\/admin\/system-config\/list/)
+  assert.match(browserGate, /\/api\/admin\/system-config\/batch-update/)
+  assert.match(browserGate, /submittedConfigs/)
+  assert.match(browserGate, /Page\.reload/)
+  assert.match(browserGate, /reload persistence/)
+  assert.doesNotMatch(browserGate, /puppeteer|playwright|selenium/i)
+
+  assert.match(browserRunner, /spawnSync\(process\.execPath/)
+  assert.match(browserRunner, /PASS login → permission menu → grouped config batch save → reload persistence/)
+  assert.match(browserRunner, /ENOTEMPTY: directory not empty/)
+  assert.match(browserRunner, /maxRetries: 10/)
+  assert.match(browserRunner, /retryDelay: 100/)
 })
 
 test('release-check.sh recognizes freeze mode and prints both gate conclusions', () => {
@@ -55,4 +117,64 @@ test('release-check.sh treats public placeholders as external production config'
   assert.match(script, /legal\.ts 保留公开占位联系方式/)
   assert.match(script, /run_pnpm_with_node_env development "\$MINI_BUILD_SCRIPT"/)
   assert.doesNotMatch(script, /legal\.ts 仍包含待确认联系方式占位：\$pattern（生产严格门禁下不可发布）/)
+})
+
+test('production container runs full config/payment preflight before custom commands and migrations', () => {
+  const entrypoint = readFileSync(resolve(root, 'deploy/scripts/entrypoint.sh'), 'utf8')
+  const preflight = readFileSync(resolve(root, 'apps/api/src/config/production-config-preflight.ts'), 'utf8')
+  const preflightIndex = entrypoint.indexOf('node dist/config/production-config-preflight.js')
+  const customExecIndex = entrypoint.indexOf('exec "$@"')
+  const migrationIndex = entrypoint.indexOf('npx prisma migrate deploy')
+
+  assert.match(entrypoint, /\[ "\$\{NODE_ENV:-\}" = "production" \]/)
+  assert.ok(preflightIndex >= 0, 'production entrypoint must run the compiled production config preflight')
+  assert.ok(customExecIndex >= 0, 'production entrypoint must execute custom commands')
+  assert.ok(migrationIndex >= 0, 'production entrypoint must contain the Prisma migration command')
+  assert.ok(preflightIndex < customExecIndex, 'production config preflight must run before custom command exec')
+  assert.ok(preflightIndex < migrationIndex, 'production config preflight must run before Prisma migration')
+
+  assert.match(preflight, /validateEnv\(\{ \.\.\.env \}\)/)
+  assert.match(preflight, /new PaymentService\(/)
+  assert.match(preflight, /createPrivateKey\(/)
+  assert.match(preflight, /new X509Certificate\(/)
+  assert.match(preflight, /WECHAT_PLATFORM_CERT_MAP/)
+  assert.doesNotMatch(preflight, /NestFactory|createApplicationContext/)
+})
+
+test('production compose files pass certificate rotation and critical alert settings', () => {
+  const compose = readFileSync(resolve(root, 'deploy/docker-compose.yml'), 'utf8')
+  const btCompose = readFileSync(resolve(root, 'deploy/docker-compose.bt.yml'), 'utf8')
+  const productionEnv = readFileSync(resolve(root, '.env.production.example'), 'utf8')
+
+  for (const source of [compose, btCompose]) {
+    assert.match(source, /WECHAT_PLATFORM_CERT_MAP: \$\{WECHAT_PLATFORM_CERT_MAP:-\}/)
+    assert.match(source, /ALERT_WEBHOOK_URL: \$\{ALERT_WEBHOOK_URL:-\}/)
+  }
+  assert.match(productionEnv, /WECHAT_PLATFORM_CERT_MAP=/)
+  assert.match(productionEnv, /ALERT_WEBHOOK_URL=/)
+  assert.match(productionEnv, /秘密值含 \$ 时优先使用单引号/)
+})
+
+test('production HTTPS smoke never disables certificate verification', () => {
+  const smoke = readFileSync(resolve(root, 'deploy/scripts/smoke-runtime.sh'), 'utf8')
+
+  assert.doesNotMatch(smoke, /--insecure/)
+  assert.match(smoke, /--resolve "\$\{API_DOMAIN\}:\$\{HTTPS_HOST_PORT\}:127\.0\.0\.1"/)
+  assert.match(smoke, /--resolve "\$\{ADMIN_DOMAIN\}:\$\{HTTPS_HOST_PORT\}:127\.0\.0\.1"/)
+  assert.match(smoke, /trusted production HTTPS/)
+})
+
+test('production deploy validates TLS identity before starting database work', () => {
+  const deploy = readFileSync(resolve(root, 'deploy/scripts/deploy-production.sh'), 'utf8')
+  const tlsCheckIndex = deploy.indexOf("pass 'TLS certificates cover production domains")
+  const databaseStartIndex = deploy.indexOf('up -d mysql redis')
+
+  assert.match(deploy, /command -v openssl/)
+  assert.match(deploy, /validate_tls_pair\(\)/)
+  assert.match(deploy, /-checkend 604800/)
+  assert.match(deploy, /-checkhost "\$domain"/)
+  assert.match(deploy, /TLS certificate and private key do not match/)
+  assert.ok(tlsCheckIndex >= 0, 'TLS preflight must report a successful identity check')
+  assert.ok(databaseStartIndex >= 0, 'deployment must contain database startup')
+  assert.ok(tlsCheckIndex < databaseStartIndex, 'TLS preflight must finish before database work starts')
 })

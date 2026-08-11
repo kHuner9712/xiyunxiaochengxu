@@ -15,15 +15,24 @@
       </view>
 
       <text class="result-text">{{ resultText }}</text>
-      <text class="result-subtext">订单状态可能有短暂延迟，请以订单详情为准</text>
+      <text class="result-subtext">{{ resultSubtext }}</text>
     </view>
 
-    <view v-if="paymentState === 'success' && orderInfo?.fulfillmentType === 'pickup'" class="pickup-tip card">
+    <view
+      v-if="paymentState === 'success' && orderInfo?.status === 'pending_pickup' && orderInfo?.fulfillmentType === 'pickup'"
+      class="pickup-tip card"
+    >
       <text class="tip-text">请到店出示自提码取货</text>
       <view v-if="orderInfo.pickupCode" class="tip-code">
         <text class="tip-code-label">自提码</text>
         <text class="tip-code-text">{{ orderInfo.pickupCode }}</text>
       </view>
+    </view>
+
+    <view v-if="paymentState === 'success' && orderInfo?.status === 'paid'" class="group-tip card">
+      <text class="tip-text">已付款，正在等待拼团成团</text>
+      <text class="group-tip-subtext">成团后订单才会进入发货或自提流程；若拼团失败，系统会按规则自动退款。</text>
+      <view v-if="resolvedGroupId" class="group-progress-link" @tap="goGroupProgress">查看拼团进度</view>
     </view>
 
     <view v-if="orderInfo" class="order-info card">
@@ -42,8 +51,8 @@
     </view>
 
     <view class="action-btns">
-      <view class="btn-outline" @tap="goOrderDetail">
-        <text class="btn-text">查看订单</text>
+      <view class="btn-outline" @tap="goPrimaryDetail">
+        <text class="btn-text">{{ resolvedGroupId && paymentState === 'success' ? '查看拼团' : '查看订单' }}</text>
       </view>
       <view class="btn-primary" @tap="goHome">
         <text class="btn-text-white">返回首页</text>
@@ -62,6 +71,7 @@ import { formatPrice } from '@/utils/format'
 type PaymentState = 'confirming' | 'success' | 'failed' | 'pending' | 'unknown'
 
 const orderId = ref('')
+const groupId = ref('')
 const orderInfo = ref<OrderDetail | null>(null)
 const checking = ref(true)
 const paymentState = ref<PaymentState>('confirming')
@@ -69,23 +79,65 @@ const pollAttempt = ref(0)
 const maxPollCount = 6
 const pollIntervalMs = 2000
 let pollTimer: ReturnType<typeof setTimeout> | null = null
+let pollSleepResolve: (() => void) | null = null
+let pollGeneration = 0
+let pollingActive = false
 const payIntent = ref('')
 const zeroPay = ref(false)
 
+const resolvedGroupId = computed(() => groupId.value || orderInfo.value?.groupBuyGroupId || '')
+
 const resultText = computed(() => {
   if (checking.value || paymentState.value === 'confirming') return '正在确认支付结果...'
-  if (zeroPay.value && paymentState.value === 'success') return '订单提交成功'
-  if (paymentState.value === 'success') return '支付成功'
+  if (zeroPay.value && paymentState.value === 'success') {
+    return orderInfo.value?.status === 'paid' ? '订单已提交，等待拼团成团' : '订单提交成功'
+  }
+  if (paymentState.value === 'success') {
+    return orderInfo.value?.status === 'paid' ? '支付成功，等待拼团成团' : '支付成功'
+  }
   if (paymentState.value === 'pending') return '支付结果确认中，请稍后在订单详情查看'
   if (paymentState.value === 'failed') return '支付失败'
   return '支付结果未知，请稍后在订单详情查看'
 })
 
+const resultSubtext = computed(() => {
+  if (paymentState.value === 'success' && orderInfo.value?.status === 'paid') {
+    return '当前仅代表付款成功，尚未进入发货或自提状态'
+  }
+  return '订单状态可能有短暂延迟，请以订单详情为准'
+})
+
 function stopPolling() {
+  pollGeneration += 1
+  pollingActive = false
   if (pollTimer) {
     clearTimeout(pollTimer)
     pollTimer = null
   }
+  if (pollSleepResolve) {
+    const resolve = pollSleepResolve
+    pollSleepResolve = null
+    resolve()
+  }
+}
+
+function waitForNextPoll(generation: number): Promise<void> {
+  if (generation !== pollGeneration) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      if (pollSleepResolve === finish) pollSleepResolve = null
+      if (pollTimer) {
+        clearTimeout(pollTimer)
+        pollTimer = null
+      }
+      resolve()
+    }
+    pollSleepResolve = finish
+    pollTimer = setTimeout(finish, pollIntervalMs)
+  })
 }
 
 function mapStatusToState(status: any): PaymentState {
@@ -93,6 +145,7 @@ function mapStatusToState(status: any): PaymentState {
   if (status.displayStatus === 'closed' || status.displayStatus === 'failed' || status.displayStatus === 'cancelled') return 'failed'
   if (status.displayStatus === 'pending' || status.displayStatus === 'confirming' || status.confirming) return 'confirming'
   if (
+    status.orderStatus === 'paid' ||
     status.orderStatus === 'pending_delivery' ||
     status.orderStatus === 'pending_pickup' ||
     status.orderStatus === 'delivered' ||
@@ -105,72 +158,110 @@ function mapStatusToState(status: any): PaymentState {
   return 'unknown'
 }
 
-async function checkPaymentStatusOnce() {
+async function checkPaymentStatusOnce(generation: number) {
   try {
     const status = await getPaymentStatus(orderId.value)
+    if (generation !== pollGeneration) return null
     paymentState.value = mapStatusToState(status)
     return status
   } catch {
+    if (generation !== pollGeneration) return null
     paymentState.value = 'unknown'
     return null
   }
 }
 
-async function loadOrder() {
+async function loadOrder(generation?: number) {
   try {
-    orderInfo.value = await getOrderDetail(orderId.value)
+    const detail = await getOrderDetail(orderId.value)
+    if (generation !== undefined && generation !== pollGeneration) return
+    orderInfo.value = detail
   } catch (e: any) {
+    if (generation !== undefined && generation !== pollGeneration) return
     uni.showToast({ title: e.message || '订单信息加载失败', icon: 'none' })
   }
 }
 
 async function startPollingStatus() {
+  if (pollingActive || zeroPay.value || !orderId.value) return
+
+  const generation = ++pollGeneration
+  pollingActive = true
   checking.value = true
-  stopPolling()
   pollAttempt.value = 0
 
-  while (pollAttempt.value < maxPollCount) {
-    pollAttempt.value++
-    const status = await checkPaymentStatusOnce()
-    if (paymentState.value === 'success') {
-      checking.value = false
-      await loadOrder()
-      return
-    }
-    if (paymentState.value === 'failed') {
-      checking.value = false
-      await loadOrder()
-      return
-    }
-    if (status?.displayStatus === 'pending' || status?.displayStatus === 'confirming' || status?.confirming || paymentState.value === 'confirming') {
-      await new Promise<void>((resolve) => {
-        pollTimer = setTimeout(() => resolve(), pollIntervalMs)
-      })
-      continue
-    }
-    await new Promise<void>((resolve) => {
-      pollTimer = setTimeout(() => resolve(), pollIntervalMs)
-    })
-  }
+  try {
+    while (generation === pollGeneration && pollAttempt.value < maxPollCount) {
+      pollAttempt.value++
+      const status = await checkPaymentStatusOnce(generation)
+      if (generation !== pollGeneration) return
 
-  checking.value = false
-  if (paymentState.value !== 'success' && paymentState.value !== 'failed') {
-    paymentState.value = 'pending'
+      if (paymentState.value === 'success' || paymentState.value === 'failed') {
+        checking.value = false
+        await loadOrder(generation)
+        return
+      }
+
+      if (
+        status?.displayStatus === 'pending'
+        || status?.displayStatus === 'confirming'
+        || status?.confirming
+        || paymentState.value === 'confirming'
+        || paymentState.value === 'unknown'
+      ) {
+        await waitForNextPoll(generation)
+      }
+    }
+
+    if (generation !== pollGeneration) return
+    checking.value = false
+    if (paymentState.value !== 'success' && paymentState.value !== 'failed') {
+      paymentState.value = 'pending'
+    }
+    await loadOrder(generation)
+  } finally {
+    if (generation === pollGeneration) {
+      pollingActive = false
+      if (pollTimer) {
+        clearTimeout(pollTimer)
+        pollTimer = null
+      }
+      pollSleepResolve = null
+    }
   }
-  await loadOrder()
 }
 
 function goOrderDetail() {
+  stopPolling()
   uni.redirectTo({ url: `/pages/order/detail?id=${orderId.value}` })
 }
 
+function goGroupProgress() {
+  stopPolling()
+  if (!resolvedGroupId.value) {
+    goOrderDetail()
+    return
+  }
+  uni.redirectTo({ url: `/pages/group-buy/group?id=${resolvedGroupId.value}` })
+}
+
+function goPrimaryDetail() {
+  if (resolvedGroupId.value && paymentState.value === 'success') {
+    goGroupProgress()
+    return
+  }
+  goOrderDetail()
+}
+
 function goHome() {
+  stopPolling()
   uni.switchTab({ url: '/pages/home/index' })
 }
 
 onLoad((options) => {
-  if (options?.orderId) orderId.value = options.orderId
-  if (options?.payIntent) payIntent.value = options.payIntent
+  if (options?.orderId) orderId.value = String(options.orderId)
+  if (options?.groupId) groupId.value = String(options.groupId)
+  if (options?.payIntent) payIntent.value = String(options.payIntent)
   zeroPay.value = options?.zeroPay === '1'
   if (payIntent.value === 'cancel') {
     uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
@@ -278,7 +369,8 @@ onUnload(() => {
   width: 100%;
 }
 
-.pickup-tip {
+.pickup-tip,
+.group-tip {
   width: 100%;
   text-align: center;
   padding: $spacing-lg $spacing-md;
@@ -294,6 +386,27 @@ onUnload(() => {
   font-weight: 600;
   display: block;
   margin-bottom: $spacing-sm;
+}
+
+.group-tip-subtext {
+  display: block;
+  font-size: $font-xs;
+  color: $text-secondary;
+  line-height: 1.6;
+}
+
+.group-progress-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60rpx;
+  margin-top: $spacing-sm;
+  padding: 0 28rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.9);
+  color: $primary-dark;
+  font-size: $font-sm;
+  font-weight: 700;
 }
 
 .tip-code {

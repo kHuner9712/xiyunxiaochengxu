@@ -52,7 +52,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { getBabyDetail, createBaby, updateBaby, type BabyForm } from '@/api/baby'
 import { chooseAndUploadImage } from '@/api/upload'
 
-const form = ref<BabyForm & { id?: number }>({
+const form = ref<BabyForm & { id?: string }>({
   nickname: '',
   gender: 1,
   birthday: '',
@@ -63,11 +63,11 @@ const form = ref<BabyForm & { id?: number }>({
 const isEdit = ref(false)
 const avatarPreview = computed(() => form.value.avatar || form.value.avatarUrl || '')
 
-async function loadBaby(id: number) {
+async function loadBaby(id: string) {
   try {
     const data = await getBabyDetail(id)
     const avatar = data.avatar || data.avatarUrl || ''
-    form.value = { ...data, id: data.id as any, avatar, avatarUrl: avatar }
+    form.value = { ...data, id: String(data.id), avatar, avatarUrl: avatar }
     isEdit.value = true
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
@@ -80,7 +80,7 @@ function onDateChange(e: any) {
 
 async function uploadAvatar() {
   try {
-    const results = await chooseAndUploadImage(1)
+    const results = await chooseAndUploadImage(1, 'baby-avatar')
     if (results.length) {
       form.value.avatar = results[0].url
       form.value.avatarUrl = results[0].url
@@ -105,14 +105,15 @@ function validate(): boolean {
 async function handleSubmit() {
   if (!validate()) return
   try {
-    const payload = {
-      ...form.value,
-      avatarUrl: form.value.avatarUrl || form.value.avatar || ''
+    const { id, ...payload } = form.value
+    const normalizedPayload: BabyForm = {
+      ...payload,
+      avatarUrl: payload.avatarUrl || payload.avatar || ''
     }
-    if (isEdit.value && form.value.id) {
-      await updateBaby(payload as any)
+    if (isEdit.value && id) {
+      await updateBaby({ ...normalizedPayload, id })
     } else {
-      await createBaby(payload)
+      await createBaby(normalizedPayload)
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1500)
@@ -122,7 +123,7 @@ async function handleSubmit() {
 }
 
 onLoad((options) => {
-  if (options?.id) loadBaby(Number(options.id))
+  if (options?.id) loadBaby(String(options.id))
 })
 
 defineExpose({
@@ -192,7 +193,6 @@ defineExpose({
   padding: 0 20rpx;
   box-sizing: border-box;
 }
-
 
 .form-value {
   flex: 1;

@@ -48,6 +48,8 @@ const contents = ref<ContentItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let contentVersion = 0
+let loadingVersion = -1
 
 async function loadCategories() {
   try {
@@ -59,32 +61,47 @@ async function loadCategories() {
   }
 }
 
-async function loadContents(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    contents.value = []
-  }
+function resetContents() {
+  page.value = 1
+  finished.value = false
+  contents.value = []
+}
+
+async function loadContents(version = contentVersion) {
+  if (finished.value && version === contentVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
+  const requestCategoryId = currentCategoryId.value
   loading.value = true
+  loadingVersion = version
   try {
-    const params: any = { page: page.value, pageSize: 10 }
-    if (currentCategoryId.value) params.categoryId = currentCategoryId.value
+    const params: any = { page: requestPage, pageSize: 10 }
+    if (requestCategoryId) params.categoryId = requestCategoryId
     const data = await getContentList(params)
+    if (version !== contentVersion) return
+
     contents.value.push(...data.list)
     finished.value = contents.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === contentVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === contentVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
 function switchCategory(id: string) {
+  if (currentCategoryId.value === id) return
   currentCategoryId.value = id
-  loadContents(true)
+  const version = ++contentVersion
+  resetContents()
+  loadContents(version)
 }
 
 function goDetail(id: string | number) {
@@ -92,17 +109,27 @@ function goDetail(id: string | number) {
 }
 
 onPullDownRefresh(async () => {
-  await loadContents(true)
+  const version = ++contentVersion
+  resetContents()
+  await loadContents(version)
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadContents()
+  loadContents(contentVersion)
 })
 
 onMounted(async () => {
   await loadCategories()
-  loadContents()
+  loadContents(contentVersion)
+})
+
+defineExpose({
+  currentCategoryId,
+  contents,
+  loading,
+  switchCategory,
+  loadContents,
 })
 </script>
 

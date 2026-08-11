@@ -3,10 +3,14 @@ import { OrderService } from './order.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { DeliverDto, BatchDeliverDto } from './dto/deliver.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { AdminRemarkDto } from './dto/admin-remark.dto';
+import { AdminCancelOrderDto } from './dto/admin-cancel-order.dto';
 import { Response } from 'express';
 
 @Controller('weapp/order')
@@ -36,6 +40,7 @@ export class WeappOrderController {
   @Post('create')
   async create(@CurrentUser('id') userId: string, @Body() dto: CreateOrderDto) {
     return this.orderService.create(userId, {
+      clientRequestId: dto.clientRequestId,
       addressId: dto.addressId,
       pickupStoreId: dto.pickupStoreId || undefined,
       fulfillmentType: dto.fulfillmentType || undefined,
@@ -48,13 +53,7 @@ export class WeappOrderController {
       referrerUserId: dto.referrerUserId,
       remark: dto.remark,
       items: dto.items.map((i) => ({ skuId: i.skuId, quantity: i.quantity })),
-    });
-  }
-
-  @Post('pay/:id')
-  async pay(@CurrentUser('id') userId: string, @Param('id') id: string) {
-    // Deprecated: legacy compatibility endpoint. New clients must use /weapp/pay/create.
-    return { orderId: id, message: '请通过支付模块发起支付' };
+    } as CreateOrderDto);
   }
 
   @Get('list')
@@ -88,7 +87,10 @@ export class WeappOrderController {
 
 @Controller('admin/order')
 export class AdminOrderController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(
+    private readonly orderService: OrderService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('list')
   @RequirePermission('order:list')
@@ -99,19 +101,33 @@ export class AdminOrderController {
   @Get('detail/:id')
   @RequirePermission('order:detail')
   async detail(@Param('id') id: string) {
-    return this.orderService.findAdminById(id);
+    const orderId = parsePositiveBigIntId(id, '订单');
+    const [detail, order] = await Promise.all([
+      this.orderService.findAdminById(id),
+      this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { adminRemark: true },
+      }),
+    ]);
+
+    return {
+      ...detail,
+      adminRemark: order?.adminRemark || '',
+    };
   }
 
   @Put('remark/:id')
   @RequirePermission('order:remark')
-  async remark(@Param('id') id: string, @Body() body: { remark: string }) {
-    return this.orderService.adminRemark(id, body.remark);
+  async remark(@Param('id') id: string, @Body() dto: AdminRemarkDto) {
+    const adminRemark = dto.remark.trim();
+    const result = await this.orderService.adminRemark(id, adminRemark);
+    return { ...result, adminRemark };
   }
 
   @Put('cancel/:id')
   @RequirePermission('order:cancel')
-  async cancel(@Param('id') id: string, @Body() body: { reason: string }) {
-    return this.orderService.adminCancel(id, body.reason);
+  async cancel(@Param('id') id: string, @Body() dto: AdminCancelOrderDto) {
+    return this.orderService.adminCancel(id, dto.reason);
   }
 
   @Get('delivery-list')
@@ -151,7 +167,7 @@ export class AdminOrderController {
       '配送方式',
       '商品数量',
       '商品明细',
-      '订单金额',
+      '商品金额',
       '优惠金额',
       '运费',
       '积分抵扣',
@@ -178,6 +194,17 @@ export class AdminOrderController {
       return `"${safeText.replace(/"/g, '""')}"`;
     };
     const typeLabel = (value: string) => (value === 'pickup' ? '到店自提' : '快递配送');
+    const statusLabels: Record<string, string> = {
+      pending_payment: '待付款',
+      paid: '已付款',
+      pending_delivery: '待发货',
+      pending_pickup: '待自提',
+      delivered: '已发货',
+      completed: '已完成',
+      cancelled: '已取消',
+      aftersale: '售后中',
+    };
+    const statusLabel = (value: string) => statusLabels[value] || value || '未知';
 
     const lines = [
       headers.map(esc).join(','),
@@ -186,7 +213,7 @@ export class AdminOrderController {
           row.orderNo,
           row.userNickname,
           row.userPhone,
-          row.status,
+          statusLabel(row.status),
           typeLabel(row.fulfillmentType),
           row.itemCount,
           row.itemDetails,

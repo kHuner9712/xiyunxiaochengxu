@@ -7,18 +7,23 @@
         <el-card style="margin-bottom: 20px">
           <template #header><span>售后信息</span></template>
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="售后单号">{{ detail.id }}</el-descriptions-item>
-            <el-descriptions-item label="订单号">{{ detail.orderNo }}</el-descriptions-item>
+            <el-descriptions-item label="售后单号">{{ detail.aftersaleNo || detail.id || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="订单号">{{ detail.order?.orderNo || '-' }}</el-descriptions-item>
             <el-descriptions-item label="售后类型">{{ AFTERSALE_TYPE_MAP[detail.type] || '-' }}</el-descriptions-item>
             <el-descriptions-item label="状态">
-              <el-tag :type="detail.status === 0 ? 'warning' : detail.status === 4 ? 'success' : detail.status === 2 ? 'danger' : 'info'">
+              <el-tag :type="getAftersaleStatusTagType(detail.status)">
                 {{ formatAftersaleStatus(detail.status) }}
               </el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="退款金额">¥{{ formatPrice(detail.refundAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="申请时间">{{ formatDate(detail.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="申请时间">{{ formatDate(detail.createdAt) }}</el-descriptions-item>
             <el-descriptions-item label="售后原因" :span="2">{{ detail.reason || '-' }}</el-descriptions-item>
             <el-descriptions-item label="售后描述" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
+            <template v-if="detail.type === 2 && detail.returnAddress">
+              <el-descriptions-item label="退货收件人">{{ detail.returnReceiverName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="退货联系电话">{{ detail.returnReceiverPhone || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="退货地址" :span="2">{{ detail.returnAddress }}</el-descriptions-item>
+            </template>
           </el-descriptions>
 
           <div v-if="asArray(detail.images).length" style="margin-top: 16px">
@@ -36,18 +41,23 @@
 
         <el-card>
           <template #header><span>商品信息</span></template>
-          <el-table :data="asArray(detail.items)" stripe>
+          <el-table :data="orderItems" stripe>
             <el-table-column label="商品图片" width="80">
               <template #default="{ row }">
                 <el-image :src="row.productImage" style="width: 50px; height: 50px" fit="cover" />
               </template>
             </el-table-column>
             <el-table-column prop="productName" label="商品名称" show-overflow-tooltip />
-            <el-table-column prop="skuName" label="规格" width="120" />
+            <el-table-column label="规格" width="160">
+              <template #default="{ row }">{{ formatSkuSpecs(row.skuSpecs) }}</template>
+            </el-table-column>
             <el-table-column label="单价" width="100">
               <template #default="{ row }">¥{{ formatPrice(row.price) }}</template>
             </el-table-column>
             <el-table-column prop="quantity" label="数量" width="80" />
+            <el-table-column label="小计" width="100">
+              <template #default="{ row }">¥{{ formatPrice(row.subtotal) }}</template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-col>
@@ -56,20 +66,45 @@
         <el-card style="margin-bottom: 20px">
           <template #header><span>用户信息</span></template>
           <el-descriptions :column="1" border>
-            <el-descriptions-item label="用户">{{ detail.userName }}</el-descriptions-item>
-            <el-descriptions-item label="联系电话">{{ detail.userPhone }}</el-descriptions-item>
+            <el-descriptions-item label="用户">{{ detail.user?.nickname || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="联系电话">{{ detail.user?.phone || '-' }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
 
-        <el-card v-if="detail.status === 0">
+        <el-card v-if="detail.status === 'pending_review'" v-permission="'order:aftersale:review'">
           <template #header><span>审核操作</span></template>
-          <el-form label-width="100px">
+          <el-form label-width="110px">
             <el-form-item label="审核结果">
               <el-radio-group v-model="auditResult">
                 <el-radio value="approve">通过</el-radio>
                 <el-radio value="reject">拒绝</el-radio>
               </el-radio-group>
             </el-form-item>
+            <el-form-item v-if="auditResult === 'approve'" label="退款金额(元)">
+              <el-input-number
+                v-model="refundAmountYuan"
+                :min="isZeroPayOrder ? 0 : 0.01"
+                :precision="2"
+                :disabled="isZeroPayOrder"
+                style="width: 180px"
+              />
+              <div style="width: 100%; margin-top: 6px; color: #909399; font-size: 12px">
+                {{ isZeroPayOrder ? '该订单实付为0元，将执行本地售后结算，不调用微信退款' : '系统会校验可退金额上限' }}
+              </div>
+            </el-form-item>
+            <template v-if="auditResult === 'approve' && detail.type === 2">
+              <el-divider content-position="left">退货收件信息</el-divider>
+              <el-form-item label="收件人" required>
+                <el-input v-model="returnReceiverName" maxlength="50" placeholder="请输入退货收件人" />
+              </el-form-item>
+              <el-form-item label="联系电话" required>
+                <el-input v-model="returnReceiverPhone" maxlength="30" placeholder="请输入退货联系电话" />
+              </el-form-item>
+              <el-form-item label="退货地址" required>
+                <el-input v-model="returnAddress" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请输入用户实际寄回商品的完整地址" />
+              </el-form-item>
+              <el-alert title="该地址会作为本次售后审核快照展示给用户，请确认准确后再通过审核。" type="warning" :closable="false" show-icon style="margin-bottom: 16px" />
+            </template>
             <el-form-item v-if="auditResult === 'reject'" label="拒绝原因">
               <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝原因" />
             </el-form-item>
@@ -79,16 +114,42 @@
           </el-form>
         </el-card>
 
-        <el-card v-if="detail.status === 1">
-          <template #header><span>退款操作</span></template>
-          <el-form label-width="100px">
-            <el-form-item label="退款金额(元)">
-              <el-input-number v-model="refundAmountYuan" :min="0" :precision="2" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="submitting" @click="handleRefund">确认退款</el-button>
-            </el-form-item>
-          </el-form>
+        <el-card v-if="needsRefundSync" style="margin-bottom: 20px">
+          <el-alert
+            title="退款请求结果待核实，请先同步微信退款状态；确认已关闭后才能重新发起普通退款"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px"
+          />
+          <el-button
+            v-permission="'order:aftersale:refund'"
+            :loading="syncingRefund"
+            :disabled="!detail.latestOutRefundNo"
+            @click="handleSyncRefund"
+          >
+            同步微信退款状态
+          </el-button>
+        </el-card>
+
+        <el-card v-if="needsManualRefund" style="margin-bottom: 20px">
+          <el-alert
+            title="微信退款异常，不能重新发起普通退款"
+            description="请前往微信支付商户平台的交易中心处理此笔异常退款，或按微信支付异常退款流程处理。处理完成后再同步退款状态。"
+            type="error"
+            :closable="false"
+            show-icon
+          />
+        </el-card>
+
+        <el-card v-if="canRefund" v-permission="'order:aftersale:refund'">
+          <template #header><span>{{ isRefundRetry ? '退款重试' : '退款操作' }}</span></template>
+          <el-descriptions :column="1" border style="margin-bottom: 16px">
+            <el-descriptions-item label="确认退款金额">¥{{ formatPrice(detail.refundAmount) }}</el-descriptions-item>
+          </el-descriptions>
+          <el-button type="primary" :loading="submitting" @click="handleRefund">
+            {{ isRefundRetry ? '重新发起退款' : (isZeroPayOrder ? '确认售后结算' : '确认退款') }}
+          </el-button>
         </el-card>
       </el-col>
     </el-row>
@@ -96,31 +157,74 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
-import { formatPrice, formatDate, formatAftersaleStatus, priceToFen } from '@/utils/format'
+import { refundApi } from '@/api/refund'
+import {
+  formatPrice,
+  formatDate,
+  formatAftersaleStatus,
+  getAftersaleStatusTagType,
+  priceToFen,
+} from '@/utils/format'
 import { resolvePrivateFileUrls, revokePrivateObjectUrls } from '@/utils/private-file'
 import { asArray } from '@/utils/response'
 
-const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款', 3: '换货' }
+const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货退款' }
 const router = useRouter()
 const route = useRoute()
 const submitting = ref(false)
+const syncingRefund = ref(false)
 const detail = ref<any>({})
 const auditResult = ref('approve')
 const rejectReason = ref('')
 const refundAmountYuan = ref(0)
+const returnReceiverName = ref('')
+const returnReceiverPhone = ref('')
+const returnAddress = ref('')
 const displayImages = ref<string[]>([])
+
+const orderItems = computed(() => (detail.value.orderItem ? [detail.value.orderItem] : []))
+const isZeroPayOrder = computed(() => Number(detail.value.order?.payAmount ?? 0) === 0)
+const isRefundRetry = computed(() => {
+  return detail.value.status === 'pending_refund' && detail.value.refundRetryable === true
+})
+const needsRefundSync = computed(() => {
+  return !isZeroPayOrder.value && detail.value.status === 'pending_refund' && detail.value.refundSyncRequired === true
+})
+const needsManualRefund = computed(() => {
+  return !isZeroPayOrder.value && detail.value.status === 'pending_refund' && detail.value.refundManualRequired === true
+})
+const canRefund = computed(() => {
+  return (
+    (detail.value.type === 1 && detail.value.status === 'approved') ||
+    (detail.value.type === 2 && detail.value.status === 'returned') ||
+    isRefundRetry.value
+  )
+})
+
+function formatSkuSpecs(specs: unknown) {
+  if (!specs) return '-'
+  if (typeof specs === 'string') return specs
+  if (Array.isArray(specs)) return specs.join(' / ')
+  if (typeof specs === 'object') return Object.values(specs as Record<string, unknown>).join(' / ')
+  return String(specs)
+}
 
 async function fetchDetail() {
   try {
     revokePrivateObjectUrls(displayImages.value)
     displayImages.value = []
-    const res = await aftersaleApi.getDetail(Number(route.params.id))
+    const res = await aftersaleApi.getDetail(String(route.params.id))
     detail.value = res.data || {}
-    refundAmountYuan.value = (res.data?.refundAmount || 0) / 100
+    const orderIsZeroPay = Number(detail.value.order?.payAmount ?? 0) === 0
+    const defaultRefundAmount = detail.value.refundAmount ?? (orderIsZeroPay ? 0 : (detail.value.orderItem?.subtotal || 0))
+    refundAmountYuan.value = Number(defaultRefundAmount || 0) / 100
+    returnReceiverName.value = String(detail.value.returnReceiverName || '')
+    returnReceiverPhone.value = String(detail.value.returnReceiverPhone || '')
+    returnAddress.value = String(detail.value.returnAddress || '')
     displayImages.value = await resolvePrivateFileUrls(asArray(detail.value.images))
   } catch (e: any) {
     ElMessage.error(e?.message || '获取售后详情失败')
@@ -128,9 +232,42 @@ async function fetchDetail() {
 }
 
 async function handleAudit() {
-  const actionLabel = auditResult.value === 'approve' ? '通过' : '拒绝'
+  if (auditResult.value === 'reject' && !rejectReason.value.trim()) {
+    ElMessage.warning('请输入拒绝原因')
+    return
+  }
+
+  const refundAmount = isZeroPayOrder.value ? 0 : priceToFen(refundAmountYuan.value)
+  if (auditResult.value === 'approve' && !isZeroPayOrder.value && refundAmount <= 0) {
+    ElMessage.warning('请输入正确的退款金额')
+    return
+  }
+  if (auditResult.value === 'approve' && detail.value.type === 2) {
+    if (!returnReceiverName.value.trim()) {
+      ElMessage.warning('请输入退货收件人')
+      return
+    }
+    if (!returnReceiverPhone.value.trim()) {
+      ElMessage.warning('请输入退货联系电话')
+      return
+    }
+    if (!returnAddress.value.trim()) {
+      ElMessage.warning('请输入退货地址')
+      return
+    }
+  }
+
+  const actionLabel = auditResult.value === 'approve'
+    ? isZeroPayOrder.value
+      ? '通过并确认0元售后结算'
+      : `通过并确认退款 ¥${refundAmountYuan.value.toFixed(2)}`
+    : '拒绝'
   try {
-    await ElMessageBox.confirm(`确认${actionLabel}该售后申请？`, '审核确认', { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' })
+    await ElMessageBox.confirm(`确认${actionLabel}该售后申请？`, '审核确认', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
   } catch {
     return
   }
@@ -138,17 +275,20 @@ async function handleAudit() {
   submitting.value = true
   try {
     if (auditResult.value === 'approve') {
-      await aftersaleApi.approve(detail.value.id)
+      await aftersaleApi.approve(String(detail.value.id), {
+        refundAmount,
+        ...(detail.value.type === 2 ? {
+          returnReceiverName: returnReceiverName.value.trim(),
+          returnReceiverPhone: returnReceiverPhone.value.trim(),
+          returnAddress: returnAddress.value.trim(),
+        } : {}),
+      })
       ElMessage.success('审核通过')
     } else {
-      if (!rejectReason.value) {
-        ElMessage.warning('请输入拒绝原因')
-        return
-      }
-      await aftersaleApi.reject(detail.value.id, rejectReason.value)
+      await aftersaleApi.reject(String(detail.value.id), rejectReason.value.trim())
       ElMessage.success('已拒绝')
     }
-    fetchDetail()
+    await fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.message || '审核操作失败')
   } finally {
@@ -156,18 +296,58 @@ async function handleAudit() {
   }
 }
 
-async function handleRefund() {
+async function handleSyncRefund() {
+  const outRefundNo = String(detail.value.latestOutRefundNo || '').trim()
+  if (!outRefundNo) {
+    ElMessage.warning('退款单号缺失，无法同步')
+    return
+  }
+
+  syncingRefund.value = true
   try {
-    await ElMessageBox.confirm(`确认退款 ¥${refundAmountYuan.value.toFixed(2)}？此操作将发起微信退款，请谨慎操作。`, '退款确认', { confirmButtonText: '确认退款', cancelButtonText: '取消', type: 'warning' })
+    const res = await refundApi.sync(outRefundNo)
+    const result = res.data || {}
+    if (result.synced === false) {
+      ElMessage.warning(result.message || '退款状态暂未完成同步')
+    } else {
+      ElMessage.success(result.message || '退款状态已同步')
+    }
+    await fetchDetail()
+  } catch {
+    // 请求错误由全局拦截器统一提示。
+  } finally {
+    syncingRefund.value = false
+  }
+}
+
+async function handleRefund() {
+  const refundAmount = Number(detail.value.refundAmount ?? 0)
+  if (!isZeroPayOrder.value && refundAmount <= 0) {
+    ElMessage.warning('退款金额未设置')
+    return
+  }
+
+  const actionLabel = isZeroPayOrder.value
+    ? '确认完成0元售后结算'
+    : (isRefundRetry.value ? '重新发起退款' : '确认退款')
+  const confirmation = isZeroPayOrder.value
+    ? '该订单实付为0元，不会调用微信退款；系统将完成售后状态、库存、积分与权益结算。'
+    : `${actionLabel} ¥${formatPrice(refundAmount)}？此操作将发起微信退款，请谨慎操作。`
+  try {
+    await ElMessageBox.confirm(confirmation, '退款确认', {
+      confirmButtonText: isRefundRetry.value ? '重新发起' : '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
   } catch {
     return
   }
 
   submitting.value = true
   try {
-    await aftersaleApi.refund(detail.value.id, priceToFen(refundAmountYuan.value))
-    ElMessage.success('退款成功')
-    fetchDetail()
+    await aftersaleApi.refund(String(detail.value.id))
+    ElMessage.success(isZeroPayOrder.value ? '0元售后结算完成' : (isRefundRetry.value ? '退款已重新发起' : '退款已发起'))
+    await fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.message || '退款失败')
   } finally {

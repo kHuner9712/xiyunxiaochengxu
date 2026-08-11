@@ -1,96 +1,81 @@
-# 禧孕小程序 GO_LIVE 状态（2026-06-10 +08:00）
+# 禧孕优选 GO_LIVE 状态（2026-08-11）
 
 ## 1. 当前结论
 
-- 代码仓库门禁：**当前工作树本地门禁通过**（`pnpm typecheck`、`pnpm test:ci`、`pnpm build`、`pnpm release:check`）。
-- 当前提交：以最终冻结/发布 commit 为准；本文件不得用历史 HEAD 代替当前工作树结果。
-- 外部生产配置：负责人确认真实小程序平台配置、支付平台配置、主体资质、经营资质、备案信息、证照材料、客服与售后联系方式等，均已在服务器、微信公众平台、商户平台或其他外部平台完成配置；公开 GitHub 仓库不保存也不复核这些真实明文值。
-- 正式发布：**待服务器生产门禁、体验版上传、真机验收留痕后 Go**。
+- 代码仓库候选：以 PR #15 `agent/production-operation-closure-20260807` 的**当前 HEAD**为唯一候选；不得使用历史 SHA 的绿色结果替代当前 HEAD。
+- 仓库级 Go 条件：当前 HEAD 的 CI、Release Gate Check、API Unit Diagnostic、API E2E Diagnostic、API Open Handle Diagnostic 必须全部成功，且 PR 不存在未解决 review thread。
+- 外部生产配置：**仓库无法证明已完成，当前状态按待验收处理**。真实服务器 `.env.production`、DNS/TLS、MySQL/Redis、微信小程序与微信支付配置必须在部署环境单独验证。
+- 正式发布：**No-Go，直到服务器生产门禁、真实微信支付/退款、体验版与真机验收全部留痕通过。**
 
-## 1.1 本轮上线前专项收口
+仓库门禁成功只表示“当前代码候选具备进入生产验收的资格”，不等于“已经正式上线可用”。
 
-- 上传安全：后端静态资源只公开 `uploads/public`；售后图片、营业执照、资质图片、后台敏感上传文件走私有存储与鉴权下载。
-- 订单一致性：下单积分抵扣改为条件扣减，取消事务外重复购物车删除，自提核销重复扫码保持幂等。
-- 商品编辑：后台已上架商品修改规格增加提示；后端 SKU 更新复用同商品已有 `skuCode`。
-- 小程序生产构建：继续强制真实 `VITE_WX_APPID` 与 `https://.../api`，并禁止本地/占位 API 域名。
-- 已验证：当前工作树本地 typecheck/test/build/release gate 通过。
-- 待核验：真实支付/退款回调、生产数据库迁移、微信开发者工具上传体验版、真机验收与服务器 Nginx 实际配置。
+## 2. 本轮上线前专项收口
 
-## 2. 公开仓库门禁范围
+本轮审计不是以“接口存在 / 单测通过 / CI 绿色”作为完成标准，而是按真实操作链、并发、弱网、重试、事务和部署失败模型收口。主要已覆盖：
 
-公开仓库只检查可在代码仓库内验证的事项：
+- 普通订单创建增加跨超时、跨页面重试的持久请求标识和数据库唯一事实兜底。
+- 秒杀、开团/参团、活动多商品下单补齐同等级弱网幂等，竞争失败事务回滚后恢复赢家结果。
+- 优惠券领取补齐弱网幂等；`perLimit > 1` 时区分真正的第二次领取与同一次请求重试。
+- 后台库存调整使用提交时库存作为操作版本，响应丢失后旧操作不能重复增减库存。
+- 后台人工积分调整统一为行锁事务，并使用 `user:points` 专用权限；查看用户详情不再等价于修改积分资产。
+- 用户启停由“toggle”改为显式目标状态；同一禁用/启用请求重试不会反向翻转，并继续撤销旧会话。
+- 微信支付/退款失败回调保持非 2xx，使微信继续重试；生产 smoke 与该回调合同保持一致。
+- 孤儿退款回调不能被误确认 SUCCESS；本地无法确认退款记录时 fail-closed。
+- 商户结算从营销活动权限拆出独立结算权限，并兼容已有生产库和 fresh install 授权。
+- 权益核销生产路径确认使用同一数据库事务写入 entitlement 状态、核销日志与服务分佣。
+- 上传用户会话、正式小程序 API 导出、订单 preview 并发覆盖等前端真实运行问题已补齐回归保护。
+- Redis 正确性状态使用 `noeviction + AOF everysec + 持久卷`；生产 `/health` 校验真实 Redis 配置。
+- Redis 容器启动前验证 Linux 宿主机 `vm.overcommit_memory=1`，不满足时拒绝启动；THP 未关闭会明确告警。
+- production config preflight 在连接数据库/Redis或启动 Nest providers 前校验证书、外部 HTTP timeout、危险 bypass，并拒绝明显 `REPLACE_WITH_*` 等模板占位值。
 
-- 代码构建：API、管理后台、小程序默认构建。
-- 类型检查：API 构建类型约束、管理后台 typecheck、小程序 typecheck。
-- lint：API lint、管理后台 lint。
-- API 测试：unit + e2e。
-- 小程序生产构建脚本可执行性：脚本入口、产物校验逻辑、真实生产变量注入路径存在；真实 AppID 与生产 API 地址由服务器/外部平台注入，不在仓库明文复核。
-- `pnpm release:check`、`pnpm release:check:freeze`、`pnpm release:check:prod` 的可执行性与结论输出。
-- 敏感信息未入库：真实 AppID、密钥、证书、资质编号、备案编号、客服电话、客服微信、退货地址等不得提交到公开仓库。
-- 文档与当前 `main` HEAD 一致。
+## 3. 仓库级证据范围
 
-## 3. 外部生产配置口径
+当前候选必须由同一精确 HEAD 完成以下证据链：
 
-以下项目统一归类为外部生产配置，由负责人确认已在服务器、微信公众平台、商户平台或其他外部平台完成；公开仓库不保存、不展示、不复核真实明文值：
+- Prisma validate、migration deploy、schema drift check。
+- API unit + mocked HTTP E2E。
+- 真实 MySQL operation lifecycle integration。
+- 小程序 unit/component tests、typecheck 与正式构建。
+- API build 与真实 API + MySQL/Redis runtime；SIGTERM 可干净退出。
+- Admin build 与浏览器级操作流。
+- 生产 Docker image 构建。
+- Runtime/API/deployment contract audits。
+- Release Gate Check。
+- API Unit / E2E / Open Handle diagnostics。
 
-- 微信小程序真实 AppID、合法域名、上传与提审相关后台配置。
-- 微信支付商户号、证书序列号、APIv3 Key、商户私钥、平台证书、支付回调与退款回调地址。
-- 主体资质、经营资质、备案信息、证照材料、资质编号。
-- 客服电话、客服微信、退货地址、售后联系方式。
-- 服务器 `.env.production`、证书目录、Docker/Nginx/HTTPS 私有配置。
+任何后续代码提交都会使旧 SHA 的绿色结果失效，必须对新的 HEAD 重新执行。
 
-`apps/miniprogram/src/config/legal.ts` 中公开占位联系方式不再直接作为代码仓库 No-Go；但正式版体验版/线上用户端最终展示或客服入口必须真实可用，并在真机验收中留痕。
+## 4. 外部生产配置与真实环境门禁
 
-## 4. 正式版发布门禁
+以下内容不能由公开仓库绿色 CI 代替，正式发布前必须在真实服务器、微信公众平台、微信支付商户平台和真机环境验证：
 
-正式版发布门禁以运行时和验收结果为准，需在服务器与微信生态真实环境中完成并留痕：
+- 微信小程序真实 AppID/Secret 与主体、隐私、客服配置。
+- `request/upload/download` 合法域名、体验版上传及正式版域名校验。
+- 微信支付真实商户号、商户证书序列号、API v3 Key、商户私钥、平台证书与证书轮换映射。
+- 支付和退款回调真实公网可达、真实验签、金额与订单状态流转。
+- 生产 DNS、受信任 TLS 链、证书域名/私钥匹配与有效期。
+- 生产 MySQL/Redis 连接、Redis `vm.overcommit_memory=1`、磁盘与内存容量。
+- 发布前数据库备份、备份恢复到临时 MySQL、候选镜像 migration/status/schema-drift 验证。
+- 生产 Docker/Nginx/健康检查与 `smoke-runtime.sh`。
+- 微信原生 `open-type="contact"` 客服真机可用。
+- 真机完整业务链：登录 → 浏览 → 领券 → 普通/促销下单 → 微信支付 → 回调 → 履约/核销 → 售后 → 退款 → 退款回调。
 
-- 服务器私有环境变量已生效，且未写入公开仓库。
-- 生产 API HTTPS 可访问，路径、证书、CORS、上传资源公网访问地址正确。
-- 微信后台合法域名配置正确。
-- 支付回调和退款回调真实可达、验签通过、订单/退款状态流转正确。
-- 生产数据库迁移完成，确认连接的是目标生产数据库。
-- Docker、Nginx、HTTPS、健康检查与 smoke 测试通过。
-- 微信开发者工具体验版上传完成。
-- 真机验收清单完成：登录、首页、商品、购物车、下单、支付、支付回调、退款、退款回调、售后、自提、客服、协议与最终客服入口。
+## 5. 正式部署唯一入口
 
-## 5. 建议执行命令
-
-以下命令需在仓库根目录执行；命令结果需以当前 `main` HEAD 重新留痕：
-
-```bash
-pnpm install
-pnpm --filter @baby-mall/api prisma:validate
-pnpm --filter @baby-mall/api test:ci
-pnpm typecheck
-pnpm lint
-pnpm build:all
-pnpm release:check
-pnpm release:check:freeze
-pnpm release:check:prod
-```
-
-服务器真实生产环境另需执行并留痕：
+正式部署只能从合并后的 `main` 当前远端 tip 执行，并显式传入批准的完整 40 位 SHA：
 
 ```bash
-cd deploy
-docker compose --env-file ../.env.production config
+EXPECTED_DEPLOY_SHA=<approved-40-char-main-sha> \
+ENV_FILE=.env.production \
+pnpm deploy:prod
 ```
 
-```bash
-pnpm --filter @baby-mall/api prisma migrate deploy
-```
-
-```bash
-ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
-pnpm smoke
-pnpm smoke:public
-pnpm smoke:login
-pnpm smoke:all
-```
+部署脚本负责：生产配置预检、TLS/微信支付证书校验、候选镜像构建、维护模式、写入静默后的数据库备份、备份恢复迁移演练、live migration、候选 API 健康检查、Nginx 重新开放以及完整 production smoke。任何一步失败均不得把失败候选继续当作 Go。
 
 ## 6. Go / No-Go
 
-- 代码仓库门禁：**Go**（当前工作树本地门禁通过）。
-- 外部生产配置：**负责人确认已完成，不在公开仓库明文复核**。
-- 正式发布：**待服务器生产门禁、体验版上传、真机验收留痕后 Go**。
+- **代码仓库：** 当前 HEAD 五条门禁全部成功时为 Go；HEAD 一旦变化即重新计算。
+- **外部生产配置：** Pending，必须在真实环境验证，不再以“负责人已确认”替代证据。
+- **服务器运行时：** Pending，必须执行正式部署和 production smoke。
+- **微信体验版/真机：** Pending，必须完成真实支付、退款、客服和核心业务链验收。
+- **正式公开上线：No-Go，直到以上 Pending 项全部变为有留痕的 Go。**

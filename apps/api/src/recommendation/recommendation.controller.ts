@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { RecommendationQueryDto } from './dto/recommendation-query.dto';
+import { RecommendationCandidateQueryDto, RecommendationQueryDto } from './dto/recommendation-query.dto';
 import { SaveRecommendationItemsDto } from './dto/save-recommendation-items.dto';
 import { SaveRecommendationDto } from './dto/save-recommendation.dto';
 import { RecommendationService } from './recommendation.service';
@@ -37,6 +37,12 @@ export class AdminRecommendationController {
   @RequirePermission('marketing:recommendation')
   async items(@Param('id') id: string) {
     return this.recommendationService.findItems(id);
+  }
+
+  @Get('candidates/:id')
+  @RequirePermission('marketing:recommendation')
+  async candidates(@Param('id') id: string, @Query() dto: RecommendationCandidateQueryDto) {
+    return this.recommendationService.findCandidates(id, dto);
   }
 
   @Put('items/:id')

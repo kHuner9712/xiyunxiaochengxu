@@ -12,6 +12,9 @@ import { MerchantSettlementService } from './merchant-settlement.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import {
   CommissionRuleQueryDto,
+  CreateCommissionRuleDto,
+  UpdateCommissionRuleDto,
+  CommissionRuleStatusDto,
   CommissionRecordQueryDto,
   CommissionRecordStatusDto,
   SettlementBatchQueryDto,
@@ -20,11 +23,11 @@ import {
   SettlementReportQueryDto,
 } from './dto/merchant-settlement.dto';
 
+const SETTLEMENT_PERMISSION = 'order:merchant-settlement';
+
 @Controller('admin/merchant-settlement')
 export class AdminMerchantSettlementController {
   constructor(private readonly service: MerchantSettlementService) {}
-
-  // ===== 规则管理 =====
 
   @Get('rule/list')
   @RequirePermission('marketing:activity')
@@ -40,13 +43,13 @@ export class AdminMerchantSettlementController {
 
   @Post('rule/create')
   @RequirePermission('marketing:activity')
-  async ruleCreate(@Body() dto: any) {
+  async ruleCreate(@Body() dto: CreateCommissionRuleDto) {
     return this.service.createRule(dto);
   }
 
   @Put('rule/update/:id')
   @RequirePermission('marketing:activity')
-  async ruleUpdate(@Param('id') id: string, @Body() dto: any) {
+  async ruleUpdate(@Param('id') id: string, @Body() dto: UpdateCommissionRuleDto) {
     return this.service.updateRule(id, dto);
   }
 
@@ -54,7 +57,7 @@ export class AdminMerchantSettlementController {
   @RequirePermission('marketing:activity')
   async ruleUpdateStatus(
     @Param('id') id: string,
-    @Body() dto: { status: number },
+    @Body() dto: CommissionRuleStatusDto,
   ) {
     return this.service.updateRuleStatus(id, dto.status);
   }
@@ -65,22 +68,20 @@ export class AdminMerchantSettlementController {
     return this.service.deleteRule(id);
   }
 
-  // ===== 分佣明细 =====
-
   @Get('records')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async records(@Query() dto: CommissionRecordQueryDto) {
     return this.service.findRecords(dto);
   }
 
   @Get('records/stats')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async recordsStats() {
     return this.service.getRecordsStats();
   }
 
   @Put('records/:id/status')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async recordUpdateStatus(
     @Param('id') id: string,
     @Body() dto: CommissionRecordStatusDto,
@@ -88,34 +89,32 @@ export class AdminMerchantSettlementController {
     return this.service.updateRecordStatus(id, dto.status, dto.remark);
   }
 
-  // ===== 结算批次 =====
-
   @Get('batches')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batches(@Query() dto: SettlementBatchQueryDto) {
     return this.service.findBatches(dto);
   }
 
   @Get('batches/:id')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchDetail(@Param('id') id: string) {
     return this.service.findBatchById(id);
   }
 
   @Post('batches/preview')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchPreview(@Body() dto: CreateSettlementBatchDto) {
     return this.service.previewBatch(dto);
   }
 
   @Post('batches/create')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchCreate(@Body() dto: CreateSettlementBatchDto) {
     return this.service.createBatch(dto);
   }
 
   @Put('batches/:id/confirm')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchConfirm(
     @Param('id') id: string,
     @Body() dto: SettlementBatchRemarkDto,
@@ -124,7 +123,7 @@ export class AdminMerchantSettlementController {
   }
 
   @Put('batches/:id/paid')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchPaid(
     @Param('id') id: string,
     @Body() dto: SettlementBatchRemarkDto,
@@ -133,7 +132,7 @@ export class AdminMerchantSettlementController {
   }
 
   @Put('batches/:id/cancel')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchCancel(
     @Param('id') id: string,
     @Body() dto: SettlementBatchRemarkDto,
@@ -141,16 +140,14 @@ export class AdminMerchantSettlementController {
     return this.service.cancelBatch(id, dto.remark);
   }
 
-  // ===== 报表 =====
-
   @Get('report/merchant')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async reportMerchant(@Query() dto: SettlementReportQueryDto) {
     return this.service.reportByMerchant(dto);
   }
 
   @Get('report/monthly')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async reportMonthly(@Query() dto: SettlementReportQueryDto) {
     return this.service.reportMonthly(dto);
   }

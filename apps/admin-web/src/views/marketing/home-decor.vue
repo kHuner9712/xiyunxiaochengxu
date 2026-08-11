@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <el-card>
+    <el-card v-loading="loading">
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center">
           <span>首页装修</span>
@@ -11,11 +11,22 @@
       <el-form label-width="120px">
         <el-divider content-position="left">搜索栏配置</el-divider>
         <el-form-item label="搜索热词">
-          <el-tag v-for="(tag, idx) in config.hotKeywords" :key="idx" closable @close="config.hotKeywords.splice(idx, 1)" style="margin-right: 8px">
+          <el-tag v-for="(tag, idx) in config.hotKeywords" :key="tag" closable @close="config.hotKeywords.splice(idx, 1)" style="margin-right: 8px">
             {{ tag }}
           </el-tag>
-          <el-input v-if="keywordInputVisible" ref="keywordInputRef" v-model="keywordInput" size="small" style="width: 120px" @keyup.enter="addKeyword" @blur="addKeyword" />
-          <el-button v-else size="small" @click="keywordInputVisible = true">+ 添加热词</el-button>
+          <el-input
+            v-if="keywordInputVisible"
+            ref="keywordInputRef"
+            v-model="keywordInput"
+            size="small"
+            maxlength="20"
+            style="width: 160px"
+            placeholder="最多20字"
+            @keyup.enter="addKeyword"
+            @blur="addKeyword"
+          />
+          <el-button v-else size="small" :disabled="config.hotKeywords.length >= 20" @click="keywordInputVisible = true">+ 添加热词</el-button>
+          <span class="hint">最多20个，每个最多20字</span>
         </el-form-item>
 
         <el-divider content-position="left">Banner配置</el-divider>
@@ -24,7 +35,13 @@
         </el-form-item>
 
         <el-divider content-position="left">导航图标配置</el-divider>
-        <el-table :data="config.navIcons" border size="small" style="margin-bottom: 20px; max-width: 700px">
+        <el-alert
+          type="info"
+          :closable="false"
+          title="跳转地址请填写 /pages/... 小程序页面路径，或 gift / discount / points / member 内置入口。"
+          style="margin-bottom: 12px"
+        />
+        <el-table :data="config.navIcons" border size="small" style="margin-bottom: 20px; max-width: 860px">
           <el-table-column label="图标" width="100">
             <template #default="{ row }">
               <el-upload action="" :http-request="(opt: any) => handleUploadNavIcon(opt, row)" :show-file-list="false" accept="image/*">
@@ -33,19 +50,19 @@
               </el-upload>
             </template>
           </el-table-column>
-          <el-table-column label="名称" min-width="120">
+          <el-table-column label="名称" min-width="140">
             <template #default="{ row }">
-              <el-input v-model="row.name" size="small" />
+              <el-input v-model="row.name" size="small" maxlength="30" />
             </template>
           </el-table-column>
-          <el-table-column label="跳转链接" min-width="200">
+          <el-table-column label="跳转链接" min-width="300">
             <template #default="{ row }">
-              <el-input v-model="row.linkUrl" size="small" />
+              <el-input v-model="row.linkUrl" size="small" maxlength="200" placeholder="/pages/product/list 或内置入口" />
             </template>
           </el-table-column>
-          <el-table-column label="排序" width="80">
+          <el-table-column label="排序" width="120">
             <template #default="{ row }">
-              <el-input-number v-model="row.sort" size="small" :min="0" controls-position="right" />
+              <el-input-number v-model="row.sort" size="small" :min="0" :max="9999" controls-position="right" />
             </template>
           </el-table-column>
           <el-table-column width="80">
@@ -54,7 +71,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-button size="small" @click="config.navIcons.push({ icon: '', name: '', linkUrl: '', sort: 0 })">添加导航图标</el-button>
+        <el-button size="small" :disabled="config.navIcons.length >= 20" @click="config.navIcons.push({ icon: '', name: '', linkUrl: '', sort: config.navIcons.length * 10 })">添加导航图标</el-button>
 
         <el-divider content-position="left">推荐位配置</el-divider>
         <el-form-item label="推荐位设置">
@@ -63,7 +80,7 @@
 
         <el-divider content-position="left">公告配置</el-divider>
         <el-form-item label="首页公告">
-          <el-input v-model="config.announcement" type="textarea" :rows="2" placeholder="请输入首页公告内容" />
+          <el-input v-model="config.announcement" type="textarea" :rows="2" maxlength="500" show-word-limit placeholder="请输入首页公告内容" />
         </el-form-item>
       </el-form>
     </el-card>
@@ -77,7 +94,9 @@ import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { uploadApi } from '@/api/upload'
 
+const HOME_ENTRY_LINK = /^(?:\/pages\/[A-Za-z0-9_./?=&%+\-]+|gift|discount|points|member)$/
 const router = useRouter()
+const loading = ref(false)
 const saving = ref(false)
 const keywordInputVisible = ref(false)
 const keywordInput = ref('')
@@ -90,8 +109,22 @@ const config = reactive({
 })
 
 function addKeyword() {
-  if (keywordInput.value && !config.hotKeywords.includes(keywordInput.value)) {
-    config.hotKeywords.push(keywordInput.value)
+  const keyword = keywordInput.value.trim()
+  if (!keyword) {
+    keywordInput.value = ''
+    keywordInputVisible.value = false
+    return
+  }
+  if (keyword.length > 20) {
+    ElMessage.warning('搜索热词最多20个字符')
+    return
+  }
+  if (config.hotKeywords.includes(keyword)) {
+    ElMessage.info('该搜索热词已存在')
+  } else if (config.hotKeywords.length >= 20) {
+    ElMessage.warning('搜索热词最多20个')
+  } else {
+    config.hotKeywords.push(keyword)
   }
   keywordInput.value = ''
   keywordInputVisible.value = false
@@ -99,35 +132,78 @@ function addKeyword() {
 
 async function handleUploadNavIcon(options: any, row: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
+    const res = await uploadApi.uploadImage(options.file, 'home-decor')
     row.icon = res.data.url
-  } catch {}
+    options.onSuccess?.(res)
+  } catch (e: any) {
+    options.onError?.(e)
+    ElMessage.error(e?.message || '导航图标上传失败')
+  }
 }
 
 async function fetchConfig() {
+  loading.value = true
   try {
     const res = await request.get('/admin/home-decor/config')
-    if (res.data) {
-      Object.assign(config, {
-        hotKeywords: res.data.hotKeywords || [],
-        navIcons: res.data.navIcons || [],
-        announcement: res.data.announcement || '',
-      })
-    }
-  } catch {}
+    Object.assign(config, {
+      hotKeywords: Array.isArray(res.data?.hotKeywords) ? res.data.hotKeywords : [],
+      navIcons: Array.isArray(res.data?.navIcons) ? res.data.navIcons : [],
+      announcement: typeof res.data?.announcement === 'string' ? res.data.announcement : '',
+    })
+  } catch (e: any) {
+    ElMessage.error(e?.message || '首页装修配置加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function validateBeforeSave() {
+  if (config.hotKeywords.length > 20) throw new Error('搜索热词最多20个')
+  const normalizedKeywords = config.hotKeywords.map((item) => item.trim()).filter(Boolean)
+  if (normalizedKeywords.some((item) => item.length > 20)) throw new Error('搜索热词最多20个字符')
+  if (new Set(normalizedKeywords).size !== normalizedKeywords.length) throw new Error('搜索热词不能重复')
+  config.hotKeywords = normalizedKeywords
+
+  if (config.navIcons.length > 20) throw new Error('导航入口最多20个')
+  config.navIcons.forEach((item, index) => {
+    item.icon = item.icon.trim()
+    item.name = item.name.trim()
+    item.linkUrl = item.linkUrl.trim()
+    if (!item.icon) throw new Error(`第${index + 1}个导航入口请先上传图标`)
+    if (!item.name || item.name.length > 30) throw new Error(`第${index + 1}个导航名称无效`)
+    if (!HOME_ENTRY_LINK.test(item.linkUrl)) throw new Error(`第${index + 1}个导航跳转地址无效`)
+    if (!Number.isSafeInteger(item.sort) || item.sort < 0 || item.sort > 9999) throw new Error(`第${index + 1}个导航排序无效`)
+  })
+  config.announcement = config.announcement.trim()
 }
 
 async function handleSave() {
+  try {
+    validateBeforeSave()
+  } catch (e: any) {
+    ElMessage.warning(e?.message || '请检查首页装修配置')
+    return
+  }
+
   saving.value = true
   try {
     await request.put('/admin/home-decor/config', config)
     ElMessage.success('保存成功')
-  } catch {} finally {
+    await fetchConfig()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '首页装修配置保存失败')
+  } finally {
     saving.value = false
   }
 }
 
-onMounted(() => {
-  fetchConfig()
-})
+onMounted(fetchConfig)
 </script>
+
+<style scoped>
+.hint {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 12px;
+}
+</style>

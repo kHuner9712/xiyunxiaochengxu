@@ -17,15 +17,16 @@
 
     <div class="table-card">
       <div style="margin-bottom: 16px">
-        <el-button v-permission="'supplier:list'" type="primary" @click="handleAdd">新增供应商</el-button>
+        <el-button v-permission="'supplier:create'" type="primary" @click="handleAdd">新增供应商</el-button>
         <el-alert type="info" :closable="false" style="margin-top: 8px">供应商管理（仅内部管理，供应商不登录后台）</el-alert>
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="name" label="供应商名称" min-width="150" />
-        <el-table-column prop="contactPerson" label="联系人" width="100" />
+        <el-table-column prop="contactName" label="联系人" width="100" />
         <el-table-column prop="contactPhone" label="联系电话" width="130" />
+        <el-table-column prop="email" label="联系邮箱" min-width="180" show-overflow-tooltip />
         <el-table-column prop="address" label="地址" show-overflow-tooltip min-width="200" />
         <el-table-column label="合作状态" width="100">
           <template #default="{ row }">
@@ -37,8 +38,8 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'supplier:list'" type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'supplier:list'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'supplier:edit'" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'supplier:delete'" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -59,19 +60,19 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="供应商名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入供应商名称" />
+          <el-input v-model="form.name" placeholder="请输入供应商名称" maxlength="100" />
         </el-form-item>
-        <el-form-item label="联系人" prop="contactPerson">
-          <el-input v-model="form.contactPerson" placeholder="请输入联系人" />
+        <el-form-item label="联系人" prop="contactName">
+          <el-input v-model="form.contactName" placeholder="请输入联系人" maxlength="50" />
         </el-form-item>
         <el-form-item label="联系电话" prop="contactPhone">
-          <el-input v-model="form.contactPhone" placeholder="请输入联系电话" />
+          <el-input v-model="form.contactPhone" placeholder="请输入联系电话" maxlength="20" />
         </el-form-item>
-        <el-form-item label="联系邮箱">
-          <el-input v-model="form.email" placeholder="请输入联系邮箱" />
+        <el-form-item label="联系邮箱" prop="email">
+          <el-input v-model="form.email" placeholder="请输入联系邮箱" maxlength="100" />
         </el-form-item>
         <el-form-item label="地址">
-          <el-input v-model="form.address" placeholder="请输入地址" />
+          <el-input v-model="form.address" placeholder="请输入地址" maxlength="300" />
         </el-form-item>
         <el-form-item label="合作状态">
           <el-radio-group v-model="form.status">
@@ -80,7 +81,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入备注" />
+          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="2000" show-word-limit placeholder="请输入备注" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -107,9 +108,9 @@ const searchForm = reactive({ name: '', contactPhone: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: undefined as string | undefined,
   name: '',
-  contactPerson: '',
+  contactName: '',
   contactPhone: '',
   email: '',
   address: '',
@@ -119,8 +120,9 @@ const form = reactive({
 
 const rules: FormRules = {
   name: [{ required: true, message: '请输入供应商名称', trigger: 'blur' }],
-  contactPerson: [{ required: true, message: '请输入联系人', trigger: 'blur' }],
+  contactName: [{ required: true, message: '请输入联系人', trigger: 'blur' }],
   contactPhone: [{ required: true, message: '请输入联系电话', trigger: 'blur' }],
+  email: [{ type: 'email', message: '请输入正确的邮箱地址', trigger: ['blur', 'change'] }],
 }
 
 const dialogTitle = computed(() => (form.id ? '编辑供应商' : '新增供应商'))
@@ -147,26 +149,30 @@ function resetSearch() {
   handleSearch()
 }
 
-function handleAdd() {
+function resetForm() {
   form.id = undefined
   form.name = ''
-  form.contactPerson = ''
+  form.contactName = ''
   form.contactPhone = ''
   form.email = ''
   form.address = ''
   form.status = 1
   form.remark = ''
+}
+
+function handleAdd() {
+  resetForm()
   dialogVisible.value = true
 }
 
 function handleEdit(row: any) {
-  form.id = row.id
-  form.name = row.name
-  form.contactPerson = row.contactPerson
-  form.contactPhone = row.contactPhone
+  form.id = String(row.id)
+  form.name = row.name || ''
+  form.contactName = row.contactName || ''
+  form.contactPhone = row.contactPhone || ''
   form.email = row.email || ''
   form.address = row.address || ''
-  form.status = row.status
+  form.status = row.status === 0 ? 0 : 1
   form.remark = row.remark || ''
   dialogVisible.value = true
 }
@@ -174,7 +180,7 @@ function handleEdit(row: any) {
 async function handleDelete(row: any) {
   try {
     await ElMessageBox.confirm('确定删除该供应商吗？', '提示', { type: 'warning' })
-    await supplierApi.delete(row.id)
+    await supplierApi.delete(String(row.id))
     ElMessage.success('删除成功')
     fetchList()
   } catch {}
@@ -186,10 +192,19 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
+    const payload = {
+      name: form.name.trim(),
+      contactName: form.contactName.trim(),
+      contactPhone: form.contactPhone.trim(),
+      email: form.email.trim() || undefined,
+      address: form.address.trim() || undefined,
+      status: form.status,
+      remark: form.remark.trim() || undefined,
+    }
     if (form.id) {
-      await supplierApi.update({ ...form })
+      await supplierApi.update(form.id, payload)
     } else {
-      await supplierApi.create({ ...form })
+      await supplierApi.create(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false

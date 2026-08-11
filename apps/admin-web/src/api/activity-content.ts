@@ -32,19 +32,19 @@ export const activityContentApi = {
   getList(params: ActivityContentListParams) {
     return request.get('/admin/activity-content/list', { params })
   },
-  getDetail(id: string | number) {
-    return request.get(`/admin/activity-content/detail/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/activity-content/detail/${encodeURIComponent(id)}`)
   },
   create(data: any) {
     return request.post('/admin/activity-content/create', data)
   },
-  update(id: string | number, data: any) {
-    return request.put(`/admin/activity-content/update/${id}`, data)
+  update(id: string, data: any) {
+    return request.put(`/admin/activity-content/update/${encodeURIComponent(id)}`, data)
   },
-  updateStatus(id: string | number, status: number) {
-    return request.put(`/admin/activity-content/status/${id}`, { status })
+  updateStatus(id: string, status: number) {
+    return request.put(`/admin/activity-content/status/${encodeURIComponent(id)}`, { status })
   },
-  delete(id: string | number) {
-    return request.delete(`/admin/activity-content/delete/${id}`)
+  delete(id: string) {
+    return request.delete(`/admin/activity-content/delete/${encodeURIComponent(id)}`)
   },
 }

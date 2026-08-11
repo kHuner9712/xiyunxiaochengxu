@@ -11,7 +11,7 @@ export class HomeService {
   constructor(private prisma: PrismaService) {}
 
   async getHomeData(userId?: string) {
-    const [banners, _recommendations, hotProducts, newProducts, activities, monthAgeRecommend, homeDecor] = await Promise.all([
+    const [banners, recommendations, hotProducts, newProducts, activities, monthAgeRecommend, homeDecor] = await Promise.all([
       this.getBanners(),
       this.getRecommendations(),
       this.getHotProducts(),
@@ -25,6 +25,7 @@ export class HomeService {
       banners,
       quickEntries: homeDecor.quickEntries,
       announcement: homeDecor.announcement,
+      recommendations,
       monthRecommend: monthAgeRecommend,
       hotProducts,
       newProducts,
@@ -80,24 +81,88 @@ export class HomeService {
   }
 
   private async getRecommendations() {
-    const list = await this.prisma.product.findMany({
-      where: {
-        deletedAt: null,
-        status: 1,
-        isRecommend: 1,
-      },
-      orderBy: { sortOrder: 'asc' },
+    const sections = await this.prisma.homeSection.findMany({
+      where: { type: 'recommendation', status: 1 },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       take: 10,
-      select: {
-        id: true,
-        name: true,
-        mainImage: true,
-        minPrice: true,
-        totalSales: true,
-        isRecommend: true,
-      },
     });
-    return list.map((p) => ({ ...serializeProductCard(p), image: normalizeAssetUrl(p.mainImage, this.assetBaseUrl) }));
+    const now = new Date();
+
+    const resolved = await Promise.all(sections.map(async (section) => {
+      const config = this.parseJsonConfig(section.config);
+      const type = Number(config.recommendationType || 0);
+      if (![1, 2, 3].includes(type)) return null;
+
+      const storedItems = this.parseRecommendationItems(config.items);
+      if (storedItems.length === 0) return null;
+      const ids = storedItems.map((item) => item.id);
+      const itemMap = new Map<string, any>();
+
+      if (type === 1) {
+        const products = await this.prisma.product.findMany({
+          where: { id: { in: ids }, deletedAt: null, status: 1 },
+          select: { id: true, name: true, mainImage: true, minPrice: true, totalSales: true },
+        });
+        for (const product of products) {
+          itemMap.set(product.id.toString(), {
+            ...serializeProductCard(product),
+            id: product.id.toString(),
+            image: normalizeAssetUrl(product.mainImage, this.assetBaseUrl),
+          });
+        }
+      } else if (type === 2) {
+        const activities = await this.prisma.activity.findMany({
+          where: {
+            id: { in: ids },
+            status: 2,
+            startTime: { lte: now },
+            endTime: { gte: now },
+          },
+          select: { id: true, name: true, type: true, bannerImage: true, startTime: true, endTime: true },
+        });
+        for (const activity of activities) {
+          itemMap.set(activity.id.toString(), {
+            id: activity.id.toString(),
+            name: activity.name,
+            image: normalizeAssetUrl(activity.bannerImage, this.assetBaseUrl),
+            type: Number(activity.type),
+            startTime: activity.startTime,
+            endTime: activity.endTime,
+          });
+        }
+      } else {
+        const contents = await this.prisma.content.findMany({
+          where: { id: { in: ids }, deletedAt: null, status: 1 },
+          select: { id: true, title: true, coverImage: true, summary: true, contentType: true, publishedAt: true },
+        });
+        for (const content of contents) {
+          itemMap.set(content.id.toString(), {
+            id: content.id.toString(),
+            title: content.title,
+            image: normalizeAssetUrl(content.coverImage, this.assetBaseUrl),
+            summary: content.summary || '',
+            contentType: content.contentType,
+            publishedAt: content.publishedAt,
+          });
+        }
+      }
+
+      const items = storedItems
+        .map((stored) => itemMap.get(stored.id.toString()))
+        .filter(Boolean);
+      if (items.length === 0) return null;
+
+      return {
+        id: section.id.toString(),
+        name: section.title || '',
+        code: String(config.code || ''),
+        type,
+        sort: section.sortOrder,
+        items,
+      };
+    }));
+
+    return resolved.filter(Boolean);
   }
 
   private async getHotProducts() {
@@ -201,6 +266,27 @@ export class HomeService {
         '',
       ),
     };
+  }
+
+  private parseRecommendationItems(value: unknown): Array<{ id: bigint; sort: number }> {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set<string>();
+    return value
+      .map((item: any) => {
+        const targetId = String(item?.targetId || '').trim();
+        if (!/^[1-9]\d*$/.test(targetId)) return null;
+        try {
+          const id = BigInt(targetId);
+          if (id > 9223372036854775807n || seen.has(targetId)) return null;
+          seen.add(targetId);
+          return { id, sort: Number.isFinite(Number(item?.sort)) ? Number(item.sort) : 0 };
+        } catch {
+          return null;
+        }
+      })
+      .filter((item): item is { id: bigint; sort: number } => !!item)
+      .sort((a, b) => a.sort - b.sort || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, 20);
   }
 
   private parseJsonConfig(value: unknown): any {

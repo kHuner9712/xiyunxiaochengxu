@@ -30,11 +30,13 @@
     <div class="table-card">
       <el-table :data="tableData" stripe v-loading="loading">
         <el-table-column prop="orderNo" label="订单号" width="200" />
-        <el-table-column prop="userName" label="用户" width="120" />
-        <el-table-column label="商品数量" width="80">
-          <template #default="{ row }">{{ row.items?.length || 0 }}</template>
+        <el-table-column label="用户" width="140">
+          <template #default="{ row }">{{ row.user?.nickname || row.user?.phone || '-' }}</template>
         </el-table-column>
-        <el-table-column label="订单金额" width="120">
+        <el-table-column label="商品数量" width="80">
+          <template #default="{ row }">{{ getOrderItemQuantity(row.items) }}</template>
+        </el-table-column>
+        <el-table-column label="商品金额" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.totalAmount) }}</template>
         </el-table-column>
         <el-table-column label="实付金额" width="120">
@@ -63,8 +65,8 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleDetail(row)">查看</el-button>
-            <el-button v-permission="'order:detail'" v-if="row.status === 'pending_payment'" type="danger" link @click="handleCancel(row)">取消</el-button>
+            <el-button v-permission="'order:detail'" type="primary" link @click="handleDetail(row)">查看</el-button>
+            <el-button v-if="row.status === 'pending_payment'" v-permission="'order:cancel'" type="danger" link @click="handleCancel(row)">取消</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -136,20 +138,25 @@ function resetSearch() {
 }
 
 function handleDetail(row: any) {
-  router.push(`/order/detail/${row.id}`)
+  router.push(`/order/detail/${String(row.id)}`)
 }
 
 async function handleCancel(row: any) {
   let reason = ''
   try {
-    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /.+/, inputErrorMessage: '请输入取消原因' })
-    reason = value
+    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /\S+/, inputErrorMessage: '请输入取消原因' })
+    reason = String(value || '').trim()
   } catch {
     return
   }
 
+  if (!reason) {
+    ElMessage.warning('请输入取消原因')
+    return
+  }
+
   try {
-    await orderApi.cancel(row.id, reason)
+    await orderApi.cancel(String(row.id), reason)
     ElMessage.success('取消成功')
     fetchList()
   } catch (e: any) {
@@ -190,6 +197,30 @@ async function handleExport() {
   }
 }
 
+function getOrderItemQuantity(items: unknown) {
+  return asArray(items).reduce((total, item: any) => {
+    const quantity = Number(item?.quantity)
+    return total + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0)
+  }, 0)
+}
+
+function toLocalDayIso(value: string, endOfDay: boolean) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return value
+
+  const [, year, month, day] = match
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    endOfDay ? 23 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 999 : 0,
+  )
+  return date.toISOString()
+}
+
 function buildQueryParams() {
   const params: any = {
     orderNo: searchForm.orderNo || undefined,
@@ -197,8 +228,8 @@ function buildQueryParams() {
     fulfillmentType: searchForm.fulfillmentType,
   }
   if (dateRange.value?.length === 2) {
-    params.startDate = dateRange.value[0]
-    params.endDate = dateRange.value[1]
+    params.startDate = toLocalDayIso(dateRange.value[0], false)
+    params.endDate = toLocalDayIso(dateRange.value[1], true)
   }
   return params
 }

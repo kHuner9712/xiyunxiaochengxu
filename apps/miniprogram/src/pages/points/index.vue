@@ -56,8 +56,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onReachBottom, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { getPointsBalance, getPointsDetail, checkIn, getCheckInStatus, getPointsRules, type PointsRecord, type PointsRule } from '@/api/points'
 import { formatDate } from '@/utils/format'
 import Loading from '@/components/Loading.vue'
@@ -69,6 +69,8 @@ const pointsRules = ref<PointsRule[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let detailVersion = 0
+let loadingVersion = -1
 
 async function loadBalance() {
   try {
@@ -86,46 +88,77 @@ async function loadCheckInStatus() {
   }
 }
 
-async function loadPointsDetail(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
+async function loadPointsDetail(reset = false, version = detailVersion) {
+  if (!reset && finished.value && version === detailVersion) return
+  if (loading.value && loadingVersion === version) return
   if (reset) {
     page.value = 1
     finished.value = false
     pointsDetail.value = []
   }
 
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await getPointsDetail({ page: page.value, pageSize: 10 })
-    pointsDetail.value.push(...data.list)
-    finished.value = pointsDetail.value.length >= data.total
-    page.value++
+    const data = await getPointsDetail({ page: requestPage, pageSize: 10 })
+    if (version !== detailVersion) return
+
+    const list = Array.isArray(data?.list) ? data.list : []
+    pointsDetail.value.push(...list)
+    finished.value = pointsDetail.value.length >= Number(data?.total || 0)
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '明细加载失败', icon: 'none' })
+    if (version === detailVersion) {
+      uni.showToast({ title: '明细加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === detailVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshPointsDetail() {
+  const version = ++detailVersion
+  return loadPointsDetail(true, version)
 }
 
 async function loadRules() {
   try {
-    pointsRules.value = await getPointsRules()
+    const data = await getPointsRules()
+    pointsRules.value = Array.isArray(data) ? data : []
   } catch {
     uni.showToast({ title: '规则加载失败', icon: 'none' })
   }
+}
+
+async function refreshPage() {
+  await Promise.all([
+    loadBalance(),
+    loadCheckInStatus(),
+    refreshPointsDetail(),
+    loadRules(),
+  ])
 }
 
 async function handleCheckIn() {
   if (checkInStatus.value.checked) return
   try {
     const data = await checkIn()
+    if (data.alreadySigned) {
+      uni.showToast({ title: '今日已签到', icon: 'none' })
+      await refreshPage()
+      return
+    }
+
     checkInStatus.value.checked = true
     checkInStatus.value.continuous = data.continuous ?? data.consecutiveDays ?? checkInStatus.value.continuous
     checkInStatus.value.todayPoints = data.points
     uni.showToast({ title: `签到成功，+${data.points}积分`, icon: 'none' })
     await loadBalance()
-    loadPointsDetail(true)
+    void refreshPointsDetail()
   } catch {
     uni.showToast({ title: '签到失败', icon: 'none' })
   }
@@ -141,27 +174,28 @@ function formatPointTime(item: PointsRecord) {
 }
 
 onPullDownRefresh(async () => {
-  await Promise.all([loadBalance(), loadCheckInStatus(), loadPointsDetail(true)])
+  await refreshPage()
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadPointsDetail()
+  void loadPointsDetail(false, detailVersion)
 })
 
-onMounted(() => {
-  loadBalance()
-  loadCheckInStatus()
-  loadPointsDetail()
-  loadRules()
+onShow(() => {
+  void refreshPage()
+})
+
+defineExpose({
+  pointsDetail,
+  loading,
+  loadPointsDetail,
+  refreshPointsDetail,
 })
 </script>
 
 <style lang="scss" scoped>
-.points-page {
-  min-height: 100vh;
-}
-
+.points-page { min-height: 100vh; }
 .points-header {
   background:
     radial-gradient(circle at 86% 18%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 240rpx),
@@ -169,174 +203,36 @@ onMounted(() => {
   padding: $spacing-xl $spacing-md;
   border-radius: 0 0 $radius-xxl $radius-xxl;
 }
-
-.points-balance {
-  text-align: center;
-  margin-bottom: $spacing-lg;
-}
-
-.balance-label {
-  font-size: $font-sm;
-  color: $text-secondary;
-  display: block;
-}
-
-.balance-value {
-  font-size: 72rpx;
-  color: $price-color;
-  font-weight: 800;
-}
-
-.points-stats {
-  display: flex;
-  justify-content: center;
-  gap: 80rpx;
-}
-
-.stat-item {
-  text-align: center;
-}
-
-.stat-value {
-  font-size: $font-lg;
-  color: $text-color;
-  font-weight: 800;
-  display: block;
-}
-
-.stat-label {
-  font-size: $font-xs;
-  color: $text-hint;
-}
-
-.checkin-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: $spacing-md;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.checkin-info {
-  flex: 1;
-}
-
-.checkin-label {
-  font-size: $font-md;
-  font-weight: 600;
-  color: $text-color;
-  display: block;
-}
-
-.checkin-continuous {
-  font-size: $font-xs;
-  color: $text-hint;
-  margin-top: 4rpx;
-  display: block;
-}
-
+.points-balance { text-align: center; margin-bottom: $spacing-lg; }
+.balance-label { font-size: $font-sm; color: $text-secondary; display: block; }
+.balance-value { font-size: 72rpx; color: $price-color; font-weight: 800; }
+.points-stats { display: flex; justify-content: center; gap: 80rpx; }
+.stat-item { text-align: center; }
+.stat-value { font-size: $font-lg; color: $text-color; font-weight: 800; display: block; }
+.stat-label { font-size: $font-xs; color: $text-hint; }
+.checkin-section { display: flex; align-items: center; justify-content: space-between; margin: $spacing-md; background: rgba(255, 255, 255, 0.9); }
+.checkin-info { flex: 1; }
+.checkin-label { font-size: $font-md; font-weight: 600; color: $text-color; display: block; }
+.checkin-continuous { font-size: $font-xs; color: $text-hint; margin-top: 4rpx; display: block; }
 .checkin-btn {
   background: $gradient-coral;
   border-radius: $radius-round;
   padding: 16rpx 40rpx;
   box-shadow: $shadow-coral;
-
-  &.checked {
-    background: $bg-gray;
-    box-shadow: none;
-  }
+  &.checked { background: $bg-gray; box-shadow: none; }
 }
-
-.checkin-text {
-  color: #FFFFFF;
-  font-size: $font-sm;
-  font-weight: 500;
-
-  .checked & { color: $text-hint; }
-}
-
-.detail-section {
-  padding: 0 $spacing-md;
-}
-
-.section-title {
-  font-size: $font-lg;
-  font-weight: 800;
-  color: $text-color;
-  display: block;
-  margin-bottom: $spacing-sm;
-}
-
-.detail-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: $spacing-sm;
-  border-radius: $radius-xl;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.detail-info {
-  flex: 1;
-}
-
-.detail-desc {
-  font-size: $font-sm;
-  color: $text-color;
-  display: block;
-}
-
-.detail-time {
-  font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-  margin-top: 4rpx;
-}
-
-.detail-points {
-  font-size: $font-md;
-  font-weight: 600;
-
-  &.earn { color: $success-dark; }
-  &.spend { color: $text-secondary; }
-}
-
-.rules-section {
-  margin: $spacing-md;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.rule-item {
-  @include flex-between;
-  padding: 12rpx 0;
-  border-bottom: 1rpx solid $divider-color;
-
-  &:last-child { border-bottom: none; }
-}
-
-.rule-action {
-  font-size: $font-sm;
-  color: $text-secondary;
-  display: block;
-}
-
-.rule-value {
-  font-size: $font-sm;
-  color: $price-color;
-  font-weight: 500;
-}
-
-.rule-copy {
-  flex: 1;
-  min-width: 0;
-  margin-right: $spacing-sm;
-}
-
-.rule-desc {
-  display: block;
-  margin-top: 4rpx;
-  font-size: $font-xs;
-  color: $text-hint;
-  line-height: 1.45;
-}
+.checkin-text { color: #FFFFFF; font-size: $font-sm; font-weight: 500; .checked & { color: $text-hint; } }
+.detail-section { padding: 0 $spacing-md; }
+.section-title { font-size: $font-lg; font-weight: 800; color: $text-color; display: block; margin-bottom: $spacing-sm; }
+.detail-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: $spacing-sm; border-radius: $radius-xl; background: rgba(255, 255, 255, 0.9); }
+.detail-info { flex: 1; }
+.detail-desc { font-size: $font-sm; color: $text-color; display: block; }
+.detail-time { font-size: $font-xs; color: $text-hint; display: block; margin-top: 4rpx; }
+.detail-points { font-size: $font-md; font-weight: 600; &.earn { color: $success-dark; } &.spend { color: $text-secondary; } }
+.rules-section { margin: $spacing-md; background: rgba(255, 255, 255, 0.9); }
+.rule-item { @include flex-between; padding: 12rpx 0; border-bottom: 1rpx solid $divider-color; &:last-child { border-bottom: none; } }
+.rule-action { font-size: $font-sm; color: $text-secondary; display: block; }
+.rule-value { font-size: $font-sm; color: $price-color; font-weight: 500; }
+.rule-copy { flex: 1; min-width: 0; margin-right: $spacing-sm; }
+.rule-desc { display: block; margin-top: 4rpx; font-size: $font-xs; color: $text-hint; line-height: 1.45; }
 </style>

@@ -15,31 +15,36 @@
     <div class="table-card">
       <div style="margin-bottom: 16px; display: flex; justify-content: space-between">
         <span style="font-size: 14px; color: #909399">待发货订单列表</span>
-        <el-button v-permission="'order:delivery'" type="primary" :disabled="!selectedOrders.length" @click="handleBatchDeliver">批量发货</el-button>
+        <el-button v-permission="'order:deliver'" type="primary" :disabled="!selectedOrders.length" @click="handleBatchDeliver">批量发货</el-button>
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" />
         <el-table-column prop="orderNo" label="订单号" width="200" />
-        <el-table-column prop="userName" label="用户" width="120" />
-        <el-table-column label="订单金额" width="120">
+        <el-table-column label="用户" width="140">
+          <template #default="{ row }">{{ row.user?.nickname || row.user?.phone || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="商品数量" width="90">
+          <template #default="{ row }">{{ getDeliveryItemQuantity(row.orderItems) }}</template>
+        </el-table-column>
+        <el-table-column label="商品金额" width="120">
           <template #default="{ row }">¥{{ formatPrice(row.totalAmount) }}</template>
         </el-table-column>
         <el-table-column label="收货人" width="100">
-          <template #default="{ row }">{{ row.consignee }}</template>
+          <template #default="{ row }">{{ row.receiverName || '-' }}</template>
         </el-table-column>
         <el-table-column label="收货电话" width="130">
-          <template #default="{ row }">{{ row.phone }}</template>
+          <template #default="{ row }">{{ row.receiverPhone || '-' }}</template>
         </el-table-column>
         <el-table-column label="收货地址" show-overflow-tooltip min-width="200">
-          <template #default="{ row }">{{ row.address }}</template>
+          <template #default="{ row }">{{ formatDeliveryAddress(row) }}</template>
         </el-table-column>
         <el-table-column label="下单时间" width="180">
-          <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
+          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'order:delivery'" type="primary" link @click="handleDeliver(row)">发货</el-button>
+            <el-button v-permission="'order:deliver'" type="primary" link @click="handleDeliver(row)">发货</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -57,10 +62,15 @@
       </div>
     </div>
 
-    <el-dialog v-model="deliverVisible" :title="batchMode ? '批量发货' : '发货'" width="500px" destroy-on-close>
-      <div v-if="batchMode">
-        <p style="margin-bottom: 10px">已选择 {{ selectedOrders.length }} 个订单</p>
-      </div>
+    <el-dialog v-model="deliverVisible" :title="batchMode ? '批量发货' : '发货'" :width="batchMode ? '760px' : '500px'" destroy-on-close>
+      <el-alert
+        v-if="batchMode"
+        :title="`已选择 ${batchRows.length} 个订单，请逐单填写对应物流单号`"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+
       <el-form ref="deliverFormRef" :model="deliverForm" :rules="deliverRules" label-width="100px">
         <el-form-item label="物流公司" prop="logisticsCompany">
           <el-select v-model="deliverForm.logisticsCompany" placeholder="请选择物流公司" filterable>
@@ -73,10 +83,23 @@
             <el-option label="京东物流" value="京东物流" />
           </el-select>
         </el-form-item>
-        <el-form-item label="物流单号" prop="logisticsNo">
+        <el-form-item v-if="!batchMode" label="物流单号" prop="logisticsNo">
           <el-input v-model="deliverForm.logisticsNo" placeholder="请输入物流单号" />
         </el-form-item>
       </el-form>
+
+      <el-table v-if="batchMode" :data="batchRows" border max-height="420">
+        <el-table-column prop="orderNo" label="订单号" min-width="210" />
+        <el-table-column label="收货人" width="110">
+          <template #default="{ row }">{{ row.consignee || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="物流单号" min-width="260">
+          <template #default="{ row }">
+            <el-input v-model="row.logisticsNo" placeholder="填写该订单物流单号" maxlength="80" />
+          </template>
+        </el-table-column>
+      </el-table>
+
       <template #footer>
         <el-button @click="deliverVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmitDeliver">确认发货</el-button>
@@ -92,19 +115,27 @@ import { orderApi } from '@/api/order'
 import { formatPrice, formatDate } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
+type BatchDeliveryRow = {
+  orderId: string
+  orderNo: string
+  consignee: string
+  logisticsNo: string
+}
+
 const loading = ref(false)
 const submitting = ref(false)
 const deliverVisible = ref(false)
 const batchMode = ref(false)
 const tableData = ref<any[]>([])
 const selectedOrders = ref<any[]>([])
+const batchRows = ref<BatchDeliveryRow[]>([])
 const deliverFormRef = ref<FormInstance>()
 
 const searchForm = reactive({ orderNo: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const deliverForm = reactive({
-  orderId: undefined as number | undefined,
+  orderId: undefined as string | undefined,
   logisticsCompany: '',
   logisticsNo: '',
 })
@@ -112,6 +143,21 @@ const deliverForm = reactive({
 const deliverRules: FormRules = {
   logisticsCompany: [{ required: true, message: '请选择物流公司', trigger: 'change' }],
   logisticsNo: [{ required: true, message: '请输入物流单号', trigger: 'blur' }],
+}
+
+function getDeliveryItemQuantity(orderItems: unknown) {
+  return asArray(orderItems).reduce((total, item: any) => {
+    const quantity = Number(item?.quantity)
+    return total + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0)
+  }, 0)
+}
+
+function formatDeliveryAddress(row: any) {
+  const address = [row?.province, row?.city, row?.district, row?.detailAddress]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' ')
+  return address || '-'
 }
 
 async function fetchList() {
@@ -141,18 +187,31 @@ function handleSelectionChange(rows: any[]) {
   selectedOrders.value = rows
 }
 
-function handleDeliver(row: any) {
-  batchMode.value = false
-  deliverForm.orderId = row.id
+function resetDeliverForm() {
+  deliverForm.orderId = undefined
   deliverForm.logisticsCompany = ''
   deliverForm.logisticsNo = ''
+  batchRows.value = []
+  deliverFormRef.value?.clearValidate()
+}
+
+function handleDeliver(row: any) {
+  batchMode.value = false
+  resetDeliverForm()
+  deliverForm.orderId = String(row.id)
   deliverVisible.value = true
 }
 
 function handleBatchDeliver() {
+  if (!selectedOrders.value.length) return
   batchMode.value = true
-  deliverForm.logisticsCompany = ''
-  deliverForm.logisticsNo = ''
+  resetDeliverForm()
+  batchRows.value = selectedOrders.value.map((o) => ({
+    orderId: String(o.id),
+    orderNo: String(o.orderNo || '-'),
+    consignee: String(o.receiverName || ''),
+    logisticsNo: '',
+  }))
   deliverVisible.value = true
 }
 
@@ -160,8 +219,25 @@ async function handleSubmitDeliver() {
   const valid = await deliverFormRef.value?.validate().catch(() => false)
   if (!valid) return
 
+  const logisticsCompany = deliverForm.logisticsCompany.trim()
+  if (!logisticsCompany) {
+    ElMessage.warning('请选择物流公司')
+    return
+  }
+
+  if (batchMode.value) {
+    const missingTrackingOrder = batchRows.value.find((row) => !row.logisticsNo.trim())
+    if (missingTrackingOrder) {
+      ElMessage.warning(`请填写订单 ${missingTrackingOrder.orderNo} 的物流单号`)
+      return
+    }
+  } else if (!deliverForm.logisticsNo.trim()) {
+    ElMessage.warning('请输入物流单号')
+    return
+  }
+
   try {
-    const actionText = batchMode.value ? `确认为 ${selectedOrders.value.length} 个订单批量发货？` : '确认发货？'
+    const actionText = batchMode.value ? `确认为 ${batchRows.value.length} 个订单批量发货？` : '确认发货？'
     await ElMessageBox.confirm(actionText, '发货确认', { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' })
   } catch {
     return
@@ -170,17 +246,44 @@ async function handleSubmitDeliver() {
   submitting.value = true
   try {
     if (batchMode.value) {
-      const orders = selectedOrders.value.map((o) => ({
-        orderId: o.id,
-        logisticsCompany: deliverForm.logisticsCompany,
-        logisticsNo: deliverForm.logisticsNo,
+      const orders = batchRows.value.map((row) => ({
+        orderId: row.orderId,
+        logisticsCompany,
+        logisticsNo: row.logisticsNo.trim(),
       }))
-      await orderApi.batchDeliver({ orders })
+      const res = await orderApi.batchDeliver({ orders })
+      const result = res.data || {}
+      const successCount = Number(result.successCount || 0)
+      const failCount = Number(result.failCount || 0)
+
+      if (failCount > 0) {
+        const firstError = Array.isArray(result.errors) ? result.errors[0]?.message : ''
+        const message = `批量发货完成：成功 ${successCount} 单，失败 ${failCount} 单${firstError ? `；首个失败原因：${firstError}` : ''}`
+        if (successCount > 0) {
+          deliverVisible.value = false
+          selectedOrders.value = []
+          batchRows.value = []
+          fetchList()
+        }
+        ElMessage.warning(message)
+        return
+      }
+
+      ElMessage.success(`批量发货成功，共 ${successCount} 单`)
     } else {
-      await orderApi.deliver(deliverForm as any)
+      const orderId = deliverForm.orderId
+      const logisticsNo = deliverForm.logisticsNo.trim()
+      if (!orderId) {
+        ElMessage.warning('订单ID无效，请刷新后重试')
+        return
+      }
+      await orderApi.deliver({ orderId, logisticsCompany, logisticsNo })
+      ElMessage.success('发货成功')
     }
-    ElMessage.success('发货成功')
+
     deliverVisible.value = false
+    selectedOrders.value = []
+    batchRows.value = []
     fetchList()
   } catch (e: any) {
     ElMessage.error(e?.message || '发货失败')

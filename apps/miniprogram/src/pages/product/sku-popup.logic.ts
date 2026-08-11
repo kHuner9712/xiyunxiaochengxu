@@ -1,5 +1,5 @@
 export interface PopupSku {
-  id: number
+  id: string
   stock: number
   specText?: string
 }
@@ -11,7 +11,7 @@ interface EnsureSellableSkuSelectionResult {
 
 export function ensureSellableSkuSelection(
   skus: PopupSku[],
-  selectedSkuId: number,
+  selectedSkuId: string,
 ): EnsureSellableSkuSelectionResult {
   const current = skus.find((sku) => sku.id === selectedSkuId && sku.stock > 0) || null
   if (current) {

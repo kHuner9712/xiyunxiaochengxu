@@ -84,12 +84,29 @@ export const AFTERSALE_STATUS_MAP: Record<string, string> = {
   approved: '审核通过',
   rejected: '已拒绝',
   returned: '已退货',
+  pending_refund: '退款处理中',
   refunded: '已退款',
   closed: '已关闭',
 }
 
+type ElementTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+
+export const AFTERSALE_STATUS_TAG_TYPE: Record<string, ElementTagType> = {
+  pending_review: 'warning',
+  approved: 'primary',
+  rejected: 'danger',
+  returned: 'warning',
+  pending_refund: 'warning',
+  refunded: 'success',
+  closed: 'info',
+}
+
 export function formatAftersaleStatus(status: string): string {
   return AFTERSALE_STATUS_MAP[status] || '未知'
+}
+
+export function getAftersaleStatusTagType(status: string): ElementTagType {
+  return AFTERSALE_STATUS_TAG_TYPE[status] || 'info'
 }
 
 export const COUPON_TYPE_MAP: Record<number, string> = {

@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common'
 import { CartService } from './cart.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AddCartDto } from './dto/add-cart.dto';
-import { UpdateCartDto } from './dto/update-cart.dto';
+import { SelectAllCartDto, UpdateCartDto } from './dto/update-cart.dto';
 
 @Controller('weapp/cart')
 export class WeappCartController {
@@ -31,7 +31,7 @@ export class WeappCartController {
   @Put('select-all')
   async selectAll(
     @CurrentUser('id') userId: string,
-    @Body() body: { isSelected: number },
+    @Body() body: SelectAllCartDto,
   ) {
     return this.cartService.selectAll(userId, body.isSelected);
   }

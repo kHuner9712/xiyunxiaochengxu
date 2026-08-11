@@ -9,9 +9,12 @@ import {
   Query,
 } from '@nestjs/common';
 import { GroupBuyService } from './group-buy.service';
+import { PublicGroupBuyViewService } from './public-group-buy-view.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { OptionalAuth } from '../common/decorators/optional-auth.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import {
   GroupBuyActivityQueryDto,
   GroupBuyActivityDto,
@@ -23,13 +26,10 @@ import {
   AvailableGroupQueryDto,
 } from './dto/group-buy.dto';
 
-// ============ 后台 ============
-
 @Controller('admin/group-buy')
 export class AdminGroupBuyController {
   constructor(private readonly service: GroupBuyService) {}
 
-  // ===== 活动管理 =====
   @Get('activity/list')
   @RequirePermission('marketing:activity')
   async activityList(@Query() dto: GroupBuyActivityQueryDto) {
@@ -66,7 +66,6 @@ export class AdminGroupBuyController {
     return this.service.deleteActivity(id);
   }
 
-  // ===== 团单查询 =====
   @Get('groups')
   @RequirePermission('marketing:activity')
   async groups(@Query() dto: GroupBuyGroupQueryDto) {
@@ -91,7 +90,6 @@ export class AdminGroupBuyController {
     return this.service.getStats();
   }
 
-  // ===== 手动标记过期团 =====
   @Post('groups/mark-expired')
   @RequirePermission('marketing:activity')
   async markExpired() {
@@ -99,18 +97,19 @@ export class AdminGroupBuyController {
   }
 }
 
-// ============ 小程序 ============
-
 @Controller('weapp/group-buy')
 export class WeappGroupBuyController {
-  constructor(private readonly service: GroupBuyService) {}
+  constructor(
+    private readonly service: GroupBuyService,
+    private readonly publicView: PublicGroupBuyViewService,
+  ) {}
 
   @Public()
   @Get('list')
-  async list(@Query() query: { page?: string; pageSize?: string }) {
+  async list(@Query() query: PaginationDto) {
     return this.service.weappFindActivities({
-      page: query.page ? Number(query.page) : 1,
-      pageSize: query.pageSize ? Number(query.pageSize) : 10,
+      page: query.page,
+      pageSize: query.pageSize,
     });
   }
 
@@ -123,24 +122,28 @@ export class WeappGroupBuyController {
   @Public()
   @Get('available-groups')
   async availableGroups(@Query() dto: AvailableGroupQueryDto) {
-    return this.service.weappFindAvailableGroups(String(dto.activityId));
+    return this.publicView.findAvailableGroups(String(dto.activityId));
   }
 
   @Get('my-groups')
   async myGroups(
     @CurrentUser('id') userId: string,
-    @Query() query: { page?: string; pageSize?: string },
+    @Query() query: PaginationDto,
   ) {
     return this.service.weappFindMyGroups(userId, {
-      page: query.page ? Number(query.page) : 1,
-      pageSize: query.pageSize ? Number(query.pageSize) : 10,
+      page: query.page,
+      pageSize: query.pageSize,
     });
   }
 
   @Public()
+  @OptionalAuth()
   @Get('group/:id')
-  async groupDetail(@Param('id') id: string) {
-    return this.service.weappFindGroupById(id);
+  async groupDetail(
+    @Param('id') id: string,
+    @CurrentUser('id') userId?: string,
+  ) {
+    return this.publicView.findGroupById(id, userId);
   }
 
   @Post('start')

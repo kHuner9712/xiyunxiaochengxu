@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>自提点管理</span>
-          <el-button type="primary" @click="handleAdd">新增自提点</el-button>
+          <el-button v-permission="'pickup:store'" type="primary" @click="handleAdd">新增自提点</el-button>
         </div>
       </template>
 
@@ -36,11 +36,16 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button size="small" :type="row.status === 1 ? 'warning' : 'success'" @click="handleToggleStatus(row)">
+            <el-button v-permission="'pickup:store'" size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button
+              v-permission="'pickup:store'"
+              size="small"
+              :type="row.status === 1 ? 'warning' : 'success'"
+              @click="handleToggleStatus(row)"
+            >
               {{ row.status === 1 ? '停用' : '启用' }}
             </el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'pickup:store'" size="small" type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -117,7 +122,7 @@ const submitting = ref(false)
 const formRef = ref<FormInstance>()
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: undefined as string | undefined,
   name: '',
   contactPhone: '',
   province: '',
@@ -155,27 +160,79 @@ async function loadList() {
   }
 }
 
+function resetForm() {
+  Object.assign(form, {
+    id: undefined,
+    name: '',
+    contactPhone: '',
+    province: '',
+    city: '',
+    district: '',
+    address: '',
+    businessHours: '',
+    pickupNotice: '',
+    sortOrder: 0,
+    status: 1,
+  })
+}
+
 function handleAdd() {
   isEdit.value = false
-  Object.assign(form, { id: undefined, name: '', contactPhone: '', province: '', city: '', district: '', address: '', businessHours: '', pickupNotice: '', sortOrder: 0, status: 1 })
+  resetForm()
+  formRef.value?.clearValidate()
   showDialog.value = true
 }
 
 function handleEdit(row: any) {
   isEdit.value = true
-  Object.assign(form, row)
+  Object.assign(form, {
+    id: String(row.id),
+    name: row.name || '',
+    contactPhone: row.contactPhone || '',
+    province: row.province || '',
+    city: row.city || '',
+    district: row.district || '',
+    address: row.address || '',
+    businessHours: row.businessHours || '',
+    pickupNotice: row.pickupNotice || '',
+    sortOrder: Number(row.sortOrder || 0),
+    status: Number(row.status || 1),
+  })
+  formRef.value?.clearValidate()
   showDialog.value = true
+}
+
+function buildPayload() {
+  return {
+    name: form.name.trim(),
+    contactPhone: form.contactPhone.trim(),
+    province: form.province.trim(),
+    city: form.city.trim(),
+    district: form.district.trim(),
+    address: form.address.trim(),
+    businessHours: form.businessHours.trim(),
+    pickupNotice: form.pickupNotice.trim(),
+    sortOrder: form.sortOrder,
+    status: form.status,
+  }
 }
 
 async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
+
+  if (isEdit.value && !form.id) {
+    ElMessage.error('自提点ID无效，请重新打开编辑窗口')
+    return
+  }
+
   submitting.value = true
   try {
-    if (isEdit.value && form.id) {
-      await pickupStoreApi.update(form.id, form)
+    const payload = buildPayload()
+    if (isEdit.value) {
+      await pickupStoreApi.update(form.id as string, payload)
     } else {
-      await pickupStoreApi.create(form)
+      await pickupStoreApi.create(payload)
     }
     ElMessage.success('保存成功')
     showDialog.value = false
@@ -188,18 +245,28 @@ async function handleSubmit() {
 async function handleToggleStatus(row: any) {
   const newStatus = row.status === 1 ? 2 : 1
   const action = newStatus === 1 ? '启用' : '停用'
-  await ElMessageBox.confirm(`确定${action}该自提点吗？`, '提示')
   try {
-    await pickupStoreApi.updateStatus(row.id, newStatus)
+    await ElMessageBox.confirm(`确定${action}该自提点吗？`, '提示')
+  } catch {
+    return
+  }
+
+  try {
+    await pickupStoreApi.updateStatus(String(row.id), newStatus)
     ElMessage.success(`${action}成功`)
     loadList()
   } catch {}
 }
 
 async function handleDelete(row: any) {
-  await ElMessageBox.confirm('确定删除该自提点吗？删除后不可恢复。', '提示')
   try {
-    await pickupStoreApi.delete(row.id)
+    await ElMessageBox.confirm('确定删除该自提点吗？删除后不可恢复。', '提示')
+  } catch {
+    return
+  }
+
+  try {
+    await pickupStoreApi.delete(String(row.id))
     ElMessage.success('删除成功')
     loadList()
   } catch {}

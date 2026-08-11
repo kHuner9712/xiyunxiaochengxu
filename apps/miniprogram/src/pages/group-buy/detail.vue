@@ -20,59 +20,111 @@
           <text>已售 {{ activity.soldCount }}</text>
           <text v-if="activity.stockLimit != null"> / 限 {{ activity.stockLimit }}</text>
           <text v-if="activity.limitPerUser > 0" class="limit">每人限购{{ activity.limitPerUser }}次</text>
+          <text class="activity-state">{{ activityStateText }}</text>
         </view>
       </view>
     </view>
 
-    <!-- 可参与的团 -->
     <view class="section">
       <view class="section-title">正在拼团，可直接参与</view>
       <view v-if="availableGroups.length === 0" class="empty-tip">暂无可参与的团，快来开团吧</view>
       <view v-for="g in availableGroups" :key="g.id" class="group-card card">
         <view class="group-info">
           <view class="group-leader">
-            <image v-if="g.leader?.avatar" class="avatar" :src="g.leader.avatar" mode="aspectFill" />
+            <image
+              v-if="g.leader?.avatarUrl"
+              class="avatar"
+              :src="g.leader.avatarUrl"
+              mode="aspectFill"
+            />
             <view v-else class="avatar avatar-placeholder" />
-            <text class="leader-name">{{ g.leader?.nickname || '用户' + g.leaderUserId }}</text>
+            <text class="leader-name">{{ g.leader?.nickname || '用户' }}</text>
           </view>
           <view class="group-progress">
             <text class="progress-text">{{ g.currentCount }}/{{ g.targetCount }}人</text>
             <text class="remain">剩 {{ remainTime(g.expiresAt) }}</text>
           </view>
         </view>
-        <button class="join-btn" size="mini" @tap="handleJoin(g.id)">参与拼团</button>
+        <button class="join-btn" size="mini" :disabled="!activityActive || submitting" @tap="handleJoin(g.id)">参与拼团</button>
       </view>
     </view>
 
     <view class="bottom-bar">
-      <button class="start-btn" @tap="handleStart">我要开团</button>
+      <button class="start-btn" :disabled="!activityActive || submitting" @tap="handleStart">{{ startButtonText }}</button>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
-import { groupBuyApi, type GroupBuyActivity, type GroupBuyGroup } from '@/api/group-buy'
+import { computed, ref } from 'vue'
+import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from '@dcloudio/uni-app'
+import { groupBuyApi, type GroupBuyActivity, type GroupBuyGroup, type StartGroupBuyResult } from '@/api/group-buy'
 import { useUserStore } from '@/stores/user'
-import { getPromotionSourceForOrder } from '@/utils/share'
+import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
 import { createPayment, wxPay } from '@/api/payment'
 
 const userStore = useUserStore()
 const activity = ref<GroupBuyActivity | null>(null)
 const availableGroups = ref<GroupBuyGroup[]>([])
 const submitting = ref(false)
+const lastGroupId = ref('')
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
 }
 
-function remainTime(expiresAt: string): string {
-  const ms = new Date(expiresAt).getTime() - Date.now()
+const activityActive = computed(() => {
+  if (!activity.value) return false
+  const start = new Date(activity.value.startTime).getTime()
+  const end = new Date(activity.value.endTime).getTime()
+  return nowMs.value >= start && nowMs.value < end
+})
+
+const activityStateText = computed(() => {
+  if (!activity.value) return ''
+  const start = new Date(activity.value.startTime).getTime()
+  const end = new Date(activity.value.endTime).getTime()
+  if (nowMs.value < start) return ` · ${remainTime(activity.value.startTime)}后开始`
+  if (nowMs.value >= end) return ' · 活动已结束'
+  return ` · ${remainTime(activity.value.endTime)}后结束`
+})
+
+const startButtonText = computed(() => {
+  if (submitting.value) return '处理中...'
+  if (!activity.value) return '我要开团'
+  const start = new Date(activity.value.startTime).getTime()
+  const end = new Date(activity.value.endTime).getTime()
+  if (nowMs.value < start) return '活动未开始'
+  if (nowMs.value >= end) return '活动已结束'
+  return '我要开团'
+})
+
+function remainTime(timeStr: string): string {
+  const ms = new Date(timeStr).getTime() - nowMs.value
   if (ms <= 0) return '已过期'
   const hours = Math.floor(ms / 3600000)
   const mins = Math.floor((ms % 3600000) / 60000)
-  return hours > 0 ? `${hours}h${mins}m` : `${mins}m`
+  const secs = Math.floor((ms % 60000) / 1000)
+  if (hours > 0) return `${hours}h${mins}m`
+  if (mins > 0) return `${mins}m${secs}s`
+  return `${secs}s`
 }
 
 async function loadDetail(id: string) {
@@ -98,16 +150,15 @@ async function payOrder(orderId: string) {
   try {
     const payment = await createPayment({ orderId })
     await wxPay(payment)
-    uni.showToast({ title: '支付成功', icon: 'success' })
-    setTimeout(() => {
-      uni.redirectTo({ url: `/pages/group-buy/group?id=${lastGroupId.value}` })
-    }, 1500)
+    uni.redirectTo({
+      url: `/pages/order/pay-result?orderId=${orderId}&payScene=group&groupId=${lastGroupId.value}&payIntent=success`,
+    })
   } catch (err: any) {
-    const msg = err?.errMsg || err?.message || ''
-    if (msg.includes('cancel')) {
+    const msg = String(err?.errMsg || err?.message || '')
+    if (msg.toLowerCase().includes('cancel')) {
       uni.showModal({
         title: '支付未完成',
-        content: '请尽快在订单列表中完成支付',
+        content: '请尽快在订单列表中完成支付，否则该参团名额不会计入成团人数。',
         showCancel: false,
         confirmText: '查看订单',
         success: () => {
@@ -116,34 +167,54 @@ async function payOrder(orderId: string) {
       })
       return
     }
-    uni.showToast({ title: '支付失败', icon: 'none' })
+    uni.showModal({
+      title: '支付未完成',
+      content: err?.message || '支付发起失败，请到订单详情稍后重试。',
+      showCancel: false,
+      confirmText: '查看订单',
+      success: () => {
+        uni.redirectTo({ url: `/pages/order/detail?id=${orderId}` })
+      },
+    })
   }
 }
 
-const lastGroupId = ref('')
+async function handleCheckoutResult(result: StartGroupBuyResult) {
+  lastGroupId.value = result.groupId
+  if (result.isZeroPay) {
+    uni.redirectTo({
+      url: `/pages/order/pay-result?orderId=${result.orderId}&payScene=group&groupId=${result.groupId}&zeroPay=1&payIntent=success`,
+    })
+    return
+  }
+
+  uni.showToast({ title: result.role === 'leader' ? '开团成功，请支付' : '参团成功，请支付', icon: 'success' })
+  setTimeout(() => payOrder(result.orderId), 300)
+}
 
 async function handleStart() {
-  if (!activity.value) return
-  if (submitting.value) return
+  if (!activity.value || !activityActive.value || submitting.value) return
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(() => handleStart())
     return
   }
   if (!activity.value.skuId) {
-    uni.showToast({ title: '该活动未指定规格，请联系客服', icon: 'none' })
+    uni.showToast({ title: '活动商品规格配置异常', icon: 'none' })
     return
   }
+
   submitting.value = true
   try {
+    const fulfillment = await resolvePromotionFulfillment(activity.value.productId, '拼团')
+    if (!fulfillment) return
+
     const result = await groupBuyApi.start({
-      activityId: Number(activity.value.id),
-      skuId: activity.value.skuId ? Number(activity.value.skuId) : undefined,
+      activityId: activity.value.id,
+      skuId: activity.value.skuId,
       quantity: 1,
-      fulfillmentType: 'delivery',
+      ...fulfillment,
     })
-    lastGroupId.value = result.groupId
-    uni.showToast({ title: '开团成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 800)
+    await handleCheckoutResult(result)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '开团失败', icon: 'none' })
   } finally {
@@ -151,23 +222,24 @@ async function handleStart() {
   }
 }
 
-async function handleJoin(groupId: string | number) {
-  if (!activity.value) return
-  if (submitting.value) return
+async function handleJoin(groupId: string) {
+  if (!activity.value || !activityActive.value || submitting.value) return
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(() => handleJoin(groupId))
     return
   }
+
   submitting.value = true
   try {
+    const fulfillment = await resolvePromotionFulfillment(activity.value.productId, '拼团')
+    if (!fulfillment) return
+
     const result = await groupBuyApi.join({
-      groupId: Number(groupId),
+      groupId,
       quantity: 1,
-      fulfillmentType: 'delivery',
+      ...fulfillment,
     })
-    lastGroupId.value = result.groupId
-    uni.showToast({ title: '参团成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 800)
+    await handleCheckoutResult(result)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '参团失败', icon: 'none' })
   } finally {
@@ -177,9 +249,12 @@ async function handleJoin(groupId: string | number) {
 
 onLoad((options) => {
   if (options?.id) {
-    loadDetail(options.id)
+    loadDetail(String(options.id))
   }
 })
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 
 onShareAppMessage(() => ({
   title: activity.value?.name || '快来一起拼团',
@@ -266,6 +341,10 @@ onShareAppMessage(() => ({
 .limit {
   margin-left: $spacing-sm;
   color: $price-color;
+}
+
+.activity-state {
+  color: $warning-color;
 }
 
 .section {

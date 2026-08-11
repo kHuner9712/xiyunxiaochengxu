@@ -2,6 +2,7 @@ import { get, post, put } from '@/utils/request'
 
 export type OrderStatus =
   | 'pending_payment'
+  | 'paid'
   | 'pending_delivery'
   | 'pending_pickup'
   | 'delivered'
@@ -11,6 +12,7 @@ export type OrderStatus =
 
 export const ORDER_STATUS_VALUES: OrderStatus[] = [
   'pending_payment',
+  'paid',
   'pending_delivery',
   'pending_pickup',
   'delivered',
@@ -21,6 +23,7 @@ export const ORDER_STATUS_VALUES: OrderStatus[] = [
 
 const LEGACY_ORDER_STATUS_MAP: Record<string, OrderStatus> = {
   '10': 'pending_payment',
+  '15': 'paid',
   '20': 'pending_delivery',
   '25': 'pending_pickup',
   '30': 'delivered',
@@ -29,6 +32,10 @@ const LEGACY_ORDER_STATUS_MAP: Record<string, OrderStatus> = {
   '60': 'aftersale',
 }
 
+const PENDING_ORDER_CREATE_KEY = 'baby_mall_pending_order_create'
+const PENDING_ORDER_CREATE_TTL_MS = 2 * 60 * 60 * 1000
+const CLIENT_REQUEST_ID_PATTERN = /^\d{13}-[a-z0-9]{16,40}$/i
+
 export function normalizeOrderStatus(status?: string | number | null): OrderStatus | undefined {
   if (status === undefined || status === null || status === '') return undefined
   const value = String(status)
@@ -36,7 +43,7 @@ export function normalizeOrderStatus(status?: string | number | null): OrderStat
   return LEGACY_ORDER_STATUS_MAP[value]
 }
 
-export function createOrder(data: {
+export interface CreateOrderRequest {
   addressId?: string
   pickupStoreId?: string
   fulfillmentType?: string
@@ -49,15 +56,108 @@ export function createOrder(data: {
   shareCampaignId?: string
   referrerUserId?: string
   remark?: string
-}) {
-  return post<{
+}
+
+function buildOrderCreateFingerprint(data: CreateOrderRequest) {
+  const items = data.items
+    .map((item) => ({ skuId: String(item.skuId), quantity: Number(item.quantity) }))
+    .sort((a, b) => a.skuId.localeCompare(b.skuId) || a.quantity - b.quantity)
+  return JSON.stringify({
+    addressId: data.addressId || '',
+    pickupStoreId: data.pickupStoreId || '',
+    fulfillmentType: data.fulfillmentType || '',
+    couponId: data.couponId || '',
+    pointsDeduct: Number(data.pointsDeduct || 0),
+    sourceType: data.sourceType || '',
+    sourceCode: data.sourceCode || '',
+    shareRecordId: data.shareRecordId || '',
+    shareCampaignId: data.shareCampaignId || '',
+    referrerUserId: data.referrerUserId || '',
+    remark: data.remark || '',
+    items,
+  })
+}
+
+function generateOrderClientRequestId() {
+  const random = [
+    Math.random().toString(36).slice(2),
+    Math.random().toString(36).slice(2),
+    Math.random().toString(36).slice(2),
+  ].join('').replace(/[^a-z0-9]/gi, '').padEnd(24, '0').slice(0, 24)
+  return `${Date.now()}-${random}`
+}
+
+function loadPendingOrderClientRequestId(fingerprint: string): string | null {
+  try {
+    const raw = uni.getStorageSync(PENDING_ORDER_CREATE_KEY)
+    const value = typeof raw === 'string' ? JSON.parse(raw) : raw
+    const clientRequestId = String(value?.clientRequestId || '')
+    const createdAt = Number(value?.createdAt || 0)
+    const storedFingerprint = String(value?.fingerprint || '')
+    const now = Date.now()
+    if (
+      CLIENT_REQUEST_ID_PATTERN.test(clientRequestId) &&
+      storedFingerprint === fingerprint &&
+      Number.isFinite(createdAt) &&
+      createdAt > 0 &&
+      now - createdAt >= 0 &&
+      now - createdAt <= PENDING_ORDER_CREATE_TTL_MS
+    ) {
+      return clientRequestId
+    }
+  } catch {
+    // Corrupted local state must never block checkout; replace it with a fresh request identity.
+  }
+  uni.removeStorageSync(PENDING_ORDER_CREATE_KEY)
+  return null
+}
+
+function getOrCreateOrderClientRequestId(fingerprint: string): string {
+  const existing = loadPendingOrderClientRequestId(fingerprint)
+  if (existing) return existing
+  const clientRequestId = generateOrderClientRequestId()
+  uni.setStorageSync(PENDING_ORDER_CREATE_KEY, {
+    clientRequestId,
+    createdAt: Date.now(),
+    fingerprint,
+  })
+  return clientRequestId
+}
+
+function clearPendingOrderClientRequestId(clientRequestId: string) {
+  try {
+    const raw = uni.getStorageSync(PENDING_ORDER_CREATE_KEY)
+    const value = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (String(value?.clientRequestId || '') === clientRequestId) {
+      uni.removeStorageSync(PENDING_ORDER_CREATE_KEY)
+    }
+  } catch {
+    uni.removeStorageSync(PENDING_ORDER_CREATE_KEY)
+  }
+}
+
+export async function createOrder(data: CreateOrderRequest) {
+  // Keep this identity across network failures and page/process re-entry only while the actual
+  // checkout payload is unchanged. If the user changes items/address/coupon/points after a timeout,
+  // that is a new purchase intent and must never recover an older committed order by accident.
+  const fingerprint = buildOrderCreateFingerprint(data)
+  const clientRequestId = getOrCreateOrderClientRequestId(fingerprint)
+  const result = await post<{
     orderId: string
     orderNo: string
     payAmount: number
     isZeroPay: boolean
     status: OrderStatus
     fulfillmentType?: string
-  }>('/weapp/order/create', data)
+  }>('/weapp/order/create', {
+    ...data,
+    clientRequestId,
+  })
+  clearPendingOrderClientRequestId(clientRequestId)
+  if (result.status === 'cancelled') {
+    throw new Error('上次提交对应订单已取消，请重新提交')
+  }
+  return result
 }
 
 export function getOrderList(params: {
@@ -68,20 +168,20 @@ export function getOrderList(params: {
   return get<{ list: OrderItem[]; total: number }>('/weapp/order/list', params)
 }
 
-export function getOrderDetail(id: string | number) {
-  return get<OrderDetail>(`/weapp/order/detail/${id}`)
+export function getOrderDetail(id: string) {
+  return get<OrderDetail>(`/weapp/order/detail/${encodeURIComponent(id)}`)
 }
 
 export function getOrderDetailByNo(orderNo: string) {
   return get<OrderDetail>(`/weapp/order/detail-by-no/${encodeURIComponent(orderNo)}`)
 }
 
-export function cancelOrder(id: string | number) {
-  return put(`/weapp/order/cancel/${id}`)
+export function cancelOrder(id: string) {
+  return put(`/weapp/order/cancel/${encodeURIComponent(id)}`)
 }
 
-export function confirmReceive(id: string | number) {
-  return put(`/weapp/order/confirm-receive/${id}`)
+export function confirmReceive(id: string) {
+  return put(`/weapp/order/confirm-receive/${encodeURIComponent(id)}`)
 }
 
 export function getOrderCount() {
@@ -90,6 +190,7 @@ export function getOrderCount() {
 
 export interface OrderCount {
   unpaid: number
+  paid?: number
   unshipped: number
   pendingPickup: number
   unreceived: number
@@ -108,6 +209,7 @@ export interface OrderItem {
   status: OrderStatus
   totalAmount: number
   payAmount: number
+  groupBuyGroupId?: string
   items: OrderProductItem[]
   createTime: string
 }
@@ -121,6 +223,8 @@ export interface OrderProductItem {
   skuName: string
   price: number
   quantity: number
+  subtotal?: number
+  activityDiscount?: number
   canApplyAftersale?: boolean
   aftersaleStatus?: number | string
   aftersaleDisabledReason?: string
@@ -133,8 +237,11 @@ export interface OrderDetail {
   totalAmount: number
   payAmount: number
   freightAmount: number
+  discountAmount: number
+  activityDiscountAmount: number
   couponAmount: number
   pointsAmount: number
+  groupBuyGroupId?: string
   addressName: string
   addressPhone: string
   addressDetail: string
@@ -165,15 +272,47 @@ export interface LogisticsTrace {
   content: string
 }
 
-export function previewOrder(data: {
+type OrderPreviewRequest = {
   items: { skuId: string; quantity: number }[]
   addressId?: string
   pickupStoreId?: string
   fulfillmentType?: string
   couponId?: string
   pointsDeduct?: number
-}) {
-  return post<OrderPreview>('/weapp/order/confirm', data)
+}
+
+let previewRequestVersion = 0
+let latestPreviewRequest: { version: number; promise: Promise<OrderPreview> } | null = null
+
+/**
+ * Order confirmation is highly interactive: changing address, fulfillment, coupon or points can
+ * start another quote while the previous request is still in flight. A slower stale response must
+ * never overwrite a newer quote in the page. Every caller therefore converges on the newest
+ * in-flight request before resolving; stale successes and stale failures are both ignored.
+ */
+export async function previewOrder(data: OrderPreviewRequest): Promise<OrderPreview> {
+  const version = ++previewRequestVersion
+  const requestPromise = post<OrderPreview>('/weapp/order/confirm', data)
+  latestPreviewRequest = { version, promise: requestPromise }
+
+  let awaitedVersion = version
+  let awaitedPromise = requestPromise
+
+  for (;;) {
+    try {
+      const result = await awaitedPromise
+      if (awaitedVersion === previewRequestVersion) return result
+    } catch (error) {
+      if (awaitedVersion === previewRequestVersion) throw error
+    }
+
+    const latest = latestPreviewRequest
+    if (!latest) {
+      throw new Error('订单试算状态异常，请重试')
+    }
+    awaitedVersion = latest.version
+    awaitedPromise = latest.promise
+  }
 }
 
 export interface OrderPreview {

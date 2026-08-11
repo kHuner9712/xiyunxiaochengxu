@@ -1,19 +1,26 @@
 import request from '@/utils/request'
 
+export interface AftersaleApprovalInput {
+  refundAmount: number
+  returnReceiverName?: string
+  returnReceiverPhone?: string
+  returnAddress?: string
+}
+
 export const aftersaleApi = {
-  getList(params: { page: number; pageSize: number; orderNo?: string; status?: number; type?: number }) {
+  getList(params: { page: number; pageSize: number; status?: string }) {
     return request.get('/admin/aftersale/list', { params })
   },
-  getDetail(id: number) {
-    return request.get(`/admin/aftersale/detail/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/aftersale/detail/${encodeURIComponent(id)}`)
   },
-  approve(id: number) {
-    return request.put(`/admin/aftersale/${id}/approve`)
+  approve(id: string, input: AftersaleApprovalInput) {
+    return request.put(`/admin/aftersale/${encodeURIComponent(id)}/approve`, input)
   },
-  reject(id: number, reason: string) {
-    return request.put(`/admin/aftersale/${id}/reject`, { reason })
+  reject(id: string, rejectReason: string) {
+    return request.put(`/admin/aftersale/${encodeURIComponent(id)}/reject`, { rejectReason })
   },
-  refund(id: number, refundAmount: number) {
-    return request.put(`/admin/aftersale/${id}/refund`, { refundAmount })
+  refund(id: string) {
+    return request.put(`/admin/aftersale/${encodeURIComponent(id)}/refund`)
   },
 }

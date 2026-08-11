@@ -74,4 +74,29 @@ jobs:
         run: pnpm --filter @baby-mall/shared build
 
       - name: Run audited Release Gate
-        run: pnpm release:check
+        id: audited-release-gate
+        run: |
+          set +e
+          pnpm release:check > release-gate.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 300 release-gate.log
+            exit "$status"
+          fi
+          cat release-gate.log
+
+      - name: Preserve audited Release Gate failure diagnostics
+        if: failure() && steps.audited-release-gate.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-failure-log
+          path: release-gate.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Build and verify production miniprogram artifact
+        env:
+          VITE_WX_APPID: wxe40f76a33427090f
+          VITE_API_BASE_URL: https://api.yunxixiaochengxu.com.cn/api
+        run: pnpm build:mini:prod

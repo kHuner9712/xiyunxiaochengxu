@@ -34,7 +34,7 @@ function createMockPrisma() {
     productStockLog: { create: jest.fn() },
     userCoupon: { findFirst: jest.fn(), update: jest.fn() },
     user: { findFirst: jest.fn(), update: jest.fn() },
-    pointsRecord: { create: jest.fn() },
+    pointsRecord: { findFirst: (jest.fn() as any).mockResolvedValue({ points: 100 }), create: jest.fn() },
     paymentCompensationTask: { create: jest.fn(), findMany: jest.fn(), count: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     $transaction: jest.fn(),
   };
@@ -123,7 +123,7 @@ function setupTransaction(mockPrisma: any) {
       productStockLog: { create: mockPrisma.productStockLog.create },
       userCoupon: { findFirst: mockPrisma.userCoupon.findFirst, update: mockPrisma.userCoupon.update },
       user: { findFirst: mockPrisma.user.findFirst, update: mockPrisma.user.update },
-      pointsRecord: { create: mockPrisma.pointsRecord.create },
+      pointsRecord: { findFirst: mockPrisma.pointsRecord.findFirst, create: mockPrisma.pointsRecord.create },
       orderLog: { create: mockPrisma.orderLog.create },
     };
     return await callback(tx);

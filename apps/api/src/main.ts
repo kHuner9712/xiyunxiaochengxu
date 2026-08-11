@@ -8,16 +8,40 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { PrismaService } from './common/prisma/prisma.service';
 import * as path from 'path';
+import { configureOutboundHttpTimeout } from './common/http/outbound-http-timeout';
 import { configurePublicUploadStaticAssets } from './common/utils/upload-static-assets';
+import { runProductionConfigPreflight } from './config/production-config-preflight';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  // Keep direct production starts (for example `node dist/main.js`) under the same preflight
+  // contract as the Docker entrypoint. This runs before Nest providers connect to MySQL/Redis
+  // or register schedulers, and therefore remains safe before any runtime side effects.
+  if ((process.env.NODE_ENV || 'development') === 'production') {
+    runProductionConfigPreflight(process.env);
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
 
+  // Docker/systemd/Kubernetes terminate services with SIGTERM/SIGINT. Enable Nest lifecycle
+  // hooks so Prisma, Redis and any future resource-owning providers can drain cleanly instead
+  // of waiting for the process manager to force-kill the API.
+  app.enableShutdownHooks(['SIGTERM', 'SIGINT']);
+
   const configService = app.get(ConfigService);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+
+  try {
+    configureOutboundHttpTimeout(
+      configService.get<string>('OUTBOUND_HTTP_TIMEOUT_MS', '10000'),
+    );
+  } catch (error) {
+    logger.error((error as Error).message);
+    process.exit(1);
+  }
 
   if (nodeEnv === 'production') {
     app.set('trust proxy', 1);

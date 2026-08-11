@@ -15,11 +15,18 @@
             <el-descriptions-item label="付款时间">{{ formatDate(order.payTime) }}</el-descriptions-item>
             <el-descriptions-item label="发货时间">{{ formatDate(order.deliveryTime) }}</el-descriptions-item>
             <el-descriptions-item label="完成时间">{{ formatDate(order.finishTime) }}</el-descriptions-item>
-            <el-descriptions-item label="订单金额">¥{{ formatPrice(order.totalAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="实付金额">¥{{ formatPrice(order.payAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="商品金额">¥{{ formatPrice(order.totalAmount) }}</el-descriptions-item>
             <el-descriptions-item label="运费">¥{{ formatPrice(order.freightAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="优惠金额">¥{{ formatPrice(order.discountAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="普通优惠">¥{{ formatPrice(order.discountAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="优惠券优惠">¥{{ formatPrice(order.couponAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="活动优惠">¥{{ formatPrice(order.activityDiscountAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="积分抵扣">¥{{ formatPrice(order.pointsAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="优惠及抵扣合计">
+              ¥{{ formatPrice(Number(order.discountAmount || 0) + Number(order.couponAmount || 0) + Number(order.activityDiscountAmount || 0) + Number(order.pointsAmount || 0)) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="实付金额">¥{{ formatPrice(order.payAmount) }}</el-descriptions-item>
             <el-descriptions-item label="买家备注" :span="2">{{ order.remark || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="运营备注" :span="2">{{ order.adminRemark || '-' }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
 
@@ -104,7 +111,7 @@
               :timestamp="formatDate(log.createTime)"
               placement="top"
             >
-              {{ log.content }} <span v-if="log.operator">（{{ log.operator }}）</span>
+              {{ log.content }} <span>（{{ formatOrderLogOperator(log) }}）</span>
             </el-timeline-item>
           </el-timeline>
         </el-card>
@@ -112,9 +119,10 @@
         <el-card>
           <template #header><span>订单操作</span></template>
           <div style="display: flex; flex-direction: column; gap: 10px">
-            <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:delivery'" type="primary" @click="showDeliverDialog">发货</el-button>
+            <el-button v-permission="'order:remark'" @click="showRemarkDialog">编辑运营备注</el-button>
+            <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:deliver'" type="primary" @click="showDeliverDialog">发货</el-button>
             <el-button v-if="order.status === 'pending_pickup'" v-permission="'pickup:verify'" type="success" @click="showVerifyPickupDialog">核销自提</el-button>
-            <el-button v-if="order.status === 'pending_payment'" v-permission="'order:detail'" type="danger" @click="handleCancelOrder">取消订单</el-button>
+            <el-button v-if="order.status === 'pending_payment'" v-permission="'order:cancel'" type="danger" @click="handleCancelOrder">取消订单</el-button>
           </div>
         </el-card>
       </el-col>
@@ -143,15 +151,36 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="verifyPickupVisible" title="核销自提" width="400px" destroy-on-close>
-      <el-form :model="verifyPickupForm" label-width="80px">
+    <el-dialog v-model="verifyPickupVisible" title="核销自提" width="420px" destroy-on-close>
+      <el-alert
+        :title="`即将核销订单 ${order.orderNo || '-'}`"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+      <el-form label-width="80px">
         <el-form-item label="自提码">
-          <el-input v-model="verifyPickupForm.pickupCode" placeholder="请输入8位自提码" maxlength="8" />
+          <el-input :model-value="verifyPickupCode" disabled />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="verifyPickupVisible = false">取消</el-button>
         <el-button type="success" :loading="submitting" @click="handleVerifyPickup">确认核销</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="remarkVisible" title="运营备注" width="520px" destroy-on-close>
+      <el-input
+        v-model="adminRemarkInput"
+        type="textarea"
+        :rows="5"
+        maxlength="500"
+        show-word-limit
+        placeholder="填写订单处理、沟通或异常情况；留空保存可清除备注"
+      />
+      <template #footer>
+        <el-button @click="remarkVisible = false">取消</el-button>
+        <el-button type="primary" :loading="remarkSubmitting" @click="handleSaveRemark">保存备注</el-button>
       </template>
     </el-dialog>
   </div>
@@ -169,20 +198,20 @@ import { asArray } from '@/utils/response'
 const router = useRouter()
 const route = useRoute()
 const submitting = ref(false)
+const remarkSubmitting = ref(false)
 const deliverVisible = ref(false)
 const verifyPickupVisible = ref(false)
+const remarkVisible = ref(false)
 const deliverFormRef = ref<FormInstance>()
+const verifyPickupCode = ref('')
+const adminRemarkInput = ref('')
 
 const order = ref<any>({})
 
 const deliverForm = reactive({
-  orderId: undefined as number | undefined,
+  orderId: undefined as string | undefined,
   logisticsCompany: '',
   logisticsNo: '',
-})
-
-const verifyPickupForm = reactive({
-  pickupCode: '',
 })
 
 const deliverRules: FormRules = {
@@ -192,15 +221,66 @@ const deliverRules: FormRules = {
 
 async function fetchDetail() {
   try {
-    const res = await orderApi.getDetail(route.params.id as string)
+    const res = await orderApi.getDetail(String(route.params.id))
     order.value = res.data || {}
   } catch {}
 }
 
+function formatOrderLogOperator(log: any) {
+  if (log?.operatorType === 'admin') return '管理员'
+  if (log?.operatorType === 'system') return '系统'
+  if (log?.operatorType === 'user') return '用户'
+  return String(log?.operator || '未知')
+}
+
+function showRemarkDialog() {
+  const orderId = String(order.value.id || '')
+  if (!/^\d+$/.test(orderId)) {
+    ElMessage.warning('订单ID无效，请刷新后重试')
+    return
+  }
+
+  adminRemarkInput.value = String(order.value.adminRemark || '')
+  remarkVisible.value = true
+}
+
+async function handleSaveRemark() {
+  const orderId = String(order.value.id || '')
+  if (!/^\d+$/.test(orderId)) {
+    ElMessage.warning('订单ID无效，请刷新后重试')
+    return
+  }
+
+  const remark = adminRemarkInput.value.trim()
+  if (remark.length > 500) {
+    ElMessage.warning('订单备注不能超过500个字符')
+    return
+  }
+
+  remarkSubmitting.value = true
+  try {
+    await orderApi.remark(orderId, remark)
+    ElMessage.success(remark ? '运营备注已保存' : '运营备注已清除')
+    remarkVisible.value = false
+    await fetchDetail()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '保存运营备注失败')
+  } finally {
+    remarkSubmitting.value = false
+  }
+}
+
 function showDeliverDialog() {
-  deliverForm.orderId = order.value.id
+  const orderId = String(order.value.id || '')
+  if (!/^\d+$/.test(orderId)) {
+    ElMessage.warning('订单ID无效，请刷新后重试')
+    return
+  }
+
+  deliverForm.orderId = orderId
   deliverForm.logisticsCompany = ''
   deliverForm.logisticsNo = ''
+  deliverFormRef.value?.clearValidate()
   deliverVisible.value = true
 }
 
@@ -208,9 +288,17 @@ async function handleDeliver() {
   const valid = await deliverFormRef.value?.validate().catch(() => false)
   if (!valid) return
 
+  const orderId = deliverForm.orderId
+  const logisticsCompany = deliverForm.logisticsCompany.trim()
+  const logisticsNo = deliverForm.logisticsNo.trim()
+  if (!orderId || !logisticsCompany || !logisticsNo) {
+    ElMessage.warning('请完整填写发货信息')
+    return
+  }
+
   submitting.value = true
   try {
-    await orderApi.deliver(deliverForm as any)
+    await orderApi.deliver({ orderId, logisticsCompany, logisticsNo })
     ElMessage.success('发货成功')
     deliverVisible.value = false
     fetchDetail()
@@ -221,28 +309,49 @@ async function handleDeliver() {
 
 async function handleCancelOrder() {
   try {
-    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /.+/, inputErrorMessage: '请输入取消原因' })
-    await orderApi.cancel(order.value.id, value)
+    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /\S+/, inputErrorMessage: '请输入取消原因' })
+    const reason = String(value || '').trim()
+    if (!reason) {
+      ElMessage.warning('请输入取消原因')
+      return
+    }
+    await orderApi.cancel(String(order.value.id), reason)
     ElMessage.success('取消成功')
     fetchDetail()
   } catch {}
 }
 
 function showVerifyPickupDialog() {
-  verifyPickupForm.pickupCode = order.value.pickupCode || ''
+  if (order.value.status !== 'pending_pickup') {
+    ElMessage.warning('当前订单状态不可核销')
+    return
+  }
+
+  const code = String(order.value.pickupCode || '').trim()
+  if (!/^\d{8}$/.test(code)) {
+    ElMessage.warning('当前订单自提码无效，请刷新后重试')
+    return
+  }
+
+  verifyPickupCode.value = code
   verifyPickupVisible.value = true
 }
 
 async function handleVerifyPickup() {
-  if (!verifyPickupForm.pickupCode) {
-    ElMessage.warning('请输入自提码')
+  const code = verifyPickupCode.value
+  const currentCode = String(order.value.pickupCode || '').trim()
+  if (order.value.status !== 'pending_pickup' || !/^\d{8}$/.test(code) || code !== currentCode) {
+    ElMessage.warning('订单或自提码已变化，请刷新后重试')
+    verifyPickupVisible.value = false
     return
   }
+
   submitting.value = true
   try {
-    await pickupStoreApi.verifyPickupCode(verifyPickupForm.pickupCode)
+    await pickupStoreApi.verifyPickupCode(code)
     ElMessage.success('核销成功')
     verifyPickupVisible.value = false
+    verifyPickupCode.value = ''
     fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '核销失败')

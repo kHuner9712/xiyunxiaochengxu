@@ -44,16 +44,33 @@ const addresses = ref<AddressItem[]>([])
 const loading = ref(false)
 const isSelectMode = ref(false)
 let eventChannel: any = null
+let addressVersion = 0
+let loadingVersion = -1
 
-async function loadAddresses() {
+async function loadAddresses(version = addressVersion) {
+  if (loading.value && loadingVersion === version) return
+
   loading.value = true
+  loadingVersion = version
   try {
-    addresses.value = await getAddressList()
+    const data = await getAddressList()
+    if (version !== addressVersion) return
+    addresses.value = data
   } catch {
-    uni.showToast({ title: '地址加载失败', icon: 'none' })
+    if (version === addressVersion) {
+      uni.showToast({ title: '地址加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === addressVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshAddresses() {
+  const version = ++addressVersion
+  return loadAddresses(version)
 }
 
 function handleSelect(item: AddressItem) {
@@ -73,7 +90,7 @@ function editAddress(item: AddressItem) {
 async function setDefault(item: AddressItem) {
   try {
     await setDefaultAddress(item.id)
-    await loadAddresses()
+    await refreshAddresses()
   } catch {
     uni.showToast({ title: '设置失败', icon: 'none' })
   }
@@ -86,14 +103,11 @@ async function deleteAddress(item: AddressItem) {
     success: async (res) => {
       if (res.confirm) {
         try {
+          // AddressService.delete already reassigns the default address transactionally when the
+          // deleted row was the default. A second client-side setDefault call used to create a
+          // false "删除失败" after a successful delete whenever that follow-up request failed.
           await deleteAddressApi(item.id)
-          if (item.isDefault) {
-            const remaining = addresses.value.filter(a => a.id !== item.id)
-            if (remaining.length > 0) {
-              await setDefaultAddress(remaining[0].id)
-            }
-          }
-          await loadAddresses()
+          await refreshAddresses()
         } catch {
           uni.showToast({ title: '删除失败', icon: 'none' })
         }
@@ -110,7 +124,14 @@ onLoad((options) => {
 })
 
 onShow(() => {
-  loadAddresses()
+  void refreshAddresses()
+})
+
+defineExpose({
+  addresses,
+  loading,
+  loadAddresses,
+  refreshAddresses,
 })
 </script>
 

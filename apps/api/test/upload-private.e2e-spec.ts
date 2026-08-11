@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { UploadModule } from '../src/upload/upload.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { RedisService } from '../src/common/redis/redis.service';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../src/common/guards/permission.guard';
 import { configurePublicUploadStaticAssets } from '../src/common/utils/upload-static-assets';
@@ -22,7 +23,34 @@ describe('Private upload access (e2e)', () => {
     fileAsset: {
       findFirst: jest.fn(({ where }: any) => fileAssets.get(where.id.toString()) || null),
     },
-    adminUserRole: { findMany: jest.fn().mockResolvedValue([]) },
+    user: {
+      findFirst: jest.fn(({ where }: any) =>
+        where?.id === 8n || where?.id === 9n ? { id: where.id } : null,
+      ),
+    },
+    adminUser: {
+      findFirst: jest.fn(({ where }: any) =>
+        where?.id === 1n || where?.id === 2n ? { id: where.id } : null,
+      ),
+    },
+    adminUserRole: {
+      findMany: jest.fn(({ where }: any) =>
+        where.adminUserId === 1n
+          ? [{
+              role: {
+                code: 'super_admin',
+                status: 1,
+                adminRolePermissions: [],
+              },
+            }]
+          : [],
+      ),
+    },
+    aftersaleOrder: { findFirst: jest.fn().mockResolvedValue(null) },
+    supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+  };
+  const mockRedis = {
+    exists: jest.fn().mockResolvedValue(true),
   };
 
   beforeAll(async () => {
@@ -52,6 +80,7 @@ describe('Private upload access (e2e)', () => {
         UploadModule,
       ],
       providers: [
+        { provide: RedisService, useValue: mockRedis },
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: PermissionGuard },
       ],
@@ -68,12 +97,16 @@ describe('Private upload access (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
     fs.rmSync(tempUploadDir, { recursive: true, force: true });
   });
 
   function sign(payload: any) {
-    return jwtService.sign({ ...payload, tokenType: 'access' });
+    return jwtService.sign({
+      ...payload,
+      tokenId: `session-${payload.roleType}-${payload.id}`,
+      tokenType: 'access',
+    });
   }
 
   it('未登录访问敏感组文件返回 401', async () => {
@@ -120,7 +153,15 @@ describe('Private upload access (e2e)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('管理员可以访问敏感附件', async () => {
+  it('无文件/业务权限管理员访问敏感附件返回 403', async () => {
+    const token = sign({ id: '2', roleType: 'admin' });
+    const res = await request(app.getHttpServer())
+      .get('/api/common/file/private/2')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('super_admin 可以访问敏感附件', async () => {
     const token = sign({ id: '1', roleType: 'admin' });
     const res = await request(app.getHttpServer())
       .get('/api/common/file/private/2')

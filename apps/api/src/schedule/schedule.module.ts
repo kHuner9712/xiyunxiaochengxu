@@ -6,6 +6,12 @@ import { RedisModule } from '../common/redis/redis.module';
 import { OrderModule } from '../order/order.module';
 import { PaymentModule } from '../payment/payment.module';
 import { FlashSaleModule } from '../flash-sale/flash-sale.module';
+import { GroupBuyModule } from '../group-buy/group-buy.module';
+import { MerchantSettlementModule } from '../merchant-settlement/merchant-settlement.module';
+import { ShareModule } from '../share/share.module';
+import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
+import { PointsModule } from '../points/points.module';
+import { PointsExpiryScheduleService } from '../points/points-expiry-schedule.service';
 
 @Module({
   imports: [
@@ -14,8 +20,13 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
     RedisModule,
     OrderModule,
     FlashSaleModule,
+    GroupBuyModule,
+    MerchantSettlementModule,
+    ShareModule,
+    BenefitPackageModule,
+    PointsModule,
     forwardRef(() => PaymentModule),
   ],
-  providers: [ScheduleService],
+  providers: [ScheduleService, PointsExpiryScheduleService],
 })
 export class ScheduleModule {}

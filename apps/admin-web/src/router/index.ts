@@ -37,7 +37,7 @@ const routes: RouteRecordRaw[] = [
             path: 'edit',
             name: 'ProductEdit',
             component: () => import('@/views/product/edit.vue'),
-            meta: { title: '商品编辑', permission: 'product:edit', hidden: true },
+            meta: { title: '商品编辑', permission: 'product:create', hidden: true },
           },
           {
             path: 'edit/:id',
@@ -117,7 +117,19 @@ const routes: RouteRecordRaw[] = [
             path: 'reconcile',
             name: 'ReconcileCenter',
             component: () => import('@/views/order/reconcile-center.vue'),
-            meta: { title: '对账与补偿', permission: 'system:config' },
+            meta: { title: '对账与补偿', permission: 'order:aftersale:refund' },
+          },
+          {
+            path: 'merchant-settlement-records',
+            name: 'MerchantSettlementRecords',
+            component: () => import('@/views/marketing/merchant-settlement-records.vue'),
+            meta: { title: '分佣明细', permission: 'order:merchant-settlement' },
+          },
+          {
+            path: 'merchant-settlement-batches',
+            name: 'MerchantSettlementBatches',
+            component: () => import('@/views/marketing/merchant-settlement-batches.vue'),
+            meta: { title: '结算批次', permission: 'order:merchant-settlement' },
           },
         ],
       },
@@ -248,18 +260,6 @@ const routes: RouteRecordRaw[] = [
             name: 'MerchantSettlementRules',
             component: () => import('@/views/marketing/merchant-settlement-rules.vue'),
             meta: { title: '分佣规则', permission: 'marketing:activity' },
-          },
-          {
-            path: 'merchant-settlement-records',
-            name: 'MerchantSettlementRecords',
-            component: () => import('@/views/marketing/merchant-settlement-records.vue'),
-            meta: { title: '分佣明细', permission: 'marketing:activity' },
-          },
-          {
-            path: 'merchant-settlement-batches',
-            name: 'MerchantSettlementBatches',
-            component: () => import('@/views/marketing/merchant-settlement-batches.vue'),
-            meta: { title: '结算批次', permission: 'marketing:activity' },
           },
           {
             path: 'group-buy-activity',

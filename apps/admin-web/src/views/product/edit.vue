@@ -63,14 +63,14 @@
         </el-form-item>
 
         <el-form-item label="商品主图" prop="mainImage">
-          <el-upload action="" :http-request="handleUploadImage" :show-file-list="false" accept="image/*">
+          <el-upload action="" :http-request="handleUploadMainImage" :show-file-list="false" accept="image/*">
             <el-image v-if="form.mainImage" :src="form.mainImage" style="width: 120px; height: 120px" fit="cover" />
             <el-icon v-else :size="28" style="width: 120px; height: 120px; line-height: 120px; border: 1px dashed #d9d9d9; text-align: center"><Plus /></el-icon>
           </el-upload>
         </el-form-item>
 
         <el-form-item label="商品图片">
-          <el-upload action="" :http-request="handleUploadImage" list-type="picture-card" :file-list="imageFileList" :on-remove="handleRemoveImage" accept="image/*">
+          <el-upload action="" :http-request="handleUploadGalleryImage" list-type="picture-card" :file-list="imageFileList" :on-remove="handleRemoveImage" accept="image/*">
             <el-icon><Plus /></el-icon>
           </el-upload>
         </el-form-item>
@@ -249,14 +249,14 @@ const isEdit = computed(() => !!route.params.id)
 const isRegulatedType = computed(() => form.complianceType !== 'normal')
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: undefined as string | undefined,
   name: '',
-  categoryId: undefined as number | undefined,
+  categoryId: undefined as string | undefined,
   productType: 'physical',
   fulfillmentType: 'delivery',
   businessCategory: 'other',
-  brandId: undefined as number | undefined,
-  supplierId: undefined as number | undefined,
+  brandId: undefined as string | undefined,
+  supplierId: undefined as string | undefined,
   mainImage: '',
   videoUrl: '',
   images: [] as string[],
@@ -268,7 +268,7 @@ const form = reactive({
   isRecommend: 0,
   description: '',
   skuMode: 'single' as 'single' | 'multi',
-  skus: [] as { id?: number; skuCode?: string; name: string; price: number; originalPrice: number; stock: number; image: string }[],
+  skus: [] as { id?: string; skuCode?: string; name: string; price: number; originalPrice: number; stock: number; image: string }[],
   complianceType: 'normal' as 'normal' | 'food' | 'health' | 'infant' | 'advanced',
   compliance: {
     isRegulated: false,
@@ -300,7 +300,6 @@ function sanitizeUrl(url: unknown): string {
   return typeof url === 'string' && url.trim() && url.trim() !== 'undefined' ? url.trim() : ''
 }
 
-
 function extractUploadUrl(res: any): string {
   return sanitizeUrl(
     res?.url ||
@@ -313,37 +312,30 @@ function extractUploadUrl(res: any): string {
   )
 }
 
-function syncMainImageAfterImagesChanged() {
-  const firstImage = form.images[0] || ''
-  if (!form.mainImage || !form.images.includes(form.mainImage)) {
-    form.mainImage = firstImage
-  }
-}
-
 function sanitizeUrlList(values: unknown): string[] {
   if (!Array.isArray(values)) return []
   return values.map((item) => sanitizeUrl(item)).filter((item) => !!item)
 }
 
-function inferCategoryNameById(id?: number): string {
+function inferCategoryNameById(id?: string): string {
   if (!id) return ''
   const stack = [...categoryTree.value]
   while (stack.length) {
     const current = stack.shift()
     if (!current) continue
-    if (Number(current.id) === Number(id)) return String(current.name || '')
+    if (String(current.id) === id) return String(current.name || '')
     if (Array.isArray(current.children)) stack.push(...current.children)
   }
   return ''
 }
 
-function inferCategoryById(id?: number): any | null {
+function inferCategoryById(id?: string): any | null {
   if (!id) return null
   const stack = [...categoryTree.value]
   while (stack.length) {
     const current = stack.shift()
     if (!current) continue
-    if (Number(current.id) === Number(id)) return current
+    if (String(current.id) === id) return current
     if (Array.isArray(current.children)) stack.push(...current.children)
   }
   return null
@@ -367,7 +359,7 @@ function normalizeSpecs(name: string) {
   return specs
 }
 
-function generateSkuCode(productId?: number) {
+function generateSkuCode(productId?: string) {
   const randomPart =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID().replace(/-/g, '')
@@ -499,14 +491,32 @@ function validateComplianceBeforeSave(): boolean {
   return true
 }
 
-async function handleUploadImage(options: any) {
-  const res = await uploadApi.uploadImage(options.file)
-  const uploadedUrl = sanitizeUrl(res?.data?.url)
-  if (!uploadedUrl) return
-  if (!form.mainImage) form.mainImage = uploadedUrl
-  else {
-    form.images.push(uploadedUrl)
-    imageFileList.value.push({ url: uploadedUrl })
+async function handleUploadMainImage(options: any) {
+  try {
+    const res = await uploadApi.uploadImage(options.file, 'product-image')
+    const uploadedUrl = extractUploadUrl(res)
+    if (!uploadedUrl) throw new Error('上传成功但未返回图片地址')
+    form.mainImage = uploadedUrl
+    options.onSuccess?.(res)
+  } catch (error: any) {
+    options.onError?.(error)
+    ElMessage.error(error?.message || '商品主图上传失败')
+  }
+}
+
+async function handleUploadGalleryImage(options: any) {
+  try {
+    const res = await uploadApi.uploadImage(options.file, 'product-image')
+    const uploadedUrl = extractUploadUrl(res)
+    if (!uploadedUrl) throw new Error('上传成功但未返回图片地址')
+    if (!form.images.includes(uploadedUrl)) {
+      form.images.push(uploadedUrl)
+      imageFileList.value.push({ url: uploadedUrl })
+    }
+    options.onSuccess?.(res)
+  } catch (error: any) {
+    options.onError?.(error)
+    ElMessage.error(error?.message || '商品图片上传失败')
   }
 }
 
@@ -548,12 +558,11 @@ function handleRemoveImage(file: any) {
   const idx = form.images.indexOf(targetUrl)
   if (idx > -1) form.images.splice(idx, 1)
   imageFileList.value = imageFileList.value.filter((item: any) => sanitizeUrl(item.rawUrl || item.url) !== targetUrl)
-  syncMainImageAfterImagesChanged()
 }
 
 async function handleUploadSkuImage(options: any, row: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file, 'product')
+    const res = await uploadApi.uploadImage(options.file, 'product-image')
     const uploadedUrl = extractUploadUrl(res)
     if (!uploadedUrl) {
       ElMessage.error('上传成功但未返回图片地址')
@@ -593,21 +602,21 @@ function handleRemoveCertImage(file: any) {
   if (file.url) revokePrivateObjectUrls([file.url])
 }
 
-async function fetchDetail(id: number) {
+async function fetchDetail(id: string) {
   const res = await productApi.getDetail(id)
   const d = res.data
   const skus = asArray(d.skus).filter((s: any) => s.status === 1 || s.status === undefined)
   const firstSku = skus[0]
 
   Object.assign(form, {
-    id: Number(d.id),
+    id: String(d.id),
     name: d.name || '',
-    categoryId: d.categoryId ? Number(d.categoryId) : undefined,
+    categoryId: d.categoryId ? String(d.categoryId) : undefined,
     productType: d.productType || 'physical',
     fulfillmentType: d.fulfillmentType || 'delivery',
     businessCategory: d.businessCategory || 'other',
-    brandId: d.brandId ? Number(d.brandId) : undefined,
-    supplierId: d.supplierId ? Number(d.supplierId) : undefined,
+    brandId: d.brandId ? String(d.brandId) : undefined,
+    supplierId: d.supplierId ? String(d.supplierId) : undefined,
     mainImage: sanitizeUrl(d.mainImage),
     videoUrl: sanitizeUrl(d.videoUrl),
     images: sanitizeUrlList(d.images),
@@ -619,7 +628,7 @@ async function fetchDetail(id: number) {
     isRecommend: Number(d.isRecommend ?? 0),
     description: d.description || '',
     skus: skus.map((s: any) => ({
-      id: s.id ? Number(s.id) : undefined,
+      id: s.id ? String(s.id) : undefined,
       skuCode: s.skuCode || undefined,
       name: Object.values(s.specs || {}).join('/'),
       price: Number((s.price / 100).toFixed(2)),
@@ -713,7 +722,7 @@ onMounted(async () => {
   brandList.value = asArray(brandRes.data)
   supplierList.value = asArray(supplierRes.data)
 
-  if (route.params.id) await fetchDetail(Number(route.params.id))
+  if (route.params.id) await fetchDetail(String(route.params.id))
 })
 
 onUnmounted(() => {

@@ -11,6 +11,9 @@
     </div>
 
     <div class="table-card">
+      <el-alert type="info" :closable="false" style="margin-bottom: 12px">
+        秒杀活动必须绑定一个真实可售 SKU；活动库存是额外秒杀上限，最终成交仍受 SKU 实际库存约束。商品/SKU ID 全程按字符串处理，避免大整数精度丢失。
+      </el-alert>
       <el-table v-loading="loading" :data="tableData" border>
         <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column prop="name" label="活动名称" min-width="140" show-overflow-tooltip />
@@ -25,7 +28,7 @@
         <el-table-column prop="limitPerUser" label="限购" width="70" />
         <el-table-column prop="lockMinutes" label="锁库存(分)" width="100" />
         <el-table-column label="活动时间" width="320">
-          <template #default="{ row }">{{ formatDateShort(row.startTime) }} ~ {{ formatDateShort(row.endTime) }}</template>
+          <template #default="{ row }">{{ formatActivityDate(row.startTime) }} ~ {{ formatActivityDate(row.endTime) }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -50,16 +53,36 @@
       />
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editing.id ? '编辑秒杀活动' : '新增秒杀活动'" width="640px">
+    <el-dialog v-model="dialogVisible" :title="editing.id ? '编辑秒杀活动' : '新增秒杀活动'" width="700px">
       <el-form :model="editing" label-width="120px">
         <el-form-item label="活动名称" required>
           <el-input v-model="editing.name" placeholder="请输入活动名称" />
         </el-form-item>
         <el-form-item label="商品ID" required>
-          <el-input v-model="editing.productId" placeholder="请输入商品ID" />
+          <div class="inline-field">
+            <el-input
+              v-model="editing.productId"
+              placeholder="输入商品ID后加载SKU"
+              @change="handleProductChanged"
+            />
+            <el-button :loading="productLoading" @click="loadProductSkus(true)">加载SKU</el-button>
+          </div>
         </el-form-item>
-        <el-form-item label="SKU ID">
-          <el-input v-model="editing.skuId" placeholder="可选，留空则需用户选择规格" />
+        <el-form-item label="SKU" required>
+          <el-select
+            v-model="editing.skuId"
+            filterable
+            placeholder="请先加载商品并选择SKU"
+            style="width: 100%"
+            :disabled="availableSkus.length === 0"
+          >
+            <el-option
+              v-for="sku in availableSkus"
+              :key="sku.id"
+              :value="sku.id"
+              :label="`${sku.name}｜ID ${sku.id}｜¥${formatPrice(sku.price)}｜库存 ${sku.stock}`"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="秒杀价(元)" required>
           <el-input-number v-model="editing.flashPrice" :min="0" :precision="2" />
@@ -68,7 +91,7 @@
           <el-input-number v-model="editing.originalPrice" :min="0" :precision="2" />
         </el-form-item>
         <el-form-item label="秒杀库存" required>
-          <el-input-number v-model="editing.stockLimit" :min="0" />
+          <el-input-number v-model="editing.stockLimit" :min="1" />
         </el-form-item>
         <el-form-item label="每人限购">
           <el-input-number v-model="editing.limitPerUser" :min="0" />
@@ -111,11 +134,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { flashSaleApi } from '@/api/flash-sale'
-import { formatPrice, formatDateShort } from '@/utils/format'
+import { productApi } from '@/api/product'
+import { formatPrice } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
+const POSITIVE_ID = /^[1-9]\d*$/
 const loading = ref(false)
+const productLoading = ref(false)
 const tableData = ref<any[]>([])
+const availableSkus = ref<Array<{ id: string; name: string; price: number; stock: number }>>([])
 const total = ref(0)
 const dialogVisible = ref(false)
 
@@ -144,23 +171,8 @@ const editing = reactive<any>({
   description: '',
 })
 
-async function loadList() {
-  loading.value = true
-  try {
-    const res: any = await flashSaleApi.getActivities({
-      page: searchForm.page,
-      pageSize: searchForm.pageSize,
-      keyword: searchForm.keyword || undefined,
-      status: searchForm.status,
-    })
-    tableData.value = asArray(res.data)
-    total.value = paginationTotal(res.data)
-  } finally {
-    loading.value = false
-  }
-}
-
-function openCreate() {
+function resetEditing() {
+  availableSkus.value = []
   Object.assign(editing, {
     id: null,
     name: '',
@@ -178,64 +190,199 @@ function openCreate() {
     coverImage: '',
     description: '',
   })
+}
+
+async function loadProductSkus(showMessage = false): Promise<boolean> {
+  const productId = String(editing.productId || '').trim()
+  if (!POSITIVE_ID.test(productId)) {
+    availableSkus.value = []
+    editing.skuId = ''
+    if (showMessage) ElMessage.warning('请输入有效的商品ID')
+    return false
+  }
+
+  productLoading.value = true
+  try {
+    const res: any = await productApi.getDetail(productId)
+    const product = res.data || {}
+    const skus = asArray(product.skus)
+      .filter((sku: any) => sku?.id != null && (sku.status === 1 || sku.status === undefined))
+      .map((sku: any) => ({
+        id: String(sku.id),
+        name: Object.values(sku.specs || {}).join('/') || sku.skuCode || `SKU ${sku.id}`,
+        price: Number(sku.price || 0),
+        stock: Number(sku.stock || 0),
+      }))
+
+    availableSkus.value = skus
+    if (skus.length === 0) {
+      editing.skuId = ''
+      if (showMessage) ElMessage.warning('该商品没有可售SKU，无法创建秒杀活动')
+      return false
+    }
+    if (!skus.some((sku) => sku.id === String(editing.skuId || ''))) {
+      editing.skuId = skus.length === 1 ? skus[0].id : ''
+    }
+    if (showMessage) ElMessage.success(`已加载 ${skus.length} 个可售SKU`)
+    return true
+  } catch {
+    availableSkus.value = []
+    editing.skuId = ''
+    return false
+  } finally {
+    productLoading.value = false
+  }
+}
+
+function handleProductChanged() {
+  editing.productId = String(editing.productId || '').trim()
+  editing.skuId = ''
+  availableSkus.value = []
+}
+
+async function loadList() {
+  loading.value = true
+  try {
+    const res: any = await flashSaleApi.getActivities({
+      page: searchForm.page,
+      pageSize: searchForm.pageSize,
+      keyword: searchForm.keyword || undefined,
+      status: searchForm.status,
+    })
+    tableData.value = asArray(res.data)
+    total.value = paginationTotal(res.data)
+  } finally {
+    loading.value = false
+  }
+}
+
+function openCreate() {
+  resetEditing()
   dialogVisible.value = true
 }
 
-function openEdit(row: any) {
+async function openEdit(row: any) {
+  resetEditing()
   Object.assign(editing, {
     id: row.id,
     name: row.name,
-    productId: row.productId,
-    skuId: row.skuId || '',
-    flashPrice: row.flashPrice / 100,
-    originalPrice: row.originalPrice ? row.originalPrice / 100 : null,
+    productId: row.productId != null ? String(row.productId) : '',
+    skuId: row.skuId != null ? String(row.skuId) : '',
+    flashPrice: Number(row.flashPrice || 0) / 100,
+    originalPrice: row.originalPrice != null ? Number(row.originalPrice) / 100 : null,
     stockLimit: row.stockLimit,
     limitPerUser: row.limitPerUser,
     lockMinutes: row.lockMinutes,
-    startTime: row.startTime,
-    endTime: row.endTime,
+    startTime: toLocalPickerDateTime(row.startTime),
+    endTime: toLocalPickerDateTime(row.endTime),
     status: row.status,
     sortOrder: row.sortOrder,
     coverImage: row.coverImage || '',
     description: row.description || '',
   })
+  await loadProductSkus(false)
   dialogVisible.value = true
 }
 
+function padDatePart(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+function toLocalPickerDateTime(value: unknown): string {
+  if (!value) return ''
+  const date = new Date(String(value))
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`
+}
+
+function parsePickerDateTime(value: unknown): Date | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const date = new Date(value.trim().replace(' ', 'T'))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function toIsoDateTime(value: unknown): string | null {
+  return parsePickerDateTime(value)?.toISOString() ?? null
+}
+
+function formatActivityDate(value: unknown): string {
+  return toLocalPickerDateTime(value) || '-'
+}
+
 async function handleSubmit() {
-  if (!editing.name) { ElMessage.warning('请填写活动名称'); return }
-  if (!editing.productId) { ElMessage.warning('请填写商品ID'); return }
-  if (!editing.startTime || !editing.endTime) { ElMessage.warning('请选择活动时间'); return }
+  if (!editing.name?.trim()) { ElMessage.warning('请填写活动名称'); return }
+  const productId = String(editing.productId || '').trim()
+  if (!POSITIVE_ID.test(productId)) { ElMessage.warning('请输入有效的商品ID'); return }
+
+  const loaded = await loadProductSkus(false)
+  if (!loaded) { ElMessage.warning('商品或SKU不可用，请重新加载'); return }
+  const skuId = String(editing.skuId || '').trim()
+  const selectedSku = availableSkus.value.find((sku) => sku.id === skuId)
+  if (!POSITIVE_ID.test(skuId) || !selectedSku) {
+    ElMessage.warning('请选择该商品的有效SKU')
+    return
+  }
+
+  const startDate = parsePickerDateTime(editing.startTime)
+  const endDate = parsePickerDateTime(editing.endTime)
+  if (!startDate || !endDate) { ElMessage.warning('请选择有效的活动时间'); return }
+  if (startDate.getTime() >= endDate.getTime()) {
+    ElMessage.warning('活动结束时间必须晚于开始时间')
+    return
+  }
+
+  const flashPriceFen = Math.round(Number(editing.flashPrice) * 100)
+  if (!Number.isSafeInteger(flashPriceFen) || flashPriceFen < 0) {
+    ElMessage.warning('秒杀价格无效')
+    return
+  }
+  if (flashPriceFen > selectedSku.price) {
+    ElMessage.warning(`秒杀价不能高于当前SKU售价 ¥${formatPrice(selectedSku.price)}`)
+    return
+  }
+  const stockLimit = Number(editing.stockLimit)
+  if (!Number.isInteger(stockLimit) || stockLimit < 1) {
+    ElMessage.warning('秒杀库存必须至少为1')
+    return
+  }
+
+  const { id: _id, ...rest } = editing
   const payload: any = {
-    ...editing,
-    productId: Number(editing.productId),
-    flashPrice: Math.round(Number(editing.flashPrice) * 100),
-    originalPrice: editing.originalPrice ? Math.round(Number(editing.originalPrice) * 100) : undefined,
-    stockLimit: Number(editing.stockLimit),
+    ...rest,
+    productId,
+    skuId,
+    flashPrice: flashPriceFen,
+    originalPrice: editing.originalPrice != null
+      ? Math.round(Number(editing.originalPrice) * 100)
+      : undefined,
+    stockLimit,
     limitPerUser: Number(editing.limitPerUser),
     lockMinutes: Number(editing.lockMinutes),
     sortOrder: Number(editing.sortOrder),
+    startTime: toIsoDateTime(editing.startTime),
+    endTime: toIsoDateTime(editing.endTime),
   }
-  if (!payload.skuId) delete payload.skuId
   if (payload.originalPrice === undefined) delete payload.originalPrice
   try {
     if (editing.id) {
-      await flashSaleApi.updateActivity(editing.id, payload)
+      await flashSaleApi.updateActivity(String(editing.id), payload)
     } else {
       await flashSaleApi.createActivity(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
     loadList()
-  } catch (e) {}
+  } catch {
+    // 错误已由拦截器处理
+  }
 }
 
 async function handleStatusChange(row: any, val: string | number | boolean) {
   const numVal = val ? 1 : 0
   try {
-    await flashSaleApi.updateActivityStatus(row.id, numVal)
+    await flashSaleApi.updateActivityStatus(String(row.id), numVal)
     ElMessage.success(numVal === 1 ? '已上架' : '已下架')
-  } catch (e) {
+  } catch {
     row.status = numVal === 1 ? 0 : 1
   }
 }
@@ -243,10 +390,12 @@ async function handleStatusChange(row: any, val: string | number | boolean) {
 async function handleDelete(row: any) {
   try {
     await ElMessageBox.confirm(`确认删除活动「${row.name}」吗？`, '提示', { type: 'warning' })
-    await flashSaleApi.deleteActivity(row.id)
+    await flashSaleApi.deleteActivity(String(row.id))
     ElMessage.success('删除成功')
     loadList()
-  } catch (e) {}
+  } catch {
+    // 取消或错误
+  }
 }
 
 onMounted(() => loadList())
@@ -271,4 +420,10 @@ onMounted(() => loadList())
   padding: 16px;
   border-radius: 8px;
 }
+.inline-field {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.inline-field .el-input { flex: 1; }
 </style>

@@ -1,31 +1,109 @@
-import { get } from '@/utils/request'
+import { get, post } from '@/utils/request'
+import { runIdempotentCheckout } from '@/utils/checkout-idempotency'
 
-export function getActivityList(params: { type?: number; page: number; pageSize: number }) {
-  return get<{ list: ActivityDetail[]; total: number }>('/weapp/activity/active', params)
+export function getActivityList(params: { type?: string; page: number; pageSize: number }) {
+  return get<ActivityDetail[]>('/weapp/activity/active', params)
 }
 
-export function getActivityDetail(id: number) {
-  return get<ActivityDetail>(`/weapp/activity/${id}`)
+export function getActivityDetail(id: string) {
+  return get<ActivityDetail>(`/weapp/activity/${encodeURIComponent(id)}`)
 }
 
 export function getActivityFeed(params: { tab: string; page: number; pageSize: number }) {
   return get<{ list: FeedItem[]; total: number }>('/weapp/activity/feed', params)
 }
 
+export interface ActivityCheckoutInput {
+  activityProductId: string
+  skuId: string
+  quantity: number
+  addressId?: string
+  pickupStoreId?: string
+  fulfillmentType?: 'delivery' | 'pickup'
+  sourceType?: string
+  sourceCode?: string
+  referrerUserId?: string
+  remark?: string
+}
+
+export interface ActivityOrderPreview {
+  activityId: string
+  activityProductId: string
+  activityType: string
+  promotionLabel: string
+  items: Array<{
+    activityProductId?: string
+    productId: string
+    skuId: string
+    productName: string
+    productImage: string
+    skuSpecText?: string
+    price: number
+    originalPrice: number
+    quantity: number
+    subtotal: number
+    isGift?: boolean
+  }>
+  totalAmount: number
+  discountAmount: number
+  couponAmount: number
+  activityDiscountAmount: number
+  pointsAmount: number
+  pointsDeducted: number
+  availablePoints: number
+  maxPointsDeduct: number
+  pointsDeductRate: number
+  pointsDeductMaxPercent: number
+  freightAmount: number
+  payAmount: number
+  fulfillmentType: 'delivery' | 'pickup'
+  isZeroPay: boolean
+  promotionStackingDisabled: true
+  maxQuantity?: number
+}
+
+export function previewActivityOrder(activityId: string, data: ActivityCheckoutInput) {
+  return post<ActivityOrderPreview>(`/weapp/activity/${encodeURIComponent(activityId)}/preview`, data)
+}
+
+export async function createActivityOrder(activityId: string, data: ActivityCheckoutInput) {
+  const result = await runIdempotentCheckout<{
+    orderId: string
+    orderNo: string
+    payAmount: number
+    isZeroPay: boolean
+    status: string
+    fulfillmentType: string
+    activityId: string
+    activityProductId: string
+  }>(
+    `activity:${activityId}:${data.activityProductId}:${data.skuId}`,
+    data,
+    (clientRequestId) => post(`/weapp/activity/${encodeURIComponent(activityId)}/order`, {
+      ...data,
+      clientRequestId,
+    }),
+  )
+  if (result.status === 'cancelled') {
+    throw new Error('上次提交对应活动订单已取消，请重新提交')
+  }
+  return result
+}
+
 export interface ActivityDetail {
-  id: string | number
+  id: string
   name: string
   image?: string
   bannerImage?: string
   description: string
-  type: string | number
+  type: string
   startTime: number | string | Date
   endTime: number | string | Date
-  rules: string
+  rules?: Record<string, unknown> | null
   discount?: number
   minAmount?: number
   products?: ActivityProduct[]
-  activityProducts?: any[]
+  activityProducts?: ActivityProduct[]
   productList?: ActivityProduct[]
   goodsList?: ActivityProduct[]
 }
@@ -50,9 +128,10 @@ export interface FeedItem {
 }
 
 export interface ActivityProduct {
-  id?: string | number
-  productId: string | number
-  skuId?: string | number
+  id?: string
+  activityProductId?: string
+  productId: string
+  skuId?: string | null
   name: string
   image: string
   price: number
@@ -60,4 +139,8 @@ export interface ActivityProduct {
   sales: number
   activityPrice: number
   stock: number
+  activityStock?: number
+  limitPerUser?: number
+  fulfillmentType?: 'delivery' | 'pickup'
+  detailUrl?: string
 }

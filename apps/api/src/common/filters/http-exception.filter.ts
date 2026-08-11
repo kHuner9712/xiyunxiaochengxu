@@ -71,11 +71,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
         code = ERROR_CODE.INTERNAL_ERROR;
       }
     } else {
-      const mappedPrismaError = this.mapPrismaException(exception);
-      if (mappedPrismaError) {
-        code = mappedPrismaError.code;
-        message = mappedPrismaError.message;
-        httpStatus = mappedPrismaError.httpStatus;
+      const mappedNativeInputError = this.mapNativeInputException(exception);
+      const mappedPrismaError = mappedNativeInputError ? null : this.mapPrismaException(exception);
+      const mappedError = mappedNativeInputError ?? mappedPrismaError;
+      if (mappedError) {
+        code = mappedError.code;
+        message = mappedError.message;
+        httpStatus = mappedError.httpStatus;
       }
     }
 
@@ -96,6 +98,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
       data: null,
       requestId,
     });
+  }
+
+  private mapNativeInputException(exception: unknown): MappedException | null {
+    if (!(exception instanceof SyntaxError) && !(exception instanceof RangeError)) return null;
+    const message = exception.message || '';
+    if (!message.toLowerCase().includes('bigint')) return null;
+
+    return {
+      code: ERROR_CODE.PARAM_ERROR,
+      message: 'ID参数格式无效',
+      httpStatus: HttpStatus.BAD_REQUEST,
+    };
   }
 
   private mapPrismaException(exception: unknown): MappedException | null {

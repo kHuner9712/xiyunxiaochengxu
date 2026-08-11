@@ -52,6 +52,7 @@ describe('ContentService', () => {
       expect(result.list).toHaveLength(1);
       expect(result.list[0].contentType).toBe('video');
       expect(result.list[0].videoUrl).toBe('http://video.mp4');
+      expect(result.list[0].relatedProductIds).toEqual(['1', '2']);
     });
 
     it('should filter by contentType=article', async () => {
@@ -157,9 +158,9 @@ describe('ContentService', () => {
   });
 
   describe('findActivityFeed', () => {
-    it('should return mixed feed for recommend tab', async () => {
+    it('should return mixed feed for recommend tab using only executable active activities', async () => {
       prisma.activity.findMany.mockResolvedValue([{
-        id: 1n, name: '限时折扣', type: 'flash_sale',
+        id: 1n, name: '限时折扣', type: '1',
         bannerImage: 'banner.jpg', startTime: new Date(), endTime: new Date(),
       }]);
       prisma.content.findMany.mockResolvedValue([{
@@ -172,6 +173,14 @@ describe('ContentService', () => {
 
       const result = await service.findActivityFeed('recommend', 1, 10);
 
+      expect(prisma.activity.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          status: 1,
+          type: { in: ['1', '2', '5'] },
+          startTime: { lte: expect.any(Date) },
+          endTime: { gte: expect.any(Date) },
+        }),
+      }));
       expect(result.list.length).toBeGreaterThan(0);
       const types = result.list.map((item: any) => item.type);
       expect(types).toContain('activity');
@@ -207,15 +216,26 @@ describe('ContentService', () => {
       expect(result.list[0].type).toBe('article');
     });
 
-    it('should return activities for discount tab', async () => {
+    it('should return only executable active activities for discount tab', async () => {
       prisma.activity.findMany.mockResolvedValue([{
-        id: 1n, name: '满减活动', type: 'full_reduction',
+        id: 1n, name: '满减活动', type: '2',
         bannerImage: 'banner.jpg', startTime: new Date(), endTime: new Date(),
       }]);
       prisma.activity.count.mockResolvedValue(1);
 
       const result = await service.findActivityFeed('discount', 1, 10);
 
+      expect(prisma.activity.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          status: 1,
+          type: { in: ['1', '2', '5'] },
+          startTime: { lte: expect.any(Date) },
+          endTime: { gte: expect.any(Date) },
+        }),
+      }));
+      expect(prisma.activity.count).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ status: 1, type: { in: ['1', '2', '5'] } }),
+      }));
       expect(result.list).toHaveLength(1);
       expect(result.list[0].type).toBe('activity');
     });
@@ -235,7 +255,7 @@ describe('ContentService', () => {
       expect(result.id).toBe('123');
     });
 
-    it('should include all new fields', async () => {
+    it('should include all new fields and normalize historical related product ids to strings', async () => {
       prisma.content.findFirst.mockResolvedValue({
         id: 1n, title: '视频内容', contentType: 'video', coverImage: 'cover.jpg',
         content: 'body', summary: '摘要', videoUrl: 'http://video.mp4',
@@ -254,7 +274,7 @@ describe('ContentService', () => {
       expect(result.videoDuration).toBe(120);
       expect(result.placement).toEqual(['activity', 'home']);
       expect(result.tags).toEqual(['种草', '好物']);
-      expect(result.relatedProductIds).toEqual([1, 2]);
+      expect(result.relatedProductIds).toEqual(['1', '2']);
       expect(result.relatedActivityId).toBe('5');
       expect(result.isFeatured).toBe(1);
       expect(result.categoryName).toBe('育儿知识');

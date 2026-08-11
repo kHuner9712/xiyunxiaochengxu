@@ -2,9 +2,12 @@
   <view class="home-page page-shell">
     <view class="brand-panel">
       <view class="brand-top">
-        <view>
-          <text class="brand-title">禧孕优选</text>
-          <text class="brand-subtitle">科学育儿 · 品质之选</text>
+        <view class="brand-identity">
+          <image v-if="homeData.brand.logo" class="brand-logo" :src="homeData.brand.logo" mode="aspectFit" />
+          <view class="brand-copy">
+            <text class="brand-title">{{ homeData.brand.name }}</text>
+            <text class="brand-subtitle">科学育儿 · 品质之选</text>
+          </view>
         </view>
         <view class="brand-badge">
           <text class="brand-badge-text">自营母婴精品</text>
@@ -71,6 +74,50 @@
       <scroll-view scroll-x class="month-scroll">
         <view class="month-list">
           <ProductCard v-for="item in homeData.monthRecommend" :key="item.id" :product="item" class="month-item" />
+        </view>
+      </scroll-view>
+    </view>
+
+    <view v-for="section in homeData.recommendations" :key="section.id" class="section">
+      <view class="section-header">
+        <view>
+          <text class="section-title">{{ section.name }}</text>
+          <text class="section-subtitle">{{ recommendationSubtitle(section) }}</text>
+        </view>
+      </view>
+
+      <view v-if="section.type === 1" class="product-grid">
+        <ProductCard v-for="item in recommendationProducts(section)" :key="item.id" :product="item" />
+      </view>
+
+      <scroll-view v-else scroll-x class="activity-scroll">
+        <view class="activity-list">
+          <view
+            v-for="item in recommendationActivities(section)"
+            v-if="section.type === 2"
+            :key="item.id"
+            class="activity-card"
+            @tap="goActivityDetail(item.id)"
+          >
+            <image class="activity-image" :src="item.image" mode="aspectFill" />
+            <view class="activity-info">
+              <text class="activity-name">{{ item.name }}</text>
+              <CountdownTimer :endTime="item.endTime" :showLabel="true" />
+            </view>
+          </view>
+          <view
+            v-for="item in recommendationContents(section)"
+            v-else
+            :key="item.id"
+            class="activity-card"
+            @tap="goContentDetail(item.id)"
+          >
+            <image class="activity-image" :src="item.image" mode="aspectFill" />
+            <view class="activity-info">
+              <text class="activity-name">{{ item.title }}</text>
+              <text class="section-subtitle">{{ item.summary || '查看精选内容' }}</text>
+            </view>
+          </view>
         </view>
       </scroll-view>
     </view>
@@ -154,8 +201,19 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShareAppMessage } from '@dcloudio/uni-app'
-import { getHomeData, getGuessProducts, type BannerItem, type QuickEntry, type ProductItem, type ActivityItem } from '@/api/home'
+import {
+  getHomeData,
+  getGuessProducts,
+  type BannerItem,
+  type QuickEntry,
+  type ProductItem,
+  type ActivityItem,
+  type ContentRecommendationItem,
+  type RecommendationSection,
+  type StorefrontBrand,
+} from '@/api/home'
 import { useUserStore } from '@/stores/user'
+import { resolveBannerNavigation } from './banner-navigation'
 import ProductCard from '@/components/ProductCard.vue'
 import CountdownTimer from '@/components/CountdownTimer.vue'
 import Loading from '@/components/Loading.vue'
@@ -164,28 +222,32 @@ import Empty from '@/components/Empty.vue'
 const userStore = useUserStore()
 const activityLabels = ['限时秒杀', '会员专享', '新人礼包']
 
-onShareAppMessage(() => ({
-  title: '禧孕优选 - 品质母婴好物',
-  path: `/pages/home/index?inviter=${userStore.userInfo?.id || ''}`
-}))
-
 const homeData = reactive<{
+  brand: StorefrontBrand
   banners: BannerItem[]
   quickEntries: QuickEntry[]
   announcement: string
+  recommendations: RecommendationSection[]
   monthRecommend: ProductItem[]
   hotProducts: ProductItem[]
   newProducts: ProductItem[]
   activities: ActivityItem[]
 }>({
+  brand: { name: '禧孕优选', logo: '' },
   banners: [],
   quickEntries: [],
   announcement: '',
+  recommendations: [],
   monthRecommend: [],
   hotProducts: [],
   newProducts: [],
   activities: []
 })
+
+onShareAppMessage(() => ({
+  title: `${homeData.brand.name || '禧孕优选'} - 品质母婴好物`,
+  path: `/pages/home/index?inviter=${userStore.userInfo?.id || ''}`
+}))
 
 const guessProducts = ref<ProductItem[]>([])
 const guessLoading = ref(false)
@@ -216,15 +278,35 @@ async function loadGuessProducts() {
   }
 }
 
+function recommendationSubtitle(section: RecommendationSection) {
+  if (section.type === 1) return '为你精选的商品'
+  if (section.type === 2) return '精选活动 · 限时参与'
+  return '精选内容 · 值得一读'
+}
+
+function recommendationProducts(section: RecommendationSection): ProductItem[] {
+  return section.type === 1 ? section.items as ProductItem[] : []
+}
+
+function recommendationActivities(section: RecommendationSection): ActivityItem[] {
+  return section.type === 2 ? section.items as ActivityItem[] : []
+}
+
+function recommendationContents(section: RecommendationSection): ContentRecommendationItem[] {
+  return section.type === 3 ? section.items as ContentRecommendationItem[] : []
+}
+
 function goSearch() {
   uni.navigateTo({ url: '/pages/search/index' })
 }
 
 function handleBannerTap(banner: BannerItem) {
-  if (banner.linkType === 1) {
-    uni.navigateTo({ url: `/pages/product/detail?id=${banner.linkValue}` })
-  } else if (banner.linkType === 2) {
-    uni.navigateTo({ url: `/pages/activity/detail?id=${banner.linkValue}` })
+  const navigation = resolveBannerNavigation(banner)
+  if (!navigation) return
+  if (navigation.method === 'switchTab') {
+    uni.switchTab({ url: navigation.url })
+  } else {
+    uni.navigateTo({ url: navigation.url })
   }
 }
 
@@ -252,8 +334,12 @@ function goActivityList() {
   uni.switchTab({ url: '/pages/activity/index' })
 }
 
-function goActivityDetail(id: number) {
-  uni.navigateTo({ url: `/pages/activity/detail?id=${id}` })
+function goActivityDetail(id: string) {
+  uni.navigateTo({ url: `/pages/activity/detail?id=${encodeURIComponent(id)}` })
+}
+
+function goContentDetail(id: string) {
+  uni.navigateTo({ url: `/pages/content/detail?id=${encodeURIComponent(id)}` })
 }
 
 function goActivityContentList() {
@@ -293,12 +379,34 @@ onMounted(() => {
   margin-bottom: $spacing-md;
 }
 
+.brand-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.brand-logo {
+  width: 86rpx;
+  height: 86rpx;
+  margin-right: 18rpx;
+  border-radius: 24rpx;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: $shadow-xs;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
 .brand-title {
   display: block;
+  max-width: 420rpx;
   font-size: 52rpx;
   line-height: 1.12;
   font-weight: 900;
   color: $text-color;
+  @include text-ellipsis;
 }
 
 .brand-subtitle {
@@ -313,6 +421,7 @@ onMounted(() => {
   border-radius: $radius-round;
   background: rgba($success-color, 0.12);
   border: 1rpx solid rgba($success-color, 0.18);
+  flex-shrink: 0;
 }
 
 .brand-badge-text {

@@ -1,5 +1,8 @@
 import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
+import { IsEnum, IsOptional } from 'class-validator';
+import { AftersaleStatus } from '@prisma/client';
 import { AftersaleService } from './aftersale.service';
+import { AftersaleReviewService } from './aftersale-review.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -7,12 +10,11 @@ import { CreateAftersaleDto } from './dto/create-aftersale.dto';
 import { RejectDto } from './dto/reject.dto';
 import { ReturnLogisticsDto } from './dto/return-logistics.dto';
 import { ApproveAftersaleDto } from './dto/approve-aftersale.dto';
-import { IsOptional, IsString } from 'class-validator';
 
 class AdminAftersaleQueryDto extends PaginationDto {
   @IsOptional()
-  @IsString()
-  status?: string;
+  @IsEnum(AftersaleStatus)
+  status?: AftersaleStatus;
 }
 
 @Controller('weapp/aftersale')
@@ -51,7 +53,10 @@ export class WeappAftersaleController {
 
 @Controller('admin/aftersale')
 export class AdminAftersaleController {
-  constructor(private readonly aftersaleService: AftersaleService) {}
+  constructor(
+    private readonly aftersaleService: AftersaleService,
+    private readonly aftersaleReviewService: AftersaleReviewService,
+  ) {}
 
   @Get('list')
   @RequirePermission('order:aftersale')
@@ -72,7 +77,7 @@ export class AdminAftersaleController {
     @CurrentUser('id') adminId: string,
     @Body() dto: ApproveAftersaleDto,
   ) {
-    return this.aftersaleService.approve(id, adminId, dto.refundAmount);
+    return this.aftersaleReviewService.approve(id, adminId, dto);
   }
 
   @Put(':id/reject')

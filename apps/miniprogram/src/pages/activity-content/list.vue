@@ -88,45 +88,64 @@ const list = ref<ActivityContentListItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let listVersion = 0
+let loadingVersion = -1
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    list.value = []
-  }
+function resetList() {
+  page.value = 1
+  finished.value = false
+  list.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
+  const requestKeyword = keyword.value.trim()
+  const requestType = currentType.value
   loading.value = true
+  loadingVersion = version
   try {
     const data = await getActivityContentList({
-      page: page.value,
+      page: requestPage,
       pageSize: 10,
-      keyword: keyword.value.trim() || undefined,
-      type: (currentType.value || undefined) as ActivityContentType | undefined,
+      keyword: requestKeyword || undefined,
+      type: (requestType || undefined) as ActivityContentType | undefined,
     })
+    if (version !== listVersion) return
+
     list.value.push(...(data.list || []))
     finished.value = list.value.length >= (data.total || 0)
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
 function switchType(value: string) {
   if (currentType.value === value) return
   currentType.value = value
-  loadList(true)
+  const version = ++listVersion
+  resetList()
+  loadList(version)
 }
 
 function handleSearch() {
-  loadList(true)
+  const version = ++listVersion
+  resetList()
+  loadList(version)
 }
 
 function focusSearch() {
-  // 占位：避免占位点击行为，实际输入由 input 自身处理
+  // 输入由 input 自身处理。
 }
 
 function goDetail(id: string) {
@@ -140,15 +159,27 @@ function typeLabel(type: ActivityContentType): string {
 }
 
 onPullDownRefresh(async () => {
-  await loadList(true)
+  const version = ++listVersion
+  resetList()
+  await loadList(version)
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadList()
+  loadList(listVersion)
 })
 
-loadList()
+loadList(listVersion)
+
+defineExpose({
+  currentType,
+  keyword,
+  list,
+  loading,
+  switchType,
+  handleSearch,
+  loadList,
+})
 </script>
 
 <style lang="scss" scoped>

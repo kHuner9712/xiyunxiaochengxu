@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad, onReachBottom } from '@dcloudio/uni-app'
+import { onHide, onLoad, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import { groupBuyApi, type GroupBuyActivity } from '@/api/group-buy'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
@@ -36,13 +36,30 @@ const activityList = ref<GroupBuyActivity[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 60_000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
 }
 
 function remainHours(act: GroupBuyActivity): number {
-  const ms = new Date(act.endTime).getTime() - Date.now()
+  const ms = new Date(act.endTime).getTime() - nowMs.value
   return Math.max(0, Math.floor(ms / 3600000))
 }
 
@@ -72,6 +89,9 @@ function goDetail(id: string) {
 }
 
 onLoad(() => loadList())
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 onReachBottom(() => loadList())
 </script>
 

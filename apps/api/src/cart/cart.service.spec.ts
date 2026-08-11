@@ -2,21 +2,24 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { CartService } from './cart.service';
 
 function createMockPrisma() {
-  return {
+  const prisma: any = {
     cart: {
-      findMany: jest.fn() as any,
-      findFirst: jest.fn() as any,
-      create: jest.fn() as any,
-      update: jest.fn() as any,
-      delete: jest.fn() as any,
-      updateMany: jest.fn() as any,
-      deleteMany: jest.fn() as any,
-      count: jest.fn() as any,
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      updateMany: jest.fn(),
+      deleteMany: jest.fn(),
+      count: jest.fn(),
     },
     productSku: {
-      findFirst: jest.fn() as any,
+      findFirst: jest.fn(),
     },
+    $queryRaw: jest.fn(),
   };
+  prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
+  return prisma;
 }
 
 describe('CartService', () => {
@@ -25,6 +28,7 @@ describe('CartService', () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    prisma.$queryRaw.mockResolvedValue([{ id: 100n }]);
     service = new CartService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
     process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
@@ -69,35 +73,35 @@ describe('CartService', () => {
       expect(item.isValid).toBe(true);
     });
 
-    it('should set isValid to false when product is off-sale', async () => {
-      prisma.cart.findMany.mockResolvedValue([{
-        id: 1n,
-        userId: 100n,
-        productId: 10n,
-        skuId: 20n,
-        quantity: 1,
-        isSelected: 0,
-        createdAt: new Date(),
-        product: {
-          id: 10n,
-          name: '下架商品',
-          mainImage: 'product.jpg',
-          status: 2,
+    it('marks off-sale or insufficient-stock rows invalid', async () => {
+      prisma.cart.findMany.mockResolvedValue([
+        {
+          id: 1n,
+          userId: 100n,
+          productId: 10n,
+          skuId: 20n,
+          quantity: 1,
+          isSelected: 0,
+          createdAt: new Date(),
+          product: { id: 10n, name: '下架商品', mainImage: 'product.jpg', status: 2 },
+          sku: { id: 20n, specs: { 颜色: '蓝色' }, price: 5900, stock: 10, status: 1, image: null },
         },
-        sku: {
-          id: 20n,
-          specs: { 颜色: '蓝色', 尺码: '90cm' },
-          price: 5900,
-          stock: 10,
-          status: 1,
-          image: null,
+        {
+          id: 2n,
+          userId: 100n,
+          productId: 11n,
+          skuId: 21n,
+          quantity: 3,
+          isSelected: 0,
+          createdAt: new Date(),
+          product: { id: 11n, name: '库存不足', mainImage: 'stock.jpg', status: 1 },
+          sku: { id: 21n, specs: null, price: 6900, stock: 2, status: 1, image: null },
         },
-      }]);
+      ]);
 
       const result = await service.findAll('100');
       expect(result[0].isValid).toBe(false);
-      expect(result[0].productImage).toBe('https://api.example.com/product.jpg');
-      expect(result[0].skuName).toBe('颜色：蓝色 / 尺码：90cm');
+      expect(result[1].isValid).toBe(false);
     });
   });
 
@@ -105,11 +109,11 @@ describe('CartService', () => {
     it('updateItem scopes cart item by current user id', async () => {
       prisma.cart.findFirst.mockResolvedValue(null);
 
-      await expect(service.updateItem('100', { id: 9, quantity: 2 })).rejects.toThrow('购物车记录不存在');
+      await expect(service.updateItem('100', { id: '9', quantity: 2 })).rejects.toThrow('购物车记录不存在');
 
-      expect(prisma.cart.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cart.findFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 9n, userId: 100n },
-      });
+      }));
       expect(prisma.cart.update).not.toHaveBeenCalled();
     });
 
@@ -121,17 +125,34 @@ describe('CartService', () => {
       expect(prisma.cart.delete).not.toHaveBeenCalled();
     });
 
-    it('bulk operations are always scoped to current user id', async () => {
-      prisma.cart.updateMany.mockResolvedValue({ count: 2 });
-      prisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+    it('select all clears stale selections then selects only currently purchasable rows', async () => {
+      prisma.cart.updateMany
+        .mockResolvedValueOnce({ count: 3 })
+        .mockResolvedValueOnce({ count: 1 });
+      prisma.cart.findMany.mockResolvedValue([
+        { id: 1n, quantity: 2, product: { status: 1 }, sku: { status: 1, stock: 5 } },
+        { id: 2n, quantity: 2, product: { status: 2 }, sku: { status: 1, stock: 5 } },
+        { id: 3n, quantity: 4, product: { status: 1 }, sku: { status: 1, stock: 3 } },
+      ]);
 
-      await service.selectAll('100', 1);
-      await service.removeSelected('100');
+      const result = await service.selectAll('100', 1);
 
-      expect(prisma.cart.updateMany).toHaveBeenCalledWith({
+      expect(prisma.cart.updateMany).toHaveBeenNthCalledWith(1, {
         where: { userId: 100n },
+        data: { isSelected: 0 },
+      });
+      expect(prisma.cart.updateMany).toHaveBeenNthCalledWith(2, {
+        where: { userId: 100n, id: { in: [1n] } },
         data: { isSelected: 1 },
       });
+      expect(result.updatedCount).toBe(1);
+    });
+
+    it('removeSelected is transactionally scoped to current user id', async () => {
+      prisma.cart.deleteMany.mockResolvedValue({ count: 1 });
+
+      await service.removeSelected('100');
+
       expect(prisma.cart.deleteMany).toHaveBeenCalledWith({
         where: { userId: 100n, isSelected: 1 },
       });

@@ -82,6 +82,8 @@ const total = ref(0)
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let searchVersion = 0
+let loadingVersion = -1
 
 async function loadHotKeywords() {
   try {
@@ -110,13 +112,14 @@ async function doSearch() {
     uni.showToast({ title: '请输入搜索关键词', icon: 'none' })
     return
   }
+  const version = ++searchVersion
   hasSearched.value = true
   page.value = 1
   total.value = 0
   finished.value = false
   products.value = []
-  await loadProducts()
-  if (userStore.isLoggedIn) {
+  await loadProducts(version)
+  if (version === searchVersion && userStore.isLoggedIn) {
     loadSearchHistory()
   }
 }
@@ -126,23 +129,35 @@ function searchByKeyword(kw: string) {
   doSearch()
 }
 
-async function loadProducts() {
-  if (loading.value || finished.value) return
+async function loadProducts(version = searchVersion) {
+  if (finished.value && version === searchVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestKeyword = keyword.value
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
     const data = await searchProducts({
-      keyword: keyword.value,
-      page: page.value,
+      keyword: requestKeyword,
+      page: requestPage,
       pageSize: 10
     })
+    if (version !== searchVersion) return
+
     products.value.push(...data.list)
     total.value = data.total
     finished.value = products.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '搜索失败', icon: 'none' })
+    if (version === searchVersion) {
+      uni.showToast({ title: '搜索失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === searchVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
@@ -170,17 +185,18 @@ onMounted(() => {
 
 onReachBottom(() => {
   if (hasSearched.value) {
-    loadProducts()
+    loadProducts(searchVersion)
   }
 })
 
 onPullDownRefresh(async () => {
   if (hasSearched.value) {
+    const version = ++searchVersion
     page.value = 1
     total.value = 0
     finished.value = false
     products.value = []
-    await loadProducts()
+    await loadProducts(version)
   } else {
     await Promise.all([loadHotKeywords(), loadSearchHistory()])
   }
@@ -188,7 +204,12 @@ onPullDownRefresh(async () => {
 })
 
 defineExpose({
+  keyword,
+  products,
+  loading,
   searchHistory,
+  doSearch,
+  loadProducts,
   clearHistory,
 })
 </script>

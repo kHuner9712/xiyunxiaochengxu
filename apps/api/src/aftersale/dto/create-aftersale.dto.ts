@@ -1,4 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, Matches, IsIn } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateAftersaleDto {
   @IsString()
@@ -24,5 +34,10 @@ export class CreateAftersaleDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(6)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(128, { each: true })
+  @Matches(/^\/api\/common\/file\/private\/[1-9]\d*$/, { each: true })
   images?: string[];
 }

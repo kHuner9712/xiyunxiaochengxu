@@ -41,7 +41,7 @@ import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getAddressDetail, createAddress, updateAddress, deleteAddress as deleteAddressApi, type AddressForm } from '@/api/address'
 
-const form = ref<AddressForm & { id?: string | number }>({
+const form = ref<AddressForm & { id?: string }>({
   name: '',
   phone: '',
   province: '',
@@ -77,7 +77,7 @@ function onDefaultChange(e: any) {
 async function loadAddress(id: string) {
   try {
     const data = await getAddressDetail(id)
-    form.value = { ...data, id: data.id }
+    form.value = { ...data, id: String(data.id) }
     if (data.province) {
       regionValue.value = [data.province, data.city || '', data.district || '']
     }
@@ -110,10 +110,11 @@ function validate(): boolean {
 async function handleSubmit() {
   if (!validate()) return
   try {
-    if (isEdit.value && form.value.id) {
-      await updateAddress(form.value as any)
+    const { id, ...payload } = form.value
+    if (isEdit.value && id) {
+      await updateAddress({ ...payload, id })
     } else {
-      await createAddress(form.value)
+      await createAddress(payload)
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1500)
@@ -123,14 +124,15 @@ async function handleSubmit() {
 }
 
 async function handleDelete() {
-  if (!form.value.id) return
+  const id = form.value.id
+  if (!id) return
   uni.showModal({
     title: '提示',
     content: '确定删除该地址吗？',
     success: async (res) => {
       if (res.confirm) {
         try {
-          await deleteAddressApi(form.value.id!)
+          await deleteAddressApi(id)
           uni.navigateBack()
         } catch {
           uni.showToast({ title: '删除失败', icon: 'none' })
@@ -141,7 +143,7 @@ async function handleDelete() {
 }
 
 onLoad((options) => {
-  if (options?.id) loadAddress(options.id)
+  if (options?.id) loadAddress(String(options.id))
 })
 </script>
 

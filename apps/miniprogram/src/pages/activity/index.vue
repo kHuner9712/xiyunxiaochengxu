@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
+import { onHide, onReachBottom, onPullDownRefresh, onShow, onUnload } from '@dcloudio/uni-app'
 import { getActivityFeed, type FeedItem } from '@/api/activity'
 import CountdownTimer from '@/components/CountdownTimer.vue'
 import Loading from '@/components/Loading.vue'
@@ -87,8 +87,7 @@ const tabs = [
   { label: '推荐', value: 'recommend' },
   { label: '优惠', value: 'discount' },
   { label: '视频', value: 'video' },
-  { label: '文章', value: 'article' },
-  { label: '线下', value: 'offline' }
+  { label: '文章', value: 'article' }
 ]
 
 const currentTab = ref('recommend')
@@ -96,6 +95,8 @@ const feedList = ref<FeedItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
 
 async function loadFeed(reset = false) {
   if (loading.value) return
@@ -143,7 +144,9 @@ function typeLabel(type: string) {
 }
 
 function marketingLabel(item: FeedItem) {
-  if (item.activityType) return item.activityType
+  if (item.activityType === '1') return '限时折扣'
+  if (item.activityType === '2') return '满减优惠'
+  if (item.activityType === '5') return '新人优惠'
   if (item.type === 'activity') return '限时活动'
   if (item.type === 'video') return '育儿视频'
   if (item.type === 'article') return '科学育儿'
@@ -152,7 +155,7 @@ function marketingLabel(item: FeedItem) {
 
 function statusLabel(item: FeedItem) {
   if (item.type !== 'activity') return '精选'
-  const now = Date.now()
+  const now = nowMs.value
   const start = item.startTime ? endTimeNumber(item.startTime) : 0
   const end = item.endTime ? endTimeNumber(item.endTime) : 0
   if (start && now < start) return '即将开始'
@@ -175,11 +178,25 @@ function formatDuration(seconds: number) {
 }
 
 function endTimeNumber(value?: string) {
-  if (!value) return Date.now()
+  if (!value) return nowMs.value
   const parsed = Number(value)
   if (Number.isFinite(parsed)) return parsed < 10000000000 ? parsed * 1000 : parsed
   const timestamp = new Date(value).getTime()
-  return Number.isFinite(timestamp) ? timestamp : Date.now()
+  return Number.isFinite(timestamp) ? timestamp : nowMs.value
+}
+
+function startClock() {
+  nowMs.value = Date.now()
+  if (clockTimer) return
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (!clockTimer) return
+  clearInterval(clockTimer)
+  clockTimer = null
 }
 
 onPullDownRefresh(async () => {
@@ -194,6 +211,10 @@ onReachBottom(() => {
 onMounted(() => {
   loadFeed()
 })
+
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 </script>
 
 <style lang="scss" scoped>

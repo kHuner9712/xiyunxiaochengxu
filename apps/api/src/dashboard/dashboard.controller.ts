@@ -1,13 +1,15 @@
 import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { IsDateString, IsInt, IsOptional, Matches } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class TrendQuery {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(1)
+  @Max(31)
   days?: number;
 
   @IsOptional()
@@ -19,6 +21,15 @@ class TrendQuery {
   @IsDateString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   endDate?: string;
+}
+
+class LimitQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }
 
 @Controller('admin/dashboard')
@@ -40,18 +51,18 @@ export class DashboardController {
       }
       return this.dashboardService.getSalesChartByDateRange(query.startDate, query.endDate);
     }
-    return this.dashboardService.getSalesChart(query.days || 7);
+    return this.dashboardService.getSalesChart(query.days ?? 7);
   }
 
   @Get('top-products')
   @RequirePermission('dashboard')
-  async getTopProducts(@Query('limit') limit?: number) {
-    return this.dashboardService.getTopProducts(limit || 10);
+  async getTopProducts(@Query() query: LimitQuery) {
+    return this.dashboardService.getTopProducts(query.limit ?? 10);
   }
 
   @Get('recent-orders')
   @RequirePermission('dashboard')
-  async getRecentOrders(@Query('limit') limit?: number) {
-    return this.dashboardService.getRecentOrders(limit || 10);
+  async getRecentOrders(@Query() query: LimitQuery) {
+    return this.dashboardService.getRecentOrders(query.limit ?? 10);
   }
 }

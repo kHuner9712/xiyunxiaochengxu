@@ -4,8 +4,8 @@ export function getPickupStoreList(params: { page: number; pageSize: number }) {
   return get<{ list: PickupStoreItem[]; total: number }>('/weapp/pickup-store/list', params)
 }
 
-export function getPickupStoreDetail(id: string | number) {
-  return get<PickupStoreItem>(`/weapp/pickup-store/${id}`)
+export function getPickupStoreDetail(id: string) {
+  return get<PickupStoreItem>(`/weapp/pickup-store/${encodeURIComponent(id)}`)
 }
 
 export interface PickupStoreItem {

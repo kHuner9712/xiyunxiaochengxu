@@ -110,13 +110,12 @@ const handleSubmit = async () => {
       confirmPassword: form.confirmPassword,
     })
 
-    ElMessage.success('密码修改成功，请妥善保管')
-
-    await userStore.fetchUserInfo()
-
-    if (!userStore.userInfo.mustChangePassword) {
-      router.push('/dashboard')
-    }
+    // The server intentionally revokes every existing admin session after a password change.
+    // Do not call fetchUserInfo with an access token that is now invalid: that used to turn a
+    // successful password change into a misleading "password change failed" UI flow.
+    userStore.clearTokens()
+    ElMessage.success('密码修改成功，请使用新密码重新登录')
+    await router.replace('/login')
   } catch (e: any) {
     const msg = e?.response?.data?.message || e?.message || '密码修改失败'
     ElMessage.error(msg)

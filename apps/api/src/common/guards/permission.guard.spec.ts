@@ -24,6 +24,14 @@ describe('PermissionGuard', () => {
     getClass: () => jest.fn(),
   });
 
+  const activeRole = (code: string, permissions: string[] = []) => ({
+    role: {
+      code,
+      status: 1,
+      adminRolePermissions: permissions.map((permission) => ({ permission: { code: permission } })),
+    },
+  });
+
   it('没有 @RequirePermission 装饰器时应放行', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
     const context = createMockContext() as any;
@@ -31,38 +39,39 @@ describe('PermissionGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('super_admin 角色应放行所有权限', async () => {
+  it('有效 super_admin 角色应放行所有权限', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['system:config']);
-    mockPrisma.adminUserRole.findMany.mockResolvedValue([
-      { role: { code: 'super_admin', adminRolePermissions: [] } },
-    ]);
+    mockPrisma.adminUserRole.findMany.mockResolvedValue([activeRole('super_admin')]);
     const context = createMockContext() as any;
     const result = await guard.canActivate(context);
     expect(result).toBe(true);
   });
 
-  it('用户有所需权限时应放行', async () => {
+  it('停用的 super_admin 角色不得继续放行', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['system:config']);
+    mockPrisma.adminUserRole.findMany.mockResolvedValue([
+      { role: { code: 'super_admin', status: 2, adminRolePermissions: [] } },
+    ]);
+    const context = createMockContext() as any;
+    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('用户有来自有效角色的所需权限时应放行', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['order:list']);
+    mockPrisma.adminUserRole.findMany.mockResolvedValue([activeRole('order_manager', ['order:list'])]);
+    const context = createMockContext() as any;
+    const result = await guard.canActivate(context);
+    expect(result).toBe(true);
+  });
+
+  it('停用角色中的权限不得继续授权', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['order:list']);
     mockPrisma.adminUserRole.findMany.mockResolvedValue([
       {
         role: {
           code: 'order_manager',
+          status: 2,
           adminRolePermissions: [{ permission: { code: 'order:list' } }],
-        },
-      },
-    ]);
-    const context = createMockContext() as any;
-    const result = await guard.canActivate(context);
-    expect(result).toBe(true);
-  });
-
-  it('用户没有所需权限时应抛出 ForbiddenException', async () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['order:list']);
-    mockPrisma.adminUserRole.findMany.mockResolvedValue([
-      {
-        role: {
-          code: 'product_manager',
-          adminRolePermissions: [{ permission: { code: 'product:list' } }],
         },
       },
     ]);
@@ -70,15 +79,17 @@ describe('PermissionGuard', () => {
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 
+  it('用户没有所需权限时应抛出 ForbiddenException', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['order:list']);
+    mockPrisma.adminUserRole.findMany.mockResolvedValue([activeRole('product_manager', ['product:list'])]);
+    const context = createMockContext() as any;
+    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
+  });
+
   it('多个权限要求中有一个匹配即放行', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['order:refund', 'order:aftersale:refund']);
     mockPrisma.adminUserRole.findMany.mockResolvedValue([
-      {
-        role: {
-          code: 'aftersale_manager',
-          adminRolePermissions: [{ permission: { code: 'order:aftersale:refund' } }],
-        },
-      },
+      activeRole('aftersale_manager', ['order:aftersale:refund']),
     ]);
     const context = createMockContext() as any;
     const result = await guard.canActivate(context);
@@ -87,56 +98,28 @@ describe('PermissionGuard', () => {
 
   it('业务事件权限 system:log 未授权时应拒绝', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['system:log']);
-    mockPrisma.adminUserRole.findMany.mockResolvedValue([
-      {
-        role: {
-          code: 'order_manager',
-          adminRolePermissions: [{ permission: { code: 'order:list' } }],
-        },
-      },
-    ]);
+    mockPrisma.adminUserRole.findMany.mockResolvedValue([activeRole('order_manager', ['order:list'])]);
     const context = createMockContext() as any;
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 
   it('对账权限 system:config 未授权时应拒绝', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['system:config']);
-    mockPrisma.adminUserRole.findMany.mockResolvedValue([
-      {
-        role: {
-          code: 'order_manager',
-          adminRolePermissions: [{ permission: { code: 'order:list' } }],
-        },
-      },
-    ]);
+    mockPrisma.adminUserRole.findMany.mockResolvedValue([activeRole('order_manager', ['order:list'])]);
     const context = createMockContext() as any;
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 
   it('退款确认权限 order:aftersale:refund 未授权时应拒绝', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['order:aftersale:refund']);
-    mockPrisma.adminUserRole.findMany.mockResolvedValue([
-      {
-        role: {
-          code: 'order_manager',
-          adminRolePermissions: [{ permission: { code: 'order:list' } }],
-        },
-      },
-    ]);
+    mockPrisma.adminUserRole.findMany.mockResolvedValue([activeRole('order_manager', ['order:list'])]);
     const context = createMockContext() as any;
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 
   it('文件上传权限 system:file 未授权时应拒绝', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['system:file']);
-    mockPrisma.adminUserRole.findMany.mockResolvedValue([
-      {
-        role: {
-          code: 'order_manager',
-          adminRolePermissions: [{ permission: { code: 'order:list' } }],
-        },
-      },
-    ]);
+    mockPrisma.adminUserRole.findMany.mockResolvedValue([activeRole('order_manager', ['order:list'])]);
     const context = createMockContext() as any;
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });

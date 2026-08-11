@@ -85,6 +85,26 @@ describe('HttpExceptionFilter Prisma mapping', () => {
     }));
   });
 
+  it('maps raw BigInt conversion failures to a parameter error instead of an internal error', () => {
+    const { host, response } = createHost('/api/weapp/group-buy/group/not-an-id');
+    let error: unknown;
+    try {
+      BigInt('not-an-id');
+    } catch (caught) {
+      error = caught;
+    }
+
+    filter.catch(error, host);
+
+    expect(response.status).toHaveBeenCalledWith(200);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: ERROR_CODE.PARAM_ERROR,
+      message: 'ID参数格式无效',
+      data: null,
+      requestId: expect.any(String),
+    }));
+  });
+
   it('keeps unknown exceptions as internal errors', () => {
     const { host, response } = createHost();
 

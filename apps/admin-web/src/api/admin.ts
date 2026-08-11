@@ -1,25 +1,32 @@
 import request from '@/utils/request'
 
+export interface AdminPayload {
+  username?: string
+  password?: string
+  realName?: string
+  phone?: string
+  avatar?: string
+  roleIds?: string[]
+  status?: 0 | 1
+}
+
 export const adminApi = {
   getList(params: { page: number; pageSize: number; username?: string; status?: number }) {
     return request.get('/admin/admin-user', { params })
   },
-  getDetail(id: number) {
-    return request.get(`/admin/admin-user/${id}`)
+  getDetail(id: string) {
+    return request.get(`/admin/admin-user/${encodeURIComponent(id)}`)
   },
-  create(data: any) {
+  create(data: AdminPayload) {
     return request.post('/admin/admin-user', data)
   },
-  update(idOrData: number | any, data?: any) {
-    const id = typeof idOrData === 'number' ? idOrData : idOrData.id
-    const payload = typeof idOrData === 'number' ? (data || {}) : { ...(idOrData || {}) }
-    delete payload.id
-    return request.put(`/admin/admin-user/${id}`, payload)
+  update(id: string, data: AdminPayload) {
+    return request.put(`/admin/admin-user/${encodeURIComponent(id)}`, data)
   },
-  delete(id: number) {
-    return request.delete(`/admin/admin-user/${id}`)
+  delete(id: string) {
+    return request.delete(`/admin/admin-user/${encodeURIComponent(id)}`)
   },
-  updateStatus(id: number, status: number) {
-    return request.put(`/admin/admin-user/${id}/status`, { status })
+  updateStatus(id: string, status: 0 | 1) {
+    return request.put(`/admin/admin-user/${encodeURIComponent(id)}/status`, { status })
   },
 }

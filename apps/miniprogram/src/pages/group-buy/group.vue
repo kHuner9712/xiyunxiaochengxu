@@ -3,7 +3,8 @@
     <view v-if="group" class="group-detail-card card">
       <view class="status-banner" :class="`status-${group.status}`">
         <text class="status-text">{{ statusText(group.status) }}</text>
-        <text v-if="group.status === 'forming'" class="status-sub">剩 {{ remainTime(group.expiresAt) }}</text>
+        <text v-if="group.status === 'forming' && !groupExpired" class="status-sub">剩 {{ remainTime(group.expiresAt) }}</text>
+        <text v-else-if="group.status === 'forming' && groupExpired" class="status-sub">系统正在处理拼团结果</text>
         <text v-else-if="group.status === 'success' && group.successAt" class="status-sub">成团时间 {{ formatDateTime(group.successAt) }}</text>
         <text v-else-if="group.status === 'failed' && group.failedAt" class="status-sub">失败时间 {{ formatDateTime(group.failedAt) }}</text>
       </view>
@@ -39,12 +40,12 @@
 
       <view class="members-section">
         <view class="section-title">团成员</view>
-        <view v-for="m in group.members" :key="m.id" class="member-item">
-          <image v-if="m.user?.avatar" class="avatar" :src="m.user.avatar" mode="aspectFill" />
+        <view v-for="(m, index) in group.members" :key="`${m.role}-${m.createdAt || index}-${index}`" class="member-item">
+          <image v-if="m.user?.avatarUrl" class="avatar" :src="m.user.avatarUrl" mode="aspectFill" />
           <view v-else class="avatar avatar-placeholder" />
           <view class="member-info">
             <view class="member-top">
-              <text class="member-name">{{ m.user?.nickname || '用户' + m.userId }}</text>
+              <text class="member-name">{{ m.user?.nickname || '用户' }}</text>
               <text v-if="m.role === 'leader'" class="role-tag leader">团长</text>
               <text v-else class="role-tag member">团员</text>
             </view>
@@ -55,9 +56,11 @@
       </view>
 
       <view v-if="canJoin" class="bottom-bar">
-        <button class="join-btn" @tap="goJoin">参与此团</button>
+        <button class="join-btn" :disabled="submitting" @tap="handleJoinCurrentGroup">
+          {{ submitting ? '参团中...' : '参与此团' }}
+        </button>
       </view>
-      <button v-else class="share-btn" open-type="share">邀请好友拼团</button>
+      <button v-else-if="canShare" class="share-btn" open-type="share">邀请好友拼团</button>
     </view>
 
     <Loading v-if="loading" />
@@ -66,25 +69,48 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from '@dcloudio/uni-app'
 import { groupBuyApi, type GroupBuyGroup } from '@/api/group-buy'
 import { useUserStore } from '@/stores/user'
+import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
+import { createPayment, wxPay } from '@/api/payment'
 import Loading from '@/components/Loading.vue'
 
 const userStore = useUserStore()
 const group = ref<GroupBuyGroup | null>(null)
 const loading = ref(false)
+const submitting = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
 }
 
 function remainTime(expiresAt: string): string {
-  const ms = new Date(expiresAt).getTime() - Date.now()
+  const ms = new Date(expiresAt).getTime() - nowMs.value
   if (ms <= 0) return '已过期'
   const hours = Math.floor(ms / 3600000)
   const mins = Math.floor((ms % 3600000) / 60000)
-  return hours > 0 ? `${hours}h${mins}m` : `${mins}m`
+  const secs = Math.floor((ms % 60000) / 1000)
+  if (hours > 0) return `${hours}h${mins}m`
+  if (mins > 0) return `${mins}m${secs}s`
+  return `${secs}s`
 }
 
 function formatDate(s: string): string {
@@ -100,10 +126,11 @@ function formatDateTime(s: string): string {
 }
 
 function statusText(status: string): string {
+  if (status === 'forming' && groupExpired.value) return '拼团已到期'
   switch (status) {
     case 'forming': return '组团中'
     case 'success': return '已成团'
-    case 'failed': return '已失败'
+    case 'failed': return '拼团失败，已付款订单将自动退款'
     case 'cancelled': return '已取消'
     default: return status
   }
@@ -125,15 +152,24 @@ const progressPercent = computed(() => {
   return Math.min(100, Math.round((group.value.currentCount / target) * 100))
 })
 
+const groupExpired = computed(() => {
+  if (!group.value) return false
+  return new Date(group.value.expiresAt).getTime() <= nowMs.value
+})
+
 const canJoin = computed(() => {
   if (!group.value) return false
   if (group.value.status !== 'forming') return false
-  if (new Date(group.value.expiresAt).getTime() <= Date.now()) return false
+  if (groupExpired.value) return false
   if (group.value.currentCount >= group.value.targetCount) return false
-  // 已加入该团则不能再次参团
-  const meId = String(userStore.userInfo?.id || '')
-  if (!meId) return true
-  return !group.value.members?.some((m: any) => String(m.userId) === meId)
+  return !group.value.members?.some((member) => member.isCurrentUser)
+})
+
+const canShare = computed(() => {
+  if (!group.value) return false
+  return group.value.status === 'forming'
+    && !groupExpired.value
+    && group.value.currentCount < group.value.targetCount
 })
 
 async function loadDetail(id: string) {
@@ -148,22 +184,75 @@ async function loadDetail(id: string) {
   }
 }
 
-function goJoin() {
-  if (!group.value) return
+async function handleJoinCurrentGroup() {
+  if (!group.value || !canJoin.value || submitting.value) return
   if (!userStore.isLoggedIn) {
-    userStore.requireLogin(() => goJoin())
+    const targetGroupId = group.value.id
+    userStore.requireLogin(async () => {
+      await loadDetail(targetGroupId)
+      if (!canJoin.value) {
+        uni.showToast({ title: '您已参与此团或该团已不可加入', icon: 'none' })
+        return
+      }
+      await handleJoinCurrentGroup()
+    })
     return
   }
-  uni.navigateTo({
-    url: `/pages/group-buy/detail?id=${group.value!.activityId}`,
-  })
+
+  submitting.value = true
+  try {
+    const targetGroupId = group.value.id
+    const activity = await groupBuyApi.getDetail(group.value.activityId)
+    const fulfillment = await resolvePromotionFulfillment(activity.productId, '拼团')
+    if (!fulfillment) return
+
+    const result = await groupBuyApi.join({
+      groupId: targetGroupId,
+      quantity: 1,
+      ...fulfillment,
+    })
+
+    if (result.isZeroPay) {
+      uni.redirectTo({
+        url: `/pages/order/pay-result?orderId=${result.orderId}&payScene=group&groupId=${targetGroupId}&zeroPay=1&payIntent=success`,
+      })
+      return
+    }
+
+    try {
+      const payment = await createPayment({ orderId: result.orderId })
+      await wxPay(payment)
+      uni.redirectTo({
+        url: `/pages/order/pay-result?orderId=${result.orderId}&payScene=group&groupId=${targetGroupId}&payIntent=success`,
+      })
+    } catch (payErr: any) {
+      const msg = String(payErr?.errMsg || payErr?.message || '')
+      uni.showModal({
+        title: msg.toLowerCase().includes('cancel') ? '支付未完成' : '支付发起失败',
+        content: '参团订单已创建，请到订单详情尽快完成支付；未支付成员不会计入成团人数。',
+        showCancel: false,
+        confirmText: '查看订单',
+        success: () => {
+          uni.navigateTo({ url: `/pages/order/detail?id=${result.orderId}` })
+        },
+      })
+    }
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '参团失败', icon: 'none' })
+    if (group.value?.id) await loadDetail(group.value.id)
+  } finally {
+    submitting.value = false
+  }
 }
 
 onLoad((options) => {
   if (options?.id) {
-    loadDetail(options.id)
+    loadDetail(String(options.id))
   }
 })
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 
 onShareAppMessage(() => ({
   title: group.value?.activity?.name || '快来一起拼团',
@@ -195,18 +284,10 @@ onShareAppMessage(() => ({
   margin-bottom: $spacing-md;
 }
 
-.status-banner.status-forming {
-  background: $primary-soft;
-}
-
-.status-banner.status-success {
-  background: $success-soft;
-}
-
+.status-banner.status-forming { background: $primary-soft; }
+.status-banner.status-success { background: $success-soft; }
 .status-banner.status-failed,
-.status-banner.status-cancelled {
-  background: $info-soft;
-}
+.status-banner.status-cancelled { background: $info-soft; }
 
 .status-text {
   font-size: $font-lg;
@@ -232,14 +313,8 @@ onShareAppMessage(() => ({
   flex-shrink: 0;
 }
 
-.cover-placeholder {
-  @include flex-center;
-}
-
-.placeholder-text {
-  color: $text-hint;
-  font-size: $font-sm;
-}
+.cover-placeholder { @include flex-center; }
+.placeholder-text { color: $text-hint; font-size: $font-sm; }
 
 .info-right {
   flex: 1;
@@ -259,27 +334,11 @@ onShareAppMessage(() => ({
   @include text-ellipsis-2;
 }
 
-.price-row {
-  display: flex;
-  align-items: baseline;
-  gap: $spacing-sm;
-}
+.price-row { display: flex; align-items: baseline; gap: $spacing-sm; }
+.price { color: $price-color; font-size: $font-lg; font-weight: 800; }
+.size { color: $warning-color; font-size: $font-sm; }
 
-.price {
-  color: $price-color;
-  font-size: $font-lg;
-  font-weight: 800;
-}
-
-.size {
-  color: $warning-color;
-  font-size: $font-sm;
-}
-
-.progress-section {
-  margin-bottom: $spacing-md;
-}
-
+.progress-section { margin-bottom: $spacing-md; }
 .progress-bar {
   width: 100%;
   height: 16rpx;
@@ -288,144 +347,33 @@ onShareAppMessage(() => ({
   overflow: hidden;
   margin-bottom: $spacing-sm;
 }
+.progress-inner { height: 100%; background: $gradient-coral; transition: width 0.3s; }
+.progress-text-row { display: flex; justify-content: space-between; align-items: center; }
+.progress-count { color: $price-color; font-size: $font-md; font-weight: 700; }
+.group-no { color: $text-hint; font-size: $font-sm; @include text-ellipsis; }
 
-.progress-inner {
-  height: 100%;
-  background: $gradient-coral;
-  transition: width 0.3s;
-}
-
-.progress-text-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.progress-count {
-  color: $price-color;
-  font-size: $font-md;
-  font-weight: 700;
-}
-
-.group-no {
-  color: $text-hint;
-  font-size: $font-sm;
-  @include text-ellipsis;
-}
-
-.members-section {
-  margin-top: $spacing-md;
-}
-
-.section-title {
-  font-size: $font-md;
-  font-weight: 700;
-  color: $text-color;
-  margin-bottom: $spacing-md;
-}
-
-.member-item {
-  display: flex;
-  align-items: center;
-  padding: $spacing-sm 0;
-  border-bottom: 1rpx solid $divider-color;
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.avatar {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 50%;
-  background: $bg-ivory;
-  flex-shrink: 0;
-}
-
-.avatar-placeholder {
-  background: $bg-gray;
-}
-
-.member-info {
-  flex: 1;
-  min-width: 0;
-  margin-left: $spacing-sm;
-}
-
-.member-top {
-  display: flex;
-  align-items: center;
-  gap: $spacing-xs;
-  margin-bottom: 4rpx;
-}
-
-.member-name {
-  font-size: $font-sm;
-  color: $text-color;
-  @include text-ellipsis;
-}
-
-.role-tag {
-  font-size: 20rpx;
-  padding: 2rpx 12rpx;
-  border-radius: $radius-round;
-  font-weight: 700;
-}
-
-.role-tag.leader {
-  background: $primary-soft;
-  color: $primary-dark;
-}
-
-.role-tag.member {
-  background: $info-soft;
-  color: $text-hint;
-}
-
-.member-status {
-  font-size: $font-xs;
-  color: $text-hint;
-}
-
-.member-status.m-status-paid {
-  color: $success-dark;
-}
-
-.member-status.m-status-pending_payment {
-  color: $warning-color;
-}
-
+.members-section { margin-top: $spacing-md; }
+.section-title { font-size: $font-md; font-weight: 700; color: $text-color; margin-bottom: $spacing-md; }
+.member-item { display: flex; align-items: center; padding: $spacing-sm 0; border-bottom: 1rpx solid $divider-color; }
+.member-item:last-child { border-bottom: none; }
+.avatar { width: 64rpx; height: 64rpx; border-radius: 50%; background: $bg-ivory; flex-shrink: 0; }
+.avatar-placeholder { background: $bg-gray; }
+.member-info { flex: 1; min-width: 0; margin-left: $spacing-sm; }
+.member-top { display: flex; align-items: center; gap: $spacing-xs; margin-bottom: 4rpx; }
+.member-name { font-size: $font-sm; color: $text-color; @include text-ellipsis; }
+.role-tag { font-size: 20rpx; padding: 2rpx 12rpx; border-radius: $radius-round; font-weight: 700; }
+.role-tag.leader { background: $primary-soft; color: $primary-dark; }
+.role-tag.member { background: $info-soft; color: $text-hint; }
+.member-status { font-size: $font-xs; color: $text-hint; }
+.member-status.m-status-paid { color: $success-dark; }
+.member-status.m-status-pending_payment { color: $warning-color; }
 .member-status.m-status-cancelled,
-.member-status.m-status-refunded {
-  color: $text-hint;
-}
+.member-status.m-status-refunded { color: $text-hint; }
+.paid-time { font-size: $font-xs; color: $text-hint; }
 
-.paid-time {
-  font-size: $font-xs;
-  color: $text-hint;
-}
-
-.bottom-bar {
-  margin-top: $spacing-lg;
-}
-
-.join-btn {
-  width: 100%;
-  border-radius: $radius-round;
-  background: $gradient-coral;
-  color: #FFFFFF;
-  font-size: $font-md;
-  font-weight: 700;
-  box-shadow: $shadow-coral;
-
-  &::after {
-    border: none;
-  }
-}
-
+.bottom-bar { margin-top: $spacing-lg; }
+.join-btn,
 .share-btn {
-  margin-top: $spacing-lg;
   width: 100%;
   border-radius: $radius-round;
   background: $gradient-coral;
@@ -433,9 +381,8 @@ onShareAppMessage(() => ({
   font-size: $font-md;
   font-weight: 700;
   box-shadow: $shadow-coral;
-
-  &::after {
-    border: none;
-  }
 }
+.join-btn::after,
+.share-btn::after { border: none; }
+.share-btn { margin-top: $spacing-lg; }
 </style>

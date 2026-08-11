@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, NotFoundException } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductStatusDto } from './dto/product-status.dto';
 
 @Controller('weapp/product')
 export class WeappProductController {
@@ -19,7 +20,11 @@ export class WeappProductController {
   @Public()
   @Get('detail/:id')
   async detail(@Param('id') id: string) {
-    return this.productService.findById(id);
+    const product = await this.productService.findById(id);
+    if (product.status !== 1) {
+      throw new NotFoundException('商品不存在或已下架');
+    }
+    return product;
   }
 
   @Public()
@@ -34,13 +39,13 @@ export class AdminProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Get('list')
-  @RequirePermission('product:list')
+  @RequirePermission('product:list', 'product:create', 'product:edit', 'marketing:activity')
   async list(@Query() dto: ProductQueryDto) {
     return this.productService.findAllAdmin(dto);
   }
 
   @Get('detail/:id')
-  @RequirePermission('product:list')
+  @RequirePermission('product:list', 'product:edit', 'marketing:activity')
   async detail(@Param('id') id: string) {
     return this.productService.findAdminById(id);
   }
@@ -65,7 +70,7 @@ export class AdminProductController {
 
   @Put('status/:id')
   @RequirePermission('product:publish')
-  async updateStatus(@Param('id') id: string, @Body() body: { status: number }) {
-    return this.productService.updateStatus(id, body.status);
+  async updateStatus(@Param('id') id: string, @Body() dto: ProductStatusDto) {
+    return this.productService.updateStatus(id, dto.status);
   }
 }

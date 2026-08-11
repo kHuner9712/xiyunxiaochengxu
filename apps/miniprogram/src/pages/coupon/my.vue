@@ -2,33 +2,38 @@
   <view class="my-coupon-page page-shell">
     <view class="tab-wrap">
       <view class="tab-bar pill-tab-bar">
-      <view
-        v-for="tab in tabs"
-        :key="tab.value"
-        class="tab-item pill-tab-item"
-        :class="{ active: currentTab === tab.value }"
-        @tap="switchTab(tab.value)"
-      >
-        <text class="tab-text">{{ tab.label }}</text>
-      </view>
+        <view
+          v-for="tab in tabs"
+          :key="tab.value"
+          class="tab-item pill-tab-item"
+          :class="{ active: currentTab === tab.value }"
+          @tap="switchTab(tab.value)"
+        >
+          <text class="tab-text">{{ tab.label }}</text>
+        </view>
       </view>
     </view>
 
     <view class="coupon-list">
-      <view v-for="item in coupons" :key="item.id" class="coupon-card" :class="{ used: item.status === 2, expired: item.status === 3 }">
+      <view
+        v-for="item in coupons"
+        :key="item.id"
+        class="coupon-card"
+        :class="{ used: item.status === 2, expired: item.status === 3, locked: item.status === 4 }"
+      >
         <view class="coupon-left">
           <view class="coupon-value">
-            <text v-if="item.type === 1 || item.type === 3" class="value-symbol">¥</text>
             <text class="value-num">{{ formatCouponValue(item) }}</text>
           </view>
           <text class="coupon-condition">{{ item.minAmount > 0 ? `满${formatPrice(item.minAmount)}可用` : '无门槛' }}</text>
         </view>
         <view class="coupon-right">
           <text class="coupon-name">{{ item.name }}</text>
-          <text class="coupon-time">{{ item.startTime }} - {{ item.endTime }}</text>
+          <text class="coupon-time">{{ formatDate(item.startTime, 'YYYY-MM-DD') }} - {{ formatDate(item.endTime, 'YYYY-MM-DD') }}</text>
           <text v-if="item.status === 2" class="coupon-status used">已使用</text>
-          <text v-if="item.status === 3" class="coupon-status expired">已过期</text>
-          <view v-if="item.status === 1" class="coupon-use-btn" @tap="goUse">
+          <text v-else-if="item.status === 3" class="coupon-status expired">已过期</text>
+          <text v-else-if="item.status === 4" class="coupon-status locked">待付款订单使用中</text>
+          <view v-else-if="item.status === 1" class="coupon-use-btn" @tap="goUse">
             <text class="use-text">去使用</text>
           </view>
         </view>
@@ -41,16 +46,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onReachBottom, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { getMyCoupons, type MyCouponItem } from '@/api/coupon'
 import { useUserStore } from '@/stores/user'
-import { formatPrice, formatCouponValue } from '@/utils/format'
+import { formatDate, formatPrice, formatCouponValue } from '@/utils/format'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
 const tabs = [
   { label: '可用', value: 1 },
+  { label: '使用中', value: 4 },
   { label: '已使用', value: 2 },
   { label: '已过期', value: 3 }
 ]
@@ -61,38 +67,58 @@ const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
 const userStore = useUserStore()
+let couponVersion = 0
+let loadingVersion = -1
 
-async function loadCoupons(reset = false) {
+function resetCoupons() {
+  page.value = 1
+  finished.value = false
+  coupons.value = []
+}
+
+async function loadCoupons(version = couponVersion) {
   if (!userStore.isLoggedIn) {
     showLoginRequired()
     return
   }
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    coupons.value = []
-  }
+  if (finished.value && version === couponVersion) return
+  if (loading.value && loadingVersion === version) return
 
+  const requestPage = page.value
+  const requestStatus = currentTab.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await getMyCoupons({ status: currentTab.value, page: page.value, pageSize: 10 })
+    const data = await getMyCoupons({ status: requestStatus, page: requestPage, pageSize: 10 })
+    if (version !== couponVersion) return
+
     const list = Array.isArray(data?.list) ? data.list : []
     coupons.value.push(...list)
     finished.value = coupons.value.length >= Number(data?.total || 0)
-    page.value++
+    page.value = requestPage + 1
   } catch (err) {
-    console.error('[baby-mall] loadMyCoupons failed:', { status: currentTab.value, page: page.value, err })
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === couponVersion) {
+      console.error('[baby-mall] loadMyCoupons failed:', { status: requestStatus, page: requestPage, err })
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === couponVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
+function refreshCoupons() {
+  const version = ++couponVersion
+  resetCoupons()
+  return loadCoupons(version)
+}
+
 function switchTab(value: number) {
+  if (currentTab.value === value) return
   currentTab.value = value
-  loadCoupons(true)
+  void refreshCoupons()
 }
 
 function goUse() {
@@ -114,49 +140,39 @@ function showLoginRequired() {
 }
 
 onPullDownRefresh(async () => {
-  await loadCoupons(true)
+  await refreshCoupons()
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadCoupons()
+  void loadCoupons(couponVersion)
 })
 
-onMounted(() => {
-  loadCoupons()
+onShow(() => {
+  void refreshCoupons()
+})
+
+defineExpose({
+  currentTab,
+  coupons,
+  loading,
+  loadCoupons,
+  refreshCoupons,
+  switchTab,
 })
 </script>
 
 <style lang="scss" scoped>
-.my-coupon-page {
-  min-height: 100vh;
-}
-
-.tab-wrap {
-  padding: $spacing-md $spacing-md $spacing-sm;
-}
-
+.my-coupon-page { min-height: 100vh; }
+.tab-wrap { padding: $spacing-md $spacing-md $spacing-sm; }
+.tab-bar { display: flex; }
 .tab-item {
   flex: 1;
   position: relative;
-
-  &.active {
-    .tab-text {
-      color: $primary-dark;
-      font-weight: 700;
-    }
-  }
+  &.active { .tab-text { color: $primary-dark; font-weight: 700; } }
 }
-
-.tab-text {
-  font-size: $font-sm;
-  color: $text-secondary;
-}
-
-.coupon-list {
-  padding: $spacing-md;
-}
-
+.tab-text { font-size: $font-sm; color: $text-secondary; }
+.coupon-list { padding: $spacing-md; }
 .coupon-card {
   display: flex;
   background: $gradient-card;
@@ -165,12 +181,8 @@ onMounted(() => {
   margin-bottom: $spacing-md;
   border: 1rpx solid rgba($border-color, 0.78);
   box-shadow: $shadow-sm;
-
-  &.used, &.expired {
-    opacity: 0.6;
-  }
+  &.used, &.expired, &.locked { opacity: 0.68; }
 }
-
 .coupon-left {
   width: 200rpx;
   @include flex-center;
@@ -179,59 +191,19 @@ onMounted(() => {
   padding: $spacing-md;
   flex-shrink: 0;
 }
-
-.coupon-value {
-  color: #FFFFFF;
-  font-weight: 700;
-  display: flex;
-  align-items: baseline;
-}
-
-.value-symbol {
-  font-size: $font-sm;
-}
-
-.value-num {
-  font-size: $font-xxl;
-}
-
-.coupon-condition {
-  font-size: $font-xs;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 4rpx;
-}
-
-.coupon-right {
-  flex: 1;
-  padding: $spacing-md;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.coupon-name {
-  font-size: $font-md;
-  font-weight: 800;
-  color: $text-color;
-  display: block;
-  margin-bottom: 8rpx;
-}
-
-.coupon-time {
-  font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-  margin-bottom: $spacing-sm;
-}
-
+.coupon-value { color: #FFFFFF; font-weight: 700; display: flex; align-items: baseline; }
+.value-num { font-size: $font-xxl; }
+.coupon-condition { font-size: $font-xs; color: rgba(255, 255, 255, 0.8); margin-top: 4rpx; }
+.coupon-right { flex: 1; padding: $spacing-md; display: flex; flex-direction: column; justify-content: center; }
+.coupon-name { font-size: $font-md; font-weight: 800; color: $text-color; display: block; margin-bottom: 8rpx; }
+.coupon-time { font-size: $font-xs; color: $text-hint; display: block; margin-bottom: $spacing-sm; }
 .coupon-status {
   @include status-badge;
   font-size: $font-xs;
-
   &.used { background: $bg-gray; color: $text-hint; }
   &.expired { background: $danger-soft; color: $danger-color; }
+  &.locked { background: $warning-soft; color: $warning-color; }
 }
-
 .coupon-use-btn {
   align-self: flex-start;
   min-height: 56rpx;
@@ -241,10 +213,5 @@ onMounted(() => {
   @include flex-center;
   background: rgba(255, 255, 255, 0.9);
 }
-
-.use-text {
-  font-size: $font-xs;
-  color: $primary-dark;
-  font-weight: 700;
-}
+.use-text { font-size: $font-xs; color: $primary-dark; font-weight: 700; }
 </style>

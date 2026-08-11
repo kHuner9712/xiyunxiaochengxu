@@ -1,16 +1,25 @@
 import request from '@/utils/request'
 
+export interface MemberLevelPayload {
+  name?: string
+  minGrowthValue?: number
+  maxGrowthValue?: number | null
+  discountRate?: number | null
+  pointsRate?: number
+  benefits?: string
+  icon?: string
+  sortOrder?: number
+  status?: 0 | 1
+}
+
 export const memberApi = {
   getList() {
     return request.get('/admin/member/levels')
   },
-  create(data: any) {
+  create(data: MemberLevelPayload) {
     return request.post('/admin/member/levels', data)
   },
-  update(idOrData: number | any, data?: any) {
-    const id = typeof idOrData === 'number' ? idOrData : idOrData.id
-    const payload = typeof idOrData === 'number' ? (data || {}) : { ...(idOrData || {}) }
-    delete payload.id
-    return request.put(`/admin/member/levels/${id}`, payload)
+  update(id: string, data: MemberLevelPayload) {
+    return request.put(`/admin/member/levels/${encodeURIComponent(id)}`, data)
   },
 }

@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
 import { BabyProfileService } from './baby-profile.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateBabyProfileDto } from './dto/create-baby-profile.dto';
-import { PaginationDto } from '../common/dto/pagination.dto';
+import { CreateBabyProfileDto, UpdateBabyProfileDto } from './dto/create-baby-profile.dto';
+import { BabyProfileQueryDto } from './dto/baby-profile-query.dto';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 
 @Controller('weapp/baby-profile')
@@ -28,7 +28,7 @@ export class WeappBabyProfileController {
   async update(
     @CurrentUser('id') userId: string,
     @Param('id') id: string,
-    @Body() dto: Partial<CreateBabyProfileDto>,
+    @Body() dto: UpdateBabyProfileDto,
   ) {
     return this.babyProfileService.update(userId, id, dto);
   }
@@ -45,7 +45,7 @@ export class AdminBabyProfileController {
 
   @Get()
   @RequirePermission('user:detail')
-  async list(@Query() dto: PaginationDto & { userId?: string }) {
+  async list(@Query() dto: BabyProfileQueryDto) {
     return this.babyProfileService.findAllAdmin(dto);
   }
 }

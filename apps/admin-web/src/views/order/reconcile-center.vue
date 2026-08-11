@@ -24,12 +24,12 @@
             </div>
           </template>
           <div class="reconcile-desc">
-            扫描本地支付记录，与微信侧状态对账，修复半成功状态（支付已成功但订单未推进）。
+            扫描本地支付记录，与微信侧状态对账，并核验历史已取消订单是否存在微信侧支付异常。
           </div>
           <div v-if="paymentResult" class="reconcile-result">
             <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="总计">{{ paymentResult.total }}</el-descriptions-item>
-              <el-descriptions-item label="已修复">
+              <el-descriptions-item label="常规扫描">{{ paymentResult.total }}</el-descriptions-item>
+              <el-descriptions-item label="常规修复">
                 <el-tag :type="paymentResult.fixed > 0 ? 'success' : 'info'" size="small">{{ paymentResult.fixed }}</el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="失败">
@@ -39,6 +39,56 @@
                 <el-tag type="info" size="small">{{ paymentResult.skipped }}</el-tag>
               </el-descriptions-item>
             </el-descriptions>
+
+            <div v-if="hasHistoricalPaymentResult" class="historical-result">
+              <div class="result-section-title">历史取消支付核验</div>
+              <el-descriptions :column="3" border size="small">
+                <el-descriptions-item label="检查">{{ paymentResult.cancelledCreatedChecked || 0 }}</el-descriptions-item>
+                <el-descriptions-item label="确认已支付">
+                  <el-tag :type="(paymentResult.cancelledCreatedSuccess || 0) > 0 ? 'warning' : 'info'" size="small">
+                    {{ paymentResult.cancelledCreatedSuccess || 0 }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="安全关闭">
+                  <el-tag :type="(paymentResult.cancelledCreatedClosed || 0) > 0 ? 'success' : 'info'" size="small">
+                    {{ paymentResult.cancelledCreatedClosed || 0 }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="待确认">{{ paymentResult.cancelledCreatedPending || 0 }}</el-descriptions-item>
+                <el-descriptions-item label="金额异常">
+                  <el-tag :type="(paymentResult.cancelledCreatedMismatch || 0) > 0 ? 'danger' : 'info'" size="small">
+                    {{ paymentResult.cancelledCreatedMismatch || 0 }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="查询失败">
+                  <el-tag :type="(paymentResult.cancelledCreatedFailed || 0) > 0 ? 'danger' : 'info'" size="small">
+                    {{ paymentResult.cancelledCreatedFailed || 0 }}
+                  </el-tag>
+                </el-descriptions-item>
+              </el-descriptions>
+
+              <div class="result-section-title">历史资金任务</div>
+              <el-descriptions :column="3" border size="small">
+                <el-descriptions-item label="任务复核">{{ paymentResult.historicalTasksChecked || 0 }}</el-descriptions-item>
+                <el-descriptions-item label="自动闭环">
+                  <el-tag :type="(paymentResult.historicalTasksResolved || 0) > 0 ? 'success' : 'info'" size="small">
+                    {{ paymentResult.historicalTasksResolved || 0 }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="敞口刷新">{{ paymentResult.historicalTasksRefreshed || 0 }}</el-descriptions-item>
+                <el-descriptions-item label="复核失败">
+                  <el-tag :type="(paymentResult.historicalTasksFailed || 0) > 0 ? 'danger' : 'info'" size="small">
+                    {{ paymentResult.historicalTasksFailed || 0 }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="新发现异常">{{ paymentResult.cancelledPaidDetected || 0 }}</el-descriptions-item>
+                <el-descriptions-item label="新建任务">
+                  <el-tag :type="(paymentResult.cancelledPaidSeeded || 0) > 0 ? 'warning' : 'info'" size="small">
+                    {{ paymentResult.cancelledPaidSeeded || 0 }}
+                  </el-tag>
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
           </div>
           <el-empty v-else description="暂未执行对账" :image-size="60" />
         </el-card>
@@ -204,10 +254,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { reconcileApi } from '@/api/reconcile'
 import { asArray, paginationTotal } from '@/utils/response'
+
+type PaymentReconcileResult = {
+  total: number
+  fixed: number
+  failed: number
+  skipped: number
+  cancelledCreatedChecked?: number
+  cancelledCreatedSuccess?: number
+  cancelledCreatedClosed?: number
+  cancelledCreatedPending?: number
+  cancelledCreatedMismatch?: number
+  cancelledCreatedFailed?: number
+  historicalTasksChecked?: number
+  historicalTasksResolved?: number
+  historicalTasksRefreshed?: number
+  historicalTasksFailed?: number
+  cancelledPaidDetected?: number
+  cancelledPaidSeeded?: number
+}
 
 const paymentLoading = ref(false)
 const refundLoading = ref(false)
@@ -215,11 +284,30 @@ const syncLoading = ref(false)
 const compensationLoading = ref(false)
 const resolveSubmitting = ref(false)
 
-const paymentResult = ref<{ total: number; fixed: number; failed: number; skipped: number } | null>(null)
+const paymentResult = ref<PaymentReconcileResult | null>(null)
 const refundResult = ref<{ total: number; fixed: number; failed: number; skipped: number } | null>(null)
 const syncResult = ref<any>(null)
 const syncOutRefundNo = ref('')
 const lastError = ref('')
+
+const hasHistoricalPaymentResult = computed(() => {
+  const result = paymentResult.value
+  if (!result) return false
+  return [
+    result.cancelledCreatedChecked,
+    result.cancelledCreatedSuccess,
+    result.cancelledCreatedClosed,
+    result.cancelledCreatedPending,
+    result.cancelledCreatedMismatch,
+    result.cancelledCreatedFailed,
+    result.historicalTasksChecked,
+    result.historicalTasksResolved,
+    result.historicalTasksRefreshed,
+    result.historicalTasksFailed,
+    result.cancelledPaidDetected,
+    result.cancelledPaidSeeded,
+  ].some((value) => value !== undefined)
+})
 
 const compensationQuery = reactive({
   page: 1,
@@ -258,10 +346,20 @@ async function handlePaymentReconcile() {
   try {
     const res = await reconcileApi.reconcilePayments()
     paymentResult.value = res.data
-    if (res.data.fixed > 0) {
-      ElMessage.success(`支付对账完成，修复 ${res.data.fixed} 条记录`)
+    await fetchCompensationTasks()
+
+    const historicalAlerts =
+      (res.data.cancelledPaidSeeded || 0) +
+      (res.data.cancelledCreatedMismatch || 0) +
+      (res.data.historicalTasksFailed || 0) +
+      (res.data.cancelledCreatedFailed || 0)
+    if (historicalAlerts > 0) {
+      ElMessage.warning(`支付对账完成，发现 ${historicalAlerts} 项需关注的历史资金异常，请查看下方补偿任务`)
+    } else if (res.data.fixed > 0 || (res.data.historicalTasksResolved || 0) > 0 || (res.data.cancelledCreatedClosed || 0) > 0) {
+      const repaired = res.data.fixed + (res.data.historicalTasksResolved || 0) + (res.data.cancelledCreatedClosed || 0)
+      ElMessage.success(`支付对账完成，已收敛 ${repaired} 项状态`)
     } else {
-      ElMessage.info('支付对账完成，无需修复')
+      ElMessage.info('支付对账完成，未发现需人工处理的新异常')
     }
   } catch (error: any) {
     const message = error?.response?.data?.message || error?.message || '支付对账请求失败'
@@ -337,8 +435,10 @@ async function handleSyncRefund() {
 
 function summarizePayload(payload: any) {
   if (!payload) return '-'
-  const tx = payload?.decryptedData?.transaction_id || payload?.transactionId
+  const tx = payload?.decryptedData?.transaction_id || payload?.transactionId || payload?.wechat?.transaction_id
   if (tx) return `transaction_id: ${tx}`
+  if (payload?.outstandingAmount !== undefined) return `未闭环金额: ${payload.outstandingAmount}分`
+  if (payload?.reconciliation?.outstandingAmount !== undefined) return `未闭环金额: ${payload.reconciliation.outstandingAmount}分`
   return '可查看详情'
 }
 
@@ -441,6 +541,17 @@ onMounted(() => {
 
 .reconcile-result {
   margin-top: 16px;
+}
+
+.historical-result {
+  margin-top: 16px;
+}
+
+.result-section-title {
+  margin: 12px 0 8px;
+  color: #606266;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .pagination-wrap {

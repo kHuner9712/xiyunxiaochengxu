@@ -5,6 +5,15 @@
       <text class="status-subtext">订单编号 {{ order.orderNo || '-' }}</text>
     </view>
 
+    <view v-if="order.status === 'paid'" class="group-waiting-section card">
+      <view class="section-title-row">
+        <text class="section-title">拼团进度</text>
+        <text class="group-state-badge">已付款待成团</text>
+      </view>
+      <text class="group-waiting-text">当前仅代表付款成功，尚未进入发货或自提流程。达到成团人数后订单会自动进入履约；若拼团失败，系统会按规则自动退款。</text>
+      <view v-if="order.groupBuyGroupId" class="group-progress-btn" @tap="goGroupProgress">查看当前拼团</view>
+    </view>
+
     <view v-if="order.addressName" class="address-section card">
       <view class="section-title-row">
         <text class="section-title">收货信息</text>
@@ -16,7 +25,10 @@
       <text class="address-detail">{{ order.addressDetail }}</text>
     </view>
 
-    <view v-if="order.fulfillmentType === 'pickup' && order.pickupStoreName" class="pickup-section card">
+    <view
+      v-if="order.status !== 'paid' && order.fulfillmentType === 'pickup' && order.pickupStoreName"
+      class="pickup-section card"
+    >
       <view class="pickup-header">
         <text class="pickup-label">自提信息</text>
         <text v-if="order.pickupCode" class="pickup-code-badge">待自提</text>
@@ -48,7 +60,7 @@
       </view>
     </view>
 
-    <view v-if="order.logistics" class="logistics-section card" @tap="showLogistics = true">
+    <view v-if="order.status !== 'paid' && order.logistics" class="logistics-section card" @tap="openLogistics">
       <text class="section-label">物流信息</text>
       <text class="logistics-company">{{ order.logistics.company }}</text>
       <text class="section-arrow">›</text>
@@ -71,6 +83,7 @@
         <view class="product-right">
           <PriceDisplay :price="item.price" />
           <text class="product-qty">x{{ item.quantity }}</text>
+          <text class="product-line-total">商品小计 ¥{{ formatPrice(item.subtotal ?? item.price * item.quantity) }}</text>
           <view
             v-if="order.status === 'completed' || order.status === 'delivered' || order.status === 'aftersale'"
             class="item-aftersale-btn"
@@ -92,6 +105,14 @@
       <view class="price-row">
         <text class="price-label">运费</text>
         <text class="price-value">{{ order.freightAmount > 0 ? `¥${formatPrice(order.freightAmount)}` : '免运费' }}</text>
+      </view>
+      <view v-if="order.discountAmount > 0" class="price-row">
+        <text class="price-label">会员优惠</text>
+        <text class="price-value discount">-¥{{ formatPrice(order.discountAmount) }}</text>
+      </view>
+      <view v-if="order.activityDiscountAmount > 0" class="price-row">
+        <text class="price-label">活动优惠</text>
+        <text class="price-value discount">-¥{{ formatPrice(order.activityDiscountAmount) }}</text>
       </view>
       <view v-if="order.couponAmount > 0" class="price-row">
         <text class="price-label">优惠券</text>
@@ -132,6 +153,8 @@
     <view class="bottom-bar bottom-action-bar" v-if="order.status">
       <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap="handleCancel">取消订单</view>
       <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap="handlePay">去支付</view>
+      <view v-if="order.status === 'paid'" class="action-hint">已付款 · 等待拼团成团</view>
+      <view v-if="order.status === 'paid' && order.groupBuyGroupId" class="action-btn primary" @tap="goGroupProgress">拼团进度</view>
       <view v-if="order.status === 'pending_pickup'" class="action-hint">到店自提 · 请出示自提码</view>
       <view v-if="order.status === 'delivered'" class="action-btn primary" @tap="handleConfirm">确认收货</view>
       <view v-if="order.status === 'completed' || order.status === 'delivered' || order.status === 'aftersale'" class="action-hint">请选择要售后的商品</view>
@@ -142,7 +165,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getOrderDetail, getOrderDetailByNo, cancelOrder, confirmReceive, type OrderDetail, type OrderProductItem } from '@/api/order'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatOrderStatus, formatPrice } from '@/utils/format'
@@ -150,15 +173,17 @@ import PriceDisplay from '@/components/PriceDisplay.vue'
 
 const order = ref<OrderDetail>({
   id: '', orderNo: '', status: '' as any, totalAmount: 0, payAmount: 0,
-  freightAmount: 0, couponAmount: 0, pointsAmount: 0,
+  freightAmount: 0, discountAmount: 0, activityDiscountAmount: 0, couponAmount: 0, pointsAmount: 0,
   addressName: '', addressPhone: '', addressDetail: '',
   fulfillmentType: 'delivery',
   items: [], createTime: ''
 })
 
-const showLogistics = ref(false)
 const selectAftersaleMode = ref(false)
 const shouldSelectAftersale = ref(false)
+const loadedOrderId = ref('')
+const loadedOrderNo = ref('')
+let skipInitialShowRefresh = true
 
 async function loadOrder(id: string) {
   try {
@@ -185,6 +210,7 @@ function getOptionValue(value: unknown): string {
 function guideAftersaleSelection() {
   const canApplyItems = (order.value.items || []).filter((item) => item.canApplyAftersale !== false)
   if (canApplyItems.length === 0) {
+    shouldSelectAftersale.value = false
     const reason = order.value.items?.find((item) => item.aftersaleDisabledReason)?.aftersaleDisabledReason || '当前订单暂无可申请售后的商品'
     uni.showToast({ title: reason, icon: 'none' })
     return
@@ -195,16 +221,13 @@ function guideAftersaleSelection() {
   }
   selectAftersaleMode.value = true
   uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
-  uni.pageScrollTo?.({
-    selector: '.products-section',
-    duration: 300
-  })
+  uni.pageScrollTo?.({ selector: '.products-section', duration: 300 })
 }
 
 function getStatusClass(status: string): string {
   const map: Record<string, string> = {
     pending_payment: 'status-unpaid',
-    paid: 'status-shipping',
+    paid: 'status-grouping',
     pending_delivery: 'status-shipping',
     pending_pickup: 'status-pickup',
     delivered: 'status-receiving',
@@ -213,6 +236,14 @@ function getStatusClass(status: string): string {
     aftersale: 'status-aftersale'
   }
   return map[status] || ''
+}
+
+function goGroupProgress() {
+  if (!order.value.groupBuyGroupId) {
+    uni.showToast({ title: '拼团信息暂未加载，请稍后刷新', icon: 'none' })
+    return
+  }
+  uni.navigateTo({ url: `/pages/group-buy/group?id=${order.value.groupBuyGroupId}` })
 }
 
 function isUserCancelPayError(err: any): boolean {
@@ -250,16 +281,16 @@ async function handlePay() {
       }
       uni.showModal({
         title: '支付未完成',
-        content: '支付发起异常，请稍后重试或联系客服',
+        content: payClientErr?.message || payClientErr?.errMsg || '支付发起异常，请稍后重试或联系客服',
         showCancel: false,
         confirmText: '我知道了'
       })
     }
   } catch (e: any) {
-    const msg = e?.message || '支付发起失败'
+    const msg = e?.message || '支付发起失败，请稍后重试或联系客服'
     uni.showModal({
-      title: '提示',
-      content: msg.includes('暂未开通') ? msg : '支付功能暂未开放，请联系客服',
+      title: '支付未完成',
+      content: msg,
       showCancel: false,
       confirmText: '我知道了'
     })
@@ -292,8 +323,42 @@ function goAftersale(item: OrderProductItem) {
     uni.showToast({ title: '缺少商品信息，请刷新后重试', icon: 'none' })
     return
   }
-  uni.navigateTo({
-    url: `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${item.id}`
+  shouldSelectAftersale.value = false
+  selectAftersaleMode.value = false
+  uni.navigateTo({ url: `/pages/aftersale/apply?orderId=${order.value.id}&orderItemId=${item.id}` })
+}
+
+function openLogistics() {
+  const logistics = order.value.logistics
+  if (!logistics) {
+    uni.showToast({ title: '暂无物流信息', icon: 'none' })
+    return
+  }
+
+  const traceText = (logistics.traces || [])
+    .slice(0, 3)
+    .map((trace) => `${trace.time} ${trace.content}`)
+    .join('\n')
+  const content = [
+    `物流公司：${logistics.company || '-'}`,
+    `运单号：${logistics.trackingNo || '-'}`,
+    traceText ? `最新轨迹：\n${traceText}` : '最新轨迹：暂无物流轨迹',
+  ].join('\n')
+
+  uni.showModal({
+    title: '物流详情',
+    content,
+    showCancel: !!logistics.trackingNo,
+    cancelText: '关闭',
+    confirmText: logistics.trackingNo ? '复制单号' : '我知道了',
+    success: (res) => {
+      if (res.confirm && logistics.trackingNo) {
+        uni.setClipboardData({
+          data: logistics.trackingNo,
+          success: () => uni.showToast({ title: '运单号已复制', icon: 'success' })
+        })
+      }
+    }
   })
 }
 
@@ -320,11 +385,27 @@ onLoad((options) => {
     options?.orderNo || options?.out_trade_no || options?.outTradeNo || options?.order_no
   )
   if (orderNo) {
+    loadedOrderNo.value = orderNo
     loadOrderByNo(orderNo)
   } else if (id) {
+    loadedOrderId.value = id
     loadOrder(id)
   } else {
     uni.redirectTo({ url: '/pages/order/list' })
+  }
+})
+
+onShow(() => {
+  if (skipInitialShowRefresh) {
+    skipInitialShowRefresh = false
+    return
+  }
+  shouldSelectAftersale.value = false
+  selectAftersaleMode.value = false
+  if (loadedOrderNo.value) {
+    loadOrderByNo(loadedOrderNo.value)
+  } else if (loadedOrderId.value) {
+    loadOrder(loadedOrderId.value)
   }
 })
 
@@ -352,6 +433,7 @@ defineExpose({
   box-shadow: $shadow-md;
 
   &.status-unpaid { background: $warning-soft; }
+  &.status-grouping { background: $primary-soft; }
   &.status-shipping { background: $info-soft; }
   &.status-pickup { background: $primary-soft; }
   &.status-receiving { background: $secondary-soft; }
@@ -374,18 +456,45 @@ defineExpose({
   color: $text-hint;
 }
 
+.group-waiting-section,
 .address-section,
 .logistics-section,
 .products-section,
 .price-section,
-.info-section {
+.info-section,
+.pickup-section {
   margin: $spacing-sm $spacing-md;
   background: rgba(255, 255, 255, 0.9);
 }
 
-.pickup-section {
-  margin: $spacing-sm $spacing-md;
-  background: rgba(255, 255, 255, 0.9);
+.group-waiting-section {
+  border: 1rpx solid rgba($primary-color, 0.2);
+}
+
+.group-state-badge {
+  font-size: $font-xs;
+  color: $primary-dark;
+  background: $primary-soft;
+  padding: 4rpx 14rpx;
+  border-radius: $radius-round;
+}
+
+.group-waiting-text {
+  display: block;
+  font-size: $font-sm;
+  color: $text-secondary;
+  line-height: 1.65;
+}
+
+.group-progress-btn {
+  margin-top: $spacing-md;
+  min-height: 68rpx;
+  border-radius: $radius-round;
+  background: $gradient-coral;
+  color: #FFFFFF;
+  font-size: $font-sm;
+  font-weight: 700;
+  @include flex-center;
 }
 
 .pickup-header {
@@ -414,19 +523,9 @@ defineExpose({
   padding: 8rpx 0;
 }
 
-.pickup-row-label {
-  font-size: $font-sm;
-  color: $text-hint;
-}
-
-.pickup-row-value {
-  font-size: $font-sm;
-  color: $text-color;
-
-  &.phone {
-    color: $primary-color;
-  }
-}
+.pickup-row-label { font-size: $font-sm; color: $text-hint; }
+.pickup-row-value { font-size: $font-sm; color: $text-color; }
+.pickup-row-value.phone { color: $primary-color; }
 
 .pickup-code-section {
   display: flex;
@@ -437,146 +536,39 @@ defineExpose({
   border-top: 1rpx solid $divider-color;
 }
 
-.pickup-code-label {
-  font-size: $font-sm;
-  color: $text-hint;
-  margin-right: $spacing-sm;
-}
+.pickup-code-label { font-size: $font-sm; color: $text-hint; margin-right: $spacing-sm; }
+.pickup-code-box { background: $primary-soft; padding: 16rpx 36rpx; border-radius: $radius-xl; box-shadow: inset 0 0 0 1rpx rgba($primary-color, 0.12); }
+.pickup-code-text { font-size: $font-xl; font-weight: 700; color: $primary-color; letter-spacing: 8rpx; }
+.pickup-code-copy { font-size: $font-sm; color: $primary-color; margin-left: $spacing-md; }
 
-.pickup-code-box {
-  background: $primary-soft;
-  padding: 16rpx 36rpx;
-  border-radius: $radius-xl;
-  box-shadow: inset 0 0 0 1rpx rgba($primary-color, 0.12);
-}
+.address-top { display: flex; align-items: center; margin-bottom: 8rpx; }
+.section-title-row { @include flex-between; margin-bottom: $spacing-sm; }
+.section-title { font-size: $font-md; color: $text-color; font-weight: 800; }
+.section-count { font-size: $font-xs; color: $text-hint; }
+.address-name { font-size: $font-md; font-weight: 600; margin-right: $spacing-sm; }
+.address-phone { font-size: $font-sm; color: $text-secondary; }
+.address-detail { font-size: $font-sm; color: $text-secondary; }
 
-.pickup-code-text {
-  font-size: $font-xl;
-  font-weight: 700;
-  color: $primary-color;
-  letter-spacing: 8rpx;
-}
-
-.pickup-code-copy {
-  font-size: $font-sm;
-  color: $primary-color;
-  margin-left: $spacing-md;
-}
-
-.address-top {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8rpx;
-}
-
-.section-title-row {
-  @include flex-between;
-  margin-bottom: $spacing-sm;
-}
-
-.section-title {
-  font-size: $font-md;
-  color: $text-color;
-  font-weight: 800;
-}
-
-.section-count {
-  font-size: $font-xs;
-  color: $text-hint;
-}
-
-.address-name {
-  font-size: $font-md;
-  font-weight: 600;
-  margin-right: $spacing-sm;
-}
-
-.address-phone {
-  font-size: $font-sm;
-  color: $text-secondary;
-}
-
-.address-detail {
-  font-size: $font-sm;
-  color: $text-secondary;
-}
-
-.logistics-section {
-  display: flex;
-  align-items: center;
-}
-
-.section-label {
-  font-size: $font-md;
-  color: $text-color;
-  margin-right: $spacing-sm;
-}
-
-.logistics-company {
-  flex: 1;
-  font-size: $font-sm;
-  color: $text-secondary;
-}
-
-.section-arrow {
-  font-size: $font-lg;
-  color: $text-hint;
-}
+.logistics-section { display: flex; align-items: center; }
+.section-label { font-size: $font-md; color: $text-color; margin-right: $spacing-sm; }
+.logistics-company { flex: 1; font-size: $font-sm; color: $text-secondary; }
+.section-arrow { font-size: $font-lg; color: $text-hint; }
 
 .product-item {
   display: flex;
   align-items: flex-start;
   padding: 18rpx 0;
   border-bottom: 1rpx solid $divider-color;
-
   &:last-child { border-bottom: none; }
 }
 
-.product-image {
-  width: 156rpx;
-  height: 156rpx;
-  border-radius: 28rpx;
-  flex-shrink: 0;
-  background: $bg-gray;
-}
-
-.product-info {
-  flex: 1;
-  margin-left: $spacing-sm;
-  overflow: hidden;
-}
-
-.product-name {
-  font-size: $font-sm;
-  color: $text-color;
-  font-weight: 600;
-  @include text-ellipsis-2;
-  display: block;
-  line-height: 1.4;
-}
-
-.product-sku {
-  font-size: $font-xs;
-  color: $text-secondary;
-  display: inline-flex;
-  max-width: 100%;
-  margin-top: 8rpx;
-  padding: 6rpx 14rpx;
-  border-radius: $radius-round;
-  background: $bg-soft;
-  @include text-ellipsis;
-}
-
-.product-right {
-  text-align: right;
-  margin-left: $spacing-sm;
-}
-
-.product-qty {
-  font-size: $font-xs;
-  color: $text-hint;
-  display: block;
-}
+.product-image { width: 156rpx; height: 156rpx; border-radius: 28rpx; flex-shrink: 0; background: $bg-gray; }
+.product-info { flex: 1; margin-left: $spacing-sm; overflow: hidden; }
+.product-name { font-size: $font-sm; color: $text-color; font-weight: 600; @include text-ellipsis-2; display: block; line-height: 1.4; }
+.product-sku { font-size: $font-xs; color: $text-secondary; display: inline-flex; max-width: 100%; margin-top: 8rpx; padding: 6rpx 14rpx; border-radius: $radius-round; background: $bg-soft; @include text-ellipsis; }
+.product-right { text-align: right; margin-left: $spacing-sm; }
+.product-qty { font-size: $font-xs; color: $text-hint; display: block; }
+.product-line-total { margin-top: 4rpx; font-size: $font-xs; color: $price-color; display: block; font-weight: 700; }
 
 .item-aftersale-btn {
   margin-top: 8rpx;
@@ -587,75 +579,29 @@ defineExpose({
   border-radius: $radius-round;
   padding: 6rpx 16rpx;
   display: inline-block;
-
-  &.disabled {
-    color: $text-hint;
-    border-color: $border-color;
-  }
+  &.disabled { color: $text-hint; border-color: $border-color; }
 }
 
-.aftersale-focus {
-  border: 2rpx solid rgba($primary-color, 0.42);
-  box-shadow: $shadow-coral;
-}
-
-.aftersale-select-tip {
-  margin-bottom: $spacing-sm;
-  padding: 14rpx 18rpx;
-  border-radius: $radius-lg;
-  background: $primary-soft;
-}
-
-.aftersale-select-text {
-  font-size: $font-sm;
-  color: $primary-dark;
-  font-weight: 700;
-}
+.aftersale-focus { border: 2rpx solid rgba($primary-color, 0.42); box-shadow: $shadow-coral; }
+.aftersale-select-tip { margin-bottom: $spacing-sm; padding: 14rpx 18rpx; border-radius: $radius-lg; background: $primary-soft; }
+.aftersale-select-text { font-size: $font-sm; color: $primary-dark; font-weight: 700; }
 
 .price-row {
   @include flex-between;
   padding: 8rpx 0;
-
-  &.total {
-    border-top: 1rpx solid $divider-color;
-    padding-top: $spacing-sm;
-    margin-top: $spacing-xs;
-  }
+  &.total { border-top: 1rpx solid $divider-color; padding-top: $spacing-sm; margin-top: $spacing-xs; }
 }
 
-.price-label {
-  font-size: $font-sm;
-  color: $text-secondary;
-}
+.price-label { font-size: $font-sm; color: $text-secondary; }
+.price-value { font-size: $font-sm; color: $text-color; }
+.price-value.discount { color: $price-color; }
+.price-value.pay-amount { color: $price-color; font-weight: 800; font-size: $font-lg; }
 
-.price-value {
-  font-size: $font-sm;
-  color: $text-color;
+.info-row { @include flex-between; padding: 8rpx 0; }
+.info-label { font-size: $font-sm; color: $text-hint; }
+.info-value { font-size: $font-sm; color: $text-color; }
 
-  &.discount { color: $price-color; }
-  &.pay-amount { color: $price-color; font-weight: 800; font-size: $font-lg; }
-}
-
-.info-row {
-  @include flex-between;
-  padding: 8rpx 0;
-}
-
-.info-label {
-  font-size: $font-sm;
-  color: $text-hint;
-}
-
-.info-value {
-  font-size: $font-sm;
-  color: $text-color;
-}
-
-.bottom-bar {
-  justify-content: flex-end;
-  min-height: 136rpx;
-}
-
+.bottom-bar { justify-content: flex-end; min-height: 136rpx; }
 .action-btn {
   min-height: 64rpx;
   padding: 0 32rpx;
@@ -665,20 +611,8 @@ defineExpose({
   border: 2rpx solid $border-color;
   @include flex-center;
   background: $bg-white;
-
-  &.primary {
-    color: #FFFFFF;
-    border-color: transparent;
-    background: $gradient-coral;
-    font-weight: 700;
-    box-shadow: $shadow-coral;
-  }
+  &.primary { color: #FFFFFF; border-color: transparent; background: $gradient-coral; font-weight: 700; box-shadow: $shadow-coral; }
   &.cancel { color: $text-hint; }
 }
-
-.action-hint {
-  font-size: $font-sm;
-  color: $text-hint;
-  padding: 16rpx 0;
-}
+.action-hint { font-size: $font-sm; color: $text-hint; padding: 16rpx 0; }
 </style>

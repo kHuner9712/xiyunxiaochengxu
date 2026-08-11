@@ -6,6 +6,7 @@ import { generateAftersaleNo, paginate, AFTERSALE_APPLY_DAYS } from '@baby-mall/
 import { AftersaleStatus, OrderStatus } from '@prisma/client';
 import { PaymentService } from '../payment/payment.service';
 import { calculateOrderItemRefundCap } from '../common/utils/refund-amount';
+import { REFUND_STATUS } from '../common/constants';
 
 @Injectable()
 export class AftersaleService {
@@ -231,7 +232,26 @@ export class AftersaleService {
       },
     });
     if (!aftersale) throw new NotFoundException('售后单不存在');
-    return this.serializeAftersale(aftersale);
+
+    const latestRefund = aftersale.status === AftersaleStatus.pending_refund
+      ? await (this.prisma as any).orderRefund?.findFirst({
+          where: { aftersaleId: aftersale.id },
+          orderBy: { createdAt: 'desc' },
+          select: { status: true, outRefundNo: true },
+        })
+      : null;
+    const retryableStatuses = [REFUND_STATUS.CLOSED] as string[];
+    const syncRequiredStatuses = [REFUND_STATUS.INITIATING, REFUND_STATUS.FAILED, REFUND_STATUS.RETRYING] as string[];
+    const manualRequiredStatuses = [REFUND_STATUS.ABNORMAL] as string[];
+
+    return {
+      ...this.serializeAftersale(aftersale),
+      latestRefundStatus: latestRefund?.status || null,
+      latestOutRefundNo: latestRefund?.outRefundNo || null,
+      refundRetryable: !!latestRefund && retryableStatuses.includes(latestRefund.status),
+      refundSyncRequired: !!latestRefund && syncRequiredStatuses.includes(latestRefund.status),
+      refundManualRequired: !!latestRefund && manualRequiredStatuses.includes(latestRefund.status),
+    };
   }
 
   async approve(id: string, adminId: string, refundAmount: number) {
@@ -345,18 +365,67 @@ export class AftersaleService {
     });
     if (!aftersale) throw new NotFoundException('售后单不存在');
 
-    if (aftersale.status === AftersaleStatus.pending_refund || aftersale.status === AftersaleStatus.refunded) {
+    if (aftersale.status === AftersaleStatus.refunded) {
       throw new BadRequestException('退款已在处理中或已完成');
     }
 
-    if (aftersale.type === 1 && aftersale.status !== AftersaleStatus.approved) {
+    const latestRefundBefore = await (this.prisma as any).orderRefund?.findFirst({
+      where: { aftersaleId: BigInt(id) },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let retryingTerminalRefund = false;
+    if (aftersale.status === AftersaleStatus.pending_refund) {
+      if (latestRefundBefore?.status === REFUND_STATUS.FAILED) {
+        throw new BadRequestException('退款请求结果待核实，请先同步微信退款状态');
+      }
+      if (latestRefundBefore?.status === REFUND_STATUS.ABNORMAL) {
+        throw new BadRequestException('微信退款异常，请前往微信支付商户平台处理异常退款，不能重新发起普通退款');
+      }
+      const retryableStatuses = [REFUND_STATUS.CLOSED] as string[];
+      if (!latestRefundBefore || !retryableStatuses.includes(latestRefundBefore.status)) {
+        throw new BadRequestException('退款已在处理中或已完成');
+      }
+      retryingTerminalRefund = true;
+    }
+
+    if (!retryingTerminalRefund && aftersale.type === 1 && aftersale.status !== AftersaleStatus.approved) {
       throw new BadRequestException('仅退款类型需审核通过后才能退款');
     }
-    if (aftersale.type === 2 && aftersale.status !== AftersaleStatus.returned) {
+    if (!retryingTerminalRefund && aftersale.type === 2 && aftersale.status !== AftersaleStatus.returned) {
       throw new BadRequestException('退货退款类型需用户填写退货物流后才能退款');
     }
     if (!aftersale.refundAmount) {
       throw new BadRequestException('退款金额未设置');
+    }
+
+    const prisma = this.prisma as any;
+    let originalRetryStatus: string | null = null;
+
+    if (retryingTerminalRefund) {
+      const claim = await prisma.orderRefund.updateMany({
+        where: {
+          id: latestRefundBefore.id,
+          status: latestRefundBefore.status,
+        },
+        data: { status: REFUND_STATUS.RETRYING },
+      });
+      if (claim.count !== 1) {
+        throw new BadRequestException('退款操作正在处理中，请勿重复提交');
+      }
+      originalRetryStatus = latestRefundBefore.status;
+      this.logger.warn(`售后单${id}已原子占位重试，上一笔退款状态为${originalRetryStatus}`);
+    } else {
+      const claim = await prisma.aftersaleOrder.updateMany({
+        where: {
+          id: BigInt(id),
+          status: aftersale.status,
+        },
+        data: { status: AftersaleStatus.pending_refund },
+      });
+      if (claim.count !== 1) {
+        throw new BadRequestException('退款操作正在处理中，请勿重复提交');
+      }
     }
 
     try {
@@ -367,17 +436,55 @@ export class AftersaleService {
         reason: aftersale.reason,
       });
     } catch (error) {
-      this.logger.error(`发起退款失败，售后单${id}保持原状态: ${(error as Error).message}`);
+      const latestRefundAfter = await prisma.orderRefund?.findFirst({
+        where: { aftersaleId: BigInt(id) },
+        orderBy: { createdAt: 'desc' },
+      });
+      const beforeId = latestRefundBefore?.id?.toString?.() ?? latestRefundBefore?.id;
+      const afterId = latestRefundAfter?.id?.toString?.() ?? latestRefundAfter?.id;
+      const createdNewRefund = !!latestRefundAfter && String(afterId) !== String(beforeId ?? '');
+      const uncertainStatuses = [
+        REFUND_STATUS.INITIATING,
+        REFUND_STATUS.PENDING,
+        REFUND_STATUS.PROCESSING,
+        REFUND_STATUS.FAILED,
+      ] as string[];
+      const requiresSync = createdNewRefund && uncertainStatuses.includes(latestRefundAfter.status);
+
+      if (!retryingTerminalRefund && !requiresSync) {
+        await prisma.aftersaleOrder.updateMany({
+          where: { id: BigInt(id), status: AftersaleStatus.pending_refund },
+          data: { status: aftersale.status },
+        });
+      }
+
+      this.logger.error(`发起退款失败，售后单${id}${requiresSync ? '转为待核实状态' : '恢复原状态'}: ${(error as Error).message}`);
       await this.prisma.aftersaleLog.create({
         data: {
           aftersaleId: BigInt(id),
           operatorType: 'admin',
           operatorId: BigInt(adminId),
           action: 'refund_failed',
-          content: `发起退款失败: ${(error as Error).message}，售后单保持原状态`,
+          content: requiresSync
+            ? `退款请求结果待核实: ${(error as Error).message}，请先同步微信退款状态`
+            : `发起退款失败: ${(error as Error).message}，售后单已恢复原状态`,
         },
       });
       throw error;
+    } finally {
+      if (retryingTerminalRefund && originalRetryStatus) {
+        try {
+          await prisma.orderRefund.updateMany({
+            where: {
+              id: latestRefundBefore.id,
+              status: REFUND_STATUS.RETRYING,
+            },
+            data: { status: originalRetryStatus },
+          });
+        } catch (restoreError) {
+          this.logger.error(`恢复上一笔退款终态失败: ${latestRefundBefore.id}`, (restoreError as Error).message);
+        }
+      }
     }
 
     const result = await this.prisma.aftersaleOrder.findFirst({ where: { id: BigInt(id) } });

@@ -3,28 +3,39 @@ import { ref, computed } from 'vue'
 import { get, post, put, del } from '@/utils/request'
 
 interface CartItem {
-  id: number
-  productId: number
-  skuId: number
+  id: string
+  productId: string
+  skuId: string
   productName: string
   productImage: string
   skuName: string
   price: number
   quantity: number
   stock: number
+  isValid?: boolean
   checked: boolean
 }
 
 export const useCartStore = defineStore('cart', () => {
   const items = ref<CartItem[]>([])
   const loading = ref(false)
+  let fetchVersion = 0
+
+  function isPurchasable(item: CartItem) {
+    return item.isValid !== false
+      && Number.isInteger(item.quantity)
+      && item.quantity > 0
+      && Number.isFinite(item.stock)
+      && item.stock >= item.quantity
+      && item.price >= 0
+  }
 
   const totalCount = computed(() => {
     return items.value.reduce((sum, item) => sum + item.quantity, 0)
   })
 
   const checkedItems = computed(() => {
-    return items.value.filter(item => item.checked)
+    return items.value.filter(item => item.checked && isPurchasable(item))
   })
 
   const checkedCount = computed(() => {
@@ -35,8 +46,11 @@ export const useCartStore = defineStore('cart', () => {
     return checkedItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
   })
 
+  const purchasableItems = computed(() => items.value.filter(isPurchasable))
+
   const allChecked = computed(() => {
-    return items.value.length > 0 && items.value.every(item => item.checked)
+    return purchasableItems.value.length > 0
+      && purchasableItems.value.every(item => item.checked)
   })
 
   function updateTabBadge() {
@@ -52,50 +66,68 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   async function fetchCart() {
+    const version = ++fetchVersion
     loading.value = true
     try {
       const data = await get<CartItem[]>('/weapp/cart/list')
+      if (version !== fetchVersion) return
+
       const prevCheckedIds = new Set(items.value.filter(i => i.checked).map(i => i.id))
-      items.value = data.map(item => ({
-        ...item,
-        checked: prevCheckedIds.size > 0 ? prevCheckedIds.has(item.id) : true,
-      }))
+      const hadPreviousState = items.value.length > 0
+      items.value = data.map(item => {
+        const purchasable = isPurchasable(item)
+        return {
+          ...item,
+          checked: purchasable && (hadPreviousState ? prevCheckedIds.has(item.id) : true),
+        }
+      })
       updateTabBadge()
     } catch {
+      if (version !== fetchVersion) return
       items.value = []
+      updateTabBadge()
     } finally {
-      loading.value = false
+      if (version === fetchVersion) {
+        loading.value = false
+      }
     }
   }
 
-  async function addToCart(params: { productId: number; skuId: number; quantity: number }) {
+  async function addToCart(params: { productId: string; skuId: string; quantity: number }) {
     await post('/weapp/cart/add', params)
     await fetchCart()
   }
 
-  async function updateQuantity(cartItemId: number, quantity: number) {
+  async function updateQuantity(cartItemId: string, quantity: number) {
     await put('/weapp/cart/update', { id: cartItemId, quantity })
     await fetchCart()
   }
 
-  async function removeItem(cartItemId: number) {
-    await del(`/weapp/cart/delete/${cartItemId}`)
+  async function removeItem(cartItemId: string) {
+    await del(`/weapp/cart/delete/${encodeURIComponent(cartItemId)}`)
     await fetchCart()
   }
 
   async function removeSelected() {
     const selectedIds = checkedItems.value.map(item => item.id)
-    await Promise.all(selectedIds.map(id => del(`/weapp/cart/delete/${id}`)))
+    await Promise.all(selectedIds.map(id => del(`/weapp/cart/delete/${encodeURIComponent(id)}`)))
     await fetchCart()
   }
 
   function toggleCheck(index: number) {
-    items.value[index].checked = !items.value[index].checked
+    const item = items.value[index]
+    if (!item || !isPurchasable(item)) {
+      uni.showToast({ title: '该商品已下架或库存不足', icon: 'none' })
+      return
+    }
+    item.checked = !item.checked
   }
 
   function toggleCheckAll() {
     const checked = !allChecked.value
-    items.value.forEach(item => { item.checked = checked })
+    items.value.forEach(item => {
+      item.checked = isPurchasable(item) ? checked : false
+    })
   }
 
   return {

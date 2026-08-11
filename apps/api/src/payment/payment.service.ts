@@ -932,7 +932,17 @@ try {
           }
 
           if (aftersaleWithRelations.refundAmount && aftersaleWithRelations.refundAmount > 0 && aftersaleWithRelations.order?.payAmount) {
-            const orderEarnedPoints = Math.floor((aftersaleWithRelations.order.payAmount || 0) / 100);
+            const completionReward = await tx.pointsRecord.findFirst({
+              where: {
+                userId: aftersaleWithRelations.userId,
+                sourceId: aftersaleWithRelations.orderId,
+                source: { in: ['order_complete', 'order_auto_complete'] },
+                type: 1,
+              },
+              select: { points: true },
+              orderBy: { createdAt: 'asc' },
+            });
+            const orderEarnedPoints = completionReward?.points ?? 0;
             const proportionalDeductedPoints = Math.floor(orderEarnedPoints * aftersaleWithRelations.refundAmount / aftersaleWithRelations.order.payAmount);
             if (proportionalDeductedPoints > 0) {
               const user = await tx.user.findFirst({ where: { id: aftersaleWithRelations.userId } });

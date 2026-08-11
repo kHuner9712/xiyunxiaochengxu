@@ -37,7 +37,7 @@
     <div class="table-card">
       <div style="margin-bottom: 16px; display: flex; justify-content: space-between">
         <div>
-          <el-button v-permission="'product:edit'" type="primary" @click="handleAdd">新增商品</el-button>
+          <el-button v-permission="'product:create'" type="primary" @click="handleAdd">新增商品</el-button>
         </div>
       </div>
 
@@ -70,14 +70,14 @@
           <template #default="{ row }">
             <el-button v-permission="'product:edit'" type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button
-              v-permission="'product:edit'"
+              v-permission="'product:publish'"
               :type="row.status === 1 ? 'warning' : 'success'"
               link
               @click="handleToggleStatus(row)"
             >
               {{ row.status === 1 ? '下架' : '上架' }}
             </el-button>
-            <el-button v-permission="'product:edit'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'product:delete'" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -115,8 +115,8 @@ const brandList = ref<any[]>([])
 
 const searchForm = reactive({
   keyword: '',
-  categoryId: undefined as number | undefined,
-  brandId: undefined as number | undefined,
+  categoryId: undefined as string | undefined,
+  brandId: undefined as string | undefined,
   status: undefined as number | undefined,
 })
 
@@ -125,6 +125,14 @@ const pagination = reactive({
   pageSize: 10,
   total: 0,
 })
+
+function normalizeCategoryIds(rows: any[]): any[] {
+  return rows.map((row) => ({
+    ...row,
+    id: String(row.id),
+    children: Array.isArray(row.children) ? normalizeCategoryIds(row.children) : row.children,
+  }))
+}
 
 async function fetchList() {
   loading.value = true
@@ -144,14 +152,14 @@ async function fetchList() {
 async function fetchCategoryTree() {
   try {
     const res = await categoryApi.getTree()
-    categoryTree.value = asArray(res.data)
+    categoryTree.value = normalizeCategoryIds(asArray(res.data))
   } catch {}
 }
 
 async function fetchBrandList() {
   try {
     const res = await brandApi.getList({ page: 1, pageSize: 100 })
-    brandList.value = asArray(res.data)
+    brandList.value = asArray(res.data).map((item: any) => ({ ...item, id: String(item.id) }))
   } catch {}
 }
 
@@ -173,7 +181,7 @@ function handleAdd() {
 }
 
 function handleEdit(row: any) {
-  router.push(`/product/edit/${row.id}`)
+  router.push(`/product/edit/${String(row.id)}`)
 }
 
 function getStatusText(status: number) {
@@ -192,7 +200,7 @@ function getStatusTagType(status: number) {
 async function handleToggleStatus(row: any) {
   const newStatus = row.status === 1 ? 0 : 1
   try {
-    await productApi.updateStatus(row.id, newStatus)
+    await productApi.updateStatus(String(row.id), newStatus)
     ElMessage.success('操作成功')
     fetchList()
   } catch {}
@@ -201,7 +209,7 @@ async function handleToggleStatus(row: any) {
 async function handleDelete(row: any) {
   try {
     await ElMessageBox.confirm('确定删除该商品吗？', '提示', { type: 'warning' })
-    await productApi.delete(row.id)
+    await productApi.delete(String(row.id))
     ElMessage.success('删除成功')
     fetchList()
   } catch {}

@@ -2,16 +2,20 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { BabyProfileService } from './baby-profile.service';
 
 function createMockPrisma() {
-  return {
+  const prisma: any = {
     babyProfile: {
-      findMany: jest.fn() as any,
-      findFirst: jest.fn() as any,
-      count: jest.fn() as any,
-      create: jest.fn() as any,
-      update: jest.fn() as any,
-      updateMany: jest.fn() as any,
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
     },
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn(),
   };
+  prisma.$transaction.mockImplementation(async (callback: any) => callback(prisma));
+  return prisma;
 }
 
 function babyProfile(overrides: Record<string, any> = {}) {
@@ -36,13 +40,15 @@ describe('BabyProfileService', () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    prisma.$queryRaw.mockResolvedValue([{ id: 1n }]);
     prisma.babyProfile.count.mockResolvedValue(0);
+    prisma.babyProfile.findMany.mockResolvedValue([]);
     service = new BabyProfileService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   });
 
   it('should accept avatar alias on create and save it as avatarUrl', async () => {
-    prisma.babyProfile.create.mockResolvedValue(babyProfile({ avatarUrl: 'https://example.com/new-baby.png' }));
+    prisma.babyProfile.create.mockResolvedValue(babyProfile({ avatarUrl: 'https://example.com/new-baby.png', isDefault: 1 }));
 
     const result = await service.create('1', {
       nickname: '小宝',
@@ -51,6 +57,8 @@ describe('BabyProfileService', () => {
       avatar: 'https://example.com/new-baby.png',
     });
 
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.babyProfile.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -64,12 +72,15 @@ describe('BabyProfileService', () => {
 
   it('should accept avatar alias on update and remove raw avatar before saving', async () => {
     prisma.babyProfile.findFirst.mockResolvedValue(babyProfile());
-    prisma.babyProfile.update.mockResolvedValue(babyProfile({ avatarUrl: 'https://example.com/edited-baby.png' }));
+    prisma.babyProfile.findMany.mockResolvedValue([babyProfile({ isDefault: 1 })]);
+    prisma.babyProfile.update.mockResolvedValue(babyProfile({ avatarUrl: 'https://example.com/edited-baby.png', isDefault: 1 }));
 
     const result = await service.update('1', '2', {
       avatar: 'https://example.com/edited-baby.png',
     });
 
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
     expect(prisma.babyProfile.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

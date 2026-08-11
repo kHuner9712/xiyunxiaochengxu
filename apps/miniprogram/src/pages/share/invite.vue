@@ -19,7 +19,7 @@
 
     <view class="action-section">
       <button class="share-btn" open-type="share">邀请好友</button>
-      <view class="share-product-entry" @click="goProductList">
+      <view class="share-product-entry" @tap="goProductList">
         <text class="share-product-text">分享指定商品</text>
         <text class="share-product-arrow">›</text>
       </view>
@@ -62,8 +62,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { onShareAppMessage } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import { getMyShareStats, getMyRewards, type MyShareStats, type MyRewardItem } from '@/api/share'
 import { useUserStore } from '@/stores/user'
 
@@ -74,20 +74,23 @@ const stats = ref<MyShareStats>({
   totalRewardPoints: 0,
   recentInvites: []
 })
-
 const rewards = ref<MyRewardItem[]>([])
 
 async function loadStats() {
   try {
     stats.value = await getMyShareStats()
-  } catch {}
+  } catch (error) {
+    console.error('[baby-mall] load share stats failed:', error)
+  }
 }
 
 async function loadRewards() {
   try {
     const res = await getMyRewards({ page: 1, pageSize: 20 })
-    rewards.value = res.list || []
-  } catch {}
+    rewards.value = Array.isArray(res?.list) ? res.list : []
+  } catch (error) {
+    console.error('[baby-mall] load share rewards failed:', error)
+  }
 }
 
 function formatTime(dateStr: string): string {
@@ -126,17 +129,13 @@ onShareAppMessage(() => ({
   path: `/pages/home/index?inviter=${encodeURIComponent(userStore.userInfo?.id || '')}`
 }))
 
-onMounted(() => {
-  loadStats()
-  loadRewards()
+onShow(() => {
+  void Promise.all([loadStats(), loadRewards()])
 })
 </script>
 
 <style lang="scss" scoped>
-.invite-page {
-  min-height: 100vh;
-}
-
+.invite-page { min-height: 100vh; }
 .header-section {
   background:
     radial-gradient(circle at 88% 14%, rgba($success-color, 0.18) 0%, rgba($success-color, 0) 240rpx),
@@ -144,59 +143,14 @@ onMounted(() => {
   padding: 60rpx $spacing-md 40rpx;
   text-align: center;
 }
-
-.header-title {
-  font-size: $font-xxl;
-  color: #FFFFFF;
-  font-weight: 700;
-  display: block;
-}
-
-.header-desc {
-  font-size: $font-sm;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 12rpx;
-  display: block;
-}
-
-.stats-section {
-  display: flex;
-  align-items: center;
-  margin: -20rpx $spacing-md $spacing-md;
-  padding: $spacing-lg;
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.stat-item {
-  flex: 1;
-  @include flex-center;
-  @include flex-column;
-}
-
-.stat-value {
-  font-size: $font-xxl;
-  font-weight: 700;
-  color: $price-color;
-  display: block;
-}
-
-.stat-label {
-  font-size: $font-xs;
-  color: $text-hint;
-  margin-top: 8rpx;
-  display: block;
-}
-
-.stat-divider {
-  width: 2rpx;
-  height: 60rpx;
-  background: $divider-color;
-}
-
-.action-section {
-  padding: 0 $spacing-md $spacing-md;
-}
-
+.header-title { font-size: $font-xxl; color: #FFFFFF; font-weight: 700; display: block; }
+.header-desc { font-size: $font-sm; color: rgba(255, 255, 255, 0.8); margin-top: 12rpx; display: block; }
+.stats-section { display: flex; align-items: center; margin: -20rpx $spacing-md $spacing-md; padding: $spacing-lg; background: rgba(255, 255, 255, 0.92); }
+.stat-item { flex: 1; @include flex-center; @include flex-column; }
+.stat-value { font-size: $font-xxl; font-weight: 700; color: $price-color; display: block; }
+.stat-label { font-size: $font-xs; color: $text-hint; margin-top: 8rpx; display: block; }
+.stat-divider { width: 2rpx; height: 60rpx; background: $divider-color; }
+.action-section { padding: 0 $spacing-md $spacing-md; }
 .share-btn {
   background: $gradient-coral;
   color: #FFFFFF;
@@ -206,197 +160,44 @@ onMounted(() => {
   font-size: $font-lg;
   font-weight: 600;
   box-shadow: $shadow-coral;
-
-  &::after {
-    border: none;
-  }
+  &::after { border: none; }
 }
-
-.share-product-entry {
-  @include flex-between;
-  margin-top: $spacing-sm;
-  padding: 24rpx $spacing-md;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: $radius-md;
-}
-
-.share-product-text {
-  font-size: $font-md;
-  color: $text-color;
-  font-weight: 500;
-}
-
-.share-product-arrow {
-  font-size: $font-xl;
-  color: $text-hint;
-}
-
-.rewards-section {
-  margin: 0 $spacing-md $spacing-md;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.reward-item {
-  @include flex-between;
-  padding: $spacing-sm 0;
-  border-bottom: 1rpx solid $divider-color;
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
+.share-product-entry { @include flex-between; margin-top: $spacing-sm; padding: 24rpx $spacing-md; background: rgba(255, 255, 255, 0.92); border-radius: $radius-md; }
+.share-product-text { font-size: $font-md; color: $text-color; font-weight: 500; }
+.share-product-arrow { font-size: $font-xl; color: $text-hint; }
+.rewards-section { margin: 0 $spacing-md $spacing-md; background: rgba(255, 255, 255, 0.9); }
+.reward-item { @include flex-between; padding: $spacing-sm 0; border-bottom: 1rpx solid $divider-color; &:last-child { border-bottom: none; } }
 .reward-icon {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 50%;
-  @include flex-center;
-  flex-shrink: 0;
-
-  &.points {
-    background: rgba($warning-color, 0.15);
-  }
-
-  &.coupon {
-    background: rgba($success-color, 0.15);
-  }
-
-  &.physical {
-    background: rgba($price-color, 0.15);
-  }
+  width: 64rpx; height: 64rpx; border-radius: 50%; @include flex-center; flex-shrink: 0;
+  &.points { background: rgba($warning-color, 0.15); }
+  &.coupon { background: rgba($success-color, 0.15); }
+  &.physical { background: rgba($price-color, 0.15); }
 }
-
 .reward-icon-text {
-  font-size: $font-sm;
-  font-weight: 700;
-
-  .points & {
-    color: $warning-color;
-  }
-
-  .coupon & {
-    color: $success-dark;
-  }
-
-  .physical & {
-    color: $price-color;
-  }
+  font-size: $font-sm; font-weight: 700;
+  .points & { color: $warning-color; }
+  .coupon & { color: $success-dark; }
+  .physical & { color: $price-color; }
 }
-
-.reward-info {
-  flex: 1;
-  margin-left: $spacing-sm;
-}
-
-.reward-name {
-  font-size: $font-md;
-  color: $text-color;
-  display: block;
-}
-
-.reward-source {
-  font-size: $font-xs;
-  color: $text-hint;
-  margin-top: 4rpx;
-  display: block;
-}
-
+.reward-info { flex: 1; margin-left: $spacing-sm; }
+.reward-name { font-size: $font-md; color: $text-color; display: block; }
+.reward-source { font-size: $font-xs; color: $text-hint; margin-top: 4rpx; display: block; }
 .reward-status {
-  padding: 4rpx 16rpx;
-  border-radius: $radius-round;
-  background: rgba($text-hint, 0.1);
-
-  &.issued {
-    background: rgba($success-color, 0.1);
-  }
-
-  &.pending {
-    background: rgba($warning-color, 0.1);
-  }
-
-  &.claimed {
-    background: rgba($text-hint, 0.1);
-  }
-
-  &.cancelled {
-    background: rgba($text-hint, 0.05);
-  }
+  padding: 4rpx 16rpx; border-radius: $radius-round; background: rgba($text-hint, 0.1);
+  &.issued { background: rgba($success-color, 0.1); }
+  &.pending { background: rgba($warning-color, 0.1); }
+  &.claimed { background: rgba($text-hint, 0.1); }
+  &.cancelled { background: rgba($text-hint, 0.05); }
 }
-
-.list-section {
-  margin: 0 $spacing-md;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.section-title {
-  font-size: $font-md;
-  font-weight: 600;
-  color: $text-color;
-  display: block;
-  margin-bottom: $spacing-md;
-}
-
-.invite-item {
-  @include flex-between;
-  padding: $spacing-sm 0;
-  border-bottom: 1rpx solid $divider-color;
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.invite-avatar {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.invite-info {
-  flex: 1;
-  margin-left: $spacing-sm;
-}
-
-.invite-name {
-  font-size: $font-md;
-  color: $text-color;
-  display: block;
-}
-
-.invite-time {
-  font-size: $font-xs;
-  color: $text-hint;
-  margin-top: 4rpx;
-  display: block;
-}
-
-.invite-status {
-  padding: 4rpx 16rpx;
-  border-radius: $radius-round;
-  background: rgba($text-hint, 0.1);
-
-  &.paid {
-    background: rgba($success-color, 0.1);
-  }
-}
-
-.status-text {
-  font-size: $font-xs;
-  color: $text-hint;
-
-  .paid & {
-    color: $success-dark;
-  }
-}
-
-.empty-section {
-  @include flex-center;
-  padding: 80rpx 0;
-}
-
-.empty-text {
-  font-size: $font-md;
-  color: $text-hint;
-}
+.list-section { margin: 0 $spacing-md; background: rgba(255, 255, 255, 0.9); }
+.section-title { font-size: $font-md; font-weight: 600; color: $text-color; display: block; margin-bottom: $spacing-md; }
+.invite-item { @include flex-between; padding: $spacing-sm 0; border-bottom: 1rpx solid $divider-color; &:last-child { border-bottom: none; } }
+.invite-avatar { width: 72rpx; height: 72rpx; border-radius: 50%; flex-shrink: 0; }
+.invite-info { flex: 1; margin-left: $spacing-sm; }
+.invite-name { font-size: $font-sm; color: $text-color; display: block; }
+.invite-time { font-size: $font-xs; color: $text-hint; margin-top: 4rpx; display: block; }
+.invite-status { padding: 4rpx 16rpx; border-radius: $radius-round; background: rgba($warning-color, 0.1); &.paid { background: rgba($success-color, 0.1); } }
+.status-text { font-size: $font-xs; color: $text-secondary; }
+.empty-section { padding: 60rpx 0; text-align: center; }
+.empty-text { font-size: $font-sm; color: $text-hint; }
 </style>

@@ -61,10 +61,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
 import { useUserStore } from '@/stores/user'
 import { getPromotionSourceForOrder } from '@/utils/share'
+import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
 import { createPayment, wxPay } from '@/api/payment'
 import Loading from '@/components/Loading.vue'
 
@@ -72,6 +73,23 @@ const userStore = useUserStore()
 const activity = ref<FlashSaleActivity | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function startClock() {
+  stopClock()
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toFixed(2)
@@ -84,7 +102,7 @@ const remainStock = computed(() => {
 
 const statusText = computed(() => {
   if (!activity.value) return ''
-  const now = Date.now()
+  const now = nowMs.value
   const start = new Date(activity.value.startTime).getTime()
   const end = new Date(activity.value.endTime).getTime()
   if (now < start) return '未开始'
@@ -112,7 +130,7 @@ const buttonText = computed(() => {
 })
 
 function remainTime(timeStr: string): string {
-  const ms = new Date(timeStr).getTime() - Date.now()
+  const ms = new Date(timeStr).getTime() - nowMs.value
   if (ms <= 0) return '已结束'
   const days = Math.floor(ms / 86400000)
   const hours = Math.floor((ms % 86400000) / 3600000)
@@ -136,26 +154,39 @@ async function loadDetail(id: string) {
 }
 
 async function handleBuy() {
-  if (!activity.value) return
-  if (!canBuy.value) return
-  if (submitting.value) return
+  if (!activity.value || !canBuy.value || submitting.value) return
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(() => handleBuy())
     return
   }
+  if (!activity.value.skuId) {
+    uni.showToast({ title: '活动商品规格配置异常', icon: 'none' })
+    return
+  }
+
   submitting.value = true
   try {
+    const fulfillment = await resolvePromotionFulfillment(activity.value.productId, '秒杀')
+    if (!fulfillment) return
+
     const promo = getPromotionSourceForOrder()
     const result = await flashSaleApi.buy({
-      activityId: Number(activity.value.id),
+      activityId: activity.value.id,
       quantity: 1,
-      fulfillmentType: 'delivery',
+      ...fulfillment,
       sourceType: promo.sourceType,
       sourceCode: promo.sourceCode,
       referrerUserId: promo.referrerUserId,
     })
-    uni.showToast({ title: '抢购成功，请支付', icon: 'success' })
-    setTimeout(() => payOrder(result.orderId), 800)
+
+    if (result.isZeroPay) {
+      uni.redirectTo({
+        url: `/pages/order/pay-result?orderId=${result.orderId}&payScene=flash&zeroPay=1&payIntent=success`,
+      })
+      return
+    }
+
+    await payOrder(result.orderId)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '秒杀失败', icon: 'none' })
   } finally {
@@ -167,16 +198,15 @@ async function payOrder(orderId: string) {
   try {
     const payment = await createPayment({ orderId })
     await wxPay(payment)
-    uni.showToast({ title: '支付成功', icon: 'success' })
-    setTimeout(() => {
-      uni.redirectTo({ url: `/pages/order/detail?id=${orderId}` })
-    }, 1500)
+    uni.redirectTo({
+      url: `/pages/order/pay-result?orderId=${orderId}&payScene=flash&payIntent=success`,
+    })
   } catch (err: any) {
-    const msg = err?.errMsg || err?.message || ''
-    if (msg.includes('cancel')) {
+    const msg = String(err?.errMsg || err?.message || '')
+    if (msg.toLowerCase().includes('cancel')) {
       uni.showModal({
         title: '支付未完成',
-        content: '请在订单列表中尽快完成支付，否则锁库存将过期',
+        content: '请在订单列表中尽快完成支付，否则锁库存将过期。',
         showCancel: false,
         confirmText: '查看订单',
         success: () => {
@@ -185,15 +215,26 @@ async function payOrder(orderId: string) {
       })
       return
     }
-    uni.showToast({ title: '支付失败', icon: 'none' })
+    uni.showModal({
+      title: '支付发起失败',
+      content: err?.message || '支付功能暂时不可用，请进入订单详情稍后重试。',
+      showCancel: false,
+      confirmText: '查看订单',
+      success: () => {
+        uni.redirectTo({ url: `/pages/order/detail?id=${orderId}` })
+      },
+    })
   }
 }
 
 onLoad((options) => {
   if (options?.id) {
-    loadDetail(options.id)
+    loadDetail(String(options.id))
   }
 })
+onShow(() => startClock())
+onHide(() => stopClock())
+onUnload(() => stopClock())
 
 onShareAppMessage(() => ({
   title: activity.value?.name || '限时秒杀，手慢无',
@@ -216,171 +257,31 @@ onShareAppMessage(() => ({
   box-shadow: $shadow-md;
 }
 
-.cover-wrap {
-  width: 100%;
-}
-
-.cover {
-  width: 100%;
-  height: 400rpx;
-  background: $bg-ivory;
-}
-
-.cover-placeholder {
-  @include flex-center;
-}
-
-.placeholder-text {
-  color: $text-hint;
-  font-size: $font-lg;
-}
-
-.info-section {
-  padding: $spacing-md;
-}
-
-.name {
-  font-size: $font-lg;
-  font-weight: 800;
-  color: $text-color;
-  margin-bottom: $spacing-sm;
-  line-height: 1.4;
-}
-
-.price-row {
-  display: flex;
-  align-items: baseline;
-  gap: $spacing-sm;
-  margin-bottom: $spacing-md;
-}
-
-.flash-price {
-  color: $price-color;
-  font-size: 52rpx;
-  font-weight: 800;
-}
-
-.origin-price {
-  color: $text-hint;
-  font-size: $font-md;
-  text-decoration: line-through;
-}
-
-.meta-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: $spacing-sm;
-  margin-bottom: $spacing-md;
-}
-
-.meta-item {
-  width: 48%;
-  display: flex;
-  justify-content: space-between;
-  padding: 12rpx $spacing-sm;
-  background: $bg-gray;
-  border-radius: $radius-md;
-}
-
-.meta-label {
-  font-size: $font-sm;
-  color: $text-hint;
-}
-
-.meta-value {
-  font-size: $font-sm;
-  color: $text-color;
-  font-weight: 700;
-}
-
-.meta-value.status-running {
-  color: $price-color;
-}
-
-.meta-value.status-pending {
-  color: $warning-color;
-}
-
-.meta-value.status-end {
-  color: $text-hint;
-}
-
-.countdown-row {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-sm $spacing-md;
-  background: $primary-soft;
-  border-radius: $radius-md;
-  margin-bottom: $spacing-md;
-}
-
-.countdown-label {
-  font-size: $font-sm;
-  color: $primary-dark;
-  font-weight: 700;
-}
-
-.countdown-value {
-  font-size: $font-lg;
-  color: $price-color;
-  font-weight: 800;
-}
-
-.desc-section {
-  margin-top: $spacing-sm;
-}
-
-.desc-title {
-  font-size: $font-md;
-  font-weight: 700;
-  color: $text-color;
-  margin-bottom: $spacing-xs;
-  display: block;
-}
-
-.desc-content {
-  font-size: $font-sm;
-  color: $text-secondary;
-  line-height: 1.6;
-}
-
-.bottom-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: $spacing-sm $spacing-md;
-  background: rgba(255, 252, 247, 0.96);
-  border-top: 1rpx solid rgba($border-color, 0.82);
-  box-shadow: 0 -12rpx 36rpx rgba(131, 91, 78, 0.08);
-  z-index: 20;
-  @include safe-bottom;
-}
-
-.buy-btn {
-  width: 100%;
-  border-radius: $radius-round;
-  background: $gradient-coral;
-  color: #FFFFFF;
-  font-size: $font-lg;
-  font-weight: 800;
-  padding: 20rpx 0;
-  box-shadow: $shadow-coral;
-
-  &::after {
-    border: none;
-  }
-}
-
-.buy-btn[disabled] {
-  background: $text-disabled;
-  color: #FFFFFF;
-  box-shadow: none;
-  opacity: 0.7;
-}
-
-.btn-text {
-  color: inherit;
-}
+.cover-wrap { width: 100%; }
+.cover { width: 100%; height: 400rpx; background: $bg-ivory; }
+.cover-placeholder { @include flex-center; }
+.placeholder-text { color: $text-hint; font-size: $font-lg; }
+.info-section { padding: $spacing-md; }
+.name { font-size: $font-lg; font-weight: 800; color: $text-color; margin-bottom: $spacing-sm; line-height: 1.4; }
+.price-row { display: flex; align-items: baseline; gap: $spacing-sm; margin-bottom: $spacing-md; }
+.flash-price { color: $price-color; font-size: 52rpx; font-weight: 800; }
+.origin-price { color: $text-hint; font-size: $font-md; text-decoration: line-through; }
+.meta-grid { display: flex; flex-wrap: wrap; gap: $spacing-sm; margin-bottom: $spacing-md; }
+.meta-item { width: 48%; display: flex; justify-content: space-between; padding: 12rpx $spacing-sm; background: $bg-gray; border-radius: $radius-md; }
+.meta-label { font-size: $font-sm; color: $text-hint; }
+.meta-value { font-size: $font-sm; color: $text-color; font-weight: 700; }
+.meta-value.status-running { color: $price-color; }
+.meta-value.status-pending { color: $warning-color; }
+.meta-value.status-end { color: $text-hint; }
+.countdown-row { display: flex; align-items: center; gap: $spacing-sm; padding: $spacing-sm $spacing-md; background: $primary-soft; border-radius: $radius-md; margin-bottom: $spacing-md; }
+.countdown-label { font-size: $font-sm; color: $primary-dark; font-weight: 700; }
+.countdown-value { font-size: $font-lg; color: $price-color; font-weight: 800; }
+.desc-section { margin-top: $spacing-sm; }
+.desc-title { font-size: $font-md; font-weight: 700; color: $text-color; margin-bottom: $spacing-xs; display: block; }
+.desc-content { font-size: $font-sm; color: $text-secondary; line-height: 1.6; }
+.bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: $spacing-sm $spacing-md; background: rgba(255, 252, 247, 0.96); border-top: 1rpx solid rgba($border-color, 0.82); box-shadow: 0 -12rpx 36rpx rgba(131, 91, 78, 0.08); z-index: 20; @include safe-bottom; }
+.buy-btn { width: 100%; border-radius: $radius-round; background: $gradient-coral; color: #FFFFFF; font-size: $font-lg; font-weight: 800; padding: 20rpx 0; box-shadow: $shadow-coral; }
+.buy-btn::after { border: none; }
+.buy-btn[disabled] { background: $text-disabled; color: #FFFFFF; box-shadow: none; opacity: 0.7; }
+.btn-text { color: inherit; }
 </style>

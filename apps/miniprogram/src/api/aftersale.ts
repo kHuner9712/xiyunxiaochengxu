@@ -8,21 +8,21 @@ export function getAftersaleList(params: { page: number; pageSize: number }) {
   return get<{ list: AftersaleItem[]; total: number }>('/weapp/aftersale/list', params)
 }
 
-export function getAftersaleDetail(id: string | number) {
-  return get<AftersaleDetail>(`/weapp/aftersale/detail/${id}`)
+export function getAftersaleDetail(id: string) {
+  return get<AftersaleDetail>(`/weapp/aftersale/detail/${encodeURIComponent(id)}`)
 }
 
-export function cancelAftersale(id: string | number) {
-  return put(`/weapp/aftersale/cancel/${id}`)
+export function cancelAftersale(id: string) {
+  return put(`/weapp/aftersale/cancel/${encodeURIComponent(id)}`)
 }
 
-export function fillReturnLogistics(id: string | number, data: ReturnLogisticsForm) {
-  return put(`/weapp/aftersale/return-logistics/${id}`, data)
+export function fillReturnLogistics(id: string, data: ReturnLogisticsForm) {
+  return put(`/weapp/aftersale/return-logistics/${encodeURIComponent(id)}`, data)
 }
 
 export interface AftersaleForm {
-  orderId: string | number
-  orderItemId: string | number
+  orderId: string
+  orderItemId: string
   type: number
   reason: string
   description: string
@@ -58,6 +58,9 @@ export interface AftersaleDetail {
   quantity: number
   logs: AftersaleLog[]
   aftersaleLogs?: any[]
+  returnReceiverName?: string | null
+  returnReceiverPhone?: string | null
+  returnAddress?: string | null
   returnLogisticsCompany?: string
   returnLogisticsNo?: string
   createTime: string

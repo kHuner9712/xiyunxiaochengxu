@@ -102,14 +102,18 @@ describe('Weapp Auth (e2e)', () => {
       data: { openid: 'test_openid', session_key: 'test_session_key' },
     });
 
-    mockPrisma.user.findFirst.mockResolvedValue(null);
-    mockPrisma.user.create.mockResolvedValue({
+    const createdUser = {
       id: BigInt(1),
       openid: 'test_openid',
       unionId: null,
       status: 1,
       deletedAt: null,
-    });
+      lastLoginAt: new Date(),
+    };
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    mockPrisma.memberLevel.findFirst.mockResolvedValue(null);
+    mockPrisma.user.create.mockResolvedValue(createdUser);
+    mockPrisma.user.update.mockResolvedValue(createdUser);
 
     const res = await request(app.getHttpServer())
       .post('/api/weapp/auth/login')
@@ -119,14 +123,21 @@ describe('Weapp Auth (e2e)', () => {
     expect(res.body.data.token).toBeDefined();
     expect(typeof res.body.data.token).toBe('string');
     expect(res.body.data.isNewUser).toBe(true);
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: BigInt(1) },
+      data: expect.objectContaining({ lastLoginAt: expect.any(Date) }),
+    });
 
     token = res.body.data.token;
   });
 
-  it('token payload contains roleType=user and tokenType=access', async () => {
+  it('token payload contains a revocable user access session id', async () => {
     const decoded = await jwtService.verifyAsync(token);
     expect(decoded.roleType).toBe('user');
     expect(decoded.tokenType).toBe('access');
+    expect(typeof decoded.tokenId).toBe('string');
+    expect(decoded.tokenId.length).toBeGreaterThan(10);
+    await expect(mockRedis.exists(`weapp_access_token:1:${decoded.tokenId}`)).resolves.toBe(1);
   });
 
   it('token can access weapp authenticated endpoints', async () => {
@@ -134,6 +145,9 @@ describe('Weapp Auth (e2e)', () => {
     axios.default.get.mockResolvedValue({
       data: { session_key: 'new_session_key' },
     });
+    // The live guard re-checks account state on every authenticated request. Reflect the user
+    // created by the preceding login instead of leaving the pre-login "not found" mock active.
+    mockPrisma.user.findFirst.mockResolvedValue({ id: BigInt(1) });
 
     const res = await request(app.getHttpServer())
       .post('/api/weapp/auth/phone')
@@ -141,6 +155,21 @@ describe('Weapp Auth (e2e)', () => {
       .send({ code: 'x', encryptedData: 'x', iv: 'x' });
 
     expect([40101, 40102, 40103]).not.toContain(res.body.code);
+  });
+
+  it('POST /api/weapp/auth/logout revokes the current JWT immediately', async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: BigInt(1) });
+
+    const logoutRes = await request(app.getHttpServer())
+      .post('/api/weapp/auth/logout')
+      .set('Authorization', `Bearer ${token}`);
+    expect(logoutRes.status).toBe(200);
+
+    const rejectedRes = await request(app.getHttpServer())
+      .post('/api/weapp/auth/phone')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'x', encryptedData: 'x', iv: 'x' });
+    expect(rejectedRes.body.code).toBe(40101);
   });
 
   it('POST /api/weapp/auth/login with WeChat error throws unauthorized', async () => {

@@ -16,7 +16,7 @@
       <view v-for="pkg in packageList" :key="pkg.id" class="pkg-card card">
         <view class="pkg-header">
           <view class="pkg-name">{{ pkg.packageName }}</view>
-          <view class="pkg-status" :class="`status-${pkg.status}`">{{ statusText(pkg.status) }}</view>
+          <view class="pkg-status" :class="`status-${effectivePackageStatus(pkg)}`">{{ statusText(effectivePackageStatus(pkg)) }}</view>
         </view>
         <view class="pkg-meta">
           <text class="meta-label">有效期：</text>
@@ -32,7 +32,7 @@
       <view v-for="e in entitlementList" :key="e.id" class="ent-card card" @tap="goEntitlementDetail(e.id)">
         <view class="ent-header">
           <view class="ent-name">{{ e.itemName }}</view>
-          <view class="ent-status" :class="`status-${e.status}`">{{ statusText(e.status) }}</view>
+          <view class="ent-status" :class="`status-${effectiveEntitlementStatus(e)}`">{{ statusText(effectiveEntitlementStatus(e)) }}</view>
         </view>
         <view class="ent-pkg">{{ e.packageName }}</view>
         <view class="ent-code">核销码：{{ e.verifyCode }}</view>
@@ -46,7 +46,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { onHide, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import {
   getMyBenefitPackages,
   getMyBenefitEntitlements,
@@ -68,10 +68,15 @@ const entitlementList = ref<UserBenefitEntitlementSummary[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+let listVersion = 0
+let loadingVersion = -1
 
 function statusText(status: string): string {
   switch (status) {
     case 'active': return '有效'
+    case 'not_started': return '未生效'
     case 'expired': return '已过期'
     case 'refunded': return '已退款'
     case 'cancelled': return '已取消'
@@ -79,6 +84,24 @@ function statusText(status: string): string {
     case 'used': return '已使用'
     default: return status
   }
+}
+
+function effectivePackageStatus(pkg: UserBenefitPackageSummary): string {
+  if (pkg.status !== 'active') return pkg.status
+  const validFrom = pkg.validFrom ? new Date(pkg.validFrom).getTime() : Number.NaN
+  const validTo = pkg.validTo ? new Date(pkg.validTo).getTime() : Number.NaN
+  if (Number.isFinite(validFrom) && nowMs.value < validFrom) return 'not_started'
+  if (Number.isFinite(validTo) && nowMs.value > validTo) return 'expired'
+  return pkg.status
+}
+
+function effectiveEntitlementStatus(e: UserBenefitEntitlementSummary): string {
+  if (e.status !== 'unused') return e.status
+  const validFrom = e.validFrom ? new Date(e.validFrom).getTime() : Number.NaN
+  const validTo = e.validTo ? new Date(e.validTo).getTime() : Number.NaN
+  if (Number.isFinite(validFrom) && nowMs.value < validFrom) return 'not_started'
+  if (Number.isFinite(validTo) && nowMs.value > validTo) return 'expired'
+  return e.status
 }
 
 function formatDate(s: string): string {
@@ -93,38 +116,70 @@ function formatDateTime(s: string): string {
   return `${formatDate(s)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    if (activeTab.value === 'packages') packageList.value = []
-    else entitlementList.value = []
-  }
+function startClock() {
+  nowMs.value = Date.now()
+  if (clockTimer) return
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 30000)
+}
+
+function stopClock() {
+  if (!clockTimer) return
+  clearInterval(clockTimer)
+  clockTimer = null
+}
+
+function resetCurrentList(tab: TabValue) {
+  page.value = 1
+  finished.value = false
+  if (tab === 'packages') packageList.value = []
+  else entitlementList.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
+  const requestTab = activeTab.value
   loading.value = true
+  loadingVersion = version
   try {
-    if (activeTab.value === 'packages') {
-      const data = await getMyBenefitPackages({ page: page.value, pageSize: 20 })
+    if (requestTab === 'packages') {
+      const data = await getMyBenefitPackages({ page: requestPage, pageSize: 20 })
+      if (version !== listVersion || requestTab !== activeTab.value) return
       packageList.value.push(...data.list)
       finished.value = packageList.value.length >= data.total
     } else {
-      const data = await getMyBenefitEntitlements({ page: page.value, pageSize: 20 })
+      const data = await getMyBenefitEntitlements({ page: requestPage, pageSize: 20 })
+      if (version !== listVersion || requestTab !== activeTab.value) return
       entitlementList.value.push(...data.list)
       finished.value = entitlementList.value.length >= data.total
     }
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion && requestTab === activeTab.value) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion && requestTab === activeTab.value) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshList() {
+  const version = ++listVersion
+  resetCurrentList(activeTab.value)
+  return loadList(version)
 }
 
 function switchTab(v: TabValue) {
   if (activeTab.value === v) return
   activeTab.value = v
-  loadList(true)
+  void refreshList()
 }
 
 function goEntitlements(packageId: string) {
@@ -135,8 +190,23 @@ function goEntitlementDetail(id: string) {
   uni.navigateTo({ url: `/pages/benefit-package/entitlement?id=${id}` })
 }
 
-onShow(() => loadList(true))
-onReachBottom(() => loadList())
+onShow(() => {
+  startClock()
+  void refreshList()
+})
+onHide(() => stopClock())
+onUnload(() => stopClock())
+onReachBottom(() => void loadList(listVersion))
+
+defineExpose({
+  activeTab,
+  packageList,
+  entitlementList,
+  loading,
+  loadList,
+  refreshList,
+  switchTab,
+})
 </script>
 
 <style lang="scss" scoped>
@@ -210,6 +280,11 @@ onReachBottom(() => loadList())
   &.status-unused {
     background: rgba($success-color, 0.15);
     color: $success-color;
+  }
+
+  &.status-not_started {
+    background: rgba($info-color, 0.12);
+    color: $info-color;
   }
 
   &.status-expired,

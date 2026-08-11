@@ -29,6 +29,32 @@
       </view>
     </view>
 
+    <view v-if="detail.type === 2 && normalizedStatus !== 'pending_review' && normalizedStatus !== 'rejected' && normalizedStatus !== 'closed'" class="return-destination-section card">
+      <view class="return-title-row">
+        <text class="section-title return-title">退货寄送信息</text>
+        <text v-if="detail.returnAddress" class="copy-address" @tap="copyReturnAddress">复制地址</text>
+      </view>
+      <template v-if="detail.returnAddress">
+        <view class="info-row">
+          <text class="info-label">收件人</text>
+          <text class="info-value">{{ detail.returnReceiverName || '-' }}</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">联系电话</text>
+          <text class="info-value phone-value" @tap="callReturnPhone">{{ detail.returnReceiverPhone || '-' }}</text>
+        </view>
+        <view class="info-row vertical">
+          <text class="info-label">退货地址</text>
+          <text class="return-address">{{ detail.returnAddress }}</text>
+        </view>
+        <text v-if="normalizedStatus === 'approved'" class="return-tip">请确认商品、配件和赠品齐全后寄回，并在下方提交真实物流公司与单号。</text>
+      </template>
+      <view v-else class="missing-return-destination">
+        <text class="missing-title">退货地址尚未补齐</text>
+        <text class="missing-desc">请先联系客服确认退货收件信息。在地址补齐前请勿自行寄回商品。</text>
+      </view>
+    </view>
+
     <view class="info-section card">
       <view class="info-row">
         <text class="info-label">售后类型</text>
@@ -42,7 +68,7 @@
         <text class="info-label">问题描述</text>
         <text class="info-value">{{ detail.description }}</text>
       </view>
-      <view v-if="detail.refundAmount" class="info-row">
+      <view v-if="detail.refundAmount !== undefined && detail.refundAmount !== null" class="info-row">
         <text class="info-label">退款金额</text>
         <text class="info-value price">¥{{ formatPrice(detail.refundAmount) }}</text>
       </view>
@@ -54,7 +80,7 @@
       </view>
     </view>
 
-    <view v-if="showBottomBar" class="bottom-bar bottom-action-bar">
+    <view class="bottom-bar bottom-action-bar">
       <view class="cs-btn" @tap="goCustomerService">联系客服</view>
       <view v-if="canCancelAftersale" class="cancel-btn" @tap="handleCancel">取消申请</view>
       <view v-if="canFillReturnLogistics" class="return-logistics-btn" @tap="openReturnLogisticsForm">填写退货物流</view>
@@ -90,7 +116,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getAftersaleDetail, cancelAftersale, fillReturnLogistics, type AftersaleDetail } from '@/api/aftersale'
 import { formatAftersaleStatus, formatPrice, normalizeAftersaleStatus } from '@/utils/format'
 import { resolvePrivateFileUrls } from '@/utils/private-file'
@@ -109,11 +135,16 @@ const returnLogisticsForm = ref({
   contactPhone: '',
   remark: ''
 })
+const loadedAftersaleId = ref('')
+let skipInitialShowRefresh = true
 
 const normalizedStatus = computed(() => normalizeAftersaleStatus(detail.value.status))
 const canCancelAftersale = computed(() => normalizedStatus.value === 'pending_review')
-const canFillReturnLogistics = computed(() => detail.value.type === 2 && normalizedStatus.value === 'approved')
-const showBottomBar = computed(() => canCancelAftersale.value || canFillReturnLogistics.value)
+const canFillReturnLogistics = computed(() =>
+  detail.value.type === 2
+  && normalizedStatus.value === 'approved'
+  && !!String(detail.value.returnAddress || '').trim()
+)
 const displayStatusText = computed(() => {
   if (normalizedStatus.value === 'approved') {
     return detail.value.type === 2 ? '已通过/待退货' : '已通过/待退款'
@@ -121,7 +152,7 @@ const displayStatusText = computed(() => {
   return formatAftersaleStatus(detail.value.status)
 })
 
-async function loadDetail(id: string | number) {
+async function loadDetail(id: string) {
   try {
     detail.value = normalizeDetail(await getAftersaleDetail(id))
     displayImages.value = await resolvePrivateFileUrls(detail.value.images || [])
@@ -141,6 +172,8 @@ function normalizeDetail(data: any): AftersaleDetail {
 
   return {
     ...data,
+    id: String(data.id || ''),
+    orderId: String(data.orderId || data.order?.id || ''),
     orderNo: data.orderNo || data.order?.orderNo || '',
     productName: data.productName || data.orderItem?.productName || '',
     productImage: data.productImage || data.orderItem?.productImage || '',
@@ -148,6 +181,9 @@ function normalizeDetail(data: any): AftersaleDetail {
     price: data.price ?? data.orderItem?.price ?? 0,
     quantity: data.quantity ?? data.orderItem?.quantity ?? 0,
     refundAmount: data.refundAmount ?? 0,
+    returnReceiverName: data.returnReceiverName ?? null,
+    returnReceiverPhone: data.returnReceiverPhone ?? null,
+    returnAddress: data.returnAddress ?? null,
     images: Array.isArray(data.images) ? data.images : [],
     logs,
     createTime: data.createTime || data.createdAt || '',
@@ -184,7 +220,7 @@ async function handleCancel() {
       if (res.confirm) {
         try {
           await cancelAftersale(detail.value.id)
-          loadDetail(detail.value.id)
+          await loadDetail(detail.value.id)
         } catch {
           uni.showToast({ title: '取消失败', icon: 'none' })
         }
@@ -197,7 +233,27 @@ function goCustomerService() {
   uni.navigateTo({ url: '/pages/customer-service/index' })
 }
 
+function copyReturnAddress() {
+  const addressText = [
+    detail.value.returnReceiverName,
+    detail.value.returnReceiverPhone,
+    detail.value.returnAddress,
+  ].filter(Boolean).join(' ')
+  if (!addressText) return
+  uni.setClipboardData({ data: addressText })
+}
+
+function callReturnPhone() {
+  const phoneNumber = String(detail.value.returnReceiverPhone || '').trim()
+  if (!phoneNumber) return
+  uni.makePhoneCall({ phoneNumber })
+}
+
 function openReturnLogisticsForm() {
+  if (!detail.value.returnAddress) {
+    uni.showToast({ title: '退货地址尚未补齐，请先联系客服', icon: 'none' })
+    return
+  }
   returnLogisticsForm.value = {
     returnLogisticsCompany: detail.value.returnLogisticsCompany || '',
     returnLogisticsNo: detail.value.returnLogisticsNo || '',
@@ -240,7 +296,20 @@ async function submitReturnLogistics() {
 
 onLoad((options) => {
   const id = Array.isArray(options?.id) ? options?.id[0] : options?.id
-  if (id) loadDetail(id)
+  if (id) {
+    loadedAftersaleId.value = String(id)
+    loadDetail(loadedAftersaleId.value)
+  }
+})
+
+onShow(() => {
+  if (skipInitialShowRefresh) {
+    skipInitialShowRefresh = false
+    return
+  }
+  if (loadedAftersaleId.value) {
+    loadDetail(loadedAftersaleId.value)
+  }
 })
 
 defineExpose({
@@ -281,9 +350,69 @@ defineExpose({
 
 .progress-section,
 .product-section,
-.info-section {
+.info-section,
+.return-destination-section {
   margin: $spacing-sm $spacing-md;
   background: rgba(255, 255, 255, 0.9);
+}
+
+.return-destination-section {
+  border: 1rpx solid rgba($primary-color, 0.16);
+  background: rgba($primary-color, 0.05);
+}
+
+.return-title-row {
+  @include flex-between;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+}
+
+.return-title {
+  margin-bottom: 0 !important;
+}
+
+.copy-address {
+  font-size: $font-xs;
+  color: $primary-dark;
+  font-weight: 700;
+  padding: 8rpx 16rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.return-address {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-sm;
+  color: $text-color;
+  line-height: 1.7;
+}
+
+.phone-value {
+  color: $primary-dark;
+  text-decoration: underline;
+}
+
+.return-tip,
+.missing-desc {
+  display: block;
+  margin-top: $spacing-sm;
+  font-size: $font-xs;
+  color: $text-secondary;
+  line-height: 1.6;
+}
+
+.missing-return-destination {
+  padding: $spacing-sm;
+  border-radius: $radius-lg;
+  background: rgba($warning-color, 0.1);
+}
+
+.missing-title {
+  display: block;
+  font-size: $font-sm;
+  color: $warning-color;
+  font-weight: 800;
 }
 
 .section-title {
@@ -340,20 +469,18 @@ defineExpose({
 .progress-time {
   font-size: $font-xs;
   color: $text-hint;
-  display: block;
   margin-top: 4rpx;
+  display: block;
 }
 
 .product-row {
   display: flex;
-  align-items: flex-start;
 }
 
 .product-image {
-  width: 156rpx;
-  height: 156rpx;
-  border-radius: 28rpx;
-  flex-shrink: 0;
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 26rpx;
   background: $bg-gray;
 }
 
@@ -365,40 +492,32 @@ defineExpose({
 .product-name {
   font-size: $font-sm;
   color: $text-color;
-  font-weight: 600;
   @include text-ellipsis-2;
   display: block;
-  line-height: 1.4;
 }
 
 .product-sku {
   font-size: $font-xs;
   color: $text-secondary;
-  display: inline-flex;
-  max-width: 100%;
   margin-top: 8rpx;
-  padding: 6rpx 14rpx;
-  border-radius: $radius-round;
-  background: $bg-soft;
-  @include text-ellipsis;
+  display: block;
 }
 
 .product-bottom {
-  @include flex-between;
-  margin-top: 8rpx;
+  display: flex;
+  align-items: center;
+  margin-top: $spacing-sm;
 }
 
 .product-qty {
   font-size: $font-xs;
   color: $text-hint;
+  margin-left: $spacing-sm;
 }
 
 .info-row {
   @include flex-between;
-  padding: 12rpx 0;
-  border-bottom: 1rpx solid $divider-color;
-
-  &:last-child { border-bottom: none; }
+  padding: 8rpx 0;
 
   &.vertical {
     flex-direction: column;
@@ -414,10 +533,8 @@ defineExpose({
 .info-value {
   font-size: $font-sm;
   color: $text-color;
-  text-align: right;
-  max-width: 460rpx;
 
-  &.price { color: $price-color; font-weight: 800; }
+  &.price { color: $price-color; font-weight: 700; }
 }
 
 .image-list {
@@ -428,131 +545,122 @@ defineExpose({
 }
 
 .evidence-image {
-  width: 160rpx;
-  height: 160rpx;
+  width: 150rpx;
+  height: 150rpx;
   border-radius: $radius-lg;
 }
 
 .bottom-bar {
-  justify-content: center;
+  justify-content: flex-end;
+  gap: $spacing-sm;
 }
 
+.cs-btn,
 .cancel-btn,
 .return-logistics-btn {
-  min-height: 76rpx;
-  padding: 0 80rpx;
-  border: 2rpx solid $border-color;
+  min-height: 64rpx;
+  padding: 0 32rpx;
   border-radius: $radius-round;
-  font-size: $font-md;
-  color: $text-secondary;
   @include flex-center;
+  font-size: $font-sm;
+}
+
+.cs-btn,
+.cancel-btn {
+  color: $text-secondary;
+  border: 2rpx solid $border-color;
+  background: $bg-white;
 }
 
 .return-logistics-btn {
-  border-color: transparent;
-  background: $gradient-coral;
   color: #FFFFFF;
-  box-shadow: $shadow-coral;
-}
-
-.cs-btn {
-  min-height: 76rpx;
-  padding: 0 80rpx;
+  border: 2rpx solid transparent;
   background: $gradient-coral;
-  border-radius: $radius-round;
-  font-size: $font-md;
-  color: #FFFFFF;
-  margin-right: $spacing-sm;
-  @include flex-center;
+  font-weight: 700;
   box-shadow: $shadow-coral;
 }
 
 .logistics-modal-mask {
   position: fixed;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 300;
-  padding: $spacing-md;
-  background: rgba(58, 48, 44, 0.36);
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.46);
   @include flex-center;
+  padding: $spacing-md;
 }
 
 .logistics-modal {
   width: 100%;
   max-width: 680rpx;
-  background: #FFFFFF;
-  border-radius: $radius-xxl;
 }
 
 .modal-title {
   display: block;
-  margin-bottom: $spacing-md;
   font-size: $font-lg;
   font-weight: 800;
   color: $text-color;
+  margin-bottom: $spacing-md;
 }
 
 .modal-field {
-  margin-bottom: $spacing-sm;
+  margin-bottom: $spacing-md;
 }
 
 .modal-label {
   display: block;
-  margin-bottom: 8rpx;
   font-size: $font-sm;
   color: $text-secondary;
-  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.modal-input,
+.modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: $radius-lg;
+  background: $bg-soft;
+  border: 1rpx solid $border-color;
+  padding: 18rpx 20rpx;
+  min-height: 80rpx;
+  line-height: 44rpx;
+  font-size: $font-sm;
+  color: $text-color;
 }
 
 .modal-input {
-  width: 100%;
-  height: 72rpx;
-  min-height: 72rpx;
-  line-height: 72rpx;
-  padding: 0 20rpx;
-  border-radius: $radius-lg;
-  background: $bg-soft;
-  font-size: $font-sm;
-  color: $text-color;
+  min-height: 80rpx;
+  line-height: 44rpx;
 }
 
 .modal-textarea {
-  width: 100%;
-  min-height: 132rpx;
-  padding: 18rpx 20rpx;
-  border-radius: $radius-lg;
-  background: $bg-soft;
-  font-size: $font-sm;
-  color: $text-color;
-  line-height: 1.6;
+  min-height: 150rpx;
+  line-height: 44rpx;
 }
 
 .modal-actions {
   display: flex;
+  justify-content: flex-end;
   gap: $spacing-sm;
   margin-top: $spacing-md;
 }
 
 .modal-cancel-btn,
 .modal-submit-btn {
-  flex: 1;
-  min-height: 76rpx;
+  min-height: 64rpx;
+  padding: 0 32rpx;
   border-radius: $radius-round;
   @include flex-center;
-  font-size: $font-md;
-  font-weight: 700;
+  font-size: $font-sm;
 }
 
 .modal-cancel-btn {
-  background: $bg-gray;
+  border: 1rpx solid $border-color;
   color: $text-secondary;
 }
 
 .modal-submit-btn {
   background: $gradient-coral;
   color: #FFFFFF;
-  box-shadow: $shadow-coral;
+  font-weight: 700;
 }
 </style>

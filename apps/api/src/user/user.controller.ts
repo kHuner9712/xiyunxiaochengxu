@@ -1,10 +1,16 @@
 import { Controller, Get, Put, Param, Query, Body } from '@nestjs/common';
 import { UserService } from './user.service';
-import { PointsService } from '../points/points.service';
+import { UserStatusService } from './user-status.service';
+import { AdminPointsAdjustmentService } from '../points/admin-points-adjustment.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { UserQueryDto } from './dto/user-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import {
+  AdjustMemberLevelDto,
+  AdjustUserPointsDto,
+  UpdateUserStatusDto,
+} from './dto/admin-user-mutation.dto';
 
 @Controller('weapp/user')
 export class WeappUserController {
@@ -16,10 +22,7 @@ export class WeappUserController {
   }
 
   @Put('profile')
-  async updateProfile(
-    @CurrentUser('id') userId: string,
-    @Body() dto: UpdateProfileDto,
-  ) {
+  async updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateProfileDto) {
     return this.userService.updateProfile(userId, dto);
   }
 }
@@ -28,7 +31,8 @@ export class WeappUserController {
 export class AdminUserController {
   constructor(
     private readonly userService: UserService,
-    private readonly pointsService: PointsService,
+    private readonly adminPointsAdjustmentService: AdminPointsAdjustmentService,
+    private readonly userStatusService: UserStatusService,
   ) {}
 
   @Get('list')
@@ -45,25 +49,24 @@ export class AdminUserController {
 
   @Put('level/:id')
   @RequirePermission('user:member')
-  async adjustLevel(
-    @Param('id') id: string,
-    @Body() body: { memberLevelId: number; reason?: string },
-  ) {
+  async adjustLevel(@Param('id') id: string, @Body() body: AdjustMemberLevelDto) {
     return this.userService.adjustLevel(id, body.memberLevelId, body.reason);
   }
 
   @Put('points/:id')
-  @RequirePermission('user:detail')
-  async adjustPoints(
-    @Param('id') id: string,
-    @Body() body: { points: number; reason: string },
-  ) {
-    return this.pointsService.adminAdjust(id, body.points, body.reason);
+  @RequirePermission('user:points')
+  async adjustPoints(@Param('id') id: string, @Body() body: AdjustUserPointsDto) {
+    return this.adminPointsAdjustmentService.adjust(
+      id,
+      body.points,
+      body.reason,
+      body.expectedAvailablePoints,
+    );
   }
 
   @Put('status/:id')
   @RequirePermission('user:detail')
-  async toggleStatus(@Param('id') id: string) {
-    return this.userService.toggleStatus(id);
+  async setStatus(@Param('id') id: string, @Body() body: UpdateUserStatusDto) {
+    return this.userStatusService.setStatus(id, body.status);
   }
 }

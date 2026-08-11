@@ -95,8 +95,10 @@ import { refundApi } from '@/api/refund'
 import { formatPrice, formatDate } from '@/utils/format'
 
 const REFUND_STATUS_MAP: Record<string, string> = {
+  initiating: '提交中',
   pending: '待处理',
   processing: '处理中',
+  retrying: '重试核实中',
   success: '退款成功',
   failed: '退款失败',
   closed: '已关闭',
@@ -104,8 +106,10 @@ const REFUND_STATUS_MAP: Record<string, string> = {
 }
 
 const REFUND_STATUS_TAG_TYPE: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
+  initiating: 'warning',
   pending: 'warning',
   processing: 'primary',
+  retrying: 'warning',
   success: 'success',
   failed: 'danger',
   closed: 'info',

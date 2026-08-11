@@ -11,18 +11,20 @@ import {
   createMockPrismaService,
   createMockRedisService,
   createTestEnvConfig,
-  setupTestApp,
 } from './helpers/mock-providers';
 
 describe('HealthController (e2e)', () => {
   let app: any;
   let httpServer: any;
   let mockPrisma: ReturnType<typeof createMockPrismaService>;
-  let mockRedis: ReturnType<typeof createMockRedisService>;
+  let mockRedis: ReturnType<typeof createMockRedisService> & {
+    isSchedulerPausedForCurrentBuild?: jest.Mock;
+  };
 
   beforeAll(async () => {
     mockPrisma = createMockPrismaService();
-    mockRedis = createMockRedisService();
+    mockRedis = createMockRedisService() as typeof mockRedis;
+    mockRedis.isSchedulerPausedForCurrentBuild = jest.fn().mockReturnValue(false);
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [
@@ -63,6 +65,10 @@ describe('HealthController (e2e)', () => {
     httpServer = app.getHttpServer();
   });
 
+  beforeEach(() => {
+    mockRedis.isSchedulerPausedForCurrentBuild?.mockReturnValue(false);
+  });
+
   afterAll(async () => {
     await app.close();
   });
@@ -82,34 +88,54 @@ describe('HealthController (e2e)', () => {
     expect(res.body).toHaveProperty('status', 'ok');
   });
 
-  it('GET /api/health returns ok when database and redis are healthy', async () => {
+  it('GET /api/health returns ok when database, redis and scheduler are healthy', async () => {
     mockPrisma.$queryRaw.mockResolvedValue([{ '1': 1 }]);
     mockRedis.ping.mockResolvedValue('PONG');
 
     const res = await request(httpServer).get('/api/health');
 
+    expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
+    expect(res.body.maintenance).toBe(false);
     expect(res.body.services.database).toBe('ok');
     expect(res.body.services.redis).toBe('ok');
+    expect(res.body.services.scheduler).toBe('ok');
   });
 
-  it('GET /api/health returns degraded when database fails', async () => {
+  it('GET /api/health returns 503 degraded when database fails', async () => {
     mockPrisma.$queryRaw.mockRejectedValue(new Error('DB down'));
     mockRedis.ping.mockResolvedValue('PONG');
 
     const res = await request(httpServer).get('/api/health');
 
+    expect(res.status).toBe(503);
     expect(res.body.status).toBe('degraded');
     expect(res.body.services.database).toBe('error');
   });
 
-  it('GET /api/health returns degraded when redis fails', async () => {
+  it('GET /api/health returns 503 degraded when redis fails', async () => {
     mockPrisma.$queryRaw.mockResolvedValue([{ '1': 1 }]);
     mockRedis.ping.mockResolvedValue('ERROR');
 
     const res = await request(httpServer).get('/api/health');
 
+    expect(res.status).toBe(503);
     expect(res.body.status).toBe('degraded');
     expect(res.body.services.redis).toBe('error');
+  });
+
+  it('GET /api/health stays 200 while the current build scheduler is intentionally paused for deployment', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{ '1': 1 }]);
+    mockRedis.ping.mockResolvedValue('PONG');
+    mockRedis.isSchedulerPausedForCurrentBuild?.mockReturnValue(true);
+
+    const res = await request(httpServer).get('/api/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(res.body.maintenance).toBe(true);
+    expect(res.body.services.database).toBe('ok');
+    expect(res.body.services.redis).toBe('ok');
+    expect(res.body.services.scheduler).toBe('paused');
   });
 });

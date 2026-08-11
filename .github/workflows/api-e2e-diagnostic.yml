@@ -1,0 +1,61 @@
+name: API E2E Diagnostic
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  mocked-http-e2e:
+    runs-on: ubuntu-latest
+    env:
+      PRISMA_SKIP_POSTINSTALL_GENERATE: true
+      NODE_ENV: test
+      JWT_SECRET: ci-runtime-jwt-secret-not-for-production-2026
+      REFRESH_TOKEN_SECRET: ci-runtime-refresh-secret-not-for-production-2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.2.2
+          run_install: false
+          standalone: true
+
+      - name: Setup Node.js 22.13.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @baby-mall/shared build
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @baby-mall/api prisma:generate
+
+      - name: Run mocked HTTP e2e and preserve full output
+        id: api-e2e
+        run: |
+          set +e
+          pnpm --filter @baby-mall/api test:e2e > api-e2e.log 2>&1
+          status=$?
+          set -e
+          cat api-e2e.log
+          exit "$status"
+
+      - name: Preserve mocked HTTP e2e diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-e2e-diagnostic-log
+          path: api-e2e.log
+          if-no-files-found: error
+          retention-days: 1

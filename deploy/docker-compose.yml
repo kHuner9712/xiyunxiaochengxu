@@ -59,8 +59,13 @@ services:
       - "127.0.0.1:${API_HOST_PORT:-3001}:3000"
     environment:
       NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
       PORT: 3000
-      DATABASE_URL: mysql://root:${DB_PASSWORD:?DB_PASSWORD required}@mysql:3306/${DB_NAME:-baby_mall}
+      API_DOMAIN: ${API_DOMAIN:-api.yunxixiaochengxu.com.cn}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.yunxixiaochengxu.com.cn}
+      HTTP_HOST_PORT: ${HTTP_HOST_PORT:-80}
+      HTTPS_HOST_PORT: ${HTTPS_HOST_PORT:-443}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-baby_mall}
@@ -78,10 +83,12 @@ services:
       WECHAT_PRIVATE_KEY_PATH: ${WECHAT_PRIVATE_KEY_PATH:-/app/apps/api/certs/apiclient_key.pem}
       WECHAT_PLATFORM_CERT_PATH: ${WECHAT_PLATFORM_CERT_PATH:-/app/apps/api/certs/wechatpay_platform.pem}
       WECHAT_PLATFORM_CERT_SERIAL_NO: ${WECHAT_PLATFORM_CERT_SERIAL_NO:-}
+      WECHAT_PLATFORM_CERT_MAP: ${WECHAT_PLATFORM_CERT_MAP:-}
       WECHAT_SKIP_VERIFY: ${WECHAT_SKIP_VERIFY:-false}
       WECHAT_NOTIFY_URL: ${WECHAT_NOTIFY_URL:?WECHAT_NOTIFY_URL required}
       WECHAT_REFUND_NOTIFY_URL: ${WECHAT_REFUND_NOTIFY_URL:?WECHAT_REFUND_NOTIFY_URL required}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS required}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
       UPLOAD_DIR: /app/apps/api/uploads
       RUN_SEED: ${RUN_SEED:-false}
       SKIP_MIGRATE: ${SKIP_MIGRATE:-false}
@@ -90,6 +97,7 @@ services:
       SMOKE_TEST_BYPASS_CAPTCHA: ${SMOKE_TEST_BYPASS_CAPTCHA:-false}
       UPLOAD_PUBLIC_URL: ${UPLOAD_PUBLIC_URL:?UPLOAD_PUBLIC_URL required}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      OUTBOUND_HTTP_TIMEOUT_MS: ${OUTBOUND_HTTP_TIMEOUT_MS:-10000}
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET required}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-30d}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}

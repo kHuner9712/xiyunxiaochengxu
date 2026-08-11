@@ -1,10 +1,16 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { uploadImage } from '../upload'
-import { getApiBaseUrl } from '@/utils/request'
+import {
+  getApiBaseUrl,
+  redirectToLoginTab,
+  removeToken,
+} from '@/utils/request'
 
 vi.mock('@/utils/request', () => ({
   getApiBaseUrl: vi.fn(() => 'https://api.example.com/api'),
   getToken: vi.fn(() => 'token-value'),
+  removeToken: vi.fn(),
+  redirectToLoginTab: vi.fn(),
 }))
 
 const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -59,6 +65,34 @@ describe('uploadImage', () => {
     expect((globalThis as any).uni.showToast).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'API 地址未配置，无法上传图片' }),
     )
+  })
+
+  it('业务 401 响应会清理旧 token 并回到登录页', async () => {
+    ;(globalThis as any).uni.uploadFile.mockImplementationOnce((options: any) => {
+      options.success({
+        statusCode: 200,
+        data: JSON.stringify({ code: 40102, message: '登录已过期' }),
+      })
+    })
+
+    await expect(uploadImage('/tmp/refund.jpg', 'aftersale')).rejects.toThrow('登录已过期')
+
+    expect(removeToken).toHaveBeenCalledTimes(1)
+    expect(redirectToLoginTab).toHaveBeenCalledWith('登录已过期，请重新登录')
+  })
+
+  it('HTTP 401 响应同样清理旧 token 并回到登录页', async () => {
+    ;(globalThis as any).uni.uploadFile.mockImplementationOnce((options: any) => {
+      options.success({
+        statusCode: 401,
+        data: JSON.stringify({ code: 40101, message: '未登录' }),
+      })
+    })
+
+    await expect(uploadImage('/tmp/refund.jpg', 'aftersale')).rejects.toThrow('登录已过期')
+
+    expect(removeToken).toHaveBeenCalledTimes(1)
+    expect(redirectToLoginTab).toHaveBeenCalledWith('登录已过期，请重新登录')
   })
 
   it('上传失败时输出模块名、状态码和错误内容且不打印 token', async () => {

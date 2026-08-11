@@ -19,6 +19,8 @@ export class HealthController {
     const result: any = {
       status: 'ok',
       timestamp: new Date().toISOString(),
+      buildSha: process.env.BUILD_SHA || 'unknown',
+      maintenance: false,
       services: {} as Record<string, string>,
     };
 
@@ -40,8 +42,34 @@ export class HealthController {
         result.status = 'degraded';
         isHealthy = false;
       }
+
+      if ((process.env.NODE_ENV || 'development') === 'production') {
+        const safety = await this.redis.getRuntimeSafetyConfig();
+        const safetyOk = safety.maxmemoryPolicy === 'noeviction'
+          && safety.appendonly === 'yes'
+          && safety.appendfsync === 'everysec';
+        result.services.redisSafety = safetyOk ? 'ok' : 'error';
+        if (!safetyOk) {
+          result.services.redis = 'error';
+          result.status = 'degraded';
+          isHealthy = false;
+        }
+      }
     } catch {
       result.services.redis = 'error';
+      if ((process.env.NODE_ENV || 'development') === 'production') {
+        result.services.redisSafety = 'error';
+      }
+      result.status = 'degraded';
+      isHealthy = false;
+    }
+
+    try {
+      const schedulerPaused = this.redis.isSchedulerPausedForCurrentBuild?.() ?? false;
+      result.services.scheduler = schedulerPaused ? 'paused' : 'ok';
+      result.maintenance = schedulerPaused;
+    } catch {
+      result.services.scheduler = 'error';
       result.status = 'degraded';
       isHealthy = false;
     }

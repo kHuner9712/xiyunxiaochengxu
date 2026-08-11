@@ -27,7 +27,7 @@
         </el-table-column>
         <el-table-column prop="name" label="品牌名称" min-width="150" />
         <el-table-column prop="description" label="品牌描述" show-overflow-tooltip min-width="200" />
-        <el-table-column prop="sort" label="排序" width="80" />
+        <el-table-column prop="sortOrder" label="排序" width="80" />
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'product:brand'" type="primary" link @click="handleEdit(row)">编辑</el-button>
@@ -61,7 +61,7 @@
           </el-upload>
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="form.sort" :min="0" />
+          <el-input-number v-model="form.sortOrder" :min="0" />
         </el-form-item>
         <el-form-item label="品牌描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入品牌描述" />
@@ -92,10 +92,10 @@ const searchForm = reactive({ keyword: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
-  id: undefined as number | undefined,
+  id: undefined as string | undefined,
   name: '',
   logo: '',
-  sort: 0,
+  sortOrder: 0,
   description: '',
 })
 
@@ -130,16 +130,16 @@ function handleAdd() {
   form.id = undefined
   form.name = ''
   form.logo = ''
-  form.sort = 0
+  form.sortOrder = 0
   form.description = ''
   dialogVisible.value = true
 }
 
 function handleEdit(row: any) {
-  form.id = row.id
+  form.id = String(row.id)
   form.name = row.name
   form.logo = row.logo || ''
-  form.sort = row.sort
+  form.sortOrder = Number(row.sortOrder || 0)
   form.description = row.description || ''
   dialogVisible.value = true
 }
@@ -147,7 +147,7 @@ function handleEdit(row: any) {
 async function handleDelete(row: any) {
   try {
     await ElMessageBox.confirm('确定删除该品牌吗？', '提示', { type: 'warning' })
-    await brandApi.delete(row.id)
+    await brandApi.delete(String(row.id))
     ElMessage.success('删除成功')
     fetchList()
   } catch {}
@@ -155,7 +155,7 @@ async function handleDelete(row: any) {
 
 async function handleUploadLogo(options: any) {
   try {
-    const res = await uploadApi.uploadImage(options.file)
+    const res = await uploadApi.uploadImage(options.file, 'brand-logo')
     form.logo = res.data.url
   } catch {}
 }
@@ -166,10 +166,16 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
+    const payload = {
+      name: form.name,
+      logo: form.logo,
+      sortOrder: form.sortOrder,
+      description: form.description,
+    }
     if (form.id) {
-      await brandApi.update({ ...form })
+      await brandApi.update(form.id, payload)
     } else {
-      await brandApi.create({ ...form })
+      await brandApi.create(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
