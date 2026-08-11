@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const expectedSerial = 'ABCDEF123456'
+const apiDomain = 'api.yunxixiaochengxu.com.cn'
+const adminDomain = 'admin.yunxixiaochengxu.com.cn'
 
 function spawn(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -48,6 +50,8 @@ function buildProductionEnv(fixture) {
   return {
     ...process.env,
     NODE_ENV: 'production',
+    API_DOMAIN: apiDomain,
+    ADMIN_DOMAIN: adminDomain,
     HTTP_HOST_PORT: '80',
     HTTPS_HOST_PORT: '443',
     DB_HOST: '127.0.0.1',
@@ -69,11 +73,11 @@ function buildProductionEnv(fixture) {
     WECHAT_PLATFORM_CERT_PATH: fixture.platformCertPath,
     WECHAT_PLATFORM_CERT_SERIAL_NO: expectedSerial,
     WECHAT_PLATFORM_CERT_MAP: JSON.stringify({ [expectedSerial]: fixture.platformCertPath }),
-    WECHAT_NOTIFY_URL: 'https://api.example.com/api/weapp/pay/callback',
-    WECHAT_REFUND_NOTIFY_URL: 'https://api.example.com/api/weapp/pay/refund-callback',
+    WECHAT_NOTIFY_URL: `https://${apiDomain}/api/weapp/pay/callback`,
+    WECHAT_REFUND_NOTIFY_URL: `https://${apiDomain}/api/weapp/pay/refund-callback`,
     WECHAT_SKIP_VERIFY: 'false',
-    UPLOAD_PUBLIC_URL: 'https://api.example.com',
-    CORS_ORIGINS: 'https://admin.example.com',
+    UPLOAD_PUBLIC_URL: `https://${apiDomain}`,
+    CORS_ORIGINS: `https://${adminDomain}`,
     ALERT_WEBHOOK_URL: 'https://alerts.example.com/hook',
     OUTBOUND_HTTP_TIMEOUT_MS: '10000',
     SMOKE_TEST_BYPASS_CAPTCHA: 'false',
@@ -132,63 +136,52 @@ test('production config preflight executes real crypto checks and rejects danger
     assert.notEqual(wrongDatabasePassword.status, 0, 'DATABASE_URL password mismatch must fail before database access')
     assert.match(`${wrongDatabasePassword.stderr}\n${wrongDatabasePassword.stdout}`, /DB_PASSWORD 不一致/)
 
-    const nonstandardHttpPort = runPreflight({
-      ...validEnv,
-      HTTP_HOST_PORT: '8080',
-    })
+    const nonstandardHttpPort = runPreflight({ ...validEnv, HTTP_HOST_PORT: '8080' })
     assert.notEqual(nonstandardHttpPort.status, 0, 'nonstandard public HTTP port must fail production preflight')
     assert.match(`${nonstandardHttpPort.stderr}\n${nonstandardHttpPort.stdout}`, /HTTP_HOST_PORT 必须为 80/)
 
-    const nonstandardHttpsPort = runPreflight({
-      ...validEnv,
-      HTTPS_HOST_PORT: '8443',
-    })
+    const nonstandardHttpsPort = runPreflight({ ...validEnv, HTTPS_HOST_PORT: '8443' })
     assert.notEqual(nonstandardHttpsPort.status, 0, 'nonstandard public HTTPS port must fail production preflight')
     assert.match(`${nonstandardHttpsPort.stderr}\n${nonstandardHttpsPort.stdout}`, /HTTPS_HOST_PORT 必须为 443/)
 
-    const invalidOutboundTimeout = runPreflight({
-      ...validEnv,
-      OUTBOUND_HTTP_TIMEOUT_MS: '999',
-    })
-    assert.notEqual(
-      invalidOutboundTimeout.status,
-      0,
-      'invalid outbound HTTP timeout must fail before production runtime or migration side effects',
-    )
+    const wrongApiDomain = runPreflight({ ...validEnv, API_DOMAIN: 'api-wrong.example.com' })
+    assert.notEqual(wrongApiDomain.status, 0, 'API domain drift from Nginx server_name must fail preflight')
+    assert.match(`${wrongApiDomain.stderr}\n${wrongApiDomain.stdout}`, /API_DOMAIN 必须与 Nginx server_name 一致/)
 
-    const placeholderMerchant = runPreflight({
+    const missingAdminCors = runPreflight({ ...validEnv, CORS_ORIGINS: 'https://ops.example.com' })
+    assert.notEqual(missingAdminCors.status, 0, 'production CORS must allow the actual admin web origin')
+    assert.match(`${missingAdminCors.stderr}\n${missingAdminCors.stdout}`, /CORS_ORIGINS 必须包含管理后台 origin/)
+
+    const wrongUploadOrigin = runPreflight({ ...validEnv, UPLOAD_PUBLIC_URL: 'https://cdn.example.com' })
+    assert.notEqual(wrongUploadOrigin.status, 0, 'upload public origin drift must fail before runtime')
+    assert.match(`${wrongUploadOrigin.stderr}\n${wrongUploadOrigin.stdout}`, /UPLOAD_PUBLIC_URL 必须精确为/)
+
+    const wrongPayCallback = runPreflight({
       ...validEnv,
-      WECHAT_MCH_ID: 'REPLACE_WITH_REAL_MCH_ID',
+      WECHAT_NOTIFY_URL: `https://${apiDomain}/api/weapp/pay/wrong-callback`,
     })
-    assert.notEqual(
-      placeholderMerchant.status,
-      0,
-      'obvious production template placeholders must fail before payment/runtime side effects',
-    )
+    assert.notEqual(wrongPayCallback.status, 0, 'payment callback route drift must fail preflight')
+    assert.match(`${wrongPayCallback.stderr}\n${wrongPayCallback.stdout}`, /WECHAT_NOTIFY_URL 必须精确为/)
+
+    const invalidOutboundTimeout = runPreflight({ ...validEnv, OUTBOUND_HTTP_TIMEOUT_MS: '999' })
+    assert.notEqual(invalidOutboundTimeout.status, 0, 'invalid outbound timeout must fail before side effects')
+
+    const placeholderMerchant = runPreflight({ ...validEnv, WECHAT_MCH_ID: 'REPLACE_WITH_REAL_MCH_ID' })
+    assert.notEqual(placeholderMerchant.status, 0, 'production template placeholders must fail preflight')
     assert.match(`${placeholderMerchant.stderr}\n${placeholderMerchant.stdout}`, /模板占位值/)
 
     const placeholderDatabaseUrl = runPreflight({
       ...validEnv,
       DATABASE_URL: 'mysql://root:REPLACE_WITH_PERCENT_ENCODED_DB_PASSWORD@127.0.0.1:3306/baby_mall_preflight',
     })
-    assert.notEqual(
-      placeholderDatabaseUrl.status,
-      0,
-      'placeholder database credentials must fail before any database connection or migration',
-    )
+    assert.notEqual(placeholderDatabaseUrl.status, 0, 'placeholder database credentials must fail preflight')
 
-    const wrongSerial = runPreflight({
-      ...validEnv,
-      WECHAT_PLATFORM_CERT_SERIAL_NO: 'ABCDEF123457',
-    })
+    const wrongSerial = runPreflight({ ...validEnv, WECHAT_PLATFORM_CERT_SERIAL_NO: 'ABCDEF123457' })
     assert.notEqual(wrongSerial.status, 0, 'mismatched platform certificate serial must fail preflight')
 
     const badKeyPath = join(dir, 'bad-private-key.pem')
     writeFileSync(badKeyPath, 'not-a-private-key\n')
-    const badKey = runPreflight({
-      ...validEnv,
-      WECHAT_PRIVATE_KEY_PATH: badKeyPath,
-    })
+    const badKey = runPreflight({ ...validEnv, WECHAT_PRIVATE_KEY_PATH: badKeyPath })
     assert.notEqual(badKey.status, 0, 'unparseable merchant private key must fail preflight')
 
     const nonCanonicalMapSerial = runPreflight({
@@ -197,10 +190,7 @@ test('production config preflight executes real crypto checks and rejects danger
     })
     assert.notEqual(nonCanonicalMapSerial.status, 0, 'non-canonical certificate rotation serial must fail preflight')
 
-    const insecureAlert = runPreflight({
-      ...validEnv,
-      ALERT_WEBHOOK_URL: 'http://alerts.example.com/hook',
-    })
+    const insecureAlert = runPreflight({ ...validEnv, ALERT_WEBHOOK_URL: 'http://alerts.example.com/hook' })
     assert.notEqual(insecureAlert.status, 0, 'production critical alert webhook must require HTTPS')
 
     assert.match(readFileSync(fixture.platformCertPath, 'utf8'), /BEGIN CERTIFICATE/)
@@ -213,7 +203,6 @@ test('direct production bootstrap invokes preflight before NestFactory creates p
   const main = readFileSync(resolve(root, 'apps/api/src/main.ts'), 'utf8')
   const preflightIndex = main.indexOf('runProductionConfigPreflight(process.env)')
   const nestCreateIndex = main.indexOf('NestFactory.create')
-
   assert.ok(preflightIndex >= 0, 'main.ts must invoke production config preflight')
   assert.ok(nestCreateIndex >= 0, 'main.ts must create the Nest application')
   assert.ok(preflightIndex < nestCreateIndex, 'production preflight must run before Nest providers and schedulers start')
@@ -224,6 +213,8 @@ test('production deploy quiesces all writers before the proof backup and rolls b
   const entrypoint = readFileSync(resolve(root, 'deploy/scripts/entrypoint.sh'), 'utf8')
   const redis = readFileSync(resolve(root, 'apps/api/src/common/redis/redis.service.ts'), 'utf8')
   const smoke = readFileSync(resolve(root, 'deploy/scripts/smoke-runtime.sh'), 'utf8')
+  const compose = readFileSync(resolve(root, 'deploy/docker-compose.yml'), 'utf8')
+  const btCompose = readFileSync(resolve(root, 'deploy/docker-compose.bt.yml'), 'utf8')
 
   const buildIndex = deploy.indexOf('build --pull api')
   const maintenanceIndex = deploy.indexOf('MAINTENANCE_ACTIVE=true')
@@ -237,19 +228,7 @@ test('production deploy quiesces all writers before the proof backup and rolls b
   const publicExposeIndex = deploy.indexOf('PUBLIC_EXPOSED=true')
   const smokeIndex = deploy.indexOf('smoke-runtime.sh')
 
-  for (const [label, value] of Object.entries({
-    buildIndex,
-    maintenanceIndex,
-    stopNginxIndex,
-    stopApiIndex,
-    backupIndex,
-    cloneIndex,
-    liveTouchedIndex,
-    liveMigrationIndex,
-    candidateHealthIndex,
-    publicExposeIndex,
-    smokeIndex,
-  })) {
+  for (const [label, value] of Object.entries({ buildIndex, maintenanceIndex, stopNginxIndex, stopApiIndex, backupIndex, cloneIndex, liveTouchedIndex, liveMigrationIndex, candidateHealthIndex, publicExposeIndex, smokeIndex })) {
     assert.ok(value >= 0, `deployment contract missing ${label}`)
   }
 
@@ -270,7 +249,6 @@ test('production deploy quiesces all writers before the proof backup and rolls b
   assert.match(deploy, /restore_previous_runtime\(\)/)
   assert.match(deploy, /PUBLIC_EXPOSED.*automatic database rollback is disabled/s)
   assert.match(deploy, /candidate API business route and Nginx configuration pass before public exposure/)
-
   assert.match(entrypoint, /\.scheduler-paused/)
   assert.match(entrypoint, /\$\{BUILD_SHA:-unknown\}/)
   assert.match(redis, /key\.startsWith\('schedule:'\)/)
@@ -278,4 +256,11 @@ test('production deploy quiesces all writers before the proof backup and rolls b
   assert.match(smoke, /scheduler_pause_marker/)
   assert.match(smoke, /scheduler_pause_marker.*api_build_sha/s)
   assert.match(smoke, /rm -f.*\.scheduler-paused/)
+
+  for (const source of [compose, btCompose]) {
+    assert.match(source, /API_DOMAIN: \$\{API_DOMAIN:-api\.yunxixiaochengxu\.com\.cn\}/)
+    assert.match(source, /ADMIN_DOMAIN: \$\{ADMIN_DOMAIN:-admin\.yunxixiaochengxu\.com\.cn\}/)
+    assert.match(source, /HTTP_HOST_PORT: \$\{HTTP_HOST_PORT:-80\}/)
+    assert.match(source, /HTTPS_HOST_PORT: \$\{HTTPS_HOST_PORT:-443\}/)
+  }
 })
