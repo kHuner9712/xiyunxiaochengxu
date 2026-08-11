@@ -149,6 +149,17 @@ async function main() {
     const persistedProduct = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
     assert.equal(persistedProduct.supplierId, supplierId, '合作中供应商必须可被商品正常绑定');
 
+    const initialStockLogs = await prisma.productStockLog.findMany({
+      where: { productId },
+      orderBy: { createdAt: 'asc' },
+    });
+    assert.equal(initialStockLogs.length, 1, '商品创建时非零初始库存必须留下真实库存流水');
+    assert.equal(initialStockLogs[0].type, 2);
+    assert.equal(initialStockLogs[0].quantity, 2);
+    assert.equal(initialStockLogs[0].beforeStock, 0);
+    assert.equal(initialStockLogs[0].afterStock, 2);
+    assert.equal(initialStockLogs[0].reason, '商品创建初始库存');
+
     await assert.rejects(
       productService.update(productId.toString(), { categoryId: deletedCategory.id.toString() } as any),
       /分类不存在或已删除，请重新选择分类/,
