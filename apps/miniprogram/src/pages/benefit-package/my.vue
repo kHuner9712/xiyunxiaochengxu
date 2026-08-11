@@ -70,6 +70,8 @@ const page = ref(1)
 const finished = ref(false)
 const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
+let listVersion = 0
+let loadingVersion = -1
 
 function statusText(status: string): string {
   switch (status) {
@@ -128,38 +130,56 @@ function stopClock() {
   clockTimer = null
 }
 
-async function loadList(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    if (activeTab.value === 'packages') packageList.value = []
-    else entitlementList.value = []
-  }
+function resetCurrentList(tab: TabValue) {
+  page.value = 1
+  finished.value = false
+  if (tab === 'packages') packageList.value = []
+  else entitlementList.value = []
+}
+
+async function loadList(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
+  const requestTab = activeTab.value
   loading.value = true
+  loadingVersion = version
   try {
-    if (activeTab.value === 'packages') {
-      const data = await getMyBenefitPackages({ page: page.value, pageSize: 20 })
+    if (requestTab === 'packages') {
+      const data = await getMyBenefitPackages({ page: requestPage, pageSize: 20 })
+      if (version !== listVersion || requestTab !== activeTab.value) return
       packageList.value.push(...data.list)
       finished.value = packageList.value.length >= data.total
     } else {
-      const data = await getMyBenefitEntitlements({ page: page.value, pageSize: 20 })
+      const data = await getMyBenefitEntitlements({ page: requestPage, pageSize: 20 })
+      if (version !== listVersion || requestTab !== activeTab.value) return
       entitlementList.value.push(...data.list)
       finished.value = entitlementList.value.length >= data.total
     }
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === listVersion && requestTab === activeTab.value) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion && requestTab === activeTab.value) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshList() {
+  const version = ++listVersion
+  resetCurrentList(activeTab.value)
+  return loadList(version)
 }
 
 function switchTab(v: TabValue) {
   if (activeTab.value === v) return
   activeTab.value = v
-  loadList(true)
+  void refreshList()
 }
 
 function goEntitlements(packageId: string) {
@@ -172,11 +192,21 @@ function goEntitlementDetail(id: string) {
 
 onShow(() => {
   startClock()
-  loadList(true)
+  void refreshList()
 })
 onHide(() => stopClock())
 onUnload(() => stopClock())
-onReachBottom(() => loadList())
+onReachBottom(() => void loadList(listVersion))
+
+defineExpose({
+  activeTab,
+  packageList,
+  entitlementList,
+  loading,
+  loadList,
+  refreshList,
+  switchTab,
+})
 </script>
 
 <style lang="scss" scoped>
