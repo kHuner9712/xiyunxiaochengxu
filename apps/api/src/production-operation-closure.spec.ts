@@ -101,6 +101,7 @@ describe('production operation closure contracts', () => {
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
     const snapshotSettlement = read('apps/api/src/merchant-settlement/snapshot-aware-state-safe-merchant-settlement.service.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
+    const atomicShare = read('apps/api/src/share/atomic-share-production.service.ts');
 
     expect(paymentModule).toContain('useClass: MemberGrowthConservingPaymentService');
     expect(memberGrowthPayment).toContain('extends PromotionRecoveringDurableZeroPayAftersalePaymentService');
@@ -130,7 +131,8 @@ describe('production operation closure contracts', () => {
     expect(versionedBenefits).toContain('extends ZeroPayAwareBenefitPackageService');
     expect(settlementModule).toContain('SnapshotAwareStateSafeMerchantSettlementService');
     expect(snapshotSettlement).toContain('extends StateSafeProductionMerchantSettlementService');
-    expect(shareModule).toContain('SafeShareProductionService');
+    expect(shareModule).toContain('useClass: AtomicShareProductionService');
+    expect(atomicShare).toContain('extends SafeShareProductionService');
   });
 
   it('makes production deployment identity and restored-backup migration verification mandatory', () => {
