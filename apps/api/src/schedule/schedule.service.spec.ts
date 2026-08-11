@@ -8,6 +8,7 @@ import { ScheduleService } from './schedule.service';
 function createRedisService() {
   return {
     setNX: jest.fn(),
+    extendLockWithLua: jest.fn(),
     releaseLockWithLua: jest.fn(),
   };
 }
@@ -113,6 +114,7 @@ describe('ScheduleService', () => {
     benefitPackageService = createBenefitPackageService();
     schedulerRegistry = createSchedulerRegistry();
     redisService.setNX.mockImplementation(async () => true);
+    redisService.extendLockWithLua.mockImplementation(async () => true);
     redisService.releaseLockWithLua.mockImplementation(async () => true);
     prismaService.$queryRaw.mockImplementation(async () => []);
     prismaService.merchantCommissionRecord.findFirst.mockImplementation(async () => null);
@@ -240,6 +242,21 @@ describe('ScheduleService', () => {
     expect(paymentService.createGroupBuyFailureRefund).toHaveBeenCalledTimes(1);
   });
 
+  it('单轮拼团失败退款提交有上限，剩余订单留给下一轮持久化扫描', async () => {
+    groupBuyService.markExpiredGroups.mockImplementation(async () => ({
+      affected: 25,
+      refundOrderIds: Array.from({ length: 25 }, (_, index) => String(index + 1)),
+    }));
+
+    await service.handleExpiredGroupBuys();
+
+    expect(paymentService.createGroupBuyFailureRefund).toHaveBeenCalledTimes(20);
+    expect(paymentService.createGroupBuyFailureRefund).toHaveBeenLastCalledWith(
+      '20',
+      '拼团失败自动退款',
+    );
+  });
+
   it('权益核销审计缺口和服务分佣缺口都会自动重建', async () => {
     benefitPackageService.reconcileUsedEntitlementAuditGaps.mockImplementation(async () => ({
       total: 1,
@@ -303,6 +320,37 @@ describe('ScheduleService', () => {
       'schedule:mature_referral_rewards',
       expect.any(String),
     );
+  });
+
+  it('长任务会在锁TTL到期前续租，并在释放后停止续租', async () => {
+    jest.useFakeTimers();
+    try {
+      const lockValue = await (service as any).acquireLock('schedule:lease-test', 3);
+      expect(lockValue).toEqual(expect.any(String));
+
+      jest.advanceTimersByTime(1000);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(redisService.extendLockWithLua).toHaveBeenCalledWith(
+        'schedule:lease-test',
+        lockValue,
+        3,
+      );
+
+      await (service as any).releaseLock('schedule:lease-test', lockValue);
+      const renewalCallsAfterRelease = redisService.extendLockWithLua.mock.calls.length;
+
+      jest.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(redisService.extendLockWithLua).toHaveBeenCalledTimes(
+        renewalCallsAfterRelease,
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('关机时停止 Cron 并等待已持有锁的任务释放后才完成', async () => {
