@@ -40,11 +40,17 @@ assert.match(restore, /gzip -dc "\$DB_FILE"[\s\S]*exec -T mysql/);
 assert.match(restore, /gzip -dc "\$UPLOAD_FILE"[\s\S]*run --rm --no-deps -T --entrypoint sh api/);
 assert.match(restore, /up -d api/);
 assert.match(restore, /127\.0\.0\.1:3000\/health/);
+assert.match(restore, /ENV_FILE="\$ENV_FILE" bash "\$SCRIPT_DIR\/smoke-runtime\.sh"/);
+assert.match(restore, /"\$\{COMPOSE\[@\]\}" stop nginx/);
+assert.match(restore, /完整 runtime smoke 已通过/);
 
 const apiStart = restore.indexOf('up -d api');
 const health = restore.indexOf('127.0.0.1:3000/health');
 const nginxStart = restore.indexOf('up -d nginx');
+const smoke = restore.indexOf('smoke-runtime.sh');
+const success = restore.indexOf('完整 runtime smoke 已通过');
 assert.ok(apiStart >= 0 && health > apiStart && nginxStart > health, 'Nginx must reopen only after restored API health succeeds');
+assert.ok(smoke > nginxStart && success > smoke, 'Restore must declare success only after the full runtime smoke passes');
 assert.match(restore, /恢复失败且公网保持关闭/);
 
 console.log('[audit-production-entrypoints] PASS');
