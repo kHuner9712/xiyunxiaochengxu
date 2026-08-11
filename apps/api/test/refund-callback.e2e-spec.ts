@@ -110,7 +110,7 @@ describe('PaymentController refund-callback (e2e)', () => {
     });
   });
 
-  it('POST /api/weapp/pay/refund-callback with amount mismatch returns FAIL', async () => {
+  it('POST /api/weapp/pay/refund-callback with amount mismatch returns retryable HTTP 500 + FAIL', async () => {
     paymentService.handleRefundCallback.mockResolvedValue({ code: 'FAIL', message: '退款金额不匹配' });
 
     const res = await request(app.getHttpServer())
@@ -118,7 +118,7 @@ describe('PaymentController refund-callback (e2e)', () => {
       .send({})
       .set('Content-Type', 'application/json');
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
     expect(res.body.code).toBe('FAIL');
     expect(res.body.message).toBe('退款金额不匹配');
   });
@@ -137,6 +137,8 @@ describe('PaymentController refund-callback (e2e)', () => {
       .send({})
       .set('Content-Type', 'application/json');
 
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
     expect(res1.body).toEqual({ code: 'SUCCESS', message: '' });
     expect(res2.body).toEqual({ code: 'SUCCESS', message: '' });
     expect(paymentService.handleRefundCallback).toHaveBeenCalledTimes(2);
