@@ -22,13 +22,50 @@ async function main() {
   await prisma.$connect();
   const suffix = Date.now().toString();
   const supplierIds: bigint[] = [];
-  let categoryId: bigint | null = null;
+  const categoryIds: bigint[] = [];
+  const brandIds: bigint[] = [];
   let productId: bigint | null = null;
 
   try {
     const service = new SupplierService(prisma as any);
     const productService = new ProductionProductService(prisma as any);
     const supplierName = `供应商真库-${suffix}`;
+
+    const activeCategory = await prisma.productCategory.create({
+      data: { name: `供应商真库分类-${suffix}` },
+    });
+    categoryIds.push(activeCategory.id);
+
+    const deletedCategory = await prisma.productCategory.create({
+      data: { name: `已删除分类-${suffix}`, deletedAt: new Date() },
+    });
+    categoryIds.push(deletedCategory.id);
+
+    const deletedBrand = await prisma.brand.create({
+      data: { name: `已删除品牌-${suffix}`, deletedAt: new Date() },
+    });
+    brandIds.push(deletedBrand.id);
+
+    await assert.rejects(
+      productService.create({
+        name: `已删除分类商品-${suffix}`,
+        categoryId: deletedCategory.id.toString(),
+        skus: [{ skuCode: `CAT-DELETED-${suffix}`.slice(0, 64), price: 1000, stock: 1 }],
+      } as any),
+      /分类不存在或已删除，请重新选择分类/,
+      '软删除分类行仍存在时，也不能通过旧ID重新绑定商品',
+    );
+
+    await assert.rejects(
+      productService.create({
+        name: `已删除品牌商品-${suffix}`,
+        categoryId: activeCategory.id.toString(),
+        brandId: deletedBrand.id.toString(),
+        skus: [{ skuCode: `BRAND-DELETED-${suffix}`.slice(0, 64), price: 1000, stock: 1 }],
+      } as any),
+      /品牌不存在或已删除，请重新选择品牌/,
+      '软删除品牌行仍存在时，也不能通过旧ID重新绑定商品',
+    );
 
     const created: any = await service.create({
       name: supplierName,
@@ -47,15 +84,10 @@ async function main() {
     assert.equal(persisted.email, 'supplier-a@example.com');
     assert.equal(persisted.status, 0, '创建时显式停用状态必须落库');
 
-    const category = await prisma.productCategory.create({
-      data: { name: `供应商真库分类-${suffix}` },
-    });
-    categoryId = category.id;
-
     await assert.rejects(
       productService.create({
         name: `停用供应商商品-${suffix}`,
-        categoryId: category.id.toString(),
+        categoryId: activeCategory.id.toString(),
         supplierId: supplierId.toString(),
         skus: [{ skuCode: `SUP-INACTIVE-${suffix}`.slice(0, 64), price: 1000, stock: 1 }],
       } as any),
@@ -75,13 +107,24 @@ async function main() {
 
     const product: any = await productService.create({
       name: `供应商真库商品-${suffix}`,
-      categoryId: category.id.toString(),
+      categoryId: activeCategory.id.toString(),
       supplierId: supplierId.toString(),
       skus: [{ skuCode: `SUP-ACTIVE-${suffix}`.slice(0, 64), price: 1200, stock: 2 }],
     } as any);
     productId = BigInt(product.id);
     const persistedProduct = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
     assert.equal(persistedProduct.supplierId, supplierId, '合作中供应商必须可被商品正常绑定');
+
+    await assert.rejects(
+      productService.update(productId.toString(), { categoryId: deletedCategory.id.toString() } as any),
+      /分类不存在或已删除，请重新选择分类/,
+      '已有商品不能改绑到软删除分类',
+    );
+    await assert.rejects(
+      productService.update(productId.toString(), { brandId: deletedBrand.id.toString() } as any),
+      /品牌不存在或已删除，请重新选择品牌/,
+      '已有商品不能改绑到软删除品牌',
+    );
 
     const list: any = await service.findAll({
       page: 1,
@@ -157,7 +200,8 @@ async function main() {
       await prisma.product.deleteMany({ where: { id: productId } });
     }
     if (supplierIds.length) await prisma.supplier.deleteMany({ where: { id: { in: supplierIds } } });
-    if (categoryId) await prisma.productCategory.deleteMany({ where: { id: categoryId } });
+    if (brandIds.length) await prisma.brand.deleteMany({ where: { id: { in: brandIds } } });
+    if (categoryIds.length) await prisma.productCategory.deleteMany({ where: { id: { in: categoryIds } } });
     await prisma.$disconnect();
   }
 }
