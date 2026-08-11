@@ -48,6 +48,8 @@ function buildProductionEnv(fixture) {
   return {
     ...process.env,
     NODE_ENV: 'production',
+    HTTP_HOST_PORT: '80',
+    HTTPS_HOST_PORT: '443',
     DB_HOST: '127.0.0.1',
     DB_PORT: '3306',
     DB_NAME: 'baby_mall_preflight',
@@ -129,6 +131,20 @@ test('production config preflight executes real crypto checks and rejects danger
     })
     assert.notEqual(wrongDatabasePassword.status, 0, 'DATABASE_URL password mismatch must fail before database access')
     assert.match(`${wrongDatabasePassword.stderr}\n${wrongDatabasePassword.stdout}`, /DB_PASSWORD 不一致/)
+
+    const nonstandardHttpPort = runPreflight({
+      ...validEnv,
+      HTTP_HOST_PORT: '8080',
+    })
+    assert.notEqual(nonstandardHttpPort.status, 0, 'nonstandard public HTTP port must fail production preflight')
+    assert.match(`${nonstandardHttpPort.stderr}\n${nonstandardHttpPort.stdout}`, /HTTP_HOST_PORT 必须为 80/)
+
+    const nonstandardHttpsPort = runPreflight({
+      ...validEnv,
+      HTTPS_HOST_PORT: '8443',
+    })
+    assert.notEqual(nonstandardHttpsPort.status, 0, 'nonstandard public HTTPS port must fail production preflight')
+    assert.match(`${nonstandardHttpsPort.stderr}\n${nonstandardHttpsPort.stdout}`, /HTTPS_HOST_PORT 必须为 443/)
 
     const invalidOutboundTimeout = runPreflight({
       ...validEnv,
