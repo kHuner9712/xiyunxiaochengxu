@@ -5,6 +5,10 @@ import { PAYMENT_STATUS, REFUND_STATUS, WECHAT_REFUND_STATUS } from '../common/c
 import { BusinessEventService } from '../common/business-event.service';
 import { OrderStatus } from '@prisma/client';
 
+const PAYMENT_RECONCILE_BATCH_SIZE = 20;
+const REFUND_RECONCILE_BATCH_SIZE = 20;
+const TIMEOUT_CLOSE_CONFIRM_BATCH_SIZE = 20;
+
 @Injectable()
 export class PaymentReconcileService {
   private readonly logger = new Logger(PaymentReconcileService.name);
@@ -27,6 +31,8 @@ export class PaymentReconcileService {
         createdAt: { lt: fiveMinutesAgo },
       },
       include: { order: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: PAYMENT_RECONCILE_BATCH_SIZE,
     });
 
     const halfSuccessPayments = await this.prisma.orderPayment.findMany({
@@ -35,6 +41,8 @@ export class PaymentReconcileService {
         order: { status: OrderStatus.pending_payment },
       },
       include: { order: true },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: PAYMENT_RECONCILE_BATCH_SIZE,
     });
 
     let fixed = 0;
@@ -111,6 +119,8 @@ export class PaymentReconcileService {
         autoCloseAt: { lte: new Date() },
       },
       include: { payment: true },
+      orderBy: [{ autoCloseAt: 'asc' }, { id: 'asc' }],
+      take: TIMEOUT_CLOSE_CONFIRM_BATCH_SIZE,
     });
 
     if (timeoutOrders.length === 0) {
@@ -199,6 +209,8 @@ export class PaymentReconcileService {
         status: { in: [REFUND_STATUS.INITIATING, REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] },
         updatedAt: { lt: fiveMinutesAgo },
       },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: REFUND_RECONCILE_BATCH_SIZE,
     });
 
     let fixed = 0;
