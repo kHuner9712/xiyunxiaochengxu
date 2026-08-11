@@ -24,6 +24,24 @@ SET @pickup_permission_id := (
   SELECT `id` FROM `admin_permissions` WHERE `code` = 'pickup' LIMIT 1
 );
 
+INSERT INTO `admin_permissions`
+  (`parent_id`, `name`, `code`, `type`, `sort_order`, `created_at`, `updated_at`)
+SELECT
+  @pickup_permission_id, '自提点管理', 'pickup:store', 2, 1, NOW(), NOW()
+WHERE @pickup_permission_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM `admin_permissions` WHERE `code` = 'pickup:store'
+  );
+
+INSERT INTO `admin_permissions`
+  (`parent_id`, `name`, `code`, `type`, `sort_order`, `created_at`, `updated_at`)
+SELECT
+  @pickup_permission_id, '自提核销', 'pickup:verify', 2, 2, NOW(), NOW()
+WHERE @pickup_permission_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM `admin_permissions` WHERE `code` = 'pickup:verify'
+  );
+
 UPDATE `admin_permissions`
 SET
   `parent_id` = @pickup_permission_id,
@@ -50,6 +68,15 @@ JOIN `admin_permissions` child
   ON child.`id` = existing.`permission_id`
 WHERE child.`code` IN ('pickup:store', 'pickup:verify')
   AND @pickup_permission_id IS NOT NULL;
+
+-- super_admin is defined as full access. If an older database was missing either child row, grant
+-- the repaired parent and children explicitly so the persisted role assignment matches that model.
+INSERT IGNORE INTO `admin_role_permissions` (`role_id`, `permission_id`)
+SELECT super_role.`id`, permission.`id`
+FROM `admin_roles` super_role
+JOIN `admin_permissions` permission
+  ON permission.`code` IN ('pickup', 'pickup:store', 'pickup:verify')
+WHERE super_role.`code` = 'super_admin';
 
 -- The earlier default-role migration intentionally seeded an operator only when every required
 -- permission already existed. On databases affected by the missing `pickup` parent that condition
