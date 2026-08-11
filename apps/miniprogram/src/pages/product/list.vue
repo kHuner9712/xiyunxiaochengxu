@@ -82,17 +82,26 @@ const page = ref(1)
 const finished = ref(false)
 const categoryId = ref('')
 const keyword = ref('')
+let listVersion = 0
+let loadingVersion = -1
 
-async function loadProducts(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    products.value = []
-    total.value = 0
-  }
+function resetList() {
+  page.value = 1
+  finished.value = false
+  products.value = []
+  total.value = 0
+}
+
+async function loadProducts(version = listVersion) {
+  if (finished.value && version === listVersion) return
+  if (loading.value && loadingVersion === version) return
+
+  const requestPage = page.value
+  const requestSort = currentSort.value
+  const requestCategoryId = categoryId.value
+  const requestKeyword = keyword.value
   loading.value = true
+  loadingVersion = version
   try {
     const params: {
       categoryId?: string
@@ -101,28 +110,37 @@ async function loadProducts(reset = false) {
       page: number
       pageSize: number
     } = {
-      sort: currentSort.value,
-      page: page.value,
+      sort: requestSort,
+      page: requestPage,
       pageSize: 10
     }
-    if (categoryId.value) params.categoryId = categoryId.value
-    if (keyword.value) params.keyword = keyword.value
+    if (requestCategoryId) params.categoryId = requestCategoryId
+    if (requestKeyword) params.keyword = requestKeyword
     const data = await getProductList(params)
+    if (version !== listVersion) return
+
     products.value.push(...data.list)
     total.value = data.total
     finished.value = products.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '商品加载失败', icon: 'none' })
+    if (version === listVersion) {
+      uni.showToast({ title: '商品加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === listVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
 function switchSort(value: ProductListSort) {
   if (currentSort.value === value) return
   currentSort.value = value
-  loadProducts(true)
+  const version = ++listVersion
+  resetList()
+  loadProducts(version)
 }
 
 function goSearch() {
@@ -133,16 +151,27 @@ onLoad((options) => {
   categoryId.value = normalizeProductCategoryId(options?.categoryId)
   currentSort.value = normalizeProductListSort(options?.sort)
   if (options?.keyword) keyword.value = String(options.keyword)
-  loadProducts()
+  loadProducts(listVersion)
 })
 
 onPullDownRefresh(async () => {
-  await loadProducts(true)
+  const version = ++listVersion
+  resetList()
+  await loadProducts(version)
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadProducts()
+  loadProducts(listVersion)
+})
+
+defineExpose({
+  currentSort,
+  products,
+  total,
+  loading,
+  switchSort,
+  loadProducts,
 })
 </script>
 
