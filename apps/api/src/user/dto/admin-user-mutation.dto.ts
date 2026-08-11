@@ -20,6 +20,12 @@ export class AdjustMemberLevelDto {
 export class AdjustUserPointsDto {
   @Type(() => Number)
   @IsInt()
+  @Min(0)
+  @Max(2147483647)
+  expectedAvailablePoints!: number;
+
+  @Type(() => Number)
+  @IsInt()
   @Min(-100000000)
   @Max(100000000)
   points!: number;
