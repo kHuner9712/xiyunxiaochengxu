@@ -102,9 +102,18 @@ export class StockService {
     if (expectedProductId && expectedProductId !== sku.productId) {
       throw new BadRequestException('所选SKU不属于当前商品，请刷新库存列表后重试');
     }
+
+    // The stock value rendered in the admin dialog is the optimistic-concurrency token for this
+    // operation. If the first request committed but its HTTP response was lost, a retry still sends
+    // the old expectedStock and is rejected instead of applying the same increment/decrement twice.
+    if (sku.stock !== dto.expectedStock) {
+      throw new BadRequestException(
+        `库存已变更（当前库存 ${sku.stock}），请刷新确认上次操作是否已生效后再重试`,
+      );
+    }
     if (dto.type === 'out' && sku.stock < dto.quantity) throw new BadRequestException('库存不足');
 
-    const beforeStock = sku.stock;
+    const beforeStock = dto.expectedStock;
     const afterStock = dto.type === 'in' ? beforeStock + dto.quantity : beforeStock - dto.quantity;
     if (
       !Number.isSafeInteger(afterStock) ||
@@ -115,13 +124,13 @@ export class StockService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      // Compare-and-swap preserves concurrent user order deductions: if any order changes this
-      // SKU after the admin list was read, the adjustment fails instead of overwriting it.
+      // Compare-and-swap also preserves concurrent user order deductions between the optimistic
+      // pre-check above and this write. Neither a retry nor a concurrent order may be overwritten.
       const updated = await tx.productSku.updateMany({
         where: { id: sku.id, stock: beforeStock },
         data: { stock: afterStock },
       });
-      if (updated.count === 0) throw new BadRequestException('库存已变更，请刷新后重试');
+      if (updated.count === 0) throw new BadRequestException('库存已变更，请刷新确认后重试');
 
       await tx.productStockLog.create({
         data: {
