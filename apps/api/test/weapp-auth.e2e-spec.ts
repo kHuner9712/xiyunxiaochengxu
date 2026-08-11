@@ -131,10 +131,13 @@ describe('Weapp Auth (e2e)', () => {
     token = res.body.data.token;
   });
 
-  it('token payload contains roleType=user and tokenType=access', async () => {
+  it('token payload contains a revocable user access session id', async () => {
     const decoded = await jwtService.verifyAsync(token);
     expect(decoded.roleType).toBe('user');
     expect(decoded.tokenType).toBe('access');
+    expect(typeof decoded.tokenId).toBe('string');
+    expect(decoded.tokenId.length).toBeGreaterThan(10);
+    await expect(mockRedis.exists(`weapp_access_token:1:${decoded.tokenId}`)).resolves.toBe(1);
   });
 
   it('token can access weapp authenticated endpoints', async () => {
@@ -152,6 +155,21 @@ describe('Weapp Auth (e2e)', () => {
       .send({ code: 'x', encryptedData: 'x', iv: 'x' });
 
     expect([40101, 40102, 40103]).not.toContain(res.body.code);
+  });
+
+  it('POST /api/weapp/auth/logout revokes the current JWT immediately', async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: BigInt(1) });
+
+    const logoutRes = await request(app.getHttpServer())
+      .post('/api/weapp/auth/logout')
+      .set('Authorization', `Bearer ${token}`);
+    expect(logoutRes.status).toBe(200);
+
+    const rejectedRes = await request(app.getHttpServer())
+      .post('/api/weapp/auth/phone')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'x', encryptedData: 'x', iv: 'x' });
+    expect(rejectedRes.body.code).toBe(40101);
   });
 
   it('POST /api/weapp/auth/login with WeChat error throws unauthorized', async () => {
