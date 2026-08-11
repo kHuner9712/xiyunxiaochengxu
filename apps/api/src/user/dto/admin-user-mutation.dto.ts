@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min, Max } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min, Max } from 'class-validator';
 
 const POSITIVE_ID = /^[1-9]\d*$/;
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
@@ -35,4 +35,11 @@ export class AdjustUserPointsDto {
   @IsNotEmpty()
   @MaxLength(200)
   reason!: string;
+}
+
+export class UpdateUserStatusDto {
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([0, 1])
+  status!: number;
 }
