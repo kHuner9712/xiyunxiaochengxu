@@ -128,6 +128,9 @@ export async function createOrder(data: {
     clientRequestId,
   })
   clearPendingOrderClientRequestId(clientRequestId)
+  if (result.status === 'cancelled') {
+    throw new Error('上次提交对应订单已取消，请重新提交')
+  }
   return result
 }
 
