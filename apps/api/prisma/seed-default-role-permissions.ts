@@ -2,11 +2,17 @@ import { PrismaClient } from '@prisma/client';
 import {
   ensureDefaultRolePermissions,
   ensureMerchantSettlementPermission,
+  ensurePickupPermissionStructure,
 } from './default-role-permissions';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const pickup = await ensurePickupPermissionStructure(prisma);
+  console.log(
+    `自提权限层级已确保：parent=${pickup.parentId.toString()} children=${pickup.childIds.length} inheritedRoles=${pickup.inheritedRoleCount}`,
+  );
+
   const results = await ensureDefaultRolePermissions(prisma);
   for (const result of results) {
     if (result.action === 'seeded') {
