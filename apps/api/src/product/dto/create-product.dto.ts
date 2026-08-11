@@ -20,6 +20,7 @@ import {
 import { Type } from 'class-transformer';
 
 type EntityId = string | number;
+const MYSQL_SIGNED_INT_MAX = 2_147_483_647;
 
 @ValidatorConstraint({ name: 'recommendAgeRange', async: false })
 export class RecommendAgeRangeConstraint implements ValidatorConstraintInterface {
@@ -37,6 +38,7 @@ export class RecommendAgeRangeConstraint implements ValidatorConstraintInterface
 export class SkuDto {
   @IsOptional()
   @IsString()
+  @MaxLength(50)
   skuCode?: string;
 
   @IsOptional()
@@ -45,38 +47,45 @@ export class SkuDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(MYSQL_SIGNED_INT_MAX)
   price!: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   originalPrice?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   costPrice?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   stock?: number;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   image?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   weight?: number;
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
   barcode?: string;
 }
 
@@ -117,10 +126,12 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   mainImage?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   videoUrl?: string;
 
   @IsOptional()
@@ -146,6 +157,7 @@ export class CreateProductDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   @Validate(RecommendAgeRangeConstraint)
   recommendAgeMin?: number;
 
@@ -153,6 +165,7 @@ export class CreateProductDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   @Validate(RecommendAgeRangeConstraint)
   recommendAgeMax?: number;
 
@@ -167,6 +180,7 @@ export class CreateProductDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   sortOrder?: number;
 
   @IsOptional()
