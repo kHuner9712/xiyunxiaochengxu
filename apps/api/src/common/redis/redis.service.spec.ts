@@ -48,6 +48,32 @@ describe('RedisService.delByPattern', () => {
   });
 });
 
+describe('RedisService token-safe locks', () => {
+  it('renews a lock only through token-checked Lua and preserves the TTL argument', async () => {
+    const client: any = { eval: jest.fn().mockResolvedValue(1) };
+    const service = new RedisService(client);
+
+    await expect(service.extendLockWithLua('schedule:payment_reconcile', 'owner-token', 240))
+      .resolves.toBe(true);
+    expect(client.eval).toHaveBeenCalledTimes(1);
+    const [lua, keyCount, key, token, ttl] = client.eval.mock.calls[0];
+    expect(lua).toContain('redis.call("get", KEYS[1]) == ARGV[1]');
+    expect(lua).toContain('redis.call("expire", KEYS[1], ARGV[2])');
+    expect(keyCount).toBe(1);
+    expect(key).toBe('schedule:payment_reconcile');
+    expect(token).toBe('owner-token');
+    expect(ttl).toBe('240');
+  });
+
+  it('reports a lost lock when the token no longer owns the key', async () => {
+    const client: any = { eval: jest.fn().mockResolvedValue(0) };
+    const service = new RedisService(client);
+
+    await expect(service.extendLockWithLua('schedule:refund_reconcile', 'old-token', 240))
+      .resolves.toBe(false);
+  });
+});
+
 describe('RedisService scheduler maintenance marker', () => {
   let tempDir: string;
   let markerPath: string;
@@ -102,6 +128,6 @@ describe('RedisService scheduler maintenance marker', () => {
 
     fs.rmSync(markerPath);
     await expect(service.setNX('schedule:close_timeout_orders', 'second', 60)).resolves.toBe(true);
-    expect(client.set).toHaveBeenCalledWith('schedule:close_timeout_orders', 'second', 'EX', 60, 'NX');
+    expect(client.set).toHaveBeenCalledWith('schedule:close_timeout_orders', 'second', 60, 'NX');
   });
 });
