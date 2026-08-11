@@ -1,199 +1,126 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-# 禧孕母婴商城 后台登录冒烟测试脚本
-# 验证后台登录功能是否正常
-#
-# 两种模式:
-#   1. bypass 模式 (默认): 需要 SMOKE_TEST_BYPASS_CAPTCHA=true，自动绕过验证码
-#   2. manual 模式: 需要手动提供 captchaId 和 captchaCode
+API_BASE_URL="${API_BASE_URL:-}"
+ADMIN_USERNAME="${ADMIN_USERNAME:-}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+LOGIN_MODE="${LOGIN_MODE:-manual}"
+NODE_ENV_VALUE="${NODE_ENV:-development}"
 
-set -e
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
-COLOR_RESET="\033[0m"
-COLOR_GREEN="\033[32m"
-COLOR_RED="\033[31m"
-COLOR_YELLOW="\033[33m"
-COLOR_BLUE="\033[34m"
+pass() {
+  echo "PASS: $*"
+}
 
-API_PORT=${API_PORT:-3001}
-API_BASE="http://localhost:${API_PORT}"
-ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-LOGIN_MODE=${LOGIN_MODE:-bypass}
+command -v curl >/dev/null 2>&1 || fail "curl is required"
+command -v node >/dev/null 2>&1 || fail "node is required"
 
-echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
-echo -e "${COLOR_BLUE}  禧孕母婴商城 后台登录冒烟测试${COLOR_RESET}"
-echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
-echo ""
+[ -n "$API_BASE_URL" ] || fail "API_BASE_URL is required; do not rely on a localhost production default"
+[ -n "$ADMIN_USERNAME" ] || fail "ADMIN_USERNAME is required; no default admin account is assumed"
+[ -n "$ADMIN_PASSWORD" ] || fail "ADMIN_PASSWORD is required; no default password is allowed"
+API_BASE_URL="${API_BASE_URL%/}"
 
-# -------------------------------------------------------
-# 0. 依赖检查
-# -------------------------------------------------------
-echo -e "${COLOR_YELLOW}[0/3] 检查运行依赖...${COLOR_RESET}"
-
-if ! command -v curl > /dev/null 2>&1; then
-    echo -e "${COLOR_RED}❌  curl 未安装，无法继续${COLOR_RESET}"
-    exit 1
-else
-    echo -e "${COLOR_GREEN}✅  curl 已安装${COLOR_RESET}"
+if [ "$NODE_ENV_VALUE" = "production" ]; then
+  [ "$API_BASE_URL" = "https://api.yunxixiaochengxu.com.cn" ] \
+    || fail "production login smoke must use https://api.yunxixiaochengxu.com.cn"
+  [ "$LOGIN_MODE" = "manual" ] \
+    || fail "production login smoke forbids captcha bypass; use LOGIN_MODE=manual with a real captcha"
 fi
 
-echo ""
-
-all_passed=true
-
-# -------------------------------------------------------
-# 1. 登录
-# -------------------------------------------------------
-echo -e "${COLOR_YELLOW}[1/3] 管理员登录 (模式: $LOGIN_MODE)...${COLOR_RESET}"
-
-if [ "$LOGIN_MODE" = "bypass" ]; then
-    # bypass 模式: 检查 SMOKE_TEST_BYPASS_CAPTCHA 环境变量
-    BYPASS_CAPTCHA="${SMOKE_TEST_BYPASS_CAPTCHA:-false}"
-
-    if [ "$BYPASS_CAPTCHA" != "true" ]; then
-        echo -e "${COLOR_RED}❌  bypass 模式需要设置 SMOKE_TEST_BYPASS_CAPTCHA=true${COLOR_RESET}"
-        echo -e "${COLOR_RED}    此选项仅限非生产环境使用!${COLOR_RESET}"
-        echo -e "${COLOR_YELLOW}    提示: 在 .env 文件中添加 SMOKE_TEST_BYPASS_CAPTCHA=true${COLOR_RESET}"
-        echo -e "${COLOR_YELLOW}    提示: 或使用 manual 模式: LOGIN_MODE=manual CAPTCHA_ID=xxx CAPTCHA_CODE=xxx $0${COLOR_RESET}"
-        all_passed=false
-    else
-        echo -e "${COLOR_YELLOW}    使用 bypass 绕过验证码 (仅限非生产环境)${COLOR_RESET}"
-        login_payload="{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\",\"captchaId\":\"smoke-test\",\"captchaCode\":\"bypass\"}"
-        login_response=$(curl -s -X POST "${API_BASE}/api/admin/auth/login" \
-            -H "Content-Type: application/json" \
-            -d "$login_payload")
-
-        if echo "$login_response" | grep -q '"accessToken"'; then
-            echo -e "${COLOR_GREEN}✅  登录成功 (bypass 模式)${COLOR_RESET}"
-            access_token=$(echo "$login_response" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
-            refresh_token=$(echo "$login_response" | grep -o '"refreshToken":"[^"]*"' | cut -d'"' -f4)
-            echo -e "${COLOR_GREEN}    Access Token: ${access_token:0:50}...${COLOR_RESET}"
-        else
-            echo -e "${COLOR_RED}❌  登录失败${COLOR_RESET}"
-            echo -e "${COLOR_RED}    响应: ${login_response}${COLOR_RESET}"
-            echo -e "${COLOR_RED}    排查: 确认 ADMIN_USERNAME / ADMIN_PASSWORD 是否正确${COLOR_RESET}"
-            echo -e "${COLOR_RED}    排查: 确认种子数据已加载 (RUN_SEED=true)${COLOR_RESET}"
-            echo -e "${COLOR_RED}    排查: cd deploy && docker compose logs api${COLOR_RESET}"
-            all_passed=false
-        fi
-    fi
-
-elif [ "$LOGIN_MODE" = "manual" ]; then
-    # manual 模式: 需要提供 CAPTCHA_ID 和 CAPTCHA_CODE
+case "$LOGIN_MODE" in
+  manual)
     CAPTCHA_ID="${CAPTCHA_ID:-}"
     CAPTCHA_CODE="${CAPTCHA_CODE:-}"
-
     if [ -z "$CAPTCHA_ID" ] || [ -z "$CAPTCHA_CODE" ]; then
-        echo -e "${COLOR_YELLOW}    manual 模式需要先获取验证码...${COLOR_RESET}"
-        captcha_response=$(curl -s "${API_BASE}/api/admin/auth/captcha")
-
-        if echo "$captcha_response" | grep -q 'captchaId'; then
-            captcha_id_val=$(echo "$captcha_response" | grep -o '"captchaId":"[^"]*"' | cut -d'"' -f4)
-            echo -e "${COLOR_GREEN}    Captcha ID: ${captcha_id_val}${COLOR_RESET}"
-            echo -e "${COLOR_YELLOW}    请查看验证码图片并输入验证码 (SVG 已在 API 响应中返回)${COLOR_RESET}"
-            echo -e "${COLOR_YELLOW}    然后运行:${COLOR_RESET}"
-            echo -e "      CAPTCHA_ID=${captcha_id_val} CAPTCHA_CODE=<输入的验证码> LOGIN_MODE=manual $0"
-            echo ""
-            exit 0
-        else
-            echo -e "${COLOR_RED}❌  获取验证码失败${COLOR_RESET}"
-            echo -e "${COLOR_RED}    响应: ${captcha_response}${COLOR_RESET}"
-            echo -e "${COLOR_RED}    排查: cd deploy && docker compose logs api${COLOR_RESET}"
-            all_passed=false
-        fi
-    else
-        echo -e "${COLOR_YELLOW}    使用 manual 验证码模式${COLOR_RESET}"
-        login_payload="{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\",\"captchaId\":\"${CAPTCHA_ID}\",\"captchaCode\":\"${CAPTCHA_CODE}\"}"
-        login_response=$(curl -s -X POST "${API_BASE}/api/admin/auth/login" \
-            -H "Content-Type: application/json" \
-            -d "$login_payload")
-
-        if echo "$login_response" | grep -q '"accessToken"'; then
-            echo -e "${COLOR_GREEN}✅  登录成功 (manual 模式)${COLOR_RESET}"
-            access_token=$(echo "$login_response" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
-            refresh_token=$(echo "$login_response" | grep -o '"refreshToken":"[^"]*"' | cut -d'"' -f4)
-            echo -e "${COLOR_GREEN}    Access Token: ${access_token:0:50}...${COLOR_RESET}"
-        else
-            echo -e "${COLOR_RED}❌  登录失败${COLOR_RESET}"
-            echo -e "${COLOR_RED}    响应: ${login_response}${COLOR_RESET}"
-            echo -e "${COLOR_RED}    排查: 验证码可能已过期，请重新获取${COLOR_RESET}"
-            echo -e "${COLOR_RED}    排查: 确认 ADMIN_USERNAME / ADMIN_PASSWORD 是否正确${COLOR_RESET}"
-            echo -e "${COLOR_RED}    排查: cd deploy && docker compose logs api${COLOR_RESET}"
-            all_passed=false
-        fi
+      fail "manual mode requires CAPTCHA_ID and CAPTCHA_CODE from GET ${API_BASE_URL}/api/admin/auth/captcha"
     fi
+    ;;
+  bypass)
+    [ "$NODE_ENV_VALUE" != "production" ] || fail "captcha bypass is forbidden in production"
+    [ "${SMOKE_TEST_BYPASS_CAPTCHA:-false}" = "true" ] \
+      || fail "bypass mode requires SMOKE_TEST_BYPASS_CAPTCHA=true and is non-production only"
+    CAPTCHA_ID="smoke-test"
+    CAPTCHA_CODE="bypass"
+    ;;
+  *)
+    fail "LOGIN_MODE must be manual or bypass"
+    ;;
+esac
 
-else
-    echo -e "${COLOR_RED}❌  未知 LOGIN_MODE: $LOGIN_MODE (支持: bypass, manual)${COLOR_RESET}"
-    all_passed=false
-fi
+login_payload="$({
+  ADMIN_USERNAME="$ADMIN_USERNAME" \
+  ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  CAPTCHA_ID="$CAPTCHA_ID" \
+  CAPTCHA_CODE="$CAPTCHA_CODE" \
+  node -e '
+    process.stdout.write(JSON.stringify({
+      username: process.env.ADMIN_USERNAME,
+      password: process.env.ADMIN_PASSWORD,
+      captchaId: process.env.CAPTCHA_ID,
+      captchaCode: process.env.CAPTCHA_CODE,
+    }));
+  '
+})"
 
-echo ""
+login_response="$(curl --silent --show-error \
+  -X POST "${API_BASE_URL}/api/admin/auth/login" \
+  -H 'Content-Type: application/json' \
+  --data-binary "$login_payload")"
 
-# -------------------------------------------------------
-# 2. 验证获取用户信息
-# -------------------------------------------------------
-echo -e "${COLOR_YELLOW}[2/3] 验证获取用户信息...${COLOR_RESET}"
+access_token="$({
+  RESPONSE="$login_response" node -e '
+    try {
+      const body = JSON.parse(process.env.RESPONSE || "{}");
+      const data = body?.data ?? body;
+      process.stdout.write(typeof data?.accessToken === "string" ? data.accessToken : "");
+    } catch { process.exit(1); }
+  '
+})" || fail "login response is not valid JSON"
+refresh_token="$({
+  RESPONSE="$login_response" node -e '
+    const body = JSON.parse(process.env.RESPONSE || "{}");
+    const data = body?.data ?? body;
+    process.stdout.write(typeof data?.refreshToken === "string" ? data.refreshToken : "");
+  '
+})"
 
-if [ -n "$access_token" ]; then
-    info_response=$(curl -s "${API_BASE}/api/admin/auth/info" \
-        -H "Authorization: Bearer ${access_token}")
+[ -n "$access_token" ] || fail "admin login did not return accessToken"
+[ -n "$refresh_token" ] || fail "admin login did not return refreshToken"
+pass "admin login returned access and refresh tokens"
 
-    if echo "$info_response" | grep -q '"id"'; then
-        echo -e "${COLOR_GREEN}✅  获取用户信息成功${COLOR_RESET}"
-        username=$(echo "$info_response" | grep -o '"username":"[^"]*"' | cut -d'"' -f4)
-        echo -e "${COLOR_GREEN}    用户名: ${username}${COLOR_RESET}"
-        if echo "$info_response" | grep -q '"roles"'; then
-            roles=$(echo "$info_response" | grep -o '"roles":\[[^]]*\]' | cut -d'[' -f2 | cut -d']' -f1)
-            echo -e "${COLOR_GREEN}    角色: ${roles}${COLOR_RESET}"
-        fi
-    else
-        echo -e "${COLOR_RED}❌  获取用户信息失败${COLOR_RESET}"
-        echo -e "${COLOR_RED}    响应: ${info_response}${COLOR_RESET}"
-        echo -e "${COLOR_RED}    排查: cd deploy && docker compose logs api${COLOR_RESET}"
-        all_passed=false
-    fi
-else
-    echo -e "${COLOR_YELLOW}⚠️  跳过用户信息验证（未获取到 access token）${COLOR_RESET}"
-fi
-echo ""
+info_response="$(curl --silent --show-error \
+  "${API_BASE_URL}/api/admin/auth/info" \
+  -H "Authorization: Bearer ${access_token}")"
+RESPONSE="$info_response" node -e '
+  const body = JSON.parse(process.env.RESPONSE || "{}");
+  const data = body?.data ?? body;
+  if (data?.id === undefined || data?.id === null || !data?.username) process.exit(1);
+' || fail "authenticated admin info endpoint did not return an admin identity"
+pass "authenticated admin info endpoint is usable"
 
-# -------------------------------------------------------
-# 3. 验证 Token 刷新
-# -------------------------------------------------------
-echo -e "${COLOR_YELLOW}[3/3] 验证 Token 刷新...${COLOR_RESET}"
+refresh_payload="$({
+  REFRESH_TOKEN="$refresh_token" node -e '
+    process.stdout.write(JSON.stringify({ refreshToken: process.env.REFRESH_TOKEN }));
+  '
+})"
+refresh_response="$(curl --silent --show-error \
+  -X POST "${API_BASE_URL}/api/admin/auth/refresh" \
+  -H 'Content-Type: application/json' \
+  --data-binary "$refresh_payload")"
+new_access_token="$({
+  RESPONSE="$refresh_response" node -e '
+    try {
+      const body = JSON.parse(process.env.RESPONSE || "{}");
+      const data = body?.data ?? body;
+      process.stdout.write(typeof data?.accessToken === "string" ? data.accessToken : "");
+    } catch { process.exit(1); }
+  '
+})" || fail "refresh response is not valid JSON"
+[ -n "$new_access_token" ] || fail "refresh token flow did not return a new accessToken"
+pass "admin refresh token flow is usable"
 
-if [ -n "$refresh_token" ]; then
-    refresh_response=$(curl -s -X POST "${API_BASE}/api/admin/auth/refresh" \
-        -H "Content-Type: application/json" \
-        -d "{\"refreshToken\":\"${refresh_token}\"}")
-
-    if echo "$refresh_response" | grep -q '"accessToken"'; then
-        echo -e "${COLOR_GREEN}✅  Token 刷新成功${COLOR_RESET}"
-    else
-        echo -e "${COLOR_YELLOW}⚠️  Token 刷新失败 (可能不影响核心功能)${COLOR_RESET}"
-        echo -e "${COLOR_YELLOW}    响应: ${refresh_response}${COLOR_RESET}"
-    fi
-else
-    echo -e "${COLOR_YELLOW}⚠️  跳过 Token 刷新验证（未获取到 refresh token）${COLOR_RESET}"
-fi
-echo ""
-
-# -------------------------------------------------------
-# 汇总
-# -------------------------------------------------------
-echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
-if [ "$all_passed" = true ]; then
-    echo -e "${COLOR_GREEN}  后台登录冒烟测试通过!${COLOR_RESET}"
-    echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
-    echo ""
-    exit 0
-else
-    echo -e "${COLOR_RED}  后台登录冒烟测试失败!${COLOR_RESET}"
-    echo -e "${COLOR_BLUE}============================================${COLOR_RESET}"
-    echo ""
-    echo -e "${COLOR_RED}请根据上述排查提示检查服务状态。${COLOR_RESET}"
-    echo ""
-    exit 1
-fi
+echo "Admin login smoke completed successfully."
