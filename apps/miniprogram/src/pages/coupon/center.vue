@@ -38,37 +38,55 @@ const coupons = ref<CouponItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let couponVersion = 0
+let loadingVersion = -1
 
-async function loadCoupons(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
+async function loadCoupons(reset = false, version = couponVersion) {
+  if (!reset && finished.value && version === couponVersion) return
+  if (loading.value && loadingVersion === version) return
   if (reset) {
     page.value = 1
     finished.value = false
     coupons.value = []
   }
+
+  const requestPage = page.value
+  const loggedIn = userStore.isLoggedIn
   loading.value = true
+  loadingVersion = version
   try {
-    if (userStore.isLoggedIn) {
+    if (loggedIn) {
       // /available has already applied member-level, new-customer, stock and per-user-limit rules.
       // It only contains coupons this account can still claim. Ignore its historical `received`
       // flag because a perLimit > 1 coupon may legitimately have been received before and still be
       // claimable now.
       const data = await getClaimableCoupons()
+      if (version !== couponVersion) return
       coupons.value = data.map((item) => ({ ...item, received: false }))
       finished.value = true
       return
     }
 
-    const data = await getCouponCenter({ page: page.value, pageSize: 10 })
+    const data = await getCouponCenter({ page: requestPage, pageSize: 10 })
+    if (version !== couponVersion) return
     coupons.value.push(...data.list)
     finished.value = coupons.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === couponVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === couponVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
+}
+
+function refreshCoupons() {
+  const version = ++couponVersion
+  return loadCoupons(true, version)
 }
 
 async function handleReceive(item: CouponItem) {
@@ -77,10 +95,10 @@ async function handleReceive(item: CouponItem) {
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(async () => {
       try {
-        // Re-read claimability after authentication instead of retrying the anonymous card blindly.
-        const claimable = await getClaimableCoupons()
-        coupons.value = claimable.map((coupon) => ({ ...coupon, received: false }))
-        finished.value = true
+        // Authentication may happen while an anonymous center request is still in flight. Start a
+        // new versioned eligibility read so that old anonymous cards can never overwrite the
+        // signed-in account's claimable set.
+        await refreshCoupons()
         const current = coupons.value.find((coupon) => coupon.id === item.id)
         if (!current) {
           uni.showToast({ title: '当前账号不符合该优惠券领取条件', icon: 'none' })
@@ -99,24 +117,31 @@ async function handleReceive(item: CouponItem) {
     uni.showToast({ title: '领取成功', icon: 'success' })
     // Server is authoritative for per-user limits. A coupon with perLimit > 1 should remain in the
     // center until the account actually reaches that limit; a fully claimed coupon disappears.
-    await loadCoupons(true)
+    await refreshCoupons()
   } catch (error: any) {
     uni.showToast({ title: error?.message || '领取失败', icon: 'none' })
-    await loadCoupons(true)
+    await refreshCoupons()
   }
 }
 
 onPullDownRefresh(async () => {
-  await loadCoupons(true)
+  await refreshCoupons()
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadCoupons()
+  void loadCoupons(false, couponVersion)
 })
 
 onShow(() => {
-  loadCoupons(true)
+  void refreshCoupons()
+})
+
+defineExpose({
+  coupons,
+  loading,
+  loadCoupons,
+  refreshCoupons,
 })
 </script>
 
