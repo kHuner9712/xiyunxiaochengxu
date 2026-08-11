@@ -1,6 +1,6 @@
 import { Controller, Get, Put, Param, Query, Body } from '@nestjs/common';
 import { UserService } from './user.service';
-import { PointsService } from '../points/points.service';
+import { AdminPointsAdjustmentService } from '../points/admin-points-adjustment.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { UserQueryDto } from './dto/user-query.dto';
@@ -26,7 +26,7 @@ export class WeappUserController {
 export class AdminUserController {
   constructor(
     private readonly userService: UserService,
-    private readonly pointsService: PointsService,
+    private readonly adminPointsAdjustmentService: AdminPointsAdjustmentService,
   ) {}
 
   @Get('list')
@@ -48,9 +48,14 @@ export class AdminUserController {
   }
 
   @Put('points/:id')
-  @RequirePermission('user:detail')
+  @RequirePermission('user:points')
   async adjustPoints(@Param('id') id: string, @Body() body: AdjustUserPointsDto) {
-    return this.pointsService.adminAdjust(id, body.points, body.reason);
+    return this.adminPointsAdjustmentService.adjust(
+      id,
+      body.points,
+      body.reason,
+      body.expectedAvailablePoints,
+    );
   }
 
   @Put('status/:id')
