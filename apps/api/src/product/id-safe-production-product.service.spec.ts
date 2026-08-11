@@ -9,18 +9,17 @@ describe('IdSafeProductionProductService', () => {
     return new IdSafeProductionProductService({} as any);
   }
 
-  it.each([
-    ['findById', 'findById'],
-    ['findAdminById', 'findAdminById'],
-    ['delete', 'delete'],
-  ] as const)('%s rejects malformed identifiers before reaching the base service', async (method) => {
-    const baseSpy = jest
-      .spyOn(ProductionProductService.prototype as any, method)
-      .mockResolvedValue({});
+  it.each(['findById', 'findAdminById', 'delete'] as const)(
+    '%s rejects malformed identifiers before reaching the base service',
+    async (method) => {
+      const baseSpy = jest
+        .spyOn(ProductionProductService.prototype as any, method)
+        .mockResolvedValue({});
 
-    await expect((service() as any)[method]('not-an-id')).rejects.toBeInstanceOf(BadRequestException);
-    expect(baseSpy).not.toHaveBeenCalled();
-  });
+      await expect((service() as any)[method]('not-an-id')).rejects.toBeInstanceOf(BadRequestException);
+      expect(baseSpy).not.toHaveBeenCalled();
+    },
+  );
 
   it('updateStatus rejects malformed identifiers before reaching the base service', async () => {
     const baseSpy = jest
