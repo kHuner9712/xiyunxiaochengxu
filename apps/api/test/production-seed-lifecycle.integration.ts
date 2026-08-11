@@ -63,8 +63,38 @@ async function main() {
   const permissionCount = await prisma.adminRolePermission.count({ where: { roleId: superAdminRole.id } });
   if (permissionCount === 0) throw new Error('super_admin role has no permissions after seed');
 
+  const pickupPermissions = await prisma.adminPermission.findMany({
+    where: { code: { in: ['pickup', 'pickup:store', 'pickup:verify'] } },
+  });
+  const pickup = pickupPermissions.find((permission) => permission.code === 'pickup');
+  const pickupStore = pickupPermissions.find((permission) => permission.code === 'pickup:store');
+  const pickupVerify = pickupPermissions.find((permission) => permission.code === 'pickup:verify');
+  if (!pickup || !pickupStore || !pickupVerify) {
+    throw new Error('production seed must create the complete pickup permission tree');
+  }
+  if (pickup.parentId !== 0n) {
+    throw new Error(`pickup parent must be top-level, parentId=${pickup.parentId.toString()}`);
+  }
+  if (pickupStore.parentId !== pickup.id || pickupVerify.parentId !== pickup.id) {
+    throw new Error('pickup child permissions must point to the pickup parent');
+  }
+
+  const operatorRole = await prisma.adminRole.findFirst({ where: { code: 'operator', status: 1 } });
+  if (!operatorRole) throw new Error('operator role was not seeded');
+  const operatorPickupAssignments = await prisma.adminRolePermission.findMany({
+    where: {
+      roleId: operatorRole.id,
+      permissionId: { in: [pickup.id, pickupStore.id, pickupVerify.id] },
+    },
+  });
+  if (operatorPickupAssignments.length !== 3) {
+    throw new Error(
+      `operator must receive pickup parent/store/verify permissions, found ${operatorPickupAssignments.length}`,
+    );
+  }
+
   console.log(
-    `[production-seed-lifecycle] PASS admin=${admin.id.toString()} permissions=${permissionCount}`,
+    `[production-seed-lifecycle] PASS admin=${admin.id.toString()} permissions=${permissionCount} pickup=${pickup.id.toString()}`,
   );
 }
 
