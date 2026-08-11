@@ -103,13 +103,21 @@ function hasMenuPermission(route: RouteRecordRaw): boolean {
   return userStore.hasPermission(perm)
 }
 
-const filteredMenuRoutes = computed(() => {
-  return menuRoutes.value.filter(hasMenuPermission)
-})
-
 function filterChildren(children: RouteRecordRaw[]) {
   return children.filter((child) => !child.meta?.hidden && hasMenuPermission(child))
 }
+
+function hasVisibleAuthorizedChild(route: RouteRecordRaw): boolean {
+  return !!route.children && filterChildren(route.children).length > 0
+}
+
+const filteredMenuRoutes = computed(() => {
+  // A child capability can intentionally belong to a different operational role than the
+  // section's broad parent permission (for example benefit verification uses pickup:verify).
+  // Keep the section visible when at least one visible child is actually authorized; child rows
+  // are still filtered by their own permission and every API remains guarded server-side.
+  return menuRoutes.value.filter((route) => hasMenuPermission(route) || hasVisibleAuthorizedChild(route))
+})
 
 function toAbsolutePath(path: string): string {
   const normalized = path.replace(/\/+/g, '/')
