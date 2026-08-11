@@ -67,7 +67,8 @@ describe('RedisService scheduler maintenance marker', () => {
     service = new RedisService(client as any);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await service.onApplicationShutdown();
     if (previousBuildSha === undefined) delete process.env.BUILD_SHA;
     else process.env.BUILD_SHA = previousBuildSha;
     if (previousPauseFile === undefined) delete process.env.SCHEDULER_PAUSE_FILE;
@@ -103,5 +104,86 @@ describe('RedisService scheduler maintenance marker', () => {
     fs.rmSync(markerPath);
     await expect(service.setNX('schedule:close_timeout_orders', 'second', 60)).resolves.toBe(true);
     expect(client.set).toHaveBeenCalledWith('schedule:close_timeout_orders', 'second', 'EX', 60, 'NX');
+  });
+});
+
+describe('RedisService scheduler lock heartbeat', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('renews a scheduler lock with the same token and stops after release', async () => {
+    const client: any = {
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn().mockResolvedValue(1),
+      quit: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new RedisService(client);
+
+    await expect(service.setNX('schedule:test', 'owner-a', 3)).resolves.toBe(true);
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(client.eval).toHaveBeenCalledTimes(1);
+    expect(client.eval.mock.calls[0][0]).toContain('expire');
+    expect(client.eval.mock.calls[0].slice(1)).toEqual([1, 'schedule:test', 'owner-a', '3']);
+
+    await expect(service.releaseLockWithLua('schedule:test', 'owner-a')).resolves.toBe(true);
+    expect(client.eval).toHaveBeenCalledTimes(2);
+
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(client.eval).toHaveBeenCalledTimes(2);
+    await service.onApplicationShutdown();
+  });
+
+  it('stops renewing when Redis reports that ownership was lost', async () => {
+    const client: any = {
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn().mockResolvedValueOnce(0),
+      quit: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new RedisService(client);
+
+    await expect(service.setNX('schedule:test', 'owner-a', 3)).resolves.toBe(true);
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(client.eval).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(client.eval).toHaveBeenCalledTimes(1);
+    await service.onApplicationShutdown();
+  });
+
+  it('does not create heartbeats for non-scheduler locks', async () => {
+    const client: any = {
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn(),
+      quit: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new RedisService(client);
+
+    await expect(service.setNX('payment:callback:123', 'owner-a', 3)).resolves.toBe(true);
+    await jest.advanceTimersByTimeAsync(5000);
+
+    expect(client.eval).not.toHaveBeenCalled();
+    await service.onApplicationShutdown();
+  });
+
+  it('clears scheduler heartbeat timers before Redis shutdown', async () => {
+    const client: any = {
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn(),
+      quit: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new RedisService(client);
+
+    await expect(service.setNX('schedule:test', 'owner-a', 3)).resolves.toBe(true);
+    await service.onApplicationShutdown();
+    await jest.advanceTimersByTimeAsync(5000);
+
+    expect(client.eval).not.toHaveBeenCalled();
+    expect(client.quit).toHaveBeenCalledTimes(1);
   });
 });
