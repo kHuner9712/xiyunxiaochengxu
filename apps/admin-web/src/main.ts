@@ -6,16 +6,19 @@ import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import router from './router'
+import { setupRoutePermissionGuard } from './router/permission-guard'
 import '@/styles/index.scss'
 import { setupPermissionDirective } from '@/directives/permission'
 
 const app = createApp(App)
+const pinia = createPinia()
 
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
 
-app.use(createPinia())
+app.use(pinia)
+setupRoutePermissionGuard(router, pinia)
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
 setupPermissionDirective(app)
