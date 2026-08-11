@@ -71,6 +71,22 @@ export class ProductionProductService extends ProductService {
           },
         });
       }
+
+      const initialStockLogs = product.skus
+        .filter((sku) => sku.stock > 0)
+        .map((sku) => ({
+          productId: product.id,
+          skuId: sku.id,
+          type: 2,
+          quantity: sku.stock,
+          beforeStock: 0,
+          afterStock: sku.stock,
+          reason: '商品创建初始库存',
+        }));
+      if (initialStockLogs.length > 0) {
+        await tx.productStockLog.createMany({ data: initialStockLogs });
+      }
+
       return product.id;
     });
 
