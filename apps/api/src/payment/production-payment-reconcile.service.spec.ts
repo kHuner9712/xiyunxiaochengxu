@@ -25,6 +25,7 @@ describe('ProductionPaymentReconcileService', () => {
       },
       orderRefund: {
         findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       orderLog: {
         create: jest.fn().mockResolvedValue({}),
@@ -134,7 +135,7 @@ describe('ProductionPaymentReconcileService', () => {
     expect(result.closable).toBe(1);
   });
 
-  it('automatically observes stale abnormal refunds and counts recovered terminal states', async () => {
+  it('observes stale abnormal refunds with reason-based metrics and rotates unresolved rows', async () => {
     const { service, prisma, paymentService } = createService();
     jest.spyOn(PaymentReconcileService.prototype, 'reconcilePendingRefunds').mockResolvedValue({
       total: 2,
@@ -148,9 +149,9 @@ describe('ProductionPaymentReconcileService', () => {
       { id: 3n, outRefundNo: 'OR-C' },
     ]);
     paymentService.syncRefund
-      .mockResolvedValueOnce({ synced: true, status: REFUND_STATUS.SUCCESS })
-      .mockResolvedValueOnce({ synced: false, status: REFUND_STATUS.ABNORMAL })
-      .mockResolvedValueOnce({ synced: true, status: REFUND_STATUS.CLOSED });
+      .mockResolvedValueOnce({ synced: true, reason: 'wechat_success_processed' })
+      .mockResolvedValueOnce({ synced: true, reason: 'wechat_abnormal' })
+      .mockResolvedValueOnce({ synced: true, reason: 'wechat_closed' });
 
     const result = await service.reconcilePendingRefunds();
 
@@ -166,6 +167,11 @@ describe('ProductionPaymentReconcileService', () => {
     expect(paymentService.syncRefund).toHaveBeenNthCalledWith(1, 'OR-A');
     expect(paymentService.syncRefund).toHaveBeenNthCalledWith(2, 'OR-B');
     expect(paymentService.syncRefund).toHaveBeenNthCalledWith(3, 'OR-C');
+    expect(prisma.orderRefund.updateMany).toHaveBeenCalledTimes(3);
+    expect(prisma.orderRefund.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 2n, status: REFUND_STATUS.ABNORMAL },
+      data: { updatedAt: expect.any(Date) },
+    });
     expect(result).toEqual(expect.objectContaining({
       total: 2,
       fixed: 1,
@@ -176,7 +182,7 @@ describe('ProductionPaymentReconcileService', () => {
     }));
   });
 
-  it('isolates a failed abnormal-refund observation instead of aborting the whole batch', async () => {
+  it('counts query failures as failed while rotating them behind other abnormal refunds', async () => {
     const { service, prisma, paymentService } = createService();
     jest.spyOn(PaymentReconcileService.prototype, 'reconcilePendingRefunds').mockResolvedValue({
       total: 0,
@@ -189,13 +195,15 @@ describe('ProductionPaymentReconcileService', () => {
       { id: 2n, outRefundNo: 'OR-B' },
     ]);
     paymentService.syncRefund
-      .mockRejectedValueOnce(new Error('wechat unavailable'))
-      .mockResolvedValueOnce({ synced: true, status: REFUND_STATUS.PENDING });
+      .mockResolvedValueOnce({ synced: false, reason: 'wechat_query_failed' })
+      .mockResolvedValueOnce({ synced: true, reason: 'wechat_processing' });
 
     const result = await service.reconcilePendingRefunds();
 
     expect(paymentService.syncRefund).toHaveBeenCalledTimes(2);
+    expect(prisma.orderRefund.updateMany).toHaveBeenCalledTimes(2);
     expect(result.abnormalFailed).toBe(1);
-    expect(result.abnormalRecovered).toBe(1);
+    expect(result.abnormalRecovered).toBe(0);
+    expect(result.abnormalStillAbnormal).toBe(1);
   });
 });
