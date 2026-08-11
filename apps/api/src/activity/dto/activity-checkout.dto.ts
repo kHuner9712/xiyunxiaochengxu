@@ -2,9 +2,19 @@ import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Max, Min } from 'class-validator';
 
 const POSITIVE_ID = /^[1-9]\d*$/;
+const CLIENT_REQUEST_ID_PATTERN = /^\d{13}-[a-z0-9]{16,40}$/i;
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 
 export class ActivityCheckoutDto {
+  // Preview uses the same DTO and therefore may omit the request identity. The create-order path
+  // requires it explicitly in the idempotent production checkout service.
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Matches(CLIENT_REQUEST_ID_PATTERN, { message: '下单请求标识无效' })
+  @MaxLength(54, { message: '下单请求标识过长' })
+  clientRequestId?: string;
+
   @Transform(trim)
   @IsString()
   @Matches(POSITIVE_ID, { message: '活动商品ID无效' })
