@@ -17,6 +17,16 @@ vi.mock('@/api/aftersale', () => ({
   getAftersaleList: vi.fn(),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function row(status: string) {
   return {
     id: '50',
@@ -61,5 +71,33 @@ describe('售后列表前台刷新', () => {
 
     expect(wrapper.find('.status-text').classes()).toContain('completed')
     expect(getAftersaleList).toHaveBeenCalledTimes(2)
+  })
+
+  it('返回详情触发的新请求先完成后，旧请求晚到不能恢复旧售后状态', async () => {
+    const first = deferred<any>()
+    const second = deferred<any>()
+    vi.mocked(getAftersaleList)
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+
+    const wrapper = mount(AftersaleListPage, {
+      global: { stubs: { Loading: true, Empty: true } },
+    })
+
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+    expect(getAftersaleList).toHaveBeenCalledTimes(2)
+
+    second.resolve({ list: [row('refunded')], total: 1 })
+    await flushPromises()
+    expect(wrapper.find('.status-text').classes()).toContain('completed')
+
+    first.resolve({ list: [row('pending_review')], total: 1 })
+    await flushPromises()
+
+    expect(wrapper.find('.status-text').classes()).toContain('completed')
+    expect(wrapper.find('.status-text').classes()).not.toContain('pending')
   })
 })
