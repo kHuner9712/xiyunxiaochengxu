@@ -41,7 +41,8 @@
     "test:integration:recommendation-home": "ts-node --transpile-only -P tsconfig.json test/recommendation-home-lifecycle.integration.ts",
     "test:integration:search-hot-keywords": "ts-node --transpile-only -P tsconfig.json test/search-hot-keyword-lifecycle.integration.ts",
     "test:integration:share-reward": "ts-node --transpile-only -P tsconfig.json test/share-reward-lifecycle.integration.ts",
-    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:member-benefit && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale && pnpm test:integration:merchant-settlement && pnpm test:integration:benefit-snapshot && pnpm test:integration:benefit-snapshot-view && pnpm test:integration:dashboard-payment-facts && pnpm test:integration:aftersale-attachment-ownership && pnpm test:integration:supplier-admin && pnpm test:integration:product-cert-private-access && pnpm test:integration:default-role-permissions && pnpm test:integration:recommendation-home && pnpm test:integration:search-hot-keywords && pnpm test:integration:share-reward",
+    "test:integration:production-seed": "ts-node --transpile-only -P tsconfig.json test/production-seed-lifecycle.integration.ts",
+    "test:integration": "pnpm test:integration:content && pnpm test:integration:promotion && pnpm test:integration:normal-order && pnpm test:integration:member-benefit && pnpm test:integration:activity-multi-item && pnpm test:integration:promotion-timeout && pnpm test:integration:payment-anomaly && pnpm test:integration:cancelled-created-payment && pnpm test:integration:zero-pay-aftersale && pnpm test:integration:merchant-settlement && pnpm test:integration:benefit-snapshot && pnpm test:integration:benefit-snapshot-view && pnpm test:integration:dashboard-payment-facts && pnpm test:integration:aftersale-attachment-ownership && pnpm test:integration:supplier-admin && pnpm test:integration:product-cert-private-access && pnpm test:integration:default-role-permissions && pnpm test:integration:recommendation-home && pnpm test:integration:search-hot-keywords && pnpm test:integration:share-reward && pnpm test:integration:production-seed",
     "test:ci": "jest --config jest.config.js && jest --config test/jest-e2e.config.js"
   },
   "dependencies": {
@@ -63,7 +64,7 @@
     "ioredis": "^5.3.2",
     "multer": "^1.4.5-lts.1",
     "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1",
+    "passport-jwt": "^4.0.3",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
     "svg-captcha": "^1.4.0"
@@ -76,19 +77,17 @@
     "@types/bcrypt": "^5.0.2",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.11",
-    "@types/multer": "^1.4.11",
+    "@types/multer": "^1.4.12",
     "@types/node": "^20.10.0",
-    "@types/passport-jwt": "^4.0.0",
-    "@types/supertest": "^7.2.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/supertest": "^7.2.2",
     "eslint": "^8.57.1",
     "jest": "^29.7.0",
     "prisma": "^5.8.0",
     "supertest": "^7.2.2",
-    "ts-jest": "^29.1.1",
+    "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.3"
   },
   "prisma": {
     "seed": "ts-node -P prisma/tsconfig.seed.json prisma/seed.ts && ts-node -P prisma/tsconfig.seed.json prisma/seed-default-role-permissions.ts"
