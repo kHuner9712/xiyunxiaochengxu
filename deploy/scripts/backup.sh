@@ -47,7 +47,7 @@ service_running() {
 wait_api_health() {
   for attempt in $(seq 1 90); do
     if "${COMPOSE[@]}" exec -T api node -e '
-      fetch("http://127.0.0.1:3000/health")
+      fetch("http://127.0.0.1:3000/api/health")
         .then(async (r) => {
           const body = await r.json();
           if (!r.ok || body?.status !== "ok" || body?.services?.database !== "ok" || body?.services?.redis !== "ok") process.exit(1);
@@ -130,8 +130,9 @@ printf '%s\n' "  目录: $BACKUP_DIR"
 printf '%s\n' "========================================="
 
 # Database rows and local uploads are one restore unit but cannot share a storage transaction.
-# Close the public entrypoint first, then gracefully stop the API (including schedulers) so no
-# application write can occur between the MySQL snapshot and the uploads archive.
+# Mark the quiesce phase before the first stop command so the EXIT trap restores prior runtime even
+# if one of the stop operations itself fails after an earlier service has already been stopped.
+WRITERS_QUIESCED=true
 if [ "$NGINX_WAS_RUNNING" = true ]; then
   echo "[1/5] 关闭 Nginx 公网入口..."
   "${COMPOSE[@]}" stop nginx >/dev/null
@@ -140,7 +141,6 @@ if [ "$API_WAS_RUNNING" = true ]; then
   echo "[1/5] 优雅停止 API writers / scheduler..."
   "${COMPOSE[@]}" stop api >/dev/null
 fi
-WRITERS_QUIESCED=true
 
 if service_running api || service_running nginx; then
   echo "备份失败：无法确认 API/Nginx writers 已停止" >&2
@@ -178,8 +178,6 @@ mv "$UPLOAD_TMP" "$UPLOAD_FILE"
 chmod 600 "$UPLOAD_FILE"
 echo "上传文件备份成功: $UPLOAD_BASENAME"
 
-# Store relative names so a complete backup set can be copied to a different server/path and still
-# be verified there during disaster recovery.
 (
   cd "$BACKUP_DIR"
   sha256sum "$DB_BASENAME" "$UPLOAD_BASENAME" > "$CHECKSUM_BASENAME"
