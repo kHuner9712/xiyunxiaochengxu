@@ -1,4 +1,5 @@
 import { get, post } from '@/utils/request'
+import { runIdempotentCheckout } from '@/utils/checkout-idempotency'
 
 export interface GroupBuyActivity {
   id: string
@@ -55,6 +56,33 @@ export interface StartGroupBuyResult {
   role: string
   isZeroPay: boolean
   orderStatus?: string | null
+  fulfillmentType?: string | null
+}
+
+type StartGroupBuyInput = {
+  activityId: string
+  skuId?: string
+  quantity?: number
+  addressId?: string
+  pickupStoreId?: string
+  fulfillmentType?: string
+  remark?: string
+}
+
+type JoinGroupBuyInput = {
+  groupId: string
+  quantity?: number
+  addressId?: string
+  pickupStoreId?: string
+  fulfillmentType?: string
+  remark?: string
+}
+
+async function assertReusableGroupCheckout(result: StartGroupBuyResult) {
+  if (result.orderStatus === 'cancelled') {
+    throw new Error('上次提交对应拼团订单已取消，请重新提交')
+  }
+  return result
 }
 
 export const groupBuyApi = {
@@ -73,25 +101,26 @@ export const groupBuyApi = {
   getGroupDetail(id: string) {
     return get<GroupBuyGroup>(`/weapp/group-buy/group/${id}`)
   },
-  start(data: {
-    activityId: string
-    skuId?: string
-    quantity?: number
-    addressId?: string
-    pickupStoreId?: string
-    fulfillmentType?: string
-    remark?: string
-  }) {
-    return post<StartGroupBuyResult>('/weapp/group-buy/start', data)
+  async start(data: StartGroupBuyInput) {
+    const result = await runIdempotentCheckout<StartGroupBuyResult>(
+      `group-buy:start:${data.activityId}`,
+      data,
+      (clientRequestId) => post<StartGroupBuyResult>('/weapp/group-buy/start', {
+        ...data,
+        clientRequestId,
+      }),
+    )
+    return assertReusableGroupCheckout(result)
   },
-  join(data: {
-    groupId: string
-    quantity?: number
-    addressId?: string
-    pickupStoreId?: string
-    fulfillmentType?: string
-    remark?: string
-  }) {
-    return post<StartGroupBuyResult>('/weapp/group-buy/join', data)
+  async join(data: JoinGroupBuyInput) {
+    const result = await runIdempotentCheckout<StartGroupBuyResult>(
+      `group-buy:join:${data.groupId}`,
+      data,
+      (clientRequestId) => post<StartGroupBuyResult>('/weapp/group-buy/join', {
+        ...data,
+        clientRequestId,
+      }),
+    )
+    return assertReusableGroupCheckout(result)
   },
 }
