@@ -48,6 +48,11 @@ function buildProductionEnv(fixture) {
   return {
     ...process.env,
     NODE_ENV: 'production',
+    DB_HOST: '127.0.0.1',
+    DB_PORT: '3306',
+    DB_NAME: 'baby_mall_preflight',
+    DB_USER: 'root',
+    DB_PASSWORD: 'preflight',
     DATABASE_URL: 'mysql://root:preflight@127.0.0.1:3306/baby_mall_preflight',
     REDIS_HOST: '127.0.0.1',
     REDIS_PASSWORD: 'R7mQ2xL9vC4nK8pW6sF3hJ5y',
@@ -86,6 +91,45 @@ test('production config preflight executes real crypto checks and rejects danger
     assert.equal(valid.status, 0, `valid production preflight failed:\n${valid.stderr}\n${valid.stdout}`)
     assert.match(valid.stdout, /PRODUCTION_CONFIG_PREFLIGHT_PASS/)
 
+    const percentEncodedDatabasePassword = runPreflight({
+      ...validEnv,
+      DB_PASSWORD: 'P@ss#2026',
+      DATABASE_URL: 'mysql://root:P%40ss%232026@127.0.0.1:3306/baby_mall_preflight',
+    })
+    assert.equal(
+      percentEncodedDatabasePassword.status,
+      0,
+      `percent-encoded DATABASE_URL password should match DB_PASSWORD after decoding:\n${percentEncodedDatabasePassword.stderr}\n${percentEncodedDatabasePassword.stdout}`,
+    )
+
+    const wrongDatabaseHost = runPreflight({
+      ...validEnv,
+      DATABASE_URL: 'mysql://root:preflight@localhost:3306/baby_mall_preflight',
+    })
+    assert.notEqual(wrongDatabaseHost.status, 0, 'DATABASE_URL host mismatch must fail before database access')
+    assert.match(`${wrongDatabaseHost.stderr}\n${wrongDatabaseHost.stdout}`, /DB_HOST 不一致/)
+
+    const wrongDatabasePort = runPreflight({
+      ...validEnv,
+      DATABASE_URL: 'mysql://root:preflight@127.0.0.1:3307/baby_mall_preflight',
+    })
+    assert.notEqual(wrongDatabasePort.status, 0, 'DATABASE_URL port mismatch must fail before database access')
+    assert.match(`${wrongDatabasePort.stderr}\n${wrongDatabasePort.stdout}`, /DB_PORT 不一致/)
+
+    const wrongDatabaseName = runPreflight({
+      ...validEnv,
+      DATABASE_URL: 'mysql://root:preflight@127.0.0.1:3306/wrong_database',
+    })
+    assert.notEqual(wrongDatabaseName.status, 0, 'DATABASE_URL database mismatch must fail before database access')
+    assert.match(`${wrongDatabaseName.stderr}\n${wrongDatabaseName.stdout}`, /DB_NAME 不一致/)
+
+    const wrongDatabasePassword = runPreflight({
+      ...validEnv,
+      DATABASE_URL: 'mysql://root:wrong-password@127.0.0.1:3306/baby_mall_preflight',
+    })
+    assert.notEqual(wrongDatabasePassword.status, 0, 'DATABASE_URL password mismatch must fail before database access')
+    assert.match(`${wrongDatabasePassword.stderr}\n${wrongDatabasePassword.stdout}`, /DB_PASSWORD 不一致/)
+
     const invalidOutboundTimeout = runPreflight({
       ...validEnv,
       OUTBOUND_HTTP_TIMEOUT_MS: '999',
@@ -109,7 +153,7 @@ test('production config preflight executes real crypto checks and rejects danger
 
     const placeholderDatabaseUrl = runPreflight({
       ...validEnv,
-      DATABASE_URL: 'mysql://root:REPLACE_WITH_PERCENT_ENCODED_DB_PASSWORD@mysql:3306/baby_mall',
+      DATABASE_URL: 'mysql://root:REPLACE_WITH_PERCENT_ENCODED_DB_PASSWORD@127.0.0.1:3306/baby_mall_preflight',
     })
     assert.notEqual(
       placeholderDatabaseUrl.status,
