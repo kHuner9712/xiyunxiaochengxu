@@ -42,8 +42,24 @@ export class HealthController {
         result.status = 'degraded';
         isHealthy = false;
       }
+
+      if ((process.env.NODE_ENV || 'development') === 'production') {
+        const safety = await this.redis.getRuntimeSafetyConfig();
+        const safetyOk = safety.maxmemoryPolicy === 'noeviction'
+          && safety.appendonly === 'yes'
+          && safety.appendfsync === 'everysec';
+        result.services.redisSafety = safetyOk ? 'ok' : 'error';
+        if (!safetyOk) {
+          result.services.redis = 'error';
+          result.status = 'degraded';
+          isHealthy = false;
+        }
+      }
     } catch {
       result.services.redis = 'error';
+      if ((process.env.NODE_ENV || 'development') === 'production') {
+        result.services.redisSafety = 'error';
+      }
       result.status = 'degraded';
       isHealthy = false;
     }
@@ -52,10 +68,6 @@ export class HealthController {
       const schedulerPaused = this.redis.isSchedulerPausedForCurrentBuild?.() ?? false;
       result.services.scheduler = schedulerPaused ? 'paused' : 'ok';
       result.maintenance = schedulerPaused;
-      // A deployment maintenance pause intentionally stops Cron side effects while the API,
-      // database and Redis remain healthy. Keep HTTP 200 so Docker can verify the candidate
-      // before public Nginx is reopened; expose the pause explicitly instead of misclassifying
-      // an intentional maintenance state as a runtime failure.
     } catch {
       result.services.scheduler = 'error';
       result.status = 'degraded';

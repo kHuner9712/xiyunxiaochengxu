@@ -2,6 +2,12 @@ import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/commo
 import * as fs from 'fs';
 import * as path from 'path';
 
+export interface RedisRuntimeSafetyConfig {
+  maxmemoryPolicy: string;
+  appendonly: string;
+  appendfsync: string;
+}
+
 @Injectable()
 export class RedisService implements OnApplicationShutdown {
   private readonly logger = new Logger(RedisService.name);
@@ -99,10 +105,30 @@ export class RedisService implements OnApplicationShutdown {
     return this.client.ping();
   }
 
+  async getRuntimeSafetyConfig(): Promise<RedisRuntimeSafetyConfig> {
+    const [maxmemoryPolicy, appendonly, appendfsync] = await Promise.all([
+      this.getConfigValue('maxmemory-policy'),
+      this.getConfigValue('appendonly'),
+      this.getConfigValue('appendfsync'),
+    ]);
+    return { maxmemoryPolicy, appendonly, appendfsync };
+  }
+
   async releaseLockWithLua(key: string, value: string): Promise<boolean> {
     const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
     const result = await this.client.eval(lua, 1, key, value);
     return result === 1;
+  }
+
+  private async getConfigValue(name: string): Promise<string> {
+    const result = await this.client.config('GET', name);
+    if (Array.isArray(result)) {
+      return String(result[1] ?? '').trim().toLowerCase();
+    }
+    if (result && typeof result === 'object') {
+      return String(result[name] ?? '').trim().toLowerCase();
+    }
+    return '';
   }
 
   private isSchedulerPaused(key: string): boolean {
@@ -122,7 +148,6 @@ export class RedisService implements OnApplicationShutdown {
     try {
       markerBuild = fs.readFileSync(markerPath, 'utf8').trim();
     } catch (error) {
-      // A marker that exists but cannot be read is safer to treat as active for the current build.
       this.logger.warn(`调度维护标记不可读，按暂停处理：${(error as Error).message}`);
       return true;
     }
@@ -162,7 +187,6 @@ export class RedisService implements OnApplicationShutdown {
       try {
         this.client.disconnect?.();
       } catch {
-        // The process is already shutting down; there is no further recovery action here.
       }
     }
   }
