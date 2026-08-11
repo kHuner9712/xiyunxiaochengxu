@@ -43,6 +43,41 @@ export function normalizeOrderStatus(status?: string | number | null): OrderStat
   return LEGACY_ORDER_STATUS_MAP[value]
 }
 
+export interface CreateOrderRequest {
+  addressId?: string
+  pickupStoreId?: string
+  fulfillmentType?: string
+  items: OrderItemInput[]
+  couponId?: string
+  pointsDeduct?: number
+  sourceType?: string
+  sourceCode?: string
+  shareRecordId?: string
+  shareCampaignId?: string
+  referrerUserId?: string
+  remark?: string
+}
+
+function buildOrderCreateFingerprint(data: CreateOrderRequest) {
+  const items = data.items
+    .map((item) => ({ skuId: String(item.skuId), quantity: Number(item.quantity) }))
+    .sort((a, b) => a.skuId.localeCompare(b.skuId) || a.quantity - b.quantity)
+  return JSON.stringify({
+    addressId: data.addressId || '',
+    pickupStoreId: data.pickupStoreId || '',
+    fulfillmentType: data.fulfillmentType || '',
+    couponId: data.couponId || '',
+    pointsDeduct: Number(data.pointsDeduct || 0),
+    sourceType: data.sourceType || '',
+    sourceCode: data.sourceCode || '',
+    shareRecordId: data.shareRecordId || '',
+    shareCampaignId: data.shareCampaignId || '',
+    referrerUserId: data.referrerUserId || '',
+    remark: data.remark || '',
+    items,
+  })
+}
+
 function generateOrderClientRequestId() {
   const random = [
     Math.random().toString(36).slice(2),
@@ -52,15 +87,17 @@ function generateOrderClientRequestId() {
   return `${Date.now()}-${random}`
 }
 
-function loadPendingOrderClientRequestId(): string | null {
+function loadPendingOrderClientRequestId(fingerprint: string): string | null {
   try {
     const raw = uni.getStorageSync(PENDING_ORDER_CREATE_KEY)
     const value = typeof raw === 'string' ? JSON.parse(raw) : raw
     const clientRequestId = String(value?.clientRequestId || '')
     const createdAt = Number(value?.createdAt || 0)
+    const storedFingerprint = String(value?.fingerprint || '')
     const now = Date.now()
     if (
       CLIENT_REQUEST_ID_PATTERN.test(clientRequestId) &&
+      storedFingerprint === fingerprint &&
       Number.isFinite(createdAt) &&
       createdAt > 0 &&
       now - createdAt >= 0 &&
@@ -75,13 +112,14 @@ function loadPendingOrderClientRequestId(): string | null {
   return null
 }
 
-function getOrCreateOrderClientRequestId(): string {
-  const existing = loadPendingOrderClientRequestId()
+function getOrCreateOrderClientRequestId(fingerprint: string): string {
+  const existing = loadPendingOrderClientRequestId(fingerprint)
   if (existing) return existing
   const clientRequestId = generateOrderClientRequestId()
   uni.setStorageSync(PENDING_ORDER_CREATE_KEY, {
     clientRequestId,
     createdAt: Date.now(),
+    fingerprint,
   })
   return clientRequestId
 }
@@ -98,24 +136,12 @@ function clearPendingOrderClientRequestId(clientRequestId: string) {
   }
 }
 
-export async function createOrder(data: {
-  addressId?: string
-  pickupStoreId?: string
-  fulfillmentType?: string
-  items: OrderItemInput[]
-  couponId?: string
-  pointsDeduct?: number
-  sourceType?: string
-  sourceCode?: string
-  shareRecordId?: string
-  shareCampaignId?: string
-  referrerUserId?: string
-  remark?: string
-}) {
-  // Keep this identity across network failures and page/process re-entry. The backend derives a
-  // deterministic unique order number from it, so a retry after an ambiguous timeout can only
-  // recover the original order; it cannot reserve stock/coupon/points a second time.
-  const clientRequestId = getOrCreateOrderClientRequestId()
+export async function createOrder(data: CreateOrderRequest) {
+  // Keep this identity across network failures and page/process re-entry only while the actual
+  // checkout payload is unchanged. If the user changes items/address/coupon/points after a timeout,
+  // that is a new purchase intent and must never recover an older committed order by accident.
+  const fingerprint = buildOrderCreateFingerprint(data)
+  const clientRequestId = getOrCreateOrderClientRequestId(fingerprint)
   const result = await post<{
     orderId: string
     orderNo: string
