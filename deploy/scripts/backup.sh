@@ -36,27 +36,118 @@ CHECKSUM_FILE="$BACKUP_DIR/$CHECKSUM_BASENAME"
 DB_TMP="${DB_FILE}.tmp"
 UPLOAD_TMP="${UPLOAD_FILE}.tmp"
 
-cleanup() {
-  rm -f "$DB_TMP" "$UPLOAD_TMP"
-  rmdir "$LOCK_DIR" 2>/dev/null || true
-}
-trap cleanup EXIT
-
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$DEPLOY_DIR/docker-compose.yml")
 "${COMPOSE[@]}" config >/dev/null
 
-if ! "${COMPOSE[@]}" ps --status running --services | grep -qx mysql; then
+service_running() {
+  local service="$1"
+  "${COMPOSE[@]}" ps --status running --services | grep -qx "$service"
+}
+
+wait_api_health() {
+  for attempt in $(seq 1 90); do
+    if "${COMPOSE[@]}" exec -T api node -e '
+      fetch("http://127.0.0.1:3000/health")
+        .then(async (r) => {
+          const body = await r.json();
+          if (!r.ok || body?.status !== "ok" || body?.services?.database !== "ok" || body?.services?.redis !== "ok") process.exit(1);
+        })
+        .catch(() => process.exit(1));
+    ' >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+API_WAS_RUNNING=false
+NGINX_WAS_RUNNING=false
+service_running api && API_WAS_RUNNING=true
+service_running nginx && NGINX_WAS_RUNNING=true
+
+if [ "$NGINX_WAS_RUNNING" = true ] && [ "$API_WAS_RUNNING" != true ]; then
+  echo "备份失败：Nginx 正在运行但 API 未运行；拒绝在异常生产状态下创建可宣称一致的在线备份" >&2
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+  exit 1
+fi
+if ! service_running mysql; then
   echo "备份失败：MySQL 容器未运行" >&2
+  rmdir "$LOCK_DIR" 2>/dev/null || true
   exit 1
 fi
 
+WRITERS_QUIESCED=false
+RUNTIME_RESTORED=false
+
+restore_previous_runtime() {
+  local ok=true
+  if [ "$API_WAS_RUNNING" = true ]; then
+    echo "恢复备份前 API 运行状态..." >&2
+    if ! SKIP_MIGRATE=true "${COMPOSE[@]}" up -d api >/dev/null; then
+      ok=false
+    elif ! wait_api_health; then
+      echo "备份后 API 未通过健康检查；不会重新开放 Nginx" >&2
+      ok=false
+    fi
+  fi
+
+  if [ "$NGINX_WAS_RUNNING" = true ]; then
+    if [ "$ok" = true ]; then
+      if ! "${COMPOSE[@]}" up -d nginx >/dev/null; then
+        ok=false
+      fi
+    else
+      "${COMPOSE[@]}" stop nginx >/dev/null 2>&1 || true
+    fi
+  fi
+
+  [ "$ok" = true ]
+}
+
+cleanup() {
+  status=$?
+  rm -f "$DB_TMP" "$UPLOAD_TMP"
+
+  if [ "$WRITERS_QUIESCED" = true ] && [ "$RUNTIME_RESTORED" != true ]; then
+    if restore_previous_runtime; then
+      RUNTIME_RESTORED=true
+    else
+      echo "备份流程结束但原生产运行状态恢复失败；Nginx 保持关闭，请立即人工处理" >&2
+      status=1
+    fi
+  fi
+
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+  exit "$status"
+}
+trap cleanup EXIT
+
 printf '%s\n' "========================================="
-printf '%s\n' "  禧孕优选生产备份"
+printf '%s\n' "  禧孕优选一致性生产备份"
 printf '%s\n' "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
 printf '%s\n' "  目录: $BACKUP_DIR"
 printf '%s\n' "========================================="
 
-echo "[1/3] 备份 MySQL 数据库..."
+# Database rows and local uploads are one restore unit but cannot share a storage transaction.
+# Close the public entrypoint first, then gracefully stop the API (including schedulers) so no
+# application write can occur between the MySQL snapshot and the uploads archive.
+if [ "$NGINX_WAS_RUNNING" = true ]; then
+  echo "[1/5] 关闭 Nginx 公网入口..."
+  "${COMPOSE[@]}" stop nginx >/dev/null
+fi
+if [ "$API_WAS_RUNNING" = true ]; then
+  echo "[1/5] 优雅停止 API writers / scheduler..."
+  "${COMPOSE[@]}" stop api >/dev/null
+fi
+WRITERS_QUIESCED=true
+
+if service_running api || service_running nginx; then
+  echo "备份失败：无法确认 API/Nginx writers 已停止" >&2
+  exit 1
+fi
+
+echo "[2/5] 在无应用写入窗口备份 MySQL..."
 "${COMPOSE[@]}" exec -T mysql sh -lc '
   exec mysqldump \
     -uroot -p"$MYSQL_ROOT_PASSWORD" \
@@ -75,7 +166,7 @@ mv "$DB_TMP" "$DB_FILE"
 chmod 600 "$DB_FILE"
 echo "数据库备份成功: $DB_BASENAME"
 
-echo "[2/3] 备份上传文件..."
+echo "[3/5] 在同一无写入窗口备份 uploads..."
 "${COMPOSE[@]}" run --rm --no-deps --entrypoint sh api -lc '
   cd /app/apps/api/uploads
   exec tar -czf - .
@@ -87,18 +178,25 @@ mv "$UPLOAD_TMP" "$UPLOAD_FILE"
 chmod 600 "$UPLOAD_FILE"
 echo "上传文件备份成功: $UPLOAD_BASENAME"
 
-# Store relative names so a complete backup set can be copied to a different server/path and
-# still be verified there during disaster recovery.
+# Store relative names so a complete backup set can be copied to a different server/path and still
+# be verified there during disaster recovery.
 (
   cd "$BACKUP_DIR"
   sha256sum "$DB_BASENAME" "$UPLOAD_BASENAME" > "$CHECKSUM_BASENAME"
 )
 chmod 600 "$CHECKSUM_FILE"
 
-echo "[3/3] 清理 ${RETENTION_DAYS} 天前的备份..."
+echo "[4/5] 恢复备份前生产运行状态..."
+if ! restore_previous_runtime; then
+  echo "备份文件已生成，但 API/Nginx 原运行状态恢复失败；拒绝报告备份成功" >&2
+  exit 1
+fi
+RUNTIME_RESTORED=true
+
+echo "[5/5] 清理 ${RETENTION_DAYS} 天前的完整备份文件..."
 find "$BACKUP_DIR" -maxdepth 1 -type f \
   \( -name 'db_*.sql.gz' -o -name 'uploads_*.tar.gz' -o -name 'checksums_*.sha256' \) \
   -mtime "+$RETENTION_DAYS" -delete
 
-echo "备份完成："
+echo "一致性备份完成："
 ls -lh "$DB_FILE" "$UPLOAD_FILE" "$CHECKSUM_FILE"
