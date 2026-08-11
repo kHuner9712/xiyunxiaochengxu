@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -52,6 +53,28 @@ test('release gate wrapper preserves env, reports boundaries and runs supplement
   assert.match(wrapper, /@baby-mall\/api', 'test:integration'/)
   assert.match(wrapper, /isClearlyTestDatabase\(env\.DATABASE_URL\)/)
   assert.match(wrapper, /does not constitute production runtime or real-device acceptance/)
+})
+
+test('strict production gate rejects reserved or local miniprogram API hosts before running repository checks', () => {
+  const wrapperPath = resolve(root, 'deploy/scripts/run-release-check.mjs')
+  for (const apiBaseUrl of [
+    'https://example.invalid/api',
+    'https://service.test/api',
+    'https://localhost/api',
+    'https://127.0.0.1/api',
+  ]) {
+    const result = spawnSync(process.execPath, [wrapperPath, '--strict-prod-gate'], {
+      cwd: root,
+      env: {
+        ...process.env,
+        VITE_API_BASE_URL: apiBaseUrl,
+      },
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 1, `${apiBaseUrl} must fail strict production gate`)
+    assert.match(result.stderr, /refuses reserved\/local VITE_API_BASE_URL/)
+    assert.doesNotMatch(result.stdout, /Release Gate Check/)
+  }
 })
 
 test('admin browser gate uses a built SPA, Chrome DevTools and grouped config refresh persistence evidence', () => {
