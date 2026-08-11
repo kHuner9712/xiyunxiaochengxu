@@ -8,7 +8,7 @@ jest.mock('@nestjs/schedule', () => ({
 import { ScheduleService } from './schedule.service';
 
 describe('ScheduleService group-buy refund backlog priority', () => {
-  it('uses the finite batch for durable backlog before newly failed IDs', async () => {
+  it('snapshots durable backlog before expiring new groups and spends the finite batch on backlog first', async () => {
     const redisService: any = {
       setNX: jest.fn(async () => true),
       extendLockWithLua: jest.fn(async () => true),
@@ -80,6 +80,9 @@ describe('ScheduleService group-buy refund backlog priority', () => {
 
     await service.handleExpiredGroupBuys();
 
+    expect(prismaService.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      groupBuyService.markExpiredGroups.mock.invocationCallOrder[0],
+    );
     expect(paymentService.createGroupBuyFailureRefund).toHaveBeenCalledTimes(20);
     expect(paymentService.createGroupBuyFailureRefund).toHaveBeenNthCalledWith(
       1,
