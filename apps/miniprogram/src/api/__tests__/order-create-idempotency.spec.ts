@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOrder } from '../order'
 import { post } from '@/utils/request'
 
@@ -18,6 +18,10 @@ beforeEach(() => {
     setStorageSync: vi.fn((key: string, value: any) => storage.set(key, value)),
     removeStorageSync: vi.fn((key: string) => storage.delete(key)),
   }
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 const payload = {
@@ -61,6 +65,18 @@ describe('createOrder client request identity', () => {
 
     await createOrder(payload)
 
+    expect(storage.size).toBe(0)
+  })
+
+  it('clears a recovered cancelled order identity and asks for a fresh submission', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1786449600000)
+    vi.spyOn(Math, 'random').mockReturnValue(0.222222222)
+    vi.mocked(post).mockResolvedValueOnce({
+      ...successResult,
+      status: 'cancelled',
+    })
+
+    await expect(createOrder(payload)).rejects.toThrow('上次提交对应订单已取消')
     expect(storage.size).toBe(0)
   })
 
