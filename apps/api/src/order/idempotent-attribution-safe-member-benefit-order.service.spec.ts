@@ -1,6 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { AttributionSafeMemberBenefitOrderService } from './attribution-safe-member-benefit-order.service';
-import { IdempotentAttributionSafeMemberBenefitOrderService } from './idempotent-attribution-safe-member-benefit-order.service';
+import {
+  createOrderIdempotencyPrismaProxy,
+  IdempotentAttributionSafeMemberBenefitOrderService,
+} from './idempotent-attribution-safe-member-benefit-order.service';
 
 const CLIENT_REQUEST_ID = '1786449600000-abcdefghijklmnopqrstuvwx';
 
@@ -83,18 +86,21 @@ describe('IdempotentAttributionSafeMemberBenefitOrderService', () => {
     } as any)).rejects.toThrow('库存不足');
   });
 
-  it('injects the deterministic order number into order.create inside the existing transaction', async () => {
+  it('injects the deterministic order number only through the service-local Prisma proxy', async () => {
     const orderCreate = jest.fn(async (args: any) => args.data);
     const nativeTransaction = jest.fn(async (callback: any) => callback({
       order: { create: orderCreate },
     }));
-    const service = createBareService(jest.fn()) as any;
-    service.idempotentPrisma.$transaction = nativeTransaction;
-    service.installDeterministicOrderNumberHook();
+    const originalPrisma = {
+      $transaction: nativeTransaction,
+    } as any;
+    const originalTransactionReference = originalPrisma.$transaction;
+    const storage = new AsyncLocalStorage<any>();
+    const proxiedPrisma = createOrderIdempotencyPrismaProxy(originalPrisma, storage) as any;
 
-    const result = await service.orderCreateIdempotency.run(
+    const result = await storage.run(
       { userId: '7', orderNo: 'XY20260811120000abcdef123456' },
-      () => service.idempotentPrisma.$transaction((tx: any) => tx.order.create({
+      () => proxiedPrisma.$transaction((tx: any) => tx.order.create({
         data: { userId: 7n, orderNo: 'random-order-no' },
       })),
     );
@@ -103,5 +109,11 @@ describe('IdempotentAttributionSafeMemberBenefitOrderService', () => {
       data: { userId: 7n, orderNo: 'XY20260811120000abcdef123456' },
     });
     expect(result.orderNo).toBe('XY20260811120000abcdef123456');
+    expect(originalPrisma.$transaction).toBe(originalTransactionReference);
+  });
+
+  it('constructing the local Prisma proxy does not require $transaction until a transaction is actually used', () => {
+    const partialPrisma = { order: { findFirst: jest.fn() } } as any;
+    expect(() => createOrderIdempotencyPrismaProxy(partialPrisma, new AsyncLocalStorage())).not.toThrow();
   });
 });
