@@ -55,11 +55,6 @@ export class WeappOrderController {
     });
   }
 
-  @Post('pay/:id')
-  async pay(@CurrentUser('id') _userId: string, @Param('id') id: string) {
-    return { orderId: id, message: '请通过支付模块发起支付' };
-  }
-
   @Get('list')
   async list(@CurrentUser('id') userId: string, @Query() dto: OrderQueryDto) {
     return this.orderService.findByUser(userId, dto);
