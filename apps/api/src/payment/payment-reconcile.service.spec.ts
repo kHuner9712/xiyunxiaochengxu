@@ -36,7 +36,7 @@ describe('PaymentReconcileService batch safety', () => {
     return { service, prisma, paymentService };
   }
 
-  it('bounds stale created-payment and half-success scans to stable 20-row batches', async () => {
+  it('bounds active created-payment and half-success scans to stable 20-row batches', async () => {
     const { service, prisma } = createService();
 
     await service.reconcilePendingPayments();
@@ -45,6 +45,7 @@ describe('PaymentReconcileService batch safety', () => {
       where: {
         status: PAYMENT_STATUS.CREATED,
         createdAt: { lt: expect.any(Date) },
+        order: { status: OrderStatus.pending_payment },
       },
       include: { order: true },
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
