@@ -37,7 +37,7 @@ services:
       - ./scripts/redis-entrypoint.sh:/usr/local/bin/redis-entrypoint.sh:ro
     entrypoint: ["sh", "/usr/local/bin/redis-entrypoint.sh"]
     healthcheck:
-      test: ["CMD", "sh", "-c", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -qx PONG"]
+      test: ["CMD", "sh", "-c", "value=$$(cat /proc/sys/vm/overcommit_memory 2>/dev/null || echo unreadable); [ \"$$value\" = 1 ] || { echo \"vm.overcommit_memory=$$value; Redis requires 1\" >&2; exit 1; }; REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -qx PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -102,15 +102,8 @@ services:
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-30d}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       JWT_ADMIN_EXPIRES_IN: ${JWT_ADMIN_EXPIRES_IN:-2h}
-      ORDER_AUTO_CLOSE_MINUTES: ${ORDER_AUTO_CLOSE_MINUTES:-30}
-      ORDER_AUTO_COMPLETE_DAYS: ${ORDER_AUTO_COMPLETE_DAYS:-15}
-      FREIGHT_FREE_AMOUNT: ${FREIGHT_FREE_AMOUNT:-99}
-      FREIGHT_DEFAULT_FEE: ${FREIGHT_DEFAULT_FEE:-10}
-      FREIGHT_REMOTE_FEE: ${FREIGHT_REMOTE_FEE:-20}
       UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}
       UPLOAD_ALLOWED_TYPES: ${UPLOAD_ALLOWED_TYPES:-image/jpeg,image/png,image/gif,image/webp,video/mp4}
-      POINTS_DEDUCT_RATE: ${POINTS_DEDUCT_RATE:-100}
-      POINTS_DEDUCT_MAX_PERCENT: ${POINTS_DEDUCT_MAX_PERCENT:-30}
     volumes:
       - upload_data:/app/apps/api/uploads
       - log_data:/app/apps/api/logs
