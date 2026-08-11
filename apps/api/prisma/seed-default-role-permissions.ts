@@ -1,5 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-import { ensureDefaultRolePermissions } from './default-role-permissions';
+import {
+  ensureDefaultRolePermissions,
+  ensureMerchantSettlementPermission,
+} from './default-role-permissions';
 
 const prisma = new PrismaClient();
 
@@ -14,6 +17,13 @@ async function main() {
       console.log(`默认角色 ${result.roleCode} 不存在，跳过`);
     }
   }
+
+  const settlement = await ensureMerchantSettlementPermission(prisma);
+  console.log(
+    settlement.financeGranted
+      ? '商户结算权限已确保存在并授予财务角色'
+      : '商户结算权限已确保存在；财务角色不存在，跳过角色授权',
+  );
 }
 
 main()

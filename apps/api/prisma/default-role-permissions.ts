@@ -112,3 +112,47 @@ export async function ensureDefaultRolePermissions(
 
   return results;
 }
+
+export async function ensureMerchantSettlementPermission(prisma: PrismaClient) {
+  const parent = await prisma.adminPermission.findFirst({ where: { code: 'order' } });
+  let permission = await prisma.adminPermission.findFirst({
+    where: { code: 'order:merchant-settlement' },
+  });
+
+  if (permission) {
+    permission = await prisma.adminPermission.update({
+      where: { id: permission.id },
+      data: {
+        parentId: parent?.id ?? permission.parentId,
+        name: '商户结算',
+        type: 2,
+        sortOrder: 12,
+      },
+    });
+  } else {
+    permission = await prisma.adminPermission.create({
+      data: {
+        parentId: parent?.id ?? 0n,
+        name: '商户结算',
+        code: 'order:merchant-settlement',
+        type: 2,
+        sortOrder: 12,
+      },
+    });
+  }
+
+  const financeRole = await prisma.adminRole.findFirst({ where: { code: 'finance' } });
+  if (!financeRole) {
+    return { permissionId: permission.id, financeGranted: false };
+  }
+
+  const existing = await prisma.adminRolePermission.findFirst({
+    where: { roleId: financeRole.id, permissionId: permission.id },
+  });
+  if (!existing) {
+    await prisma.adminRolePermission.create({
+      data: { roleId: financeRole.id, permissionId: permission.id },
+    });
+  }
+  return { permissionId: permission.id, financeGranted: true };
+}

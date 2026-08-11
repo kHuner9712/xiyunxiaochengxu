@@ -23,6 +23,8 @@ import {
   SettlementReportQueryDto,
 } from './dto/merchant-settlement.dto';
 
+const SETTLEMENT_PERMISSION = 'order:merchant-settlement';
+
 @Controller('admin/merchant-settlement')
 export class AdminMerchantSettlementController {
   constructor(private readonly service: MerchantSettlementService) {}
@@ -67,19 +69,19 @@ export class AdminMerchantSettlementController {
   }
 
   @Get('records')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async records(@Query() dto: CommissionRecordQueryDto) {
     return this.service.findRecords(dto);
   }
 
   @Get('records/stats')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async recordsStats() {
     return this.service.getRecordsStats();
   }
 
   @Put('records/:id/status')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async recordUpdateStatus(
     @Param('id') id: string,
     @Body() dto: CommissionRecordStatusDto,
@@ -88,31 +90,31 @@ export class AdminMerchantSettlementController {
   }
 
   @Get('batches')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batches(@Query() dto: SettlementBatchQueryDto) {
     return this.service.findBatches(dto);
   }
 
   @Get('batches/:id')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchDetail(@Param('id') id: string) {
     return this.service.findBatchById(id);
   }
 
   @Post('batches/preview')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchPreview(@Body() dto: CreateSettlementBatchDto) {
     return this.service.previewBatch(dto);
   }
 
   @Post('batches/create')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchCreate(@Body() dto: CreateSettlementBatchDto) {
     return this.service.createBatch(dto);
   }
 
   @Put('batches/:id/confirm')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchConfirm(
     @Param('id') id: string,
     @Body() dto: SettlementBatchRemarkDto,
@@ -121,7 +123,7 @@ export class AdminMerchantSettlementController {
   }
 
   @Put('batches/:id/paid')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchPaid(
     @Param('id') id: string,
     @Body() dto: SettlementBatchRemarkDto,
@@ -130,7 +132,7 @@ export class AdminMerchantSettlementController {
   }
 
   @Put('batches/:id/cancel')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async batchCancel(
     @Param('id') id: string,
     @Body() dto: SettlementBatchRemarkDto,
@@ -139,13 +141,13 @@ export class AdminMerchantSettlementController {
   }
 
   @Get('report/merchant')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async reportMerchant(@Query() dto: SettlementReportQueryDto) {
     return this.service.reportByMerchant(dto);
   }
 
   @Get('report/monthly')
-  @RequirePermission('marketing:activity')
+  @RequirePermission(SETTLEMENT_PERMISSION)
   async reportMonthly(@Query() dto: SettlementReportQueryDto) {
     return this.service.reportMonthly(dto);
   }
