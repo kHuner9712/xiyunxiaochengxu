@@ -3,9 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import axios from 'axios';
+import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { AuthService } from './auth.service';
+
+const WEAPP_ACCESS_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @Injectable()
 export class ProductionAuthService extends AuthService {
@@ -140,17 +143,24 @@ export class ProductionAuthService extends AuthService {
     await this.productionRedis.set(
       `wechat_session:${user.id.toString()}`,
       session_key,
-      86400 * 7,
+      WEAPP_ACCESS_TTL_SECONDS,
     );
 
+    const tokenId = crypto.randomUUID();
     const token = await this.productionJwt.signAsync(
       {
         id: user.id.toString(),
         roleType: 'user',
         type: 'user',
         tokenType: 'access',
+        tokenId,
       },
       { expiresIn: '7d' },
+    );
+    await this.productionRedis.set(
+      `weapp_access_token:${user.id.toString()}:${tokenId}`,
+      '1',
+      WEAPP_ACCESS_TTL_SECONDS,
     );
 
     return { token, isNewUser };
