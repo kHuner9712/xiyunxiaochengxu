@@ -99,7 +99,9 @@ export class PaymentController {
   ) {
     const rawBody = req.rawBody;
     try {
-      return await this.paymentService.handleCallback(body, headers, rawBody);
+      const result = await this.paymentService.handleCallback(body, headers, rawBody);
+      if (result?.code === 'FAIL') res.status(500);
+      return result;
     } catch (error: any) {
       this.logger.error(`支付回调处理异常: ${error?.message}`, error?.stack);
       // WeChat Pay treats a 2xx callback response as successfully received and stops retrying.
@@ -123,7 +125,9 @@ export class PaymentController {
   ) {
     const rawBody = req.rawBody;
     try {
-      return await this.paymentService.handleRefundCallback(body, headers, rawBody);
+      const result = await this.paymentService.handleRefundCallback(body, headers, rawBody);
+      if (result?.code === 'FAIL') res.status(500);
+      return result;
     } catch (error: any) {
       this.logger.error(`退款回调处理异常: ${error?.message}`, error?.stack);
       res.status(500);
