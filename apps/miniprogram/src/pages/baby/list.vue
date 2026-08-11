@@ -33,20 +33,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getBabyList, deleteBaby as deleteBabyApi, type BabyItem } from '@/api/baby'
 import { formatBabyAge } from '@/utils/format'
 import Empty from '@/components/Empty.vue'
 
 const babies = ref<BabyItem[]>([])
+let babyVersion = 0
 
-async function loadBabies() {
+async function loadBabies(version = babyVersion) {
   try {
-    babies.value = await getBabyList()
+    const data = await getBabyList()
+    if (version !== babyVersion) return
+    babies.value = data
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === babyVersion) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   }
+}
+
+function refreshBabies() {
+  const version = ++babyVersion
+  return loadBabies(version)
 }
 
 function addBaby() {
@@ -65,7 +75,7 @@ async function deleteBaby(item: BabyItem) {
       if (res.confirm) {
         try {
           await deleteBabyApi(item.id)
-          await loadBabies()
+          await refreshBabies()
         } catch {
           uni.showToast({ title: '删除失败', icon: 'none' })
         }
@@ -75,7 +85,13 @@ async function deleteBaby(item: BabyItem) {
 }
 
 onShow(() => {
-  loadBabies()
+  void refreshBabies()
+})
+
+defineExpose({
+  babies,
+  loadBabies,
+  refreshBabies,
 })
 </script>
 
