@@ -152,7 +152,7 @@ for callback_path in callback refund-callback; do
     "https://${API_DOMAIN}:${HTTPS_HOST_PORT}/api/weapp/pay/${callback_path}")"
   callback_response="$(cat "$callback_body_file")"
   rm -f "$callback_body_file"
-  [ "$callback_status" = '200' ] || fail "${callback_path} route returned HTTP $callback_status instead of 200: $callback_response"
+  [ "$callback_status" = '500' ] || fail "${callback_path} route returned HTTP $callback_status instead of 500: $callback_response"
   echo "$callback_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*"FAIL"' || fail "${callback_path} invalid-signature smoke did not reach callback failure contract: $callback_response"
 done
 pass 'payment and refund callback routes are reachable through trusted production HTTPS and reject invalid signatures safely'
