@@ -9,25 +9,25 @@ export interface CouponItem {
   minAmount: number
   discountLimit?: number
   maxDiscount?: number
-  totalCount: number
-  receivedCount: number
+  totalCount?: number
+  receivedCount?: number
   remainCount: number
-  perLimit: number
+  perLimit?: number
   startTime: string
   endTime: string
-  validDays: number
-  applicableType: number
+  validDays?: number
+  applicableType?: number
   applicableIds?: string[]
   memberLevelId?: string | null
-  isNewUser: number
-  status: number
+  isNewUser?: number
+  status?: number
   received: boolean
   description?: string
 }
 
 export interface UserCouponItem {
   id: string
-  userId: string
+  userId?: string
   couponId: string
   status: number
   rawStatus?: number
@@ -42,18 +42,26 @@ export interface UserCouponItem {
   discountLimit?: number
   startTime: string
   endTime: string
-  applicableType: number
+  applicableType?: number
   applicableIds?: string[]
   description?: string
-  coupon: CouponItem
+  coupon?: CouponItem
 }
+
+/** Compatibility name used by the order-confirm page and existing callers. */
+export type MyCouponItem = UserCouponItem
 
 export function getCouponCenter(params: { page: number; pageSize: number }) {
   return get<{ list: CouponItem[]; total: number }>('/weapp/coupon/center', params)
 }
 
-export function getClaimableCoupons() {
-  return get<CouponItem[]>('/weapp/coupon/available')
+/**
+ * Logged-in coupon center source. The backend only returns coupons the current account can still
+ * claim after member-level, new-customer, stock and per-user-limit checks.
+ */
+export async function getClaimableCoupons() {
+  const data = await get<CouponItem[]>('/weapp/coupon/available')
+  return Array.isArray(data) ? data : []
 }
 
 export function getMyCoupons(params: { status?: number; page: number; pageSize: number }) {
@@ -71,6 +79,20 @@ export function receiveCoupon(couponId: string) {
   )
 }
 
-export function getUsableCoupons(params: { amount: number; productIds?: string[] }) {
-  return get<UserCouponItem[]>('/weapp/coupon/usable', params)
+/** Existing order-confirm API: keep the exported name and CSV query contract stable. */
+export async function getAvailableCoupons(params: { amount: number; productIds: string[] }) {
+  const data = await get<UserCouponItem[]>('/weapp/coupon/usable', {
+    amount: params.amount,
+    productIds: params.productIds.join(','),
+  })
+  return Array.isArray(data) ? data : []
+}
+
+/** Explicit alias for callers that use the backend route terminology. */
+export async function getUsableCoupons(params: { amount: number; productIds?: string[] }) {
+  const data = await get<UserCouponItem[]>('/weapp/coupon/usable', {
+    amount: params.amount,
+    ...(params.productIds?.length ? { productIds: params.productIds.join(',') } : {}),
+  })
+  return Array.isArray(data) ? data : []
 }
