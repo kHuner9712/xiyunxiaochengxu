@@ -12,8 +12,12 @@
         <view class="coupon-right">
           <text class="coupon-name">{{ item.name }}</text>
           <text class="coupon-time">{{ item.startTime }} - {{ item.endTime }}</text>
-          <view class="coupon-action" :class="{ disabled: item.received || item.remainCount <= 0 }" @tap="handleReceive(item)">
-            <text class="action-text">{{ item.received ? '已领取' : item.remainCount <= 0 ? '已抢光' : '领取' }}</text>
+          <view
+            class="coupon-action"
+            :class="{ disabled: item.received || item.remainCount <= 0 || isReceiving(item.id) }"
+            @tap="handleReceive(item)"
+          >
+            <text class="action-text">{{ isReceiving(item.id) ? '领取中' : item.received ? '已领取' : item.remainCount <= 0 ? '已抢光' : '领取' }}</text>
           </view>
         </view>
       </view>
@@ -36,6 +40,7 @@ import Empty from '@/components/Empty.vue'
 const userStore = useUserStore()
 const coupons = ref<CouponItem[]>([])
 const loading = ref(false)
+const receivingCouponIds = ref<Set<string>>(new Set())
 const page = ref(1)
 const finished = ref(false)
 let couponVersion = 0
@@ -89,8 +94,19 @@ function refreshCoupons() {
   return loadCoupons(true, version)
 }
 
+function isReceiving(couponId: string) {
+  return receivingCouponIds.value.has(couponId)
+}
+
+function setReceiving(couponId: string, receiving: boolean) {
+  const next = new Set(receivingCouponIds.value)
+  if (receiving) next.add(couponId)
+  else next.delete(couponId)
+  receivingCouponIds.value = next
+}
+
 async function handleReceive(item: CouponItem) {
-  if (item.received || item.remainCount <= 0) return
+  if (item.received || item.remainCount <= 0 || isReceiving(item.id)) return
 
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(async () => {
@@ -112,6 +128,10 @@ async function handleReceive(item: CouponItem) {
     return
   }
 
+  // perLimit can legitimately be > 1, so backend idempotency cannot distinguish an intentional
+  // second claim from a rapid double-tap. Serialize the UI action per coupon to ensure one physical
+  // interaction consumes at most one claim and one unit of campaign inventory.
+  setReceiving(item.id, true)
   try {
     await receiveCoupon(item.id)
     uni.showToast({ title: '领取成功', icon: 'success' })
@@ -121,6 +141,8 @@ async function handleReceive(item: CouponItem) {
   } catch (error: any) {
     uni.showToast({ title: error?.message || '领取失败', icon: 'none' })
     await refreshCoupons()
+  } finally {
+    setReceiving(item.id, false)
   }
 }
 
@@ -140,8 +162,10 @@ onShow(() => {
 defineExpose({
   coupons,
   loading,
+  receivingCouponIds,
   loadCoupons,
   refreshCoupons,
+  handleReceive,
 })
 </script>
 
