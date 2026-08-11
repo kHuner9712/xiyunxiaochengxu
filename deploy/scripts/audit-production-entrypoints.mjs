@@ -27,8 +27,18 @@ assert.match(productionDeploy, /smoke-runtime\.sh/);
 assert.match(backup, /DB_BASENAME="db_\$\{TIMESTAMP\}\.sql\.gz"/);
 assert.match(backup, /UPLOAD_BASENAME="uploads_\$\{TIMESTAMP\}\.tar\.gz"/);
 assert.match(backup, /CHECKSUM_BASENAME="checksums_\$\{TIMESTAMP\}\.sha256"/);
+assert.match(backup, /WRITERS_QUIESCED=true[\s\S]*stop nginx[\s\S]*stop api/);
+assert.match(backup, /service_running api \|\| service_running nginx/);
+assert.match(backup, /在无应用写入窗口备份 MySQL/);
+assert.match(backup, /在同一无写入窗口备份 uploads/);
+assert.match(backup, /SKIP_MIGRATE=true "\$\{COMPOSE\[@\]\}" up -d api/);
+assert.match(backup, /127\.0\.0\.1:3000\/api\/health/);
 assert.match(backup, /cd "\$BACKUP_DIR"[\s\S]*sha256sum "\$DB_BASENAME" "\$UPLOAD_BASENAME"/);
 assert.doesNotMatch(backup, /sha256sum "\$DB_FILE" "\$UPLOAD_FILE"/);
+const backupDb = backup.indexOf('在无应用写入窗口备份 MySQL');
+const backupUploads = backup.indexOf('在同一无写入窗口备份 uploads');
+const backupRestoreRuntime = backup.indexOf('恢复备份前生产运行状态');
+assert.ok(backupDb >= 0 && backupUploads > backupDb && backupRestoreRuntime > backupUploads, 'DB and uploads must be captured while writers remain quiesced');
 
 assert.match(restore, /ENV_FILE="\$\{ENV_FILE:-\$PROJECT_DIR\/\.env\.production\}"/);
 assert.match(restore, /docker compose --env-file "\$ENV_FILE"/);
@@ -42,13 +52,14 @@ assert.match(restore, /DROP DATABASE IF EXISTS/);
 assert.match(restore, /gzip -dc "\$DB_FILE"[\s\S]*exec -T mysql/);
 assert.match(restore, /gzip -dc "\$UPLOAD_FILE"[\s\S]*run --rm --no-deps -T --entrypoint sh api/);
 assert.match(restore, /up -d api/);
-assert.match(restore, /127\.0\.0\.1:3000\/health/);
+assert.match(restore, /127\.0\.0\.1:3000\/api\/health/);
+assert.doesNotMatch(restore, /127\.0\.0\.1:3000\/health/);
 assert.match(restore, /ENV_FILE="\$ENV_FILE" bash "\$SCRIPT_DIR\/smoke-runtime\.sh"/);
 assert.match(restore, /"\$\{COMPOSE\[@\]\}" stop nginx/);
 assert.match(restore, /完整 runtime smoke 已通过/);
 
 const apiStart = restore.indexOf('up -d api');
-const health = restore.indexOf('127.0.0.1:3000/health');
+const health = restore.indexOf('127.0.0.1:3000/api/health');
 const nginxStart = restore.indexOf('up -d nginx');
 const smoke = restore.indexOf('smoke-runtime.sh');
 const success = restore.indexOf('完整 runtime smoke 已通过');
@@ -65,12 +76,13 @@ assert.match(bootstrap, /检测到全新生产数据库/);
 assert.match(bootstrap, /must_change_password/);
 assert.match(bootstrap, /customer_service/);
 assert.match(bootstrap, /_prisma_migrations/);
+assert.match(bootstrapWorkflow, /Validate production shell entrypoints/);
 assert.match(bootstrapWorkflow, /Build production API image/);
 assert.match(bootstrapWorkflow, /test-production-container-bootstrap\.sh baby-mall-api:bootstrap-ci/);
 
-// Production business knobs are persisted runtime configuration, not environment overrides.
-// Keeping inactive ORDER/FREIGHT/POINTS keys in the env template is dangerous because operators
-// can change a value, restart successfully, and falsely believe pricing/timeout behavior changed.
+// These names must never be active environment assignments. Most business pricing/time values are
+// DB-backed runtime configuration; remote freight is currently a code constant. In either case an
+// env assignment would falsely imply an effective production override.
 for (const key of [
   'ORDER_AUTO_CLOSE_MINUTES',
   'ORDER_AUTO_COMPLETE_DAYS',
