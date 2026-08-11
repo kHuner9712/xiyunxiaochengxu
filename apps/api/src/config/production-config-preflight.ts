@@ -8,6 +8,8 @@ import { validateEnv } from './env.validation';
 
 const MIN_PLATFORM_CERT_VALIDITY_MS = 24 * 60 * 60 * 1000;
 const CANONICAL_CERT_SERIAL = /^[0-9A-F]+$/;
+const CANONICAL_API_DOMAIN = 'api.yunxixiaochengxu.com.cn';
+const CANONICAL_ADMIN_DOMAIN = 'admin.yunxixiaochengxu.com.cn';
 const PLACEHOLDER_SENSITIVE_KEYS = [
   'DATABASE_URL',
   'DB_PASSWORD',
@@ -107,6 +109,58 @@ function validatePublicPortContract(env: NodeJS.ProcessEnv): void {
   }
   if (httpsPort !== '443') {
     fail(`HTTPS_HOST_PORT 必须为 443；当前为 ${httpsPort || '(empty)'}，微信支付/退款回调使用无端口 HTTPS URL，只会访问标准 443 端口`);
+  }
+}
+
+function parseExactOrigin(value: string, label: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    fail(`${label} 不是合法 URL origin`);
+  }
+  if (parsed.protocol !== 'https:') fail(`${label} 必须使用 HTTPS`);
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    fail(`${label} 不能包含用户名、密码、query 或 hash`);
+  }
+  const path = parsed.pathname.replace(/\/+$/, '');
+  if (path) fail(`${label} 必须是纯 origin，不能包含路径`);
+  return parsed.origin.toLowerCase();
+}
+
+function validatePublicOriginContract(env: NodeJS.ProcessEnv): void {
+  const apiDomain = String(env.API_DOMAIN || CANONICAL_API_DOMAIN).trim().toLowerCase();
+  const adminDomain = String(env.ADMIN_DOMAIN || CANONICAL_ADMIN_DOMAIN).trim().toLowerCase();
+  if (apiDomain !== CANONICAL_API_DOMAIN) {
+    fail(`API_DOMAIN 必须与 Nginx server_name 一致: ${CANONICAL_API_DOMAIN}`);
+  }
+  if (adminDomain !== CANONICAL_ADMIN_DOMAIN) {
+    fail(`ADMIN_DOMAIN 必须与 Nginx server_name 一致: ${CANONICAL_ADMIN_DOMAIN}`);
+  }
+
+  const apiOrigin = `https://${apiDomain}`;
+  const adminOrigin = `https://${adminDomain}`;
+  const uploadOrigin = String(env.UPLOAD_PUBLIC_URL || '').trim().replace(/\/+$/, '').toLowerCase();
+  if (uploadOrigin !== apiOrigin) {
+    fail(`UPLOAD_PUBLIC_URL 必须精确为 ${apiOrigin}`);
+  }
+
+  const expectedPayCallback = `${apiOrigin}/api/weapp/pay/callback`;
+  const expectedRefundCallback = `${apiOrigin}/api/weapp/pay/refund-callback`;
+  if (String(env.WECHAT_NOTIFY_URL || '').trim().toLowerCase() !== expectedPayCallback) {
+    fail(`WECHAT_NOTIFY_URL 必须精确为 ${expectedPayCallback}`);
+  }
+  if (String(env.WECHAT_REFUND_NOTIFY_URL || '').trim().toLowerCase() !== expectedRefundCallback) {
+    fail(`WECHAT_REFUND_NOTIFY_URL 必须精确为 ${expectedRefundCallback}`);
+  }
+
+  const corsOrigins = String(env.CORS_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => parseExactOrigin(value, 'CORS_ORIGINS'));
+  if (!corsOrigins.includes(adminOrigin)) {
+    fail(`CORS_ORIGINS 必须包含管理后台 origin ${adminOrigin}`);
   }
 }
 
@@ -247,11 +301,8 @@ export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.en
   rejectObviousPlaceholderValues(env);
   validateDatabaseUrlConsistency(env);
   validatePublicPortContract(env);
+  validatePublicOriginContract(env);
 
-  // This value is consumed by every Axios-based external integration. Validate it here so an
-  // invalid production setting cannot survive until after a live Prisma migration or until Nest
-  // providers have already connected to MySQL/Redis. The mutation of axios.defaults is harmless
-  // in the standalone preflight process and is reused directly when preflight runs in main.ts.
   configureOutboundHttpTimeout(env.OUTBOUND_HTTP_TIMEOUT_MS);
 
   validateMerchantPrivateKey(String(env.WECHAT_PRIVATE_KEY_PATH || ''));
@@ -270,9 +321,6 @@ export function runProductionConfigPreflight(env: NodeJS.ProcessEnv = process.en
     },
   } as ConfigService;
 
-  // PaymentService performs the remaining production payment checks. Its other dependencies
-  // are not accessed by the constructor, so null placeholders keep this preflight free of
-  // database, Redis, HTTP, cron or other runtime side effects.
   new PaymentService(
     null as any,
     configService,
