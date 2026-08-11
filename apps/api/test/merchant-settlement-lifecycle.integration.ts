@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { StateSafeProductionMerchantSettlementService } from '../src/merchant-settlement/state-safe-production-merchant-settlement.service';
+import { resolveCreateOrderAttribution } from '../src/order/order-attribution';
 
 function assertSafeIntegrationDatabase() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -32,8 +33,47 @@ async function main() {
   await prisma.$connect();
   await cleanup();
   const service = new StateSafeProductionMerchantSettlementService(prisma as any);
+  let attributionSourceId: bigint | null = null;
 
   try {
+    const attributionCode = `ATTR-${Date.now()}`.toUpperCase();
+    const attributionSource = await prisma.merchantPromotionSource.create({
+      data: {
+        name: '归因状态真库测试',
+        promotionCode: attributionCode,
+        status: 1,
+      },
+    });
+    attributionSourceId = attributionSource.id;
+
+    const activeAttribution = await resolveCreateOrderAttribution(prisma as any, {
+      sourceType: 'merchant_referral',
+      sourceCode: attributionCode.toLowerCase(),
+      items: [{ skuId: '1', quantity: 1 }],
+    } as any);
+    assert.equal(activeAttribution.sourceType, 'merchant_referral');
+    assert.equal(
+      activeAttribution.sourceCode,
+      attributionCode,
+      '启用推广码必须按后台统一的大写形式进入新订单快照',
+    );
+
+    await prisma.merchantPromotionSource.update({
+      where: { id: attributionSource.id },
+      data: { status: 0 },
+    });
+    const stoppedAttribution = await resolveCreateOrderAttribution(prisma as any, {
+      sourceType: 'merchant_referral',
+      sourceCode: attributionCode,
+      items: [{ skuId: '1', quantity: 1 }],
+    } as any);
+    assert.equal(
+      stoppedAttribution.sourceType,
+      'direct',
+      '停用推广码不能继续进入未来新订单归因，但也不能阻断用户下单',
+    );
+    assert.equal(stoppedAttribution.sourceCode, undefined);
+
     const now = new Date();
     const occurredAt = new Date(now.getTime() - 60_000);
     const periodStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
@@ -209,6 +249,9 @@ async function main() {
     console.log('[merchant-settlement-lifecycle-integration] PASS');
   } finally {
     await cleanup();
+    if (attributionSourceId) {
+      await prisma.merchantPromotionSource.deleteMany({ where: { id: attributionSourceId } });
+    }
     await prisma.$disconnect();
   }
 }
