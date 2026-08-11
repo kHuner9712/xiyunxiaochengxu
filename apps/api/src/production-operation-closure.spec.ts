@@ -83,6 +83,7 @@ describe('production operation closure contracts', () => {
 
   it('uses the outermost hardened runtime providers rather than leaving safety wrappers unused', () => {
     const paymentModule = read('apps/api/src/payment/payment.module.ts');
+    const orphanSafePayment = read('apps/api/src/payment/orphan-safe-member-growth-payment.service.ts');
     const memberGrowthPayment = read('apps/api/src/payment/member-growth-conserving-payment.service.ts');
     const promotionRecoveringPayment = read('apps/api/src/payment/promotion-recovering-durable-zero-pay-aftersale-payment.service.ts');
     const durableZeroPayPayment = read('apps/api/src/payment/durable-zero-pay-aftersale-payment.service.ts');
@@ -106,7 +107,9 @@ describe('production operation closure contracts', () => {
     const shareModule = read('apps/api/src/share/share.module.ts');
     const atomicShare = read('apps/api/src/share/atomic-share-production.service.ts');
 
-    expect(paymentModule).toContain('useClass: MemberGrowthConservingPaymentService');
+    expect(paymentModule).toContain('useClass: OrphanSafeMemberGrowthPaymentService');
+    expect(orphanSafePayment).toContain('extends MemberGrowthConservingPaymentService');
+    expect(orphanSafePayment).toContain("return { code: 'FAIL', message: '本地退款记录不存在，请重试' }");
     expect(memberGrowthPayment).toContain('extends PromotionRecoveringDurableZeroPayAftersalePaymentService');
     expect(promotionRecoveringPayment).toContain('extends DurableZeroPayAftersalePaymentService');
     expect(durableZeroPayPayment).toContain('extends ZeroPayAftersalePaymentService');
