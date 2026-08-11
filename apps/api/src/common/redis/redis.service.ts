@@ -14,6 +14,8 @@ export class RedisService implements OnApplicationShutdown {
   private readonly client: any;
   private closing = false;
   private schedulerPauseLogged = false;
+  private readonly schedulerLockRenewals = new Map<string, NodeJS.Timeout>();
+  private readonly schedulerLockRenewalInFlight = new Set<string>();
 
   constructor(@Inject('REDIS_CLIENT') client: any) {
     this.client = client;
@@ -36,7 +38,11 @@ export class RedisService implements OnApplicationShutdown {
       return false;
     }
     const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
-    return result === 'OK';
+    const acquired = result === 'OK';
+    if (acquired && key.startsWith('schedule:')) {
+      this.startSchedulerLockRenewal(key, value, ttlSeconds);
+    }
+    return acquired;
   }
 
   isSchedulerPausedForCurrentBuild(): boolean {
@@ -115,6 +121,9 @@ export class RedisService implements OnApplicationShutdown {
   }
 
   async releaseLockWithLua(key: string, value: string): Promise<boolean> {
+    if (key.startsWith('schedule:')) {
+      this.stopSchedulerLockRenewal(key, value);
+    }
     const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
     const result = await this.client.eval(lua, 1, key, value);
     return result === 1;
@@ -125,6 +134,67 @@ export class RedisService implements OnApplicationShutdown {
     const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("expire", KEYS[1], ARGV[2]) else return 0 end`;
     const result = await this.client.eval(lua, 1, key, value, String(ttlSeconds));
     return result === 1;
+  }
+
+  private schedulerLockId(key: string, value: string): string {
+    return `${key}\u0000${value}`;
+  }
+
+  private startSchedulerLockRenewal(key: string, value: string, ttlSeconds: number): void {
+    if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 1) return;
+    const renewalId = this.schedulerLockId(key, value);
+    this.stopSchedulerLockRenewal(key, value);
+
+    // Renew well before the original lease expires. The timer is unref'd so it never prevents a
+    // clean Node shutdown; ScheduleService still drains active jobs and releases their token-safe
+    // locks during application shutdown.
+    const intervalMs = Math.max(1000, Math.floor((ttlSeconds * 1000) / 3));
+    const timer = setInterval(() => {
+      void this.renewSchedulerLock(key, value, ttlSeconds, renewalId);
+    }, intervalMs);
+    timer.unref?.();
+    this.schedulerLockRenewals.set(renewalId, timer);
+  }
+
+  private async renewSchedulerLock(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+    renewalId: string,
+  ): Promise<void> {
+    if (this.closing || !this.schedulerLockRenewals.has(renewalId)) return;
+    if (this.schedulerLockRenewalInFlight.has(renewalId)) return;
+    this.schedulerLockRenewalInFlight.add(renewalId);
+    try {
+      const renewed = await this.extendLockWithLua(key, value, ttlSeconds);
+      if (!renewed) {
+        this.stopSchedulerLockRenewal(key, value);
+        this.logger.error(`定时任务锁续租失败，当前进程已不再持有该锁：key=${key}`);
+      }
+    } catch (error) {
+      // Keep the heartbeat scheduled after a transient Redis error. Another renewal attempt will
+      // occur before the lease normally expires; if Redis remains unavailable no other instance can
+      // acquire through Redis during the outage, and token-safe renewal resumes when it recovers.
+      this.logger.warn(`定时任务锁续租异常：key=${key}, error=${(error as Error).message}`);
+    } finally {
+      this.schedulerLockRenewalInFlight.delete(renewalId);
+    }
+  }
+
+  private stopSchedulerLockRenewal(key: string, value: string): void {
+    const renewalId = this.schedulerLockId(key, value);
+    const timer = this.schedulerLockRenewals.get(renewalId);
+    if (timer) clearInterval(timer);
+    this.schedulerLockRenewals.delete(renewalId);
+    this.schedulerLockRenewalInFlight.delete(renewalId);
+  }
+
+  private stopAllSchedulerLockRenewals(): void {
+    for (const timer of this.schedulerLockRenewals.values()) {
+      clearInterval(timer);
+    }
+    this.schedulerLockRenewals.clear();
+    this.schedulerLockRenewalInFlight.clear();
   }
 
   private async getConfigValue(name: string): Promise<string> {
@@ -179,6 +249,7 @@ export class RedisService implements OnApplicationShutdown {
   async onApplicationShutdown(): Promise<void> {
     if (this.closing || !this.client) return;
     this.closing = true;
+    this.stopAllSchedulerLockRenewals();
 
     const status = String(this.client.status || '');
     if (status === 'end' || status === 'close') return;
