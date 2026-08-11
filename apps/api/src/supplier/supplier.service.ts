@@ -130,19 +130,25 @@ export class SupplierService {
   }
 
   async delete(id: string) {
-    const supplier = await this.prisma.supplier.findFirst({
-      where: { id: BigInt(id), deletedAt: null },
-    });
-    if (!supplier) throw new NotFoundException('供应商不存在');
+    const supplierId = BigInt(id);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: bigint }>>`
+        SELECT id
+        FROM suppliers
+        WHERE id = ${supplierId} AND deleted_at IS NULL
+        FOR UPDATE
+      `;
+      if (locked.length === 0) throw new NotFoundException('供应商不存在');
 
-    const products = await this.prisma.product.count({
-      where: { supplierId: BigInt(id), deletedAt: null },
-    });
-    if (products > 0) throw new BadRequestException('供应商下存在商品，无法删除');
+      const products = await tx.product.count({
+        where: { supplierId, deletedAt: null },
+      });
+      if (products > 0) throw new BadRequestException('供应商下存在商品，无法删除');
 
-    const result = await this.prisma.supplier.update({
-      where: { id: BigInt(id) },
-      data: { deletedAt: new Date() },
+      return tx.supplier.update({
+        where: { id: supplierId },
+        data: { deletedAt: new Date() },
+      });
     });
     this.logger.log(`删除供应商：${id}`);
     return { ...result, id: result.id.toString() };
