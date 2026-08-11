@@ -11,6 +11,8 @@ const legacyDeploy = read('deploy/scripts/deploy.sh');
 const productionDeploy = read('deploy/scripts/deploy-production.sh');
 const backup = read('deploy/scripts/backup.sh');
 const restore = read('deploy/scripts/restore.sh');
+const publicSmoke = read('deploy/scripts/smoke-public.sh');
+const adminLoginSmoke = read('deploy/scripts/smoke-admin-login.sh');
 const bootstrap = read('deploy/scripts/test-production-container-bootstrap.sh');
 const bootstrapWorkflow = read('.github/workflows/production-container-bootstrap.yml');
 const productionEnvExample = read('.env.production.example');
@@ -67,6 +69,18 @@ assert.ok(apiStart >= 0 && health > apiStart && nginxStart > health, 'Nginx must
 assert.ok(smoke > nginxStart && success > smoke, 'Restore must declare success only after the full runtime smoke passes');
 assert.match(restore, /恢复失败且公网保持关闭/);
 
+assert.match(publicSmoke, /exec bash "\$SCRIPT_DIR\/smoke-runtime\.sh" "\$@"/);
+assert.doesNotMatch(publicSmoke, /curl\s+-k/);
+assert.doesNotMatch(publicSmoke, /PAY_NOTIFY_URL/);
+
+assert.match(adminLoginSmoke, /LOGIN_MODE="\$\{LOGIN_MODE:-manual\}"/);
+assert.match(adminLoginSmoke, /production login smoke forbids captcha bypass/);
+assert.match(adminLoginSmoke, /production login smoke must use https:\/\/api\.yunxixiaochengxu\.com\.cn/);
+assert.match(adminLoginSmoke, /refresh token flow did not return a new accessToken/);
+assert.doesNotMatch(adminLoginSmoke, /ADMIN_PASSWORD=.*admin123/);
+assert.doesNotMatch(adminLoginSmoke, /ADMIN_USERNAME=.*:-admin/);
+assert.doesNotMatch(adminLoginSmoke, /curl\s+-k/);
+
 assert.match(bootstrap, /BOOTSTRAP_DB="baby_mall_bootstrap"/);
 assert.match(bootstrap, /docker image inspect "\$IMAGE_NAME"/);
 assert.match(bootstrap, /NODE_ENV=production/);
@@ -77,12 +91,11 @@ assert.match(bootstrap, /must_change_password/);
 assert.match(bootstrap, /customer_service/);
 assert.match(bootstrap, /_prisma_migrations/);
 assert.match(bootstrapWorkflow, /Validate production shell entrypoints/);
+assert.match(bootstrapWorkflow, /smoke-public\.sh/);
+assert.match(bootstrapWorkflow, /smoke-admin-login\.sh/);
 assert.match(bootstrapWorkflow, /Build production API image/);
 assert.match(bootstrapWorkflow, /test-production-container-bootstrap\.sh baby-mall-api:bootstrap-ci/);
 
-// These names must never be active environment assignments. Most business pricing/time values are
-// DB-backed runtime configuration; remote freight is currently a code constant. In either case an
-// env assignment would falsely imply an effective production override.
 for (const key of [
   'ORDER_AUTO_CLOSE_MINUTES',
   'ORDER_AUTO_COMPLETE_DAYS',
