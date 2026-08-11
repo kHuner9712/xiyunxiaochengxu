@@ -60,13 +60,9 @@ for required in "$DB_FILE" "$UPLOAD_FILE" "$CHECKSUM_FILE"; do
   fi
 done
 
-# Validate both archives before stopping any production writer.
 gzip -t "$DB_FILE"
 tar -tzf "$UPLOAD_FILE" >/dev/null
 
-# Verify hashes ourselves instead of `sha256sum -c`: new manifests contain portable relative
-# names, while backups produced by older releases may contain absolute paths. In both cases only
-# the basename is trusted and mapped back into BACKUP_DIR.
 seen_db=0
 seen_upload=0
 while read -r expected source_path extra; do
@@ -116,8 +112,6 @@ fi
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$DEPLOY_DIR/docker-compose.yml")
 "${COMPOSE[@]}" config >/dev/null
 
-# MySQL and Redis are infrastructure dependencies for the restored API. Start them first and keep
-# them private; public traffic remains closed until the restored API passes health checks.
 "${COMPOSE[@]}" up -d mysql redis
 for attempt in $(seq 1 60); do
   if "${COMPOSE[@]}" exec -T mysql sh -lc 'mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD" --silent' >/dev/null 2>&1; then
@@ -134,8 +128,6 @@ runtime_closed=0
 on_exit() {
   status=$?
   if [ "$status" -ne 0 ] && [ "$runtime_closed" -eq 1 ]; then
-    # This also covers a failure in the final public smoke after Nginx has briefly started.
-    # Never leave public traffic open when the restored stack has not passed the full contract.
     "${COMPOSE[@]}" stop nginx >/dev/null 2>&1 || true
     echo >&2
     echo "恢复失败且公网保持关闭：Nginx 已停止，不会自动重新开放。" >&2
@@ -159,8 +151,6 @@ gzip -dc "$DB_FILE" | "${COMPOSE[@]}" exec -T mysql sh -lc '
 '
 
 echo "[3/6] 恢复同批次 uploads 卷..."
-# Override the normal API entrypoint so this helper only manipulates the already-mounted uploads
-# volume. The runtime image currently runs as root, so restored ownership matches normal writes.
 gzip -dc "$UPLOAD_FILE" | "${COMPOSE[@]}" run --rm --no-deps -T --entrypoint sh api -lc '
   set -eu
   cd /app/apps/api/uploads
@@ -172,14 +162,17 @@ echo "[4/6] 启动恢复后的 API 并等待健康检查..."
 "${COMPOSE[@]}" up -d api
 for attempt in $(seq 1 90); do
   if "${COMPOSE[@]}" exec -T api node -e '
-    fetch("http://127.0.0.1:3000/health")
-      .then(async (r) => { const body = await r.json(); if (!r.ok || body?.status !== "ok") process.exit(1); })
+    fetch("http://127.0.0.1:3000/api/health")
+      .then(async (r) => {
+        const body = await r.json();
+        if (!r.ok || body?.status !== "ok" || body?.services?.database !== "ok" || body?.services?.redis !== "ok") process.exit(1);
+      })
       .catch(() => process.exit(1));
   ' >/dev/null 2>&1; then
     break
   fi
   if [ "$attempt" -eq 90 ]; then
-    echo "恢复失败：恢复后的 API 未通过 /health；Nginx 保持关闭" >&2
+    echo "恢复失败：恢复后的 API 未通过 /api/health；Nginx 保持关闭" >&2
     exit 1
   fi
   sleep 2
