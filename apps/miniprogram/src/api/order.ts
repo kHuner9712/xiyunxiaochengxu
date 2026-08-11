@@ -175,15 +175,47 @@ export interface LogisticsTrace {
   content: string
 }
 
-export function previewOrder(data: {
+type OrderPreviewRequest = {
   items: { skuId: string; quantity: number }[]
   addressId?: string
   pickupStoreId?: string
   fulfillmentType?: string
   couponId?: string
   pointsDeduct?: number
-}) {
-  return post<OrderPreview>('/weapp/order/confirm', data)
+}
+
+let previewRequestVersion = 0
+let latestPreviewRequest: { version: number; promise: Promise<OrderPreview> } | null = null
+
+/**
+ * Order confirmation is highly interactive: changing address, fulfillment, coupon or points can
+ * start another quote while the previous request is still in flight. A slower stale response must
+ * never overwrite a newer quote in the page. Every caller therefore converges on the newest
+ * in-flight request before resolving; stale successes and stale failures are both ignored.
+ */
+export async function previewOrder(data: OrderPreviewRequest): Promise<OrderPreview> {
+  const version = ++previewRequestVersion
+  const requestPromise = post<OrderPreview>('/weapp/order/confirm', data)
+  latestPreviewRequest = { version, promise: requestPromise }
+
+  let awaitedVersion = version
+  let awaitedPromise = requestPromise
+
+  for (;;) {
+    try {
+      const result = await awaitedPromise
+      if (awaitedVersion === previewRequestVersion) return result
+    } catch (error) {
+      if (awaitedVersion === previewRequestVersion) throw error
+    }
+
+    const latest = latestPreviewRequest
+    if (!latest) {
+      throw new Error('订单试算状态异常，请重试')
+    }
+    awaitedVersion = latest.version
+    awaitedPromise = latest.promise
+  }
 }
 
 export interface OrderPreview {
