@@ -47,6 +47,8 @@ jobs:
           deploy/scripts/redis-entrypoint.sh
           deploy/scripts/prisma-migrate-dry-run.sh
           deploy/scripts/test-production-container-bootstrap.sh
+          deploy/scripts/archive/deploy-preprod.sh
+          deploy/scripts/archive/smoke-preprod.sh
 
       - name: Build production API image
         run: >-
