@@ -155,8 +155,13 @@ export class SystemConfigService implements OnModuleInit {
         valueType: valueType || 'string',
       },
     });
-    await this.redisService.set(`config:${normalizedGroup}:${normalizedKey}`, normalizedValue, 3600);
+
+    // MySQL is the durable configuration ledger. As soon as its write commits, make the local
+    // production calculators reflect the same value before touching the optional Redis cache.
+    // The outer resilient service can recover a post-commit cache failure, but it must never leave
+    // this process serving a pre-commit runtime snapshot in the meantime.
     this.applyRuntimeConfigValue(this.runtimeConfig, normalizedGroup, normalizedKey, normalizedValue);
+    await this.redisService.set(`config:${normalizedGroup}:${normalizedKey}`, normalizedValue, 3600);
     this.logger.log(`更新配置：${normalizedGroup}.${normalizedKey}`);
     return result;
   }
@@ -189,14 +194,18 @@ export class SystemConfigService implements OnModuleInit {
       return rows;
     });
 
-    await Promise.all(normalized.map((config) =>
-      this.redisService.set(`config:${config.groupName}:${config.configKey}`, config.configValue, 3600),
-    ));
     const next = { ...this.runtimeConfig };
     for (const config of normalized) {
       this.applyRuntimeConfigValue(next, config.groupName, config.configKey, config.configValue);
     }
     this.runtimeConfig = next;
+
+    // Cache synchronization intentionally follows the durable DB + in-process runtime update.
+    // If Redis fails here, the resilient outer service verifies the committed rows and still
+    // returns the durable result without rolling the business runtime back to stale values.
+    await Promise.all(normalized.map((config) =>
+      this.redisService.set(`config:${config.groupName}:${config.configKey}`, config.configValue, 3600),
+    ));
     this.logger.log(`批量更新配置，共${normalized.length}项`);
     return results;
   }
