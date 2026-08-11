@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import {
@@ -11,6 +11,10 @@ import {
 import { SystemConfigService } from '../system-config/system-config.service';
 import { ActivityCheckoutDto } from './dto/activity-checkout.dto';
 import { AttributionSafeQuotaActivityMultiItemCheckoutService } from './attribution-safe-quota-activity-multi-item-checkout.service';
+
+type ActivityCreateOrderResult = Awaited<
+  ReturnType<AttributionSafeQuotaActivityMultiItemCheckoutService['createOrder']>
+>;
 
 @Injectable()
 export class IdempotentAttributionSafeQuotaActivityMultiItemCheckoutService extends AttributionSafeQuotaActivityMultiItemCheckoutService {
@@ -38,7 +42,7 @@ export class IdempotentAttributionSafeQuotaActivityMultiItemCheckoutService exte
     anchorActivityProductId: bigint,
     anchorSkuId: bigint,
     dto: ActivityCheckoutDto,
-  ) {
+  ): Promise<ActivityCreateOrderResult> {
     const clientRequestId = normalizePromotionClientRequestId(dto.clientRequestId);
     const orderNo = buildPromotionCheckoutOrderNo(
       userId,
@@ -85,7 +89,7 @@ export class IdempotentAttributionSafeQuotaActivityMultiItemCheckoutService exte
     activityId: bigint,
     activityProductId: bigint,
     orderNo: string,
-  ) {
+  ): Promise<ActivityCreateOrderResult | null> {
     const order = await this.sourcePrisma.order.findFirst({
       where: { orderNo, userId },
       select: {
@@ -97,6 +101,22 @@ export class IdempotentAttributionSafeQuotaActivityMultiItemCheckoutService exte
       },
     });
     if (!order) return null;
+
+    if (order.payAmount == null) {
+      throw new InternalServerErrorException('活动幂等订单缺少应付金额，请联系管理员核查');
+    }
+    if (
+      order.status !== 'pending_payment' &&
+      order.status !== 'pending_delivery' &&
+      order.status !== 'pending_pickup'
+    ) {
+      throw new InternalServerErrorException(
+        `活动幂等订单状态异常：${order.status}，请联系管理员核查`,
+      );
+    }
+    if (order.fulfillmentType !== 'delivery' && order.fulfillmentType !== 'pickup') {
+      throw new InternalServerErrorException('活动幂等订单履约方式异常，请联系管理员核查');
+    }
 
     return {
       orderId: order.id.toString(),

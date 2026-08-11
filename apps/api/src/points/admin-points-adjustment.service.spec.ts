@@ -6,7 +6,7 @@ describe('AdminPointsAdjustmentService', () => {
   it('applies one positive adjustment and rejects a retry with the stale balance version', async () => {
     let availablePoints = 100;
     let totalPoints = 500;
-    const pointsRecordCreate = jest.fn(async () => ({ id: 1n }));
+    const pointsRecordCreate = jest.fn(async (_args: any) => ({ id: 1n }));
     const tx = {
       $queryRaw: jest.fn(async () => [{ id: 7n }]),
       user: {
@@ -29,7 +29,8 @@ describe('AdminPointsAdjustmentService', () => {
     expect(availablePoints).toBe(120);
     expect(totalPoints).toBe(520);
     expect(pointsRecordCreate).toHaveBeenCalledTimes(1);
-    expect(pointsRecordCreate.mock.calls[0][0]).toMatchObject({
+    const positiveCreateArgs = pointsRecordCreate.mock.calls[0]?.[0] as any;
+    expect(positiveCreateArgs).toMatchObject({
       data: {
         userId: 7n,
         type: 1,
@@ -39,7 +40,7 @@ describe('AdminPointsAdjustmentService', () => {
         description: '人工补偿',
       },
     });
-    expect((pointsRecordCreate.mock.calls[0][0] as any).data.expireAt).toBeInstanceOf(Date);
+    expect(positiveCreateArgs.data.expireAt).toBeInstanceOf(Date);
 
     await expect(service.adjust('7', 20, '人工补偿', 100)).rejects.toThrow('用户积分已变更');
     expect(availablePoints).toBe(120);
@@ -50,7 +51,7 @@ describe('AdminPointsAdjustmentService', () => {
   it('deducts available points without reducing historical total earned points', async () => {
     let availablePoints = 100;
     let totalPoints = 500;
-    const pointsRecordCreate = jest.fn(async () => ({ id: 2n }));
+    const pointsRecordCreate = jest.fn(async (_args: any) => ({ id: 2n }));
     const tx = {
       $queryRaw: jest.fn(async () => [{ id: 7n }]),
       user: {
@@ -72,7 +73,8 @@ describe('AdminPointsAdjustmentService', () => {
     });
     expect(availablePoints).toBe(70);
     expect(totalPoints).toBe(500);
-    expect(pointsRecordCreate.mock.calls[0][0]).toMatchObject({
+    const negativeCreateArgs = pointsRecordCreate.mock.calls[0]?.[0] as any;
+    expect(negativeCreateArgs).toMatchObject({
       data: {
         type: 2,
         points: 30,
@@ -80,7 +82,7 @@ describe('AdminPointsAdjustmentService', () => {
         source: 'admin_adjust',
       },
     });
-    expect((pointsRecordCreate.mock.calls[0][0] as any).data.expireAt).toBeUndefined();
+    expect(negativeCreateArgs.data.expireAt).toBeUndefined();
   });
 
   it('fails before writing when the rendered balance no longer matches', async () => {
