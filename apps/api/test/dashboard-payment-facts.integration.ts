@@ -25,6 +25,35 @@ function dateKey(date: Date) {
 assertSafeIntegrationDatabase();
 const prisma = new PrismaClient();
 
+async function createProduct(
+  categoryId: bigint,
+  suffix: string,
+  productIds: bigint[],
+  skuIds: bigint[],
+  name: string,
+  price: number,
+) {
+  const product = await prisma.product.create({
+    data: {
+      name: `${name}-${suffix}`,
+      categoryId,
+      status: 1,
+    },
+  });
+  productIds.push(product.id);
+  const sku = await prisma.productSku.create({
+    data: {
+      productId: product.id,
+      skuCode: `${name}-${suffix}`.replace(/[^A-Za-z0-9-]/g, '').slice(0, 64),
+      price,
+      stock: 100,
+      status: 1,
+    },
+  });
+  skuIds.push(sku.id);
+  return { product, sku };
+}
+
 async function main() {
   await prisma.$connect();
   const suffix = Date.now().toString();
@@ -44,33 +73,11 @@ async function main() {
     });
     categoryId = category.id;
 
-    async function createProduct(name: string, price: number) {
-      const product = await prisma.product.create({
-        data: {
-          name: `${name}-${suffix}`,
-          categoryId: category.id,
-          status: 1,
-        },
-      });
-      productIds.push(product.id);
-      const sku = await prisma.productSku.create({
-        data: {
-          productId: product.id,
-          skuCode: `${name}-${suffix}`.replace(/[^A-Za-z0-9-]/g, '').slice(0, 64),
-          price,
-          stock: 100,
-          status: 1,
-        },
-      });
-      skuIds.push(sku.id);
-      return { product, sku };
-    }
-
-    const cappedActivity = await createProduct('DASH-CAP-A', 5000);
-    const cappedRegular = await createProduct('DASH-CAP-B', 10000);
-    const giftBasisA = await createProduct('DASH-GIFT-A', 10000);
-    const giftBasisB = await createProduct('DASH-GIFT-B', 10000);
-    const zeroGift = await createProduct('DASH-GIFT-Z', 10000);
+    const cappedActivity = await createProduct(category.id, suffix, productIds, skuIds, 'DASH-CAP-A', 5000);
+    const cappedRegular = await createProduct(category.id, suffix, productIds, skuIds, 'DASH-CAP-B', 10000);
+    const giftBasisA = await createProduct(category.id, suffix, productIds, skuIds, 'DASH-GIFT-A', 10000);
+    const giftBasisB = await createProduct(category.id, suffix, productIds, skuIds, 'DASH-GIFT-B', 10000);
+    const zeroGift = await createProduct(category.id, suffix, productIds, skuIds, 'DASH-GIFT-Z', 10000);
 
     const paidAt = new Date();
 
