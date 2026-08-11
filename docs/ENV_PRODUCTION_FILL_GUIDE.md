@@ -162,18 +162,19 @@ SMOKE_TEST_BYPASS_CAPTCHA=false
 
 ## 10. 业务参数不属于 `.env.production`
 
-以下参数的唯一运行时来源是数据库 `system_configs` + 管理后台“系统配置”，不要在 `.env.production` 中添加同名变量试图覆盖：
+以下参数的运行时来源是数据库 `system_configs` + 管理后台“系统配置”，不要在 `.env.production` 中添加同名变量试图覆盖：
 
-- `ORDER_AUTO_CLOSE_MINUTES`
-- `ORDER_AUTO_COMPLETE_DAYS`
+- 订单自动关闭时间（原旧名 `ORDER_AUTO_CLOSE_MINUTES`）
+- 自动确认收货天数（原旧名 `ORDER_AUTO_COMPLETE_DAYS`）
 - 售后申请期限
-- `FREIGHT_FREE_AMOUNT`
-- `FREIGHT_DEFAULT_FEE`
-- `FREIGHT_REMOTE_FEE`
-- `POINTS_DEDUCT_RATE`
-- `POINTS_DEDUCT_MAX_PERCENT`
+- 包邮门槛（原旧名 `FREIGHT_FREE_AMOUNT`）
+- 默认运费（原旧名 `FREIGHT_DEFAULT_FEE`）
+- 积分抵扣比率（原旧名 `POINTS_DEDUCT_RATE`）
+- 积分抵扣上限（原旧名 `POINTS_DEDUCT_MAX_PERCENT`）
 
-其中运费、包邮门槛等金额型配置在数据库中以**分**保存；管理后台负责“元 ↔ 分”转换。
+运费、包邮门槛等金额型配置在数据库中以**分**保存；管理后台负责“元 ↔ 分”转换。
+
+**偏远地区附加运费是例外**：当前实现仍使用 shared 代码常量，不由 `.env.production` 或 `system_configs` 覆盖。因此同样不要设置 `FREIGHT_REMOTE_FEE` 期待它生效；若未来需要后台可配置，必须先修改实际订单运行时代码并增加迁移/合同测试。
 
 ## 11. 不存在的旧配置项
 
