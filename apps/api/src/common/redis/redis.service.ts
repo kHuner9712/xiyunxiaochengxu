@@ -120,6 +120,13 @@ export class RedisService implements OnApplicationShutdown {
     return result === 1;
   }
 
+  async extendLockWithLua(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) return false;
+    const lua = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("expire", KEYS[1], ARGV[2]) else return 0 end`;
+    const result = await this.client.eval(lua, 1, key, value, String(ttlSeconds));
+    return result === 1;
+  }
+
   private async getConfigValue(name: string): Promise<string> {
     const result = await this.client.config('GET', name);
     if (Array.isArray(result)) {
