@@ -59,6 +59,23 @@ describe('ProductionPaymentReconcileService', () => {
     expect(result.fixed).toBe(0);
   });
 
+  it('bounds timeout-order WeChat confirmation to a stable 20-row batch', async () => {
+    const { service, prisma, paymentService } = createService();
+    paymentService.queryWechatOrder.mockResolvedValue({ trade_state: 'NOTPAY' });
+
+    await service.confirmTimeoutOrdersBeforeClose();
+
+    expect(prisma.order.findMany).toHaveBeenCalledWith({
+      where: {
+        status: 'pending_payment',
+        autoCloseAt: { lte: expect.any(Date) },
+      },
+      include: { payment: true },
+      orderBy: [{ autoCloseAt: 'asc' }, { id: 'asc' }],
+      take: 20,
+    });
+  });
+
   it('treats payment success found after a close failure as paid instead of cancelling locally', async () => {
     const { service, prisma, paymentService } = createService();
     paymentService.queryWechatOrder
@@ -142,8 +159,8 @@ describe('ProductionPaymentReconcileService', () => {
         status: REFUND_STATUS.ABNORMAL,
         updatedAt: { lt: expect.any(Date) },
       },
-      orderBy: { updatedAt: 'asc' },
-      take: 100,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: 20,
       select: { id: true, outRefundNo: true },
     });
     expect(paymentService.syncRefund).toHaveBeenNthCalledWith(1, 'OR-A');
