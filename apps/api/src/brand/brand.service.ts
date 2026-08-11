@@ -105,19 +105,25 @@ export class BrandService {
   }
 
   async delete(id: string) {
-    const brand = await this.prisma.brand.findFirst({
-      where: { id: BigInt(id), deletedAt: null },
-    });
-    if (!brand) throw new NotFoundException('品牌不存在');
+    const brandId = BigInt(id);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: bigint }>>`
+        SELECT id
+        FROM brands
+        WHERE id = ${brandId} AND deleted_at IS NULL
+        FOR UPDATE
+      `;
+      if (locked.length === 0) throw new NotFoundException('品牌不存在');
 
-    const products = await this.prisma.product.count({
-      where: { brandId: BigInt(id), deletedAt: null },
-    });
-    if (products > 0) throw new BadRequestException('品牌下存在商品，无法删除');
+      const products = await tx.product.count({
+        where: { brandId, deletedAt: null },
+      });
+      if (products > 0) throw new BadRequestException('品牌下存在商品，无法删除');
 
-    const result = await this.prisma.brand.update({
-      where: { id: BigInt(id) },
-      data: { deletedAt: new Date() },
+      return tx.brand.update({
+        where: { id: brandId },
+        data: { deletedAt: new Date() },
+      });
     });
     this.logger.log(`删除品牌：${id}`);
     return { ...result, id: result.id.toString() };
