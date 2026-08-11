@@ -147,6 +147,6 @@ describe('RedisService scheduler maintenance marker', () => {
 
     fs.rmSync(markerPath);
     await expect(service.setNX('schedule:close_timeout_orders', 'second', 60)).resolves.toBe(true);
-    expect(client.set).toHaveBeenCalledWith('schedule:close_timeout_orders', 'second', 60, 'NX');
+    expect(client.set).toHaveBeenCalledWith('schedule:close_timeout_orders', 'second', 'EX', 60, 'NX');
   });
 });
