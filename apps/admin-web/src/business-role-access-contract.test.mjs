@@ -42,15 +42,32 @@ test('business menus use operational permissions instead of unrelated system pri
   const router = read('apps/admin-web/src/router/index.ts')
   const defaultRoles = read('apps/api/prisma/default-role-permissions.ts')
   const roleMigration = read('apps/api/prisma/migrations/20260809154000_seed_default_role_permissions_if_empty/migration.sql')
+  const pickupMigration = read('apps/api/prisma/migrations/20260811174000_repair_pickup_permission_hierarchy/migration.sql')
+  const settlementController = read('apps/api/src/merchant-settlement/merchant-settlement.controller.ts')
 
   const productCreateRoute = router.match(/path: 'edit',[\s\S]*?name: 'ProductEdit'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
   const reconcileRoute = router.match(/path: 'reconcile',[\s\S]*?name: 'ReconcileCenter'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
+  const settlementRecordsRoute = router.match(/path: 'merchant-settlement-records',[\s\S]*?name: 'MerchantSettlementRecords'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
+  const settlementBatchesRoute = router.match(/path: 'merchant-settlement-batches',[\s\S]*?name: 'MerchantSettlementBatches'[\s\S]*?meta: \{[^}]+\}/)?.[0] || ''
+  const orderBlock = router.match(/path: 'order',[\s\S]*?\n      \},\n      \{\n        path: 'user'/)?.[0] || ''
+  const marketingBlock = router.match(/path: 'marketing',[\s\S]*?\n      \},\n      \{\n        path: 'content'/)?.[0] || ''
 
   assert.match(productCreateRoute, /permission: 'product:create'/)
   assert.match(reconcileRoute, /permission: 'order:aftersale:refund'/)
   assert.doesNotMatch(reconcileRoute, /permission: 'system:config'/)
 
+  assert.match(settlementRecordsRoute, /permission: 'order:merchant-settlement'/)
+  assert.match(settlementBatchesRoute, /permission: 'order:merchant-settlement'/)
+  assert.match(orderBlock, /name: 'MerchantSettlementRecords'/)
+  assert.match(orderBlock, /name: 'MerchantSettlementBatches'/)
+  assert.doesNotMatch(marketingBlock, /name: 'MerchantSettlementRecords'/)
+  assert.doesNotMatch(marketingBlock, /name: 'MerchantSettlementBatches'/)
+  assert.match(settlementController, /const SETTLEMENT_PERMISSION = 'order:merchant-settlement'/)
+
   assert.match(defaultRoles, /'pickup',\s*'pickup:store',\s*'pickup:verify'/)
   assert.match(roleMigration, /'pickup', 'pickup:store', 'pickup:verify'/)
   assert.match(roleMigration, /\) = 41;/)
+  assert.match(pickupMigration, /'自提管理', 'pickup'/)
+  assert.match(pickupMigration, /child\.`code` IN \('pickup:store', 'pickup:verify'\)/)
+  assert.match(pickupMigration, /r\.`code` = 'operator'/)
 })
