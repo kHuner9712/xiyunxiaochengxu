@@ -58,6 +58,35 @@ describe('createOrder client request identity', () => {
     expect(storage.size).toBe(0)
   })
 
+  it('does not reuse an ambiguous request identity after the purchase intent changes', async () => {
+    vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1786449600000)
+      .mockReturnValueOnce(1786449600000)
+      .mockReturnValueOnce(1786449601000)
+      .mockReturnValueOnce(1786449601000)
+    vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.111111111)
+      .mockReturnValueOnce(0.111111111)
+      .mockReturnValueOnce(0.111111111)
+      .mockReturnValueOnce(0.777777777)
+      .mockReturnValueOnce(0.777777777)
+      .mockReturnValueOnce(0.777777777)
+    vi.mocked(post)
+      .mockRejectedValueOnce(new Error('请求超时，请稍后重试'))
+      .mockResolvedValueOnce(successResult)
+
+    await expect(createOrder(payload)).rejects.toThrow('请求超时')
+    const firstRequest = vi.mocked(post).mock.calls[0][1] as any
+
+    await createOrder({
+      ...payload,
+      couponId: '88',
+    })
+    const secondRequest = vi.mocked(post).mock.calls[1][1] as any
+
+    expect(secondRequest.clientRequestId).not.toBe(firstRequest.clientRequestId)
+  })
+
   it('clears the pending request identity only after a confirmed success response', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1786449600000)
     vi.spyOn(Math, 'random').mockReturnValue(0.222222222)
@@ -84,6 +113,7 @@ describe('createOrder client request identity', () => {
     storage.set('baby_mall_pending_order_create', {
       clientRequestId: '1786449600000-abcdefghijklmnopqrstuvwx',
       createdAt: 1786449600000,
+      fingerprint: 'stale-fingerprint',
     })
     vi.spyOn(Date, 'now').mockReturnValue(1786449600000 + 3 * 60 * 60 * 1000)
     vi.spyOn(Math, 'random').mockReturnValue(0.333333333)
