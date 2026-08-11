@@ -229,8 +229,10 @@ export class ScheduleService implements OnModuleDestroy {
     const lockValue = await this.acquireLock(lockKey, 240);
     if (!lockValue) return;
     try {
+      const durableCandidates = await this.findFailedGroupRefundCandidates(
+        GROUP_BUY_REFUND_BATCH_SIZE,
+      );
       const result = await this.groupBuyService.markExpiredGroups();
-      const durableCandidates = await this.findFailedGroupRefundCandidates();
       const refundOrderIds = Array.from(
         new Set([...durableCandidates, ...(result.refundOrderIds ?? [])]),
       ).slice(0, GROUP_BUY_REFUND_BATCH_SIZE);
