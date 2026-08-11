@@ -32,6 +32,10 @@ const LEGACY_ORDER_STATUS_MAP: Record<string, OrderStatus> = {
   '60': 'aftersale',
 }
 
+const PENDING_ORDER_CREATE_KEY = 'baby_mall_pending_order_create'
+const PENDING_ORDER_CREATE_TTL_MS = 2 * 60 * 60 * 1000
+const CLIENT_REQUEST_ID_PATTERN = /^\d{13}-[a-z0-9]{16,40}$/i
+
 export function normalizeOrderStatus(status?: string | number | null): OrderStatus | undefined {
   if (status === undefined || status === null || status === '') return undefined
   const value = String(status)
@@ -39,7 +43,62 @@ export function normalizeOrderStatus(status?: string | number | null): OrderStat
   return LEGACY_ORDER_STATUS_MAP[value]
 }
 
-export function createOrder(data: {
+function generateOrderClientRequestId() {
+  const random = [
+    Math.random().toString(36).slice(2),
+    Math.random().toString(36).slice(2),
+    Math.random().toString(36).slice(2),
+  ].join('').replace(/[^a-z0-9]/gi, '').padEnd(24, '0').slice(0, 24)
+  return `${Date.now()}-${random}`
+}
+
+function loadPendingOrderClientRequestId(): string | null {
+  try {
+    const raw = uni.getStorageSync(PENDING_ORDER_CREATE_KEY)
+    const value = typeof raw === 'string' ? JSON.parse(raw) : raw
+    const clientRequestId = String(value?.clientRequestId || '')
+    const createdAt = Number(value?.createdAt || 0)
+    const now = Date.now()
+    if (
+      CLIENT_REQUEST_ID_PATTERN.test(clientRequestId) &&
+      Number.isFinite(createdAt) &&
+      createdAt > 0 &&
+      now - createdAt >= 0 &&
+      now - createdAt <= PENDING_ORDER_CREATE_TTL_MS
+    ) {
+      return clientRequestId
+    }
+  } catch {
+    // Corrupted local state must never block checkout; replace it with a fresh request identity.
+  }
+  uni.removeStorageSync(PENDING_ORDER_CREATE_KEY)
+  return null
+}
+
+function getOrCreateOrderClientRequestId(): string {
+  const existing = loadPendingOrderClientRequestId()
+  if (existing) return existing
+  const clientRequestId = generateOrderClientRequestId()
+  uni.setStorageSync(PENDING_ORDER_CREATE_KEY, {
+    clientRequestId,
+    createdAt: Date.now(),
+  })
+  return clientRequestId
+}
+
+function clearPendingOrderClientRequestId(clientRequestId: string) {
+  try {
+    const raw = uni.getStorageSync(PENDING_ORDER_CREATE_KEY)
+    const value = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (String(value?.clientRequestId || '') === clientRequestId) {
+      uni.removeStorageSync(PENDING_ORDER_CREATE_KEY)
+    }
+  } catch {
+    uni.removeStorageSync(PENDING_ORDER_CREATE_KEY)
+  }
+}
+
+export async function createOrder(data: {
   addressId?: string
   pickupStoreId?: string
   fulfillmentType?: string
@@ -53,14 +112,23 @@ export function createOrder(data: {
   referrerUserId?: string
   remark?: string
 }) {
-  return post<{
+  // Keep this identity across network failures and page/process re-entry. The backend derives a
+  // deterministic unique order number from it, so a retry after an ambiguous timeout can only
+  // recover the original order; it cannot reserve stock/coupon/points a second time.
+  const clientRequestId = getOrCreateOrderClientRequestId()
+  const result = await post<{
     orderId: string
     orderNo: string
     payAmount: number
     isZeroPay: boolean
     status: OrderStatus
     fulfillmentType?: string
-  }>('/weapp/order/create', data)
+  }>('/weapp/order/create', {
+    ...data,
+    clientRequestId,
+  })
+  clearPendingOrderClientRequestId(clientRequestId)
+  return result
 }
 
 export function getOrderList(params: {
