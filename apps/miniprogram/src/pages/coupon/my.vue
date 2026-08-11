@@ -67,38 +67,58 @@ const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
 const userStore = useUserStore()
+let couponVersion = 0
+let loadingVersion = -1
 
-async function loadCoupons(reset = false) {
+function resetCoupons() {
+  page.value = 1
+  finished.value = false
+  coupons.value = []
+}
+
+async function loadCoupons(version = couponVersion) {
   if (!userStore.isLoggedIn) {
     showLoginRequired()
     return
   }
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    coupons.value = []
-  }
+  if (finished.value && version === couponVersion) return
+  if (loading.value && loadingVersion === version) return
 
+  const requestPage = page.value
+  const requestStatus = currentTab.value
   loading.value = true
+  loadingVersion = version
   try {
-    const data = await getMyCoupons({ status: currentTab.value, page: page.value, pageSize: 10 })
+    const data = await getMyCoupons({ status: requestStatus, page: requestPage, pageSize: 10 })
+    if (version !== couponVersion) return
+
     const list = Array.isArray(data?.list) ? data.list : []
     coupons.value.push(...list)
     finished.value = coupons.value.length >= Number(data?.total || 0)
-    page.value++
+    page.value = requestPage + 1
   } catch (err) {
-    console.error('[baby-mall] loadMyCoupons failed:', { status: currentTab.value, page: page.value, err })
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === couponVersion) {
+      console.error('[baby-mall] loadMyCoupons failed:', { status: requestStatus, page: requestPage, err })
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === couponVersion) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
+function refreshCoupons() {
+  const version = ++couponVersion
+  resetCoupons()
+  return loadCoupons(version)
+}
+
 function switchTab(value: number) {
+  if (currentTab.value === value) return
   currentTab.value = value
-  void loadCoupons(true)
+  void refreshCoupons()
 }
 
 function goUse() {
@@ -120,16 +140,25 @@ function showLoginRequired() {
 }
 
 onPullDownRefresh(async () => {
-  await loadCoupons(true)
+  await refreshCoupons()
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  void loadCoupons()
+  void loadCoupons(couponVersion)
 })
 
 onShow(() => {
-  void loadCoupons(true)
+  void refreshCoupons()
+})
+
+defineExpose({
+  currentTab,
+  coupons,
+  loading,
+  loadCoupons,
+  refreshCoupons,
+  switchTab,
 })
 </script>
 
