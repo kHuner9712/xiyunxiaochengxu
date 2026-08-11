@@ -232,7 +232,7 @@ export class ScheduleService implements OnModuleDestroy {
       const result = await this.groupBuyService.markExpiredGroups();
       const durableCandidates = await this.findFailedGroupRefundCandidates();
       const refundOrderIds = Array.from(
-        new Set([...(result.refundOrderIds ?? []), ...durableCandidates]),
+        new Set([...durableCandidates, ...(result.refundOrderIds ?? [])]),
       ).slice(0, GROUP_BUY_REFUND_BATCH_SIZE);
 
       let refundSubmitted = 0;
