@@ -50,3 +50,40 @@ JOIN `admin_permissions` child
   ON child.`id` = existing.`permission_id`
 WHERE child.`code` IN ('pickup:store', 'pickup:verify')
   AND @pickup_permission_id IS NOT NULL;
+
+-- The earlier default-role migration intentionally seeded an operator only when every required
+-- permission already existed. On databases affected by the missing `pickup` parent that condition
+-- was false, leaving a zero-permission operator role. Repair only that unambiguous empty-role case;
+-- any role with existing/manual permissions remains untouched.
+INSERT IGNORE INTO `admin_role_permissions` (`role_id`, `permission_id`)
+SELECT r.`id`, p.`id`
+FROM `admin_roles` r
+JOIN `admin_permissions` p ON p.`code` IN (
+  'dashboard',
+  'product', 'product:list', 'product:create', 'product:edit', 'product:delete', 'product:publish', 'product:stock', 'product:category', 'product:brand',
+  'supplier', 'supplier:list', 'supplier:create', 'supplier:edit', 'supplier:delete',
+  'order', 'order:list', 'order:detail', 'order:deliver', 'order:remark', 'order:cancel', 'order:aftersale', 'order:aftersale:review',
+  'pickup', 'pickup:store', 'pickup:verify',
+  'marketing', 'marketing:coupon', 'marketing:activity', 'marketing:banner', 'marketing:recommendation', 'marketing:decor',
+  'share', 'share:campaign', 'share:record', 'share:invite',
+  'content', 'content:list', 'content:edit',
+  'statistics', 'statistics:index'
+)
+WHERE r.`code` = 'operator'
+  AND NOT EXISTS (
+    SELECT 1 FROM `admin_role_permissions` existing WHERE existing.`role_id` = r.`id`
+  )
+  AND (
+    SELECT COUNT(*) FROM `admin_permissions` required_permissions
+    WHERE required_permissions.`code` IN (
+      'dashboard',
+      'product', 'product:list', 'product:create', 'product:edit', 'product:delete', 'product:publish', 'product:stock', 'product:category', 'product:brand',
+      'supplier', 'supplier:list', 'supplier:create', 'supplier:edit', 'supplier:delete',
+      'order', 'order:list', 'order:detail', 'order:deliver', 'order:remark', 'order:cancel', 'order:aftersale', 'order:aftersale:review',
+      'pickup', 'pickup:store', 'pickup:verify',
+      'marketing', 'marketing:coupon', 'marketing:activity', 'marketing:banner', 'marketing:recommendation', 'marketing:decor',
+      'share', 'share:campaign', 'share:record', 'share:invite',
+      'content', 'content:list', 'content:edit',
+      'statistics', 'statistics:index'
+    )
+  ) = 41;
