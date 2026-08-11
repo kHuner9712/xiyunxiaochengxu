@@ -30,6 +30,6 @@ export class StockAdjustDto {
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
-  @MaxLength(500)
+  @MaxLength(200)
   reason!: string;
 }
