@@ -1,11 +1,16 @@
 import { Controller, Get, Put, Param, Query, Body } from '@nestjs/common';
 import { UserService } from './user.service';
+import { UserStatusService } from './user-status.service';
 import { AdminPointsAdjustmentService } from '../points/admin-points-adjustment.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { UserQueryDto } from './dto/user-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { AdjustMemberLevelDto, AdjustUserPointsDto } from './dto/admin-user-mutation.dto';
+import {
+  AdjustMemberLevelDto,
+  AdjustUserPointsDto,
+  UpdateUserStatusDto,
+} from './dto/admin-user-mutation.dto';
 
 @Controller('weapp/user')
 export class WeappUserController {
@@ -27,6 +32,7 @@ export class AdminUserController {
   constructor(
     private readonly userService: UserService,
     private readonly adminPointsAdjustmentService: AdminPointsAdjustmentService,
+    private readonly userStatusService: UserStatusService,
   ) {}
 
   @Get('list')
@@ -60,7 +66,7 @@ export class AdminUserController {
 
   @Put('status/:id')
   @RequirePermission('user:detail')
-  async toggleStatus(@Param('id') id: string) {
-    return this.userService.toggleStatus(id);
+  async setStatus(@Param('id') id: string, @Body() body: UpdateUserStatusDto) {
+    return this.userStatusService.setStatus(id, body.status);
   }
 }
