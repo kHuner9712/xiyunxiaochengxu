@@ -27,12 +27,14 @@ assert.match(envGuide, /UPLOAD_MAX_SIZE=52428800/);
 assert.match(envGuide, /system_configs/);
 assert.match(envGuide, /不要直接 `docker compose up`/);
 
-for (const stale of [
-  'deploy/nginx/ssl/fullchain.pem',
-  'deploy/nginx/ssl/privkey.pem',
-  'v24.15.0',
-  '62.234.69.19',
-]) {
+// Old generic TLS paths may appear only inside an explicit warning explaining that they are
+// obsolete. They must never appear as an active required path or executable deployment snippet.
+assert.match(checklist, /不要使用旧路径 `deploy\/nginx\/ssl\/fullchain\.pem` \/ `privkey\.pem`/);
+for (const source of [runbook, envGuide]) {
+  assert.ok(!source.includes('deploy/nginx/ssl/fullchain.pem'), 'generic TLS fullchain path is forbidden outside the explicit checklist warning');
+  assert.ok(!source.includes('deploy/nginx/ssl/privkey.pem'), 'generic TLS private-key path is forbidden outside the explicit checklist warning');
+}
+for (const stale of ['v24.15.0', '62.234.69.19']) {
   assert.ok(!docs.includes(stale), `stale production documentation token is forbidden: ${stale}`);
 }
 
