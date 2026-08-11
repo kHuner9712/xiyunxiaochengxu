@@ -64,15 +64,37 @@ export class AtomicShareProductionService extends SafeShareProductionService {
       const user = users[0];
       if (!user) throw new BadRequestException('用户不存在或已停用');
 
-      // Locking the user row serializes concurrent share submissions from the same account, so
-      // both the daily ordinal and the reward eligibility are deterministic without relying on a
-      // Redis counter that could advance independently from the points ledger.
-      const previousShareCount = await tx.shareRecord.count({
-        where: {
-          userId: userIdValue,
-          createdAt: { gte: start, lt: end },
-        },
-      });
+      // The user row serializes concurrent share submissions from the same account. The database
+      // ledger, not Redis, is authoritative for the daily ordinal so a cache increment can never
+      // consume reward eligibility independently from the points transaction.
+      const [previousShareCount, eligibleHistory] = await Promise.all([
+        tx.shareRecord.count({
+          where: { userId: userIdValue, createdAt: { gte: start, lt: end } },
+        }),
+        tx.shareRecord.findMany({
+          where: { userId: userIdValue, createdAt: { gte: start, lt: end } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: POINTS_SHARE_DAILY_LIMIT,
+          select: { id: true },
+        }),
+      ]);
+
+      // Repair same-day records left by the historical non-atomic implementation: a share record
+      // could previously commit before points issuance failed. Only the first daily-limit records
+      // are eligible, preserving the original business rule while recovering missing user assets.
+      const eligibleIds = eligibleHistory.map((item) => item.id);
+      const existingRewards = eligibleIds.length > 0
+        ? await tx.pointsRecord.findMany({
+            where: { source: 'share', sourceId: { in: eligibleIds } },
+            select: { sourceId: true },
+          })
+        : [];
+      const rewardedIds = new Set(
+        existingRewards
+          .map((record) => record.sourceId?.toString())
+          .filter((id): id is string => !!id),
+      );
+      const missingHistoricalIds = eligibleIds.filter((id) => !rewardedIds.has(id.toString()));
 
       const shareRecord = await tx.shareRecord.create({
         data: {
@@ -88,37 +110,48 @@ export class AtomicShareProductionService extends SafeShareProductionService {
         },
       });
 
-      let pointsAwarded = 0;
-      if (previousShareCount < POINTS_SHARE_DAILY_LIMIT) {
-        if (
-          user.totalPoints > MYSQL_SIGNED_INT_MAX - POINTS_SHARE_AWARD ||
-          user.availablePoints > MYSQL_SIGNED_INT_MAX - POINTS_SHARE_AWARD
-        ) {
-          // This throw happens after shareRecord.create but within the same transaction. The
-          // record therefore rolls back together with the failed reward instead of consuming a
-          // daily share slot without granting the promised points.
-          throw new BadRequestException('积分余额已达上限，暂无法发放分享奖励');
-        }
+      const currentEligible = previousShareCount < POINTS_SHARE_DAILY_LIMIT;
+      const rewardSourceIds = currentEligible
+        ? [...missingHistoricalIds, shareRecord.id]
+        : missingHistoricalIds;
+      const totalPointsToIssue = rewardSourceIds.length * POINTS_SHARE_AWARD;
 
-        pointsAwarded = POINTS_SHARE_AWARD;
+      if (
+        totalPointsToIssue > 0 &&
+        (
+          user.totalPoints > MYSQL_SIGNED_INT_MAX - totalPointsToIssue ||
+          user.availablePoints > MYSQL_SIGNED_INT_MAX - totalPointsToIssue
+        )
+      ) {
+        // This happens after shareRecord.create but inside the same transaction, deliberately
+        // proving that a failed points grant rolls the share record back rather than consuming a
+        // daily reward slot without granting the promised asset.
+        throw new BadRequestException('积分余额已达上限，暂无法发放分享奖励');
+      }
+
+      if (totalPointsToIssue > 0) {
         const expireAt = this.createPointsExpireAt();
+        let runningBalance = user.availablePoints;
+        for (const sourceId of rewardSourceIds) {
+          runningBalance += POINTS_SHARE_AWARD;
+          await tx.pointsRecord.create({
+            data: {
+              userId: userIdValue,
+              type: 1,
+              points: POINTS_SHARE_AWARD,
+              balance: runningBalance,
+              source: 'share',
+              sourceId,
+              description: `分享奖励${POINTS_SHARE_AWARD}积分`,
+              expireAt,
+            },
+          });
+        }
         await tx.user.update({
           where: { id: userIdValue },
           data: {
-            totalPoints: { increment: pointsAwarded },
-            availablePoints: { increment: pointsAwarded },
-          },
-        });
-        await tx.pointsRecord.create({
-          data: {
-            userId: userIdValue,
-            type: 1,
-            points: pointsAwarded,
-            balance: user.availablePoints + pointsAwarded,
-            source: 'share',
-            sourceId: shareRecord.id,
-            description: `分享奖励${pointsAwarded}积分`,
-            expireAt,
+            totalPoints: { increment: totalPointsToIssue },
+            availablePoints: { increment: totalPointsToIssue },
           },
         });
       }
@@ -126,7 +159,8 @@ export class AtomicShareProductionService extends SafeShareProductionService {
       return {
         shareRecordId: shareRecord.id.toString(),
         sceneCode,
-        pointsAwarded,
+        pointsAwarded: currentEligible ? POINTS_SHARE_AWARD : 0,
+        recoveredPoints: missingHistoricalIds.length * POINTS_SHARE_AWARD,
         todayShareCount: previousShareCount + 1,
       };
     });
