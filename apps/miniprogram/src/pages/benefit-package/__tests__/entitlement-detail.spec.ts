@@ -30,14 +30,18 @@ vi.mock('@/api/benefit-package', () => ({
   getMyBenefitEntitlements: vi.fn(),
 }))
 
-beforeEach(() => {
-  vi.useFakeTimers()
-  vi.setSystemTime(now)
-  vi.clearAllMocks()
-  uniAppMock.onLoadCallbacks = []
-  uniAppMock.onShowCallbacks = []
-  uniAppMock.onHideCallbacks = []
-  vi.mocked(getBenefitEntitlement).mockResolvedValue({
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function entitlement(status = 'unused') {
+  return {
     id: '9',
     userBenefitPackageId: '7',
     packageItemId: '8',
@@ -48,8 +52,8 @@ beforeEach(() => {
     itemDescription: '到店核销一次护理服务',
     originalValue: 19900,
     verifyCode: 'ABC12345',
-    status: 'unused',
-    usedAt: null,
+    status,
+    usedAt: status === 'used' ? '2026-08-10T12:05:00.000Z' : null,
     verifyRemark: null,
     validFrom: '2026-08-01T00:00:00.000Z',
     validTo: '2026-09-01T00:00:00.000Z',
@@ -61,7 +65,17 @@ beforeEach(() => {
     businessHours: '09:00-18:00',
     merchantName: '禧孕服务商',
     merchantContactPhone: '400-123-4567',
-  } as any)
+  } as any
+}
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(now)
+  vi.clearAllMocks()
+  uniAppMock.onLoadCallbacks = []
+  uniAppMock.onShowCallbacks = []
+  uniAppMock.onHideCallbacks = []
+  vi.mocked(getBenefitEntitlement).mockResolvedValue(entitlement())
   ;(globalThis as any).uni = {
     showToast: vi.fn(),
     navigateTo: vi.fn(),
@@ -99,6 +113,40 @@ describe('权益核销详情', () => {
       phoneNumber: '021-12345678',
     })
 
+    uniAppMock.onHideCallbacks.at(-1)?.()
+    wrapper.unmount()
+  })
+
+  it('后台已核销的新状态先返回后，旧未使用响应晚到不能恢复核销码状态', async () => {
+    const first = deferred<any>()
+    const second = deferred<any>()
+    vi.mocked(getBenefitEntitlement)
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+
+    const wrapper = mount(EntitlementPage, {
+      global: { stubs: { Loading: true, Empty: true } },
+    })
+    await uniAppMock.onLoadCallbacks.at(-1)?.({ id: '9' })
+
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+    uniAppMock.onHideCallbacks.at(-1)?.()
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+    expect(getBenefitEntitlement).toHaveBeenCalledTimes(2)
+
+    second.resolve(entitlement('used'))
+    await flushPromises()
+    expect(wrapper.find('.code-status').text()).toBe('已使用')
+    expect(wrapper.text()).toContain('核销时间')
+    expect(wrapper.text()).not.toContain('到店后向工作人员出示此核销码')
+
+    first.resolve(entitlement('unused'))
+    await flushPromises()
+
+    expect(wrapper.find('.code-status').text()).toBe('已使用')
+    expect((wrapper.vm as any).detail.status).toBe('used')
     uniAppMock.onHideCallbacks.at(-1)?.()
     wrapper.unmount()
   })
