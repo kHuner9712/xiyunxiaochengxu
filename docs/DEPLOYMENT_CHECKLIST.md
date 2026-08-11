@@ -54,7 +54,8 @@ Nginx Admin 证书：
 
 - [ ] 从 `.env.production.example` 创建，文件权限建议 `600`，不提交 Git。
 - [ ] `DATABASE_URL` 与 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` 完全一致。
-- [ ] DB/Redis/JWT/Refresh/Admin 密码通过生产强度门禁。
+- [ ] DB/Redis 使用独立强随机密码；自动门禁会检查必填、模板占位值和数据库连接串一致性。
+- [ ] JWT/Refresh secret ≥32 字符且不命中弱值；Admin 初始密码 ≥12 字符且不命中弱值。
 - [ ] `WECHAT_APP_ID / WECHAT_APP_SECRET / WECHAT_MCH_ID / WECHAT_MCH_SERIAL_NO / WECHAT_API_V3_KEY` 为真实值。
 - [ ] `WECHAT_SKIP_VERIFY=false`。
 - [ ] `SMOKE_TEST_BYPASS_CAPTCHA=false`。
