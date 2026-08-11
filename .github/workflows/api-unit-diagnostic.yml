@@ -1,0 +1,64 @@
+name: API Unit Diagnostic
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  api-unit-diagnostic:
+    runs-on: ubuntu-latest
+    env:
+      PRISMA_SKIP_POSTINSTALL_GENERATE: true
+      NODE_ENV: test
+      JWT_SECRET: ci-runtime-jwt-secret-not-for-production-2026
+      REFRESH_TOKEN_SECRET: ci-runtime-refresh-secret-not-for-production-2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.2.2
+          run_install: false
+          standalone: true
+
+      - name: Setup Node.js 22.13.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @baby-mall/shared build
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @baby-mall/api prisma:generate
+
+      - name: Run API tests with complete diagnostics
+        id: api-unit-tests
+        run: |
+          set +e
+          pnpm --filter @baby-mall/api test:ci > api-unit-tests.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "API test suite failed; last 400 log lines:" >&2
+            tail -n 400 api-unit-tests.log >&2
+            exit "$status"
+          fi
+          cat api-unit-tests.log
+
+      - name: Preserve API test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-unit-tests-diagnostic
+          path: api-unit-tests.log
+          if-no-files-found: warn
+          retention-days: 1
