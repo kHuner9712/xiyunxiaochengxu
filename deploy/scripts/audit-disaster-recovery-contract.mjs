@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -16,6 +17,21 @@ const expectBefore = (file, first, second, message) => {
   const a = source.indexOf(first)
   const b = source.indexOf(second)
   if (a < 0 || b < 0 || a >= b) failures.push(`${file}: ${message}`)
+}
+
+const shellScripts = [
+  'deploy/scripts/deploy-production.sh',
+  'deploy/scripts/deploy-prod-check.sh',
+  'deploy/scripts/deploy.sh',
+  'deploy/scripts/backup.sh',
+  'deploy/scripts/restore.sh',
+  'deploy/scripts/smoke-runtime.sh',
+]
+for (const file of shellScripts) {
+  const result = spawnSync('bash', ['-n', resolve(root, file)], { encoding: 'utf8' })
+  if (result.status !== 0) {
+    failures.push(`${file}: bash -n failed: ${(result.stderr || result.stdout || '').trim()}`)
+  }
 }
 
 for (const legacy of ['deploy/scripts/deploy.sh', 'deploy/scripts/deploy-prod-check.sh']) {
