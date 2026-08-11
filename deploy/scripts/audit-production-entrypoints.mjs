@@ -13,6 +13,8 @@ const backup = read('deploy/scripts/backup.sh');
 const restore = read('deploy/scripts/restore.sh');
 const publicSmoke = read('deploy/scripts/smoke-public.sh');
 const adminLoginSmoke = read('deploy/scripts/smoke-admin-login.sh');
+const archivedDeploy = read('deploy/scripts/archive/deploy-preprod.sh');
+const archivedSmoke = read('deploy/scripts/archive/smoke-preprod.sh');
 const bootstrap = read('deploy/scripts/test-production-container-bootstrap.sh');
 const bootstrapWorkflow = read('.github/workflows/production-container-bootstrap.yml');
 const productionEnvExample = read('.env.production.example');
@@ -81,6 +83,17 @@ assert.doesNotMatch(adminLoginSmoke, /ADMIN_PASSWORD=.*admin123/);
 assert.doesNotMatch(adminLoginSmoke, /ADMIN_USERNAME=.*:-admin/);
 assert.doesNotMatch(adminLoginSmoke, /curl\s+-k/);
 
+for (const archived of [archivedDeploy, archivedSmoke]) {
+  assert.match(archived, /intentionally disabled/);
+  assert.match(archived, /exit 64/);
+  assert.doesNotMatch(archived, /git\s+(pull|merge|checkout)/);
+  assert.doesNotMatch(archived, /prisma\s+migrate\s+deploy/);
+  assert.doesNotMatch(archived, /docker\s+compose[^\n]*(down|up|restart)/);
+  assert.doesNotMatch(archived, /curl\s+/);
+}
+assert.match(archivedDeploy, /deploy\/scripts\/deploy-production\.sh/);
+assert.match(archivedSmoke, /deploy\/scripts\/smoke-runtime\.sh/);
+
 assert.match(bootstrap, /BOOTSTRAP_DB="baby_mall_bootstrap"/);
 assert.match(bootstrap, /docker image inspect "\$IMAGE_NAME"/);
 assert.match(bootstrap, /NODE_ENV=production/);
@@ -93,6 +106,8 @@ assert.match(bootstrap, /_prisma_migrations/);
 assert.match(bootstrapWorkflow, /Validate production shell entrypoints/);
 assert.match(bootstrapWorkflow, /smoke-public\.sh/);
 assert.match(bootstrapWorkflow, /smoke-admin-login\.sh/);
+assert.match(bootstrapWorkflow, /archive\/deploy-preprod\.sh/);
+assert.match(bootstrapWorkflow, /archive\/smoke-preprod\.sh/);
 assert.match(bootstrapWorkflow, /Build production API image/);
 assert.match(bootstrapWorkflow, /test-production-container-bootstrap\.sh baby-mall-api:bootstrap-ci/);
 
