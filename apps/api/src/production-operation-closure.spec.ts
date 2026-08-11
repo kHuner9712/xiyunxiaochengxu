@@ -98,6 +98,7 @@ describe('production operation closure contracts', () => {
     const groupModule = read('apps/api/src/group-buy/group-buy.module.ts');
     const flashModule = read('apps/api/src/flash-sale/flash-sale.module.ts');
     const benefitModule = read('apps/api/src/benefit-package/benefit-package.module.ts');
+    const validitySafeBenefits = read('apps/api/src/benefit-package/validity-safe-snapshot-view-benefit-package.service.ts');
     const snapshotViewBenefits = read('apps/api/src/benefit-package/snapshot-view-benefit-package.service.ts');
     const versionedBenefits = read('apps/api/src/benefit-package/versioned-benefit-package.service.ts');
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
@@ -134,7 +135,9 @@ describe('production operation closure contracts', () => {
     expect(attachmentSafeAftersale).toContain('extends ProductionAftersaleService');
     expect(groupModule).toContain('ProductionGroupBuyService');
     expect(flashModule).toContain('ProductionFlashSaleService');
-    expect(benefitModule).toContain('SnapshotViewBenefitPackageService');
+    expect(benefitModule).toContain('useClass: ValiditySafeSnapshotViewBenefitPackageService');
+    expect(validitySafeBenefits).toContain('extends SnapshotViewBenefitPackageService');
+    expect(validitySafeBenefits).toContain('权益尚未生效');
     expect(snapshotViewBenefits).toContain('extends VersionedBenefitPackageService');
     expect(versionedBenefits).toContain('extends ZeroPayAwareBenefitPackageService');
     expect(settlementModule).toContain('SnapshotAwareStateSafeMerchantSettlementService');
