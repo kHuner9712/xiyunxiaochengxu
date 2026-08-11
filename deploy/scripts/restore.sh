@@ -131,23 +131,25 @@ for attempt in $(seq 1 60); do
 done
 
 runtime_closed=0
-restore_failed_after_close=0
 on_exit() {
   status=$?
   if [ "$status" -ne 0 ] && [ "$runtime_closed" -eq 1 ]; then
+    # This also covers a failure in the final public smoke after Nginx has briefly started.
+    # Never leave public traffic open when the restored stack has not passed the full contract.
+    "${COMPOSE[@]}" stop nginx >/dev/null 2>&1 || true
     echo >&2
-    echo "恢复失败且公网保持关闭：API/Nginx 不会自动重新开放。" >&2
+    echo "恢复失败且公网保持关闭：Nginx 已停止，不会自动重新开放。" >&2
     echo "请先确认数据库与 uploads 状态，再人工处理或使用另一份完整备份重试。" >&2
   fi
   exit "$status"
 }
 trap on_exit EXIT
 
-echo "[1/5] 关闭公网入口和 API writers..."
+echo "[1/6] 关闭公网入口和 API writers..."
 "${COMPOSE[@]}" stop nginx api >/dev/null 2>&1 || true
 runtime_closed=1
 
-echo "[2/5] 重建并恢复数据库..."
+echo "[2/6] 重建并恢复数据库..."
 "${COMPOSE[@]}" exec -T mysql sh -lc '
   set -eu
   mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
@@ -156,7 +158,7 @@ gzip -dc "$DB_FILE" | "${COMPOSE[@]}" exec -T mysql sh -lc '
   exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"
 '
 
-echo "[3/5] 恢复同批次 uploads 卷..."
+echo "[3/6] 恢复同批次 uploads 卷..."
 # Override the normal API entrypoint so this helper only manipulates the already-mounted uploads
 # volume. The runtime image currently runs as root, so restored ownership matches normal writes.
 gzip -dc "$UPLOAD_FILE" | "${COMPOSE[@]}" run --rm --no-deps -T --entrypoint sh api -lc '
@@ -166,7 +168,7 @@ gzip -dc "$UPLOAD_FILE" | "${COMPOSE[@]}" run --rm --no-deps -T --entrypoint sh 
   tar -xf -
 '
 
-echo "[4/5] 启动恢复后的 API 并等待健康检查..."
+echo "[4/6] 启动恢复后的 API 并等待健康检查..."
 "${COMPOSE[@]}" up -d api
 for attempt in $(seq 1 90); do
   if "${COMPOSE[@]}" exec -T api node -e '
@@ -183,13 +185,16 @@ for attempt in $(seq 1 90); do
   sleep 2
 done
 
-echo "[5/5] API 健康，重新开放 Nginx..."
+echo "[5/6] API 健康，临时启动 Nginx 进行完整 runtime smoke..."
 "${COMPOSE[@]}" up -d nginx
+
+echo "[6/6] 验证 HTTPS/Nginx/API/MySQL/Redis/上传/回调运行时合同..."
+ENV_FILE="$ENV_FILE" bash "$SCRIPT_DIR/smoke-runtime.sh"
 
 runtime_closed=0
 trap - EXIT
 printf '%s\n' "========================================="
 printf '%s\n' "生产恢复完成：$TIMESTAMP"
 printf '%s\n' "数据库与 uploads 来自同一校验批次。"
-printf '%s\n' "建议立即执行：bash deploy/scripts/smoke-runtime.sh"
+printf '%s\n' "完整 runtime smoke 已通过，公网入口保持开放。"
 printf '%s\n' "========================================="
