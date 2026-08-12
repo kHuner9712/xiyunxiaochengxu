@@ -2,6 +2,17 @@
 set -e
 
 if [ "${NODE_ENV:-}" = "production" ]; then
+  case "${DB_USER:-}" in
+    "")
+      echo "生产环境拒绝启动：DB_USER 不能为空" >&2
+      exit 1
+      ;;
+    root)
+      echo "生产环境拒绝启动：API 禁止使用 MySQL root 账号，请使用专用业务库用户" >&2
+      exit 1
+      ;;
+  esac
+
   echo "生产环境预检: 验证完整运行时与微信支付配置..."
   node dist/config/production-config-preflight.js
 fi
