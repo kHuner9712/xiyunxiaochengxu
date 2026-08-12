@@ -9,7 +9,7 @@ BOOTSTRAP_REDIS_PORT="6380"
 BOOTSTRAP_API_PORT="3200"
 REDIS_PASSWORD="BootstrapRedis#2026-Strong"
 ADMIN_USERNAME="ci_production_container_admin"
-ADMIN_PASSWORD="CiContainer#2026-Strong-Password"
+ADMIN_PASSWORD='C!7xK2vR9mQ4zT6p'
 EXPECTED_SERIAL="ABCDEF123456"
 API_DOMAIN="api.yunxixiaochengxu.com.cn"
 ADMIN_DOMAIN="admin.yunxixiaochengxu.com.cn"
@@ -179,6 +179,78 @@ role_count="$(mysql_client -N -B "$BOOTSTRAP_DB" -e "
 ")"
 [ "$role_count" = '1' ] || {
   echo "bootstrap admin is not assigned to active super_admin: $role_count" >&2
+  exit 1
+}
+
+pickup_tree_state="$(mysql_client -N -B "$BOOTSTRAP_DB" -e "
+  SELECT CONCAT(
+    SUM(p.code = 'pickup' AND p.parent_id = 0), ':',
+    SUM(p.code IN ('pickup:store', 'pickup:verify') AND p.parent_id = parent.id)
+  )
+  FROM admin_permissions p
+  LEFT JOIN admin_permissions parent ON parent.code = 'pickup'
+  WHERE p.code IN ('pickup', 'pickup:store', 'pickup:verify');
+")"
+[ "$pickup_tree_state" = '1:2' ] || {
+  echo "fresh production pickup permission hierarchy mismatch: $pickup_tree_state" >&2
+  exit 1
+}
+
+merchant_settlement_parent_count="$(mysql_client -N -B "$BOOTSTRAP_DB" -e "
+  SELECT COUNT(*)
+  FROM admin_permissions child
+  JOIN admin_permissions parent ON parent.id = child.parent_id
+  WHERE child.code = 'order:merchant-settlement' AND parent.code = 'order';
+")"
+[ "$merchant_settlement_parent_count" = '1' ] || {
+  echo "fresh production merchant settlement permission is not under order: $merchant_settlement_parent_count" >&2
+  exit 1
+}
+
+for role_code in operator cs finance; do
+  permission_count="$(mysql_client -N -B "$BOOTSTRAP_DB" -e "
+    SELECT COUNT(*)
+    FROM admin_roles ar
+    JOIN admin_role_permissions arp ON arp.role_id = ar.id
+    WHERE ar.code = '${role_code}' AND ar.status = 1;
+  ")"
+  if ! [[ "$permission_count" =~ ^[1-9][0-9]*$ ]]; then
+    echo "fresh production default role has no permissions: role=${role_code} count=${permission_count}" >&2
+    exit 1
+  fi
+done
+
+finance_settlement_count="$(mysql_client -N -B "$BOOTSTRAP_DB" -e "
+  SELECT COUNT(*)
+  FROM admin_roles ar
+  JOIN admin_role_permissions arp ON arp.role_id = ar.id
+  JOIN admin_permissions p ON p.id = arp.permission_id
+  WHERE ar.code = 'finance' AND ar.status = 1 AND p.code = 'order:merchant-settlement';
+")"
+[ "$finance_settlement_count" = '1' ] || {
+  echo "fresh production finance role lacks merchant settlement permission: $finance_settlement_count" >&2
+  exit 1
+}
+
+pickup_parent_role_gaps="$(mysql_client -N -B "$BOOTSTRAP_DB" -e "
+  SELECT COUNT(*)
+  FROM admin_roles ar
+  WHERE ar.status = 1
+    AND EXISTS (
+      SELECT 1
+      FROM admin_role_permissions arp
+      JOIN admin_permissions p ON p.id = arp.permission_id
+      WHERE arp.role_id = ar.id AND p.code IN ('pickup:store', 'pickup:verify')
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM admin_role_permissions arp
+      JOIN admin_permissions p ON p.id = arp.permission_id
+      WHERE arp.role_id = ar.id AND p.code = 'pickup'
+    );
+")"
+[ "$pickup_parent_role_gaps" = '0' ] || {
+  echo "fresh production role has pickup child permission without pickup parent: $pickup_parent_role_gaps" >&2
   exit 1
 }
 
