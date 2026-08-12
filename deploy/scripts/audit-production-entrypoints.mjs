@@ -34,6 +34,10 @@ assert.match(apiDockerfile, /COPY deploy\/scripts\/entrypoint\.sh \.\/entrypoint
 assert.match(apiDockerfile, /ENTRYPOINT \["\.\/entrypoint\.sh"\]/);
 assert.match(apiEntrypoint, /NODE_ENV:-}" = "production"/);
 assert.match(apiEntrypoint, /node dist\/config\/production-config-preflight\.js/);
+const productionSeedBody = apiEntrypoint.match(/run_seed\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(productionSeedBody, /ts-node -P prisma\/tsconfig\.seed\.json prisma\/seed\.ts/);
+assert.match(productionSeedBody, /ts-node -P prisma\/tsconfig\.seed\.json prisma\/seed-default-role-permissions\.ts/);
+assert.doesNotMatch(productionSeedBody, /prisma\s+db\s+seed/);
 const candidatePreflight = productionDeploy.indexOf('"${COMPOSE[@]}" run --rm --no-deps api true');
 const maintenanceStart = productionDeploy.indexOf('MAINTENANCE_ACTIVE=true');
 assert.ok(candidatePreflight >= 0 && maintenanceStart > candidatePreflight, 'Candidate image production preflight must pass before maintenance starts');
