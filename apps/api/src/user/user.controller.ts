@@ -1,5 +1,6 @@
-import { Controller, Get, Put, Param, Query, Body } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Put, Query } from '@nestjs/common';
 import { UserService } from './user.service';
+import { ProductionUserService } from './production-user.service';
 import { UserStatusService } from './user-status.service';
 import { AdminPointsAdjustmentService } from '../points/admin-points-adjustment.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -14,7 +15,7 @@ import {
 
 @Controller('weapp/user')
 export class WeappUserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: ProductionUserService) {}
 
   @Get('info')
   async getUserInfo(@CurrentUser('id') userId: string) {
@@ -24,6 +25,11 @@ export class WeappUserController {
   @Put('profile')
   async updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateProfileDto) {
     return this.userService.updateProfile(userId, dto);
+  }
+
+  @Delete('account')
+  async cancelAccount(@CurrentUser('id') userId: string) {
+    return this.userService.cancelAccount(userId);
   }
 }
 
