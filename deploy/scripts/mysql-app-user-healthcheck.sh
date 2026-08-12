@@ -6,6 +6,15 @@ fail() {
   exit 1
 }
 
+# During a fresh official-image initialization PID 1 remains docker-entrypoint.sh while it runs a
+# temporary mysqld. Never mutate users in that phase or we could race the image's MYSQL_USER setup.
+# Only normalize grants after the entrypoint has exec'd the final mysqld as PID 1.
+pid1_cmd="$(tr '\000' ' ' < /proc/1/cmdline 2>/dev/null || true)"
+case "$pid1_cmd" in
+  *mysqld*) ;;
+  *) fail 'final mysqld is not PID 1 yet; official initialization is still in progress' ;;
+esac
+
 case "${MYSQL_DATABASE:-}" in
   ""|*[!A-Za-z0-9_]*) fail 'MYSQL_DATABASE must contain only letters, digits, and underscore' ;;
 esac
