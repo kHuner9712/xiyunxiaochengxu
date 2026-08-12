@@ -19,7 +19,7 @@
     "test:admin": "node --test apps/admin-web/src/utils/pending-content-asset-cleanup.test.mjs apps/admin-web/src/core-operation-permissions.test.mjs apps/admin-web/src/batch-delivery-tracking.test.mjs apps/admin-web/src/aftersale-refund-retry.test.mjs apps/admin-web/src/reconcile-history-observability.test.mjs apps/admin-web/src/supplier-operation-contract.test.mjs apps/admin-web/src/business-role-access-contract.test.mjs apps/admin-web/src/recommendation-operation-contract.test.mjs",
     "test:admin:browser": "node deploy/scripts/run-admin-browser-e2e.mjs",
     "test:ci": "pnpm prepare:ci && pnpm test:admin && pnpm --filter @baby-mall/api test:ci && pnpm --filter @baby-mall/miniprogram test",
-    "audit:runtime": "node deploy/scripts/audit-runtime-contracts.mjs && node deploy/scripts/audit-production-smoke-contracts.mjs && node deploy/scripts/audit-production-entrypoints.mjs && node deploy/scripts/audit-production-docs.mjs && node deploy/scripts/audit-container-logging.mjs && node deploy/scripts/audit-redis-safety.mjs && node deploy/scripts/audit-mysql-safety.mjs && node --test deploy/scripts/production-config-preflight.test.mjs",
+    "audit:runtime": "node deploy/scripts/audit-runtime-contracts.mjs && node deploy/scripts/audit-production-smoke-contracts.mjs && node deploy/scripts/audit-production-entrypoints.mjs && node deploy/scripts/audit-production-docs.mjs && node deploy/scripts/audit-container-logging.mjs && node deploy/scripts/audit-redis-safety.mjs && node deploy/scripts/audit-mysql-safety.mjs && node --test deploy/scripts/production-config-preflight.test.mjs deploy/scripts/verify-wechat-appid-consistency.test.mjs",
     "audit:api-contracts": "node deploy/scripts/audit-api-contracts.mjs",
     "audit:project": "pnpm audit:runtime && pnpm audit:api-contracts",
     "clean": "pnpm -r clean",
@@ -46,7 +46,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "cross-env": "^7.0.3",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.4.11"
+    "jest": "29.7.0",
+    "ts-jest": "29.4.11"
   }
 }
