@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 IMAGE_NAME="${1:-baby-mall-api:ci}"
 BOOTSTRAP_DB="baby_mall_bootstrap"
+BOOTSTRAP_DB_USER="bootstrap_app"
+BOOTSTRAP_DB_PASSWORD="B7xQ2mR9kL4vT6p"
 BOOTSTRAP_REDIS_NAME="baby-mall-bootstrap-redis"
 BOOTSTRAP_API_NAME="baby-mall-bootstrap-api"
 BOOTSTRAP_ADMIN_VOLUME="baby-mall-bootstrap-admin-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
@@ -23,11 +25,16 @@ mysql_client() {
     mysql -h127.0.0.1 -P3306 -uroot -proot "$@"
 }
 
+app_mysql_client() {
+  docker run --rm --network host mysql:8.0 \
+    mysql -h127.0.0.1 -P3306 -u"$BOOTSTRAP_DB_USER" -p"$BOOTSTRAP_DB_PASSWORD" "$@"
+}
+
 cleanup() {
   docker rm -f "$BOOTSTRAP_API_NAME" >/dev/null 2>&1 || true
   docker rm -f "$BOOTSTRAP_REDIS_NAME" >/dev/null 2>&1 || true
   docker volume rm -f "$BOOTSTRAP_ADMIN_VOLUME" >/dev/null 2>&1 || true
-  mysql_client -e "DROP DATABASE IF EXISTS \`${BOOTSTRAP_DB}\`;" >/dev/null 2>&1 || true
+  mysql_client -e "DROP DATABASE IF EXISTS \`${BOOTSTRAP_DB}\`; DROP USER IF EXISTS '${BOOTSTRAP_DB_USER}'@'%';" >/dev/null 2>&1 || true
   rm -rf "$FIXTURE_DIR"
 }
 trap cleanup EXIT
@@ -40,9 +47,23 @@ docker image inspect "$IMAGE_NAME" >/dev/null 2>&1 || { echo "production image n
 docker volume rm -f "$BOOTSTRAP_ADMIN_VOLUME" >/dev/null 2>&1 || true
 docker volume create "$BOOTSTRAP_ADMIN_VOLUME" >/dev/null
 
-# Use a separate database so this test proves the image can bootstrap a genuinely empty production
-# schema without mutating the normal CI integration database.
-mysql_client -e "DROP DATABASE IF EXISTS \`${BOOTSTRAP_DB}\`; CREATE DATABASE \`${BOOTSTRAP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+# Use a separate database and a non-root application account so this proves the final production
+# image can migrate, seed, and run a genuinely empty schema without receiving MySQL root credentials.
+mysql_client -e "
+  DROP DATABASE IF EXISTS \`${BOOTSTRAP_DB}\`;
+  CREATE DATABASE \`${BOOTSTRAP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  DROP USER IF EXISTS '${BOOTSTRAP_DB_USER}'@'%';
+  CREATE USER '${BOOTSTRAP_DB_USER}'@'%' IDENTIFIED BY '${BOOTSTRAP_DB_PASSWORD}';
+  GRANT ALL PRIVILEGES ON \`${BOOTSTRAP_DB}\`.* TO '${BOOTSTRAP_DB_USER}'@'%';
+"
+[ "$(app_mysql_client -N -B "$BOOTSTRAP_DB" -e 'SELECT 1' 2>/dev/null || true)" = '1' ] || {
+  echo 'bootstrap application DB user cannot access its business database' >&2
+  exit 1
+}
+if app_mysql_client -N -B -e 'SELECT COUNT(*) FROM mysql.user' >/dev/null 2>&1; then
+  echo 'bootstrap application DB user unexpectedly has mysql.user access' >&2
+  exit 1
+fi
 
 # Production health rejects Redis correctness drift, so the bootstrap dependency deliberately uses
 # the same persistence/eviction contract as the production redis.conf rather than a loose test Redis.
@@ -95,9 +116,9 @@ container_id="$({
     -e DB_HOST=127.0.0.1 \
     -e DB_PORT=3306 \
     -e DB_NAME="$BOOTSTRAP_DB" \
-    -e DB_USER=root \
-    -e DB_PASSWORD=root \
-    -e DATABASE_URL="mysql://root:root@127.0.0.1:3306/${BOOTSTRAP_DB}" \
+    -e DB_USER="$BOOTSTRAP_DB_USER" \
+    -e DB_PASSWORD="$BOOTSTRAP_DB_PASSWORD" \
+    -e DATABASE_URL="mysql://${BOOTSTRAP_DB_USER}:${BOOTSTRAP_DB_PASSWORD}@127.0.0.1:3306/${BOOTSTRAP_DB}" \
     -e REDIS_HOST=127.0.0.1 \
     -e REDIS_PORT="$BOOTSTRAP_REDIS_PORT" \
     -e REDIS_PASSWORD="$REDIS_PASSWORD" \
@@ -298,4 +319,4 @@ exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$BOOTSTRAP_API_NAME"
   exit 1
 }
 
-echo "[production-container-bootstrap] PASS migrations=${migration_count} admin=${ADMIN_USERNAME} build=${EXPECTED_BUILD_SHA}"
+echo "[production-container-bootstrap] PASS migrations=${migration_count} admin=${ADMIN_USERNAME} dbUser=${BOOTSTRAP_DB_USER} build=${EXPECTED_BUILD_SHA}"
