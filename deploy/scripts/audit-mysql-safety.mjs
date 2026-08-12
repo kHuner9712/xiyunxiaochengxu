@@ -35,6 +35,45 @@ requirePattern(
   'deploy/mysql/my.cnf: default-time-zone must remain +08:00',
 )
 
+const appUserHealthcheck = read('deploy/scripts/mysql-app-user-healthcheck.sh')
+requirePattern(
+  appUserHealthcheck,
+  /final mysqld is not PID 1 yet/,
+  'mysql app-user healthcheck must not mutate grants during the official image temporary-init server',
+)
+requirePattern(
+  appUserHealthcheck,
+  /MYSQL_USER" != root/,
+  'mysql app-user healthcheck must reject root as the application account',
+)
+requirePattern(
+  appUserHealthcheck,
+  /MYSQL_ROOT_PASSWORD" != "\$MYSQL_PASSWORD/,
+  'mysql root and application passwords must be distinct',
+)
+requirePattern(
+  appUserHealthcheck,
+  /REVOKE ALL PRIVILEGES, GRANT OPTION/,
+  'mysql app-user healthcheck must normalize away stale/global grants',
+)
+requirePattern(
+  appUserHealthcheck,
+  /GRANT ALL PRIVILEGES ON \\`\$\{MYSQL_DATABASE\}\\`\.\*/,
+  'mysql app-user healthcheck must grant privileges only on the configured business database',
+)
+requirePattern(
+  appUserHealthcheck,
+  /SELECT COUNT\(\*\) FROM mysql\.user/,
+  'mysql app-user healthcheck must verify that the application account cannot read mysql.user',
+)
+
+const apiEntrypoint = read('deploy/scripts/entrypoint.sh')
+requirePattern(
+  apiEntrypoint,
+  /API 禁止使用 MySQL root 账号/,
+  'production API entrypoint must fail closed when DB_USER=root',
+)
+
 for (const file of ['deploy/docker-compose.yml', 'deploy/docker-compose.bt.yml']) {
   const compose = read(file)
   if (!compose.includes('image: mysql:8.0')) {
@@ -46,6 +85,46 @@ for (const file of ['deploy/docker-compose.yml', 'deploy/docker-compose.bt.yml']
   if (!compose.includes('mysql_data:/var/lib/mysql')) {
     failures.push(`${file}: MySQL data must remain on the persistent mysql_data volume`)
   }
+  requirePattern(
+    compose,
+    /MYSQL_ROOT_PASSWORD: \$\{DB_ROOT_PASSWORD:\?DB_ROOT_PASSWORD required\}/,
+    `${file}: MySQL root secret must come from dedicated DB_ROOT_PASSWORD`,
+  )
+  requirePattern(
+    compose,
+    /MYSQL_USER: \$\{DB_USER:-baby_mall_app\}/,
+    `${file}: MySQL must create/use the dedicated application account`,
+  )
+  requirePattern(
+    compose,
+    /MYSQL_PASSWORD: \$\{DB_PASSWORD:\?DB_PASSWORD required\}/,
+    `${file}: MySQL application password must be separate from the root secret`,
+  )
+  requirePattern(
+    compose,
+    /\.\/scripts\/mysql-app-user-healthcheck\.sh:\/usr\/local\/bin\/mysql-app-user-healthcheck\.sh:ro/,
+    `${file}: least-privilege MySQL healthcheck must be mounted read-only`,
+  )
+  requirePattern(
+    compose,
+    /test: \["CMD", "sh", "\/usr\/local\/bin\/mysql-app-user-healthcheck\.sh"\]/,
+    `${file}: MySQL health must depend on application-account privilege normalization`,
+  )
+
+  const apiStart = compose.indexOf('\n  api:')
+  const nextService = file.endsWith('docker-compose.yml')
+    ? compose.indexOf('\n  nginx:', apiStart)
+    : compose.indexOf('\nvolumes:', apiStart)
+  const apiBlock = apiStart >= 0 ? compose.slice(apiStart, nextService > apiStart ? nextService : undefined) : ''
+  if (!apiBlock) failures.push(`${file}: API service block could not be parsed for DB credential audit`)
+  if (apiBlock.includes('DB_ROOT_PASSWORD')) {
+    failures.push(`${file}: API service must never receive DB_ROOT_PASSWORD`)
+  }
+  requirePattern(
+    apiBlock,
+    /DB_USER: \$\{DB_USER:-baby_mall_app\}/,
+    `${file}: API runtime must use the dedicated application DB account`,
+  )
 }
 
 if (failures.length) {
