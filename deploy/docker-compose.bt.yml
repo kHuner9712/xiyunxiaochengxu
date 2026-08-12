@@ -23,12 +23,14 @@ services:
       - mysql_data:/var/lib/mysql
       - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./scripts/mysql-app-user-healthcheck.sh:/usr/local/bin/mysql-app-user-healthcheck.sh:ro
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "sh", "/usr/local/bin/mysql-app-user-healthcheck.sh"]
       interval: 10s
-      timeout: 5s
+      timeout: 8s
       retries: 10
+      start_period: 40s
     networks:
       - baby-mall-network
 
