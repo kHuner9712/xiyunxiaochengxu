@@ -289,11 +289,9 @@ export class PaymentReconcileService {
           fixed++;
           this.logger.log(`退款对账同步终态: ${refund.outRefundNo} -> ${localStatus}`);
         } else if (wechatStatus === 'PROCESSING') {
-          const shouldPromoteToPending = [
-            REFUND_STATUS.INITIATING,
-            REFUND_STATUS.FAILED,
-            REFUND_STATUS.RETRYING,
-          ].includes(refund.status);
+          const shouldPromoteToPending = refund.status === REFUND_STATUS.INITIATING
+            || refund.status === REFUND_STATUS.FAILED
+            || refund.status === REFUND_STATUS.RETRYING;
           if (shouldPromoteToPending) {
             const promoted = await this.prisma.orderRefund.updateMany({
               where: { id: refund.id, status: refund.status },
