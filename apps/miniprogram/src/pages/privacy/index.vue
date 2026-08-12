@@ -42,21 +42,100 @@
       <text class="paragraph">7.1 您有权访问、更正、删除您的个人信息。</text>
       <text class="paragraph">7.2 您有权撤回授权同意。</text>
       <text class="paragraph">7.3 您有权注销账号。</text>
+      <view v-if="userStore.isLoggedIn" class="account-action-card">
+        <text class="account-action-title">注销当前账号</text>
+        <text class="account-action-desc">注销会删除或匿名化当前账户的直接个人资料。为完成订单、退款和争议处理所必需的历史交易记录会继续保留。存在未完成订单、处理中售后/退款，或订单仍在售后期内时不能注销。</text>
+        <button class="cancel-account-btn" :disabled="cancelling" @tap="handleCancelAccount">
+          {{ cancelling ? '正在注销...' : '申请注销账号' }}
+        </button>
+      </view>
 
       <text class="section-subtitle">八、未成年人保护</text>
       <text class="paragraph">8.1 我们高度重视对未成年人个人信息的保护。</text>
       <text class="paragraph">8.2 若您是未成年人的监护人，请您指导未成年人使用本服务。</text>
 
       <text class="section-subtitle">九、联系方式</text>
-      <text class="paragraph">客服电话：{{ legal.contact.customerPhone }}</text>
-      <text class="paragraph">客服微信：{{ legal.contact.customerWechat }}</text>
-      <text class="paragraph">{{ legal.contact.serviceNotice }}</text>
+      <text v-if="customerPhone" class="paragraph">客服电话：{{ customerPhone }}</text>
+      <text v-if="customerService?.enabled && ['wechat', 'both'].includes(customerService.type)" class="paragraph">微信在线客服：请前往“客服与帮助”页面发起会话。</text>
+      <text v-if="customerService?.serviceTime" class="paragraph">服务时间：{{ customerService.serviceTime }}</text>
+      <text class="paragraph">如需隐私相关咨询、个人信息删除或其他帮助，可进入“客服与帮助”联系我们。</text>
+      <view class="customer-service-link" @tap="goCustomerService">前往客服与帮助</view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { cancelAccount } from '@/api/auth'
+import { getCustomerServiceConfig, type CustomerServiceConfig } from '@/api/customer-service'
 import { LEGAL_PROFILE as legal } from '@/config/legal'
+import { useUserStore } from '@/stores/user'
+import { removeToken } from '@/utils/request'
+
+const userStore = useUserStore()
+const customerService = ref<CustomerServiceConfig | null>(null)
+const cancelling = ref(false)
+
+const customerPhone = computed(() => {
+  if (!customerService.value?.enabled) return ''
+  return String(customerService.value.phone || '').trim()
+})
+
+function confirmModal(title: string, content: string, confirmText = '确认'): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.showModal({
+      title,
+      content,
+      confirmText,
+      confirmColor: '#D94C4C',
+      success: (res) => resolve(!!res.confirm),
+      fail: () => resolve(false),
+    })
+  })
+}
+
+async function handleCancelAccount() {
+  if (cancelling.value) return
+  const firstConfirmed = await confirmModal(
+    '注销账号',
+    '账号注销后当前账户资料、地址、宝宝档案、积分及账户权益将无法恢复。存在未完成订单、售后、退款或仍在售后期内的订单时，系统会拒绝注销。是否继续？',
+    '继续',
+  )
+  if (!firstConfirmed) return
+
+  const finalConfirmed = await confirmModal(
+    '再次确认',
+    '确认注销当前禧孕优选账号？历史订单、支付、退款等为履约和争议处理所必需的记录不会随账户资料一起删除。',
+    '确认注销',
+  )
+  if (!finalConfirmed) return
+
+  cancelling.value = true
+  try {
+    await cancelAccount()
+    userStore.$patch({ token: '', userInfo: null })
+    removeToken()
+    uni.showToast({ title: '账号已注销', icon: 'success' })
+    setTimeout(() => uni.reLaunch({ url: '/pages/home/index' }), 800)
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '注销失败，请稍后重试', icon: 'none', duration: 3000 })
+  } finally {
+    cancelling.value = false
+  }
+}
+
+function goCustomerService() {
+  uni.navigateTo({ url: '/pages/customer-service/index' })
+}
+
+onLoad(async () => {
+  try {
+    customerService.value = await getCustomerServiceConfig()
+  } catch (error) {
+    console.warn('[baby-mall] load customer service config on privacy page failed:', error)
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -110,4 +189,55 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
   margin-bottom: $spacing-xs;
 }
 
+.account-action-card {
+  margin-top: $spacing-md;
+  padding: $spacing-md;
+  border-radius: $radius-lg;
+  background: rgba($danger-color, 0.06);
+  border: 1rpx solid rgba($danger-color, 0.18);
+}
+
+.account-action-title {
+  display: block;
+  font-size: $font-md;
+  font-weight: 800;
+  color: $text-color;
+}
+
+.account-action-desc {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-sm;
+  line-height: 1.7;
+  color: $text-secondary;
+}
+
+.cancel-account-btn {
+  margin-top: $spacing-md;
+  min-height: 76rpx;
+  line-height: 76rpx;
+  border-radius: $radius-round;
+  background: rgba($danger-color, 0.1);
+  color: $danger-color;
+  font-size: $font-md;
+  font-weight: 700;
+  border: 1rpx solid rgba($danger-color, 0.24);
+
+  &::after { border: none; }
+
+  &[disabled] { opacity: 0.55; }
+}
+
+.customer-service-link {
+  margin-top: $spacing-sm;
+  display: inline-flex;
+  align-items: center;
+  min-height: 64rpx;
+  padding: 0 24rpx;
+  border-radius: $radius-round;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: $font-sm;
+  font-weight: 700;
+}
 </style>
