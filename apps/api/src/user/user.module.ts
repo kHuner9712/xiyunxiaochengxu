@@ -11,9 +11,10 @@ import { PointsModule } from '../points/points.module';
   imports: [PrismaModule, RedisModule, PointsModule],
   controllers: [WeappUserController, AdminUserController],
   providers: [
-    { provide: UserService, useClass: ProductionUserService },
+    ProductionUserService,
+    { provide: UserService, useExisting: ProductionUserService },
     UserStatusService,
   ],
-  exports: [UserService],
+  exports: [UserService, ProductionUserService],
 })
 export class UserModule {}
