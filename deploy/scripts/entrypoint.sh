@@ -48,13 +48,18 @@ if [ -d /app/admin-dist ]; then
   echo "管理后台静态资源: 已同步到 /usr/share/nginx/admin"
 fi
 
+run_permission_seed() {
+  echo "数据库权限初始化: running safe role/permission seed..."
+  ./node_modules/.bin/ts-node -P prisma/tsconfig.seed.json prisma/seed-default-role-permissions.ts
+}
+
 run_seed() {
   echo "数据库初始化: running database seed..."
-  # Production must execute the complete, audited seed chain explicitly. The indirect Prisma CLI
-  # package-metadata seed path did not reliably execute the post-seed permission normalization inside
-  # the final production image, which left pickup children attached to the wrong parent on a fresh DB.
+  # The full seed contains business defaults and is safe only for a genuinely fresh production DB.
+  # Never run it against an initialized production database: SystemConfig values are operator-owned
+  # runtime state and must survive image restarts and deployments.
   ./node_modules/.bin/ts-node -P prisma/tsconfig.seed.json prisma/seed.ts
-  ./node_modules/.bin/ts-node -P prisma/tsconfig.seed.json prisma/seed-default-role-permissions.ts
+  run_permission_seed
 }
 
 finalize_fresh_production_seed() {
@@ -135,11 +140,13 @@ NODE
     echo "检测到全新生产数据库（admin_users=0），执行首次安全初始化"
     run_seed
     finalize_fresh_production_seed
-  elif [ "$RUN_SEED" = "true" ]; then
-    echo "RUN_SEED=true: 显式执行幂等数据库 seed"
-    run_seed
   else
-    echo "检测到已有管理员账号（admin_users=$admin_count），跳过自动 seed"
+    if [ "${RUN_SEED:-false}" = "true" ]; then
+      echo "生产环境拒绝启动：已有数据的生产库禁止 RUN_SEED=true；完整 seed 会覆盖运营 SystemConfig。请通过管理后台修改业务配置，权限补齐会自动安全执行。" >&2
+      exit 1
+    fi
+    echo "检测到已有管理员账号（admin_users=$admin_count），跳过完整业务 seed，保留运营配置"
+    run_permission_seed
   fi
 else
   echo "数据库迁移: 执行 prisma db push..."
