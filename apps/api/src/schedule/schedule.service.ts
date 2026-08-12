@@ -21,12 +21,18 @@ import { ProductionShareService } from '../share/production-share.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { SnapshotGuardedProductionBenefitPackageService } from '../benefit-package/snapshot-guarded-production-benefit-package.service';
 
+const GROUP_BUY_REFUND_BATCH_SIZE = 20;
+
 @Injectable()
 export class ScheduleService implements OnModuleDestroy {
   private readonly logger = new Logger(ScheduleService.name);
   private shuttingDown = false;
   private activeExecutions = 0;
   private readonly drainWaiters = new Set<() => void>();
+  private readonly lockHeartbeats = new Map<
+    string,
+    ReturnType<typeof setInterval>
+  >();
 
   constructor(
     private readonly redisService: RedisService,
@@ -120,6 +126,8 @@ export class ScheduleService implements OnModuleDestroy {
         }
         return null;
       }
+
+      this.startLockHeartbeat(key, value, ttlSeconds);
       return value;
     } catch (error) {
       this.finishExecution();
@@ -128,6 +136,7 @@ export class ScheduleService implements OnModuleDestroy {
   }
 
   private async releaseLock(key: string, value: string): Promise<void> {
+    this.stopLockHeartbeat(key, value);
     try {
       await this.redisService.releaseLockWithLua(key, value);
     } catch (error) {
@@ -135,6 +144,43 @@ export class ScheduleService implements OnModuleDestroy {
     } finally {
       this.finishExecution();
     }
+  }
+
+  private startLockHeartbeat(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): void {
+    const heartbeatId = this.lockHeartbeatId(key, value);
+    const intervalMs = Math.max(1000, Math.floor((ttlSeconds * 1000) / 3));
+    const timer = setInterval(() => {
+      void this.redisService
+        .extendLockWithLua(key, value, ttlSeconds)
+        .then((renewed) => {
+          if (renewed) return;
+          this.stopLockHeartbeat(key, value);
+          this.logger.error(`定时任务锁续租失败，锁所有权已丢失：key=${key}`);
+        })
+        .catch((error) => {
+          this.logger.error(
+            `定时任务锁续租异常：key=${key}, error=${(error as Error).message}`,
+          );
+        });
+    }, intervalMs);
+    timer.unref?.();
+    this.lockHeartbeats.set(heartbeatId, timer);
+  }
+
+  private stopLockHeartbeat(key: string, value: string): void {
+    const heartbeatId = this.lockHeartbeatId(key, value);
+    const timer = this.lockHeartbeats.get(heartbeatId);
+    if (!timer) return;
+    clearInterval(timer);
+    this.lockHeartbeats.delete(heartbeatId);
+  }
+
+  private lockHeartbeatId(key: string, value: string): string {
+    return `${key}:${value}`;
   }
 
   @Cron('*/1 * * * *')
@@ -183,11 +229,13 @@ export class ScheduleService implements OnModuleDestroy {
     const lockValue = await this.acquireLock(lockKey, 240);
     if (!lockValue) return;
     try {
-      const result = await this.groupBuyService.markExpiredGroups();
-      const durableCandidates = await this.findFailedGroupRefundCandidates();
-      const refundOrderIds = Array.from(
-        new Set([...(result.refundOrderIds ?? []), ...durableCandidates]),
+      const durableCandidates = await this.findFailedGroupRefundCandidates(
+        GROUP_BUY_REFUND_BATCH_SIZE,
       );
+      const result = await this.groupBuyService.markExpiredGroups();
+      const refundOrderIds = Array.from(
+        new Set([...durableCandidates, ...(result.refundOrderIds ?? [])]),
+      ).slice(0, GROUP_BUY_REFUND_BATCH_SIZE);
 
       let refundSubmitted = 0;
       let refundFailed = 0;

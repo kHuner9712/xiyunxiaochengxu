@@ -6,6 +6,18 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { PaymentService } from './payment.service';
 
+const PRODUCTION_TIMEOUT_CONFIRM_BATCH_SIZE = 20;
+const ABNORMAL_REFUND_RECONCILE_BATCH_SIZE = 20;
+const RECOVERED_ABNORMAL_REFUND_REASONS = new Set([
+  'already_success',
+  'wechat_success_processed',
+  'wechat_closed',
+]);
+const FAILED_ABNORMAL_REFUND_REASONS = new Set([
+  'wechat_query_failed',
+  'process_failed',
+]);
+
 @Injectable()
 export class ProductionPaymentReconcileService extends PaymentReconcileService {
   private readonly productionLogger = new Logger(ProductionPaymentReconcileService.name);
@@ -26,6 +38,8 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
         autoCloseAt: { lte: new Date() },
       },
       include: { payment: true },
+      orderBy: [{ autoCloseAt: 'asc' }, { id: 'asc' }],
+      take: PRODUCTION_TIMEOUT_CONFIRM_BATCH_SIZE,
     });
 
     if (timeoutOrders.length === 0) {
@@ -112,8 +126,8 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
     const staleBefore = new Date(Date.now() - 5 * 60 * 1000);
     const abnormalRefunds = await this.productionPrisma.orderRefund.findMany({
       where: { status: REFUND_STATUS.ABNORMAL, updatedAt: { lt: staleBefore } },
-      orderBy: { updatedAt: 'asc' },
-      take: 100,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: ABNORMAL_REFUND_RECONCILE_BATCH_SIZE,
       select: { id: true, outRefundNo: true },
     });
     let abnormalRecovered = 0;
@@ -122,19 +136,37 @@ export class ProductionPaymentReconcileService extends PaymentReconcileService {
     for (const refund of abnormalRefunds) {
       try {
         const result = await this.productionPaymentService.syncRefund(refund.outRefundNo);
-        const status = (result as any)?.status;
-        if (status === REFUND_STATUS.SUCCESS || status === REFUND_STATUS.PENDING || status === REFUND_STATUS.CLOSED) {
+        const reason = String((result as any)?.reason || '');
+        if (RECOVERED_ABNORMAL_REFUND_REASONS.has(reason)) {
           abnormalRecovered += 1;
-          this.productionLogger.log(`异常退款自动同步收敛: outRefundNo=${refund.outRefundNo}, status=${status}`);
+          this.productionLogger.log(`异常退款自动同步收敛: outRefundNo=${refund.outRefundNo}, reason=${reason}`);
+        } else if (FAILED_ABNORMAL_REFUND_REASONS.has(reason)) {
+          abnormalFailed += 1;
+          this.productionLogger.error(`异常退款自动同步失败: outRefundNo=${refund.outRefundNo}, reason=${reason}`);
         } else {
           abnormalStillAbnormal += 1;
         }
       } catch (error) {
         abnormalFailed += 1;
         this.productionLogger.error(`异常退款自动同步失败: outRefundNo=${refund.outRefundNo}, error=${(error as Error).message}`);
+      } finally {
+        await this.rotateAbnormalRefundAttempt(refund.id);
       }
     }
     return { ...base, abnormalTotal: abnormalRefunds.length, abnormalRecovered, abnormalStillAbnormal, abnormalFailed };
+  }
+
+  private async rotateAbnormalRefundAttempt(refundId: bigint): Promise<void> {
+    try {
+      await this.productionPrisma.orderRefund.updateMany({
+        where: { id: refundId, status: REFUND_STATUS.ABNORMAL },
+        data: { updatedAt: new Date() },
+      });
+    } catch (error) {
+      this.productionLogger.warn(
+        `异常退款轮转时间更新失败: refundId=${refundId.toString()}, error=${(error as Error).message}`,
+      );
+    }
   }
 
   private async resolveAfterCloseFailure(order: any, payment: any, closeError: unknown) {
