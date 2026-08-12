@@ -50,8 +50,8 @@ fi
 
 run_seed() {
   echo "数据库初始化: running database seed..."
-  # Production must execute the complete, audited seed chain explicitly. `prisma db seed` delegates
-  # to package metadata and did not reliably execute the post-seed permission normalization inside
+  # Production must execute the complete, audited seed chain explicitly. The indirect Prisma CLI
+  # package-metadata seed path did not reliably execute the post-seed permission normalization inside
   # the final production image, which left pickup children attached to the wrong parent on a fresh DB.
   ./node_modules/.bin/ts-node -P prisma/tsconfig.seed.json prisma/seed.ts
   ./node_modules/.bin/ts-node -P prisma/tsconfig.seed.json prisma/seed-default-role-permissions.ts
