@@ -5,12 +5,14 @@ IMAGE_NAME="${1:-baby-mall-api:ci}"
 BOOTSTRAP_DB="baby_mall_bootstrap"
 BOOTSTRAP_REDIS_NAME="baby-mall-bootstrap-redis"
 BOOTSTRAP_API_NAME="baby-mall-bootstrap-api"
+BOOTSTRAP_ADMIN_VOLUME="baby-mall-bootstrap-admin-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
 BOOTSTRAP_REDIS_PORT="6380"
 BOOTSTRAP_API_PORT="3200"
 REDIS_PASSWORD="BootstrapRedis#2026-Strong"
 ADMIN_USERNAME="ci_production_container_admin"
 ADMIN_PASSWORD='C!7xK2vR9mQ4zT6p'
 EXPECTED_SERIAL="ABCDEF123456"
+EXPECTED_BUILD_SHA="${GITHUB_SHA:-0123456789abcdef0123456789abcdef01234567}"
 API_DOMAIN="api.yunxixiaochengxu.com.cn"
 ADMIN_DOMAIN="admin.yunxixiaochengxu.com.cn"
 FIXTURE_DIR="$(mktemp -d)"
@@ -24,6 +26,7 @@ mysql_client() {
 cleanup() {
   docker rm -f "$BOOTSTRAP_API_NAME" >/dev/null 2>&1 || true
   docker rm -f "$BOOTSTRAP_REDIS_NAME" >/dev/null 2>&1 || true
+  docker volume rm -f "$BOOTSTRAP_ADMIN_VOLUME" >/dev/null 2>&1 || true
   mysql_client -e "DROP DATABASE IF EXISTS \`${BOOTSTRAP_DB}\`;" >/dev/null 2>&1 || true
   rm -rf "$FIXTURE_DIR"
 }
@@ -32,6 +35,10 @@ trap cleanup EXIT
 command -v docker >/dev/null 2>&1 || { echo 'docker is required' >&2; exit 1; }
 command -v openssl >/dev/null 2>&1 || { echo 'openssl is required' >&2; exit 1; }
 docker image inspect "$IMAGE_NAME" >/dev/null 2>&1 || { echo "production image not found: $IMAGE_NAME" >&2; exit 1; }
+[[ "$EXPECTED_BUILD_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "bootstrap BUILD_SHA must be an exact 40-character SHA: $EXPECTED_BUILD_SHA" >&2; exit 1; }
+
+docker volume rm -f "$BOOTSTRAP_ADMIN_VOLUME" >/dev/null 2>&1 || true
+docker volume create "$BOOTSTRAP_ADMIN_VOLUME" >/dev/null
 
 # Use a separate database so this test proves the image can bootstrap a genuinely empty production
 # schema without mutating the normal CI integration database.
@@ -77,9 +84,10 @@ container_id="$({
     --name "$BOOTSTRAP_API_NAME" \
     --network host \
     -v "$FIXTURE_DIR:/run/bootstrap-fixture:ro" \
+    -v "$BOOTSTRAP_ADMIN_VOLUME:/usr/share/nginx/admin" \
     -e NODE_ENV=production \
     -e PORT="$BOOTSTRAP_API_PORT" \
-    -e BUILD_SHA="${GITHUB_SHA:-0123456789abcdef0123456789abcdef01234567}" \
+    -e BUILD_SHA="$EXPECTED_BUILD_SHA" \
     -e API_DOMAIN="$API_DOMAIN" \
     -e ADMIN_DOMAIN="$ADMIN_DOMAIN" \
     -e HTTP_HOST_PORT=80 \
@@ -159,6 +167,16 @@ for marker in \
     exit 1
   }
 done
+
+admin_build_sha="$(docker run --rm \
+  --entrypoint cat \
+  -v "$BOOTSTRAP_ADMIN_VOLUME:/usr/share/nginx/admin:ro" \
+  "$IMAGE_NAME" \
+  /usr/share/nginx/admin/.build-hash 2>/dev/null | tr -d '\r\n')"
+[ "$admin_build_sha" = "$EXPECTED_BUILD_SHA" ] || {
+  echo "fresh production admin volume build hash mismatch: expected=$EXPECTED_BUILD_SHA actual=${admin_build_sha:-missing}" >&2
+  exit 1
+}
 
 admin_state="$(mysql_client -N -B "$BOOTSTRAP_DB" -e "
   SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(must_change_password), 0), ':', COALESCE(MAX(status), 0))
@@ -280,4 +298,4 @@ exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$BOOTSTRAP_API_NAME"
   exit 1
 }
 
-echo "[production-container-bootstrap] PASS migrations=${migration_count} admin=${ADMIN_USERNAME}"
+echo "[production-container-bootstrap] PASS migrations=${migration_count} admin=${ADMIN_USERNAME} build=${EXPECTED_BUILD_SHA}"
