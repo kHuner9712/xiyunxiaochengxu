@@ -11,8 +11,10 @@ services:
         max-size: "20m"
         max-file: "5"
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD required}
       MYSQL_DATABASE: ${DB_NAME:-baby_mall}
+      MYSQL_USER: ${DB_USER:-baby_mall_app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
       MYSQL_CHARSET: utf8mb4
       TZ: Asia/Shanghai
     ports:
@@ -86,7 +88,7 @@ services:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-baby_mall}
-      DB_USER: root
+      DB_USER: ${DB_USER:-baby_mall_app}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
       REDIS_HOST: redis
       REDIS_PORT: 6379
