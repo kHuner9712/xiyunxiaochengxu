@@ -61,6 +61,14 @@ if (strictProductionGate && isReservedProductionApiHost(env.VITE_API_BASE_URL)) 
   process.exit(1)
 }
 
+const appIdGateArgs = ['deploy/scripts/verify-wechat-appid-consistency.mjs']
+if (strictProductionGate) appIdGateArgs.push('--require-both')
+const appIdGateStatus = run(process.execPath, appIdGateArgs)
+if (appIdGateStatus !== 0) {
+  console.error('[run-release-check] WeChat frontend/backend AppID consistency gate failed')
+  process.exit(appIdGateStatus)
+}
+
 console.log('[release-gate-boundary] API test:ci covers unit tests and mocked HTTP tests; it is not a real-database end-to-end test.')
 console.log('[release-gate-boundary] Admin browser E2E uses a built frontend and controlled mock API; production runtime, WeChat DevTools, real-device and payment acceptance remain separate evidence gates.')
 
