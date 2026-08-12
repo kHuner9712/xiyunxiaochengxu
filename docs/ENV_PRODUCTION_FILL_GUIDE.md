@@ -13,7 +13,7 @@ chmod 600 .env.production
 
 2. `WECHAT_API_V3_KEY` 必须为 32 字节。
 3. `JWT_SECRET` / `REFRESH_TOKEN_SECRET` 必须使用随机强密钥，至少 32 字符。
-4. 数据库、Redis、初始管理员密码必须为真实强密码，不得保留模板占位值。
+4. MySQL root、MySQL 应用账号、Redis、初始管理员必须分别使用独立真实强密码，不得保留模板占位值或复用数据库两套密码。
 5. `WECHAT_PRIVATE_KEY_PATH` 与 `WECHAT_PLATFORM_CERT_PATH` 是**容器内路径**；证书文件实际放在宿主机 `deploy/certs/`。
 6. `SMOKE_TEST_BYPASS_CAPTCHA=false`，`WECHAT_SKIP_VERIFY=false`。
 
@@ -31,27 +31,27 @@ chmod 600 .env.production
 | `HTTP_HOST_PORT` | **必须 `80`** |
 | `HTTPS_HOST_PORT` | **必须 `443`** |
 
-## 3. MySQL
+## 3. MySQL：root 与 API 账号必须分离
 
-必须同时填写并保持一致：
+生产环境必须同时填写：
 
 ```text
 DB_HOST=mysql
 DB_PORT=3306
 DB_NAME=baby_mall
-DB_USER=root
-DB_PASSWORD=<真实强密码>
-DATABASE_URL=mysql://root:<percent-encoded密码>@mysql:3306/baby_mall
+DB_ROOT_PASSWORD=<当前 MySQL root 强密码>
+DB_USER=baby_mall_app
+DB_PASSWORD=<独立的应用数据库强密码>
+DATABASE_URL=mysql://baby_mall_app:<percent-encoded应用密码>@mysql:3306/baby_mall
 ```
 
-production preflight 会逐项比对 `DATABASE_URL` 的协议、host、port、database、user、解码后的 password 与 `DB_*`。任何不一致都会在 live migration 前失败。
+`DB_ROOT_PASSWORD` 只提供给 MySQL 容器，用于初始化、备份/恢复及 app-user 权限规范化；**不会注入 API 容器**。已有 `mysql_data` 卷升级时，`DB_ROOT_PASSWORD` 必须填写现有数据库当前真实 root 密码。
 
-如果密码含 `@ : / # % ? &` 等 URI 保留字符，必须在 `DATABASE_URL` 中 percent-encode。例如：
+`DB_USER` 是 API/Prisma 专用账号。生产 API entrypoint 明确拒绝 `DB_USER=root`；MySQL healthcheck 会在最终 mysqld 启动后幂等创建或轮换该账号，并清理其旧的额外权限，只保留 `DB_NAME.*`。`DB_PASSWORD` 必须与 `DB_ROOT_PASSWORD` 不同。
 
-```text
-原密码: P@ss#2026
-URL密码: P%40ss%232026
-```
+production preflight 会逐项比对 `DATABASE_URL` 的协议、host、port、database、user、解码后的 password 与 API 的 `DB_*`。任何不一致都会在 live migration 前失败。
+
+应用数据库密码包含 URI 保留字符时，必须只对 `DATABASE_URL` 的 userinfo 部分做 percent-encoding；不要改动 `DB_PASSWORD` 原值。
 
 ## 4. Redis
 
@@ -61,13 +61,12 @@ REDIS_PORT=6379
 REDIS_PASSWORD=<真实强密码>
 ```
 
-当前生产 Redis 还会在 `/health` 检查：
+当前生产 Redis 还会在健康合同中检查：
 
 - `maxmemory-policy=noeviction`
 - `appendonly=yes`
 - `appendfsync=everysec`
-
-宿主机必须满足 `vm.overcommit_memory=1`。
+- 宿主机 `vm.overcommit_memory=1`
 
 ## 5. JWT / 会话
 
@@ -130,7 +129,7 @@ UPLOAD_PUBLIC_URL=https://api.yunxixiaochengxu.com.cn
 CORS_ORIGINS=https://admin.yunxixiaochengxu.com.cn
 ```
 
-不要填写 `api.xxx.com`、其他临时域名或附带 path/query 的 CORS origin；production preflight 会拒绝。
+不要填写临时域名或附带 path/query 的 CORS origin；production preflight 会拒绝。
 
 上传：
 
@@ -140,13 +139,7 @@ UPLOAD_MAX_SIZE=52428800
 UPLOAD_ALLOWED_TYPES=image/jpeg,image/png,image/gif,image/webp,video/mp4
 ```
 
-当前 API 最大上传为 50MB，Nginx body limit 为 60MB（给 multipart 留余量）。
-
-公开/私有语义：
-
-- `/uploads/public/...` 可静态访问；
-- `/uploads/private/...` 不可直接静态访问；
-- 售后图片、营业执照、商品资质等私有文件通过后端鉴权接口读取。
+当前 API 最大上传为 50MB，Nginx body limit 为 60MB（给 multipart 留余量）。`/uploads/public/...` 可静态访问；`/uploads/private/...` 不可直接静态访问；售后图片、营业执照、商品资质等私有文件必须通过后端鉴权接口读取。
 
 ## 9. 首管理员
 
@@ -162,23 +155,13 @@ SMOKE_TEST_BYPASS_CAPTCHA=false
 
 ## 10. 业务参数不属于 `.env.production`
 
-以下参数的运行时来源是数据库 `system_configs` + 管理后台“系统配置”，不要在 `.env.production` 中添加同名变量试图覆盖：
+订单自动关闭/自动收货、售后期限、默认运费/包邮门槛、积分抵扣比例等运行时来源是数据库 `system_configs` + 管理后台“系统配置”。不要在 `.env.production` 中添加 `ORDER_AUTO_* / FREIGHT_* / POINTS_*` 试图覆盖。
 
-- 订单自动关闭时间（原旧名 `ORDER_AUTO_CLOSE_MINUTES`）
-- 自动确认收货天数（原旧名 `ORDER_AUTO_COMPLETE_DAYS`）
-- 售后申请期限
-- 包邮门槛（原旧名 `FREIGHT_FREE_AMOUNT`）
-- 默认运费（原旧名 `FREIGHT_DEFAULT_FEE`）
-- 积分抵扣比率（原旧名 `POINTS_DEDUCT_RATE`）
-- 积分抵扣上限（原旧名 `POINTS_DEDUCT_MAX_PERCENT`）
-
-运费、包邮门槛等金额型配置在数据库中以**分**保存；管理后台负责“元 ↔ 分”转换。
-
-**偏远地区附加运费是例外**：当前实现仍使用 shared 代码常量，不由 `.env.production` 或 `system_configs` 覆盖。因此同样不要设置 `FREIGHT_REMOTE_FEE` 期待它生效；若未来需要后台可配置，必须先修改实际订单运行时代码并增加迁移/合同测试。
+运费、包邮门槛等金额型配置在数据库中以**分**保存。偏远地区附加运费目前仍使用 shared 代码常量，同样不要设置 `FREIGHT_REMOTE_FEE` 期待生效。
 
 ## 11. 不存在的旧配置项
 
-不要添加或依赖以下旧/预留字段：
+不要添加或依赖：
 
 - `SSL_FULLCHAIN_PATH`
 - `SSL_PRIVKEY_PATH`
@@ -204,4 +187,4 @@ ENV_FILE=.env.production \
 bash deploy/scripts/deploy-production.sh
 ```
 
-该入口会在修改 live DB 前运行 production preflight，并执行备份克隆 migration 验证、live migration、health 与完整 runtime smoke。
+该入口会在修改 live DB 前执行 production preflight、MySQL/Redis 健康合同、备份克隆 migration 验证、live migration、health 与完整 runtime smoke。MySQL 只有在专用应用账号权限规范化成功后才会变为 healthy，因此已有数据库卷也不需要人工创建 app user。
