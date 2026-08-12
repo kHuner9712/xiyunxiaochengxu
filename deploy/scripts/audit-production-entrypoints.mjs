@@ -9,6 +9,8 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
 const legacyDeploy = read('deploy/scripts/deploy.sh');
 const productionDeploy = read('deploy/scripts/deploy-production.sh');
+const apiDockerfile = read('deploy/Dockerfile.api');
+const apiEntrypoint = read('deploy/scripts/entrypoint.sh');
 const backup = read('deploy/scripts/backup.sh');
 const restore = read('deploy/scripts/restore.sh');
 const publicSmoke = read('deploy/scripts/smoke-public.sh');
@@ -25,8 +27,16 @@ assert.doesNotMatch(legacyDeploy, /prisma\s+migrate\s+deploy/);
 assert.doesNotMatch(legacyDeploy, /docker\s+compose[^\n]*(up|restart)[^\n]*(api|nginx)/);
 
 assert.match(productionDeploy, /EXPECTED_DEPLOY_SHA/);
-assert.match(productionDeploy, /production-config-preflight/);
+assert.match(productionDeploy, /"\$\{COMPOSE\[@\]\}" run --rm --no-deps api true/);
+assert.match(productionDeploy, /candidate image passed full production config\/payment preflight before maintenance/);
 assert.match(productionDeploy, /smoke-runtime\.sh/);
+assert.match(apiDockerfile, /COPY deploy\/scripts\/entrypoint\.sh \.\/entrypoint\.sh/);
+assert.match(apiDockerfile, /ENTRYPOINT \["\.\/entrypoint\.sh"\]/);
+assert.match(apiEntrypoint, /NODE_ENV:-}" = "production"/);
+assert.match(apiEntrypoint, /node dist\/config\/production-config-preflight\.js/);
+const candidatePreflight = productionDeploy.indexOf('"${COMPOSE[@]}" run --rm --no-deps api true');
+const maintenanceStart = productionDeploy.indexOf('MAINTENANCE_ACTIVE=true');
+assert.ok(candidatePreflight >= 0 && maintenanceStart > candidatePreflight, 'Candidate image production preflight must pass before maintenance starts');
 
 assert.match(backup, /DB_BASENAME="db_\$\{TIMESTAMP\}\.sql\.gz"/);
 assert.match(backup, /UPLOAD_BASENAME="uploads_\$\{TIMESTAMP\}\.tar\.gz"/);
@@ -61,7 +71,6 @@ assert.doesNotMatch(restore, /127\.0\.0\.1:3000\/health/);
 assert.match(restore, /ENV_FILE="\$ENV_FILE" bash "\$SCRIPT_DIR\/smoke-runtime\.sh"/);
 assert.match(restore, /"\$\{COMPOSE\[@\]\}" stop nginx/);
 assert.match(restore, /完整 runtime smoke 已通过/);
-
 const apiStart = restore.indexOf('up -d api');
 const health = restore.indexOf('127.0.0.1:3000/api/health');
 const nginxStart = restore.indexOf('up -d nginx');
