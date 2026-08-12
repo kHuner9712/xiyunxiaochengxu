@@ -83,6 +83,7 @@ describe('production operation closure contracts', () => {
 
   it('uses the outermost hardened runtime providers rather than leaving safety wrappers unused', () => {
     const paymentModule = read('apps/api/src/payment/payment.module.ts');
+    const confirmedMissingRefundPayment = read('apps/api/src/payment/confirmed-missing-refund-retry-payment.service.ts');
     const orphanSafePayment = read('apps/api/src/payment/orphan-safe-member-growth-payment.service.ts');
     const memberGrowthPayment = read('apps/api/src/payment/member-growth-conserving-payment.service.ts');
     const promotionRecoveringPayment = read('apps/api/src/payment/promotion-recovering-durable-zero-pay-aftersale-payment.service.ts');
@@ -107,8 +108,11 @@ describe('production operation closure contracts', () => {
     const snapshotSettlement = read('apps/api/src/merchant-settlement/snapshot-aware-state-safe-merchant-settlement.service.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
     const atomicShare = read('apps/api/src/share/atomic-share-production.service.ts');
+    const authModule = read('apps/api/src/auth/auth.module.ts');
+    const recoveringAuth = read('apps/api/src/auth/recovering-production-auth.service.ts');
 
-    expect(paymentModule).toContain('useClass: OrphanSafeMemberGrowthPaymentService');
+    expect(paymentModule).toContain('useClass: ConfirmedMissingRefundRetryPaymentService');
+    expect(confirmedMissingRefundPayment).toContain('extends OrphanSafeMemberGrowthPaymentService');
     expect(orphanSafePayment).toContain('extends MemberGrowthConservingPaymentService');
     expect(orphanSafePayment).toContain("return { code: 'FAIL', message: '本地退款记录不存在，请重试' }");
     expect(memberGrowthPayment).toContain('extends PromotionRecoveringDurableZeroPayAftersalePaymentService');
@@ -117,6 +121,9 @@ describe('production operation closure contracts', () => {
     expect(memberGrowthPayment).toContain('refund_growth_conservation');
     expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
     expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
+
+    expect(authModule).toContain('useClass: RecoveringProductionAuthService');
+    expect(recoveringAuth).toContain('extends ProductionAuthService');
 
     expect(orderModule).toContain('useClass: IdempotentAttributionSafeMemberBenefitOrderService');
     expect(idempotentOrder).toContain('extends AttributionSafeMemberBenefitOrderService');
