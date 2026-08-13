@@ -34,10 +34,15 @@ assert.match(apiDockerfile, /COPY deploy\/scripts\/entrypoint\.sh \.\/entrypoint
 assert.match(apiDockerfile, /ENTRYPOINT \["\.\/entrypoint\.sh"\]/);
 assert.match(apiEntrypoint, /NODE_ENV:-}" = "production"/);
 assert.match(apiEntrypoint, /node dist\/config\/production-config-preflight\.js/);
+const permissionSeedBody = apiEntrypoint.match(/run_permission_seed\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
 const productionSeedBody = apiEntrypoint.match(/run_seed\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(permissionSeedBody, /ts-node -P prisma\/tsconfig\.seed\.json prisma\/seed-default-role-permissions\.ts/);
+assert.doesNotMatch(permissionSeedBody, /prisma\/seed\.ts/);
+assert.doesNotMatch(permissionSeedBody, /prisma\s+db\s+seed/);
 assert.match(productionSeedBody, /ts-node -P prisma\/tsconfig\.seed\.json prisma\/seed\.ts/);
-assert.match(productionSeedBody, /ts-node -P prisma\/tsconfig\.seed\.json prisma\/seed-default-role-permissions\.ts/);
+assert.match(productionSeedBody, /run_permission_seed/);
 assert.doesNotMatch(productionSeedBody, /prisma\s+db\s+seed/);
+assert.match(apiEntrypoint, /已有数据的生产库禁止 RUN_SEED=true/);
 const candidatePreflight = productionDeploy.indexOf('"${COMPOSE[@]}" run --rm --no-deps api true');
 const maintenanceStart = productionDeploy.indexOf('MAINTENANCE_ACTIVE=true');
 assert.ok(candidatePreflight >= 0 && maintenanceStart > candidatePreflight, 'Candidate image production preflight must pass before maintenance starts');
