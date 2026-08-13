@@ -4,6 +4,7 @@ import { MODULE_METADATA } from '@nestjs/common/constants';
 import { OrderModule } from './order.module';
 import { OrderService } from './order.service';
 import { PromotionCheckoutService } from './promotion-checkout.service';
+import { AttributionAwarePromotionCheckoutService } from './attribution-aware-promotion-checkout.service';
 import {
   installPickupStoreTransactionGuard,
   PickupSafeIdempotentAttributionSafeMemberBenefitOrderService,
@@ -74,6 +75,51 @@ describe('pickup order transaction guard', () => {
     )).rejects.toThrow('自提点不存在或已停用');
 
     expect(orderCreate).not.toHaveBeenCalled();
+  });
+
+  it('locks pickup stores before delegating promotion checkout', async () => {
+    const parent = jest
+      .spyOn(AttributionAwarePromotionCheckoutService.prototype, 'createOrder')
+      .mockResolvedValue({
+        orderId: 1n,
+        orderItemId: 2n,
+        orderNo: 'XYTEST',
+        payAmount: 100,
+        isZeroPay: false,
+        status: 'pending_payment' as any,
+        fulfillmentType: 'pickup',
+      });
+    const tx: any = {
+      $queryRaw: jest.fn().mockResolvedValue([{
+        id: 9n,
+        name: '门店',
+        province: '上海市',
+        city: '上海市',
+        district: '浦东新区',
+        address: '世纪大道1号',
+        contactPhone: '021-12345678',
+      }]),
+    };
+    const service = new PickupSafeAttributionAwarePromotionCheckoutService();
+
+    try {
+      const result = await service.createOrder(tx, {
+        userId: 1n,
+        skuId: 2n,
+        quantity: 1,
+        unitPrice: 100,
+        activityId: 3n,
+        activityType: 'flash_sale',
+        fulfillmentType: 'pickup',
+        pickupStoreId: '9',
+      });
+
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(parent).toHaveBeenCalledTimes(1);
+      expect(result.orderId).toBe(1n);
+    } finally {
+      parent.mockRestore();
+    }
   });
 
   it('wires both normal and promotion checkout tokens to pickup-safe production providers', () => {
