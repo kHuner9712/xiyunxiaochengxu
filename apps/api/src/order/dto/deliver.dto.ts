@@ -1,5 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, Matches } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, Matches, MaxLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 // HTTP requests are still required to provide digit strings by the validators below.
 // The number union only keeps direct service-level unit fixtures source-compatible.
@@ -10,12 +10,16 @@ export class DeliverDto {
   @Matches(/^\d+$/, { message: '订单ID格式不正确' })
   orderId!: DeliveryOrderId;
 
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50, { message: '物流公司最多50个字符' })
   logisticsCompany!: string;
 
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50, { message: '物流单号最多50个字符' })
   logisticsNo!: string;
 
   @IsOptional()
@@ -27,12 +31,16 @@ export class DeliverItemDto {
   @Matches(/^\d+$/, { message: '订单ID格式不正确' })
   orderId!: DeliveryOrderId;
 
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50, { message: '物流公司最多50个字符' })
   logisticsCompany!: string;
 
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50, { message: '物流单号最多50个字符' })
   logisticsNo!: string;
 }
 
