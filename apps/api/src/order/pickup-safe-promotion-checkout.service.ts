@@ -7,7 +7,11 @@ import {
   PromotionCheckoutInput,
   PromotionCheckoutResult,
 } from './promotion-checkout.service';
-import { lockActivePickupStore, withLockedPickupStoreRead } from './pickup-order-guard';
+import {
+  lockActiveCheckoutUser,
+  lockActivePickupStore,
+  withLockedPickupStoreRead,
+} from './pickup-order-guard';
 
 @Injectable()
 export class PickupSafeAttributionAwarePromotionCheckoutService
@@ -20,6 +24,11 @@ export class PickupSafeAttributionAwarePromotionCheckoutService
     tx: Prisma.TransactionClient,
     input: PromotionCheckoutInput,
   ): Promise<PromotionCheckoutResult> {
+    // Account cancellation locks this same user row before checking for blocking orders. A promotion
+    // checkout that started with an older JWT therefore cannot create an order after cancellation
+    // has committed; if checkout owns the lock first, cancellation waits and then sees the order.
+    await lockActiveCheckoutUser(tx, input.userId);
+
     const fulfillmentType = input.fulfillmentType || 'delivery';
     if (fulfillmentType === 'pickup') {
       const pickupStoreId = parsePositiveBigIntId(String(input.pickupStoreId || ''), '自提点');
