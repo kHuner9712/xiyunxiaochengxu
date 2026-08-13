@@ -5,13 +5,22 @@ import {
 } from './direct-profile-asset.policy';
 
 describe('direct profile asset policy', () => {
+  const previousUploadPublicUrl = process.env.UPLOAD_PUBLIC_URL;
+
+  afterEach(() => {
+    if (previousUploadPublicUrl === undefined) delete process.env.UPLOAD_PUBLIC_URL;
+    else process.env.UPLOAD_PUBLIC_URL = previousUploadPublicUrl;
+  });
+
   it('normalizes absolute and relative public upload URLs to the stored path', () => {
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     expect(extractPublicUploadPath('/uploads/public/avatar.jpg')).toBe('/uploads/public/avatar.jpg');
     expect(extractPublicUploadPath('https://api.example.com/api/uploads/public/avatar.jpg?x=1')).toBe('/uploads/public/avatar.jpg');
     expect(extractPublicUploadPath('/api/common/file/private/1')).toBeNull();
   });
 
   it('accepts only an asset owned by the current user in the expected group', async () => {
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
     const prisma = {
       fileAsset: {
         findFirst: jest.fn().mockResolvedValue({ id: 9n, filePath: '/uploads/public/avatar.jpg' }),
@@ -34,6 +43,21 @@ describe('direct profile asset policy', () => {
       },
       select: { id: true, filePath: true },
     });
+  });
+
+  it('rejects a third-party absolute origin even when its pathname mimics an owned upload', async () => {
+    process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
+    const prisma = {
+      fileAsset: { findFirst: jest.fn() },
+    } as any;
+
+    await expect(assertOwnedDirectProfileAsset(
+      prisma,
+      7n,
+      'https://evil.example/uploads/public/avatar.jpg',
+      'user-avatar',
+    )).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.fileAsset.findFirst).not.toHaveBeenCalled();
   });
 
   it('rejects unowned, wrong-purpose or non-upload avatar values', async () => {
