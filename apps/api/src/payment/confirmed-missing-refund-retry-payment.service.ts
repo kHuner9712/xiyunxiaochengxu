@@ -12,6 +12,11 @@ import { OrderService } from '../order/order.service';
 import { ShareService } from '../share/share.service';
 import { OrphanSafeMemberGrowthPaymentService } from './orphan-safe-member-growth-payment.service';
 
+const AUTO_VERIFIABLE_CANCELLED_PAID_TASK_REASONS = new Set([
+  'cancelled_order_paid_callback',
+  'cancelled_order_paid_historical_anomaly',
+]);
+
 /**
  * Outermost production payment provider.
  *
@@ -22,6 +27,12 @@ import { OrphanSafeMemberGrowthPaymentService } from './orphan-safe-member-growt
  * both must match the durable refund/order records before any inventory/points/order side effect.
  * The only payment amount-less path accepted is the internal half-success repair where the local
  * payment fact is already SUCCESS.
+ *
+ * Cancelled-but-paid exposure tasks whose closure can be proven from SUCCESS refunds are also kept
+ * system-owned here. The historical detector deliberately refuses to seed a second task while any
+ * matching row exists, so allowing an operator to mark such a row resolved/ignored would otherwise
+ * permanently remove a real customer-money exposure from automatic reconciliation. Amount-mismatch
+ * tasks remain manually resolvable because their correct amount requires explicit human accounting.
  *
  * WeChat distinguishes an unknown/uncertain refund request from a refund that is confirmed not to
  * exist. The legacy recovery path intentionally blocks a locally FAILED refund until WeChat can
@@ -189,6 +200,24 @@ export class ConfirmedMissingRefundRetryPaymentService extends OrphanSafeMemberG
     }
 
     return super.processWechatRefundSuccess(refund, refundId, wechatData);
+  }
+
+  override async resolveCompensationTask(
+    id: string,
+    handledBy: string,
+    resolution: string,
+    status: 'resolved' | 'ignored',
+  ) {
+    const task = await this.confirmedMissingPrisma.paymentCompensationTask.findFirst({
+      where: { id: BigInt(id) },
+      select: { reason: true },
+    });
+    if (task && AUTO_VERIFIABLE_CANCELLED_PAID_TASK_REASONS.has(task.reason)) {
+      throw new BadRequestException(
+        '取消后已支付资金敞口任务不能人工关闭，必须由成功退款事实自动核销后关闭',
+      );
+    }
+    return super.resolveCompensationTask(id, handledBy, resolution, status);
   }
 
   override async queryRefund(outRefundNo: string) {
