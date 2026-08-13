@@ -10,15 +10,20 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { IdempotentAttributionSafeMemberBenefitOrderService } from './idempotent-attribution-safe-member-benefit-order.service';
-import { lockActivePickupStore, withLockedPickupStoreSnapshot } from './pickup-order-guard';
+import {
+  lockActiveCheckoutUser,
+  lockActivePickupStore,
+  withLockedPickupStoreSnapshot,
+} from './pickup-order-guard';
 
-type PickupOrderContext = {
-  pickupStoreId: bigint;
+type OrderCreateContext = {
+  userId: bigint;
+  pickupStoreId?: bigint;
 };
 
 export function installPickupStoreTransactionGuard(
   prisma: PrismaService,
-  storage: AsyncLocalStorage<PickupOrderContext>,
+  storage: AsyncLocalStorage<OrderCreateContext>,
 ): void {
   const originalTransaction = prisma.$transaction.bind(prisma) as any;
 
@@ -29,6 +34,11 @@ export function installPickupStoreTransactionGuard(
     }
 
     return originalTransaction(async (tx: any) => {
+      await lockActiveCheckoutUser(tx, context.userId);
+
+      if (!context.pickupStoreId) {
+        return input(tx);
+      }
       const store = await lockActivePickupStore(tx, context.pickupStoreId);
       return input(withLockedPickupStoreSnapshot(tx, store));
     }, ...rest);
@@ -38,7 +48,7 @@ export function installPickupStoreTransactionGuard(
 @Injectable()
 export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
   extends IdempotentAttributionSafeMemberBenefitOrderService {
-  private readonly pickupOrderContext = new AsyncLocalStorage<PickupOrderContext>();
+  private readonly pickupOrderContext = new AsyncLocalStorage<OrderCreateContext>();
 
   constructor(
     prisma: PrismaService,
@@ -61,20 +71,20 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
 
     const runtimePrisma = (this as any).productionPrisma as PrismaService | undefined;
     if (!runtimePrisma || typeof runtimePrisma.$transaction !== 'function') {
-      throw new Error('OrderService pickup transaction guard is unavailable');
+      throw new Error('OrderService checkout transaction guard is unavailable');
     }
     installPickupStoreTransactionGuard(runtimePrisma, this.pickupOrderContext);
   }
 
   override async create(userId: string, dto: CreateOrderDto) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
     const fulfillmentType = dto.fulfillmentType || 'delivery';
-    if (fulfillmentType !== 'pickup') {
-      return super.create(userId, dto);
-    }
+    const pickupStoreId = fulfillmentType === 'pickup'
+      ? parsePositiveBigIntId(String(dto.pickupStoreId || ''), '自提点')
+      : undefined;
 
-    const pickupStoreId = parsePositiveBigIntId(String(dto.pickupStoreId || ''), '自提点');
     return this.pickupOrderContext.run(
-      { pickupStoreId },
+      { userId: userIdValue, pickupStoreId },
       () => super.create(userId, dto),
     );
   }
