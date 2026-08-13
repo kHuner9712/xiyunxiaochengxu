@@ -255,6 +255,52 @@ export class ProductionProductService extends ProductService {
     return super.findAdminById(id);
   }
 
+  override async updateStatus(id: string, status: number) {
+    const productId = parsePositiveBigIntId(id, '商品');
+    if (status !== 1) {
+      return super.updateStatus(productId.toString(), status);
+    }
+
+    await this.productionPrisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: bigint; supplierId: bigint | null }>>`
+        SELECT id, supplier_id AS supplierId
+        FROM products
+        WHERE id = ${productId} AND deleted_at IS NULL
+        FOR UPDATE
+      `;
+      if (locked.length === 0) throw new NotFoundException('商品不存在');
+
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        include: { category: true },
+      });
+      if (!product || product.deletedAt) throw new NotFoundException('商品不存在');
+      if (product.minPrice === null) {
+        throw new BadRequestException('商品无有效SKU，无法上架');
+      }
+
+      if (locked[0].supplierId) {
+        // Supplier deactivation uses the same row lock. This makes "publish product" and
+        // "deactivate supplier" mutually exclusive and preserves the invariant that a live
+        // product can never point at an inactive supplier.
+        await this.assertSupplierAssignable(tx, locked[0].supplierId);
+      }
+
+      const validateComplianceBeforePublish = (this as any).validateProductComplianceBeforePublish;
+      if (typeof validateComplianceBeforePublish !== 'function') {
+        throw new Error('ProductService publish compliance validator is unavailable');
+      }
+      validateComplianceBeforePublish.call(this, product);
+
+      await tx.product.update({
+        where: { id: productId },
+        data: { status: 1 },
+      });
+    });
+
+    return super.findAdminById(productId.toString());
+  }
+
   private async assertCategoryAssignable(tx: Prisma.TransactionClient, categoryId: bigint) {
     const rows = await tx.$queryRaw<Array<{ id: bigint }>>`
       SELECT id
