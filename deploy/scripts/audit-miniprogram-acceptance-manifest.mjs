@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const pagesJsonPath = resolve(root, 'apps/miniprogram/src/pages.json')
 const manifestPath = resolve(root, 'apps/miniprogram/acceptance/wechat-page-manifest.json')
+const miniprogramPackagePath = resolve(root, 'apps/miniprogram/package.json')
+const acceptanceRunnerPath = resolve(root, 'apps/miniprogram/scripts/run-wechat-acceptance.mjs')
+const acceptanceTestPath = resolve(root, 'apps/miniprogram/src/full-function-acceptance.test.js')
+const automatorJestConfigPath = resolve(root, 'apps/miniprogram/jest.config.js')
 
 function fail(message) {
   console.error(`[audit-miniprogram-acceptance] ${message}`)
@@ -22,11 +26,27 @@ function readJson(path) {
 
 const pagesConfig = readJson(pagesJsonPath)
 const manifest = readJson(manifestPath)
+const miniprogramPackage = readJson(miniprogramPackagePath)
 const registeredPages = Array.isArray(pagesConfig.pages) ? pagesConfig.pages.map((entry) => entry.path) : []
 const acceptedPages = Array.isArray(manifest.pages) ? manifest.pages : []
 
 if (!registeredPages.length) fail('pages.json contains no registered pages')
 if (!acceptedPages.length) fail('acceptance manifest contains no pages')
+
+for (const [label, path] of [
+  ['WeChat acceptance runner', acceptanceRunnerPath],
+  ['WeChat automator test', acceptanceTestPath],
+  ['uni-automator Jest config', automatorJestConfigPath],
+]) {
+  if (!existsSync(path)) fail(`${label} is missing`)
+}
+
+for (const scriptName of ['test:wechat:smoke', 'test:wechat:full']) {
+  const command = miniprogramPackage?.scripts?.[scriptName]
+  if (typeof command !== 'string' || !command.includes('run-wechat-acceptance.mjs')) {
+    fail(`apps/miniprogram/package.json must define ${scriptName} through run-wechat-acceptance.mjs`)
+  }
+}
 
 const registeredSet = new Set(registeredPages)
 const acceptedSet = new Set()
@@ -87,6 +107,7 @@ if (!process.exitCode) {
   const dataDrivenCount = acceptedPages.filter((entry) => entry.queryEnv && Object.keys(entry.queryEnv).length).length
   console.log(
     `[audit-miniprogram-acceptance] PASS: ${registeredPages.length} registered pages are explicitly covered ` +
-    `(${authCount} authenticated, ${dataDrivenCount} data-driven); ${manifest.realDeviceOnly.length} real-device gates declared.`,
+    `(${authCount} authenticated, ${dataDrivenCount} data-driven); ${manifest.realDeviceOnly.length} real-device gates declared; ` +
+    'WeChat acceptance runner, automator test and Jest configuration are present.',
   )
 }
