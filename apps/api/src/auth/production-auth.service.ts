@@ -132,13 +132,19 @@ export class ProductionAuthService extends AuthService {
       throw new UnauthorizedException('账号已停用，请联系客服');
     }
 
-    user = await this.productionPrisma.user.update({
-      where: { id: user.id },
+    // The account may be cancelled after the initial lookup. Commit identity metadata only while
+    // the durable row is still active so an in-flight login cannot re-introduce UnionID/lastLoginAt
+    // after the cancellation transaction has anonymized the account.
+    const activeClaim = await this.productionPrisma.user.updateMany({
+      where: { id: user.id, deletedAt: null, status: 1 },
       data: {
         lastLoginAt: new Date(),
         ...(unionid ? { unionId: unionid } : {}),
       },
     });
+    if (activeClaim.count !== 1) {
+      throw new UnauthorizedException('账号已停用或注销，请重新登录');
+    }
 
     await this.productionRedis.set(
       `wechat_session:${user.id.toString()}`,
