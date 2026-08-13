@@ -132,7 +132,57 @@ export class AtomicMemberService extends MemberService {
   }
 
   private async reconcileUsersAfterLevelChange() {
-    const reconcile = (this as any).reconcileAllUserLevels as (reason: string) => Promise<void>;
-    await reconcile.call(this, '会员等级配置变更');
+    const levels = await this.atomicPrisma.memberLevel.findMany({
+      where: { status: 1 },
+      orderBy: [{ minGrowthValue: 'asc' }, { sortOrder: 'asc' }],
+    });
+    if (levels.length === 0) return;
+
+    const users = await this.atomicPrisma.user.findMany({
+      where: { deletedAt: null },
+      select: { id: true, growthValue: true, memberLevelId: true },
+    });
+
+    for (const user of users) {
+      const target = this.resolveTargetLevel(levels, user.growthValue);
+      if (!target || user.memberLevelId === target.id) continue;
+
+      await this.atomicPrisma.$transaction(async (tx) => {
+        const claim = await tx.user.updateMany({
+          where: {
+            id: user.id,
+            deletedAt: null,
+            memberLevelId: user.memberLevelId,
+          },
+          data: { memberLevelId: target.id },
+        });
+        if (claim.count !== 1) return;
+
+        await tx.userMemberRecord.create({
+          data: {
+            userId: user.id,
+            oldLevelId: user.memberLevelId,
+            newLevelId: target.id,
+            changeReason: '会员等级配置变更',
+          },
+        });
+      });
+    }
+  }
+
+  private resolveTargetLevel(levels: any[], growthValue: number) {
+    let matched = -1;
+    for (let index = 0; index < levels.length; index += 1) {
+      const level = levels[index];
+      if (
+        growthValue >= level.minGrowthValue
+        && (level.maxGrowthValue === null || growthValue <= level.maxGrowthValue)
+      ) {
+        matched = index;
+      }
+    }
+    if (matched >= 0) return levels[matched];
+    if (growthValue < levels[0].minGrowthValue) return levels[0];
+    return levels[levels.length - 1];
   }
 }
