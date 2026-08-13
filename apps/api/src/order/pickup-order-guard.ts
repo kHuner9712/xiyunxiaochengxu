@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 export type LockedPickupStore = {
@@ -10,6 +10,23 @@ export type LockedPickupStore = {
   address: string;
   contactPhone: string;
 };
+
+export async function lockActiveCheckoutUser(
+  tx: Prisma.TransactionClient,
+  userId: bigint,
+): Promise<void> {
+  const rows = await tx.$queryRaw<Array<{ id: bigint }>>`
+    SELECT id
+    FROM users
+    WHERE id = ${userId}
+      AND status = 1
+      AND deleted_at IS NULL
+    FOR UPDATE
+  `;
+  if (rows.length === 0) {
+    throw new UnauthorizedException('账号已停用或注销，请重新登录');
+  }
+}
 
 export async function lockActivePickupStore(
   tx: Prisma.TransactionClient,
