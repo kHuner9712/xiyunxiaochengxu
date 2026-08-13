@@ -20,7 +20,10 @@ for (const required of [
   '**/uploads',
   '**/logs',
   'deploy/backups',
+  '.env',
   '.env.*',
+  '**/.env',
+  '**/.env.*',
   '**/*.pem',
   '**/*.key',
   'deploy/certs',
@@ -30,5 +33,11 @@ for (const required of [
   assert.ok(entries.has(required), `.dockerignore missing required exclusion: ${required}`);
 }
 
-assert.ok(entries.has('!.env.production.example'), 'reviewed production env template must remain in build context');
+for (const entry of entries) {
+  assert.ok(
+    !entry.startsWith('!.env') && !entry.startsWith('!**/.env'),
+    `environment files must not be re-included in Docker build context: ${entry}`,
+  );
+}
+
 console.log('[audit-docker-build-context] PASS');
