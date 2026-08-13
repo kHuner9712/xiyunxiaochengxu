@@ -1,0 +1,54 @@
+# Version control and local tooling
+.git
+.github
+.vscode
+.idea
+.DS_Store
+
+# Dependencies and build outputs
+**/node_modules
+**/dist
+**/.turbo
+**/.cache
+coverage
+**/coverage
+
+# Runtime data
+**/uploads
+**/logs
+deploy/backups
+*.log
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+**/.env
+**/.env.*
+
+# Keys, certificates and private material
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.crt
+**/*.cer
+**/*.der
+deploy/certs
+deploy/nginx/ssl
+apps/api/certs
+
+# Database/export artifacts
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*.tar
+*.tar.gz
+*.zip
+
+# Temporary/editor files
+**/*.tmp
+**/*.swp
+**/*~
