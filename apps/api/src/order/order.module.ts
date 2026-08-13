@@ -1,9 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { WeappOrderController, AdminOrderController } from './order.controller';
 import { OrderService } from './order.service';
-import { IdempotentAttributionSafeMemberBenefitOrderService } from './idempotent-attribution-safe-member-benefit-order.service';
+import { PickupSafeIdempotentAttributionSafeMemberBenefitOrderService } from './pickup-safe-order.service';
 import { PromotionCheckoutService } from './promotion-checkout.service';
-import { AttributionAwarePromotionCheckoutService } from './attribution-aware-promotion-checkout.service';
+import { PickupSafeAttributionAwarePromotionCheckoutService } from './pickup-safe-promotion-checkout.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { BusinessEventModule } from '../common/business-event.module';
 import { BenefitPackageModule } from '../benefit-package/benefit-package.module';
@@ -24,11 +24,11 @@ import { SystemConfigModule } from '../system-config/system-config.module';
   providers: [
     {
       provide: PromotionCheckoutService,
-      useClass: AttributionAwarePromotionCheckoutService,
+      useClass: PickupSafeAttributionAwarePromotionCheckoutService,
     },
     {
       provide: OrderService,
-      useClass: IdempotentAttributionSafeMemberBenefitOrderService,
+      useClass: PickupSafeIdempotentAttributionSafeMemberBenefitOrderService,
     },
   ],
   exports: [OrderService, PromotionCheckoutService],
