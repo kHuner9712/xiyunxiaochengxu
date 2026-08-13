@@ -16,6 +16,7 @@ const AUTO_VERIFIABLE_CANCELLED_PAID_TASK_REASONS = new Set([
   'cancelled_order_paid_callback',
   'cancelled_order_paid_historical_anomaly',
 ]);
+const HISTORICAL_CANCELLED_PAID_RECONCILER = 'system:historical-cancelled-paid-reconcile';
 
 /**
  * Outermost production payment provider.
@@ -31,8 +32,10 @@ const AUTO_VERIFIABLE_CANCELLED_PAID_TASK_REASONS = new Set([
  * Cancelled-but-paid exposure tasks whose closure can be proven from SUCCESS refunds are also kept
  * system-owned here. The historical detector deliberately refuses to seed a second task while any
  * matching row exists, so allowing an operator to mark such a row resolved/ignored would otherwise
- * permanently remove a real customer-money exposure from automatic reconciliation. Amount-mismatch
- * tasks remain manually resolvable because their correct amount requires explicit human accounting.
+ * permanently remove a real customer-money exposure from automatic reconciliation. The refund
+ * compensation cycle also re-checks legacy manually-closed rows and reopens them when SUCCESS
+ * refunds still do not cover the paid amount. Amount-mismatch tasks remain manually resolvable
+ * because their correct amount requires explicit human accounting.
  *
  * WeChat distinguishes an unknown/uncertain refund request from a refund that is confirmed not to
  * exist. The legacy recovery path intentionally blocks a locally FAILED refund until WeChat can
@@ -202,6 +205,12 @@ export class ConfirmedMissingRefundRetryPaymentService extends OrphanSafeMemberG
     return super.processWechatRefundSuccess(refund, refundId, wechatData);
   }
 
+  override async reconcileRefundSuccessSideEffects(limit = 200) {
+    const inherited = await super.reconcileRefundSuccessSideEffects(limit);
+    const cancelledPaidExposure = await this.repairLegacyClosedCancelledPaidExposure(limit);
+    return { ...inherited, cancelledPaidExposure };
+  }
+
   override async resolveCompensationTask(
     id: string,
     handledBy: string,
@@ -241,6 +250,104 @@ export class ConfirmedMissingRefundRetryPaymentService extends OrphanSafeMemberG
         syntheticTerminalReason: 'RESOURCE_NOT_EXISTS',
       };
     }
+  }
+
+  private async repairLegacyClosedCancelledPaidExposure(limit: number) {
+    const safeLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 200;
+    const tasks = await this.confirmedMissingPrisma.paymentCompensationTask.findMany({
+      where: {
+        reason: { in: [...AUTO_VERIFIABLE_CANCELLED_PAID_TASK_REASONS] },
+        status: { in: ['resolved', 'ignored'] },
+        NOT: { handledBy: HISTORICAL_CANCELLED_PAID_RECONCILER },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: safeLimit,
+    });
+
+    let reopened = 0;
+    let verifiedResolved = 0;
+    let failed = 0;
+    for (const task of tasks) {
+      try {
+        const order = await this.confirmedMissingPrisma.order.findFirst({
+          where: { orderNo: task.orderNo },
+          include: {
+            payment: true,
+            orderRefunds: {
+              select: { status: true, refundAmount: true },
+            },
+          },
+        });
+
+        if (!order?.payment) {
+          const result = await this.confirmedMissingPrisma.paymentCompensationTask.updateMany({
+            where: { id: task.id, status: { in: ['resolved', 'ignored'] } },
+            data: {
+              status: 'pending',
+              handledBy: null,
+              handledAt: null,
+              resolution: '旧版人工关闭记录缺少可验证的订单/支付事实，已重新打开等待资金核对',
+            },
+          });
+          reopened += result.count;
+          continue;
+        }
+
+        const paidAmount = Math.max(0, Number(order.payAmount ?? order.payment.amount ?? task.amount ?? 0));
+        const successfulRefundAmount = order.orderRefunds
+          .filter((refund) => refund.status === REFUND_STATUS.SUCCESS)
+          .reduce((sum, refund) => sum + Math.max(0, refund.refundAmount || 0), 0);
+        const outstandingAmount = Math.max(0, paidAmount - successfulRefundAmount);
+        const originalPayload = task.callbackPayload && typeof task.callbackPayload === 'object' && !Array.isArray(task.callbackPayload)
+          ? { ...(task.callbackPayload as Record<string, unknown>) }
+          : {};
+        const recoveryReconciliation = {
+          checkedAt: new Date().toISOString(),
+          orderId: order.id.toString(),
+          paidAmount,
+          successfulRefundAmount,
+          outstandingAmount,
+          recoveredFromStatus: task.status,
+          recoveredHandledBy: task.handledBy,
+        };
+
+        if (outstandingAmount > 0) {
+          const result = await this.confirmedMissingPrisma.paymentCompensationTask.updateMany({
+            where: { id: task.id, status: { in: ['resolved', 'ignored'] } },
+            data: {
+              amount: outstandingAmount,
+              status: 'pending',
+              handledBy: null,
+              handledAt: null,
+              resolution: `旧版人工关闭的取消后已支付资金敞口仍有${outstandingAmount}分未被SUCCESS退款证明退回，已自动重新打开`,
+              callbackPayload: { ...originalPayload, recoveryReconciliation },
+            },
+          });
+          reopened += result.count;
+          continue;
+        }
+
+        const result = await this.confirmedMissingPrisma.paymentCompensationTask.updateMany({
+          where: { id: task.id, status: { in: ['resolved', 'ignored'] } },
+          data: {
+            amount: 0,
+            status: 'resolved',
+            handledBy: HISTORICAL_CANCELLED_PAID_RECONCILER,
+            handledAt: new Date(),
+            resolution: `SUCCESS退款已覆盖全部实付金额${paidAmount}分，历史人工关闭记录已转换为系统资金核销证据`,
+            callbackPayload: { ...originalPayload, recoveryReconciliation },
+          },
+        });
+        verifiedResolved += result.count;
+      } catch (error) {
+        failed += 1;
+        this.confirmedMissingLogger.error(
+          `旧版取消后已支付资金敞口自愈失败: taskId=${task.id}, error=${(error as Error).message}`,
+        );
+      }
+    }
+
+    return { checked: tasks.length, reopened, verifiedResolved, failed };
   }
 
   private emitPaymentAmountInvariantViolation(params: {
