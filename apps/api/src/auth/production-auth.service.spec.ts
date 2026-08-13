@@ -1,3 +1,4 @@
+import { UnauthorizedException } from '@nestjs/common';
 import axios from 'axios';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
@@ -38,7 +39,7 @@ describe('ProductionAuthService', () => {
           .mockResolvedValueOnce(null)
           .mockResolvedValueOnce(durableUser),
         create: jest.fn().mockRejectedValue(p2002),
-        update: jest.fn().mockResolvedValue(durableUser),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       memberLevel: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -70,8 +71,8 @@ describe('ProductionAuthService', () => {
     expect(result).toEqual({ token: 'access-token', isNewUser: false });
     expect(prisma.user.create).toHaveBeenCalledTimes(1);
     expect(prisma.user.findFirst).toHaveBeenCalledTimes(2);
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: 123n },
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 123n, deletedAt: null, status: 1 },
       data: expect.objectContaining({ lastLoginAt: expect.any(Date) }),
     });
     expect(redis.set).toHaveBeenNthCalledWith(1, 'wechat_session:123', 'session-key', 86400 * 7);
@@ -93,6 +94,49 @@ describe('ProductionAuthService', () => {
       '1',
       86400 * 7,
     );
+  });
+
+  it('does not restore identity metadata or issue a session when account cancellation wins the login race', async () => {
+    const durableUser = {
+      id: 123n,
+      openid: 'openid-race',
+      unionId: null,
+      status: 1,
+      deletedAt: null,
+      lastLoginAt: new Date(),
+    };
+    const prisma: any = {
+      user: {
+        findFirst: jest.fn().mockResolvedValue(durableUser),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    const jwt: any = { signAsync: jest.fn() };
+    const config: any = {
+      get: jest.fn((key: string, defaultValue?: unknown) => {
+        if (key === 'WECHAT_APP_ID') return 'app-id';
+        if (key === 'WECHAT_APP_SECRET') return 'app-secret';
+        return defaultValue;
+      }),
+    };
+    const redis: any = { set: jest.fn() };
+    mockedAxios.get.mockResolvedValueOnce({
+      data: {
+        openid: 'openid-race',
+        unionid: 'union-race',
+        session_key: 'session-key',
+      },
+    } as any);
+
+    const service = new ProductionAuthService(prisma, jwt, config, redis);
+
+    await expect(service.weappLogin('code')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 123n, deletedAt: null, status: 1 },
+      data: expect.objectContaining({ unionId: 'union-race' }),
+    });
+    expect(redis.set).not.toHaveBeenCalled();
+    expect(jwt.signAsync).not.toHaveBeenCalled();
   });
 
   it('revokes every existing admin refresh session after a successful password change', async () => {
