@@ -38,16 +38,15 @@ describe('客服与帮助页核心操作', () => {
     expect(wrapper.text()).toContain('如何退款？')
     expect(wrapper.text()).not.toContain('请在订单详情申请售后。')
 
-    await wrapper.find('.store-phone, .entry-icon-wrap.phone').exists()
-    await wrapper.findAll('.entry-item')[1].trigger('click')
+    await wrapper.findAll('.entry-item')[1].trigger('tap')
     expect((globalThis as any).uni.makePhoneCall).toHaveBeenCalledWith({ phoneNumber: '4008001234' })
 
-    await wrapper.find('.qrcode-image').trigger('click')
+    await wrapper.find('.qrcode-image').trigger('tap')
     expect((globalThis as any).uni.previewImage).toHaveBeenCalledWith({
       urls: ['https://example.test/customer.png'],
     })
 
-    await wrapper.find('.faq-q').trigger('click')
+    await wrapper.find('.faq-q').trigger('tap')
     expect(wrapper.text()).toContain('请在订单详情申请售后。')
   })
 
