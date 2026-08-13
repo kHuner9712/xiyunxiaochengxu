@@ -37,7 +37,8 @@ describe('ProductionAuthService', () => {
         findFirst: jest
           .fn()
           .mockResolvedValueOnce(null)
-          .mockResolvedValueOnce(durableUser),
+          .mockResolvedValueOnce(durableUser)
+          .mockResolvedValueOnce({ id: 123n }),
         create: jest.fn().mockRejectedValue(p2002),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -57,6 +58,7 @@ describe('ProductionAuthService', () => {
     };
     const redis: any = {
       set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
     };
     mockedAxios.get.mockResolvedValueOnce({
       data: {
@@ -70,10 +72,14 @@ describe('ProductionAuthService', () => {
 
     expect(result).toEqual({ token: 'access-token', isNewUser: false });
     expect(prisma.user.create).toHaveBeenCalledTimes(1);
-    expect(prisma.user.findFirst).toHaveBeenCalledTimes(2);
+    expect(prisma.user.findFirst).toHaveBeenCalledTimes(3);
     expect(prisma.user.updateMany).toHaveBeenCalledWith({
       where: { id: 123n, deletedAt: null, status: 1 },
       data: expect.objectContaining({ lastLoginAt: expect.any(Date) }),
+    });
+    expect(prisma.user.findFirst).toHaveBeenLastCalledWith({
+      where: { id: 123n, deletedAt: null, status: 1 },
+      select: { id: true },
     });
     expect(redis.set).toHaveBeenNthCalledWith(1, 'wechat_session:123', 'session-key', 86400 * 7);
     expect(jwt.signAsync).toHaveBeenCalledWith(
@@ -94,9 +100,10 @@ describe('ProductionAuthService', () => {
       '1',
       86400 * 7,
     );
+    expect(redis.del).not.toHaveBeenCalled();
   });
 
-  it('does not restore identity metadata or issue a session when account cancellation wins the login race', async () => {
+  it('does not restore identity metadata or issue a session when account cancellation wins before the active-user claim', async () => {
     const durableUser = {
       id: 123n,
       openid: 'openid-race',
@@ -119,7 +126,7 @@ describe('ProductionAuthService', () => {
         return defaultValue;
       }),
     };
-    const redis: any = { set: jest.fn() };
+    const redis: any = { set: jest.fn(), del: jest.fn() };
     mockedAxios.get.mockResolvedValueOnce({
       data: {
         openid: 'openid-race',
@@ -136,7 +143,54 @@ describe('ProductionAuthService', () => {
       data: expect.objectContaining({ unionId: 'union-race' }),
     });
     expect(redis.set).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
     expect(jwt.signAsync).not.toHaveBeenCalled();
+  });
+
+  it('removes session keys when cancellation commits after the active claim but before final session validation', async () => {
+    const durableUser = {
+      id: 123n,
+      openid: 'openid-race',
+      unionId: null,
+      status: 1,
+      deletedAt: null,
+      lastLoginAt: new Date(),
+    };
+    const prisma: any = {
+      user: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce(durableUser)
+          .mockResolvedValueOnce(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const jwt: any = { signAsync: jest.fn().mockResolvedValue('access-token') };
+    const config: any = {
+      get: jest.fn((key: string, defaultValue?: unknown) => {
+        if (key === 'WECHAT_APP_ID') return 'app-id';
+        if (key === 'WECHAT_APP_SECRET') return 'app-secret';
+        return defaultValue;
+      }),
+    };
+    const redis: any = {
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+    };
+    mockedAxios.get.mockResolvedValueOnce({
+      data: {
+        openid: 'openid-race',
+        session_key: 'session-key',
+      },
+    } as any);
+
+    const service = new ProductionAuthService(prisma, jwt, config, redis);
+
+    await expect(service.weappLogin('code')).rejects.toBeInstanceOf(UnauthorizedException);
+    const tokenId = jwt.signAsync.mock.calls[0][0].tokenId;
+    expect(redis.set).toHaveBeenCalledTimes(2);
+    expect(redis.del).toHaveBeenCalledWith('wechat_session:123');
+    expect(redis.del).toHaveBeenCalledWith(`weapp_access_token:123:${tokenId}`);
   });
 
   it('revokes every existing admin refresh session after a successful password change', async () => {
