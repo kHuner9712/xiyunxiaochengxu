@@ -3,14 +3,26 @@ import { PAYMENT_STATUS, REFUND_STATUS, WECHAT_REFUND_STATUS } from '../common/c
 import { ConfirmedMissingRefundRetryPaymentService } from './confirmed-missing-refund-retry-payment.service';
 import { OrphanSafeMemberGrowthPaymentService } from './orphan-safe-member-growth-payment.service';
 
+type PaymentSnapshot = { id: bigint; orderId: bigint; amount: number; status: number };
+type OrderSnapshot = { id: bigint; orderNo: string; payAmount: number | null };
+type RefundSnapshot = {
+  id: bigint;
+  orderId: bigint;
+  outRefundNo: string;
+  refundAmount: number;
+  totalAmount: number;
+};
+
 function createService(
   localStatus: string,
-  paymentSnapshot?: { id: bigint; orderId: bigint; amount: number; status: number } | null,
-  orderSnapshot?: { id: bigint; orderNo: string; payAmount: number | null } | null,
+  paymentSnapshot?: PaymentSnapshot | null,
+  orderSnapshot?: OrderSnapshot | null,
+  refundSnapshot?: RefundSnapshot | null,
 ) {
   const prisma: any = {
     orderRefund: {
       findFirst: jest.fn(async () => ({ status: localStatus })),
+      findUnique: jest.fn(async () => refundSnapshot ?? null),
     },
     orderPayment: {
       findUnique: jest.fn(async () => paymentSnapshot ?? null),
@@ -129,6 +141,123 @@ describe('ConfirmedMissingRefundRetryPaymentService', () => {
       service.processPaymentSuccess(13n, 23n, 'wx-txn-4', 8800, { payAmount: 9900 }),
     ).rejects.toThrow('本地支付金额状态异常');
     expect(downstream).not.toHaveBeenCalled();
+  });
+
+  it('rejects refund SUCCESS when WeChat total amount differs from the durable refund total', async () => {
+    const refund = {
+      id: 30n,
+      orderId: 40n,
+      outRefundNo: 'RF-AMOUNT-1',
+      refundAmount: 500,
+      totalAmount: 1000,
+    };
+    const { service, businessEvent } = createService(
+      REFUND_STATUS.PENDING,
+      null,
+      { id: 40n, orderNo: 'ORD-REFUND-1', payAmount: 1000 },
+      refund,
+    );
+    const downstream = jest
+      .spyOn(OrphanSafeMemberGrowthPaymentService.prototype as any, 'processWechatRefundSuccess')
+      .mockResolvedValue(undefined);
+
+    await expect(
+      service.processWechatRefundSuccess(refund, 'WX-RF-1', {
+        amount: { refund: 500, total: 999 },
+      }),
+    ).rejects.toThrow('退款金额不变量校验失败');
+    expect(downstream).not.toHaveBeenCalled();
+    expect(businessEvent.emitCritical).toHaveBeenCalledWith(
+      'refund_success_amount_invariant_violation',
+      'refund',
+      expect.any(String),
+      'RF-AMOUNT-1',
+      expect.objectContaining({
+        localRefundAmount: 500,
+        localTotalAmount: 1000,
+        orderAmount: 1000,
+        remoteRefundAmount: 500,
+        remoteTotalAmount: 999,
+        reason: 'remote_amount_mismatch_or_missing',
+      }),
+    );
+  });
+
+  it('rejects refund SUCCESS when WeChat omits the authoritative total amount', async () => {
+    const refund = {
+      id: 31n,
+      orderId: 41n,
+      outRefundNo: 'RF-AMOUNT-2',
+      refundAmount: 300,
+      totalAmount: 1200,
+    };
+    const { service } = createService(
+      REFUND_STATUS.PENDING,
+      null,
+      { id: 41n, orderNo: 'ORD-REFUND-2', payAmount: 1200 },
+      refund,
+    );
+    const downstream = jest
+      .spyOn(OrphanSafeMemberGrowthPaymentService.prototype as any, 'processWechatRefundSuccess')
+      .mockResolvedValue(undefined);
+
+    await expect(
+      service.processWechatRefundSuccess(refund, 'WX-RF-2', {
+        amount: { refund: 300 },
+      }),
+    ).rejects.toThrow('退款金额不变量校验失败');
+    expect(downstream).not.toHaveBeenCalled();
+  });
+
+  it('rejects refund SUCCESS when the durable refund total no longer matches the order pay amount', async () => {
+    const refund = {
+      id: 32n,
+      orderId: 42n,
+      outRefundNo: 'RF-AMOUNT-3',
+      refundAmount: 300,
+      totalAmount: 900,
+    };
+    const { service } = createService(
+      REFUND_STATUS.PENDING,
+      null,
+      { id: 42n, orderNo: 'ORD-REFUND-3', payAmount: 1000 },
+      refund,
+    );
+    const downstream = jest
+      .spyOn(OrphanSafeMemberGrowthPaymentService.prototype as any, 'processWechatRefundSuccess')
+      .mockResolvedValue(undefined);
+
+    await expect(
+      service.processWechatRefundSuccess(refund, 'WX-RF-3', {
+        amount: { refund: 300, total: 900 },
+      }),
+    ).rejects.toThrow('退款金额不变量校验失败');
+    expect(downstream).not.toHaveBeenCalled();
+  });
+
+  it('allows refund SUCCESS only when refund and total amounts match durable records exactly', async () => {
+    const refund = {
+      id: 33n,
+      orderId: 43n,
+      outRefundNo: 'RF-AMOUNT-4',
+      refundAmount: 600,
+      totalAmount: 1600,
+    };
+    const wechatData = { amount: { refund: 600, total: 1600 } };
+    const { service } = createService(
+      REFUND_STATUS.PENDING,
+      null,
+      { id: 43n, orderNo: 'ORD-REFUND-4', payAmount: 1600 },
+      refund,
+    );
+    const downstream = jest
+      .spyOn(OrphanSafeMemberGrowthPaymentService.prototype as any, 'processWechatRefundSuccess')
+      .mockResolvedValue(undefined);
+
+    await expect(
+      service.processWechatRefundSuccess(refund, 'WX-RF-4', wechatData),
+    ).resolves.toBeUndefined();
+    expect(downstream).toHaveBeenCalledWith(refund, 'WX-RF-4', wechatData);
   });
 
   it('translates WeChat RESOURCE_NOT_EXISTS to CLOSED only for a local FAILED refund', async () => {
