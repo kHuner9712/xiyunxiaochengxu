@@ -1,61 +1,48 @@
-# RELEASE_CANDIDATE（2026-06-10）
+# RELEASE_CANDIDATE
 
-## 1. 版本结论
+更新日期：2026-08-13
 
-- 项目：禧孕优选（微信小程序 + Admin + API）
-- 当前提交：以最终冻结/发布 commit 为准；本文件不得用历史 HEAD 代替当前工作树结果。
-- 当前版本：**当前工作树本地门禁通过，可继续作为正式版候选进入生产运行验收**。
-- 外部私有配置：真实 AppID、支付配置、证书、主体资质、经营资质、备案信息、证照材料、客服电话、客服微信、退货地址等缺失于公开 GitHub 仓库，不再视为阻断。
-- 当前阻断项：**未取得可验证的生产运行、微信体验版上传与真机验收结果**。
+## 用途
 
-## 1.1 本轮代码侧收口
+本文件只定义“什么证据才允许把某个版本视为正式版候选”，不保存历史 PR、历史 SHA、历史测试数量，也不作为部署命令来源。
 
-- P0 上传文件：NestJS 不再公开整个 `UPLOAD_DIR`，只公开 `/uploads/public/`；私有文件直接静态访问应失败，只能通过鉴权接口读取。
-- P1 订单一致性：积分抵扣并发扣减、重复购物车删除、自提重复核销已做小范围修复。
-- P1 小程序构建：生产 API 地址增加本地/占位域名拦截。
-- P2 后台商品：已上架商品规格修改增加风险提示，SKU 更新逻辑避免同商品 `skuCode` 唯一索引冲突。
-- 本地门禁：`pnpm typecheck`、`pnpm test:ci`、`pnpm build`、`pnpm release:check` 已通过。
+## 候选身份
 
-## 2. 公开仓库候选门禁
+候选必须绑定一个明确的完整 Git SHA。代码发生任何变化后，旧 SHA 的测试、构建和验收结果不得复用到新版本。
 
-公开仓库候选状态只以当前 `main` 可验证事项为准：
+候选进入生产验收前，同一精确 HEAD 必须完成并通过：
 
-- 代码构建：API、管理后台、小程序默认构建。
-- 类型检查：`pnpm typecheck`。
-- lint：`pnpm lint`。
-- API 测试：`pnpm --filter @baby-mall/api test:ci`。
-- 小程序生产构建脚本：脚本入口与真实生产变量注入路径可执行；真实值不写入仓库。
-- Release gate：`pnpm release:check`、`pnpm release:check:freeze`、`pnpm release:check:prod` 可执行并输出明确结论。
-- 敏感信息未入库。
-- 发布文档与当前 `main` HEAD 一致。
+- CI
+- Release Gate Check
+- API Unit Diagnostic
+- API E2E Diagnostic
+- API Open Handle Diagnostic
+- Production Container Bootstrap
 
-## 3. 外部生产配置
+仓库门禁通过只说明代码版本具备进入生产验收的资格，不代表服务器、微信支付、微信后台或真机已经可用。
 
-以下均为外部生产配置，由负责人确认已在服务器、微信公众平台、商户平台或其他外部平台完成；公开仓库不保存、不展示、不复核真实明文值：
+## 外部生产证据
 
-- 微信小程序真实 AppID、合法域名、体验版/正式版后台配置。
-- 微信支付商户号、证书序列号、APIv3 Key、商户私钥、平台证书、支付回调与退款回调地址。
-- 主体资质、经营资质、备案信息、证照材料、资质编号。
-- 客服电话、客服微信、退货地址、客服与售后联系方式。
-- 服务器 `.env.production`、HTTPS 证书、Docker/Nginx 私有配置。
+以下项目必须在真实环境单独验证并留痕，不能用“负责人确认”或仓库绿色结果替代：
 
-`legal.ts` 中公开占位联系方式不再直接作为 No-Go；但正式版体验版/线上用户端最终展示或客服入口必须真实可用，并纳入真机验收留痕。
+- 生产服务器私有环境变量、MySQL、Redis、DNS、TLS。
+- 微信小程序真实 AppID、合法域名、隐私保护指引、客服能力。
+- 微信支付商户配置、证书、支付/退款回调真实可达与验签。
+- 生产备份恢复、运行时健康检查和完整 production smoke。
+- 微信体验版上传及真实设备核心业务链。
 
-## 4. 正式版验收阻断项
+公开仓库不保存真实密钥、私钥和生产密码；这些值不在 Git 中出现是正确安全边界，但“仓库中没有”不等于“生产已经配置完成”。
 
-当前正式发布阻断项仍包括：尚未取得可验证的生产运行、微信体验版上传与真机验收结果。正式发布前必须完成并留痕：
+## 正式发布判定
 
-- 服务器私有环境变量已生效。
-- 生产 API HTTPS 可访问。
-- 微信后台合法域名配置正确。
-- 支付和退款回调真实可达、验签通过、状态流转正确。
-- 数据库迁移完成。
-- Docker、Nginx、HTTPS、健康检查与 smoke 测试通过。
-- 微信开发者工具体验版上传完成。
-- 真机验收清单完成。
+只有 Repository、Runtime、WeChat Platform、Real Device 四层均存在当前候选 SHA 对应的可验证证据，才能将正式发布状态改为 Go。
 
-## 5. 下一步建议
+任何一层未知、失败、证据属于旧 SHA，或只凭口头确认，都保持 No-Go。
 
-1. 在服务器真实生产环境执行 `pnpm release:check:prod`，确认私有变量、数据库迁移、Docker/Nginx/HTTPS 与 smoke 结果。
-2. 使用生产构建脚本生成小程序包，并通过微信开发者工具上传体验版。
-3. 完成真机验收清单与支付/退款回调留痕。
+具体部署与验收流程只以以下当前文档为准：
+
+- `docs/DEPLOYMENT_RUNBOOK.md`
+- `docs/DEPLOYMENT_CHECKLIST.md`
+- `docs/ENV_PRODUCTION_FILL_GUIDE.md`
+- `docs/MANUAL_ACCEPTANCE_CHECKLIST.md`
+- `docs/OPERATOR_REQUIRED.md`
