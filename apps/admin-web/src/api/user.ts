@@ -20,7 +20,7 @@ export const userApi = {
       expectedAvailablePoints,
     })
   },
-  getBabyList(params: { page: number; pageSize: number; name?: string; userId?: string }) {
+  getBabyList(params: { page: number; pageSize: number; nickname?: string; userId?: string }) {
     return request.get('/admin/baby-profile', { params })
   },
 }
