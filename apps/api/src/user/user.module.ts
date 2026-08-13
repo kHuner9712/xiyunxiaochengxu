@@ -7,9 +7,10 @@ import { UserStatusService } from './user-status.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { RedisModule } from '../common/redis/redis.module';
 import { PointsModule } from '../points/points.module';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
-  imports: [PrismaModule, RedisModule, PointsModule],
+  imports: [PrismaModule, RedisModule, PointsModule, UploadModule],
   controllers: [WeappUserController, AdminUserController],
   providers: [
     { provide: ProductionUserService, useClass: ProfileAssetSafeProductionUserService },
