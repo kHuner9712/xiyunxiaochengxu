@@ -8,6 +8,7 @@ function createMockPrisma() {
       findMany: jest.fn() as any,
       count: jest.fn() as any,
       update: jest.fn() as any,
+      updateMany: jest.fn() as any,
     },
     memberLevel: {
       findFirst: jest.fn() as any,
@@ -104,7 +105,7 @@ describe('UserService', () => {
   });
 
   describe('updateProfile', () => {
-    it('should accept avatar alias and save it as avatarUrl', async () => {
+    it('should accept avatar alias and save it with a deletedAt-null compare-and-set guard', async () => {
       prisma.user.findFirst
         .mockResolvedValueOnce({ id: 1n, deletedAt: null })
         .mockResolvedValueOnce({
@@ -126,15 +127,15 @@ describe('UserService', () => {
           createdAt: new Date(),
           _count: { babyProfiles: 0 },
         });
-      prisma.user.update.mockResolvedValue({});
+      prisma.user.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.updateProfile('1', {
         nickname: '新昵称',
         avatar: 'https://example.com/new-avatar.jpg',
       });
 
-      expect(prisma.user.update).toHaveBeenCalledWith({
-        where: { id: 1n },
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 1n, deletedAt: null },
         data: {
           nickname: '新昵称',
           avatarUrl: 'https://example.com/new-avatar.jpg',
