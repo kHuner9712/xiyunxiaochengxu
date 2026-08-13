@@ -61,7 +61,7 @@ describe('自提点选择页核心操作', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('陆家嘴店')
-    await wrapper.find('.store-card').trigger('click')
+    await wrapper.find('.store-card').trigger('tap')
 
     expect(emit).toHaveBeenCalledWith('selectStore', expect.objectContaining({ id: '1', name: '陆家嘴店' }))
     expect((globalThis as any).uni.navigateBack).toHaveBeenCalledTimes(1)
@@ -79,7 +79,7 @@ describe('自提点选择页核心操作', () => {
     })
     lifecycle.onLoadCallbacks.at(-1)?.({})
     await flushPromises()
-    await wrapper.find('.store-card').trigger('click')
+    await wrapper.find('.store-card').trigger('tap')
 
     expect(emit).not.toHaveBeenCalled()
     expect((globalThis as any).uni.navigateBack).not.toHaveBeenCalled()
@@ -117,7 +117,7 @@ describe('自提点选择页核心操作', () => {
     })
     lifecycle.onLoadCallbacks.at(-1)?.({ select: 'true' })
     await flushPromises()
-    await wrapper.find('.store-phone').trigger('click')
+    await wrapper.find('.store-phone').trigger('tap')
 
     expect((globalThis as any).uni.makePhoneCall).toHaveBeenCalledWith({ phoneNumber: '13800138000' })
     expect(emit).not.toHaveBeenCalled()
