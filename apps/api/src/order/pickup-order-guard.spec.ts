@@ -151,7 +151,7 @@ describe('checkout transaction guards', () => {
       expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
       expect(parent).toHaveBeenCalledTimes(1);
       expect(fallbackFindFirst).not.toHaveBeenCalled();
-      expect(result.orderNo).toBe('锁定后的当前门店');
+      expect(result.orderNo).toBe('新门店名称');
     } finally {
       parent.mockRestore();
     }
