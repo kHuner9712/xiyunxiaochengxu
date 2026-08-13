@@ -77,28 +77,35 @@ describe('pickup order transaction guard', () => {
     expect(orderCreate).not.toHaveBeenCalled();
   });
 
-  it('locks pickup stores before delegating promotion checkout', async () => {
+  it('locks pickup stores and reuses that row for promotion checkout reads', async () => {
     const parent = jest
       .spyOn(AttributionAwarePromotionCheckoutService.prototype, 'createOrder')
-      .mockResolvedValue({
-        orderId: 1n,
-        orderItemId: 2n,
-        orderNo: 'XYTEST',
-        payAmount: 100,
-        isZeroPay: false,
-        status: 'pending_payment' as any,
-        fulfillmentType: 'pickup',
+      .mockImplementation(async (guardedTx: any) => {
+        const store = await guardedTx.pickupStore.findFirst({
+          where: { id: 9n, status: 1, deletedAt: null },
+        });
+        return {
+          orderId: 1n,
+          orderItemId: 2n,
+          orderNo: store.name,
+          payAmount: 100,
+          isZeroPay: false,
+          status: 'pending_payment' as any,
+          fulfillmentType: 'pickup',
+        };
       });
+    const fallbackFindFirst = jest.fn().mockResolvedValue({ name: '旧一致性快照门店' });
     const tx: any = {
       $queryRaw: jest.fn().mockResolvedValue([{
         id: 9n,
-        name: '门店',
+        name: '锁定后的当前门店',
         province: '上海市',
         city: '上海市',
         district: '浦东新区',
         address: '世纪大道1号',
         contactPhone: '021-12345678',
       }]),
+      pickupStore: { findFirst: fallbackFindFirst },
     };
     const service = new PickupSafeAttributionAwarePromotionCheckoutService();
 
@@ -116,7 +123,8 @@ describe('pickup order transaction guard', () => {
 
       expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
       expect(parent).toHaveBeenCalledTimes(1);
-      expect(result.orderId).toBe(1n);
+      expect(fallbackFindFirst).not.toHaveBeenCalled();
+      expect(result.orderNo).toBe('锁定后的当前门店');
     } finally {
       parent.mockRestore();
     }
