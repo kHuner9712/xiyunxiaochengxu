@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import { PAYMENT_STATUS, REFUND_STATUS, WECHAT_REFUND_STATUS } from '../common/constants';
 import { ConfirmedMissingRefundRetryPaymentService } from './confirmed-missing-refund-retry-payment.service';
+import { MemberGrowthConservingPaymentService } from './member-growth-conserving-payment.service';
 import { OrphanSafeMemberGrowthPaymentService } from './orphan-safe-member-growth-payment.service';
 
 type PaymentSnapshot = { id: bigint; orderId: bigint; amount: number; status: number };
@@ -18,6 +19,7 @@ function createService(
   paymentSnapshot?: PaymentSnapshot | null,
   orderSnapshot?: OrderSnapshot | null,
   refundSnapshot?: RefundSnapshot | null,
+  compensationReason?: string | null,
 ) {
   const prisma: any = {
     orderRefund: {
@@ -29,6 +31,9 @@ function createService(
     },
     order: {
       findUnique: jest.fn(async () => orderSnapshot ?? null),
+    },
+    paymentCompensationTask: {
+      findFirst: jest.fn(async () => compensationReason ? { reason: compensationReason } : null),
     },
   };
   const config: any = { get: jest.fn((_key: string, fallback?: unknown) => fallback ?? '') };
@@ -258,6 +263,54 @@ describe('ConfirmedMissingRefundRetryPaymentService', () => {
       service.processWechatRefundSuccess(refund, 'WX-RF-4', wechatData),
     ).resolves.toBeUndefined();
     expect(downstream).toHaveBeenCalledWith(refund, 'WX-RF-4', wechatData);
+  });
+
+  it.each([
+    'cancelled_order_paid_callback',
+    'cancelled_order_paid_historical_anomaly',
+  ])('does not let an operator manually close auto-verifiable cancelled-paid exposure %s', async (reason) => {
+    const { service, prisma } = createService(
+      REFUND_STATUS.PENDING,
+      null,
+      null,
+      null,
+      reason,
+    );
+    const downstream = jest
+      .spyOn(MemberGrowthConservingPaymentService.prototype as any, 'resolveCompensationTask')
+      .mockResolvedValue({ status: 'resolved' });
+
+    await expect(
+      service.resolveCompensationTask('51', 'admin-1', 'manual close', 'resolved'),
+    ).rejects.toThrow('取消后已支付资金敞口任务不能人工关闭');
+    expect(prisma.paymentCompensationTask.findFirst).toHaveBeenCalledWith({
+      where: { id: 51n },
+      select: { reason: true },
+    });
+    expect(downstream).not.toHaveBeenCalled();
+  });
+
+  it('keeps amount-mismatch cancelled-paid tasks available for explicit manual accounting', async () => {
+    const { service } = createService(
+      REFUND_STATUS.PENDING,
+      null,
+      null,
+      null,
+      'cancelled_order_paid_amount_mismatch',
+    );
+    const downstream = jest
+      .spyOn(MemberGrowthConservingPaymentService.prototype as any, 'resolveCompensationTask')
+      .mockResolvedValue({ status: 'resolved', id: '52' });
+
+    await expect(
+      service.resolveCompensationTask('52', 'admin-1', 'verified external accounting', 'resolved'),
+    ).resolves.toEqual({ status: 'resolved', id: '52' });
+    expect(downstream).toHaveBeenCalledWith(
+      '52',
+      'admin-1',
+      'verified external accounting',
+      'resolved',
+    );
   });
 
   it('translates WeChat RESOURCE_NOT_EXISTS to CLOSED only for a local FAILED refund', async () => {
