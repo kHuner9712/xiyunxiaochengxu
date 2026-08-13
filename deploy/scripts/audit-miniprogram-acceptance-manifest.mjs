@@ -9,6 +9,9 @@ const miniprogramPackagePath = resolve(root, 'apps/miniprogram/package.json')
 const acceptanceRunnerPath = resolve(root, 'apps/miniprogram/scripts/run-wechat-acceptance.mjs')
 const acceptanceTestPath = resolve(root, 'apps/miniprogram/src/full-function-acceptance.test.js')
 const automatorJestConfigPath = resolve(root, 'apps/miniprogram/jest.config.js')
+const realDeviceTemplatePath = resolve(root, 'apps/miniprogram/acceptance/real-device-acceptance.example.json')
+const realDeviceVerifierPath = resolve(root, 'deploy/scripts/verify-real-device-acceptance.mjs')
+const releaseCheckPath = resolve(root, 'deploy/scripts/run-release-check.mjs')
 
 function fail(message) {
   console.error(`[audit-miniprogram-acceptance] ${message}`)
@@ -37,6 +40,8 @@ for (const [label, path] of [
   ['WeChat acceptance runner', acceptanceRunnerPath],
   ['WeChat automator test', acceptanceTestPath],
   ['uni-automator Jest config', automatorJestConfigPath],
+  ['real-device acceptance template', realDeviceTemplatePath],
+  ['real-device acceptance verifier', realDeviceVerifierPath],
 ]) {
   if (!existsSync(path)) fail(`${label} is missing`)
 }
@@ -46,6 +51,24 @@ for (const scriptName of ['test:wechat:smoke', 'test:wechat:full']) {
   if (typeof command !== 'string' || !command.includes('run-wechat-acceptance.mjs')) {
     fail(`apps/miniprogram/package.json must define ${scriptName} through run-wechat-acceptance.mjs`)
   }
+}
+
+if (!existsSync(releaseCheckPath)) {
+  fail('strict production release check is missing')
+} else {
+  const releaseCheckSource = readFileSync(releaseCheckPath, 'utf8')
+  if (!releaseCheckSource.includes('verify-real-device-acceptance.mjs')) {
+    fail('strict production release check must invoke verify-real-device-acceptance.mjs')
+  }
+  if (!releaseCheckSource.includes('strictProductionGate')) {
+    fail('real-device evidence must remain scoped to the strict production gate')
+  }
+}
+
+const realDeviceTemplate = readJson(realDeviceTemplatePath)
+if (realDeviceTemplate.version !== 1) fail('real-device acceptance template version must be 1')
+if (!realDeviceTemplate.checks || Object.keys(realDeviceTemplate.checks).length === 0) {
+  fail('real-device acceptance template must contain required checks')
 }
 
 const registeredSet = new Set(registeredPages)
@@ -105,9 +128,10 @@ if (!Array.isArray(manifest.realDeviceOnly) || manifest.realDeviceOnly.length ==
 if (!process.exitCode) {
   const authCount = acceptedPages.filter((entry) => entry.authRequired).length
   const dataDrivenCount = acceptedPages.filter((entry) => entry.queryEnv && Object.keys(entry.queryEnv).length).length
+  const realDeviceCount = Object.keys(realDeviceTemplate.checks || {}).length
   console.log(
     `[audit-miniprogram-acceptance] PASS: ${registeredPages.length} registered pages are explicitly covered ` +
-    `(${authCount} authenticated, ${dataDrivenCount} data-driven); ${manifest.realDeviceOnly.length} real-device gates declared; ` +
-    'WeChat acceptance runner, automator test and Jest configuration are present.',
+    `(${authCount} authenticated, ${dataDrivenCount} data-driven); ${manifest.realDeviceOnly.length} real-device capability classes declared; ` +
+    `${realDeviceCount} strict real-device checks protected; WeChat acceptance runner, automator test and Jest configuration are present.`,
   )
 }
