@@ -11,6 +11,7 @@ function createPrismaMock() {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     memberLevel: {
       findFirst: jest.fn(),
