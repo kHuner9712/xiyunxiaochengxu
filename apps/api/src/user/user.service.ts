@@ -71,7 +71,11 @@ export class UserService {
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
     if (dto.gender !== undefined) updateData.gender = dto.gender;
     if (Object.keys(updateData).length > 0) {
-      await this.prisma.user.update({ where: { id: userIdValue }, data: updateData });
+      const updated = await this.prisma.user.updateMany({
+        where: { id: userIdValue, deletedAt: null },
+        data: updateData,
+      });
+      if (updated.count !== 1) throw new NotFoundException('用户不存在');
     }
     return this.getUserInfo(userId);
   }
