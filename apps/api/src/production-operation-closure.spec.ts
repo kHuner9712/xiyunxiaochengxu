@@ -90,6 +90,8 @@ describe('production operation closure contracts', () => {
     const durableZeroPayPayment = read('apps/api/src/payment/durable-zero-pay-aftersale-payment.service.ts');
     const historicalReconcile = read('apps/api/src/payment/historical-anomaly-payment-reconcile.service.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
+    const pickupSafeOrder = read('apps/api/src/order/pickup-safe-order.service.ts');
+    const pickupSafePromotion = read('apps/api/src/order/pickup-safe-promotion-checkout.service.ts');
     const idempotentOrder = read('apps/api/src/order/idempotent-attribution-safe-member-benefit-order.service.ts');
     const attributionSafeOrder = read('apps/api/src/order/attribution-safe-member-benefit-order.service.ts');
     const attributionAwarePromotion = read('apps/api/src/order/attribution-aware-promotion-checkout.service.ts');
@@ -125,7 +127,9 @@ describe('production operation closure contracts', () => {
     expect(authModule).toContain('useClass: RecoveringProductionAuthService');
     expect(recoveringAuth).toContain('extends ProductionAuthService');
 
-    expect(orderModule).toContain('useClass: IdempotentAttributionSafeMemberBenefitOrderService');
+    expect(orderModule).toContain('useClass: PickupSafeIdempotentAttributionSafeMemberBenefitOrderService');
+    expect(pickupSafeOrder).toContain('extends IdempotentAttributionSafeMemberBenefitOrderService');
+    expect(pickupSafeOrder).toContain('installPickupStoreTransactionGuard');
     expect(idempotentOrder).toContain('extends AttributionSafeMemberBenefitOrderService');
     expect(idempotentOrder).toContain('buildDeterministicOrderNo');
     expect(idempotentOrder).toContain('orderCreateIdempotency');
@@ -138,7 +142,9 @@ describe('production operation closure contracts', () => {
     expect(netRewardOrder).toContain('successfulRefundAmount');
     expect(netRewardOrder).toContain('netPayAmount');
     expect(orderModule).toContain('provide: PromotionCheckoutService');
-    expect(orderModule).toContain('useClass: AttributionAwarePromotionCheckoutService');
+    expect(orderModule).toContain('useClass: PickupSafeAttributionAwarePromotionCheckoutService');
+    expect(pickupSafePromotion).toContain('extends AttributionAwarePromotionCheckoutService');
+    expect(pickupSafePromotion).toContain('lockActivePickupStore');
     expect(attributionAwarePromotion).toContain('extends PromotionCheckoutService');
     expect(attributionAwarePromotion).toContain('resolveCreateOrderAttribution');
 

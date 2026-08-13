@@ -42,7 +42,7 @@ export class AtomicMemberService extends MemberService {
           status: dto.status ?? 1,
         },
       });
-      await this.assertValidActiveLevelRanges(tx);
+      await this.assertValidActiveLevelRangesInTransaction(tx);
       return level.id;
     });
 
@@ -82,7 +82,7 @@ export class AtomicMemberService extends MemberService {
       }
 
       await tx.memberLevel.update({ where: { id: levelId }, data });
-      await this.assertValidActiveLevelRanges(tx);
+      await this.assertValidActiveLevelRangesInTransaction(tx);
     });
 
     await this.reconcileUsersAfterLevelChange();
@@ -100,7 +100,7 @@ export class AtomicMemberService extends MemberService {
     `;
   }
 
-  private async assertValidActiveLevelRanges(tx: Prisma.TransactionClient) {
+  private async assertValidActiveLevelRangesInTransaction(tx: Prisma.TransactionClient) {
     const levels = await tx.memberLevel.findMany({
       where: { status: 1 },
       orderBy: [{ minGrowthValue: 'asc' }, { sortOrder: 'asc' }],
