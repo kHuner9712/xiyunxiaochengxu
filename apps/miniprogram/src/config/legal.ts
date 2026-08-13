@@ -2,16 +2,16 @@ export const LEGAL_PROFILE = {
   appName: '禧孕优选',
   companyName: '临沂禧孕文化传媒有限公司',
   privacyPolicy: {
-    updatedAt: '2026年05月27日',
-    effectiveAt: '2026年05月27日',
+    updatedAt: '2026年08月13日',
+    effectiveAt: '2026年08月13日',
   },
   userAgreement: {
-    updatedAt: '2026年05月27日',
-    effectiveAt: '2026年05月27日',
+    updatedAt: '2026年08月13日',
+    effectiveAt: '2026年08月13日',
   },
   foodSafety: {
-    updatedAt: '2026年05月27日',
-    effectiveAt: '2026年05月27日',
+    updatedAt: '2026年08月13日',
+    effectiveAt: '2026年08月13日',
   },
   // 说明：公开仓库允许保留占位联系方式，不直接作为 No-Go。
   // 体验版/线上用户端最终展示或客服入口必须真实可用，并在真机验收中留痕。
