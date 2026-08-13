@@ -93,14 +93,15 @@ export class SupplierService {
   }
 
   async update(id: string, dto: UpdateSupplierDto) {
+    const supplierId = BigInt(id);
     const supplier = await this.prisma.supplier.findFirst({
-      where: { id: BigInt(id), deletedAt: null },
+      where: { id: supplierId, deletedAt: null },
     });
     if (!supplier) throw new NotFoundException('供应商不存在');
 
     if (dto.name && dto.name !== supplier.name) {
       const existing = await this.prisma.supplier.findFirst({
-        where: { name: dto.name, deletedAt: null, id: { not: BigInt(id) } },
+        where: { name: dto.name, deletedAt: null, id: { not: supplierId } },
       });
       if (existing) throw new BadRequestException('供应商名称已存在');
     }
@@ -121,10 +122,12 @@ export class SupplierService {
         : null;
     }
 
-    const result = await this.prisma.supplier.update({
-      where: { id: BigInt(id) },
-      data: updateData,
-    });
+    const result = dto.status === 0 && supplier.status !== 0
+      ? await this.updateWithDeactivationGuard(supplierId, updateData)
+      : await this.prisma.supplier.update({
+          where: { id: supplierId },
+          data: updateData,
+        });
     this.logger.log(`更新供应商：${id}`);
     return { ...result, id: result.id.toString() };
   }
@@ -155,16 +158,49 @@ export class SupplierService {
   }
 
   async updateStatus(id: string, status: number) {
+    const supplierId = BigInt(id);
     const supplier = await this.prisma.supplier.findFirst({
-      where: { id: BigInt(id), deletedAt: null },
+      where: { id: supplierId, deletedAt: null },
     });
     if (!supplier) throw new NotFoundException('供应商不存在');
 
-    const result = await this.prisma.supplier.update({
-      where: { id: BigInt(id) },
-      data: { status },
-    });
+    const result = status === 0 && supplier.status !== 0
+      ? await this.updateWithDeactivationGuard(supplierId, { status })
+      : await this.prisma.supplier.update({
+          where: { id: supplierId },
+          data: { status },
+        });
     this.logger.log(`更新供应商状态：${id} -> ${status}`);
     return { ...result, id: result.id.toString() };
+  }
+
+  private async updateWithDeactivationGuard(supplierId: bigint, data: Record<string, any>) {
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: bigint }>>`
+        SELECT id
+        FROM suppliers
+        WHERE id = ${supplierId} AND deleted_at IS NULL
+        FOR UPDATE
+      `;
+      if (locked.length === 0) throw new NotFoundException('供应商不存在');
+
+      const publishedProducts = await tx.product.count({
+        where: {
+          supplierId,
+          deletedAt: null,
+          status: 1,
+        },
+      });
+      if (publishedProducts > 0) {
+        throw new BadRequestException(
+          `该供应商仍有${publishedProducts}个上架商品，请先下架后再停用合作`,
+        );
+      }
+
+      return tx.supplier.update({
+        where: { id: supplierId },
+        data,
+      });
+    });
   }
 }
