@@ -35,7 +35,7 @@ describe('分类页核心操作', () => {
     expect(wrapper.text()).toContain('喂养用品')
     expect(wrapper.text()).toContain('奶瓶')
 
-    await wrapper.find('.sub-category').trigger('click')
+    await wrapper.find('.sub-category').trigger('tap')
     expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith({
       url: '/pages/product/list?categoryId=child',
     })
@@ -48,7 +48,7 @@ describe('分类页核心操作', () => {
     })
     await flushPromises()
 
-    await wrapper.find('.search-pill').trigger('click')
+    await wrapper.find('.search-pill').trigger('tap')
     expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith({ url: '/pages/search/index' })
   })
 
