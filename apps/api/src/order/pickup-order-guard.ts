@@ -72,3 +72,39 @@ export function withLockedPickupStoreSnapshot(
     },
   }) as Prisma.TransactionClient;
 }
+
+export function withLockedPickupStoreRead(
+  tx: Prisma.TransactionClient,
+  store: LockedPickupStore,
+): Prisma.TransactionClient {
+  const pickupStoreDelegate = tx.pickupStore;
+  const pickupStoreProxy = new Proxy(pickupStoreDelegate as any, {
+    get(target, property) {
+      if (property === 'findFirst') {
+        return async (args: any) => {
+          const requestedId = args?.where?.id;
+          const expectsActive = args?.where?.status === 1;
+          const excludesDeleted = args?.where?.deletedAt === null;
+          if (
+            requestedId?.toString?.() === store.id.toString() &&
+            expectsActive &&
+            excludesDeleted
+          ) {
+            return store;
+          }
+          return target.findFirst(args);
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  return new Proxy(tx as any, {
+    get(target, property) {
+      if (property === 'pickupStore') return pickupStoreProxy;
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as Prisma.TransactionClient;
+}
