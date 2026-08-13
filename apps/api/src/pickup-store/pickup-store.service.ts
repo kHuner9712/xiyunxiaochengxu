@@ -86,20 +86,32 @@ export class PickupStoreService {
 
   async delete(id: string) {
     const storeId = parsePositiveBigIntId(id, '自提点');
-    const store = await this.prisma.pickupStore.findFirst({ where: { id: storeId, deletedAt: null } });
-    if (!store) throw new NotFoundException('自提点不存在');
-    const activeOrders = await this.prisma.order.count({
-      where: {
-        pickupStoreId: storeId,
-        status: { in: ['pending_payment', 'paid', 'pending_pickup', 'aftersale'] },
-      },
-    });
-    if (activeOrders > 0) {
-      throw new BadRequestException('该自提点仍有未完成订单，请先停用并处理完成后再删除');
-    }
-    const result = await this.prisma.pickupStore.update({
-      where: { id: storeId },
-      data: { status: 0, deletedAt: new Date() },
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Normal and promotion pickup checkout lock this same row before order creation. Keeping the
+      // active-order check and soft delete behind the row lock prevents a new pickup order from
+      // slipping in between "count=0" and deletion.
+      const locked = await tx.$queryRaw<Array<{ id: bigint }>>`
+        SELECT id
+        FROM pickup_stores
+        WHERE id = ${storeId} AND deleted_at IS NULL
+        FOR UPDATE
+      `;
+      if (locked.length === 0) throw new NotFoundException('自提点不存在');
+
+      const activeOrders = await tx.order.count({
+        where: {
+          pickupStoreId: storeId,
+          status: { in: ['pending_payment', 'paid', 'pending_pickup', 'aftersale'] },
+        },
+      });
+      if (activeOrders > 0) {
+        throw new BadRequestException('该自提点仍有未完成订单，请先停用并处理完成后再删除');
+      }
+
+      return tx.pickupStore.update({
+        where: { id: storeId },
+        data: { status: 0, deletedAt: new Date() },
+      });
     });
     this.logger.log(`删除自提点：${id}`);
     return this.serialize(result);
