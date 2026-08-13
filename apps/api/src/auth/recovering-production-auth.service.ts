@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import axios from 'axios';
+import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { ProductionAuthService } from './production-auth.service';
@@ -28,11 +29,11 @@ export class RecoveringProductionAuthService extends ProductionAuthService {
     encryptedData?: string,
     iv?: string,
   ) {
-    // Legacy encrypted-data flow has a separate session-key contract and remains delegated to the
-    // already-hardened base implementation. Only the modern getPhoneNumber code path depends on
-    // the shared WeChat API access-token cache handled below.
+    // Keep legacy compatibility in the production provider, but do not delegate its final database
+    // write to the base implementation: an in-flight legacy request must obey the same active-user
+    // compare-and-set rule as the modern getPhoneNumber flow when account cancellation races it.
     if (encryptedData && iv) {
-      return super.bindPhone(userId, code, encryptedData, iv);
+      return this.bindLegacyPhoneSafely(userId, code, encryptedData, iv);
     }
 
     const appId = this.recoveryConfig.get<string>('WECHAT_APP_ID');
@@ -72,11 +73,104 @@ export class RecoveringProductionAuthService extends ProductionAuthService {
       throw new BadRequestException('获取手机号失败，请重试');
     }
 
-    await this.recoveryPrisma.user.update({
-      where: { id: BigInt(userId) },
-      data: { phone: phoneInfo.phoneNumber },
+    return this.persistPhoneForActiveUser(userId, phoneInfo.phoneNumber);
+  }
+
+  private async persistPhoneForActiveUser(userId: string, phone: string) {
+    const updated = await this.recoveryPrisma.user.updateMany({
+      where: { id: BigInt(userId), deletedAt: null, status: 1 },
+      data: { phone },
     });
-    return { phone: phoneInfo.phoneNumber };
+    if (updated.count !== 1) {
+      throw new UnauthorizedException('账号已停用或注销，请重新登录');
+    }
+    return { phone };
+  }
+
+  private async bindLegacyPhoneSafely(
+    userId: string,
+    code: string,
+    encryptedData: string,
+    iv: string,
+  ) {
+    const existingSessionKey = await this.recoveryRedis.get(`wechat_session:${userId}`);
+    if (!existingSessionKey) {
+      throw new UnauthorizedException('会话已过期，请重新登录');
+    }
+
+    const appId = this.recoveryConfig.get<string>('WECHAT_APP_ID');
+    const appSecret = this.recoveryConfig.get<string>('WECHAT_APP_SECRET');
+    if (!appId || !appSecret) {
+      this.recoveryLogger.error('手机号兼容绑定失败：WECHAT_APP_ID 或 WECHAT_APP_SECRET 未配置');
+      throw new BadRequestException('手机号绑定暂不可用，请稍后重试');
+    }
+
+    let sessionResponse;
+    try {
+      sessionResponse = await axios.get('https://api.weixin.qq.com/sns/jscode2session', {
+        params: {
+          appid: appId,
+          secret: appSecret,
+          js_code: code,
+          grant_type: 'authorization_code',
+        },
+      });
+    } catch (error: any) {
+      this.recoveryLogger.error(
+        `手机号兼容绑定获取会话异常: status=${error?.response?.status || '-'} message=${error?.message || error}`,
+      );
+      throw new BadRequestException('手机号绑定暂不可用，请稍后重试');
+    }
+
+    const { session_key: freshSessionKey, errcode, errmsg } = sessionResponse.data || {};
+    if (errcode) {
+      throw new BadRequestException(`获取会话失败: ${errmsg || '未知错误'}`);
+    }
+
+    const phone = this.decryptLegacyPhoneNumber(
+      freshSessionKey || existingSessionKey,
+      iv,
+      encryptedData,
+      appId,
+    );
+
+    // Do not refresh wechat_session here. The caller already has an authenticated access session,
+    // and writing a new session_key after the durable cancellation transaction would recreate
+    // sensitive Redis state that cancellation just removed.
+    return this.persistPhoneForActiveUser(userId, phone);
+  }
+
+  private decryptLegacyPhoneNumber(
+    sessionKey: string,
+    iv: string,
+    encryptedData: string,
+    expectedAppId: string,
+  ): string {
+    let phoneData: any;
+    try {
+      const decipher = crypto.createDecipheriv(
+        'aes-128-cbc',
+        Buffer.from(sessionKey, 'base64'),
+        Buffer.from(iv, 'base64'),
+      );
+      decipher.setAutoPadding(true);
+      const decrypted = Buffer.concat([
+        decipher.update(Buffer.from(encryptedData, 'base64')),
+        decipher.final(),
+      ]).toString('utf8');
+      phoneData = JSON.parse(decrypted);
+    } catch {
+      throw new BadRequestException('手机号解密失败，请重试');
+    }
+
+    const isPlainObject = phoneData && typeof phoneData === 'object' && !Array.isArray(phoneData);
+    const phoneNumber = isPlainObject ? phoneData.phoneNumber : undefined;
+    const watermark = isPlainObject ? phoneData.watermark : undefined;
+    const watermarkAppId = watermark && typeof watermark === 'object' ? watermark.appid : undefined;
+    if (typeof phoneNumber !== 'string' || phoneNumber.trim() === '' || watermarkAppId !== expectedAppId) {
+      throw new BadRequestException('手机号解密失败，请重试');
+    }
+    return phoneNumber;
   }
 
   private async getWechatAccessToken(
