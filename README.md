@@ -1,168 +1,79 @@
 # 禧孕优选
 
-临沂禧孕文化传媒有限公司自营母婴用品商城微信小程序项目。
-
-当前发布状态（2026-06-10）：**代码仓库本地门禁通过，可继续生产运行验收；正式发布尚未完成**。
-
-## 最新本地门禁与专项验证（2026-06-10）
-
-2026-05-31 历史本地门禁结果：
-
-| 门禁项 | 结果 |
-|---|---|
-| `prisma:validate` | PASS |
-| `test:ci` | 464 unit tests (30 suites) + 23 e2e tests (6 suites) |
-| `build:all` | PASS |
-| `release:check` | 106 PASS / 0 FAIL / 11 WARN |
-
-2026-06-10 本轮当前工作树已重新执行：
-
-| 门禁项 | 结果 |
-|---|---|
-| `pnpm typecheck` | PASS |
-| `pnpm test:ci` | PASS（API 587 unit + 37 e2e；小程序 54 tests） |
-| `pnpm build` | PASS（API + Admin Web） |
-| `pnpm release:check` | PASS（126 PASS / 0 FAIL / 14 WARN） |
-
-本轮代码侧专项修复已覆盖：
-
-- 后端只通过 NestJS 静态资源公开 `uploads/public`，不再公开整个 `UPLOAD_DIR`；私有文件仅允许通过 `/api/common/file/private/:id` 在鉴权通过后读取。
-- Nginx 规则与后端口径一致：`/uploads/public/` 可公开读取，`/uploads/private/` 与兜底 `/uploads/` 返回 403。
-- 下单积分抵扣改为条件扣减，降低并发超扣风险；删除事务外重复购物车删除；自提核销重复扫码保持幂等。
-- 商品 SKU 更新复用同商品已有 `skuCode`，避免编辑规格时触发唯一索引冲突或破坏既有购物车/订单引用；后台对已上架商品规格修改增加风险提示。
-- 小程序生产构建在真实 `VITE_WX_APPID`、`https://.../api` 基础上，进一步禁止 localhost、127.0.0.1、example.com、your-domain 等本地或占位 API 地址。
-
-以下项目仍待部署阶段核验，不得记录为已通过：
-
-- GitHub Actions 对应冻结 commit 的 run 结果
-- 真实数据库上的 `pnpm --filter @baby-mall/api prisma migrate deploy`
-- 真实生产变量下的 `pnpm release:check:prod`
-- 微信开发者工具使用生产构建产物上传体验版
-- 真机完整链路验收，包括登录、下单、支付、退款、售后、自提、客服、协议页与私有上传文件访问
-
-以下项目属于部署/运营阶段人工项，不作为代码冻结失败项：真实 AppID、密钥、证书、资质图片、客服电话、客服微信、退货地址。
-
-## Go/No-Go 结论
-
-- 代码仓库本地门禁：**Go**
-- 预生产/生产运行验收：**待服务器配置、生产门禁、微信体验版和真机验收留痕后确认**
-- 正式发布：**No-Go**，直到真实 AppID、支付配置、证书、数据库迁移、体验版上传、真机验收、运营/法务信息全部完成
-
-## 商用加固进展（2026-05-29）
-
-- 订单完成奖励已统一为同一服务逻辑：快递确认收货、自提核销、自动完成均走幂等发奖路径。
-- 库存回滚链路已加固：取消订单/超时关闭/售后退款回滚场景下，销量不会被扣为负数。
-- 支付回调已加固补偿：已取消订单收到支付成功回调时，会创建补偿任务并返回 `SUCCESS`，避免无意义重试风暴。
-- 类目新增合规配置模型：支持食品/保健/奶粉标记、资质图必填、扩展字段必填，并联动商品上架校验。
-- 小程序生产构建门禁增强：`NODE_ENV=production` 下强制校验真实 `VITE_WX_APPID` 和非空 `VITE_API_BASE_URL`。
-
-## 项目结构
-
-- 见 `docs/PROJECT_STRUCTURE.md`
+临沂禧孕文化传媒有限公司自营母婴用品商城微信小程序项目，包含微信小程序、管理后台和 NestJS API。
 
 ## 环境要求
 
-- Node.js >= 18
-- pnpm 11.2.2（版本由 `package.json` 的 `packageManager` 字段指定；通过 `corepack enable` 激活；CI 与 Dockerfile 均通过 corepack 读取 `packageManager`）
-- MySQL 8+
-- Redis 7+
-- Docker / Docker Compose（用于预生产部署）
+- Node.js `>=22.13.0 <25`
+- pnpm `>=11.2.2 <12`
+- MySQL 8
+- Redis 7
+- Docker / Docker Compose（生产部署）
 
-## 本地安装
+版本约束以根目录 `package.json` 的 `engines` 与 `packageManager` 为准。
+
+## 本地开发
 
 ```bash
 pnpm install
-```
-
-## 开发命令
-
-```bash
 pnpm dev:api
 pnpm dev:admin
 pnpm dev:mini
 ```
 
-## 生产构建命令
+常用检查：
 
 ```bash
-pnpm build:api
-pnpm build:admin
-pnpm build:mini
-pnpm build:all
-pnpm build:mini:prod
-```
-
-进入服务器预生产部署前使用 `pnpm release:check:freeze` 作为代码冻结门禁。该命令覆盖依赖锁定、API/Admin lint、类型检查、API 测试、API/Admin/小程序构建、权限审计、敏感文件检查与部署配置静态检查；真实 AppID、密钥、证书、资质、客服电话、客服微信、退货地址等人工/部署项只输出 WARN。正式上线前必须执行 `pnpm release:check:prod`，严格生产门禁不可弱化。
-
-小程序体验版/正式版构建（必须真实 AppID）：
-
-```bash
-NODE_ENV=production VITE_WX_APPID=真实AppID pnpm build:mini
-# 或
-pnpm build:mini:prod
-```
-
-生产小程序包只能通过 `apps/miniprogram/scripts/build-miniprogram.mjs` 或根命令 `pnpm build:mini:prod` 生成。禁止直接用 `apps/miniprogram/src/manifest.json` 中的占位 AppID、`urlCheck=false` 或本地 API 地址上传体验版/正式版。
-
-## 上线门禁命令
-
-```bash
+pnpm typecheck
+pnpm lint
+pnpm test:ci
+pnpm build
 pnpm release:check
-pnpm release:check:freeze
-pnpm release:check:prod
 ```
 
-- `release:check`：默认环境，允许占位 AppID（WARN）
-- `release:check:freeze`：进入服务器预生产部署前的代码冻结门禁；人工/部署项只 WARN，不作为代码冻结 FAIL
-- `release:check:prod`：正式上线前必须执行；强制生产门禁，缺少真实 AppID、生产 API 地址、协议占位、证书或密钥将直接 FAIL
+## 小程序正式构建
 
-GitHub Actions、真实数据库迁移、生产严格门禁和真机验收只有在实际执行并取得可核验结果后，才可在发布记录中标记为通过。
-
-## 前端构建依赖冻结说明
-
-当前小程序 `@dcloudio/*` 依赖随 `pnpm-lock.yaml` 锁定在已验证的 alpha 版本。上线冻结期不要自动升级或切换稳定版；如需升级 UniApp 编译链，应单独开升级任务，并重新完成小程序构建、微信开发者工具预览与真机验收。
-
-## 预生产部署命令
-
-默认约定：以下部署命令默认在仓库根目录执行（`package.json` 所在目录）。
+正式小程序包只允许通过受控生产构建入口生成：
 
 ```bash
-# 先生成私有生产配置（不要提交）
-cp .env.production.example .env.production
-
-# 仅配置校验（不启动）
-(cd deploy && docker compose --env-file ../.env.production config)
-
-# 完整预生产检查 + 启动
-ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
+pnpm build:mini:prod
 ```
 
-生产环境变量模板：`/.env.production.example`
+正式构建必须使用真实微信 AppID 和 HTTPS 生产 API 地址；本地、占位或未解析变量会被构建门禁拒绝。
 
-说明：服务器预生产部署前使用 `pnpm release:check:freeze`；在未提供真实 AppID 与 `legal.ts` 最终联系方式前，`pnpm release:check:prod` 失败是正式上线前的预期阻断。
+## 生产部署
 
-## 安全红线（必须遵守）
+生产部署只有一个受支持入口。必须先将批准版本合并到 `main`，再针对批准的完整 SHA 执行：
 
-- 严禁提交 `.env.production`
-- 严禁提交真实 AppSecret、APIv3 Key、数据库密码、JWT 密钥
-- 严禁提交 `apiclient_key.pem`、`wechatpay_platform.pem`、SSL 私钥等证书文件
-- 营业执照号、备案号、食品/奶粉/保健品资质编号不得编造
+```bash
+EXPECTED_DEPLOY_SHA=<approved-40-char-main-sha> \
+ENV_FILE=.env.production \
+pnpm deploy:prod
+```
 
-必填人工信息见：[docs/OPERATOR_REQUIRED.md](docs/OPERATOR_REQUIRED.md)
+不要用手工 Docker 启动、手工真实库迁移、旧预生产脚本或历史服务器命令替代正式部署入口。仓库测试通过也不等于生产服务器、微信支付或真机已经验收通过。
 
-## 上线文档入口（当前有效）
+## 当前生产事实源
 
-- [GO_LIVE.md](GO_LIVE.md)
-- [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md)
-- [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md)
-- [docs/SERVER_DEPLOY_COMMANDS.md](docs/SERVER_DEPLOY_COMMANDS.md)
-- [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md)
-- [docs/PREPROD_EXECUTION_STEPS.md](docs/PREPROD_EXECUTION_STEPS.md)
-- [docs/ENV_PRODUCTION_FILL_GUIDE.md](docs/ENV_PRODUCTION_FILL_GUIDE.md)
-- [docs/MANUAL_ACCEPTANCE_CHECKLIST.md](docs/MANUAL_ACCEPTANCE_CHECKLIST.md)
-- [docs/PREPROD_ACCEPTANCE_RECORD.md](docs/PREPROD_ACCEPTANCE_RECORD.md)
-- [docs/LEGAL_CONTENT_GUIDE.md](docs/LEGAL_CONTENT_GUIDE.md)
-- [docs/OPERATOR_REQUIRED.md](docs/OPERATOR_REQUIRED.md)
-- [docs/FUNCTION_COMPLETENESS.md](docs/FUNCTION_COMPLETENESS.md)
+生产操作只以以下文档为准：
 
-历史阶段报告与旧版指引已归档到 `docs/archive/`，不再作为主入口。
+- [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md) — 正式部署、回滚、备份恢复与运行时验收
+- [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md) — 上线前逐项检查
+- [docs/ENV_PRODUCTION_FILL_GUIDE.md](docs/ENV_PRODUCTION_FILL_GUIDE.md) — 私有生产环境变量填写规则
+- [docs/MANUAL_ACCEPTANCE_CHECKLIST.md](docs/MANUAL_ACCEPTANCE_CHECKLIST.md) — 微信体验版与真机业务验收
+- [docs/OPERATOR_REQUIRED.md](docs/OPERATOR_REQUIRED.md) — 必须由运营/平台侧完成的外部事项
+
+[GO_LIVE.md](GO_LIVE.md) 与 [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md) 只用于记录候选状态和证据边界，不是部署命令来源。
+
+历史阶段报告、旧预生产步骤和旧服务器命令不得作为当前生产操作依据。
+
+## 安全红线
+
+- 严禁提交 `.env.production` 或真实密钥、密码、AppSecret。
+- 严禁提交商户私钥、微信平台证书私钥、TLS 私钥等敏感材料。
+- 营业执照号、备案号、食品/奶粉/保健品资质编号不得编造。
+- 正式上线前必须完成真实服务器、微信公众平台、微信支付和真机验收，并保存可核验证据。
+
+## 项目结构
+
+详见 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)。
