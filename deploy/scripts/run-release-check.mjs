@@ -135,4 +135,14 @@ if (isClearlyTestDatabase(env.DATABASE_URL)) {
   console.warn('[run-release-check] CI must provide a dedicated test database, migration drift check and test:integration before merge.')
 }
 
-console.log('\n[release-gate-boundary] Repository checks passed. This does not constitute production runtime or real-device acceptance.')
+if (strictProductionGate) {
+  console.log('\n━━━ Supplemental gate E: Exact-head real-device full-function acceptance ━━━')
+  const realDeviceAcceptanceStatus = run(process.execPath, ['deploy/scripts/verify-real-device-acceptance.mjs'])
+  if (realDeviceAcceptanceStatus !== 0) {
+    console.error('[run-release-check] strict production gate requires completed real-device acceptance evidence')
+    process.exit(realDeviceAcceptanceStatus)
+  }
+  console.log('\n[release-gate-boundary] Repository checks and exact-head real-device acceptance passed.')
+} else {
+  console.log('\n[release-gate-boundary] Repository checks passed. This does not constitute production runtime or real-device acceptance.')
+}
