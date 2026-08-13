@@ -3,9 +3,25 @@ import { BadRequestException } from '@nestjs/common';
 export const DIRECT_PROFILE_ASSET_GROUPS = ['user-avatar', 'baby-avatar'] as const;
 export type DirectProfileAssetGroup = (typeof DIRECT_PROFILE_ASSET_GROUPS)[number];
 
+function hasTrustedPublicAssetOrigin(value: string): boolean {
+  if (!/^https?:\/\//i.test(value)) return true;
+  const configuredBase = (
+    process.env.UPLOAD_PUBLIC_URL
+    || process.env.PUBLIC_ASSET_BASE_URL
+    || ''
+  ).trim();
+  if (!configuredBase) return true;
+
+  try {
+    return new URL(value).origin === new URL(configuredBase).origin;
+  } catch {
+    return false;
+  }
+}
+
 export function extractPublicUploadPath(value: unknown): string | null {
   const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) return null;
+  if (!raw || !hasTrustedPublicAssetOrigin(raw)) return null;
 
   let pathname = raw;
   if (/^https?:\/\//i.test(raw)) {
