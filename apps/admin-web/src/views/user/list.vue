@@ -33,10 +33,10 @@
         </el-table-column>
         <el-table-column prop="phone" label="手机号" width="130" />
         <el-table-column label="微信OpenID" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ displayWechatIdentifier(row.openidMasked, row.openid) }}</template>
+          <template #default="{ row }">{{ row.openidMasked || '-' }}</template>
         </el-table-column>
         <el-table-column label="微信UnionID" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ displayWechatIdentifier(row.unionIdMasked, row.unionId) }}</template>
+          <template #default="{ row }">{{ row.unionIdMasked || '-' }}</template>
         </el-table-column>
         <el-table-column label="会员等级" width="100">
           <template #default="{ row }">
@@ -44,9 +44,6 @@
           </template>
         </el-table-column>
         <el-table-column prop="points" label="积分" width="80" />
-        <el-table-column label="余额" width="100">
-          <template #default="{ row }">¥{{ formatPrice(row.balance) }}</template>
-        </el-table-column>
         <el-table-column label="订单数" width="80">
           <template #default="{ row }">{{ row.orderCount || 0 }}</template>
         </el-table-column>
@@ -140,16 +137,6 @@ const pointsRules: FormRules = {
 
 function displayName(row: any) {
   return row.nickname || '微信用户'
-}
-
-function maskIdentifier(value?: string) {
-  if (!value) return ''
-  if (value.length <= 8) return `${value.slice(0, 2)}****${value.slice(-2)}`
-  return `${value.slice(0, 4)}****${value.slice(-4)}`
-}
-
-function displayWechatIdentifier(masked?: string, raw?: string) {
-  return masked || maskIdentifier(raw) || '-'
 }
 
 async function fetchList() {
