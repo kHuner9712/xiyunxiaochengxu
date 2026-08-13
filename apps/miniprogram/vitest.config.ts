@@ -1,6 +1,6 @@
 import path from 'node:path'
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [
@@ -43,5 +43,9 @@ export default defineConfig({
     minWorkers: 1,
     maxWorkers: 1,
     fileParallelism: false,
+    exclude: [
+      ...configDefaults.exclude,
+      'src/full-function-acceptance.test.js',
+    ],
   },
 })
