@@ -13,9 +13,20 @@ function createPrismaMock() {
       update: jest.fn(),
       create: jest.fn(),
     },
+    user: {
+      updateMany: jest.fn(),
+    },
+    userMemberRecord: {
+      create: jest.fn(),
+    },
   };
   const prisma: any = {
     ...tx,
+    user: {
+      findMany: jest.fn(),
+      updateMany: tx.user.updateMany,
+    },
+    userMemberRecord: tx.userMemberRecord,
     $transaction: jest.fn(async (callback: any) => callback(tx)),
   };
   return { prisma, tx };
@@ -68,6 +79,33 @@ describe('AtomicMemberService', () => {
       where: { id: 1n },
       data: { maxGrowthValue: 500 },
     });
+  });
+
+  it('does not restore a membership level when account cancellation wins reconciliation', async () => {
+    const { prisma, tx } = createPrismaMock();
+    prisma.memberLevel.findMany.mockResolvedValue([
+      {
+        id: 10n,
+        name: '普通会员',
+        minGrowthValue: 0,
+        maxGrowthValue: null,
+        sortOrder: 1,
+        status: 1,
+      },
+    ]);
+    prisma.user.findMany.mockResolvedValue([
+      { id: 7n, growthValue: 0, memberLevelId: null },
+    ]);
+    tx.user.updateMany.mockResolvedValue({ count: 0 });
+    const service = new AtomicMemberService(prisma);
+
+    await (service as any).reconcileUsersAfterLevelChange();
+
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 7n, deletedAt: null, memberLevelId: null },
+      data: { memberLevelId: 10n },
+    });
+    expect(tx.userMemberRecord.create).not.toHaveBeenCalled();
   });
 
   it('binds MemberService to the atomic production provider', () => {
