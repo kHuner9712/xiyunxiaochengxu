@@ -293,7 +293,12 @@ export class ConfirmedMissingRefundRetryPaymentService extends OrphanSafeMemberG
           continue;
         }
 
-        const paidAmount = Math.max(0, Number(order.payAmount ?? order.payment.amount ?? task.amount ?? 0));
+        const paidAmount = Math.max(
+          0,
+          Number(order.payAmount ?? 0),
+          Number(order.payment.amount ?? 0),
+          Number(task.amount ?? 0),
+        );
         const successfulRefundAmount = order.orderRefunds
           .filter((refund) => refund.status === REFUND_STATUS.SUCCESS)
           .reduce((sum, refund) => sum + Math.max(0, refund.refundAmount || 0), 0);
