@@ -9,18 +9,21 @@
 
       <text class="section-subtitle">一、我们收集的信息</text>
       <text class="paragraph">1.1 微信登录信息：我们通过微信授权获取您的 OpenID 和 UnionID，用于身份识别和登录。</text>
-      <text class="paragraph">1.2 手机号码：用于订单配送联系和账号安全验证。您可拒绝授权手机号，但可能影响部分功能使用。</text>
-      <text class="paragraph">1.3 收货地址：用于商品配送。包括收件人姓名、电话、省市区及详细地址。</text>
-      <text class="paragraph">1.4 宝宝档案信息：用于提供个性化推荐服务。包括宝宝昵称、性别、出生日期等。此信息为自愿提供。</text>
-      <text class="paragraph">1.5 订单与支付信息：用于订单处理和支付。包括商品信息、金额、支付状态等。</text>
-      <text class="paragraph">1.6 售后图片：用于售后申请处理。您上传的商品问题图片仅用于售后审核。</text>
+      <text class="paragraph">1.2 账户资料：当您主动完善资料时，我们处理您填写的昵称以及您主动选择的头像，用于展示账户资料和识别当前账户。</text>
+      <text class="paragraph">1.3 手机号码：用于订单配送联系和账号安全验证。您可拒绝授权手机号，但可能影响部分功能使用。</text>
+      <text class="paragraph">1.4 收货地址：用于商品配送。包括收件人姓名、电话、省市区及详细地址。</text>
+      <text class="paragraph">1.5 宝宝档案信息：用于提供个性化推荐服务。包括宝宝昵称、性别、出生日期，以及您主动上传的宝宝头像（如有）。此信息为自愿提供。</text>
+      <text class="paragraph">1.6 图片与媒体：当您主动上传账户头像、宝宝头像、售后凭证等图片时，我们会调用图片选择和上传能力；您可自行从相册选择图片或使用相机拍摄。我们仅处理您主动选择或拍摄并确认上传的图片。</text>
+      <text class="paragraph">1.7 订单与支付信息：用于订单处理和支付。包括商品信息、金额、支付状态等。</text>
+      <text class="paragraph">1.8 售后图片：用于售后申请处理。您主动上传的商品问题图片仅用于售后审核、退换货及争议处理。</text>
 
       <text class="section-subtitle">二、我们如何使用信息</text>
       <text class="paragraph">2.1 处理您的订单和支付。</text>
       <text class="paragraph">2.2 提供配送和自提服务。</text>
       <text class="paragraph">2.3 处理售后和退款请求。</text>
-      <text class="paragraph">2.4 提供个性化商品推荐。</text>
-      <text class="paragraph">2.5 改善我们的产品和服务。</text>
+      <text class="paragraph">2.4 根据您自愿提供的宝宝档案信息提供个性化商品推荐。</text>
+      <text class="paragraph">2.5 展示和更新您主动设置的账户昵称、头像等资料。</text>
+      <text class="paragraph">2.6 改善我们的产品和服务。</text>
 
       <text class="section-subtitle">三、信息的保存</text>
       <text class="paragraph">3.1 您的个人信息存储在中华人民共和国境内的服务器上。</text>
