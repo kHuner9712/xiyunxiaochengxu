@@ -15,11 +15,13 @@ import { OrphanSafeMemberGrowthPaymentService } from './orphan-safe-member-growt
 /**
  * Outermost production payment provider.
  *
- * Besides the confirmed-missing refund recovery below, keep payment-success amount validation at
- * this outer boundary so callback, user polling, timeout reconciliation and close-failure recovery
- * cannot have different trust rules. A remote SUCCESS amount must match both local payment and
- * order amounts before any paid-state transition is allowed. The only amount-less path that is
- * accepted is the internal half-success repair where the local payment fact is already SUCCESS.
+ * Keep payment/refund-success amount validation at this outer boundary so callback, user polling,
+ * timeout reconciliation and scheduler recovery cannot have different trust rules. A remote
+ * payment SUCCESS amount must match both local payment and order amounts before any paid-state
+ * transition is allowed. A remote refund SUCCESS must contain both refund and total amounts and
+ * both must match the durable refund/order records before any inventory/points/order side effect.
+ * The only payment amount-less path accepted is the internal half-success repair where the local
+ * payment fact is already SUCCESS.
  *
  * WeChat distinguishes an unknown/uncertain refund request from a refund that is confirmed not to
  * exist. The legacy recovery path intentionally blocks a locally FAILED refund until WeChat can
@@ -79,8 +81,6 @@ export class ConfirmedMissingRefundRetryPaymentService extends OrphanSafeMemberG
       }),
     ]);
 
-    // Preserve the underlying service's existing not-found/error semantics. The amount guard is an
-    // invariant layer, not a replacement for the core payment state machine's entity validation.
     if (!paymentSnapshot || !orderSnapshot) {
       return super.processPaymentSuccess(paymentId, orderId, transactionId, totalAmount, order);
     }
@@ -135,6 +135,62 @@ export class ConfirmedMissingRefundRetryPaymentService extends OrphanSafeMemberG
     return super.processPaymentSuccess(paymentId, orderId, transactionId, totalAmount, order);
   }
 
+  override async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {
+    const refundSnapshot = await this.confirmedMissingPrisma.orderRefund.findUnique({
+      where: { id: refund.id },
+      select: {
+        id: true,
+        orderId: true,
+        outRefundNo: true,
+        refundAmount: true,
+        totalAmount: true,
+      },
+    });
+
+    if (!refundSnapshot) {
+      return super.processWechatRefundSuccess(refund, refundId, wechatData);
+    }
+
+    const orderSnapshot = await this.confirmedMissingPrisma.order.findUnique({
+      where: { id: refundSnapshot.orderId },
+      select: { id: true, orderNo: true, payAmount: true },
+    });
+    if (!orderSnapshot) {
+      return super.processWechatRefundSuccess(refund, refundId, wechatData);
+    }
+
+    const remoteRefundAmount = wechatData?.amount?.refund;
+    const remoteTotalAmount = wechatData?.amount?.total;
+    const localAmountsValid =
+      Number.isSafeInteger(refundSnapshot.refundAmount)
+      && Number.isSafeInteger(refundSnapshot.totalAmount)
+      && Number.isSafeInteger(orderSnapshot.payAmount)
+      && refundSnapshot.totalAmount === orderSnapshot.payAmount;
+    const remoteAmountsValid =
+      Number.isSafeInteger(remoteRefundAmount)
+      && Number.isSafeInteger(remoteTotalAmount)
+      && remoteRefundAmount === refundSnapshot.refundAmount
+      && remoteTotalAmount === refundSnapshot.totalAmount;
+
+    if (!localAmountsValid || !remoteAmountsValid) {
+      this.emitRefundAmountInvariantViolation({
+        orderNo: orderSnapshot.orderNo,
+        outRefundNo: refundSnapshot.outRefundNo,
+        refundRecordId: refundSnapshot.id,
+        refundId,
+        localRefundAmount: refundSnapshot.refundAmount,
+        localTotalAmount: refundSnapshot.totalAmount,
+        orderAmount: orderSnapshot.payAmount,
+        remoteRefundAmount,
+        remoteTotalAmount,
+        reason: !localAmountsValid ? 'local_amount_invariant_broken' : 'remote_amount_mismatch_or_missing',
+      });
+      throw new BadRequestException('退款金额不变量校验失败，禁止自动确认退款成功');
+    }
+
+    return super.processWechatRefundSuccess(refund, refundId, wechatData);
+  }
+
   override async queryRefund(outRefundNo: string) {
     try {
       return await super.queryRefund(outRefundNo);
@@ -181,6 +237,40 @@ export class ConfirmedMissingRefundRetryPaymentService extends OrphanSafeMemberG
         paymentAmount: params.paymentAmount,
         orderAmount: params.orderAmount,
         remoteAmount: params.remoteAmount ?? null,
+        reason: params.reason,
+      },
+    );
+  }
+
+  private emitRefundAmountInvariantViolation(params: {
+    orderNo: string;
+    outRefundNo: string;
+    refundRecordId: bigint;
+    refundId: string;
+    localRefundAmount: number;
+    localTotalAmount: number;
+    orderAmount: number | null;
+    remoteRefundAmount: unknown;
+    remoteTotalAmount: unknown;
+    reason: string;
+  }) {
+    this.confirmedMissingLogger.error(
+      `退款成功金额不变量校验失败: order=${params.orderNo}, outRefundNo=${params.outRefundNo}, localRefund=${params.localRefundAmount}, localTotal=${params.localTotalAmount}, order=${params.orderAmount}, remoteRefund=${String(params.remoteRefundAmount)}, remoteTotal=${String(params.remoteTotalAmount)}, reason=${params.reason}`,
+    );
+    this.confirmedMissingBusinessEvent.emitCritical(
+      'refund_success_amount_invariant_violation',
+      'refund',
+      `退款成功金额不变量校验失败: ${params.outRefundNo}`,
+      params.outRefundNo,
+      {
+        orderNo: params.orderNo,
+        refundRecordId: params.refundRecordId.toString(),
+        refundId: params.refundId,
+        localRefundAmount: params.localRefundAmount,
+        localTotalAmount: params.localTotalAmount,
+        orderAmount: params.orderAmount,
+        remoteRefundAmount: params.remoteRefundAmount ?? null,
+        remoteTotalAmount: params.remoteTotalAmount ?? null,
         reason: params.reason,
       },
     );
