@@ -12,12 +12,11 @@
           </div>
           <el-descriptions :column="1" border>
             <el-descriptions-item label="用户ID">{{ user.id }}</el-descriptions-item>
-            <el-descriptions-item label="微信OpenID">{{ displayWechatIdentifier(user.openidMasked, user.openid) }}</el-descriptions-item>
-            <el-descriptions-item label="微信UnionID">{{ displayWechatIdentifier(user.unionIdMasked, user.unionId) }}</el-descriptions-item>
+            <el-descriptions-item label="微信OpenID">{{ user.openidMasked || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="微信UnionID">{{ user.unionIdMasked || '-' }}</el-descriptions-item>
             <el-descriptions-item label="手机号">{{ user.phone || '-' }}</el-descriptions-item>
             <el-descriptions-item label="会员等级">{{ user.memberLevelName || '普通用户' }}</el-descriptions-item>
             <el-descriptions-item label="积分">{{ user.points || 0 }}</el-descriptions-item>
-            <el-descriptions-item label="余额">¥{{ formatPrice(user.balance) }}</el-descriptions-item>
             <el-descriptions-item label="注册时间">{{ formatDate(user.createdAt || user.createTime) }}</el-descriptions-item>
             <el-descriptions-item label="最后登录">{{ formatDate(user.lastLoginAt || user.lastLoginTime) }}</el-descriptions-item>
           </el-descriptions>
@@ -28,7 +27,7 @@
         <el-card style="margin-bottom: 20px">
           <template #header><span>消费统计</span></template>
           <el-row :gutter="20">
-            <el-col :span="8"><el-statistic title="总订单数" :value="user.orderCount || 0" /></el-col>
+            <el-col :span="8"><el-statistic title="有效订单数" :value="user.orderCount || 0" /></el-col>
             <el-col :span="8"><el-statistic title="总消费金额" :value="Number(formatPrice(user.totalSpent))" prefix="¥" /></el-col>
             <el-col :span="8"><el-statistic title="平均客单价" :value="Number(formatPrice(user.avgOrderAmount))" prefix="¥" /></el-col>
           </el-row>
@@ -38,7 +37,7 @@
           <template #header><span>宝宝档案</span></template>
           <el-table :data="babies" stripe size="small">
             <el-table-column label="宝宝昵称"><template #default="{ row }">{{ row.nickname || row.name || '-' }}</template></el-table-column>
-            <el-table-column label="性别" width="80"><template #default="{ row }">{{ row.gender === 1 ? '男' : '女' }}</template></el-table-column>
+            <el-table-column label="性别" width="80"><template #default="{ row }">{{ row.gender === 1 ? '男' : row.gender === 2 ? '女' : '未知' }}</template></el-table-column>
             <el-table-column label="出生日期" width="120"><template #default="{ row }">{{ formatDateShort(row.birthday) }}</template></el-table-column>
             <el-table-column label="月龄" width="80"><template #default="{ row }">{{ row.currentMonthAge ?? row.age ?? '-' }}</template></el-table-column>
           </el-table>
@@ -49,7 +48,7 @@
           <el-table :data="recentOrders" stripe size="small">
             <el-table-column prop="orderNo" label="订单号" width="200" />
             <el-table-column label="金额" width="100"><template #default="{ row }">¥{{ formatPrice(row.totalAmount) }}</template></el-table-column>
-            <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag :type="getOrderStatusTagType(row.status) as any" size="small">{{ formatOrderStatus(row.status) }}</el-tag></template></el-table-column>
+            <el-table-column label="状态" width="100"><template #default="{ row }"><el-tag :type="getOrderStatusTagType(row.status) as any" size="small">{{ formatOrderStatus(row.status) }}</el-tag></template></el-table-column>
             <el-table-column label="时间" width="180"><template #default="{ row }">{{ formatDate(row.createTime) }}</template></el-table-column>
           </el-table>
         </el-card>
@@ -82,12 +81,6 @@ async function fetchDetail() {
 }
 
 function displayName(row: any) { return row.nickname || '微信用户' }
-function maskIdentifier(value?: string) {
-  if (!value) return ''
-  if (value.length <= 8) return `${value.slice(0, 2)}****${value.slice(-2)}`
-  return `${value.slice(0, 4)}****${value.slice(-4)}`
-}
-function displayWechatIdentifier(masked?: string, raw?: string) { return masked || maskIdentifier(raw) || '-' }
 
 onMounted(() => { fetchDetail() })
 </script>
