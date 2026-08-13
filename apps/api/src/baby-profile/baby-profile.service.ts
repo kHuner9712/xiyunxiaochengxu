@@ -159,6 +159,7 @@ export class BabyProfileService {
 
   async findAllAdmin(dto: BabyProfileQueryDto) {
     const where: any = { deletedAt: null };
+    if (dto.nickname) where.nickname = { contains: dto.nickname };
     if (dto.userId) where.userId = parsePositiveBigIntId(dto.userId, '用户');
 
     const [list, total] = await Promise.all([
