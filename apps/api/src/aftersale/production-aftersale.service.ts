@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
 import { AftersaleStatus, OrderStatus } from '@prisma/client';
 import { AFTERSALE_APPLY_DAYS, generateAftersaleNo } from '@baby-mall/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -58,6 +58,28 @@ export class ProductionAftersaleService extends AftersaleService {
 
     try {
       const aftersale = await this.productionPrisma.$transaction(async (tx) => {
+        const activeUsers = await tx.$queryRaw<Array<{ id: bigint }>>`
+          SELECT id
+          FROM users
+          WHERE id = ${userIdValue}
+            AND status = 1
+            AND deleted_at IS NULL
+          FOR UPDATE
+        `;
+        if (activeUsers.length === 0) {
+          throw new UnauthorizedException('账号已停用或注销，请重新登录');
+        }
+
+        // The request may have waited on the same user row while cancellation or another durable
+        // operation was running. Enforce the aftersale deadline again at the commit boundary so a
+        // request that crossed the deadline while waiting cannot create a stale claim.
+        if (referenceTime) {
+          const elapsedMs = Date.now() - referenceTime.getTime();
+          if (elapsedMs > applyDays * 24 * 60 * 60 * 1000) {
+            throw new BadRequestException(`收货/发货${applyDays}天后无法申请售后`);
+          }
+        }
+
         const created = await tx.aftersaleOrder.create({
           data: {
             aftersaleNo: generateAftersaleNo(),
