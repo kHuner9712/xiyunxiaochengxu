@@ -28,9 +28,9 @@
       <text class="paragraph">4.2 母乳是婴儿最好的食物，配方乳粉仅在无法母乳喂养时使用。</text>
 
       <text class="section-subtitle">五、退换货规则</text>
-      <text class="paragraph">5.1 食品类商品：如存在质量问题，支持7天内退换货。</text>
-      <text class="paragraph">5.2 保健食品：如存在质量问题，支持7天内退换货。</text>
-      <text class="paragraph">5.3 婴幼儿配方乳粉：如存在质量问题，支持7天内退换货。</text>
+      <text class="paragraph">5.1 食品类商品：如存在质量问题，请及时通过订单售后入口申请处理；可申请期限以订单/售后页面当前展示为准，依法享有的法定权利不受影响。</text>
+      <text class="paragraph">5.2 保健食品：如存在质量问题，请及时通过订单售后入口申请处理；可申请期限以订单/售后页面当前展示为准，依法享有的法定权利不受影响。</text>
+      <text class="paragraph">5.3 婴幼儿配方乳粉：如存在质量问题，请及时通过订单售后入口申请处理；可申请期限以订单/售后页面当前展示为准，依法享有的法定权利不受影响。</text>
       <text class="paragraph">5.4 非质量问题的食品类商品，如已拆封，可能不支持退换货，具体以售后审核为准。</text>
 
       <text class="section-subtitle">六、退货地址</text>
