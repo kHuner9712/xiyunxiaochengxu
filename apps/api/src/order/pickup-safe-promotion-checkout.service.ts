@@ -7,7 +7,7 @@ import {
   PromotionCheckoutInput,
   PromotionCheckoutResult,
 } from './promotion-checkout.service';
-import { lockActivePickupStore } from './pickup-order-guard';
+import { lockActivePickupStore, withLockedPickupStoreRead } from './pickup-order-guard';
 
 @Injectable()
 export class PickupSafeAttributionAwarePromotionCheckoutService
@@ -23,7 +23,8 @@ export class PickupSafeAttributionAwarePromotionCheckoutService
     const fulfillmentType = input.fulfillmentType || 'delivery';
     if (fulfillmentType === 'pickup') {
       const pickupStoreId = parsePositiveBigIntId(String(input.pickupStoreId || ''), '自提点');
-      await lockActivePickupStore(tx, pickupStoreId);
+      const store = await lockActivePickupStore(tx, pickupStoreId);
+      return super.createOrder(withLockedPickupStoreRead(tx, store), input);
     }
     return super.createOrder(tx, input);
   }
