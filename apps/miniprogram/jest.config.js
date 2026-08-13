@@ -1,5 +1,3 @@
-const path = require('node:path')
-
 const remote = String(process.env.WECHAT_E2E_REMOTE || '').toLowerCase() === 'true'
 const port = Number(process.env.WECHAT_DEVTOOLS_PORT || 9420)
 
@@ -25,6 +23,6 @@ module.exports = {
   watchPathIgnorePatterns: ['/node_modules/', '/dist/', '/.git/'],
   moduleFileExtensions: ['js', 'json'],
   rootDir: __dirname,
-  testMatch: [path.join('<rootDir>', 'src/full-function-acceptance.test.js')],
+  testMatch: ['<rootDir>/src/full-function-acceptance.test.js'],
   testPathIgnorePatterns: ['/node_modules/'],
 }
