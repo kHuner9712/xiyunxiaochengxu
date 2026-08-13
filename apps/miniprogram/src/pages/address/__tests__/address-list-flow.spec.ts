@@ -55,7 +55,7 @@ describe('收货地址列表核心操作', () => {
     lifecycle.onShowCallbacks.at(-1)?.()
     await flushPromises()
 
-    await wrapper.find('.address-card').trigger('click')
+    await wrapper.find('.address-card').trigger('tap')
     expect(emit).toHaveBeenCalledWith('selectAddress', expect.objectContaining({ id: '1' }))
     expect((globalThis as any).uni.navigateBack).toHaveBeenCalledTimes(1)
   })
