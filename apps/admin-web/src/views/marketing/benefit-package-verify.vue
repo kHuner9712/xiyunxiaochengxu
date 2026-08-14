@@ -11,7 +11,7 @@
         <el-form-item>
           <el-button type="primary" :loading="previewLoading" :disabled="verifyLoading" @click="handlePreview">查询预览</el-button>
           <el-button type="success" :loading="verifyLoading" :disabled="!canVerify || previewLoading || verifyLoading" @click="handleVerify">确认核销</el-button>
-          <el-button :disabled="verifyLoading" @click="handleReset">清空</el-button>
+          <el-button :disabled="verifyLoading" @click="handleReset()">清空</el-button>
         </el-form-item>
       </el-form>
     </div>
