@@ -72,6 +72,48 @@ describe('CancellationSafeStockSafePaymentService', () => {
     expect(baseCreatePayment).not.toHaveBeenCalled();
   });
 
+  it('serializes standard aftersale refund creation on the shared per-order lock', async () => {
+    const baseCreateRefund = jest
+      .spyOn(StockSafeRecoverableProductionPaymentService.prototype, 'createRefund')
+      .mockResolvedValue({ refundId: '1', refundNo: 'R1', outRefundNo: 'R1' } as any);
+    const { service, redis } = createService(true);
+    const params = {
+      orderId: '42',
+      aftersaleId: '9',
+      refundAmount: 500,
+      reason: '同意退款',
+    };
+
+    const result = await service.createRefund(params);
+
+    expect(redis.setNX).toHaveBeenCalledWith(
+      'order:payment-cancel:42',
+      expect.any(String),
+      90,
+    );
+    expect(baseCreateRefund).toHaveBeenCalledTimes(1);
+    expect(baseCreateRefund).toHaveBeenCalledWith(params);
+    expect(redis.releaseLockWithLua).toHaveBeenCalled();
+    expect(result).toEqual({ refundId: '1', refundNo: 'R1', outRefundNo: 'R1' });
+  });
+
+  it('does not enter the standard refund state machine when the order lock is occupied', async () => {
+    const baseCreateRefund = jest.spyOn(
+      StockSafeRecoverableProductionPaymentService.prototype,
+      'createRefund',
+    );
+    const { service } = createService(false);
+
+    await expect(service.createRefund({
+      orderId: '42',
+      aftersaleId: '9',
+      refundAmount: 500,
+      reason: '同意退款',
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(baseCreateRefund).not.toHaveBeenCalled();
+  });
+
   it('serializes group failure refund creation on the same per-order lock', async () => {
     const baseCreateRefund = jest
       .spyOn(RecoverableProductionPaymentService.prototype, 'createGroupBuyFailureRefund')
