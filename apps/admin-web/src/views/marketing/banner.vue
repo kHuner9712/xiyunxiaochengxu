@@ -27,7 +27,14 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'marketing:banner'" type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'marketing:banner'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-permission="'marketing:banner'"
+              type="danger"
+              link
+              :loading="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id))"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -37,9 +44,9 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
         <el-form-item label="标题" prop="title"><el-input v-model="form.title" maxlength="100" /></el-form-item>
         <el-form-item label="图片" prop="image">
-          <el-upload action="" :http-request="handleUploadImage" :show-file-list="false" accept="image/*">
+          <el-upload action="" :http-request="handleUploadImage" :show-file-list="false" accept="image/*" :disabled="uploading">
             <el-image v-if="form.image" :src="form.image" style="width: 300px; height: 150px" fit="cover" />
-            <el-button v-else size="small">上传图片</el-button>
+            <el-button v-else size="small" :loading="uploading">{{ uploading ? '上传中…' : '上传图片' }}</el-button>
           </el-upload>
         </el-form-item>
         <el-form-item label="跳转类型" prop="linkType">
@@ -59,8 +66,10 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button :disabled="submitting || uploading" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="uploading" @click="handleSubmit">
+          {{ uploading ? '图片上传中…' : '确定' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -76,9 +85,11 @@ import { asArray } from '@/utils/response'
 const BANNER_LINK_TYPE_MAP: Record<number, string> = { 0: '不跳转', 1: '商品详情', 2: '活动详情', 3: '小程序页面' }
 const loading = ref(false)
 const submitting = ref(false)
+const uploading = ref(false)
 const dialogVisible = ref(false)
 const tableData = ref<any[]>([])
 const formRef = ref<FormInstance>()
+const deleteBusyIds = reactive(new Set<string>())
 const form = reactive({ id: '', title: '', image: '', linkType: 0 as 0 | 1 | 2 | 3, linkValue: '', sortOrder: 0, status: 1 as 0 | 1 })
 
 const rules: FormRules = {
@@ -100,26 +111,58 @@ function handleAdd() { Object.assign(form, { id: '', title: '', image: '', linkT
 function handleEdit(row: any) { Object.assign(form, { id: String(row.id), title: row.title || '', image: row.image || '', linkType: Number(row.linkType ?? 0), linkValue: row.linkValue || '', sortOrder: Number(row.sortOrder || 0), status: row.status === 0 ? 0 : 1 }); dialogVisible.value = true }
 
 async function handleDelete(row: any) {
-  try { await ElMessageBox.confirm('确定删除该Banner吗？', '提示', { type: 'warning' }); await bannerApi.delete(String(row.id)); ElMessage.success('删除成功'); await fetchList() }
-  catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '删除失败') }
+  const id = String(row.id)
+  if (deleteBusyIds.has(id)) return
+  deleteBusyIds.add(id)
+  try {
+    await ElMessageBox.confirm('确定删除该Banner吗？', '提示', { type: 'warning' })
+    await bannerApi.delete(id)
+    ElMessage.success('删除成功')
+    await fetchList()
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '删除失败')
+  } finally {
+    deleteBusyIds.delete(id)
+  }
 }
 
 async function handleUploadImage(options: any) {
-  try { const res = await uploadApi.uploadImage(options.file, 'marketing-banner'); form.image = res.data.url }
-  catch (e: any) { ElMessage.error(e?.message || '图片上传失败') }
+  if (uploading.value) return
+  uploading.value = true
+  try {
+    const res = await uploadApi.uploadImage(options.file, 'marketing-banner')
+    const url = res?.data?.url
+    if (!url) throw new Error('上传成功但未返回图片地址')
+    form.image = url
+    options.onSuccess?.(res)
+  } catch (e: any) {
+    options.onError?.(e)
+    ElMessage.error(e?.message || '图片上传失败')
+  } finally {
+    uploading.value = false
+  }
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false); if (!valid) return
-  const linkValue = form.linkValue.trim()
-  if (form.linkType !== 0 && !linkValue) { ElMessage.warning('请输入跳转目标'); return }
-  if ((form.linkType === 1 || form.linkType === 2) && !/^[1-9]\d*$/.test(linkValue)) { ElMessage.warning('商品/活动跳转目标必须是有效ID'); return }
-  if (form.linkType === 3 && !linkValue.startsWith('/pages/')) { ElMessage.warning('小程序页面路径必须以 /pages/ 开头'); return }
-  const payload: BannerPayload = { title: form.title.trim(), image: form.image, linkType: form.linkType, linkValue: form.linkType === 0 ? '' : linkValue, sortOrder: form.sortOrder, status: form.status }
+  if (submitting.value) return
+  if (uploading.value) { ElMessage.warning('图片仍在上传，请等待上传完成后再保存'); return }
   submitting.value = true
-  try { if (form.id) await bannerApi.update(form.id, payload); else await bannerApi.create(payload); ElMessage.success('保存成功'); dialogVisible.value = false; await fetchList() }
-  catch (e: any) { ElMessage.error(e?.message || '保存失败') }
-  finally { submitting.value = false }
+  try {
+    const valid = await formRef.value?.validate().catch(() => false); if (!valid) return
+    const linkValue = form.linkValue.trim()
+    if (form.linkType !== 0 && !linkValue) { ElMessage.warning('请输入跳转目标'); return }
+    if ((form.linkType === 1 || form.linkType === 2) && !/^[1-9]\d*$/.test(linkValue)) { ElMessage.warning('商品/活动跳转目标必须是有效ID'); return }
+    if (form.linkType === 3 && !linkValue.startsWith('/pages/')) { ElMessage.warning('小程序页面路径必须以 /pages/ 开头'); return }
+    const payload: BannerPayload = { title: form.title.trim(), image: form.image, linkType: form.linkType, linkValue: form.linkType === 0 ? '' : linkValue, sortOrder: form.sortOrder, status: form.status }
+    if (form.id) await bannerApi.update(form.id, payload); else await bannerApi.create(payload)
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    await fetchList()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
 fetchList()
