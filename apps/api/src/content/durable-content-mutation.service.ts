@@ -39,13 +39,13 @@ export class DurableContentMutationService extends PublicRelatedContentService {
       tags: data.tags ?? null,
       relatedProductIds: relatedProductIds ?? null,
       relatedActivityId: data.relatedActivityId
-        ? this.parsePositiveId(data.relatedActivityId, '关联活动')
+        ? this.parseMutationId(data.relatedActivityId, '关联活动')
         : null,
       isFeatured: data.isFeatured ?? 0,
       sortOrder: data.sortOrder ?? 0,
       status,
       categoryId: data.categoryId
-        ? this.parsePositiveId(data.categoryId, '内容分类')
+        ? this.parseMutationId(data.categoryId, '内容分类')
         : null,
     };
 
@@ -54,7 +54,7 @@ export class DurableContentMutationService extends PublicRelatedContentService {
       normalized.videoCover = null;
       normalized.videoDuration = null;
     }
-    this.assertContentIntegrity(normalized);
+    this.assertMutationContentIntegrity(normalized);
 
     const fingerprint = this.createFingerprint(normalized);
 
@@ -76,7 +76,7 @@ export class DurableContentMutationService extends PublicRelatedContentService {
                 throw new BadRequestException('内容创建请求ID已被其他操作使用，请重新提交');
               }
               const replay = await tx.content.findFirst({
-                where: { id: this.parsePositiveId(eventPayload.contentId, '内容') },
+                where: { id: this.parseMutationId(eventPayload.contentId, '内容') },
               });
               if (!replay) {
                 throw new BadRequestException('该内容创建请求已处理，但内容记录不存在，请刷新内容列表后重试');
@@ -147,7 +147,7 @@ export class DurableContentMutationService extends PublicRelatedContentService {
   }
 
   override async delete(id: string) {
-    const contentId = this.parsePositiveId(id, '内容');
+    const contentId = this.parseMutationId(id, '内容');
     const result = await this.durablePrisma.$transaction(async (tx) => {
       const existing = await tx.content.findFirst({ where: { id: contentId } });
       if (!existing) throw new NotFoundException('内容不存在');
@@ -176,10 +176,10 @@ export class DurableContentMutationService extends PublicRelatedContentService {
     value: string[] | null | undefined,
   ): string[] | null | undefined {
     if (value === undefined || value === null) return value;
-    return value.map((id) => this.parsePositiveId(id, '关联商品').toString());
+    return value.map((id) => this.parseMutationId(id, '关联商品').toString());
   }
 
-  private parsePositiveId(value: unknown, label: string): bigint {
+  private parseMutationId(value: unknown, label: string): bigint {
     const normalized = String(value ?? '').trim();
     if (!/^[1-9]\d*$/.test(normalized)) {
       throw new BadRequestException(`${label}ID无效`);
@@ -191,7 +191,7 @@ export class DurableContentMutationService extends PublicRelatedContentService {
     return id;
   }
 
-  private assertContentIntegrity(content: {
+  private assertMutationContentIntegrity(content: {
     title?: unknown;
     contentType?: unknown;
     content?: unknown;
