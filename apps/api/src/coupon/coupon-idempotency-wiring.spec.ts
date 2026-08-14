@@ -8,10 +8,11 @@ function read(relativePath: string) {
 }
 
 describe('coupon receive idempotency runtime wiring', () => {
-  it('uses the idempotent growth-aware service as the real CouponService provider', () => {
+  it('keeps the idempotent receive service token bound to the durable final CouponService provider', () => {
     const moduleSource = read('apps/api/src/coupon/coupon.module.ts');
-    expect(moduleSource).toContain('IdempotentGrowthAwareCouponService');
-    expect(moduleSource).toContain('useExisting: IdempotentGrowthAwareCouponService');
+    expect(moduleSource).toContain('DurableAdminCouponService');
+    expect(moduleSource).toContain('{ provide: IdempotentGrowthAwareCouponService, useExisting: DurableAdminCouponService }');
+    expect(moduleSource).toContain('{ provide: CouponService, useExisting: DurableAdminCouponService }');
     expect(moduleSource).toContain('RedisModule');
   });
 

@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
@@ -128,7 +129,7 @@ export class DurableAdminCouponService extends IdempotentGrowthAwareCouponServic
           bizId: couponId.toString(),
           level: 'info',
           message: '优惠券硬删除已处理',
-          payload: { coupon: snapshot },
+          payload: { coupon: snapshot } as Prisma.InputJsonValue,
         },
       });
       await tx.coupon.delete({ where: { id: couponId } });
