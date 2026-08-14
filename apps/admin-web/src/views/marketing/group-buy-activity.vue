@@ -57,6 +57,7 @@
               v-model="row.status"
               :active-value="1"
               :inactive-value="0"
+              :disabled="statusBusyIds.has(String(row.id))"
               active-text="上架"
               inactive-text="下架"
               inline-prompt
@@ -67,7 +68,14 @@
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button
+              link
+              type="danger"
+              size="small"
+              :loading="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id))"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -163,8 +171,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">保存</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -181,10 +189,15 @@ import { asArray, paginationTotal } from '@/utils/response'
 const POSITIVE_ID = /^[1-9]\d*$/
 const loading = ref(false)
 const productLoading = ref(false)
+const submitting = ref(false)
 const tableData = ref<any[]>([])
 const availableSkus = ref<Array<{ id: string; name: string; price: number; stock: number }>>([])
 const total = ref(0)
 const dialogVisible = ref(false)
+const statusBusyIds = reactive(new Set<string>())
+const deleteBusyIds = reactive(new Set<string>())
+let skuLoadSeq = 0
+let editLoadSeq = 0
 
 const searchForm = reactive({
   page: 1,
@@ -213,6 +226,8 @@ const editing = reactive<any>({
 })
 
 function resetEditing() {
+  skuLoadSeq += 1
+  productLoading.value = false
   availableSkus.value = []
   Object.assign(editing, {
     id: null,
@@ -235,6 +250,7 @@ function resetEditing() {
 }
 
 async function loadProductSkus(showMessage = false): Promise<boolean> {
+  const requestSeq = ++skuLoadSeq
   const productId = String(editing.productId || '').trim()
   if (!POSITIVE_ID.test(productId)) {
     availableSkus.value = []
@@ -246,6 +262,9 @@ async function loadProductSkus(showMessage = false): Promise<boolean> {
   productLoading.value = true
   try {
     const res: any = await productApi.getDetail(productId)
+    if (requestSeq !== skuLoadSeq || String(editing.productId || '').trim() !== productId) {
+      return false
+    }
     const product = res.data || {}
     const skus = asArray(product.skus)
       .filter((sku: any) => sku?.id != null && (sku.status === 1 || sku.status === undefined))
@@ -268,15 +287,19 @@ async function loadProductSkus(showMessage = false): Promise<boolean> {
     if (showMessage) ElMessage.success(`已加载 ${skus.length} 个可售SKU`)
     return true
   } catch {
-    availableSkus.value = []
-    editing.skuId = ''
+    if (requestSeq === skuLoadSeq) {
+      availableSkus.value = []
+      editing.skuId = ''
+    }
     return false
   } finally {
-    productLoading.value = false
+    if (requestSeq === skuLoadSeq) productLoading.value = false
   }
 }
 
 function handleProductChanged() {
+  skuLoadSeq += 1
+  productLoading.value = false
   editing.productId = String(editing.productId || '').trim()
   editing.skuId = ''
   availableSkus.value = []
@@ -311,13 +334,16 @@ function resetSearch() {
 }
 
 function handleAdd() {
+  editLoadSeq += 1
   resetEditing()
   dialogVisible.value = true
 }
 
 async function handleEdit(row: any) {
+  const requestSeq = ++editLoadSeq
   resetEditing()
   const res: any = await groupBuyApi.getActivityDetail(row.id)
+  if (requestSeq !== editLoadSeq) return
   const d = res.data || {}
   Object.assign(editing, {
     id: d.id,
@@ -337,7 +363,8 @@ async function handleEdit(row: any) {
     coverImage: d.coverImage || '',
     description: d.description || '',
   })
-  await loadProductSkus(false)
+  const loaded = await loadProductSkus(false)
+  if (requestSeq !== editLoadSeq || !loaded) return
   dialogVisible.value = true
 }
 
@@ -367,53 +394,56 @@ function formatActivityDate(value: unknown): string {
 }
 
 async function handleSubmit() {
-  if (!editing.name?.trim()) {
-    ElMessage.warning('请填写活动名称')
-    return
-  }
-  const productId = String(editing.productId || '').trim()
-  if (!POSITIVE_ID.test(productId)) {
-    ElMessage.warning('请输入有效的商品ID')
-    return
-  }
-  const loaded = await loadProductSkus(false)
-  if (!loaded) {
-    ElMessage.warning('商品或SKU不可用，请重新加载')
-    return
-  }
-  const skuId = String(editing.skuId || '').trim()
-  const selectedSku = availableSkus.value.find((sku) => sku.id === skuId)
-  if (!POSITIVE_ID.test(skuId) || !selectedSku) {
-    ElMessage.warning('请选择该商品的有效SKU')
-    return
-  }
-
-  const startDate = parsePickerDateTime(editing.startTime)
-  const endDate = parsePickerDateTime(editing.endTime)
-  if (!startDate || !endDate) {
-    ElMessage.warning('请选择有效的活动时间')
-    return
-  }
-  if (startDate.getTime() >= endDate.getTime()) {
-    ElMessage.warning('活动结束时间必须晚于开始时间')
-    return
-  }
-  if (Number(editing.groupPrice) > selectedSku.price) {
-    ElMessage.warning(`拼团价不能高于当前SKU售价 ¥${formatPrice(selectedSku.price)}`)
-    return
-  }
-
-  const { id: _id, ...rest } = editing
-  const payload: any = {
-    ...rest,
-    productId,
-    skuId,
-    startTime: toIsoDateTime(editing.startTime),
-    endTime: toIsoDateTime(editing.endTime),
-  }
-  if (payload.originalPrice === null || payload.originalPrice === '') delete payload.originalPrice
-  if (payload.stockLimit === null || payload.stockLimit === '') delete payload.stockLimit
+  if (submitting.value) return
+  submitting.value = true
   try {
+    if (!editing.name?.trim()) {
+      ElMessage.warning('请填写活动名称')
+      return
+    }
+    const productId = String(editing.productId || '').trim()
+    if (!POSITIVE_ID.test(productId)) {
+      ElMessage.warning('请输入有效的商品ID')
+      return
+    }
+    const loaded = await loadProductSkus(false)
+    if (!loaded || productId !== String(editing.productId || '').trim()) {
+      ElMessage.warning('商品或SKU不可用，请重新加载')
+      return
+    }
+    const skuId = String(editing.skuId || '').trim()
+    const selectedSku = availableSkus.value.find((sku) => sku.id === skuId)
+    if (!POSITIVE_ID.test(skuId) || !selectedSku) {
+      ElMessage.warning('请选择该商品的有效SKU')
+      return
+    }
+
+    const startDate = parsePickerDateTime(editing.startTime)
+    const endDate = parsePickerDateTime(editing.endTime)
+    if (!startDate || !endDate) {
+      ElMessage.warning('请选择有效的活动时间')
+      return
+    }
+    if (startDate.getTime() >= endDate.getTime()) {
+      ElMessage.warning('活动结束时间必须晚于开始时间')
+      return
+    }
+    if (Number(editing.groupPrice) > selectedSku.price) {
+      ElMessage.warning(`拼团价不能高于当前SKU售价 ¥${formatPrice(selectedSku.price)}`)
+      return
+    }
+
+    const { id: _id, ...rest } = editing
+    const payload: any = {
+      ...rest,
+      productId,
+      skuId,
+      startTime: toIsoDateTime(editing.startTime),
+      endTime: toIsoDateTime(editing.endTime),
+    }
+    if (payload.originalPrice === null || payload.originalPrice === '') delete payload.originalPrice
+    if (payload.stockLimit === null || payload.stockLimit === '') delete payload.stockLimit
+
     if (editing.id) {
       await groupBuyApi.updateActivity(String(editing.id), payload)
     } else {
@@ -421,30 +451,45 @@ async function handleSubmit() {
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    loadList()
+    await loadList()
   } catch {
     // 错误已由拦截器处理
+  } finally {
+    submitting.value = false
   }
 }
 
 async function handleStatusChange(row: any, val: string | number | boolean) {
+  const id = String(row.id)
   const numVal = Number(val)
+  if (statusBusyIds.has(id)) {
+    row.status = numVal === 1 ? 0 : 1
+    return
+  }
+  statusBusyIds.add(id)
   try {
-    await groupBuyApi.updateActivityStatus(String(row.id), numVal)
+    await groupBuyApi.updateActivityStatus(id, numVal)
     ElMessage.success(numVal === 1 ? '已上架' : '已下架')
   } catch {
     row.status = numVal === 1 ? 0 : 1
+  } finally {
+    statusBusyIds.delete(id)
   }
 }
 
 async function handleDelete(row: any) {
+  const id = String(row.id)
+  if (deleteBusyIds.has(id)) return
+  deleteBusyIds.add(id)
   try {
     await ElMessageBox.confirm(`确认删除活动「${row.name}」吗？`, '提示', { type: 'warning' })
-    await groupBuyApi.deleteActivity(String(row.id))
+    await groupBuyApi.deleteActivity(id)
     ElMessage.success('删除成功')
-    loadList()
+    await loadList()
   } catch {
     // 取消或错误
+  } finally {
+    deleteBusyIds.delete(id)
   }
 }
 
