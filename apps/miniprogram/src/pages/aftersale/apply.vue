@@ -36,15 +36,15 @@
             <image class="upload-image" :src="img" mode="aspectFill" />
             <view class="image-delete" @tap="removeImage(index)">✕</view>
           </view>
-          <view v-if="imageList.length < 5" class="image-add" @tap="addImage">
-            <text class="add-icon">+</text>
+          <view v-if="imageList.length < 5" class="image-add" :class="{ disabled: uploading }" @tap="addImage">
+            <text class="add-icon">{{ uploading ? '…' : '+' }}</text>
           </view>
         </view>
       </view>
     </view>
 
-    <view class="submit-btn" @tap="handleSubmit">
-      <text class="submit-text">提交申请</text>
+    <view class="submit-btn" :class="{ disabled: submitting || uploading }" @tap="handleSubmit">
+      <text class="submit-text">{{ submitting ? '提交中...' : (uploading ? '图片上传中...' : '提交申请') }}</text>
     </view>
   </view>
 </template>
@@ -64,6 +64,8 @@ const reasons = ref<string[]>(['不想要了', '商品与描述不符', '质量�
 const imageList = ref<string[]>([])
 const displayImageList = ref<string[]>([])
 const userStore = useUserStore()
+const uploading = ref(false)
+const submitting = ref(false)
 
 const form = ref({
   type: 1,
@@ -77,6 +79,8 @@ function onReasonChange(e: any) {
 }
 
 async function addImage() {
+  if (uploading.value || submitting.value) return
+  uploading.value = true
   try {
     const results = await chooseAndUploadImage(5 - imageList.value.length, 'aftersale')
     for (const r of results) {
@@ -86,16 +90,24 @@ async function addImage() {
     }
   } catch {
     uni.showToast({ title: '图片上传失败', icon: 'none' })
+  } finally {
+    uploading.value = false
   }
 }
 
 function removeImage(index: number) {
+  if (uploading.value || submitting.value) return
   imageList.value.splice(index, 1)
   displayImageList.value.splice(index, 1)
   form.value.images.splice(index, 1)
 }
 
 async function handleSubmit() {
+  if (submitting.value) return
+  if (uploading.value) {
+    uni.showToast({ title: '图片仍在上传，请稍后提交', icon: 'none' })
+    return
+  }
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(() => handleSubmit())
     return
@@ -124,6 +136,7 @@ async function handleSubmit() {
     uni.showToast({ title: '请选择原因', icon: 'none' })
     return
   }
+  submitting.value = true
   try {
     await applyAftersale({
       orderId: orderId.value,
@@ -137,6 +150,8 @@ async function handleSubmit() {
     setTimeout(() => uni.navigateBack(), 1500)
   } catch (error: any) {
     uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -181,9 +196,12 @@ onLoad(async (options) => {
 
 defineExpose({
   handleSubmit,
+  addImage,
   orderId,
   orderItemId,
-  form
+  form,
+  uploading,
+  submitting
 })
 </script>
 
@@ -318,6 +336,8 @@ defineExpose({
   border-radius: $radius-lg;
   @include flex-center;
   border: 2rpx dashed rgba($primary-color, 0.28);
+
+  &.disabled { opacity: 0.55; pointer-events: none; }
 }
 
 .add-icon {
@@ -331,6 +351,8 @@ defineExpose({
   padding: 24rpx 0;
   text-align: center;
   box-shadow: $shadow-coral;
+
+  &.disabled { opacity: 0.55; pointer-events: none; }
 }
 
 .submit-text {
