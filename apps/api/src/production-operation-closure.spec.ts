@@ -107,6 +107,7 @@ describe('production operation closure contracts', () => {
     const snapshotViewBenefits = read('apps/api/src/benefit-package/snapshot-view-benefit-package.service.ts');
     const versionedBenefits = read('apps/api/src/benefit-package/versioned-benefit-package.service.ts');
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
+    const temporalSettlement = read('apps/api/src/merchant-settlement/temporal-rule-merchant-settlement.service.ts');
     const serializedSettlement = read('apps/api/src/merchant-settlement/serialized-sales-merchant-settlement.service.ts');
     const snapshotSettlement = read('apps/api/src/merchant-settlement/snapshot-aware-state-safe-merchant-settlement.service.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
@@ -161,7 +162,9 @@ describe('production operation closure contracts', () => {
     expect(validitySafeBenefits).toContain('权益尚未生效');
     expect(snapshotViewBenefits).toContain('extends VersionedBenefitPackageService');
     expect(versionedBenefits).toContain('extends ZeroPayAwareBenefitPackageService');
-    expect(settlementModule).toContain('useClass: SerializedSalesMerchantSettlementService');
+    expect(settlementModule).toContain('useClass: TemporalRuleMerchantSettlementService');
+    expect(temporalSettlement).toContain('extends SerializedSalesMerchantSettlementService');
+    expect(temporalSettlement).toContain('salesOccurredAt');
     expect(serializedSettlement).toContain('extends SnapshotAwareStateSafeMerchantSettlementService');
     expect(serializedSettlement).toContain('merchant:settlement:sales:');
     expect(snapshotSettlement).toContain('extends StateSafeProductionMerchantSettlementService');
