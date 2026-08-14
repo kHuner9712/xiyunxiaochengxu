@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { get, post, put, del } from '@/utils/request'
+import { get, post, put, del, getToken } from '@/utils/request'
 
 interface CartItem {
   id: string
@@ -20,6 +20,7 @@ export const useCartStore = defineStore('cart', () => {
   const items = ref<CartItem[]>([])
   const loading = ref(false)
   let fetchVersion = 0
+  let ownerToken = ''
 
   function isPurchasable(item: CartItem) {
     return item.isValid !== false
@@ -65,12 +66,32 @@ export const useCartStore = defineStore('cart', () => {
     }
   }
 
+  function clearCart() {
+    fetchVersion += 1
+    ownerToken = ''
+    items.value = []
+    loading.value = false
+    updateTabBadge()
+  }
+
   async function fetchCart() {
+    const currentToken = getToken()
+    if (!currentToken) {
+      clearCart()
+      return false
+    }
+
+    // Never expose one account's in-memory cart to another account while the new account's
+    // first network request is pending or failing.
+    if (ownerToken && ownerToken !== currentToken) {
+      clearCart()
+    }
+
     const version = ++fetchVersion
     loading.value = true
     try {
       const data = await get<CartItem[]>('/weapp/cart/list')
-      if (version !== fetchVersion) return
+      if (version !== fetchVersion) return false
 
       const prevCheckedIds = new Set(items.value.filter(i => i.checked).map(i => i.id))
       const hadPreviousState = items.value.length > 0
@@ -81,11 +102,20 @@ export const useCartStore = defineStore('cart', () => {
           checked: purchasable && (hadPreviousState ? prevCheckedIds.has(item.id) : true),
         }
       })
+      ownerToken = currentToken
       updateTabBadge()
+      return true
     } catch {
-      if (version !== fetchVersion) return
-      items.value = []
-      updateTabBadge()
+      if (version !== fetchVersion) return false
+
+      // A 401 clears the persisted token in request.ts. In that case the cart must be erased.
+      // For ordinary network/server failures keep the last known cart instead of pretending it is empty.
+      if (!getToken()) {
+        clearCart()
+      } else {
+        uni.showToast({ title: '购物车加载失败，请稍后重试', icon: 'none' })
+      }
+      return false
     } finally {
       if (version === fetchVersion) {
         loading.value = false
@@ -100,17 +130,30 @@ export const useCartStore = defineStore('cart', () => {
 
   async function updateQuantity(cartItemId: string, quantity: number) {
     await put('/weapp/cart/update', { id: cartItemId, quantity })
+
+    // The write already succeeded. Reflect that fact locally before the authoritative refresh so
+    // a transient GET failure cannot leave the UI showing the pre-write quantity.
+    const localItem = items.value.find(item => item.id === cartItemId)
+    if (localItem) {
+      localItem.quantity = quantity
+      updateTabBadge()
+    }
     await fetchCart()
   }
 
   async function removeItem(cartItemId: string) {
     await del(`/weapp/cart/delete/${encodeURIComponent(cartItemId)}`)
+    items.value = items.value.filter(item => item.id !== cartItemId)
+    updateTabBadge()
     await fetchCart()
   }
 
   async function removeSelected() {
     const selectedIds = checkedItems.value.map(item => item.id)
     await Promise.all(selectedIds.map(id => del(`/weapp/cart/delete/${encodeURIComponent(id)}`)))
+    const selectedSet = new Set(selectedIds)
+    items.value = items.value.filter(item => !selectedSet.has(item.id))
+    updateTabBadge()
     await fetchCart()
   }
 
@@ -139,6 +182,7 @@ export const useCartStore = defineStore('cart', () => {
     totalPrice,
     allChecked,
     fetchCart,
+    clearCart,
     addToCart,
     updateQuantity,
     removeItem,
