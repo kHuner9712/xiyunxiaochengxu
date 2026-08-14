@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { get, post, put, del, getToken } from '@/utils/request'
+import { runPersistentIdempotentAction } from '@/utils/checkout-idempotency'
 
 interface CartItem {
   id: string
@@ -124,7 +125,11 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   async function addToCart(params: { productId: string; skuId: string; quantity: number }) {
-    await post('/weapp/cart/add', params)
+    await runPersistentIdempotentAction(
+      `cart:add:${params.skuId}`,
+      params,
+      (clientRequestId) => post('/weapp/cart/add', { ...params, clientRequestId }),
+    )
     await fetchCart()
   }
 

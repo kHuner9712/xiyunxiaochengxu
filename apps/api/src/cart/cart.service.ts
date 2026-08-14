@@ -7,6 +7,8 @@ import { UpdateCartDto } from './dto/update-cart.dto';
 import { CART_MAX_QUANTITY, CART_MAX_ITEMS, formatSkuSpecs } from '@baby-mall/shared';
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 
+const CART_ADD_EVENT = 'cart_add';
+
 @Injectable()
 export class CartService {
   private readonly logger = new Logger(CartService.name);
@@ -37,9 +39,45 @@ export class CartService {
     if (!Number.isInteger(dto.quantity) || dto.quantity <= 0 || dto.quantity > CART_MAX_QUANTITY) {
       throw new BadRequestException(`单件商品数量必须为1-${CART_MAX_QUANTITY}`);
     }
+    const requestId = dto.clientRequestId?.trim() || null;
+    const requestBizType = `cart:${userIdValue.toString()}`;
+    const requestFingerprint = JSON.stringify({
+      productId: requestedProductId?.toString() || '',
+      skuId: skuId.toString(),
+      quantity: dto.quantity,
+    });
 
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lockUser(tx, userIdValue);
+
+      // This is an incremental mutation. Check the durable request fact before looking at current
+      // quantity/stock so a response-loss retry cannot increment again or be rejected by a limit
+      // that the first successful attempt itself reached.
+      if (requestId) {
+        const handled = await tx.businessEvent.findFirst({
+          where: {
+            eventType: CART_ADD_EVENT,
+            bizType: requestBizType,
+            bizId: requestId,
+          },
+          orderBy: { id: 'desc' },
+        });
+        if (handled) {
+          const eventPayload = this.readAddEventPayload(handled.payload);
+          if (eventPayload.fingerprint !== requestFingerprint) {
+            throw new BadRequestException('加购请求ID已被其他操作使用，请重新操作');
+          }
+          const cartId = parsePositiveBigIntId(eventPayload.cartId, '购物车');
+          const replayCart = await tx.cart.findFirst({
+            where: { id: cartId, userId: userIdValue },
+          });
+          if (!replayCart) {
+            throw new BadRequestException('该加购请求已处理，请刷新购物车后重新操作');
+          }
+          return { cart: replayCart, replayed: true };
+        }
+      }
+
       const sku = await tx.productSku.findFirst({
         where: { id: skuId, status: 1 },
         include: { product: true },
@@ -53,36 +91,59 @@ export class CartService {
       const existing = await tx.cart.findFirst({
         where: { userId: userIdValue, skuId },
       });
+      let cart: any;
       if (existing) {
         const newQuantity = existing.quantity + dto.quantity;
         if (newQuantity > CART_MAX_QUANTITY) {
           throw new BadRequestException(`单件商品数量不能超过${CART_MAX_QUANTITY}`);
         }
         if (sku.stock < newQuantity) throw new BadRequestException('库存不足');
-        return tx.cart.update({
+        cart = await tx.cart.update({
           where: { id: existing.id },
           data: { quantity: newQuantity },
         });
+      } else {
+        const cartCount = await tx.cart.count({ where: { userId: userIdValue } });
+        if (cartCount >= CART_MAX_ITEMS) {
+          throw new BadRequestException(`购物车最多添加${CART_MAX_ITEMS}种商品`);
+        }
+        if (sku.stock < dto.quantity) throw new BadRequestException('库存不足');
+
+        cart = await tx.cart.create({
+          data: {
+            userId: userIdValue,
+            productId: sku.productId,
+            skuId,
+            quantity: dto.quantity,
+          },
+        });
       }
 
-      const cartCount = await tx.cart.count({ where: { userId: userIdValue } });
-      if (cartCount >= CART_MAX_ITEMS) {
-        throw new BadRequestException(`购物车最多添加${CART_MAX_ITEMS}种商品`);
+      if (requestId) {
+        // User-row locking serializes all cart mutations for this account. Persisting the operation
+        // marker in the same transaction makes retries crash-safe without a schema migration.
+        await tx.businessEvent.create({
+          data: {
+            eventType: CART_ADD_EVENT,
+            bizType: requestBizType,
+            bizId: requestId,
+            level: 'info',
+            message: '购物车加购请求已处理',
+            payload: {
+              cartId: cart.id.toString(),
+              fingerprint: requestFingerprint,
+            },
+          },
+        });
       }
-      if (sku.stock < dto.quantity) throw new BadRequestException('库存不足');
 
-      return tx.cart.create({
-        data: {
-          userId: userIdValue,
-          productId: sku.productId,
-          skuId,
-          quantity: dto.quantity,
-        },
-      });
+      return { cart, replayed: false };
     });
 
-    this.logger.log(`用户${userId}添加/更新购物车SKU${dto.skuId}，数量${result.quantity}`);
-    return this.serializeRawCart(result);
+    this.logger.log(
+      `用户${userId}添加/更新购物车SKU${dto.skuId}，数量${result.cart.quantity}${result.replayed ? '（幂等重放）' : ''}`,
+    );
+    return this.serializeRawCart(result.cart);
   }
 
   async updateItem(userId: string, dto: UpdateCartDto) {
@@ -192,6 +253,19 @@ export class CartService {
     });
     this.logger.log(`用户${userId}删除已选购物车项，共${result.count}条`);
     return { deletedCount: result.count };
+  }
+
+  private readAddEventPayload(payload: unknown): { cartId: string; fingerprint: string } {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new BadRequestException('加购请求记录异常，请刷新购物车后重试');
+    }
+    const record = payload as Record<string, unknown>;
+    const cartId = typeof record.cartId === 'string' ? record.cartId : '';
+    const fingerprint = typeof record.fingerprint === 'string' ? record.fingerprint : '';
+    if (!cartId || !fingerprint) {
+      throw new BadRequestException('加购请求记录异常，请刷新购物车后重试');
+    }
+    return { cartId, fingerprint };
   }
 
   private async lockUser(tx: Prisma.TransactionClient, userId: bigint) {

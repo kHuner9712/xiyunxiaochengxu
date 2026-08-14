@@ -16,11 +16,31 @@ function createMockPrisma() {
     productSku: {
       findFirst: jest.fn(),
     },
+    businessEvent: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
     $queryRaw: jest.fn(),
   };
   prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
   return prisma;
 }
+
+function rawCart(overrides: Record<string, any> = {}) {
+  return {
+    id: 1n,
+    userId: 100n,
+    productId: 10n,
+    skuId: 20n,
+    quantity: 2,
+    isSelected: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
+const REQUEST_ID = '1760000000000-abcdefghijklmnopqrstuvwx';
 
 describe('CartService', () => {
   let service: CartService;
@@ -29,6 +49,8 @@ describe('CartService', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     prisma.$queryRaw.mockResolvedValue([{ id: 100n }]);
+    prisma.businessEvent.findFirst.mockResolvedValue(null);
+    prisma.businessEvent.create.mockResolvedValue({ id: 99n });
     service = new CartService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
     process.env.UPLOAD_PUBLIC_URL = 'https://api.example.com';
@@ -102,6 +124,86 @@ describe('CartService', () => {
       const result = await service.findAll('100');
       expect(result[0].isValid).toBe(false);
       expect(result[1].isValid).toBe(false);
+    });
+  });
+
+  describe('addItem idempotency', () => {
+    it('replays a committed incremental add instead of adding the same quantity twice', async () => {
+      const sku = {
+        id: 20n,
+        productId: 10n,
+        stock: 50,
+        status: 1,
+        product: { id: 10n, status: 1 },
+      };
+      const before = rawCart({ quantity: 1 });
+      const after = rawCart({ quantity: 3 });
+      let durableEvent: any = null;
+
+      prisma.productSku.findFirst.mockResolvedValue(sku);
+      prisma.cart.findFirst
+        .mockResolvedValueOnce(before)
+        .mockResolvedValueOnce(after);
+      prisma.cart.update.mockResolvedValue(after);
+      prisma.businessEvent.findFirst.mockImplementation(async () => durableEvent);
+      prisma.businessEvent.create.mockImplementation(async ({ data }: any) => {
+        durableEvent = { id: 71n, ...data };
+        return durableEvent;
+      });
+
+      const dto = {
+        productId: '10',
+        skuId: '20',
+        quantity: 2,
+        clientRequestId: REQUEST_ID,
+      };
+
+      const first = await service.addItem('100', dto);
+      const retry = await service.addItem('100', dto);
+
+      expect(first.quantity).toBe(3);
+      expect(retry.quantity).toBe(3);
+      expect(prisma.cart.update).toHaveBeenCalledTimes(1);
+      expect(prisma.productSku.findFirst).toHaveBeenCalledTimes(1);
+      expect(prisma.businessEvent.create).toHaveBeenCalledTimes(1);
+      expect(prisma.businessEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          eventType: 'cart_add',
+          bizType: 'cart:100',
+          bizId: REQUEST_ID,
+          payload: expect.objectContaining({ cartId: '1' }),
+        }),
+      });
+    });
+
+    it('fails closed if the same add request id is reused with a different quantity', async () => {
+      const sku = {
+        id: 20n,
+        productId: 10n,
+        stock: 50,
+        status: 1,
+        product: { id: 10n, status: 1 },
+      };
+      let durableEvent: any = null;
+      prisma.productSku.findFirst.mockResolvedValue(sku);
+      prisma.cart.findFirst.mockResolvedValue(rawCart({ quantity: 1 }));
+      prisma.cart.update.mockResolvedValue(rawCart({ quantity: 2 }));
+      prisma.businessEvent.findFirst.mockImplementation(async () => durableEvent);
+      prisma.businessEvent.create.mockImplementation(async ({ data }: any) => {
+        durableEvent = { id: 72n, ...data };
+        return durableEvent;
+      });
+
+      await service.addItem('100', {
+        productId: '10', skuId: '20', quantity: 1, clientRequestId: REQUEST_ID,
+      });
+
+      await expect(service.addItem('100', {
+        productId: '10', skuId: '20', quantity: 2, clientRequestId: REQUEST_ID,
+      })).rejects.toThrow('加购请求ID已被其他操作使用');
+
+      expect(prisma.cart.update).toHaveBeenCalledTimes(1);
+      expect(prisma.businessEvent.create).toHaveBeenCalledTimes(1);
     });
   });
 
