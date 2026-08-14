@@ -85,8 +85,8 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
    * The standard paid-refund flow validates duplicate/cumulative refund state before it writes the
    * durable INITIATING row. Without a shared per-order claim, two concurrent requests can both pass
    * those reads, create different out_refund_no values and independently reach WeChat. Serialize
-   * the complete refund-creation state machine on the same order lock used by payment creation,
-   * cancellation and group-failure refunds.
+   * the complete refund-creation state machine on the same order lock used by payment creation and
+   * cancellation.
    *
    * The inherited flow persists INITIATING before the remote refund request. Once the first holder
    * reaches WeChat, a later holder therefore observes durable in-flight refund state even if the
@@ -130,19 +130,16 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   }
 
   /**
-   * Group-expiry reconciliation and paid-order recovery run under different scheduler locks.
-   * Serialize the complete group-failure refund state machine on the same per-order lock used by
-   * payment/cancellation so two workers cannot both observe "no refund" and create separate
-   * full-refund intentions for the same order.
+   * Production group-failure refund creation eventually calls `this.createRefund(...)`. The
+   * standard refund override above is therefore the single per-order lock boundary. Acquiring the
+   * same non-reentrant Redis lock here as well would self-deadlock the group-failure path. Keep this
+   * wrapper lock-free and let the durable refund-intent creation acquire the shared order lock once.
    */
   override async createGroupBuyFailureRefund(
     orderId: bigint | string,
     reason = '拼团失败自动退款',
   ): Promise<GroupBuyFailureRefundResult> {
-    const normalizedOrderId = String(orderId);
-    return this.withPaymentCancelLock(normalizedOrderId, () =>
-      super.createGroupBuyFailureRefund(orderId, reason),
-    );
+    return super.createGroupBuyFailureRefund(orderId, reason);
   }
 
   /**
