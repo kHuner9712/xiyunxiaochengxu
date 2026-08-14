@@ -186,11 +186,16 @@ export class BabyProfileService {
     const profileId = parsePositiveBigIntId(id, '宝宝档案');
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${userIdValue} AND deleted_at IS NULL FOR UPDATE`;
-      await tx.$queryRaw`SELECT id FROM baby_profiles WHERE id = ${profileId} AND user_id = ${userIdValue} AND deleted_at IS NULL FOR UPDATE`;
+      // Lock the owned profile even when it is already soft-deleted. This lets a retry after a lost
+      // success response replay the completed delete without reopening default-profile mutations.
+      await tx.$queryRaw`SELECT id FROM baby_profiles WHERE id = ${profileId} AND user_id = ${userIdValue} FOR UPDATE`;
       const profile = await tx.babyProfile.findFirst({
-        where: { id: profileId, userId: userIdValue, deletedAt: null },
+        where: { id: profileId, userId: userIdValue },
       });
       if (!profile) throw new NotFoundException('宝宝档案不存在');
+      if (profile.deletedAt) {
+        return { profile, replayed: true };
+      }
 
       const deleted = await tx.babyProfile.update({
         where: { id: profileId },
@@ -205,10 +210,12 @@ export class BabyProfileService {
           await tx.babyProfile.update({ where: { id: replacement.id }, data: { isDefault: 1 } });
         }
       }
-      return deleted;
+      return { profile: deleted, replayed: false };
     });
-    this.logger.log(`用户${userIdValue}删除宝宝档案${profileId}`);
-    return this.serializeProfile(result);
+    this.logger.log(
+      `用户${userIdValue}删除宝宝档案${profileId}${result.replayed ? '（幂等重放）' : ''}`,
+    );
+    return this.serializeProfile(result.profile);
   }
 
   async findAllAdmin(dto: BabyProfileQueryDto) {

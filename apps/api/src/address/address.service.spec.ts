@@ -227,6 +227,23 @@ describe('AddressService', () => {
     });
   });
 
+  describe('delete idempotency', () => {
+    it('replays success for an address already soft-deleted by the same user', async () => {
+      const deleted = address({ id: 9n, isDefault: 0, deletedAt: new Date('2026-08-14T00:00:00.000Z') });
+      prisma.userAddress.findFirst.mockResolvedValue(deleted);
+
+      const result = await service.delete('100', '9');
+
+      expect(result.id).toBe('9');
+      expect(result.isDefault).toBe(false);
+      expect(prisma.userAddress.findFirst).toHaveBeenCalledWith({
+        where: { id: 9n, userId: 100n },
+      });
+      expect(prisma.userAddress.update).not.toHaveBeenCalled();
+      expect(prisma.userAddress.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('ownership guard', () => {
     it('findById scopes lookup by current user id', async () => {
       prisma.userAddress.findFirst.mockResolvedValue(null);
@@ -251,6 +268,9 @@ describe('AddressService', () => {
 
       await expect(service.delete('100', '9')).rejects.toThrow('地址不存在');
 
+      expect(prisma.userAddress.findFirst).toHaveBeenCalledWith({
+        where: { id: 9n, userId: 100n },
+      });
       expect(prisma.userAddress.update).not.toHaveBeenCalled();
     });
   });

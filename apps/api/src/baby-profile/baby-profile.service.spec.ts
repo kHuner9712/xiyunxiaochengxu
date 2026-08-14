@@ -164,6 +164,36 @@ describe('BabyProfileService', () => {
     expect(result.avatar).toBe('https://example.com/edited-baby.png');
   });
 
+  it('replays success for a profile already soft-deleted by the same user', async () => {
+    const deleted = babyProfile({
+      id: 7n,
+      isDefault: 0,
+      deletedAt: new Date('2026-08-14T00:00:00.000Z'),
+    });
+    prisma.babyProfile.findFirst.mockResolvedValue(deleted);
+
+    const result = await service.delete('1', '7');
+
+    expect(result.id).toBe('7');
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(prisma.babyProfile.findFirst).toHaveBeenCalledWith({
+      where: { id: 7n, userId: 1n },
+    });
+    expect(prisma.babyProfile.update).not.toHaveBeenCalled();
+    expect(prisma.babyProfile.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('delete remains scoped to the current user for unknown or foreign ids', async () => {
+    prisma.babyProfile.findFirst.mockResolvedValue(null);
+
+    await expect(service.delete('1', '7')).rejects.toThrow('宝宝档案不存在');
+
+    expect(prisma.babyProfile.findFirst).toHaveBeenCalledWith({
+      where: { id: 7n, userId: 1n },
+    });
+    expect(prisma.babyProfile.update).not.toHaveBeenCalled();
+  });
+
   it('should return both avatarUrl and avatar for list items', async () => {
     prisma.babyProfile.findMany.mockResolvedValue([babyProfile({ avatarUrl: 'https://example.com/list-baby.png' })]);
 

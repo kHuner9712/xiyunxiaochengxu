@@ -184,10 +184,15 @@ export class AddressService {
     const addressId = parsePositiveBigIntId(id, '地址');
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lockUser(tx, userIdValue);
+      // Include soft-deleted rows so a retry after a lost success response can replay the completed
+      // delete. Ownership remains scoped to the current user; unknown/foreign ids still fail closed.
       const address = await tx.userAddress.findFirst({
-        where: { id: addressId, userId: userIdValue, deletedAt: null },
+        where: { id: addressId, userId: userIdValue },
       });
       if (!address) throw new NotFoundException('地址不存在');
+      if (address.deletedAt) {
+        return { address, replayed: true };
+      }
 
       const deleted = await tx.userAddress.update({
         where: { id: addressId },
@@ -196,10 +201,10 @@ export class AddressService {
       if (address.isDefault === 1) {
         await this.ensureOneDefaultAddress(tx, userIdValue, addressId);
       }
-      return deleted;
+      return { address: deleted, replayed: false };
     });
-    this.logger.log(`用户${userId}删除地址${id}`);
-    return this.serializeAddress(result);
+    this.logger.log(`用户${userId}删除地址${id}${result.replayed ? '（幂等重放）' : ''}`);
+    return this.serializeAddress(result.address);
   }
 
   async setDefault(userId: string, id: string) {
