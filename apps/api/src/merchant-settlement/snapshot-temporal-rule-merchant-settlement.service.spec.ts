@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { SnapshotTemporalRuleMerchantSettlementService } from './snapshot-temporal-rule-merchant-settlement.service';
 
 function serviceRule(overrides: Record<string, any> = {}) {
@@ -25,6 +26,14 @@ function serviceRule(overrides: Record<string, any> = {}) {
 }
 
 describe('SnapshotTemporalRuleMerchantSettlementService', () => {
+  it('rejects manual settled status so payout accounting can only settle through a paid batch', async () => {
+    const service = new SnapshotTemporalRuleMerchantSettlementService({} as any, {} as any);
+
+    await expect(service.updateRecordStatus('1', 'settled')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
   it('rebuilds snapshot-valued service commission with the rule active at verification time', async () => {
     const prisma: any = {};
     const redis: any = {};
