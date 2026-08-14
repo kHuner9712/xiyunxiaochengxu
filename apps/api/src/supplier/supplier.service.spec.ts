@@ -16,7 +16,7 @@ function createPrismaMock() {
     product: {
       count: jest.fn(),
     },
-    $queryRaw: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 10n }]),
   };
   prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
   return prisma;
