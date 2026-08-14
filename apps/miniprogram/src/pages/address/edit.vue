@@ -132,7 +132,7 @@ async function handleSubmit() {
       await createAddress(payload)
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
-    setTimeout(() => uni.navigateBack(), 1500)
+    uni.navigateBack()
   } catch {
     uni.showToast({ title: '保存失败', icon: 'none' })
   } finally {
