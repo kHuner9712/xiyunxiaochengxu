@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 export interface ActivityProductPayload {
   productId: string
@@ -27,10 +28,12 @@ export const activityApi = {
     return request.get(`/admin/activity/${encodeURIComponent(id)}`)
   },
   create(data: ActivityPayload) {
-    return request.post('/admin/activity', data)
+    return runSingleFlight('admin:activity:create', () => request.post('/admin/activity', data))
   },
   update(id: string, data: ActivityPayload) {
-    return request.put(`/admin/activity/${encodeURIComponent(id)}`, data)
+    return runSingleFlight(`admin:activity:update:${id}`, () =>
+      request.put(`/admin/activity/${encodeURIComponent(id)}`, data),
+    )
   },
   delete(id: string) {
     return request.delete(`/admin/activity/${encodeURIComponent(id)}`)
