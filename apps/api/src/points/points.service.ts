@@ -80,6 +80,11 @@ export class PointsService {
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
+        // Redis is only an early duplicate suppressor. The database row lock is the correctness
+        // boundary for this points award: after waiting for any prior sign-in transaction on this
+        // user to commit, re-check today's ledger before changing the balance. This remains safe if
+        // the Redis lease expires or Redis briefly loses mutual exclusion.
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${userIdValue} FOR UPDATE`;
         const existing = await tx.pointsRecord.findFirst({
           where: {
             userId: userIdValue,
@@ -93,11 +98,12 @@ export class PointsService {
           return { alreadySigned: true, points: 0 };
         }
 
-        await tx.$queryRaw`SELECT id FROM users WHERE id = ${userIdValue} FOR UPDATE`;
         const user = await tx.user.findFirst({ where: { id: userIdValue, deletedAt: null } });
         if (!user) throw new BadRequestException('用户不存在');
 
-        const consecutiveDays = await this.getConsecutiveSignInDays(userId);
+        // Read the historical streak through the same transaction client while the user row is
+        // locked. Do not open a second pooled connection in the middle of an asset transaction.
+        const consecutiveDays = await this.getConsecutiveSignInDays(userId, tx);
         const bonusPoints = Math.min(
           POINTS_SIGN_IN_BASE + consecutiveDays * 2,
           POINTS_SIGN_IN_MAX,
@@ -167,11 +173,11 @@ export class PointsService {
     };
   }
 
-  private async getConsecutiveSignInDays(userId: string): Promise<number> {
+  private async getConsecutiveSignInDays(userId: string, db: any = this.prisma): Promise<number> {
     let consecutiveDays = 0;
     for (let i = 1; i <= 30; i++) {
       const { start, end } = this.chinaDayBounds(-i);
-      const record = await this.prisma.pointsRecord.findFirst({
+      const record = await db.pointsRecord.findFirst({
         where: {
           userId: BigInt(userId),
           source: 'sign_in',
