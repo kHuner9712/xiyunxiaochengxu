@@ -6,7 +6,14 @@
       </el-alert>
       <el-form inline>
         <el-form-item label="核销码">
-          <el-input v-model="verifyCode" placeholder="请输入权益核销码" style="width: 240px" :disabled="verifyLoading" @keyup.enter="handlePreview" />
+          <el-input
+            v-model="verifyCode"
+            placeholder="请输入权益核销码"
+            style="width: 240px"
+            :disabled="verifyLoading"
+            @input="handleCodeInput"
+            @keyup.enter="handlePreview"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="previewLoading" :disabled="verifyLoading" @click="handlePreview">查询预览</el-button>
@@ -72,12 +79,25 @@ import { benefitPackageApi } from '@/api/benefit-package'
 import { formatDate, formatPrice } from '@/utils/format'
 
 const verifyCode = ref('')
+const previewedVerifyCode = ref('')
 const remark = ref('')
 const preview = ref<any>(null)
 const previewLoading = ref(false)
 const verifyLoading = ref(false)
+let previewSeq = 0
 
-const canVerify = computed(() => !!preview.value?.canVerify)
+function normalizeVerifyCode(value: unknown) {
+  return String(value || '').trim().toUpperCase()
+}
+
+const canVerify = computed(() => {
+  const currentCode = normalizeVerifyCode(verifyCode.value)
+  const previewCode = normalizeVerifyCode(preview.value?.verifyCode)
+  return !!preview.value?.canVerify
+    && !!previewedVerifyCode.value
+    && currentCode === previewedVerifyCode.value
+    && previewCode === previewedVerifyCode.value
+})
 
 function statusLabel(s: string) {
   return { unused: '未使用', used: '已使用', expired: '已过期', cancelled: '已取消', refunded: '已退款' }[s] || s
@@ -89,30 +109,65 @@ function itemTypeLabel(t: string) {
   return { service: '服务', physical: '实物', coupon: '优惠券', other: '其他' }[t] || t
 }
 
+function handleCodeInput(value: string) {
+  if (verifyLoading.value) return
+  const normalized = normalizeVerifyCode(value)
+  if (previewedVerifyCode.value && normalized !== previewedVerifyCode.value) {
+    preview.value = null
+    previewedVerifyCode.value = ''
+  }
+  previewSeq += 1
+  if (previewLoading.value) previewLoading.value = false
+}
+
 async function handlePreview() {
   if (previewLoading.value || verifyLoading.value) return
-  if (!verifyCode.value.trim()) {
+  const code = normalizeVerifyCode(verifyCode.value)
+  if (!code) {
     ElMessage.warning('请输入核销码')
     return
   }
+
+  const requestSeq = ++previewSeq
+  verifyCode.value = code
   previewLoading.value = true
   preview.value = null
+  previewedVerifyCode.value = ''
   try {
-    const res = await benefitPackageApi.verifyPreview(verifyCode.value.trim().toUpperCase())
-    preview.value = res.data
+    const res = await benefitPackageApi.verifyPreview(code)
+    if (requestSeq !== previewSeq || normalizeVerifyCode(verifyCode.value) !== code) return
+    const data = res.data
+    if (normalizeVerifyCode(data?.verifyCode) !== code) {
+      throw new Error('核销码查询结果不一致，请重新查询')
+    }
+    preview.value = data
+    previewedVerifyCode.value = code
   } catch (e: any) {
+    if (requestSeq !== previewSeq) return
     ElMessage.error(e?.response?.data?.message || e?.message || '查询失败')
   } finally {
-    previewLoading.value = false
+    if (requestSeq === previewSeq) previewLoading.value = false
   }
 }
 
 async function handleVerify() {
   if (verifyLoading.value || previewLoading.value || !preview.value?.canVerify) return
+
+  const code = previewedVerifyCode.value
+  if (
+    !code
+    || normalizeVerifyCode(verifyCode.value) !== code
+    || normalizeVerifyCode(preview.value.verifyCode) !== code
+  ) {
+    ElMessage.warning('核销码已变更，请重新查询权益')
+    handleReset()
+    return
+  }
+
   verifyLoading.value = true
   try {
     await benefitPackageApi.verify({
-      verifyCode: preview.value.verifyCode,
+      verifyCode: code,
       remark: remark.value || undefined,
     })
     ElMessage.success('核销成功')
@@ -126,7 +181,10 @@ async function handleVerify() {
 
 function handleReset(force = false) {
   if (verifyLoading.value && !force) return
+  previewSeq += 1
+  previewLoading.value = false
   verifyCode.value = ''
+  previewedVerifyCode.value = ''
   remark.value = ''
   preview.value = null
 }
