@@ -14,6 +14,8 @@ import { RequirePermission } from '../common/decorators/require-permission.decor
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   BenefitPackagePublicQueryDto,
+  MyBenefitPackageQueryDto,
+  MyBenefitEntitlementQueryDto,
   BenefitPackageQueryDto,
   UserBenefitPackageQueryDto,
   EntitlementQueryDto,
@@ -43,17 +45,17 @@ export class WeappBenefitPackageController {
   @Get('my-packages')
   async myPackages(
     @CurrentUser('id') userId: string,
-    @Query() dto: BenefitPackagePublicQueryDto,
+    @Query() dto: MyBenefitPackageQueryDto,
   ) {
-    return this.service.findMyPackages(userId, dto.page, dto.pageSize);
+    return this.service.findUserPackages({ ...dto, userId });
   }
 
   @Get('my-entitlements')
   async myEntitlements(
     @CurrentUser('id') userId: string,
-    @Query() dto: BenefitPackagePublicQueryDto,
+    @Query() dto: MyBenefitEntitlementQueryDto,
   ) {
-    return this.service.findMyEntitlements(userId, dto.page, dto.pageSize);
+    return this.service.findEntitlements({ ...dto, userId });
   }
 
   @Get('entitlement/:id')
