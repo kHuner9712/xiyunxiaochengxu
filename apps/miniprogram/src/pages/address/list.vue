@@ -11,14 +11,14 @@
           <text class="address-detail">{{ item.province }}{{ item.city }}{{ item.district }}{{ item.detail }}</text>
         </view>
         <view class="address-actions">
-          <view class="action-item" @tap.stop="setDefault(item)" v-if="!item.isDefault">
-            <text class="action-text">设为默认</text>
+          <view v-if="!item.isDefault" class="action-item" :class="{ disabled: actionBusy }" @tap.stop="setDefault(item)">
+            <text class="action-text">{{ actionBusy ? '处理中' : '设为默认' }}</text>
           </view>
-          <view class="action-item" @tap.stop="editAddress(item)">
+          <view class="action-item" :class="{ disabled: actionBusy }" @tap.stop="editAddress(item)">
             <text class="action-text">编辑</text>
           </view>
-          <view class="action-item" @tap.stop="deleteAddress(item)">
-            <text class="action-text delete">删除</text>
+          <view class="action-item" :class="{ disabled: actionBusy }" @tap.stop="deleteAddress(item)">
+            <text class="action-text delete">{{ actionBusy ? '处理中' : '删除' }}</text>
           </view>
         </view>
       </view>
@@ -27,7 +27,7 @@
     <Empty v-if="!loading && addresses.length === 0" text="暂无收货地址" actionText="新增地址" @action="addAddress" />
 
     <view class="bottom-bar bottom-action-bar">
-      <view class="add-btn" @tap="addAddress">
+      <view class="add-btn" :class="{ disabled: actionBusy }" @tap="addAddress">
         <text class="add-text">新增收货地址</text>
       </view>
     </view>
@@ -43,6 +43,7 @@ import Empty from '@/components/Empty.vue'
 const addresses = ref<AddressItem[]>([])
 const loading = ref(false)
 const isSelectMode = ref(false)
+const actionBusy = ref(false)
 let eventChannel: any = null
 let addressVersion = 0
 let loadingVersion = -1
@@ -73,47 +74,62 @@ function refreshAddresses() {
   return loadAddresses(version)
 }
 
+function confirmDelete() {
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '提示',
+      content: '确定删除该地址吗？',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
+
 function handleSelect(item: AddressItem) {
-  if (!isSelectMode.value) return
+  if (actionBusy.value || !isSelectMode.value) return
   eventChannel?.emit('selectAddress', item)
   uni.navigateBack()
 }
 
 function addAddress() {
+  if (actionBusy.value) return
   uni.navigateTo({ url: '/pages/address/edit' })
 }
 
 function editAddress(item: AddressItem) {
+  if (actionBusy.value) return
   uni.navigateTo({ url: `/pages/address/edit?id=${item.id}` })
 }
 
 async function setDefault(item: AddressItem) {
+  if (actionBusy.value || item.isDefault) return
+  actionBusy.value = true
   try {
     await setDefaultAddress(item.id)
     await refreshAddresses()
   } catch {
     uni.showToast({ title: '设置失败', icon: 'none' })
+  } finally {
+    actionBusy.value = false
   }
 }
 
 async function deleteAddress(item: AddressItem) {
-  uni.showModal({
-    title: '提示',
-    content: '确定删除该地址吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          // AddressService.delete already reassigns the default address transactionally when the
-          // deleted row was the default. A second client-side setDefault call used to create a
-          // false "删除失败" after a successful delete whenever that follow-up request failed.
-          await deleteAddressApi(item.id)
-          await refreshAddresses()
-        } catch {
-          uni.showToast({ title: '删除失败', icon: 'none' })
-        }
-      }
-    }
-  })
+  if (actionBusy.value) return
+  actionBusy.value = true
+  try {
+    const confirmed = await confirmDelete()
+    if (!confirmed) return
+    // AddressService.delete already reassigns the default address transactionally when the
+    // deleted row was the default. A second client-side setDefault call used to create a
+    // false "删除失败" after a successful delete whenever that follow-up request failed.
+    await deleteAddressApi(item.id)
+    await refreshAddresses()
+  } catch {
+    uni.showToast({ title: '删除失败', icon: 'none' })
+  } finally {
+    actionBusy.value = false
+  }
 }
 
 onLoad((options) => {
@@ -130,8 +146,11 @@ onShow(() => {
 defineExpose({
   addresses,
   loading,
+  actionBusy,
   loadAddresses,
   refreshAddresses,
+  setDefault,
+  deleteAddress,
 })
 </script>
 
@@ -193,6 +212,11 @@ defineExpose({
 
 .action-item {
   padding: 4rpx 0;
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .action-text {
@@ -214,6 +238,11 @@ defineExpose({
   @include flex-center;
   text-align: center;
   box-shadow: $shadow-coral;
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .add-text {
