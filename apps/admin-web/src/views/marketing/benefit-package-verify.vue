@@ -6,12 +6,12 @@
       </el-alert>
       <el-form inline>
         <el-form-item label="核销码">
-          <el-input v-model="verifyCode" placeholder="请输入权益核销码" style="width: 240px" @keyup.enter="handlePreview" />
+          <el-input v-model="verifyCode" placeholder="请输入权益核销码" style="width: 240px" :disabled="verifyLoading" @keyup.enter="handlePreview" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="previewLoading" @click="handlePreview">查询预览</el-button>
-          <el-button type="success" :loading="verifyLoading" :disabled="!canVerify" @click="handleVerify">确认核销</el-button>
-          <el-button @click="handleReset">清空</el-button>
+          <el-button type="primary" :loading="previewLoading" :disabled="verifyLoading" @click="handlePreview">查询预览</el-button>
+          <el-button type="success" :loading="verifyLoading" :disabled="!canVerify || previewLoading || verifyLoading" @click="handleVerify">确认核销</el-button>
+          <el-button :disabled="verifyLoading" @click="handleReset">清空</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -58,7 +58,7 @@
         />
 
         <el-form-item label="核销备注" style="margin-top: 16px">
-          <el-input v-model="remark" placeholder="可选，核销备注" style="width: 360px" />
+          <el-input v-model="remark" placeholder="可选，核销备注" style="width: 360px" :disabled="verifyLoading" />
         </el-form-item>
       </div>
     </div>
@@ -90,6 +90,7 @@ function itemTypeLabel(t: string) {
 }
 
 async function handlePreview() {
+  if (previewLoading.value || verifyLoading.value) return
   if (!verifyCode.value.trim()) {
     ElMessage.warning('请输入核销码')
     return
@@ -107,7 +108,7 @@ async function handlePreview() {
 }
 
 async function handleVerify() {
-  if (!preview.value?.canVerify) return
+  if (verifyLoading.value || previewLoading.value || !preview.value?.canVerify) return
   verifyLoading.value = true
   try {
     await benefitPackageApi.verify({
@@ -115,7 +116,7 @@ async function handleVerify() {
       remark: remark.value || undefined,
     })
     ElMessage.success('核销成功')
-    handleReset()
+    handleReset(true)
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || e?.message || '核销失败')
   } finally {
@@ -123,7 +124,8 @@ async function handleVerify() {
   }
 }
 
-function handleReset() {
+function handleReset(force = false) {
+  if (verifyLoading.value && !force) return
   verifyCode.value = ''
   remark.value = ''
   preview.value = null
