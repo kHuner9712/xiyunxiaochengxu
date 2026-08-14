@@ -12,7 +12,7 @@ function brand(overrides: Record<string, any> = {}) {
     status: 1,
     createdAt: new Date('2026-08-14T00:00:00.000Z'),
     updatedAt: new Date('2026-08-14T00:00:00.000Z'),
-    deletedAt: null,
+    deletedAt: null as Date | null,
     ...overrides,
   };
 }
