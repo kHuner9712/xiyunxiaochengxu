@@ -109,6 +109,17 @@ function validate(): boolean {
   return true
 }
 
+function confirmDelete() {
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '提示',
+      content: '确定删除该地址吗？',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
+
 async function handleSubmit() {
   if (submitting.value || deleting.value) return
   if (!validate()) return
@@ -133,27 +144,31 @@ async function handleDelete() {
   if (submitting.value || deleting.value) return
   const id = form.value.id
   if (!id) return
-  uni.showModal({
-    title: '提示',
-    content: '确定删除该地址吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        deleting.value = true
-        try {
-          await deleteAddressApi(id)
-          uni.navigateBack()
-        } catch {
-          uni.showToast({ title: '删除失败', icon: 'none' })
-        } finally {
-          deleting.value = false
-        }
-      }
-    }
-  })
+
+  deleting.value = true
+  try {
+    const confirmed = await confirmDelete()
+    if (!confirmed) return
+    await deleteAddressApi(id)
+    uni.navigateBack()
+  } catch {
+    uni.showToast({ title: '删除失败', icon: 'none' })
+  } finally {
+    deleting.value = false
+  }
 }
 
 onLoad((options) => {
   if (options?.id) loadAddress(String(options.id))
+})
+
+defineExpose({
+  form,
+  isEdit,
+  submitting,
+  deleting,
+  handleSubmit,
+  handleDelete,
 })
 </script>
 
