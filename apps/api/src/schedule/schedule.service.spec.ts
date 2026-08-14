@@ -63,6 +63,7 @@ function createMerchantSettlementService() {
   return {
     generateSalesCommission: jest.fn(),
     reconcileMissingServiceCommissions: jest.fn(),
+    reconcileOutstandingSalesDebts: jest.fn(),
   };
 }
 
@@ -132,6 +133,7 @@ describe('ScheduleService', () => {
     groupBuyService.handleOrderCancel.mockImplementation(async () => undefined);
     merchantSettlementService.generateSalesCommission.mockImplementation(async () => undefined);
     merchantSettlementService.reconcileMissingServiceCommissions.mockImplementation(async () => ({ total: 0, created: 0, skipped: 0, failed: 0 }));
+    merchantSettlementService.reconcileOutstandingSalesDebts.mockImplementation(async () => ({ total: 0, reconciled: 0, skipped: 0, failed: 0 }));
     shareService.reconcileMatureFirstPaidRewards.mockImplementation(async () => ({ total: 0, issued: 0, skipped: 0, failed: 0 }));
     benefitPackageService.reconcileTerminalRefundFreezes.mockImplementation(async () => ({ orders: 0, restored: 0, skipped: 0 }));
     benefitPackageService.reconcileUsedEntitlementAuditGaps.mockImplementation(async () => ({ total: 0, repaired: 0, failed: 0 }));
@@ -280,7 +282,7 @@ describe('ScheduleService', () => {
     );
   });
 
-  it('成熟销售分佣只处理数据库扫描出的缺口订单，不会被已处理前200条饿死', async () => {
+  it('成熟销售分佣只处理数据库扫描出的缺口订单，并同步补偿退款负债半状态', async () => {
     prismaService.$queryRaw.mockImplementationOnce(async () => [{
       id: 301n,
       userId: 9n,
@@ -289,6 +291,12 @@ describe('ScheduleService', () => {
       sourceCode: 'M001',
     }]);
     prismaService.merchantCommissionRecord.findFirst.mockImplementation(async () => ({ id: 77n }));
+    merchantSettlementService.reconcileOutstandingSalesDebts.mockImplementation(async () => ({
+      total: 1,
+      reconciled: 1,
+      skipped: 0,
+      failed: 0,
+    }));
 
     await service.handleMatureSalesCommissions();
 
@@ -299,6 +307,7 @@ describe('ScheduleService', () => {
       'merchant_referral',
       'M001',
     );
+    expect(merchantSettlementService.reconcileOutstandingSalesDebts).toHaveBeenCalledWith(200);
     expect(redisService.releaseLockWithLua).toHaveBeenCalledWith(
       'schedule:mature_sales_commissions',
       expect.any(String),
