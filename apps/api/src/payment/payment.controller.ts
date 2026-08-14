@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger, HttpCode, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PaymentService } from './payment.service';
-import { PaymentReconcileService } from './payment-reconcile.service';
+import { PaymentReconcileExecutionService } from './payment-reconcile-execution.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
@@ -171,22 +171,22 @@ export class RefundController {
 @Controller('admin/payment')
 @RequirePermission('system:config', 'order:aftersale:refund')
 export class PaymentReconcileController {
-  constructor(private readonly reconcileService: PaymentReconcileService) {}
+  constructor(private readonly reconcileExecution: PaymentReconcileExecutionService) {}
 
   @Post('reconcile')
   async reconcilePayments() {
-    return this.reconcileService.reconcilePendingPayments();
+    return this.reconcileExecution.reconcilePayments();
   }
 }
 
 @Controller('admin/refund')
 @RequirePermission('system:config', 'order:aftersale:refund')
 export class RefundReconcileController {
-  constructor(private readonly reconcileService: PaymentReconcileService) {}
+  constructor(private readonly reconcileExecution: PaymentReconcileExecutionService) {}
 
   @Post('reconcile')
   async reconcileRefunds() {
-    return this.reconcileService.reconcilePendingRefunds();
+    return this.reconcileExecution.reconcileRefunds();
   }
 }
 
