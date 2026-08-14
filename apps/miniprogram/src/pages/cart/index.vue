@@ -233,7 +233,7 @@ defineExpose({
   padding: 0 18rpx;
   border-radius: $radius-round;
   background: $success-soft;
-  color: $primary-dark;
+  color: $success-dark;
   font-size: $font-xs;
   font-weight: 700;
 }
