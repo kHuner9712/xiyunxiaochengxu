@@ -67,6 +67,7 @@ export class AdminUserController {
       body.points,
       body.reason,
       body.expectedAvailablePoints,
+      body.requestId,
     );
   }
 
