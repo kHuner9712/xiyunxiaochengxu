@@ -1,7 +1,12 @@
 <template>
   <view class="profile-page page-shell">
     <view class="profile-header card">
-      <button class="avatar-picker" open-type="chooseAvatar" @chooseavatar="handleChooseAvatar">
+      <button
+        class="avatar-picker"
+        open-type="chooseAvatar"
+        :disabled="submitting"
+        @chooseavatar="handleChooseAvatar"
+      >
         <image class="user-avatar" :src="avatarPreview" mode="aspectFill" />
         <view class="avatar-edit">
           <text class="edit-text">修改</text>
@@ -19,6 +24,8 @@
           placeholder="请输入昵称"
           placeholder-class="native-input-placeholder"
           maxlength="20"
+          :disabled="submitting"
+          @input="markDirty"
         />
       </view>
       <view class="form-item">
@@ -33,7 +40,7 @@
     </view>
 
     <button class="save-btn" :disabled="submitting" :loading="submitting" @tap="handleSubmit">
-      保存资料
+      {{ submitting ? '保存中...' : '保存资料' }}
     </button>
 
     <view class="menu-section card">
@@ -59,6 +66,7 @@ import { formatPhone } from '@/utils/format'
 const userStore = useUserStore()
 const submitting = ref(false)
 const selectedAvatarPath = ref('')
+const dirty = ref(false)
 const form = reactive({
   nickname: '',
   avatar: ''
@@ -70,20 +78,30 @@ function syncForm() {
   form.nickname = userStore.userInfo?.nickname || ''
   form.avatar = userStore.userInfo?.avatar || userStore.userInfo?.avatarUrl || ''
   selectedAvatarPath.value = ''
+  dirty.value = false
+}
+
+function markDirty() {
+  if (!submitting.value) dirty.value = true
 }
 
 onShow(async () => {
   if (!userStore.isLoggedIn) return
+  const wasDirty = dirty.value
   try {
     await userStore.fetchUserInfo()
   } catch (err) {
     console.error('[baby-mall] profile fetchUserInfo failed:', err)
   } finally {
-    syncForm()
+    // A slow foreground refresh must not erase edits made while it was in flight.
+    if (!wasDirty && !dirty.value && !submitting.value) {
+      syncForm()
+    }
   }
 })
 
 function handleChooseAvatar(e: any) {
+  if (submitting.value) return
   const avatarUrl = e?.detail?.avatarUrl
   if (!avatarUrl) {
     uni.showToast({ title: '未获取到头像', icon: 'none' })
@@ -91,6 +109,7 @@ function handleChooseAvatar(e: any) {
   }
   selectedAvatarPath.value = avatarUrl
   form.avatar = avatarUrl
+  dirty.value = true
 }
 
 async function handleSubmit() {
@@ -116,6 +135,7 @@ async function handleSubmit() {
     await userStore.updateProfile({ nickname, avatar })
     form.avatar = avatar
     selectedAvatarPath.value = ''
+    dirty.value = false
     uni.showToast({ title: '保存成功', icon: 'success' })
   } catch (err) {
     console.error('[baby-mall] update profile failed:', err)
@@ -142,6 +162,14 @@ function goAddress() {
 function goBaby() {
   uni.navigateTo({ url: '/pages/baby/list' })
 }
+
+defineExpose({
+  form,
+  dirty,
+  submitting,
+  handleChooseAvatar,
+  handleSubmit,
+})
 </script>
 
 <style lang="scss" scoped>
@@ -166,6 +194,10 @@ function goBaby() {
 
   &::after {
     border: none;
+  }
+
+  &[disabled] {
+    opacity: 0.6;
   }
 }
 
