@@ -66,7 +66,15 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'order:detail'" type="primary" link @click="handleDetail(row)">查看</el-button>
-            <el-button v-if="row.status === 'pending_payment'" v-permission="'order:cancel'" type="danger" link @click="handleCancel(row)">取消</el-button>
+            <el-button
+              v-if="row.status === 'pending_payment'"
+              v-permission="'order:cancel'"
+              type="danger"
+              link
+              :loading="isCancelBusy(row.id)"
+              :disabled="isCancelBusy(row.id)"
+              @click="handleCancel(row)"
+            >取消</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -99,6 +107,8 @@ const loading = ref(false)
 const exporting = ref(false)
 const tableData = ref<any[]>([])
 const dateRange = ref<string[]>([])
+const cancelBusy = ref<Record<string, boolean>>({})
+let listRequestVersion = 0
 
 const searchForm = reactive({
   orderNo: '',
@@ -108,19 +118,42 @@ const searchForm = reactive({
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
+function isCancelBusy(id: unknown) {
+  return cancelBusy.value[String(id)] === true
+}
+
+function beginCancel(id: unknown) {
+  const key = String(id)
+  if (!key || cancelBusy.value[key]) return false
+  cancelBusy.value = { ...cancelBusy.value, [key]: true }
+  return true
+}
+
+function endCancel(id: unknown) {
+  const key = String(id)
+  if (!cancelBusy.value[key]) return
+  const next = { ...cancelBusy.value }
+  delete next[key]
+  cancelBusy.value = next
+}
+
 async function fetchList() {
+  const requestVersion = ++listRequestVersion
+  const params = buildQueryParams()
+  params.page = pagination.page
+  params.pageSize = pagination.pageSize
+
   loading.value = true
   try {
-    const params = buildQueryParams()
-    params.page = pagination.page
-    params.pageSize = pagination.pageSize
     const res = await orderApi.getList(params)
+    if (requestVersion !== listRequestVersion) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
   } catch (e: any) {
+    if (requestVersion !== listRequestVersion) return
     ElMessage.error(e?.message || '获取订单列表失败')
   } finally {
-    loading.value = false
+    if (requestVersion === listRequestVersion) loading.value = false
   }
 }
 
@@ -142,25 +175,30 @@ function handleDetail(row: any) {
 }
 
 async function handleCancel(row: any) {
-  let reason = ''
-  try {
-    const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /\S+/, inputErrorMessage: '请输入取消原因' })
-    reason = String(value || '').trim()
-  } catch {
-    return
-  }
-
-  if (!reason) {
-    ElMessage.warning('请输入取消原因')
-    return
-  }
+  const orderId = String(row?.id || '')
+  if (!beginCancel(orderId)) return
 
   try {
-    await orderApi.cancel(String(row.id), reason)
+    let reason = ''
+    try {
+      const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /\S+/, inputErrorMessage: '请输入取消原因' })
+      reason = String(value || '').trim()
+    } catch {
+      return
+    }
+
+    if (!reason) {
+      ElMessage.warning('请输入取消原因')
+      return
+    }
+
+    await orderApi.cancel(orderId, reason)
     ElMessage.success('取消成功')
-    fetchList()
+    await fetchList()
   } catch (e: any) {
     ElMessage.error(e?.message || '取消订单失败')
+  } finally {
+    endCancel(orderId)
   }
 }
 
