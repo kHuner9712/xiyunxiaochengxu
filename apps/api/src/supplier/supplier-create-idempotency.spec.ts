@@ -1,5 +1,4 @@
 import 'reflect-metadata';
-import { Prisma } from '@prisma/client';
 import { validate } from 'class-validator';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { SupplierService } from './supplier.service';
@@ -98,7 +97,7 @@ describe('SupplierService create/delete durability', () => {
     });
     expect(prisma.$transaction).toHaveBeenCalledWith(
       expect.any(Function),
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: 'Serializable' },
     );
   });
 
