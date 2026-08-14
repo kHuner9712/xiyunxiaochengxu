@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 
+const ADDRESS_CREATE_EVENT = 'address_create';
+
 type AddressInput = {
   receiverName?: string;
   receiverPhone?: string;
@@ -14,6 +16,7 @@ type AddressInput = {
   detailAddress?: string;
   detail?: string;
   isDefault?: number | boolean;
+  clientRequestId?: string;
 };
 
 @Injectable()
@@ -43,15 +46,49 @@ export class AddressService {
 
   async create(userId: string, data: AddressInput) {
     const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const requestId = data.clientRequestId?.trim() || null;
+    const requestBizType = `address:${userIdValue.toString()}`;
+
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lockUser(tx, userIdValue);
+
+      const dbData = this.normalizeAddressInput(data);
+      this.assertCompleteAddress(dbData);
+      const requestFingerprint = this.createRequestFingerprint(dbData);
+
+      // Idempotency lookup deliberately happens after the user row lock and before the 20-address
+      // limit/default mutation. A retry of the request that created address #20 must replay the
+      // original success instead of being rejected by the now-full address book.
+      if (requestId) {
+        const handled = await tx.businessEvent.findFirst({
+          where: {
+            eventType: ADDRESS_CREATE_EVENT,
+            bizType: requestBizType,
+            bizId: requestId,
+          },
+          orderBy: { id: 'desc' },
+        });
+        if (handled) {
+          const eventPayload = this.readCreateEventPayload(handled.payload);
+          if (eventPayload.fingerprint !== requestFingerprint) {
+            throw new BadRequestException('地址创建请求ID已被其他操作使用，请重新提交');
+          }
+          const addressId = parsePositiveBigIntId(eventPayload.addressId, '地址');
+          const replayAddress = await tx.userAddress.findFirst({
+            where: { id: addressId, userId: userIdValue, deletedAt: null },
+          });
+          if (!replayAddress) {
+            throw new BadRequestException('该地址创建请求已处理，请刷新地址列表后重新操作');
+          }
+          return { address: replayAddress, replayed: true };
+        }
+      }
+
       const count = await tx.userAddress.count({
         where: { userId: userIdValue, deletedAt: null },
       });
       if (count >= 20) throw new BadRequestException('最多保留20条地址');
 
-      const dbData = this.normalizeAddressInput(data);
-      this.assertCompleteAddress(dbData);
       if (count === 0) dbData.isDefault = 1;
 
       if (dbData.isDefault === 1) {
@@ -61,7 +98,7 @@ export class AddressService {
         });
       }
 
-      return tx.userAddress.create({
+      const address = await tx.userAddress.create({
         data: {
           userId: userIdValue,
           receiverName: dbData.receiverName!,
@@ -73,9 +110,30 @@ export class AddressService {
           isDefault: dbData.isDefault ?? 0,
         },
       });
+
+      if (requestId) {
+        // User-row serialization makes one request decision at a time for this user. Persisting the
+        // request fact in the same transaction guarantees profile-like crash safety without a new
+        // schema/migration: either both the address and event commit, or neither does.
+        await tx.businessEvent.create({
+          data: {
+            eventType: ADDRESS_CREATE_EVENT,
+            bizType: requestBizType,
+            bizId: requestId,
+            level: 'info',
+            message: '收货地址创建请求已处理',
+            payload: {
+              addressId: address.id.toString(),
+              fingerprint: requestFingerprint,
+            },
+          },
+        });
+      }
+
+      return { address, replayed: false };
     });
-    this.logger.log(`用户${userId}创建地址`);
-    return this.serializeAddress(result);
+    this.logger.log(`用户${userId}创建地址${result.replayed ? '（幂等重放）' : ''}`);
+    return this.serializeAddress(result.address);
   }
 
   async update(userId: string, id: string, data: AddressInput) {
@@ -216,6 +274,39 @@ export class AddressService {
     if (!data.detailAddress || data.detailAddress.length > 200) {
       throw new BadRequestException('详细地址不能为空且不能超过200个字符');
     }
+  }
+
+  private createRequestFingerprint(data: {
+    receiverName?: string;
+    receiverPhone?: string;
+    province?: string;
+    city?: string;
+    district?: string;
+    detailAddress?: string;
+    isDefault?: number;
+  }) {
+    return JSON.stringify({
+      receiverName: data.receiverName || '',
+      receiverPhone: data.receiverPhone || '',
+      province: data.province || '',
+      city: data.city || '',
+      district: data.district || '',
+      detailAddress: data.detailAddress || '',
+      isDefault: data.isDefault ?? 0,
+    });
+  }
+
+  private readCreateEventPayload(payload: unknown): { addressId: string; fingerprint: string } {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new BadRequestException('地址创建请求记录异常，请刷新后重试');
+    }
+    const record = payload as Record<string, unknown>;
+    const addressId = typeof record.addressId === 'string' ? record.addressId : '';
+    const fingerprint = typeof record.fingerprint === 'string' ? record.fingerprint : '';
+    if (!addressId || !fingerprint) {
+      throw new BadRequestException('地址创建请求记录异常，请刷新后重试');
+    }
+    return { addressId, fingerprint };
   }
 
   private async ensureOneDefaultAddress(

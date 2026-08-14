@@ -11,6 +11,7 @@ import {
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 const PHONE_PATTERN = /^[0-9+()\-\s]{6,20}$/;
+const CLIENT_REQUEST_ID = /^\d{13}-[a-z0-9]{16,40}$/i;
 
 export class CreateAddressDto {
   @IsOptional()
@@ -77,4 +78,13 @@ export class CreateAddressDto {
   @Transform(({ value }) => (value === true || value === 1 || value === '1' ? 1 : 0))
   @IsIn([0, 1])
   isDefault?: number;
+
+  // Optional only for rolling-upgrade compatibility with cached miniprogram builds. The current
+  // client always sends it and create() uses it as the durable weak-network operation identity.
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Matches(CLIENT_REQUEST_ID, { message: '地址创建请求ID无效' })
+  @MaxLength(54)
+  clientRequestId?: string;
 }
