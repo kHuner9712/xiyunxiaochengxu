@@ -12,6 +12,9 @@ const refundApi = readFileSync(resolve(root, 'apps/admin-web/src/api/refund.ts')
 const service = readFileSync(resolve(root, 'apps/api/src/aftersale/aftersale.service.ts'), 'utf8')
 const paymentConstants = readFileSync(resolve(root, 'apps/api/src/common/constants/payment.ts'), 'utf8')
 const refundMethod = service.slice(service.indexOf('  async refund('), service.indexOf('  private serializeAftersale('))
+const adminAuditMethod = detail.slice(detail.indexOf('async function handleAudit()'), detail.indexOf('async function handleSyncRefund()'))
+const adminSyncMethod = detail.slice(detail.indexOf('async function handleSyncRefund()'), detail.indexOf('async function handleRefund()'))
+const adminRefundMethod = detail.slice(detail.indexOf('async function handleRefund()'), detail.indexOf('onMounted(() =>'))
 
 test('refund retry, sync and manual eligibility come from backend status rules', () => {
   assert.match(detail, /detail\.value\.refundRetryable === true/)
@@ -67,13 +70,27 @@ test('admin can sync an uncertain refund before retrying', () => {
   assert.match(detail, /import \{ refundApi \} from '@\/api\/refund'/)
   assert.match(detail, /v-if="needsRefundSync"/)
   assert.match(detail, /detail\.value\.refundSyncRequired === true/)
-  assert.match(detail, /:disabled="!detail\.latestOutRefundNo"/)
+  assert.match(detail, /:disabled="syncingRefund \|\| !detail\.latestOutRefundNo"/)
   assert.match(detail, /@click="handleSyncRefund"/)
   assert.match(detail, /async function handleSyncRefund\(\)/)
   assert.match(detail, /await refundApi\.sync\(outRefundNo\)/)
   assert.match(detail, /result\.synced === false/)
   assert.match(detail, /await fetchDetail\(\)/)
   assert.match(detail, /请求错误由全局拦截器统一提示/)
+})
+
+test('admin aftersale actions take their lock before confirmation or network work', () => {
+  assert.match(adminAuditMethod, /if \(submitting\.value\) return/)
+  assert.match(adminAuditMethod, /submitting\.value = true[\s\S]*ElMessageBox\.confirm[\s\S]*aftersaleApi\.(approve|reject)/)
+  assert.match(adminAuditMethod, /finally \{[\s\S]*submitting\.value = false/)
+
+  assert.match(adminRefundMethod, /if \(submitting\.value\) return/)
+  assert.match(adminRefundMethod, /submitting\.value = true[\s\S]*ElMessageBox\.confirm[\s\S]*aftersaleApi\.refund/)
+  assert.match(adminRefundMethod, /finally \{[\s\S]*submitting\.value = false/)
+
+  assert.match(adminSyncMethod, /if \(syncingRefund\.value\) return/)
+  assert.match(adminSyncMethod, /syncingRefund\.value = true[\s\S]*refundApi\.sync/)
+  assert.match(adminSyncMethod, /finally \{[\s\S]*syncingRefund\.value = false/)
 })
 
 test('refund list and detail label initiating and retrying states for operators', () => {
