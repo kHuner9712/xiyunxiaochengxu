@@ -6,9 +6,11 @@ import { UpdateMemberLevelDto } from './dto/update-member-level.dto';
 import { MemberService } from './member.service';
 
 const MEMBER_LEVEL_RECONCILE_REQUESTED = 'member_level_reconcile_requested';
+const MEMBER_LEVEL_RECONCILE_PROGRESS = 'member_level_reconcile_progress';
 const MEMBER_LEVEL_RECONCILE_COMPLETED = 'member_level_reconcile_completed';
 const MEMBER_LEVEL_CONFIG_BIZ_TYPE = 'member_level_config';
 const MEMBER_LEVEL_RECONCILE_BATCH_SIZE = 100;
+const MEMBER_LEVEL_IMMEDIATE_RECONCILE_MAX_BATCHES = 1;
 
 type ReconcileStatus = 'idle' | 'completed' | 'pending';
 
@@ -163,7 +165,6 @@ export class AtomicMemberService extends MemberService {
     }
 
     let generationId = initialRequest.id;
-    let cursor = 0n;
     let batches = 0;
     let scanned = 0;
     let updated = 0;
@@ -194,8 +195,22 @@ export class AtomicMemberService extends MemberService {
           select: { id: true },
         });
         if (completion) {
-          return { kind: 'completed' as const, cursor, scanned: 0, updated: 0 };
+          return { kind: 'completed' as const, scanned: 0, updated: 0 };
         }
+
+        // Cursor progress is durable and written in the same transaction as each full batch of
+        // user updates. HTTP and cron workers therefore resume from the last committed user after
+        // process crashes, and bounded cron runs do not repeatedly rescan the first N users.
+        const progress = await tx.businessEvent.findFirst({
+          where: {
+            eventType: MEMBER_LEVEL_RECONCILE_PROGRESS,
+            bizType: MEMBER_LEVEL_CONFIG_BIZ_TYPE,
+            bizId: generationId.toString(),
+          },
+          orderBy: { id: 'desc' },
+          select: { payload: true },
+        });
+        const cursor = this.parseReconcileCursor(progress?.payload);
 
         const levels = await tx.memberLevel.findMany({
           where: { status: 1 },
@@ -256,20 +271,33 @@ export class AtomicMemberService extends MemberService {
               message: '会员等级配置变更后的用户等级重算已完成',
               payload: {
                 generationId: generationId.toString(),
+                cursor: nextCursor.toString(),
               },
             },
           });
           return {
             kind: 'completed' as const,
-            cursor: nextCursor,
             scanned: users.length,
             updated: batchUpdated,
           };
         }
 
+        await tx.businessEvent.create({
+          data: {
+            eventType: MEMBER_LEVEL_RECONCILE_PROGRESS,
+            bizType: MEMBER_LEVEL_CONFIG_BIZ_TYPE,
+            bizId: generationId.toString(),
+            level: 'info',
+            message: '会员等级配置变更后的用户等级重算批次已完成',
+            payload: {
+              generationId: generationId.toString(),
+              cursor: nextCursor.toString(),
+            },
+          },
+        });
+
         return {
           kind: 'continue' as const,
-          cursor: nextCursor,
           scanned: users.length,
           updated: batchUpdated,
         };
@@ -281,13 +309,11 @@ export class AtomicMemberService extends MemberService {
       }
       if (batch.kind === 'superseded') {
         generationId = batch.generationId;
-        cursor = 0n;
         scanned = 0;
         updated = 0;
         continue;
       }
 
-      cursor = batch.cursor;
       scanned += batch.scanned;
       updated += batch.updated;
       if (batch.kind === 'completed') {
@@ -312,7 +338,14 @@ export class AtomicMemberService extends MemberService {
 
   private async reconcileCommittedConfigurationBestEffort() {
     try {
-      await this.reconcilePendingLevelConfiguration();
+      const result = await this.reconcilePendingLevelConfiguration(
+        MEMBER_LEVEL_IMMEDIATE_RECONCILE_MAX_BATCHES,
+      );
+      if (result.status === 'pending') {
+        this.atomicLogger.log(
+          `会员等级配置已提交并完成首批重算，剩余用户将由定时任务继续处理：generation=${result.generationId}, scanned=${result.scanned}, updated=${result.updated}`,
+        );
+      }
     } catch (error) {
       // The configuration transaction has already committed. Do not turn a successful admin
       // mutation into a false failure that may be retried as a duplicate create. The durable
@@ -353,6 +386,17 @@ export class AtomicMemberService extends MemberService {
       orderBy: { id: 'desc' },
       select: { id: true },
     }) as Promise<{ id: bigint } | null>;
+  }
+
+  private parseReconcileCursor(payload: unknown): bigint {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 0n;
+    const raw = (payload as Record<string, unknown>).cursor;
+    if (typeof raw !== 'string' || !/^\d+$/.test(raw)) return 0n;
+    try {
+      return BigInt(raw);
+    } catch {
+      return 0n;
+    }
   }
 
   private async lockMemberLevelConfiguration(tx: Prisma.TransactionClient) {

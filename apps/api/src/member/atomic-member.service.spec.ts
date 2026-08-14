@@ -85,7 +85,7 @@ describe('AtomicMemberService', () => {
     expect(tx.businessEvent.create).not.toHaveBeenCalled();
   });
 
-  it('publishes the durable reconcile request before post-commit reconciliation starts', async () => {
+  it('publishes the durable reconcile request before a bounded post-commit reconciliation starts', async () => {
     const { prisma, tx } = createPrismaMock();
     tx.memberLevel.findUnique.mockResolvedValue(VALID_LEVEL);
     tx.memberLevel.update.mockResolvedValue(VALID_LEVEL);
@@ -110,9 +110,84 @@ describe('AtomicMemberService', () => {
         payload: expect.objectContaining({ action: 'update', levelId: '1' }),
       }),
     });
+    expect(reconcile).toHaveBeenCalledWith(1);
     expect(tx.businessEvent.create.mock.invocationCallOrder[0]).toBeLessThan(
       reconcile.mock.invocationCallOrder[0],
     );
+  });
+
+  it('persists a durable cursor with the same transaction after each full reconcile batch', async () => {
+    const { prisma, tx } = createPrismaMock();
+    tx.businessEvent.findFirst.mockImplementation(({ where }: any) => {
+      if (where.eventType === 'member_level_reconcile_requested') return Promise.resolve({ id: 55n });
+      return Promise.resolve(null);
+    });
+    tx.memberLevel.findMany.mockResolvedValue([{ ...VALID_LEVEL, id: 10n }]);
+    tx.user.findMany.mockResolvedValue(
+      Array.from({ length: 100 }, (_, index) => ({
+        id: BigInt(index + 1),
+        growthValue: 0,
+        memberLevelId: 10n,
+      })),
+    );
+    tx.businessEvent.create.mockResolvedValue({ id: 56n });
+    const service = new AtomicMemberService(prisma);
+
+    const result = await service.reconcilePendingLevelConfiguration(1);
+
+    expect(result).toEqual({
+      status: 'pending',
+      generationId: '55',
+      batches: 1,
+      scanned: 100,
+      updated: 0,
+    });
+    expect(tx.businessEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: 'member_level_reconcile_progress',
+        bizType: 'member_level_config',
+        bizId: '55',
+        payload: expect.objectContaining({
+          generationId: '55',
+          cursor: '100',
+        }),
+      }),
+    });
+  });
+
+  it('resumes a later invocation from the latest durable reconcile cursor', async () => {
+    const { prisma, tx } = createPrismaMock();
+    tx.businessEvent.findFirst.mockImplementation(({ where }: any) => {
+      if (where.eventType === 'member_level_reconcile_requested') return Promise.resolve({ id: 55n });
+      if (where.eventType === 'member_level_reconcile_progress') {
+        return Promise.resolve({ payload: { generationId: '55', cursor: '200' } });
+      }
+      return Promise.resolve(null);
+    });
+    tx.memberLevel.findMany.mockResolvedValue([{ ...VALID_LEVEL, id: 10n }]);
+    tx.user.findMany.mockResolvedValue([]);
+    tx.businessEvent.create.mockResolvedValue({ id: 57n });
+    const service = new AtomicMemberService(prisma);
+
+    const result = await service.reconcilePendingLevelConfiguration(1);
+
+    expect(tx.user.findMany).toHaveBeenCalledWith({
+      where: {
+        deletedAt: null,
+        id: { gt: 200n },
+      },
+      orderBy: { id: 'asc' },
+      take: 100,
+      select: { id: true, growthValue: true, memberLevelId: true },
+    });
+    expect(result.status).toBe('completed');
+    expect(tx.businessEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: 'member_level_reconcile_completed',
+        bizId: '55',
+        payload: expect.objectContaining({ cursor: '200' }),
+      }),
+    });
   });
 
   it('does not restore a membership level when account cancellation or growth mutation wins the CAS', async () => {
