@@ -107,6 +107,7 @@ describe('production operation closure contracts', () => {
     const snapshotViewBenefits = read('apps/api/src/benefit-package/snapshot-view-benefit-package.service.ts');
     const versionedBenefits = read('apps/api/src/benefit-package/versioned-benefit-package.service.ts');
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
+    const serializedSettlement = read('apps/api/src/merchant-settlement/serialized-sales-merchant-settlement.service.ts');
     const snapshotSettlement = read('apps/api/src/merchant-settlement/snapshot-aware-state-safe-merchant-settlement.service.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
     const atomicShare = read('apps/api/src/share/atomic-share-production.service.ts');
@@ -160,7 +161,9 @@ describe('production operation closure contracts', () => {
     expect(validitySafeBenefits).toContain('权益尚未生效');
     expect(snapshotViewBenefits).toContain('extends VersionedBenefitPackageService');
     expect(versionedBenefits).toContain('extends ZeroPayAwareBenefitPackageService');
-    expect(settlementModule).toContain('SnapshotAwareStateSafeMerchantSettlementService');
+    expect(settlementModule).toContain('useClass: SerializedSalesMerchantSettlementService');
+    expect(serializedSettlement).toContain('extends SnapshotAwareStateSafeMerchantSettlementService');
+    expect(serializedSettlement).toContain('merchant:settlement:sales:');
     expect(snapshotSettlement).toContain('extends StateSafeProductionMerchantSettlementService');
     expect(shareModule).toContain('useClass: AtomicShareProductionService');
     expect(atomicShare).toContain('extends SafeShareProductionService');
