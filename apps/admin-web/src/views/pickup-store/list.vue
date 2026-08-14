@@ -15,7 +15,7 @@
         <el-form-item label="状态">
           <el-select v-model="searchStatus" placeholder="全部" clearable @change="loadList">
             <el-option label="启用" :value="1" />
-            <el-option label="停用" :value="2" />
+            <el-option label="停用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -41,11 +41,20 @@
               v-permission="'pickup:store'"
               size="small"
               :type="row.status === 1 ? 'warning' : 'success'"
+              :loading="statusBusyIds.has(String(row.id))"
+              :disabled="statusBusyIds.has(String(row.id))"
               @click="handleToggleStatus(row)"
             >
               {{ row.status === 1 ? '停用' : '启用' }}
             </el-button>
-            <el-button v-permission="'pickup:store'" size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-permission="'pickup:store'"
+              size="small"
+              type="danger"
+              :loading="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id))"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -92,12 +101,12 @@
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
             <el-radio :value="1">启用</el-radio>
-            <el-radio :value="2">停用</el-radio>
+            <el-radio :value="0">停用</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
+        <el-button :disabled="submitting" @click="showDialog = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
@@ -108,6 +117,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { pickupStoreApi } from '@/api/pickup-store'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -120,6 +130,9 @@ const showDialog = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
 const formRef = ref<FormInstance>()
+const statusBusyIds = reactive(new Set<string>())
+const deleteBusyIds = reactive(new Set<string>())
+let listLoadSeq = 0
 
 const form = reactive({
   id: undefined as string | undefined,
@@ -144,6 +157,7 @@ const rules: FormRules = {
 }
 
 async function loadList() {
+  const requestSeq = ++listLoadSeq
   loading.value = true
   try {
     const res = await pickupStoreApi.getList({
@@ -152,11 +166,13 @@ async function loadList() {
       keyword: searchKeyword.value || undefined,
       status: searchStatus.value,
     })
-    const data = res.data || res
-    tableData.value = data.list || []
-    total.value = data.total || 0
-  } catch {} finally {
-    loading.value = false
+    if (requestSeq !== listLoadSeq) return
+    tableData.value = asArray(res.data)
+    total.value = paginationTotal(res.data)
+  } catch (e: any) {
+    if (requestSeq === listLoadSeq) ElMessage.error(e?.message || '加载自提点列表失败')
+  } finally {
+    if (requestSeq === listLoadSeq) loading.value = false
   }
 }
 
@@ -196,7 +212,7 @@ function handleEdit(row: any) {
     businessHours: row.businessHours || '',
     pickupNotice: row.pickupNotice || '',
     sortOrder: Number(row.sortOrder || 0),
-    status: Number(row.status || 1),
+    status: Number(row.status) === 1 ? 1 : 0,
   })
   formRef.value?.clearValidate()
   showDialog.value = true
@@ -218,16 +234,17 @@ function buildPayload() {
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
-  if (isEdit.value && !form.id) {
-    ElMessage.error('自提点ID无效，请重新打开编辑窗口')
-    return
-  }
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+
+    if (isEdit.value && !form.id) {
+      ElMessage.error('自提点ID无效，请重新打开编辑窗口')
+      return
+    }
+
     const payload = buildPayload()
     if (isEdit.value) {
       await pickupStoreApi.update(form.id as string, payload)
@@ -236,40 +253,48 @@ async function handleSubmit() {
     }
     ElMessage.success('保存成功')
     showDialog.value = false
-    loadList()
-  } catch {} finally {
+    await loadList()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存自提点失败')
+  } finally {
     submitting.value = false
   }
 }
 
 async function handleToggleStatus(row: any) {
-  const newStatus = row.status === 1 ? 2 : 1
+  const id = String(row.id)
+  if (statusBusyIds.has(id)) return
+  const previousStatus = Number(row.status) === 1 ? 1 : 0
+  const newStatus = previousStatus === 1 ? 0 : 1
   const action = newStatus === 1 ? '启用' : '停用'
+  statusBusyIds.add(id)
   try {
     await ElMessageBox.confirm(`确定${action}该自提点吗？`, '提示')
-  } catch {
-    return
-  }
-
-  try {
-    await pickupStoreApi.updateStatus(String(row.id), newStatus)
+    await pickupStoreApi.updateStatus(id, newStatus)
+    row.status = newStatus
     ElMessage.success(`${action}成功`)
-    loadList()
-  } catch {}
+  } catch (e: any) {
+    row.status = previousStatus
+    if (e !== 'cancel' && e !== 'close' && e?.message) ElMessage.error(e.message)
+  } finally {
+    statusBusyIds.delete(id)
+  }
 }
 
 async function handleDelete(row: any) {
+  const id = String(row.id)
+  if (deleteBusyIds.has(id)) return
+  deleteBusyIds.add(id)
   try {
     await ElMessageBox.confirm('确定删除该自提点吗？删除后不可恢复。', '提示')
-  } catch {
-    return
-  }
-
-  try {
-    await pickupStoreApi.delete(String(row.id))
+    await pickupStoreApi.delete(id)
     ElMessage.success('删除成功')
-    loadList()
-  } catch {}
+    await loadList()
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close' && e?.message) ElMessage.error(e.message)
+  } finally {
+    deleteBusyIds.delete(id)
+  }
 }
 
 onMounted(() => loadList())
