@@ -32,13 +32,23 @@
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-switch :model-value="row.status === 1" @change="(val: any) => handleStatusChange(row, val)" />
+            <el-switch
+              :model-value="row.status === 1"
+              :disabled="statusBusyIds.has(String(row.id))"
+              @change="(val: any) => handleStatusChange(row, val)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              :loading="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id))"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -123,8 +133,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">保存</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -141,10 +151,15 @@ import { asArray, paginationTotal } from '@/utils/response'
 const POSITIVE_ID = /^[1-9]\d*$/
 const loading = ref(false)
 const productLoading = ref(false)
+const submitting = ref(false)
 const tableData = ref<any[]>([])
 const availableSkus = ref<Array<{ id: string; name: string; price: number; stock: number }>>([])
 const total = ref(0)
 const dialogVisible = ref(false)
+const statusBusyIds = reactive(new Set<string>())
+const deleteBusyIds = reactive(new Set<string>())
+let skuLoadSeq = 0
+let editLoadSeq = 0
 
 const searchForm = reactive({
   page: 1,
@@ -172,6 +187,8 @@ const editing = reactive<any>({
 })
 
 function resetEditing() {
+  skuLoadSeq += 1
+  productLoading.value = false
   availableSkus.value = []
   Object.assign(editing, {
     id: null,
@@ -193,6 +210,7 @@ function resetEditing() {
 }
 
 async function loadProductSkus(showMessage = false): Promise<boolean> {
+  const requestSeq = ++skuLoadSeq
   const productId = String(editing.productId || '').trim()
   if (!POSITIVE_ID.test(productId)) {
     availableSkus.value = []
@@ -204,6 +222,9 @@ async function loadProductSkus(showMessage = false): Promise<boolean> {
   productLoading.value = true
   try {
     const res: any = await productApi.getDetail(productId)
+    if (requestSeq !== skuLoadSeq || String(editing.productId || '').trim() !== productId) {
+      return false
+    }
     const product = res.data || {}
     const skus = asArray(product.skus)
       .filter((sku: any) => sku?.id != null && (sku.status === 1 || sku.status === undefined))
@@ -226,15 +247,19 @@ async function loadProductSkus(showMessage = false): Promise<boolean> {
     if (showMessage) ElMessage.success(`已加载 ${skus.length} 个可售SKU`)
     return true
   } catch {
-    availableSkus.value = []
-    editing.skuId = ''
+    if (requestSeq === skuLoadSeq) {
+      availableSkus.value = []
+      editing.skuId = ''
+    }
     return false
   } finally {
-    productLoading.value = false
+    if (requestSeq === skuLoadSeq) productLoading.value = false
   }
 }
 
 function handleProductChanged() {
+  skuLoadSeq += 1
+  productLoading.value = false
   editing.productId = String(editing.productId || '').trim()
   editing.skuId = ''
   availableSkus.value = []
@@ -257,11 +282,13 @@ async function loadList() {
 }
 
 function openCreate() {
+  editLoadSeq += 1
   resetEditing()
   dialogVisible.value = true
 }
 
 async function openEdit(row: any) {
+  const requestSeq = ++editLoadSeq
   resetEditing()
   Object.assign(editing, {
     id: row.id,
@@ -280,7 +307,8 @@ async function openEdit(row: any) {
     coverImage: row.coverImage || '',
     description: row.description || '',
   })
-  await loadProductSkus(false)
+  const loaded = await loadProductSkus(false)
+  if (requestSeq !== editLoadSeq || !loaded) return
   dialogVisible.value = true
 }
 
@@ -310,60 +338,66 @@ function formatActivityDate(value: unknown): string {
 }
 
 async function handleSubmit() {
-  if (!editing.name?.trim()) { ElMessage.warning('请填写活动名称'); return }
-  const productId = String(editing.productId || '').trim()
-  if (!POSITIVE_ID.test(productId)) { ElMessage.warning('请输入有效的商品ID'); return }
-
-  const loaded = await loadProductSkus(false)
-  if (!loaded) { ElMessage.warning('商品或SKU不可用，请重新加载'); return }
-  const skuId = String(editing.skuId || '').trim()
-  const selectedSku = availableSkus.value.find((sku) => sku.id === skuId)
-  if (!POSITIVE_ID.test(skuId) || !selectedSku) {
-    ElMessage.warning('请选择该商品的有效SKU')
-    return
-  }
-
-  const startDate = parsePickerDateTime(editing.startTime)
-  const endDate = parsePickerDateTime(editing.endTime)
-  if (!startDate || !endDate) { ElMessage.warning('请选择有效的活动时间'); return }
-  if (startDate.getTime() >= endDate.getTime()) {
-    ElMessage.warning('活动结束时间必须晚于开始时间')
-    return
-  }
-
-  const flashPriceFen = Math.round(Number(editing.flashPrice) * 100)
-  if (!Number.isSafeInteger(flashPriceFen) || flashPriceFen < 0) {
-    ElMessage.warning('秒杀价格无效')
-    return
-  }
-  if (flashPriceFen > selectedSku.price) {
-    ElMessage.warning(`秒杀价不能高于当前SKU售价 ¥${formatPrice(selectedSku.price)}`)
-    return
-  }
-  const stockLimit = Number(editing.stockLimit)
-  if (!Number.isInteger(stockLimit) || stockLimit < 1) {
-    ElMessage.warning('秒杀库存必须至少为1')
-    return
-  }
-
-  const { id: _id, ...rest } = editing
-  const payload: any = {
-    ...rest,
-    productId,
-    skuId,
-    flashPrice: flashPriceFen,
-    originalPrice: editing.originalPrice != null
-      ? Math.round(Number(editing.originalPrice) * 100)
-      : undefined,
-    stockLimit,
-    limitPerUser: Number(editing.limitPerUser),
-    lockMinutes: Number(editing.lockMinutes),
-    sortOrder: Number(editing.sortOrder),
-    startTime: toIsoDateTime(editing.startTime),
-    endTime: toIsoDateTime(editing.endTime),
-  }
-  if (payload.originalPrice === undefined) delete payload.originalPrice
+  if (submitting.value) return
+  submitting.value = true
   try {
+    if (!editing.name?.trim()) { ElMessage.warning('请填写活动名称'); return }
+    const productId = String(editing.productId || '').trim()
+    if (!POSITIVE_ID.test(productId)) { ElMessage.warning('请输入有效的商品ID'); return }
+
+    const loaded = await loadProductSkus(false)
+    if (!loaded || productId !== String(editing.productId || '').trim()) {
+      ElMessage.warning('商品或SKU不可用，请重新加载')
+      return
+    }
+    const skuId = String(editing.skuId || '').trim()
+    const selectedSku = availableSkus.value.find((sku) => sku.id === skuId)
+    if (!POSITIVE_ID.test(skuId) || !selectedSku) {
+      ElMessage.warning('请选择该商品的有效SKU')
+      return
+    }
+
+    const startDate = parsePickerDateTime(editing.startTime)
+    const endDate = parsePickerDateTime(editing.endTime)
+    if (!startDate || !endDate) { ElMessage.warning('请选择有效的活动时间'); return }
+    if (startDate.getTime() >= endDate.getTime()) {
+      ElMessage.warning('活动结束时间必须晚于开始时间')
+      return
+    }
+
+    const flashPriceFen = Math.round(Number(editing.flashPrice) * 100)
+    if (!Number.isSafeInteger(flashPriceFen) || flashPriceFen < 0) {
+      ElMessage.warning('秒杀价格无效')
+      return
+    }
+    if (flashPriceFen > selectedSku.price) {
+      ElMessage.warning(`秒杀价不能高于当前SKU售价 ¥${formatPrice(selectedSku.price)}`)
+      return
+    }
+    const stockLimit = Number(editing.stockLimit)
+    if (!Number.isInteger(stockLimit) || stockLimit < 1) {
+      ElMessage.warning('秒杀库存必须至少为1')
+      return
+    }
+
+    const { id: _id, ...rest } = editing
+    const payload: any = {
+      ...rest,
+      productId,
+      skuId,
+      flashPrice: flashPriceFen,
+      originalPrice: editing.originalPrice != null
+        ? Math.round(Number(editing.originalPrice) * 100)
+        : undefined,
+      stockLimit,
+      limitPerUser: Number(editing.limitPerUser),
+      lockMinutes: Number(editing.lockMinutes),
+      sortOrder: Number(editing.sortOrder),
+      startTime: toIsoDateTime(editing.startTime),
+      endTime: toIsoDateTime(editing.endTime),
+    }
+    if (payload.originalPrice === undefined) delete payload.originalPrice
+
     if (editing.id) {
       await flashSaleApi.updateActivity(String(editing.id), payload)
     } else {
@@ -371,30 +405,44 @@ async function handleSubmit() {
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    loadList()
+    await loadList()
   } catch {
     // 错误已由拦截器处理
+  } finally {
+    submitting.value = false
   }
 }
 
 async function handleStatusChange(row: any, val: string | number | boolean) {
+  const id = String(row.id)
+  const previousStatus = Number(row.status)
   const numVal = val ? 1 : 0
+  if (statusBusyIds.has(id)) return
+  statusBusyIds.add(id)
   try {
-    await flashSaleApi.updateActivityStatus(String(row.id), numVal)
+    await flashSaleApi.updateActivityStatus(id, numVal)
+    row.status = numVal
     ElMessage.success(numVal === 1 ? '已上架' : '已下架')
   } catch {
-    row.status = numVal === 1 ? 0 : 1
+    row.status = previousStatus
+  } finally {
+    statusBusyIds.delete(id)
   }
 }
 
 async function handleDelete(row: any) {
+  const id = String(row.id)
+  if (deleteBusyIds.has(id)) return
+  deleteBusyIds.add(id)
   try {
     await ElMessageBox.confirm(`确认删除活动「${row.name}」吗？`, '提示', { type: 'warning' })
-    await flashSaleApi.deleteActivity(String(row.id))
+    await flashSaleApi.deleteActivity(id)
     ElMessage.success('删除成功')
-    loadList()
+    await loadList()
   } catch {
     // 取消或错误
+  } finally {
+    deleteBusyIds.delete(id)
   }
 }
 
