@@ -210,8 +210,9 @@ export class TemporalRuleMerchantSettlementService extends SerializedSalesMercha
       return;
     }
 
+    const completedAt = order.completedAt;
     const matureAt = new Date(
-      order.completedAt.getTime() + AFTERSALE_APPLY_DAYS * 24 * 60 * 60 * 1000,
+      completedAt.getTime() + AFTERSALE_APPLY_DAYS * 24 * 60 * 60 * 1000,
     );
     if (matureAt > new Date()) return;
 
@@ -233,7 +234,7 @@ export class TemporalRuleMerchantSettlementService extends SerializedSalesMercha
     });
     if (!merchant) return;
 
-    const occurredAt = order.paidAt ?? order.completedAt;
+    const occurredAt = order.paidAt ?? completedAt;
     await this.withTemporalMerchantLock(merchant.id, async () => {
       const existing = await this.temporalPrisma.merchantCommissionRecord.findFirst({
         where: {
@@ -273,7 +274,7 @@ export class TemporalRuleMerchantSettlementService extends SerializedSalesMercha
               refundedAmount,
               salesOccurredAt: occurredAt.toISOString(),
               salesOccurredAtSource: order.paidAt ? 'paidAt' : 'completedAt_fallback',
-              maturityCompletedAt: order.completedAt.toISOString(),
+              maturityCompletedAt: completedAt.toISOString(),
             },
             status: 'pending',
             dedupeKey,
@@ -323,7 +324,7 @@ export class TemporalRuleMerchantSettlementService extends SerializedSalesMercha
     if (!item) throw new Error(`服务结算失败：权益项不存在 itemId=${params.packageItemId}`);
 
     const sourceAmount = Math.max(0, item.originalValue ?? 0);
-    const rule = await this.matchServiceRuleAt(tx, params, params.occurredAt);
+    const rule = await this.matchTemporalServiceRuleAt(tx, params, params.occurredAt);
     if (!rule) return { created: false, reason: 'no_rule' };
 
     const { amount, snapshot } = computeCommission(rule, sourceAmount);
@@ -552,7 +553,7 @@ export class TemporalRuleMerchantSettlementService extends SerializedSalesMercha
     return candidates[0] ?? null;
   }
 
-  private async matchServiceRuleAt(
+  private async matchTemporalServiceRuleAt(
     tx: Prisma.TransactionClient,
     params: {
       packageItemId: bigint;
