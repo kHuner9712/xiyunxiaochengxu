@@ -113,32 +113,53 @@ export class StateSafeProductionMerchantSettlementService extends RefundSafeProd
       throw new BadRequestException('周期开始时间必须早于结束时间');
     }
 
+    const merchantPromotionSourceId = dto.merchantPromotionSourceId
+      ? BigInt(dto.merchantPromotionSourceId)
+      : null;
+    const pickupStoreId = dto.pickupStoreId ? BigInt(dto.pickupStoreId) : null;
+
     return this.statePrisma.$transaction(async (tx) => {
-      const candidates = await tx.merchantCommissionRecord.findMany({
-        where: {
-          deletedAt: null,
-          status: { in: ['pending', 'confirmed'] },
-          occurredAt: { gte: periodStart, lte: periodEnd },
-          commissionAmount: { gt: 0 },
-          ...(dto.merchantPromotionSourceId
-            ? { merchantPromotionSourceId: BigInt(dto.merchantPromotionSourceId) }
-            : {}),
-          ...(dto.pickupStoreId ? { pickupStoreId: BigInt(dto.pickupStoreId) } : {}),
-        },
-        orderBy: { id: 'asc' },
-      });
+      // MySQL production uses the server default transaction isolation. Do not establish a
+      // non-locking REPEATABLE READ snapshot before acquiring the commission-row locks: a refund
+      // may commit while this transaction waits and a later consistent read could otherwise keep
+      // seeing the pre-refund amount. The first candidate read is therefore a current locking read.
+      const lockedCandidates = await tx.$queryRaw<Array<{ id: bigint }>>(Prisma.sql`
+        SELECT r.id AS id
+        FROM merchant_commission_records r
+        WHERE r.deleted_at IS NULL
+          AND r.status IN ('pending', 'confirmed')
+          AND r.occurred_at >= ${periodStart}
+          AND r.occurred_at <= ${periodEnd}
+          AND r.commission_amount > 0
+          ${merchantPromotionSourceId !== null
+            ? Prisma.sql`AND r.merchant_promotion_source_id = ${merchantPromotionSourceId}`
+            : Prisma.empty}
+          ${pickupStoreId !== null
+            ? Prisma.sql`AND r.pickup_store_id = ${pickupStoreId}`
+            : Prisma.empty}
+        ORDER BY r.id ASC
+        FOR UPDATE
+      `);
+
+      const lockedIds = lockedCandidates.map((candidate) => candidate.id);
+      const candidates = lockedIds.length > 0
+        ? await tx.merchantCommissionRecord.findMany({
+            where: { id: { in: lockedIds } },
+            orderBy: { id: 'asc' },
+          })
+        : [];
 
       const eligible: typeof candidates = [];
-      for (const candidate of candidates) {
-        await tx.$queryRaw`SELECT id FROM merchant_commission_records WHERE id = ${candidate.id} FOR UPDATE`;
-        const current = await tx.merchantCommissionRecord.findUnique({ where: { id: candidate.id } });
+      for (const current of candidates) {
         if (
-          !current ||
           current.deletedAt ||
           !['pending', 'confirmed'].includes(current.status) ||
           current.commissionAmount <= 0 ||
           current.occurredAt < periodStart ||
-          current.occurredAt > periodEnd
+          current.occurredAt > periodEnd ||
+          (merchantPromotionSourceId !== null &&
+            current.merchantPromotionSourceId !== merchantPromotionSourceId) ||
+          (pickupStoreId !== null && current.pickupStoreId !== pickupStoreId)
         ) {
           continue;
         }
@@ -161,10 +182,8 @@ export class StateSafeProductionMerchantSettlementService extends RefundSafeProd
       }
 
       const batch = await this.createBatchWithUniqueNo(tx, {
-        merchantPromotionSourceId: dto.merchantPromotionSourceId
-          ? BigInt(dto.merchantPromotionSourceId)
-          : null,
-        pickupStoreId: dto.pickupStoreId ? BigInt(dto.pickupStoreId) : null,
+        merchantPromotionSourceId,
+        pickupStoreId,
         periodStart,
         periodEnd,
         recordCount: eligible.length,
