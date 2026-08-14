@@ -151,12 +151,27 @@
     </view>
 
     <view class="bottom-bar bottom-action-bar" v-if="order.status">
-      <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap="handleCancel">取消订单</view>
-      <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap="handlePay">去支付</view>
+      <view
+        v-if="order.status === 'pending_payment'"
+        class="action-btn cancel"
+        :class="{ disabled: orderActionBusy }"
+        @tap="handleCancel"
+      >取消订单</view>
+      <view
+        v-if="order.status === 'pending_payment'"
+        class="action-btn primary"
+        :class="{ disabled: orderActionBusy }"
+        @tap="handlePay"
+      >{{ orderActionBusy ? '处理中...' : '去支付' }}</view>
       <view v-if="order.status === 'paid'" class="action-hint">已付款 · 等待拼团成团</view>
       <view v-if="order.status === 'paid' && order.groupBuyGroupId" class="action-btn primary" @tap="goGroupProgress">拼团进度</view>
       <view v-if="order.status === 'pending_pickup'" class="action-hint">到店自提 · 请出示自提码</view>
-      <view v-if="order.status === 'delivered'" class="action-btn primary" @tap="handleConfirm">确认收货</view>
+      <view
+        v-if="order.status === 'delivered'"
+        class="action-btn primary"
+        :class="{ disabled: orderActionBusy }"
+        @tap="handleConfirm"
+      >{{ orderActionBusy ? '处理中...' : '确认收货' }}</view>
       <view v-if="order.status === 'completed' || order.status === 'delivered' || order.status === 'aftersale'" class="action-hint">请选择要售后的商品</view>
       <view class="action-btn" @tap="goCustomerService">联系商家</view>
     </view>
@@ -183,6 +198,7 @@ const selectAftersaleMode = ref(false)
 const shouldSelectAftersale = ref(false)
 const loadedOrderId = ref('')
 const loadedOrderNo = ref('')
+const orderActionBusy = ref(false)
 let skipInitialShowRefresh = true
 
 async function loadOrder(id: string) {
@@ -251,24 +267,34 @@ function isUserCancelPayError(err: any): boolean {
   return msg.includes('cancel')
 }
 
-async function handleCancel() {
-  uni.showModal({
-    title: '提示',
-    content: '确定取消该订单吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await cancelOrder(order.value.id)
-          loadOrder(order.value.id)
-        } catch {
-          uni.showToast({ title: '取消失败', icon: 'none' })
-        }
-      }
-    }
+function confirmModal(options: { title: string; content: string }): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.showModal({
+      ...options,
+      success: (res) => resolve(!!res.confirm),
+      fail: () => resolve(false),
+    })
   })
 }
 
+async function handleCancel() {
+  if (orderActionBusy.value) return
+  orderActionBusy.value = true
+  try {
+    const confirmed = await confirmModal({ title: '提示', content: '确定取消该订单吗？' })
+    if (!confirmed) return
+    await cancelOrder(order.value.id)
+    await loadOrder(order.value.id)
+  } catch {
+    uni.showToast({ title: '取消失败', icon: 'none' })
+  } finally {
+    orderActionBusy.value = false
+  }
+}
+
 async function handlePay() {
+  if (orderActionBusy.value) return
+  orderActionBusy.value = true
   try {
     const payment = await createPayment({ orderId: order.value.id })
     try {
@@ -294,24 +320,24 @@ async function handlePay() {
       showCancel: false,
       confirmText: '我知道了'
     })
+  } finally {
+    orderActionBusy.value = false
   }
 }
 
 async function handleConfirm() {
-  uni.showModal({
-    title: '提示',
-    content: '确认已收到商品吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await confirmReceive(order.value.id)
-          loadOrder(order.value.id)
-        } catch {
-          uni.showToast({ title: '确认收货失败', icon: 'none' })
-        }
-      }
-    }
-  })
+  if (orderActionBusy.value) return
+  orderActionBusy.value = true
+  try {
+    const confirmed = await confirmModal({ title: '提示', content: '确认已收到商品吗？' })
+    if (!confirmed) return
+    await confirmReceive(order.value.id)
+    await loadOrder(order.value.id)
+  } catch {
+    uni.showToast({ title: '确认收货失败', icon: 'none' })
+  } finally {
+    orderActionBusy.value = false
+  }
 }
 
 function goAftersale(item: OrderProductItem) {
@@ -413,6 +439,10 @@ defineExpose({
   loadOrder,
   guideAftersaleSelection,
   goAftersale,
+  handlePay,
+  handleCancel,
+  handleConfirm,
+  orderActionBusy,
   order,
   selectAftersaleMode
 })
@@ -613,6 +643,7 @@ defineExpose({
   background: $bg-white;
   &.primary { color: #FFFFFF; border-color: transparent; background: $gradient-coral; font-weight: 700; box-shadow: $shadow-coral; }
   &.cancel { color: $text-hint; }
+  &.disabled { opacity: 0.55; pointer-events: none; }
 }
 .action-hint { font-size: $font-sm; color: $text-hint; padding: 16rpx 0; }
 </style>
