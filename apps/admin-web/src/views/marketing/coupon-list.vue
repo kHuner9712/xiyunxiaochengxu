@@ -60,11 +60,11 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'marketing:coupon'" type="primary" link @click="router.push(`/marketing/coupon-edit/${row.id}`)">编辑</el-button>
-            <el-button v-permission="'marketing:coupon'" :type="row.status === 1 ? 'warning' : 'success'" link @click="handleToggleStatus(row)">
+            <el-button v-permission="'marketing:coupon'" type="primary" link :disabled="isActionBusy(row)" @click="router.push(`/marketing/coupon-edit/${row.id}`)">编辑</el-button>
+            <el-button v-permission="'marketing:coupon'" :type="row.status === 1 ? 'warning' : 'success'" link :loading="isActionBusy(row)" :disabled="isActionBusy(row)" @click="handleToggleStatus(row)">
               {{ row.status === 1 ? '禁用' : '启用' }}
             </el-button>
-            <el-button v-permission="'marketing:coupon'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'marketing:coupon'" type="danger" link :loading="isActionBusy(row)" :disabled="isActionBusy(row)" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -95,6 +95,8 @@ import { asArray, paginationTotal } from '@/utils/response'
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<any[]>([])
+const actionBusyIds = reactive(new Set<string>())
+let listRequestSeq = 0
 
 const searchForm = reactive({
   name: '',
@@ -104,22 +106,27 @@ const searchForm = reactive({
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
+function couponKey(row: any) { return String(row?.id || '') }
+function isActionBusy(row: any) { return actionBusyIds.has(couponKey(row)) }
+
 async function fetchList() {
+  const requestSeq = ++listRequestSeq
   loading.value = true
   try {
     const res = await couponApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
+    if (requestSeq !== listRequestSeq) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
   } catch (e: any) {
-    ElMessage.error(e?.message || '获取优惠券列表失败')
+    if (requestSeq === listRequestSeq) ElMessage.error(e?.message || '获取优惠券列表失败')
   } finally {
-    loading.value = false
+    if (requestSeq === listRequestSeq) loading.value = false
   }
 }
 
 function handleSearch() {
   pagination.page = 1
-  fetchList()
+  void fetchList()
 }
 
 function resetSearch() {
@@ -130,20 +137,27 @@ function resetSearch() {
 }
 
 async function handleToggleStatus(row: any) {
+  const id = couponKey(row)
+  if (!id || actionBusyIds.has(id)) return
+  actionBusyIds.add(id)
   const nextStatus = row.status === 1 ? 0 : 1
   const actionText = nextStatus === 1 ? '启用' : '禁用'
   try {
     await ElMessageBox.confirm(`确定${actionText}该优惠券吗？`, '提示', { type: 'warning' })
-    await couponApi.update(String(row.id), { status: nextStatus })
+    await couponApi.update(id, { status: nextStatus })
     ElMessage.success('操作成功')
     await fetchList()
   } catch (e: any) {
-    if (e === 'cancel' || e === 'close') return
-    ElMessage.error(e?.message || '操作失败')
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '操作失败')
+  } finally {
+    actionBusyIds.delete(id)
   }
 }
 
 async function handleDelete(row: any) {
+  const id = couponKey(row)
+  if (!id || actionBusyIds.has(id)) return
+  actionBusyIds.add(id)
   try {
     await ElMessageBox.confirm(
       Number(row.receivedCount || 0) > 0
@@ -152,14 +166,15 @@ async function handleDelete(row: any) {
       '提示',
       { type: 'warning' },
     )
-    await couponApi.delete(String(row.id))
+    await couponApi.delete(id)
     ElMessage.success(Number(row.receivedCount || 0) > 0 ? '已停止发放并保留已领取权益' : '删除成功')
     await fetchList()
   } catch (e: any) {
-    if (e === 'cancel' || e === 'close') return
-    ElMessage.error(e?.message || '删除失败')
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '删除失败')
+  } finally {
+    actionBusyIds.delete(id)
   }
 }
 
-fetchList()
+void fetchList()
 </script>
