@@ -14,6 +14,8 @@ import { PointsModule } from '../points/points.module';
 import { PointsExpiryScheduleService } from '../points/points-expiry-schedule.service';
 import { UploadModule } from '../upload/upload.module';
 import { DirectProfileCleanupScheduleService } from '../upload/direct-profile-cleanup-schedule.service';
+import { MemberModule } from '../member/member.module';
+import { MemberLevelReconcileScheduleService } from '../member/member-level-reconcile-schedule.service';
 
 @Module({
   imports: [
@@ -28,12 +30,14 @@ import { DirectProfileCleanupScheduleService } from '../upload/direct-profile-cl
     BenefitPackageModule,
     PointsModule,
     UploadModule,
+    MemberModule,
     forwardRef(() => PaymentModule),
   ],
   providers: [
     ScheduleService,
     PointsExpiryScheduleService,
     DirectProfileCleanupScheduleService,
+    MemberLevelReconcileScheduleService,
   ],
 })
 export class ScheduleModule {}
