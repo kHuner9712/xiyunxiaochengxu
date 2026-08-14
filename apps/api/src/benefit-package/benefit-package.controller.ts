@@ -47,7 +47,14 @@ export class WeappBenefitPackageController {
     @CurrentUser('id') userId: string,
     @Query() dto: MyBenefitPackageQueryDto,
   ) {
-    return this.service.findUserPackages({ ...dto, userId });
+    const result: any = await this.service.findUserPackages({ ...dto, userId });
+    return {
+      ...result,
+      list: (result.list ?? []).map((row: any) => ({
+        ...row,
+        packageCoverImage: row.packageCoverImage ?? row.coverImage ?? null,
+      })),
+    };
   }
 
   @Get('my-entitlements')
