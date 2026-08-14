@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 export interface BannerPayload {
   title?: string
@@ -14,12 +15,16 @@ export const bannerApi = {
     return request.get('/admin/banner/list')
   },
   create(data: BannerPayload) {
-    return request.post('/admin/banner', data)
+    return runSingleFlight('admin:banner:create', () => request.post('/admin/banner', data))
   },
   update(id: string, data: BannerPayload) {
-    return request.put(`/admin/banner/${encodeURIComponent(id)}`, data)
+    return runSingleFlight(`admin:banner:update:${id}`, () =>
+      request.put(`/admin/banner/${encodeURIComponent(id)}`, data),
+    )
   },
   delete(id: string) {
-    return request.delete(`/admin/banner/${encodeURIComponent(id)}`)
+    return runSingleFlight(`admin:banner:delete:${id}`, () =>
+      request.delete(`/admin/banner/${encodeURIComponent(id)}`),
+    )
   },
 }
