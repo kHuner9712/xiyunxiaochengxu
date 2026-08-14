@@ -253,19 +253,20 @@ function buildPayload(): CouponPayload {
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
-  let data: CouponPayload
-  try {
-    data = buildPayload()
-  } catch (e: any) {
-    ElMessage.warning(e?.message || '请检查优惠券配置')
-    return
-  }
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+
+    let data: CouponPayload
+    try {
+      data = buildPayload()
+    } catch (e: any) {
+      ElMessage.warning(e?.message || '请检查优惠券配置')
+      return
+    }
+
     if (isEdit.value) {
       await couponApi.update(couponId.value, data)
     } else {
