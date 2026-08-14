@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -126,7 +125,7 @@ export class SupplierService {
             }
             return { supplier, replayed: false };
           },
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          { isolationLevel: 'Serializable' },
         );
 
         this.logger.log(
