@@ -16,6 +16,7 @@ import { ShareService } from '../share/share.service';
 import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recoverable-production-payment.service';
 
 const PAYMENT_CANCEL_LOCK_TTL_SECONDS = 90;
+const REFUND_USER_LOCK_TTL_SECONDS = 120;
 
 export interface GroupBuyFailureRefundResult {
   status: string;
@@ -98,6 +99,34 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
     reason?: string;
   }) {
     return this.withPaymentCancelLock(params.orderId, () => super.createRefund(params));
+  }
+
+  /**
+   * Refund-success side effects read a user's current points before applying a decrement. Two
+   * successful refunds on different orders can otherwise both observe the same pre-decrement
+   * balance and drive availablePoints below zero. Serialize the inherited refund-success core by
+   * user across all orders. This is deliberately independent from the per-order payment/cancel lock.
+   *
+   * If the lock is occupied we fail closed; WeChat callback/reconciliation will retry. Deleted users
+   * are still eligible for monetary refund processing, so the lookup does not require an active user.
+   */
+  override async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {
+    const rawOrderId = refund?.orderId;
+    if (rawOrderId === undefined || rawOrderId === null) {
+      throw new BadRequestException('退款记录缺少订单ID，无法安全处理退款');
+    }
+
+    const order = await this.cancellationPrisma.order.findUnique({
+      where: { id: BigInt(rawOrderId) },
+      select: { userId: true },
+    });
+    if (!order) {
+      throw new BadRequestException('退款对应订单不存在，无法安全处理退款');
+    }
+
+    return this.withRefundUserLock(order.userId.toString(), () =>
+      super.processWechatRefundSuccess(refund, refundId, wechatData),
+    );
   }
 
   /**
@@ -284,6 +313,25 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
     );
     if (!acquired) {
       throw new BadRequestException('订单支付、取消或退款状态处理中，请稍后重试');
+    }
+
+    try {
+      return await action();
+    } finally {
+      await this.cancellationRedis.releaseLockWithLua(key, token);
+    }
+  }
+
+  private async withRefundUserLock<T>(userId: string, action: () => Promise<T>): Promise<T> {
+    const key = `user:refund-success:${userId}`;
+    const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    const acquired = await this.cancellationRedis.setNX(
+      key,
+      token,
+      REFUND_USER_LOCK_TTL_SECONDS,
+    );
+    if (!acquired) {
+      throw new BadRequestException('该用户退款状态正在处理中，请稍后重试');
     }
 
     try {
