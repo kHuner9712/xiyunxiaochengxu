@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PointsPage from '../index.vue'
-import { getCheckInStatus, getPointsBalance, getPointsDetail, getPointsRules } from '@/api/points'
+import { checkIn, getCheckInStatus, getPointsBalance, getPointsDetail, getPointsRules } from '@/api/points'
 
 const uniAppMock = vi.hoisted(() => ({
   onShowCallbacks: [] as Array<() => void>,
@@ -50,6 +50,7 @@ beforeEach(() => {
   vi.mocked(getCheckInStatus).mockResolvedValue({ checked: true, continuous: 3, todayPoints: 1 } as any)
   vi.mocked(getPointsDetail).mockResolvedValue({ list: [], total: 0 } as any)
   vi.mocked(getPointsRules).mockResolvedValue([] as any)
+  vi.mocked(checkIn).mockResolvedValue({ points: 10, continuous: 4 } as any)
   ;(globalThis as any).uni = {
     showToast: vi.fn(),
     stopPullDownRefresh: vi.fn(),
@@ -76,6 +77,29 @@ describe('积分中心前台刷新', () => {
     expect(wrapper.find('.balance-value').text()).toBe('20')
     expect(wrapper.find('.checkin-text').text()).toBe('签到')
     expect(getCheckInStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('签到成功后，之前发出的旧未签到状态晚到也不能重新打开签到按钮', async () => {
+    const staleStatus = deferred<any>()
+    vi.mocked(getCheckInStatus).mockImplementationOnce(() => staleStatus.promise)
+    const wrapper = mount(PointsPage, {
+      global: { stubs: { Loading: true } },
+    })
+
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+
+    const vm = wrapper.vm as any
+    await vm.handleCheckIn()
+    await flushPromises()
+    expect(vm.checkInStatus.checked).toBe(true)
+    expect(wrapper.find('.checkin-text').text()).toBe('已签到')
+
+    staleStatus.resolve({ checked: false, continuous: 0, todayPoints: 0 })
+    await flushPromises()
+
+    expect(vm.checkInStatus.checked).toBe(true)
+    expect(wrapper.find('.checkin-text').text()).toBe('已签到')
   })
 
   it('新的积分明细先返回后，旧分页请求晚到不能恢复旧账本', async () => {
