@@ -144,42 +144,84 @@ export class SupplierService {
 
   async update(id: string, dto: UpdateSupplierDto) {
     const supplierId = BigInt(id);
-    const supplier = await this.prisma.supplier.findFirst({
-      where: { id: supplierId, deletedAt: null },
-    });
-    if (!supplier) throw new NotFoundException('供应商不存在');
 
-    if (dto.name && dto.name !== supplier.name) {
-      const existing = await this.prisma.supplier.findFirst({
-        where: { name: dto.name, deletedAt: null, id: { not: supplierId } },
-      });
-      if (existing) throw new BadRequestException('供应商名称已存在');
+    for (let attempt = 0; attempt < SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
+      try {
+        const result = await this.prisma.$transaction(
+          async (tx) => {
+            const locked = await tx.$queryRaw<Array<{ id: bigint }>>`
+              SELECT id
+              FROM suppliers
+              WHERE id = ${supplierId} AND deleted_at IS NULL
+              FOR UPDATE
+            `;
+            if (locked.length === 0) throw new NotFoundException('供应商不存在');
+
+            const supplier = await tx.supplier.findFirst({
+              where: { id: supplierId, deletedAt: null },
+            });
+            if (!supplier) throw new NotFoundException('供应商不存在');
+
+            const updateData: any = {};
+            if (dto.name !== undefined) {
+              const nextName = dto.name.trim();
+              if (!nextName) throw new BadRequestException('供应商名称不能为空');
+              if (nextName !== supplier.name) {
+                const existing = await tx.supplier.findFirst({
+                  where: { name: nextName, deletedAt: null, id: { not: supplierId } },
+                });
+                if (existing) throw new BadRequestException('供应商名称已存在');
+              }
+              updateData.name = nextName;
+            }
+            if (dto.contactName !== undefined) updateData.contactName = dto.contactName;
+            if (dto.contactPhone !== undefined) updateData.contactPhone = dto.contactPhone;
+            if (dto.email !== undefined) updateData.email = dto.email;
+            if (dto.address !== undefined) updateData.address = dto.address;
+            if (dto.businessLicense !== undefined) updateData.businessLicense = dto.businessLicense;
+            if (dto.settlementType !== undefined) updateData.settlementType = dto.settlementType;
+            if (dto.remark !== undefined) updateData.remark = dto.remark;
+            if (dto.status !== undefined) updateData.status = dto.status;
+            if (dto.cooperationStartDate !== undefined) {
+              updateData.cooperationStartDate = dto.cooperationStartDate
+                ? new Date(dto.cooperationStartDate)
+                : null;
+            }
+
+            if (dto.status === 0 && supplier.status !== 0) {
+              const publishedProducts = await tx.product.count({
+                where: {
+                  supplierId,
+                  deletedAt: null,
+                  status: 1,
+                },
+              });
+              if (publishedProducts > 0) {
+                throw new BadRequestException(
+                  `该供应商仍有${publishedProducts}个上架商品，请先下架后再停用合作`,
+                );
+              }
+            }
+
+            return tx.supplier.update({
+              where: { id: supplierId },
+              data: updateData,
+            });
+          },
+          { isolationLevel: 'Serializable' },
+        );
+
+        this.logger.log(`更新供应商：${id}`);
+        return { ...result, id: result.id.toString() };
+      } catch (error: any) {
+        if (error?.code === 'P2034' && attempt + 1 < SERIALIZABLE_RETRY_LIMIT) {
+          continue;
+        }
+        throw error;
+      }
     }
 
-    const updateData: any = {};
-    if (dto.name !== undefined) updateData.name = dto.name;
-    if (dto.contactName !== undefined) updateData.contactName = dto.contactName;
-    if (dto.contactPhone !== undefined) updateData.contactPhone = dto.contactPhone;
-    if (dto.email !== undefined) updateData.email = dto.email;
-    if (dto.address !== undefined) updateData.address = dto.address;
-    if (dto.businessLicense !== undefined) updateData.businessLicense = dto.businessLicense;
-    if (dto.settlementType !== undefined) updateData.settlementType = dto.settlementType;
-    if (dto.remark !== undefined) updateData.remark = dto.remark;
-    if (dto.status !== undefined) updateData.status = dto.status;
-    if (dto.cooperationStartDate !== undefined) {
-      updateData.cooperationStartDate = dto.cooperationStartDate
-        ? new Date(dto.cooperationStartDate)
-        : null;
-    }
-
-    const result = dto.status === 0 && supplier.status !== 0
-      ? await this.updateWithDeactivationGuard(supplierId, updateData)
-      : await this.prisma.supplier.update({
-          where: { id: supplierId },
-          data: updateData,
-        });
-    this.logger.log(`更新供应商：${id}`);
-    return { ...result, id: result.id.toString() };
+    throw new Error('供应商更新事务重试次数已耗尽');
   }
 
   async delete(id: string) {

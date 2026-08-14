@@ -47,7 +47,7 @@ function createPrismaMock() {
   return prisma;
 }
 
-describe('SupplierService create/delete durability', () => {
+describe('SupplierService mutation durability', () => {
   it('accepts the rolling-upgrade supplier create request id format', async () => {
     const dto = Object.assign(new CreateSupplierDto(), {
       name: '供应商A',
@@ -138,6 +138,53 @@ describe('SupplierService create/delete durability', () => {
     expect(result.id).toBe('10');
     expect(prisma.$transaction).toHaveBeenCalledTimes(2);
     expect(prisma.supplier.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes rename uniqueness checks and retries write conflicts before one update', async () => {
+    const prisma = createPrismaMock();
+    const current = supplier();
+    prisma.$queryRaw.mockResolvedValue([{ id: 10n }]);
+    prisma.supplier.findFirst.mockImplementation(async ({ where }: any) => {
+      if (typeof where.id === 'bigint') return current;
+      if (where.name === '供应商B') return null;
+      return null;
+    });
+    prisma.supplier.update.mockResolvedValue({ ...current, name: '供应商B' });
+    const normalTransaction = prisma.$transaction.getMockImplementation();
+    prisma.$transaction
+      .mockRejectedValueOnce(Object.assign(new Error('write conflict'), { code: 'P2034' }))
+      .mockImplementation(normalTransaction!);
+    const service = new SupplierService(prisma as any);
+    jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
+
+    const result: any = await service.update('10', { name: '供应商B' });
+
+    expect(result.name).toBe('供应商B');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(prisma.$transaction).toHaveBeenLastCalledWith(
+      expect.any(Function),
+      { isolationLevel: 'Serializable' },
+    );
+    expect(prisma.supplier.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the published-product guard inside the same serializable update transaction', async () => {
+    const prisma = createPrismaMock();
+    const current = supplier({ status: 1 });
+    prisma.$queryRaw.mockResolvedValue([{ id: 10n }]);
+    prisma.supplier.findFirst.mockResolvedValue(current);
+    prisma.product.count.mockResolvedValue(2);
+    const service = new SupplierService(prisma as any);
+
+    await expect(service.update('10', { status: 0 })).rejects.toThrow(
+      '该供应商仍有2个上架商品，请先下架后再停用合作',
+    );
+
+    expect(prisma.supplier.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: 'Serializable' },
+    );
   });
 
   it('replays success when the same supplier was already soft-deleted', async () => {
