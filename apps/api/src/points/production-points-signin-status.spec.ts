@@ -18,6 +18,7 @@ function createService(findFirstResults: any[], history: Date[]) {
 
   const prisma: any = {
     pointsRecord: { findFirst, findMany },
+    $queryRaw: jest.fn<any>().mockResolvedValue([{ id: 100n }]),
     $transaction: jest.fn(async (callback: any) => callback(prisma)),
   };
   const redis: any = {
