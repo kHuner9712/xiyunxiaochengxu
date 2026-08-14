@@ -72,9 +72,8 @@ export class SupplierService {
     const requestId = dto.clientRequestId?.trim() || null;
     const createData = this.buildCreateData(dto);
     const fingerprint = this.createRequestFingerprint(createData);
-    let attempt = 0;
 
-    while (true) {
+    for (let attempt = 0; attempt < SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
       try {
         const result = await this.prisma.$transaction(
           async (tx) => {
@@ -133,13 +132,14 @@ export class SupplierService {
         );
         return { ...result.supplier, id: result.supplier.id.toString() };
       } catch (error: any) {
-        attempt += 1;
-        if (error?.code === 'P2034' && attempt < SERIALIZABLE_RETRY_LIMIT) {
+        if (error?.code === 'P2034' && attempt + 1 < SERIALIZABLE_RETRY_LIMIT) {
           continue;
         }
         throw error;
       }
     }
+
+    throw new Error('供应商创建事务重试次数已耗尽');
   }
 
   async update(id: string, dto: UpdateSupplierDto) {
