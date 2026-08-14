@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateContentDto } from './dto/create-content.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
@@ -19,11 +20,6 @@ export class DurableContentMutationService extends PublicRelatedContentService {
   override async create(data: CreateContentDto) {
     const relatedProductIds = this.normalizeRelatedProductIds(data.relatedProductIds);
     const requestId = data.clientRequestId?.trim() || null;
-
-    if (!requestId) {
-      return super.create({ ...data, relatedProductIds });
-    }
-
     const contentType = data.contentType || 'article';
     const status = data.status ?? 2;
     const normalized = {
@@ -62,29 +58,31 @@ export class DurableContentMutationService extends PublicRelatedContentService {
       try {
         const result = await this.durablePrisma.$transaction(
           async (tx) => {
-            const handled = await tx.businessEvent.findFirst({
-              where: {
-                eventType: CONTENT_CREATE_EVENT,
-                bizType: 'content',
-                bizId: requestId,
-              },
-              orderBy: { id: 'desc' },
-            });
-            if (handled) {
-              const eventPayload = this.readCreateEventPayload(handled.payload);
-              if (eventPayload.fingerprint !== fingerprint) {
-                throw new BadRequestException('内容创建请求ID已被其他操作使用，请重新提交');
-              }
-              const replay = await tx.content.findFirst({
-                where: { id: this.parseMutationId(eventPayload.contentId, '内容') },
+            if (requestId) {
+              const handled = await tx.businessEvent.findFirst({
+                where: {
+                  eventType: CONTENT_CREATE_EVENT,
+                  bizType: 'content',
+                  bizId: requestId,
+                },
+                orderBy: { id: 'desc' },
               });
-              if (!replay) {
-                throw new BadRequestException('该内容创建请求已处理，但内容记录不存在，请刷新内容列表后重试');
+              if (handled) {
+                const eventPayload = this.readCreateEventPayload(handled.payload);
+                if (eventPayload.fingerprint !== fingerprint) {
+                  throw new BadRequestException('内容创建请求ID已被其他操作使用，请重新提交');
+                }
+                const replay = await tx.content.findFirst({
+                  where: { id: this.parseMutationId(eventPayload.contentId, '内容') },
+                });
+                if (!replay) {
+                  throw new BadRequestException('该内容创建请求已处理，但内容记录不存在，请刷新内容列表后重试');
+                }
+                if (replay.deletedAt) {
+                  throw new BadRequestException('该内容创建请求已处理，但内容已删除，请刷新内容列表');
+                }
+                return { content: replay, replayed: true };
               }
-              if (replay.deletedAt) {
-                throw new BadRequestException('该内容创建请求已处理，但内容已删除，请刷新内容列表');
-              }
-              return { content: replay, replayed: true };
             }
 
             if (normalized.categoryId !== null) {
@@ -100,23 +98,28 @@ export class DurableContentMutationService extends PublicRelatedContentService {
             const content = await tx.content.create({
               data: {
                 ...normalized,
+                placement: this.toDatabaseJson(normalized.placement),
+                tags: this.toDatabaseJson(normalized.tags),
+                relatedProductIds: this.toDatabaseJson(normalized.relatedProductIds),
                 publishedAt: status === 1 ? new Date() : null,
               },
             });
 
-            await tx.businessEvent.create({
-              data: {
-                eventType: CONTENT_CREATE_EVENT,
-                bizType: 'content',
-                bizId: requestId,
-                level: 'info',
-                message: '内容创建请求已处理',
-                payload: {
-                  contentId: content.id.toString(),
-                  fingerprint,
+            if (requestId) {
+              await tx.businessEvent.create({
+                data: {
+                  eventType: CONTENT_CREATE_EVENT,
+                  bizType: 'content',
+                  bizId: requestId,
+                  level: 'info',
+                  message: '内容创建请求已处理',
+                  payload: {
+                    contentId: content.id.toString(),
+                    fingerprint,
+                  },
                 },
-              },
-            });
+              });
+            }
 
             return { content, replayed: false };
           },
@@ -137,13 +140,16 @@ export class DurableContentMutationService extends PublicRelatedContentService {
   }
 
   override async update(id: string, data: UpdateContentDto) {
-    if (data.relatedProductIds === undefined) {
-      return super.update(id, data);
+    const normalizedData: any = { ...data };
+    if (data.relatedProductIds !== undefined) {
+      const relatedProductIds = this.normalizeRelatedProductIds(data.relatedProductIds);
+      normalizedData.relatedProductIds = relatedProductIds === null
+        ? Prisma.DbNull
+        : relatedProductIds;
     }
-    return super.update(id, {
-      ...data,
-      relatedProductIds: this.normalizeRelatedProductIds(data.relatedProductIds),
-    });
+    if (data.placement === null) normalizedData.placement = Prisma.DbNull;
+    if (data.tags === null) normalizedData.tags = Prisma.DbNull;
+    return super.update(id, normalizedData);
   }
 
   override async delete(id: string) {
@@ -177,6 +183,10 @@ export class DurableContentMutationService extends PublicRelatedContentService {
   ): string[] | null | undefined {
     if (value === undefined || value === null) return value;
     return value.map((id) => this.parseMutationId(id, '关联商品').toString());
+  }
+
+  private toDatabaseJson(value: string[] | null) {
+    return value === null ? Prisma.DbNull : value;
   }
 
   private parseMutationId(value: unknown, label: string): bigint {
