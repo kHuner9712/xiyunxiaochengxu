@@ -177,13 +177,13 @@ export class SnapshotTemporalRuleMerchantSettlementService extends TemporalRuleM
 
     candidates.sort((left, right) =>
       right.priority - left.priority ||
-      this.ruleSpecificity(right) - this.ruleSpecificity(left) ||
+      this.snapshotRuleSpecificity(right) - this.snapshotRuleSpecificity(left) ||
       Number(left.id - right.id),
     );
     return candidates[0] ?? null;
   }
 
-  private ruleSpecificity(rule: any) {
+  private snapshotRuleSpecificity(rule: any) {
     return [
       rule.merchantPromotionSourceId,
       rule.pickupStoreId,
