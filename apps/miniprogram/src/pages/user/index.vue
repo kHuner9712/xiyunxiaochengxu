@@ -17,18 +17,20 @@
       <view
         v-if="!userStore.isLoggedIn"
         class="login-btn"
-        :class="{ disabled: !hasAgreedToPolicies }"
+        :class="{ disabled: !hasAgreedToPolicies || loggingIn }"
         @tap="handleLogin"
       >
-        <text class="login-text">微信快捷登录</text>
+        <text class="login-text">{{ loggingIn ? '登录中...' : '微信快捷登录' }}</text>
       </view>
       <button
         v-if="userStore.isLoggedIn && !userStore.phone"
         class="phone-btn"
         open-type="getPhoneNumber"
+        :disabled="bindingPhone"
+        :loading="bindingPhone"
         @getphonenumber="handleGetPhoneNumber"
       >
-        绑定手机号
+        {{ bindingPhone ? '绑定中...' : '绑定手机号' }}
       </button>
       <view v-if="userStore.isLoggedIn && !userStore.isProfileComplete" class="profile-btn" @tap="goProfile">
         <text class="profile-text">完善资料</text>
@@ -171,8 +173,8 @@
       </view>
     </view>
 
-    <view v-if="userStore.isLoggedIn" class="logout-btn" @tap="handleLogout">
-      <text class="logout-text">退出登录</text>
+    <view v-if="userStore.isLoggedIn" class="logout-btn" :class="{ disabled: logoutConfirming }" @tap="handleLogout">
+      <text class="logout-text">{{ logoutConfirming ? '处理中...' : '退出登录' }}</text>
     </view>
   </view>
 </template>
@@ -186,6 +188,9 @@ import { navigateToStoredRedirect } from '@/utils/request'
 
 const userStore = useUserStore()
 const hasAgreedToPolicies = ref(false)
+const loggingIn = ref(false)
+const bindingPhone = ref(false)
+const logoutConfirming = ref(false)
 const orderCount = ref<OrderCount>({
   unpaid: 0,
   paid: 0,
@@ -206,6 +211,7 @@ async function loadOrderCount() {
 }
 
 async function handleLogin() {
+  if (loggingIn.value) return
   if (!hasAgreedToPolicies.value) {
     uni.showToast({
       title: '请先阅读并勾选用户协议与隐私政策',
@@ -215,6 +221,7 @@ async function handleLogin() {
     return
   }
 
+  loggingIn.value = true
   try {
     await userStore.wxLogin()
     await loadOrderCount()
@@ -230,10 +237,14 @@ async function handleLogin() {
       showCancel: false,
       confirmText: '我知道了'
     })
+  } finally {
+    loggingIn.value = false
   }
 }
 
 async function handleGetPhoneNumber(e: any) {
+  if (bindingPhone.value) return
+
   const detail = e?.detail || {}
   if (detail.errMsg && !detail.errMsg.includes('ok')) {
     console.warn('[baby-mall] getPhoneNumber cancelled or failed:', detail.errMsg)
@@ -241,29 +252,30 @@ async function handleGetPhoneNumber(e: any) {
     return
   }
 
-  let bindPayload: { code: string; encryptedData?: string; iv?: string } | null = null
-  if (detail.code) {
-    bindPayload = { code: detail.code }
-  } else if (detail.encryptedData && detail.iv) {
-    try {
-      const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
-        uni.login({ provider: 'weixin', success: resolve, fail: reject })
-      })
-      if (loginRes.code) {
-        bindPayload = { code: loginRes.code, encryptedData: detail.encryptedData, iv: detail.iv }
-      }
-    } catch (err) {
-      console.error('[baby-mall] uni.login for legacy bindPhone failed:', err)
-    }
-  }
-
-  if (!bindPayload?.code) {
-    console.error('[baby-mall] getPhoneNumber missing code and legacy encrypted data:', detail)
-    uni.showToast({ title: '未获取到手机号授权凭证', icon: 'none' })
-    return
-  }
-
+  bindingPhone.value = true
   try {
+    let bindPayload: { code: string; encryptedData?: string; iv?: string } | null = null
+    if (detail.code) {
+      bindPayload = { code: detail.code }
+    } else if (detail.encryptedData && detail.iv) {
+      try {
+        const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
+          uni.login({ provider: 'weixin', success: resolve, fail: reject })
+        })
+        if (loginRes.code) {
+          bindPayload = { code: loginRes.code, encryptedData: detail.encryptedData, iv: detail.iv }
+        }
+      } catch (err) {
+        console.error('[baby-mall] uni.login for legacy bindPhone failed:', err)
+      }
+    }
+
+    if (!bindPayload?.code) {
+      console.error('[baby-mall] getPhoneNumber missing code and legacy encrypted data:', detail)
+      uni.showToast({ title: '未获取到手机号授权凭证', icon: 'none' })
+      return
+    }
+
     if (!userStore.isLoggedIn) await userStore.wxLogin()
     await userStore.bindPhone(bindPayload)
     uni.showToast({ title: '手机号绑定成功', icon: 'success' })
@@ -275,15 +287,22 @@ async function handleGetPhoneNumber(e: any) {
       showCancel: false,
       confirmText: '我知道了'
     })
+  } finally {
+    bindingPhone.value = false
   }
 }
 
 function handleLogout() {
+  if (logoutConfirming.value) return
+  logoutConfirming.value = true
   uni.showModal({
     title: '提示',
     content: '确定退出登录吗？',
     success: (res) => {
       if (res.confirm) userStore.logout()
+    },
+    complete: () => {
+      logoutConfirming.value = false
     }
   })
 }
@@ -356,6 +375,7 @@ function navigateTo(url: string) {
 }
 
 function togglePolicyAgreement() {
+  if (loggingIn.value) return
   hasAgreedToPolicies.value = !hasAgreedToPolicies.value
 }
 
@@ -365,6 +385,15 @@ function openPolicy(url: string) {
 
 onShow(() => {
   loadOrderCount()
+})
+
+defineExpose({
+  loggingIn,
+  bindingPhone,
+  logoutConfirming,
+  handleLogin,
+  handleGetPhoneNumber,
+  handleLogout,
 })
 </script>
 
@@ -390,9 +419,9 @@ onShow(() => {
 .user-name { font-size: $font-xl; color: $text-color; font-weight: 900; display: block; max-width: 420rpx; @include text-ellipsis; }
 .member-badge { display: inline-flex; align-items: center; min-height: 42rpx; background: rgba(255, 255, 255, 0.78); border: 1rpx solid rgba($primary-color, 0.16); border-radius: $radius-round; padding: 0 16rpx; margin-top: 10rpx; }
 .member-text { font-size: $font-xs; color: $primary-dark; font-weight: 700; }
-.login-btn { @include flex-center; width: 240rpx; min-height: 76rpx; margin-top: $spacing-lg; background: $gradient-coral; border-radius: $radius-round; box-shadow: $shadow-coral; &.disabled { opacity: 0.56; box-shadow: none; } }
+.login-btn { @include flex-center; width: 240rpx; min-height: 76rpx; margin-top: $spacing-lg; background: $gradient-coral; border-radius: $radius-round; box-shadow: $shadow-coral; &.disabled { opacity: 0.56; box-shadow: none; pointer-events: none; } }
 .login-text { color: #FFFFFF; font-size: $font-md; font-weight: 800; }
-.phone-btn { @include flex-center; width: 240rpx; min-height: 76rpx; margin: $spacing-lg 0 0; padding: 0; background: rgba(255, 255, 255, 0.9); border: 2rpx solid rgba($primary-color, 0.28); border-radius: $radius-round; color: $primary-dark; font-size: $font-md; font-weight: 800; line-height: 76rpx; &::after { border: none; } }
+.phone-btn { @include flex-center; width: 240rpx; min-height: 76rpx; margin: $spacing-lg 0 0; padding: 0; background: rgba(255, 255, 255, 0.9); border: 2rpx solid rgba($primary-color, 0.28); border-radius: $radius-round; color: $primary-dark; font-size: $font-md; font-weight: 800; line-height: 76rpx; &::after { border: none; } &[disabled] { opacity: 0.62; } }
 .profile-btn { @include flex-center; width: 240rpx; min-height: 76rpx; margin-top: $spacing-sm; background: rgba($success-color, 0.12); border: 2rpx solid rgba($success-color, 0.24); border-radius: $radius-round; }
 .profile-text { color: $success-color; font-size: $font-md; font-weight: 800; }
 .login-agreement { display: flex; align-items: center; flex-wrap: wrap; min-height: 48rpx; margin-top: 14rpx; }
@@ -417,7 +446,7 @@ onShow(() => {
 .menu-left { display: flex; align-items: center; min-width: 0; }
 .menu-icon { @include flex-center; width: 56rpx; height: 56rpx; margin-right: $spacing-sm; border-radius: 22rpx; background: $primary-soft; color: $primary-dark; font-size: $font-sm; font-weight: 900; flex-shrink: 0; &.sage { background: $success-soft; color: $success-dark; } &.peach { background: $secondary-soft; color: $secondary-color; } &.mint { background: rgba($mint-color, 0.14); color: $success-dark; } &.muted { background: rgba($bg-gray, 0.9); color: $text-secondary; } }
 .menu-text { font-size: $font-md; color: $text-color; font-weight: 600; @include text-ellipsis; }
-.menu-arrow { font-size: $font-md; color: $text-hint; }
-.logout-btn { margin: $spacing-xl $spacing-md; padding: 24rpx; text-align: center; background: rgba($danger-color, 0.08); border-radius: $radius-round; border: 1rpx solid rgba($danger-color, 0.1); }
+.menu-arrow { font-size: $font-lg; color: $text-hint; }
+.logout-btn { margin: $spacing-xl $spacing-md; padding: 24rpx; text-align: center; background: rgba($danger-color, 0.08); border-radius: $radius-round; border: 1rpx solid rgba($danger-color, 0.1); &.disabled { opacity: 0.55; pointer-events: none; } }
 .logout-text { font-size: $font-md; color: $danger-color; }
 </style>
