@@ -27,6 +27,16 @@ vi.mock('@/utils/private-file', () => ({
   resolvePrivateFileUrls: vi.fn((urls: string[]) => Promise.resolve(urls)),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function aftersaleDetail(overrides: Record<string, any> = {}) {
   return {
     id: '50',
@@ -122,6 +132,31 @@ describe('售后退货物流填写', () => {
       remark: '已寄出',
     })
     expect(getAftersaleDetail).toHaveBeenCalledTimes(2)
+  })
+
+  it('物流提交未完成时重复提交只发送一次请求', async () => {
+    const pending = deferred<any>()
+    vi.mocked(fillReturnLogistics).mockImplementationOnce(() => pending.promise)
+    const wrapper = mountDetail()
+    await uniAppMock.onLoadCallbacks.at(-1)?.({ id: '50' })
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    vm.returnLogisticsForm.returnLogisticsCompany = '顺丰速运'
+    vm.returnLogisticsForm.returnLogisticsNo = 'SF123456789'
+
+    const first = vm.submitReturnLogistics()
+    const second = vm.submitReturnLogistics()
+
+    expect(vm.actionBusy).toBe(true)
+    expect(fillReturnLogistics).toHaveBeenCalledTimes(1)
+
+    pending.resolve({})
+    await Promise.all([first, second])
+    await flushPromises()
+
+    expect(vm.actionBusy).toBe(false)
+    expect(fillReturnLogistics).toHaveBeenCalledTimes(1)
   })
 
   it('从客服或后台切回售后详情时重新读取最新审核退款状态', async () => {
