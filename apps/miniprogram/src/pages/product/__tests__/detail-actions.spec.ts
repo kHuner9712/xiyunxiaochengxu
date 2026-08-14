@@ -10,6 +10,7 @@ const cartState = vi.hoisted(() => ({
   addToCart: vi.fn(),
 }))
 const userState = vi.hoisted(() => ({
+  isLoggedIn: true,
   userInfo: { id: 'user-1' } as any,
   requireLogin: vi.fn((callback: () => unknown) => callback()),
 }))
@@ -31,6 +32,16 @@ vi.mock('@/stores/cart', () => ({
 vi.mock('@/stores/user', () => ({
   useUserStore: () => userState,
 }))
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
 
 function sellableProduct() {
   return {
@@ -64,11 +75,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   lifecycle.onLoadCallbacks = []
   cartState.addToCart = vi.fn().mockResolvedValue(undefined)
+  userState.isLoggedIn = true
   userState.userInfo = { id: 'user-1' }
   userState.requireLogin = vi.fn((callback: () => unknown) => callback())
   ;(globalThis as any).uni = {
     showToast: vi.fn(),
-    navigateTo: vi.fn(),
+    navigateTo: vi.fn(({ success }) => success?.()),
     switchTab: vi.fn(),
     previewImage: vi.fn(),
   }
@@ -76,7 +88,7 @@ beforeEach(() => {
 })
 
 describe('商品详情购买动作', () => {
-  it('加入购物车会使用当前可售 SKU，并在成功后提示用户', async () => {
+  it('加入购物车会使用当前可售 SKU，并等待成功后再提示用户', async () => {
     vi.mocked(getProductDetail).mockResolvedValue(sellableProduct() as any)
     const wrapper = shallowMount(ProductDetailPage)
     lifecycle.onLoadCallbacks.at(-1)?.({ id: 'product-1' })
@@ -86,7 +98,7 @@ describe('商品详情购买动作', () => {
     await (wrapper.vm as any).confirmSku()
     await flushPromises()
 
-    expect(userState.requireLogin).toHaveBeenCalledTimes(1)
+    expect(userState.requireLogin).not.toHaveBeenCalled()
     expect(cartState.addToCart).toHaveBeenCalledWith({
       productId: 'product-1',
       skuId: 'sku-1',
@@ -95,7 +107,46 @@ describe('商品详情购买动作', () => {
     expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({ title: '已加入购物车', icon: 'success' })
   })
 
-  it('立即购买会把商品、SKU 与数量带入订单确认页', async () => {
+  it('首个加购请求未完成时重复确认只增加一次购物车', async () => {
+    const pending = deferred<void>()
+    cartState.addToCart = vi.fn(() => pending.promise)
+    vi.mocked(getProductDetail).mockResolvedValue(sellableProduct() as any)
+    const wrapper = shallowMount(ProductDetailPage)
+    lifecycle.onLoadCallbacks.at(-1)?.({ id: 'product-1' })
+    await flushPromises()
+    const vm = wrapper.vm as any
+
+    vm.handleAddCart()
+    const first = vm.confirmSku()
+    const second = vm.confirmSku()
+
+    expect(vm.skuSubmitting).toBe(true)
+    expect(cartState.addToCart).toHaveBeenCalledTimes(1)
+
+    pending.resolve()
+    await Promise.all([first, second])
+
+    expect(cartState.addToCart).toHaveBeenCalledTimes(1)
+    expect(vm.skuSubmitting).toBe(false)
+  })
+
+  it('加购失败由商品页捕获并提示，不产生未处理 Promise', async () => {
+    cartState.addToCart = vi.fn().mockRejectedValue(new Error('network'))
+    vi.mocked(getProductDetail).mockResolvedValue(sellableProduct() as any)
+    const wrapper = shallowMount(ProductDetailPage)
+    lifecycle.onLoadCallbacks.at(-1)?.({ id: 'product-1' })
+    await flushPromises()
+
+    ;(wrapper.vm as any).handleAddCart()
+    await (wrapper.vm as any).confirmSku()
+
+    expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
+      title: '加入购物车失败，请稍后重试',
+      icon: 'none',
+    })
+  })
+
+  it('立即购买会把商品、SKU 与数量带入订单确认页，并等待导航完成释放锁', async () => {
     vi.mocked(getProductDetail).mockResolvedValue(sellableProduct() as any)
     const wrapper = shallowMount(ProductDetailPage)
     lifecycle.onLoadCallbacks.at(-1)?.({ id: 'product-1' })
@@ -104,10 +155,27 @@ describe('商品详情购买动作', () => {
     ;(wrapper.vm as any).handleBuyNow()
     await (wrapper.vm as any).confirmSku()
 
-    expect(userState.requireLogin).toHaveBeenCalledTimes(1)
-    expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith({
+    expect(userState.requireLogin).not.toHaveBeenCalled()
+    expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
       url: '/pages/order/confirm?productId=product-1&skuId=sku-1&quantity=1',
-    })
+    }))
+    expect((wrapper.vm as any).skuSubmitting).toBe(false)
+  })
+
+  it('未登录确认购买时只触发登录引导，不写购物车或进入订单页', async () => {
+    userState.isLoggedIn = false
+    userState.requireLogin = vi.fn()
+    vi.mocked(getProductDetail).mockResolvedValue(sellableProduct() as any)
+    const wrapper = shallowMount(ProductDetailPage)
+    lifecycle.onLoadCallbacks.at(-1)?.({ id: 'product-1' })
+    await flushPromises()
+
+    ;(wrapper.vm as any).handleAddCart()
+    await (wrapper.vm as any).confirmSku()
+
+    expect(userState.requireLogin).toHaveBeenCalledTimes(1)
+    expect(cartState.addToCart).not.toHaveBeenCalled()
+    expect((globalThis as any).uni.navigateTo).not.toHaveBeenCalled()
   })
 
   it('库存为零时不能打开购买流程或进入订单确认页', async () => {
