@@ -1,11 +1,17 @@
+import { describe, it, expect, jest } from '@jest/globals';
+
+jest.mock('@nestjs/schedule', () => ({
+  Cron: () => () => {},
+}));
+
 import { MemberLevelReconcileScheduleService } from './member-level-reconcile-schedule.service';
 
 describe('MemberLevelReconcileScheduleService', () => {
   it('uses a distributed lock and runs a bounded recovery batch', async () => {
     const redis: any = {
-      setNX: jest.fn().mockResolvedValue(true),
-      extendLockWithLua: jest.fn().mockResolvedValue(true),
-      releaseLockWithLua: jest.fn().mockResolvedValue(true),
+      setNX: jest.fn().mockResolvedValue(true as never),
+      extendLockWithLua: jest.fn().mockResolvedValue(true as never),
+      releaseLockWithLua: jest.fn().mockResolvedValue(true as never),
     };
     const memberService: any = {
       reconcilePendingLevelConfiguration: jest.fn().mockResolvedValue({
@@ -14,7 +20,7 @@ describe('MemberLevelReconcileScheduleService', () => {
         batches: 20,
         scanned: 2000,
         updated: 10,
-      }),
+      } as never),
     };
     const service = new MemberLevelReconcileScheduleService(redis, memberService);
 

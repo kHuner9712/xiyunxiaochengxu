@@ -22,7 +22,7 @@ export interface MemberLevelReconcileResult {
 
 @Injectable()
 export class AtomicMemberService extends MemberService {
-  private readonly logger = new Logger(AtomicMemberService.name);
+  private readonly atomicLogger = new Logger(AtomicMemberService.name);
 
   constructor(private readonly atomicPrisma: PrismaService) {
     super(atomicPrisma);
@@ -317,7 +317,7 @@ export class AtomicMemberService extends MemberService {
       // The configuration transaction has already committed. Do not turn a successful admin
       // mutation into a false failure that may be retried as a duplicate create. The durable
       // request event lets the scheduler resume the same reconciliation generation later.
-      this.logger.error(
+      this.atomicLogger.error(
         `会员等级配置已提交，但即时用户等级重算失败，将由定时任务补偿：${(error as Error).message}`,
         (error as Error).stack,
       );
