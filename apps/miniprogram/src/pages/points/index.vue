@@ -22,8 +22,12 @@
         <text class="checkin-label">每日签到</text>
         <text class="checkin-continuous">已连续签到{{ checkInStatus.continuous }}天</text>
       </view>
-      <view class="checkin-btn" :class="{ checked: checkInStatus.checked }" @tap="handleCheckIn">
-        <text class="checkin-text">{{ checkInStatus.checked ? '已签到' : '签到' }}</text>
+      <view
+        class="checkin-btn"
+        :class="{ checked: checkInStatus.checked, disabled: checkInStatus.checked || signingIn }"
+        @tap="handleCheckIn"
+      >
+        <text class="checkin-text">{{ checkInStatus.checked ? '已签到' : (signingIn ? '签到中...' : '签到') }}</text>
       </view>
     </view>
 
@@ -67,9 +71,11 @@ const checkInStatus = ref({ checked: false, continuous: 0, todayPoints: 0 })
 const pointsDetail = ref<PointsRecord[]>([])
 const pointsRules = ref<PointsRule[]>([])
 const loading = ref(false)
+const signingIn = ref(false)
 const page = ref(1)
 const finished = ref(false)
 let detailVersion = 0
+let checkInVersion = 0
 let loadingVersion = -1
 
 async function loadBalance() {
@@ -80,11 +86,15 @@ async function loadBalance() {
   }
 }
 
-async function loadCheckInStatus() {
+async function loadCheckInStatus(version = checkInVersion) {
   try {
-    checkInStatus.value = await getCheckInStatus()
+    const data = await getCheckInStatus()
+    if (version !== checkInVersion) return
+    checkInStatus.value = data
   } catch {
-    uni.showToast({ title: '签到状态加载失败', icon: 'none' })
+    if (version === checkInVersion) {
+      uni.showToast({ title: '签到状态加载失败', icon: 'none' })
+    }
   }
 }
 
@@ -135,16 +145,22 @@ async function loadRules() {
 }
 
 async function refreshPage() {
+  const statusVersion = ++checkInVersion
   await Promise.all([
     loadBalance(),
-    loadCheckInStatus(),
+    loadCheckInStatus(statusVersion),
     refreshPointsDetail(),
     loadRules(),
   ])
 }
 
 async function handleCheckIn() {
-  if (checkInStatus.value.checked) return
+  if (checkInStatus.value.checked || signingIn.value) return
+
+  // Invalidate any older status read before starting the mutation. A status response that started
+  // before this physical tap must never overwrite the successful sign-in result afterwards.
+  ++checkInVersion
+  signingIn.value = true
   try {
     const data = await checkIn()
     if (data.alreadySigned) {
@@ -153,6 +169,8 @@ async function handleCheckIn() {
       return
     }
 
+    // Also invalidate a foreground refresh that may have started while the sign-in request was in flight.
+    ++checkInVersion
     checkInStatus.value.checked = true
     checkInStatus.value.continuous = data.continuous ?? data.consecutiveDays ?? checkInStatus.value.continuous
     checkInStatus.value.todayPoints = data.points
@@ -161,6 +179,8 @@ async function handleCheckIn() {
     void refreshPointsDetail()
   } catch {
     uni.showToast({ title: '签到失败', icon: 'none' })
+  } finally {
+    signingIn.value = false
   }
 }
 
@@ -188,9 +208,13 @@ onShow(() => {
 
 defineExpose({
   pointsDetail,
+  checkInStatus,
+  signingIn,
   loading,
   loadPointsDetail,
   refreshPointsDetail,
+  handleCheckIn,
+  refreshPage,
 })
 </script>
 
@@ -220,6 +244,7 @@ defineExpose({
   padding: 16rpx 40rpx;
   box-shadow: $shadow-coral;
   &.checked { background: $bg-gray; box-shadow: none; }
+  &.disabled { opacity: 0.58; pointer-events: none; }
 }
 .checkin-text { color: #FFFFFF; font-size: $font-sm; font-weight: 500; .checked & { color: $text-hint; } }
 .detail-section { padding: 0 $spacing-md; }
