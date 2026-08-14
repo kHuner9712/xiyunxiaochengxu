@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const detail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/aftersale-detail.vue'), 'utf8')
+const aftersaleList = readFileSync(resolve(root, 'apps/admin-web/src/views/order/aftersale.vue'), 'utf8')
 const refundList = readFileSync(resolve(root, 'apps/admin-web/src/views/order/refund-list.vue'), 'utf8')
 const refundDetail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/refund-detail.vue'), 'utf8')
 const refundApi = readFileSync(resolve(root, 'apps/admin-web/src/api/refund.ts'), 'utf8')
@@ -91,6 +92,17 @@ test('admin aftersale actions take their lock before confirmation or network wor
   assert.match(adminSyncMethod, /if \(syncingRefund\.value\) return/)
   assert.match(adminSyncMethod, /syncingRefund\.value = true[\s\S]*refundApi\.sync/)
   assert.match(adminSyncMethod, /finally \{[\s\S]*syncingRefund\.value = false/)
+})
+
+test('aftersale and refund lists ignore stale responses after filters or pages change', () => {
+  for (const source of [aftersaleList, refundList]) {
+    assert.match(source, /let listRequestVersion = 0/)
+    assert.match(source, /const requestVersion = \+\+listRequestVersion/)
+    assert.match(source, /if \(requestVersion !== listRequestVersion\) return/)
+    assert.match(source, /if \(requestVersion === listRequestVersion\) loading\.value = false/)
+  }
+  assert.match(aftersaleList, /const querySnapshot = \{[\s\S]*page: pagination\.page[\s\S]*pageSize: pagination\.pageSize[\s\S]*status: searchForm\.status/)
+  assert.match(refundList, /const querySnapshot: any = \{[\s\S]*page: pagination\.page[\s\S]*pageSize: pagination\.pageSize/)
 })
 
 test('refund list and detail label initiating and retrying states for operators', () => {
