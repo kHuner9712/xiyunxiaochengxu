@@ -39,7 +39,7 @@ test('irreversible settlement actions lock before confirmation and remain single
   ]) {
     const body = method(name, next)
     assert.match(body, /if \(actionBusy\.value\) return/)
-    assert.match(body, new RegExp(`actionBusy\\.value = \\`${key}:\\$\\{row\\.id\\}\\``))
+    assert.match(body, new RegExp('actionBusy\\.value = `' + key + ':\\$\\{row\\.id\\}`'))
     assert.ok(body.indexOf('actionBusy.value =') < body.indexOf('ElMessageBox.confirm'))
     assert.match(body, /finally \{[\s\S]*actionBusy\.value = null/)
   }
