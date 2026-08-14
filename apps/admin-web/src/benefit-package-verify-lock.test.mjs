@@ -17,3 +17,17 @@ test('benefit verification handlers reject duplicate preview and verify work at 
   assert.match(source, /handleReset\(true\)/)
   assert.match(source, /function handleReset\(force = false\)/)
 })
+
+test('benefit verification is bound to the latest previewed code', () => {
+  assert.match(source, /const previewedVerifyCode = ref\(''\)/)
+  assert.match(source, /let previewSeq = 0/)
+  assert.match(source, /@input="handleCodeInput"/)
+  assert.match(previewMethod, /const requestSeq = \+\+previewSeq/)
+  assert.match(previewMethod, /requestSeq !== previewSeq/)
+  assert.match(previewMethod, /normalizeVerifyCode\(verifyCode\.value\) !== code/)
+  assert.match(previewMethod, /normalizeVerifyCode\(data\?\.verifyCode\) !== code/)
+  assert.match(verifyMethod, /const code = previewedVerifyCode\.value/)
+  assert.match(verifyMethod, /normalizeVerifyCode\(verifyCode\.value\) !== code/)
+  assert.match(verifyMethod, /normalizeVerifyCode\(preview\.value\.verifyCode\) !== code/)
+  assert.match(source, /previewSeq \+= 1[\s\S]*previewLoading\.value = false/)
+})
