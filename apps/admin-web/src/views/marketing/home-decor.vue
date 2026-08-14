@@ -4,16 +4,25 @@
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center">
           <span>首页装修</span>
-          <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+          <el-button
+            type="primary"
+            :loading="saving"
+            :disabled="pendingUploads > 0"
+            @click="handleSave"
+          >{{ pendingUploads > 0 ? '图标上传中…' : '保存' }}</el-button>
         </div>
       </template>
 
-      <el-form label-width="120px">
+      <el-form label-width="120px" :disabled="saving">
         <el-divider content-position="left">搜索栏配置</el-divider>
         <el-form-item label="搜索热词">
-          <el-tag v-for="(tag, idx) in config.hotKeywords" :key="tag" closable @close="config.hotKeywords.splice(idx, 1)" style="margin-right: 8px">
-            {{ tag }}
-          </el-tag>
+          <el-tag
+            v-for="(tag, idx) in config.hotKeywords"
+            :key="tag"
+            :closable="!saving"
+            @close="config.hotKeywords.splice(idx, 1)"
+            style="margin-right: 8px"
+          >{{ tag }}</el-tag>
           <el-input
             v-if="keywordInputVisible"
             ref="keywordInputRef"
@@ -25,13 +34,13 @@
             @keyup.enter="addKeyword"
             @blur="addKeyword"
           />
-          <el-button v-else size="small" :disabled="config.hotKeywords.length >= 20" @click="keywordInputVisible = true">+ 添加热词</el-button>
+          <el-button v-else size="small" :disabled="saving || config.hotKeywords.length >= 20" @click="keywordInputVisible = true">+ 添加热词</el-button>
           <span class="hint">最多20个，每个最多20字</span>
         </el-form-item>
 
         <el-divider content-position="left">Banner配置</el-divider>
         <el-form-item label="Banner设置">
-          <el-button size="small" @click="router.push('/marketing/banner')">前往Banner管理</el-button>
+          <el-button size="small" :disabled="saving" @click="router.push('/marketing/banner')">前往Banner管理</el-button>
         </el-form-item>
 
         <el-divider content-position="left">导航图标配置</el-divider>
@@ -44,9 +53,15 @@
         <el-table :data="config.navIcons" border size="small" style="margin-bottom: 20px; max-width: 860px">
           <el-table-column label="图标" width="100">
             <template #default="{ row }">
-              <el-upload action="" :http-request="(opt: any) => handleUploadNavIcon(opt, row)" :show-file-list="false" accept="image/*">
+              <el-upload
+                action=""
+                :http-request="(opt: any) => handleUploadNavIcon(opt, row)"
+                :show-file-list="false"
+                :disabled="saving"
+                accept="image/*"
+              >
                 <el-image v-if="row.icon" :src="row.icon" style="width: 40px; height: 40px" fit="cover" />
-                <el-button v-else size="small">上传</el-button>
+                <el-button v-else size="small" :disabled="saving">上传</el-button>
               </el-upload>
             </template>
           </el-table-column>
@@ -67,15 +82,19 @@
           </el-table-column>
           <el-table-column width="80">
             <template #default="{ $index }">
-              <el-button type="danger" link @click="config.navIcons.splice($index, 1)">删除</el-button>
+              <el-button type="danger" link :disabled="saving" @click="config.navIcons.splice($index, 1)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
-        <el-button size="small" :disabled="config.navIcons.length >= 20" @click="config.navIcons.push({ icon: '', name: '', linkUrl: '', sort: config.navIcons.length * 10 })">添加导航图标</el-button>
+        <el-button
+          size="small"
+          :disabled="saving || config.navIcons.length >= 20"
+          @click="config.navIcons.push({ icon: '', name: '', linkUrl: '', sort: config.navIcons.length * 10 })"
+        >添加导航图标</el-button>
 
         <el-divider content-position="left">推荐位配置</el-divider>
         <el-form-item label="推荐位设置">
-          <el-button size="small" @click="router.push('/marketing/recommendation')">前往推荐位管理</el-button>
+          <el-button size="small" :disabled="saving" @click="router.push('/marketing/recommendation')">前往推荐位管理</el-button>
         </el-form-item>
 
         <el-divider content-position="left">公告配置</el-divider>
@@ -92,12 +111,14 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 import { uploadApi } from '@/api/upload'
 
 const HOME_ENTRY_LINK = /^(?:\/pages\/[A-Za-z0-9_./?=&%+\-]+|gift|discount|points|member)$/
 const router = useRouter()
 const loading = ref(false)
 const saving = ref(false)
+const pendingUploads = ref(0)
 const keywordInputVisible = ref(false)
 const keywordInput = ref('')
 const keywordInputRef = ref<any>()
@@ -109,6 +130,7 @@ const config = reactive({
 })
 
 function addKeyword() {
+  if (saving.value) return
   const keyword = keywordInput.value.trim()
   if (!keyword) {
     keywordInput.value = ''
@@ -131,13 +153,19 @@ function addKeyword() {
 }
 
 async function handleUploadNavIcon(options: any, row: any) {
+  if (saving.value) return
+  pendingUploads.value += 1
   try {
     const res = await uploadApi.uploadImage(options.file, 'home-decor')
-    row.icon = res.data.url
+    const url = res?.data?.url
+    if (!url) throw new Error('上传成功但未返回图标地址')
+    row.icon = url
     options.onSuccess?.(res)
   } catch (e: any) {
     options.onError?.(e)
     ElMessage.error(e?.message || '导航图标上传失败')
+  } finally {
+    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
   }
 }
 
@@ -178,6 +206,12 @@ function validateBeforeSave() {
 }
 
 async function handleSave() {
+  if (saving.value) return
+  if (pendingUploads.value > 0) {
+    ElMessage.warning('导航图标仍在上传，请等待全部上传完成后再保存')
+    return
+  }
+
   try {
     validateBeforeSave()
   } catch (e: any) {
@@ -185,11 +219,17 @@ async function handleSave() {
     return
   }
 
+  const payload = {
+    hotKeywords: [...config.hotKeywords],
+    navIcons: config.navIcons.map((item) => ({ ...item })),
+    announcement: config.announcement,
+  }
   saving.value = true
   try {
-    await request.put('/admin/home-decor/config', config)
+    await runSingleFlight('admin:home-decor:save', () =>
+      request.put('/admin/home-decor/config', payload),
+    )
     ElMessage.success('保存成功')
-    await fetchConfig()
   } catch (e: any) {
     ElMessage.error(e?.message || '首页装修配置保存失败')
   } finally {
