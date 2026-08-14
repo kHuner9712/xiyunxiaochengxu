@@ -140,13 +140,27 @@ export class TemporalRuleMerchantSettlementService extends SerializedSalesMercha
       }
 
       const changedAt = new Date();
+      if (
+        current.status === 1 &&
+        this.ruleWasActiveAt(current, changedAt) &&
+        next.effectiveStartAt &&
+        next.effectiveStartAt > changedAt
+      ) {
+        throw new BadRequestException(
+          '当前生效规则不能通过编辑安排未来生效版本；请新增一条带未来生效时间的规则',
+        );
+      }
+
       await tx.merchantCommissionRule.update({
         where: { id: ruleId },
         data: { deletedAt: changedAt },
       });
 
       return tx.merchantCommissionRule.create({
-        data: this.ruleCreateData(next),
+        data: {
+          ...this.ruleCreateData(next),
+          createdAt: changedAt,
+        },
       });
     });
   }
