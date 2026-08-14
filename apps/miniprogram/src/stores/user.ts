@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { get, getToken, setToken, removeToken, redirectToLoginTab } from '@/utils/request'
 import { wxLogin as wxLoginApi, logout as logoutApi, bindPhone as bindPhoneApi, updateProfile as updateProfileApi } from '@/api/auth'
 import { handleShareBindOnLogin } from '@/utils/share'
+import { useCartStore } from './cart'
 
 interface UserInfo {
   id: number | string
@@ -58,6 +59,7 @@ export const useUserStore = defineStore('user', () => {
       if (!getToken()) {
         token.value = ''
         userInfo.value = null
+        useCartStore().clearCart()
       }
       throw err
     }
@@ -125,6 +127,7 @@ export const useUserStore = defineStore('user', () => {
         console.warn('[baby-mall] server session revoke failed during logout:', err)
       })
     }
+    useCartStore().clearCart()
     token.value = ''
     userInfo.value = null
     removeToken()
