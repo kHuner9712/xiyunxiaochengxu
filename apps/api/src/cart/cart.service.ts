@@ -8,6 +8,7 @@ import { CART_MAX_QUANTITY, CART_MAX_ITEMS, formatSkuSpecs } from '@baby-mall/sh
 import { normalizeAssetUrl } from '../common/utils/asset-url';
 
 const CART_ADD_EVENT = 'cart_add';
+const CART_REMOVE_EVENT = 'cart_remove';
 
 @Injectable()
 export class CartService {
@@ -186,16 +187,49 @@ export class CartService {
   async removeItem(userId: string, id: string) {
     const userIdValue = parsePositiveBigIntId(userId, '用户');
     const cartId = parsePositiveBigIntId(id, '购物车');
+    const requestBizType = `cart:${userIdValue.toString()}`;
+    const requestBizId = cartId.toString();
+
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lockUser(tx, userIdValue);
+
+      // Cart rows are hard-deleted, so the row itself cannot prove that a response-loss retry belongs
+      // to this user. Persist the cart id as the durable deletion fact. Unknown/foreign ids have no
+      // such fact and still fail closed instead of being treated as a successful delete.
+      const handled = await tx.businessEvent.findFirst({
+        where: {
+          eventType: CART_REMOVE_EVENT,
+          bizType: requestBizType,
+          bizId: requestBizId,
+        },
+        orderBy: { id: 'desc' },
+      });
+      if (handled) {
+        return { cart: this.readRemoveEventPayload(handled.payload), replayed: true };
+      }
+
       const cart = await tx.cart.findFirst({
         where: { id: cartId, userId: userIdValue },
       });
       if (!cart) throw new NotFoundException('购物车记录不存在');
-      return tx.cart.delete({ where: { id: cartId } });
+
+      const deleted = await tx.cart.delete({ where: { id: cartId } });
+      const serialized = this.serializeRawCart(deleted);
+      await tx.businessEvent.create({
+        data: {
+          eventType: CART_REMOVE_EVENT,
+          bizType: requestBizType,
+          bizId: requestBizId,
+          level: 'info',
+          message: '购物车删除请求已处理',
+          payload: { cart: serialized },
+        },
+      });
+      return { cart: serialized, replayed: false };
     });
-    this.logger.log(`用户${userId}删除购物车项${id}`);
-    return this.serializeRawCart(result);
+
+    this.logger.log(`用户${userId}删除购物车项${id}${result.replayed ? '（幂等重放）' : ''}`);
+    return result.cart;
   }
 
   async selectAll(userId: string, isSelected: number) {
@@ -266,6 +300,23 @@ export class CartService {
       throw new BadRequestException('加购请求记录异常，请刷新购物车后重试');
     }
     return { cartId, fingerprint };
+  }
+
+  private readRemoveEventPayload(payload: unknown) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new BadRequestException('购物车删除请求记录异常，请刷新购物车后重试');
+    }
+    const cart = (payload as Record<string, unknown>).cart;
+    if (!cart || typeof cart !== 'object' || Array.isArray(cart)) {
+      throw new BadRequestException('购物车删除请求记录异常，请刷新购物车后重试');
+    }
+    const record = cart as Record<string, unknown>;
+    for (const key of ['id', 'userId', 'productId', 'skuId']) {
+      if (typeof record[key] !== 'string' || !record[key]) {
+        throw new BadRequestException('购物车删除请求记录异常，请刷新购物车后重试');
+      }
+    }
+    return record;
   }
 
   private async lockUser(tx: Prisma.TransactionClient, userId: bigint) {
