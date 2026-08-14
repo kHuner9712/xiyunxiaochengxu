@@ -136,7 +136,50 @@ function clearPendingOrderClientRequestId(clientRequestId: string) {
   }
 }
 
+function buildPreviewInputFromCreate(data: CreateOrderRequest): OrderPreviewRequest {
+  return {
+    items: data.items.map((item) => ({
+      skuId: String(item.skuId),
+      quantity: Number(item.quantity),
+    })),
+    addressId: data.addressId,
+    pickupStoreId: data.pickupStoreId,
+    fulfillmentType: data.fulfillmentType,
+    couponId: data.couponId,
+    pointsDeduct: data.pointsDeduct,
+  }
+}
+
+function buildOrderPreviewFingerprint(data: OrderPreviewRequest) {
+  const items = data.items
+    .map((item) => ({ skuId: String(item.skuId), quantity: Number(item.quantity) }))
+    .sort((a, b) => a.skuId.localeCompare(b.skuId) || a.quantity - b.quantity)
+  return JSON.stringify({
+    addressId: data.addressId || '',
+    pickupStoreId: data.pickupStoreId || '',
+    fulfillmentType: data.fulfillmentType || '',
+    couponId: data.couponId || '',
+    pointsDeduct: Number(data.pointsDeduct || 0),
+    items,
+  })
+}
+
 export async function createOrder(data: CreateOrderRequest) {
+  // Never create from a quote that belongs to an older address/coupon/points selection, and never
+  // create while the matching quote is still in flight. This closes the tap-submit window where
+  // the page can still be displaying a previous successful preview while the newest preview has
+  // not settled yet.
+  const previewFingerprint = buildOrderPreviewFingerprint(buildPreviewInputFromCreate(data))
+  const latestPreview = latestPreviewRequest
+  if (
+    !latestPreview ||
+    latestPreview.fingerprint !== previewFingerprint ||
+    latestSuccessfulPreviewVersion !== latestPreview.version ||
+    latestSuccessfulPreviewFingerprint !== previewFingerprint
+  ) {
+    throw new Error('订单金额正在重新计算，请稍后再提交')
+  }
+
   // Keep this identity across network failures and page/process re-entry only while the actual
   // checkout payload is unchanged. If the user changes items/address/coupon/points after a timeout,
   // that is a new purchase intent and must never recover an older committed order by accident.
@@ -282,7 +325,13 @@ type OrderPreviewRequest = {
 }
 
 let previewRequestVersion = 0
-let latestPreviewRequest: { version: number; promise: Promise<OrderPreview> } | null = null
+let latestPreviewRequest: {
+  version: number
+  fingerprint: string
+  promise: Promise<OrderPreview>
+} | null = null
+let latestSuccessfulPreviewVersion = 0
+let latestSuccessfulPreviewFingerprint = ''
 
 /**
  * Order confirmation is highly interactive: changing address, fulfillment, coupon or points can
@@ -292,16 +341,22 @@ let latestPreviewRequest: { version: number; promise: Promise<OrderPreview> } | 
  */
 export async function previewOrder(data: OrderPreviewRequest): Promise<OrderPreview> {
   const version = ++previewRequestVersion
+  const fingerprint = buildOrderPreviewFingerprint(data)
   const requestPromise = post<OrderPreview>('/weapp/order/confirm', data)
-  latestPreviewRequest = { version, promise: requestPromise }
+  latestPreviewRequest = { version, fingerprint, promise: requestPromise }
 
   let awaitedVersion = version
+  let awaitedFingerprint = fingerprint
   let awaitedPromise = requestPromise
 
   for (;;) {
     try {
       const result = await awaitedPromise
-      if (awaitedVersion === previewRequestVersion) return result
+      if (awaitedVersion === previewRequestVersion) {
+        latestSuccessfulPreviewVersion = awaitedVersion
+        latestSuccessfulPreviewFingerprint = awaitedFingerprint
+        return result
+      }
     } catch (error) {
       if (awaitedVersion === previewRequestVersion) throw error
     }
@@ -311,6 +366,7 @@ export async function previewOrder(data: OrderPreviewRequest): Promise<OrderPrev
       throw new Error('订单试算状态异常，请重试')
     }
     awaitedVersion = latest.version
+    awaitedFingerprint = latest.fingerprint
     awaitedPromise = latest.promise
   }
 }
