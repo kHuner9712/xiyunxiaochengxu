@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 export const productApi = {
   getList(params: { page: number; pageSize: number; keyword?: string; categoryId?: string; status?: number; brandId?: string }) {
@@ -8,10 +9,12 @@ export const productApi = {
     return request.get(`/admin/product/detail/${encodeURIComponent(id)}`)
   },
   create(data: any) {
-    return request.post('/admin/product/create', data)
+    return runSingleFlight('admin:product:create', () => request.post('/admin/product/create', data))
   },
   update(id: string, data: any) {
-    return request.put(`/admin/product/update/${encodeURIComponent(id)}`, data)
+    return runSingleFlight(`admin:product:update:${id}`, () =>
+      request.put(`/admin/product/update/${encodeURIComponent(id)}`, data),
+    )
   },
   delete(id: string) {
     return request.delete(`/admin/product/delete/${encodeURIComponent(id)}`)
