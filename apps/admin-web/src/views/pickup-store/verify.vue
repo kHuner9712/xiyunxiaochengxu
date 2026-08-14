@@ -66,7 +66,7 @@
         </div>
 
         <div class="action-section">
-          <el-button :disabled="verifying" @click="resetPreview">取消</el-button>
+          <el-button :disabled="verifying" @click="resetPreview()">取消</el-button>
           <el-button
             type="success"
             :loading="verifying"
