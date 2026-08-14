@@ -64,36 +64,44 @@
       </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="600px"
+      destroy-on-close
+      :close-on-click-modal="!submitting"
+      :close-on-press-escape="!submitting"
+      :show-close="!submitting"
+    >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="供应商名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入供应商名称" maxlength="100" />
+          <el-input v-model="form.name" placeholder="请输入供应商名称" maxlength="100" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="联系人" prop="contactName">
-          <el-input v-model="form.contactName" placeholder="请输入联系人" maxlength="50" />
+          <el-input v-model="form.contactName" placeholder="请输入联系人" maxlength="50" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="联系电话" prop="contactPhone">
-          <el-input v-model="form.contactPhone" placeholder="请输入联系电话" maxlength="20" />
+          <el-input v-model="form.contactPhone" placeholder="请输入联系电话" maxlength="20" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="联系邮箱" prop="email">
-          <el-input v-model="form.email" placeholder="请输入联系邮箱" maxlength="100" />
+          <el-input v-model="form.email" placeholder="请输入联系邮箱" maxlength="100" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="地址">
-          <el-input v-model="form.address" placeholder="请输入地址" maxlength="300" />
+          <el-input v-model="form.address" placeholder="请输入地址" maxlength="300" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="合作状态">
-          <el-radio-group v-model="form.status">
+          <el-radio-group v-model="form.status" :disabled="submitting">
             <el-radio :value="1">合作中</el-radio>
             <el-radio :value="0">已停用</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="2000" show-word-limit placeholder="请输入备注" />
+          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="2000" show-word-limit placeholder="请输入备注" :disabled="submitting" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -118,6 +126,7 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
   id: undefined as string | undefined,
+  clientRequestId: '',
   name: '',
   contactName: '',
   contactPhone: '',
@@ -135,6 +144,17 @@ const rules: FormRules = {
 }
 
 const dialogTitle = computed(() => (form.id ? '编辑供应商' : '新增供应商'))
+
+function createSupplierRequestId() {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.getRandomValues) {
+    const words = new Uint32Array(2)
+    cryptoApi.getRandomValues(words)
+    const value = (BigInt(words[0] & 0x7fffffff) << 32n) | BigInt(words[1])
+    if (value > 0n) return value.toString()
+  }
+  return (BigInt(Date.now()) * 1_000_000n + BigInt(Math.floor(Math.random() * 1_000_000))).toString()
+}
 
 async function fetchList() {
   const requestSeq = ++listLoadSeq
@@ -164,6 +184,7 @@ function resetSearch() {
 
 function resetForm() {
   form.id = undefined
+  form.clientRequestId = ''
   form.name = ''
   form.contactName = ''
   form.contactPhone = ''
@@ -174,12 +195,16 @@ function resetForm() {
 }
 
 function handleAdd() {
+  if (submitting.value) return
   resetForm()
+  form.clientRequestId = createSupplierRequestId()
   dialogVisible.value = true
 }
 
 function handleEdit(row: any) {
+  if (submitting.value) return
   form.id = String(row.id)
+  form.clientRequestId = ''
   form.name = row.name || ''
   form.contactName = row.contactName || ''
   form.contactPhone = row.contactPhone || ''
@@ -221,10 +246,12 @@ async function handleSubmit() {
       address: form.address.trim() || undefined,
       status: form.status,
       remark: form.remark.trim() || undefined,
+      ...(!form.id ? { clientRequestId: form.clientRequestId } : {}),
     }
     if (form.id) {
       await supplierApi.update(form.id, payload)
     } else {
+      if (!form.clientRequestId) throw new Error('供应商创建请求标识缺失，请重新打开新增窗口')
       await supplierApi.create(payload)
     }
     ElMessage.success('保存成功')

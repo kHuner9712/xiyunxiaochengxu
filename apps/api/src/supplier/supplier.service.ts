@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { paginate } from '@baby-mall/shared';
+
+const SUPPLIER_CREATE_EVENT = 'supplier_create';
+const SERIALIZABLE_RETRY_LIMIT = 3;
 
 @Injectable()
 export class SupplierService {
@@ -66,30 +70,77 @@ export class SupplierService {
   }
 
   async create(dto: CreateSupplierDto) {
-    const existing = await this.prisma.supplier.findFirst({
-      where: { name: dto.name, deletedAt: null },
-    });
-    if (existing) throw new BadRequestException('供应商名称已存在');
+    const requestId = dto.clientRequestId?.trim() || null;
+    const createData = this.buildCreateData(dto);
+    const fingerprint = this.createRequestFingerprint(createData);
+    let attempt = 0;
 
-    const data: any = {
-      name: dto.name,
-      contactName: dto.contactName,
-      contactPhone: dto.contactPhone,
-      email: dto.email,
-      address: dto.address,
-      businessLicense: dto.businessLicense,
-      settlementType: dto.settlementType,
-      remark: dto.remark,
-      status: dto.status ?? 1,
-    };
+    while (true) {
+      try {
+        const result = await this.prisma.$transaction(
+          async (tx) => {
+            if (requestId) {
+              const handled = await tx.businessEvent.findFirst({
+                where: {
+                  eventType: SUPPLIER_CREATE_EVENT,
+                  bizType: 'supplier',
+                  bizId: requestId,
+                },
+                orderBy: { id: 'desc' },
+              });
+              if (handled) {
+                const eventPayload = this.readCreateEventPayload(handled.payload);
+                if (eventPayload.fingerprint !== fingerprint) {
+                  throw new BadRequestException('供应商创建请求ID已被其他操作使用，请重新提交');
+                }
+                const replay = await tx.supplier.findFirst({
+                  where: { id: BigInt(eventPayload.supplierId) },
+                });
+                if (!replay) {
+                  throw new BadRequestException('该供应商创建请求已处理，请刷新供应商列表后重试');
+                }
+                return { supplier: replay, replayed: true };
+              }
+            }
 
-    if (dto.cooperationStartDate) {
-      data.cooperationStartDate = new Date(dto.cooperationStartDate);
+            const existing = await tx.supplier.findFirst({
+              where: { name: createData.name, deletedAt: null },
+            });
+            if (existing) throw new BadRequestException('供应商名称已存在');
+
+            const supplier = await tx.supplier.create({ data: createData });
+            if (requestId) {
+              await tx.businessEvent.create({
+                data: {
+                  eventType: SUPPLIER_CREATE_EVENT,
+                  bizType: 'supplier',
+                  bizId: requestId,
+                  level: 'info',
+                  message: '供应商创建请求已处理',
+                  payload: {
+                    supplierId: supplier.id.toString(),
+                    fingerprint,
+                  },
+                },
+              });
+            }
+            return { supplier, replayed: false };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+
+        this.logger.log(
+          `创建供应商：${result.supplier.id} - ${createData.name}${result.replayed ? '（幂等重放）' : ''}`,
+        );
+        return { ...result.supplier, id: result.supplier.id.toString() };
+      } catch (error: any) {
+        attempt += 1;
+        if (error?.code === 'P2034' && attempt < SERIALIZABLE_RETRY_LIMIT) {
+          continue;
+        }
+        throw error;
+      }
     }
-
-    const result = await this.prisma.supplier.create({ data });
-    this.logger.log(`创建供应商：${result.id} - ${dto.name}`);
-    return { ...result, id: result.id.toString() };
   }
 
   async update(id: string, dto: UpdateSupplierDto) {
@@ -138,23 +189,30 @@ export class SupplierService {
       const locked = await tx.$queryRaw<Array<{ id: bigint }>>`
         SELECT id
         FROM suppliers
-        WHERE id = ${supplierId} AND deleted_at IS NULL
+        WHERE id = ${supplierId}
         FOR UPDATE
       `;
       if (locked.length === 0) throw new NotFoundException('供应商不存在');
+
+      const supplier = await tx.supplier.findFirst({ where: { id: supplierId } });
+      if (!supplier) throw new NotFoundException('供应商不存在');
+      if (supplier.deletedAt) {
+        return { supplier, replayed: true };
+      }
 
       const products = await tx.product.count({
         where: { supplierId, deletedAt: null },
       });
       if (products > 0) throw new BadRequestException('供应商下存在商品，无法删除');
 
-      return tx.supplier.update({
+      const deleted = await tx.supplier.update({
         where: { id: supplierId },
         data: { deletedAt: new Date() },
       });
+      return { supplier: deleted, replayed: false };
     });
-    this.logger.log(`删除供应商：${id}`);
-    return { ...result, id: result.id.toString() };
+    this.logger.log(`删除供应商：${id}${result.replayed ? '（幂等重放）' : ''}`);
+    return { ...result.supplier, id: result.supplier.id.toString() };
   }
 
   async updateStatus(id: string, status: number) {
@@ -172,6 +230,55 @@ export class SupplierService {
         });
     this.logger.log(`更新供应商状态：${id} -> ${status}`);
     return { ...result, id: result.id.toString() };
+  }
+
+  private buildCreateData(dto: CreateSupplierDto) {
+    const data: any = {
+      name: dto.name.trim(),
+      contactName: dto.contactName,
+      contactPhone: dto.contactPhone,
+      email: dto.email,
+      address: dto.address,
+      businessLicense: dto.businessLicense,
+      settlementType: dto.settlementType,
+      remark: dto.remark,
+      status: dto.status ?? 1,
+    };
+    if (!data.name) throw new BadRequestException('供应商名称不能为空');
+    if (dto.cooperationStartDate) {
+      data.cooperationStartDate = new Date(dto.cooperationStartDate);
+    }
+    return data;
+  }
+
+  private createRequestFingerprint(data: Record<string, any>) {
+    return JSON.stringify({
+      name: data.name,
+      contactName: data.contactName ?? null,
+      contactPhone: data.contactPhone ?? null,
+      email: data.email ?? null,
+      address: data.address ?? null,
+      businessLicense: data.businessLicense ?? null,
+      cooperationStartDate: data.cooperationStartDate instanceof Date
+        ? data.cooperationStartDate.toISOString()
+        : null,
+      settlementType: data.settlementType ?? null,
+      remark: data.remark ?? null,
+      status: data.status,
+    });
+  }
+
+  private readCreateEventPayload(payload: unknown): { supplierId: string; fingerprint: string } {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new BadRequestException('供应商创建请求记录异常，请刷新后重试');
+    }
+    const record = payload as Record<string, unknown>;
+    const supplierId = typeof record.supplierId === 'string' ? record.supplierId : '';
+    const fingerprint = typeof record.fingerprint === 'string' ? record.fingerprint : '';
+    if (!/^[1-9]\d*$/.test(supplierId) || !fingerprint) {
+      throw new BadRequestException('供应商创建请求记录异常，请刷新后重试');
+    }
+    return { supplierId, fingerprint };
   }
 
   private async updateWithDeactivationGuard(supplierId: bigint, data: Record<string, any>) {

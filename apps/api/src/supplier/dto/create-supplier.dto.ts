@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEmail,
@@ -7,8 +7,11 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
 } from 'class-validator';
+
+const SUPPLIER_CREATE_REQUEST_ID = /^[1-9]\d{0,18}$/;
 
 export class CreateSupplierDto {
   @IsString()
@@ -60,4 +63,13 @@ export class CreateSupplierDto {
   @IsInt()
   @IsIn([0, 1])
   status?: number;
+
+  // Optional for rolling-upgrade compatibility with an already-cached admin build. The current
+  // admin always sends one for create and keeps it stable until that logical create is resolved.
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Matches(SUPPLIER_CREATE_REQUEST_ID, { message: '供应商创建请求ID无效' })
+  @MaxLength(19)
+  clientRequestId?: string;
 }
