@@ -21,6 +21,16 @@ vi.mock('@/api/points', () => ({
   getPointsRules: vi.fn(),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   uniAppMock.onShowCallbacks = []
@@ -92,6 +102,29 @@ describe('积分中心', () => {
     })
     expect(getPointsBalance).toHaveBeenCalledTimes(2)
     expect(getPointsDetail).toHaveBeenLastCalledWith({ page: 1, pageSize: 10 })
+  })
+
+  it('签到请求未完成时重复点击只发送一次签到写请求', async () => {
+    const pending = deferred<any>()
+    vi.mocked(checkIn).mockImplementationOnce(() => pending.promise)
+    const wrapper = mount(PointsPage, {
+      global: { stubs: { Loading: true } },
+    })
+    const vm = wrapper.vm as any
+
+    const first = vm.handleCheckIn()
+    const second = vm.handleCheckIn()
+
+    expect(vm.signingIn).toBe(true)
+    expect(checkIn).toHaveBeenCalledTimes(1)
+
+    pending.resolve({ points: 18, continuous: 4 })
+    await Promise.all([first, second])
+    await flushPromises()
+
+    expect(checkIn).toHaveBeenCalledTimes(1)
+    expect(vm.signingIn).toBe(false)
+    expect(vm.checkInStatus.checked).toBe(true)
   })
 
   it('服务端已签到时提示幂等状态并重新同步，不显示+0奖励', async () => {
