@@ -39,7 +39,14 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'supplier:edit'" type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'supplier:delete'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-permission="'supplier:delete'"
+              type="danger"
+              link
+              :loading="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id))"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -85,7 +92,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
@@ -103,6 +110,8 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const tableData = ref<any[]>([])
 const formRef = ref<FormInstance>()
+const deleteBusyIds = reactive(new Set<string>())
+let listLoadSeq = 0
 
 const searchForm = reactive({ name: '', contactPhone: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
@@ -128,13 +137,17 @@ const rules: FormRules = {
 const dialogTitle = computed(() => (form.id ? '编辑供应商' : '新增供应商'))
 
 async function fetchList() {
+  const requestSeq = ++listLoadSeq
   loading.value = true
   try {
     const res = await supplierApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
+    if (requestSeq !== listLoadSeq) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
-  } catch {} finally {
-    loading.value = false
+  } catch (e: any) {
+    if (requestSeq === listLoadSeq) ElMessage.error(e?.message || '加载供应商列表失败')
+  } finally {
+    if (requestSeq === listLoadSeq) loading.value = false
   }
 }
 
@@ -178,20 +191,28 @@ function handleEdit(row: any) {
 }
 
 async function handleDelete(row: any) {
+  const id = String(row.id)
+  if (deleteBusyIds.has(id)) return
+  deleteBusyIds.add(id)
   try {
     await ElMessageBox.confirm('确定删除该供应商吗？', '提示', { type: 'warning' })
-    await supplierApi.delete(String(row.id))
+    await supplierApi.delete(id)
     ElMessage.success('删除成功')
-    fetchList()
-  } catch {}
+    await fetchList()
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '删除供应商失败')
+  } finally {
+    deleteBusyIds.delete(id)
+  }
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+
     const payload = {
       name: form.name.trim(),
       contactName: form.contactName.trim(),
@@ -208,8 +229,10 @@ async function handleSubmit() {
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    fetchList()
-  } catch {} finally {
+    await fetchList()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存供应商失败')
+  } finally {
     submitting.value = false
   }
 }
