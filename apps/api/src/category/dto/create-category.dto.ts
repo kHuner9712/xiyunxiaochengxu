@@ -18,6 +18,8 @@ const toSafeIdString = ({ value }: { value: unknown }) => {
   return typeof value === 'string' ? value.trim() : value;
 };
 
+const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
+
 export class CategoryComplianceConfigDto {
   @IsOptional()
   @IsBoolean()
@@ -48,14 +50,14 @@ export class CreateCategoryDto {
   @Matches(/^(0|[1-9]\d*)$/, { message: '父级分类ID格式不正确' })
   parentId?: string;
 
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @Transform(trim)
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
   name!: string;
 
   @IsOptional()
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @Transform(trim)
   @IsString()
   @MaxLength(500)
   icon?: string;
@@ -74,4 +76,10 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsObject()
   complianceConfig?: CategoryComplianceConfigDto;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Matches(/^[1-9]\d*$/, { message: '分类创建请求ID格式不正确' })
+  clientRequestId?: string;
 }

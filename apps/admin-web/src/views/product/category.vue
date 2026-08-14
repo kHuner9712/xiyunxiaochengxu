@@ -4,7 +4,7 @@
       <template #header>
         <div class="header-row">
           <span>分类管理</span>
-          <el-button v-permission="'product:category'" type="primary" @click="handleAdd(null)">添加一级分类</el-button>
+          <el-button v-permission="'product:category'" type="primary" :disabled="operationBusy" @click="handleAdd(null)">添加一级分类</el-button>
         </div>
       </template>
 
@@ -38,14 +38,14 @@
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'product:category'" type="primary" link @click="handleAdd(row)">添加子分类</el-button>
-            <el-button v-permission="'product:category'" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'product:category'" type="primary" link :disabled="operationBusy" @click="handleAdd(row)">添加子分类</el-button>
+            <el-button v-permission="'product:category'" type="primary" link :disabled="operationBusy" @click="handleEdit(row)">编辑</el-button>
             <el-button
               v-permission="'product:category'"
               type="danger"
               link
               :loading="deleteBusyIds.has(String(row.id))"
-              :disabled="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id)) || operationBusy"
               @click="handleDelete(row)"
             >删除</el-button>
           </template>
@@ -53,8 +53,16 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px" destroy-on-close>
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="500px"
+      destroy-on-close
+      :close-on-click-modal="!operationBusy"
+      :close-on-press-escape="!operationBusy"
+      :show-close="!operationBusy"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" :disabled="operationBusy">
         <el-form-item label="分类名称" prop="name">
           <el-input v-model="form.name" maxlength="50" placeholder="请输入分类名称" />
         </el-form-item>
@@ -65,7 +73,7 @@
           <el-input-number v-model="form.sortOrder" :min="0" />
         </el-form-item>
         <el-form-item label="分类图标">
-          <el-upload action="" :http-request="handleUploadIcon" :show-file-list="false" :disabled="uploading || submitting" accept="image/*">
+          <el-upload action="" :http-request="handleUploadIcon" :show-file-list="false" :disabled="operationBusy" accept="image/*">
             <el-image v-if="form.icon" :src="form.icon" style="width: 60px; height: 60px" fit="cover" />
             <el-button v-else size="small" :loading="uploading">{{ uploading ? '上传中…' : '上传图标' }}</el-button>
           </el-upload>
@@ -97,8 +105,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button :disabled="submitting || uploading" @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" :disabled="uploading" @click="handleSubmit">
+        <el-button :disabled="operationBusy" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="operationBusy" @click="handleSubmit">
           {{ uploading ? '图标上传中…' : '确定' }}
         </el-button>
       </template>
@@ -126,6 +134,7 @@ let treeLoadSeq = 0
 
 const form = reactive({
   id: '' as string,
+  clientRequestId: '',
   name: '',
   parentId: '0' as string,
   sortOrder: 0,
@@ -144,6 +153,18 @@ const rules: FormRules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
 }
 const dialogTitle = computed(() => (form.id ? '编辑分类' : '添加分类'))
+const operationBusy = computed(() => submitting.value || uploading.value)
+
+function createCategoryRequestId() {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.getRandomValues) {
+    const words = new Uint32Array(2)
+    cryptoApi.getRandomValues(words)
+    const value = (BigInt(words[0] & 0x7fffffff) << 32n) | BigInt(words[1])
+    if (value > 0n) return value.toString()
+  }
+  return (BigInt(Date.now()) * 1_000_000n + BigInt(Math.floor(Math.random() * 1_000_000))).toString()
+}
 
 function normalizeTree(rows: any[]): CategoryRecord[] {
   return rows.map((row) => ({
@@ -181,7 +202,9 @@ function resetCompliance(row?: CategoryRecord | null) {
 }
 
 function handleAdd(row: CategoryRecord | null) {
+  if (operationBusy.value) return
   form.id = ''
+  form.clientRequestId = createCategoryRequestId()
   form.name = ''
   form.parentId = row?.id || '0'
   form.sortOrder = 0
@@ -203,7 +226,9 @@ function findCategoryName(id: string, rows = categoryTree.value): string {
 }
 
 function handleEdit(row: CategoryRecord) {
+  if (operationBusy.value) return
   form.id = row.id
+  form.clientRequestId = ''
   form.name = row.name
   form.parentId = row.parentId || '0'
   form.sortOrder = Number(row.sortOrder || 0)
@@ -216,7 +241,7 @@ function handleEdit(row: CategoryRecord) {
 
 async function handleDelete(row: CategoryRecord) {
   const id = String(row.id)
-  if (deleteBusyIds.has(id)) return
+  if (operationBusy.value || deleteBusyIds.has(id)) return
   if ((row.children || []).length > 0) {
     ElMessage.warning('请先删除或移动子分类')
     return
@@ -235,7 +260,7 @@ async function handleDelete(row: CategoryRecord) {
 }
 
 async function handleUploadIcon(options: any) {
-  if (uploading.value || submitting.value) return
+  if (operationBusy.value) return
   uploading.value = true
   try {
     const res = await uploadApi.uploadImage(options.file, 'category-icon')
@@ -280,10 +305,15 @@ async function handleSubmit() {
         ...form.complianceConfig,
         requiredComplianceFields: [...form.complianceConfig.requiredComplianceFields],
       },
+      ...(!form.id ? { clientRequestId: form.clientRequestId } : {}),
     }
 
-    if (form.id) await categoryApi.update(form.id, payload)
-    else await categoryApi.create(payload)
+    if (form.id) {
+      await categoryApi.update(form.id, payload)
+    } else {
+      if (!form.clientRequestId) throw new Error('分类创建请求标识缺失，请重新打开新增窗口')
+      await categoryApi.create(payload)
+    }
     ElMessage.success('保存成功')
     dialogVisible.value = false
     await fetchTree()

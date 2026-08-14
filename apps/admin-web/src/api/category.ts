@@ -16,6 +16,7 @@ export interface CategoryPayload {
   icon?: string
   isShow?: 0 | 1
   complianceConfig?: CategoryComplianceConfig
+  clientRequestId?: string
 }
 
 export interface CategoryRecord extends CategoryPayload {
