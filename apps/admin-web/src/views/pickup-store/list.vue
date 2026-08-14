@@ -269,7 +269,7 @@ async function handleSubmit() {
 }
 
 async function handleToggleStatus(row: any) {
-  const id = rowKey(row)
+  const id = String(row.id)
   if (!id || submitting.value || actionBusyIds.has(id)) return
   const previousStatus = Number(row.status) === 1 ? 1 : 0
   const newStatus = previousStatus === 1 ? 0 : 1
@@ -289,7 +289,7 @@ async function handleToggleStatus(row: any) {
 }
 
 async function handleDelete(row: any) {
-  const id = rowKey(row)
+  const id = String(row.id)
   if (!id || submitting.value || actionBusyIds.has(id)) return
   actionBusyIds.add(id)
   try {
