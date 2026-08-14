@@ -19,6 +19,16 @@ vi.mock('@/api/address', () => ({
   setDefaultAddress: vi.fn(),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function address(id: string, isDefault = false) {
   return {
     id,
@@ -80,6 +90,32 @@ describe('收货地址列表核心操作', () => {
     expect((wrapper.vm as any).addresses[0].isDefault).toBe(true)
   })
 
+  it('设置默认地址未完成时重复操作只发送一次写请求', async () => {
+    const pending = deferred<any>()
+    vi.mocked(getAddressList).mockResolvedValue([address('1', false), address('2', true)] as any)
+    vi.mocked(setDefaultAddress).mockImplementationOnce(() => pending.promise)
+    ;(globalThis as any).getCurrentPages = vi.fn(() => [{}])
+
+    const wrapper = mount(AddressListPage, { global: { stubs: { Empty: true } } })
+    lifecycle.onLoadCallbacks.at(-1)?.({})
+    lifecycle.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    const first = vm.setDefault(vm.addresses[0])
+    const second = vm.setDefault(vm.addresses[0])
+
+    expect(vm.actionBusy).toBe(true)
+    expect(setDefaultAddress).toHaveBeenCalledTimes(1)
+
+    pending.resolve({})
+    await Promise.all([first, second])
+    await flushPromises()
+
+    expect(setDefaultAddress).toHaveBeenCalledTimes(1)
+    expect(vm.actionBusy).toBe(false)
+  })
+
   it('确认删除后只调用一次删除接口，并由刷新结果决定新的默认地址', async () => {
     vi.mocked(getAddressList)
       .mockResolvedValueOnce([address('1', true), address('2', false)] as any)
@@ -99,6 +135,40 @@ describe('收货地址列表核心操作', () => {
     expect(deleteAddress).toHaveBeenCalledTimes(1)
     expect(deleteAddress).toHaveBeenCalledWith('1')
     expect((wrapper.vm as any).addresses).toEqual([expect.objectContaining({ id: '2', isDefault: true })])
+  })
+
+  it('删除确认框打开期间阻止第二次删除和设置默认', async () => {
+    vi.mocked(getAddressList)
+      .mockResolvedValueOnce([address('1', false), address('2', true)] as any)
+      .mockResolvedValueOnce([address('2', true)] as any)
+    vi.mocked(deleteAddress).mockResolvedValue({} as any)
+    let modalOptions: any
+    ;(globalThis as any).getCurrentPages = vi.fn(() => [{}])
+    ;(globalThis as any).uni.showModal = vi.fn((options: any) => { modalOptions = options })
+
+    const wrapper = mount(AddressListPage, { global: { stubs: { Empty: true } } })
+    lifecycle.onLoadCallbacks.at(-1)?.({})
+    lifecycle.onShowCallbacks.at(-1)?.()
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    const target = vm.addresses[0]
+    const firstDelete = vm.deleteAddress(target)
+    const secondDelete = vm.deleteAddress(target)
+    const setDefaultDuringDelete = vm.setDefault(target)
+
+    expect(vm.actionBusy).toBe(true)
+    expect((globalThis as any).uni.showModal).toHaveBeenCalledTimes(1)
+    expect(deleteAddress).not.toHaveBeenCalled()
+    expect(setDefaultAddress).not.toHaveBeenCalled()
+
+    modalOptions.success?.({ confirm: true })
+    await Promise.all([firstDelete, secondDelete, setDefaultDuringDelete])
+    await flushPromises()
+
+    expect(deleteAddress).toHaveBeenCalledTimes(1)
+    expect(setDefaultAddress).not.toHaveBeenCalled()
+    expect(vm.actionBusy).toBe(false)
   })
 
   it('地址接口失败时显示加载失败，而不是把异常伪装成空地址', async () => {
