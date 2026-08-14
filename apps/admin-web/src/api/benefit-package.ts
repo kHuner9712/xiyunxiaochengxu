@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 export const benefitPackageApi = {
   getList(params: {
@@ -13,16 +14,24 @@ export const benefitPackageApi = {
     return request.get(`/admin/benefit-package/detail/${encodeURIComponent(id)}`)
   },
   create(data: any) {
-    return request.post('/admin/benefit-package/create', data)
+    return runSingleFlight('admin:benefit-package:create', () =>
+      request.post('/admin/benefit-package/create', data),
+    )
   },
   update(id: string, data: any) {
-    return request.put(`/admin/benefit-package/update/${encodeURIComponent(id)}`, data)
+    return runSingleFlight(`admin:benefit-package:update:${id}`, () =>
+      request.put(`/admin/benefit-package/update/${encodeURIComponent(id)}`, data),
+    )
   },
   updateStatus(id: string, status: number) {
-    return request.put(`/admin/benefit-package/status/${encodeURIComponent(id)}`, { status })
+    return runSingleFlight(`admin:benefit-package:status:${id}`, () =>
+      request.put(`/admin/benefit-package/status/${encodeURIComponent(id)}`, { status }),
+    )
   },
   remove(id: string) {
-    return request.delete(`/admin/benefit-package/delete/${encodeURIComponent(id)}`)
+    return runSingleFlight(`admin:benefit-package:delete:${id}`, () =>
+      request.delete(`/admin/benefit-package/delete/${encodeURIComponent(id)}`),
+    )
   },
   getUserPackages(params: any) {
     return request.get('/admin/benefit-package/user-packages', { params })
