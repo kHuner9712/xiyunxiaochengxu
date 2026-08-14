@@ -37,7 +37,7 @@
           </view>
         </view>
         <view class="order-footer">
-          <text class="order-count">共{{ order.items.length }}件商品</text>
+          <text class="order-count">共{{ getOrderItemCount(order) }}件商品</text>
           <view class="order-total">
             <text class="total-label">合计</text>
             <text class="total-price">¥{{ formatPrice(order.payAmount) }}</text>
@@ -218,6 +218,13 @@ function handleAftersale(order: OrderItem) {
   uni.navigateTo({ url: `/pages/order/detail?id=${order.id}&selectAftersale=1` })
 }
 
+function getOrderItemCount(order: OrderItem) {
+  return (order.items || []).reduce((total, item) => {
+    const quantity = Number(item.quantity)
+    return total + (Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 0)
+  }, 0)
+}
+
 function getStatusClass(status: string): string {
   const map: Record<string, string> = {
     pending_payment: 'status-unpaid',
@@ -315,6 +322,7 @@ defineExpose({
   loading,
   orderActionBusy,
   isOrderActionBusy,
+  getOrderItemCount,
   handleCancel,
   handlePay,
   handleConfirm,
