@@ -28,7 +28,14 @@
           <template #default="{ row }">
             <el-button v-permission="'marketing:recommendation'" type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button v-permission="'marketing:recommendation'" type="primary" link @click="handleManageItems(row)">管理推荐项</el-button>
-            <el-button v-permission="'marketing:recommendation'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-permission="'marketing:recommendation'"
+              type="danger"
+              link
+              :loading="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id))"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -61,7 +68,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
@@ -74,7 +81,7 @@
         style="margin-bottom: 12px"
       />
       <div style="margin-bottom: 12px">
-        <el-button type="primary" size="small" @click="openCandidateDialog">添加推荐项</el-button>
+        <el-button type="primary" size="small" :disabled="savingItems" @click="openCandidateDialog">添加推荐项</el-button>
       </div>
       <el-table :data="items" stripe size="small" row-key="targetId">
         <el-table-column prop="targetName" label="名称" min-width="220" show-overflow-tooltip />
@@ -86,12 +93,12 @@
         </el-table-column>
         <el-table-column label="操作" width="90">
           <template #default="{ $index }">
-            <el-button type="danger" link @click="items.splice($index, 1)">移除</el-button>
+            <el-button type="danger" link :disabled="savingItems" @click="items.splice($index, 1)">移除</el-button>
           </template>
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button @click="itemDialogVisible = false">取消</el-button>
+        <el-button :disabled="savingItems" @click="itemDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingItems" @click="handleSaveItems">保存</el-button>
       </template>
     </el-dialog>
@@ -139,6 +146,7 @@
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 import { formatDate, formatPrice } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
 
@@ -161,6 +169,9 @@ const formRef = ref<FormInstance>()
 const currentId = ref('')
 const currentName = ref('')
 const currentType = ref(1)
+const deleteBusyIds = reactive(new Set<string>())
+let manageLoadSeq = 0
+let candidateLoadSeq = 0
 
 const form = reactive({
   id: '' as string,
@@ -212,22 +223,30 @@ function handleEdit(row: any) {
 }
 
 async function handleDelete(row: any) {
+  const id = String(row.id || '')
+  if (!POSITIVE_ID.test(id) || deleteBusyIds.has(id)) return
+  deleteBusyIds.add(id)
   try {
     await ElMessageBox.confirm('确定删除该推荐位吗？', '提示', { type: 'warning' })
-    await request.delete(`/admin/recommendation/delete/${String(row.id)}`)
+    await runSingleFlight(`admin:recommendation:delete:${id}`, () =>
+      request.delete(`/admin/recommendation/delete/${id}`),
+    )
     ElMessage.success('删除成功')
     await fetchList()
   } catch (e: any) {
     if (e !== 'cancel' && e !== 'close' && e?.message) ElMessage.error(e.message)
+  } finally {
+    deleteBusyIds.delete(id)
   }
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+
     const payload = {
       name: form.name.trim(),
       code: form.code.trim(),
@@ -235,8 +254,15 @@ async function handleSubmit() {
       sort: form.sort,
       status: form.status,
     }
-    if (form.id) await request.put(`/admin/recommendation/update/${form.id}`, payload)
-    else await request.post('/admin/recommendation/create', payload)
+    if (form.id) {
+      await runSingleFlight(`admin:recommendation:update:${form.id}`, () =>
+        request.put(`/admin/recommendation/update/${form.id}`, payload),
+      )
+    } else {
+      await runSingleFlight('admin:recommendation:create', () =>
+        request.post('/admin/recommendation/create', payload),
+      )
+    }
     ElMessage.success('保存成功')
     dialogVisible.value = false
     await fetchList()
@@ -253,21 +279,25 @@ async function handleManageItems(row: any) {
     ElMessage.error('推荐位ID无效，请刷新页面后重试')
     return
   }
-  currentId.value = id
-  currentName.value = row.name || ''
-  currentType.value = Number(row.type || 1)
+  const requestSeq = ++manageLoadSeq
+  candidateLoadSeq += 1
+  candidateLoading.value = false
   try {
     const res = await request.get(`/admin/recommendation/items/${id}`)
+    if (requestSeq !== manageLoadSeq) return
+    currentId.value = id
+    currentName.value = row.name || ''
+    currentType.value = Number(row.type || 1)
     items.value = asArray(res.data).map((item: any) => ({
       targetId: String(item.targetId || ''),
       targetName: String(item.targetName || ''),
       sort: Number(item.sort || 0),
     })).filter((item) => POSITIVE_ID.test(item.targetId))
   } catch (e: any) {
-    ElMessage.error(e?.message || '加载推荐项失败')
+    if (requestSeq === manageLoadSeq) ElMessage.error(e?.message || '加载推荐项失败')
     return
   }
-  itemDialogVisible.value = true
+  if (requestSeq === manageLoadSeq) itemDialogVisible.value = true
 }
 
 async function openCandidateDialog() {
@@ -278,20 +308,30 @@ async function openCandidateDialog() {
 }
 
 async function fetchCandidates() {
-  if (!currentId.value) return
+  const recommendationId = currentId.value
+  if (!recommendationId) return
+  const keyword = candidateKeyword.value.trim()
+  const requestSeq = ++candidateLoadSeq
   candidateLoading.value = true
   try {
-    const res = await request.get(`/admin/recommendation/candidates/${currentId.value}`, {
-      params: { page: 1, pageSize: 100, keyword: candidateKeyword.value.trim() || undefined },
+    const res = await request.get(`/admin/recommendation/candidates/${recommendationId}`, {
+      params: { page: 1, pageSize: 100, keyword: keyword || undefined },
     })
+    if (
+      requestSeq !== candidateLoadSeq ||
+      recommendationId !== currentId.value ||
+      keyword !== candidateKeyword.value.trim()
+    ) return
     candidateRows.value = asArray(res.data)
     candidateTotal.value = paginationTotal(res.data)
   } catch (e: any) {
-    candidateRows.value = []
-    candidateTotal.value = 0
-    ElMessage.error(e?.message || '加载候选目标失败')
+    if (requestSeq === candidateLoadSeq) {
+      candidateRows.value = []
+      candidateTotal.value = 0
+      ElMessage.error(e?.message || '加载候选目标失败')
+    }
   } finally {
-    candidateLoading.value = false
+    if (requestSeq === candidateLoadSeq) candidateLoading.value = false
   }
 }
 
@@ -323,7 +363,8 @@ function confirmCandidateSelection() {
 }
 
 async function handleSaveItems() {
-  if (!currentId.value) return
+  if (savingItems.value || !currentId.value) return
+  const recommendationId = currentId.value
   const payload = items.value.map((item) => ({
     targetId: item.targetId,
     sort: Number(item.sort),
@@ -334,7 +375,10 @@ async function handleSaveItems() {
   }
   savingItems.value = true
   try {
-    const res = await request.put(`/admin/recommendation/items/${currentId.value}`, { items: payload })
+    const res = await runSingleFlight(`admin:recommendation:items:${recommendationId}`, () =>
+      request.put(`/admin/recommendation/items/${recommendationId}`, { items: payload }),
+    )
+    if (recommendationId !== currentId.value) return
     items.value = asArray(res.data).map((item: any) => ({
       targetId: String(item.targetId || ''),
       targetName: String(item.targetName || ''),
