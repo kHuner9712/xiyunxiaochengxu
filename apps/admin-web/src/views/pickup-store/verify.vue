@@ -92,6 +92,7 @@ const previewedPickupCode = ref('')
 const previewing = ref(false)
 const verifying = ref(false)
 const preview = ref<PickupOrderPreview | null>(null)
+let previewSeq = 0
 
 function handleCodeInput(value: string) {
   if (verifying.value) return
@@ -100,6 +101,8 @@ function handleCodeInput(value: string) {
   if (previewedPickupCode.value && normalized !== previewedPickupCode.value) {
     resetPreview()
   }
+  previewSeq += 1
+  if (previewing.value) previewing.value = false
 }
 
 async function handlePreview() {
@@ -110,11 +113,13 @@ async function handlePreview() {
     return
   }
 
+  const requestSeq = ++previewSeq
   pickupCode.value = code
   previewing.value = true
   resetPreview(true)
   try {
     const res = await pickupStoreApi.previewPickupCode(code)
+    if (requestSeq !== previewSeq || pickupCode.value.trim() !== code) return
     const data = (res.data || res) as PickupOrderPreview
     if (String(data.pickupCode || '') !== code) {
       throw new Error('自提码查询结果不一致，请重新查询')
@@ -122,10 +127,11 @@ async function handlePreview() {
     preview.value = data
     previewedPickupCode.value = code
   } catch (e: any) {
+    if (requestSeq !== previewSeq) return
     const msg = e?.response?.data?.message || e?.message || '查询失败'
     ElMessage.error(msg)
   } finally {
-    previewing.value = false
+    if (requestSeq === previewSeq) previewing.value = false
   }
 }
 
