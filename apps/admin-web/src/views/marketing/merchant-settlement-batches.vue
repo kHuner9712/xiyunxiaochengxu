@@ -29,6 +29,9 @@
         <el-alert type="info" :closable="false" style="margin-top: 8px">
           批次仅包含 status=pending/confirmed、occurredAt 在周期内、且未被其他未取消批次包含的记录。批次状态流转：草稿 → 已确认 → 已付款（已付款不可取消）。
         </el-alert>
+        <el-alert type="warning" :closable="false" style="margin-top: 8px">
+          “标记已付款”只记录外部/线下付款已经完成，不会由系统自动向商家发起打款。请确认款项实际支付成功后再操作。
+        </el-alert>
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
@@ -62,20 +65,26 @@
         </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="viewDetail(row)">详情</el-button>
+            <el-button link type="primary" size="small" :disabled="!!actionBusy" @click="viewDetail(row)">详情</el-button>
             <el-button
               v-if="row.status === 'draft'"
               link type="success" size="small"
+              :loading="actionBusy === `confirm:${row.id}`"
+              :disabled="!!actionBusy"
               @click="confirmBatch(row)"
             >确认</el-button>
             <el-button
               v-if="row.status === 'confirmed'"
               link type="warning" size="small"
+              :loading="actionBusy === `paid:${row.id}`"
+              :disabled="!!actionBusy"
               @click="markPaid(row)"
             >标记已付款</el-button>
             <el-button
               v-if="row.status === 'draft' || row.status === 'confirmed'"
               link type="danger" size="small"
+              :loading="actionBusy === `cancel:${row.id}`"
+              :disabled="!!actionBusy"
               @click="cancelBatch(row)"
             >取消</el-button>
           </template>
@@ -96,8 +105,8 @@
     </div>
 
     <!-- 创建批次对话框 -->
-    <el-dialog v-model="createDialogVisible" title="创建结算批次" width="560px">
-      <el-form :model="createForm" label-width="120px">
+    <el-dialog v-model="createDialogVisible" title="创建结算批次" width="560px" :close-on-click-modal="!creating">
+      <el-form :model="createForm" label-width="120px" :disabled="previewing || creating">
         <el-form-item label="商家推广来源ID">
           <el-input v-model="createForm.merchantPromotionSourceId" placeholder="留空表示全部商家" />
         </el-form-item>
@@ -114,7 +123,7 @@
           <el-input v-model="createForm.remark" type="textarea" :rows="2" />
         </el-form-item>
         <el-form-item>
-          <el-button @click="previewBatch">预览可结算记录</el-button>
+          <el-button :loading="previewing" :disabled="creating" @click="previewBatch">预览可结算记录</el-button>
         </el-form-item>
       </el-form>
       <el-card v-if="previewResult" shadow="never" style="margin-top: 12px">
@@ -123,8 +132,13 @@
         <div>应结合计：¥{{ formatPrice(previewResult.totalCommissionAmount) }}</div>
       </el-card>
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate" :disabled="!previewResult || previewResult.recordCount === 0">生成批次</el-button>
+        <el-button :disabled="creating" @click="createDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="creating"
+          :disabled="!isPreviewCurrent() || previewResult?.recordCount === 0 || previewing || creating"
+          @click="handleCreate"
+        >生成批次</el-button>
       </template>
     </el-dialog>
 
@@ -177,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { merchantSettlementApi } from '@/api/merchant-settlement'
 import { formatPrice, formatDate } from '@/utils/format'
@@ -189,7 +203,11 @@ const total = ref(0)
 const createDialogVisible = ref(false)
 const detailVisible = ref(false)
 const previewResult = ref<any>(null)
+const previewFingerprint = ref('')
 const detailData = ref<any>(null)
+const previewing = ref(false)
+const creating = ref(false)
+const actionBusy = ref<string | null>(null)
 
 const searchForm = reactive({
   page: 1,
@@ -213,6 +231,38 @@ function statusText(s: string) {
 function statusTagType(s: string): any {
   return { draft: 'info', confirmed: 'primary', paid: 'success', cancelled: 'warning' }[s] || ''
 }
+
+function createSelectionFingerprint() {
+  const periodStart = createForm.periodStart instanceof Date
+    ? createForm.periodStart.toISOString()
+    : String(createForm.periodStart || '')
+  const periodEnd = createForm.periodEnd instanceof Date
+    ? createForm.periodEnd.toISOString()
+    : String(createForm.periodEnd || '')
+  return JSON.stringify({
+    merchantPromotionSourceId: String(createForm.merchantPromotionSourceId || '').trim(),
+    pickupStoreId: String(createForm.pickupStoreId || '').trim(),
+    periodStart,
+    periodEnd,
+  })
+}
+
+function isPreviewCurrent() {
+  return !!previewResult.value && !!previewFingerprint.value && previewFingerprint.value === createSelectionFingerprint()
+}
+
+watch(
+  () => [
+    createForm.merchantPromotionSourceId,
+    createForm.pickupStoreId,
+    createForm.periodStart instanceof Date ? createForm.periodStart.getTime() : createForm.periodStart,
+    createForm.periodEnd instanceof Date ? createForm.periodEnd.getTime() : createForm.periodEnd,
+  ],
+  () => {
+    previewResult.value = null
+    previewFingerprint.value = ''
+  },
+)
 
 async function loadList() {
   loading.value = true
@@ -243,6 +293,7 @@ function resetSearch() {
 }
 
 function openCreateDialog() {
+  if (creating.value) return
   Object.assign(createForm, {
     merchantPromotionSourceId: '',
     pickupStoreId: '',
@@ -251,31 +302,57 @@ function openCreateDialog() {
     remark: '',
   })
   previewResult.value = null
+  previewFingerprint.value = ''
   createDialogVisible.value = true
 }
 
 async function previewBatch() {
+  if (previewing.value || creating.value) return
   if (!createForm.periodStart || !createForm.periodEnd) {
     ElMessage.warning('请选择周期')
     return
   }
+
+  const requestedFingerprint = createSelectionFingerprint()
+  previewing.value = true
   try {
     const res: any = await merchantSettlementApi.previewBatch({
       ...createForm,
       periodStart: createForm.periodStart.toISOString(),
       periodEnd: createForm.periodEnd.toISOString(),
     })
+    if (requestedFingerprint !== createSelectionFingerprint()) {
+      previewResult.value = null
+      previewFingerprint.value = ''
+      return
+    }
     previewResult.value = res.data
+    previewFingerprint.value = requestedFingerprint
     if (res.data.recordCount === 0) {
       ElMessage.info('所选范围内无可结算记录')
     }
   } catch (e) {
-    // 已处理
+    previewResult.value = null
+    previewFingerprint.value = ''
+  } finally {
+    previewing.value = false
   }
 }
 
 async function handleCreate() {
+  if (creating.value || previewing.value) return
+  if (!isPreviewCurrent() || !previewResult.value?.recordCount) {
+    ElMessage.warning('结算范围已变化，请重新预览后再生成批次')
+    return
+  }
+
+  const expectedFingerprint = previewFingerprint.value
+  creating.value = true
   try {
+    if (expectedFingerprint !== createSelectionFingerprint()) {
+      ElMessage.warning('结算范围已变化，请重新预览后再生成批次')
+      return
+    }
     await merchantSettlementApi.createBatch({
       ...createForm,
       periodStart: createForm.periodStart.toISOString(),
@@ -283,13 +360,18 @@ async function handleCreate() {
     })
     ElMessage.success('批次已创建')
     createDialogVisible.value = false
-    loadList()
+    previewResult.value = null
+    previewFingerprint.value = ''
+    await loadList()
   } catch (e) {
     // 已处理
+  } finally {
+    creating.value = false
   }
 }
 
 async function viewDetail(row: any) {
+  if (actionBusy.value) return
   try {
     const res: any = await merchantSettlementApi.getBatchDetail(row.id)
     detailData.value = res.data
@@ -300,35 +382,51 @@ async function viewDetail(row: any) {
 }
 
 async function confirmBatch(row: any) {
+  if (actionBusy.value) return
+  actionBusy.value = `confirm:${row.id}`
   try {
     await ElMessageBox.confirm(`确认批次「${row.settlementNo}」吗？确认后关联记录将升格为已确认`, '提示', { type: 'warning' })
     await merchantSettlementApi.confirmBatch(row.id)
     ElMessage.success('已确认')
-    loadList()
+    await loadList()
   } catch (e) {
     // 已处理
+  } finally {
+    actionBusy.value = null
   }
 }
 
 async function markPaid(row: any) {
+  if (actionBusy.value) return
+  actionBusy.value = `paid:${row.id}`
   try {
-    await ElMessageBox.confirm(`确认批次「${row.settlementNo}」已付款吗？此操作不可撤销`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(
+      `确认批次「${row.settlementNo}」的外部/线下款项已经实际支付成功吗？此按钮不会发起打款，只会将账本标记为已付款，且操作不可撤销。`,
+      '确认已实际付款',
+      { type: 'warning', confirmButtonText: '确认已付款' },
+    )
     await merchantSettlementApi.markBatchPaid(row.id)
     ElMessage.success('已标记付款')
-    loadList()
+    await loadList()
   } catch (e) {
     // 已处理
+  } finally {
+    actionBusy.value = null
   }
 }
 
 async function cancelBatch(row: any) {
+  if (actionBusy.value) return
+  actionBusy.value = `cancel:${row.id}`
   try {
     await ElMessageBox.confirm(`确认取消批次「${row.settlementNo}」吗？`, '提示', { type: 'warning' })
     await merchantSettlementApi.cancelBatch(row.id)
     ElMessage.success('已取消')
-    loadList()
+    await loadList()
   } catch (e) {
     // 已处理
+  } finally {
+    actionBusy.value = null
   }
 }
 
