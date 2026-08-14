@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 export const pickupStoreApi = {
   getList(params: { page: number; pageSize: number; keyword?: string; status?: number }) {
@@ -8,19 +9,27 @@ export const pickupStoreApi = {
     return request.get(`/admin/pickup-store/${encodeURIComponent(id)}`)
   },
   create(data: any) {
-    return request.post('/admin/pickup-store', data)
+    return runSingleFlight('admin:pickup-store:create', () => request.post('/admin/pickup-store', data))
   },
   update(id: string, data: any) {
-    return request.put(`/admin/pickup-store/${encodeURIComponent(id)}`, data)
+    return runSingleFlight(`admin:pickup-store:update:${id}`, () =>
+      request.put(`/admin/pickup-store/${encodeURIComponent(id)}`, data),
+    )
   },
   delete(id: string) {
-    return request.delete(`/admin/pickup-store/${encodeURIComponent(id)}`)
+    return runSingleFlight(`admin:pickup-store:delete:${id}`, () =>
+      request.delete(`/admin/pickup-store/${encodeURIComponent(id)}`),
+    )
   },
   updateStatus(id: string, status: number) {
-    return request.put(`/admin/pickup-store/${encodeURIComponent(id)}/status`, { status })
+    return runSingleFlight(`admin:pickup-store:status:${id}`, () =>
+      request.put(`/admin/pickup-store/${encodeURIComponent(id)}/status`, { status }),
+    )
   },
   verifyPickupCode(pickupCode: string) {
-    return request.post('/admin/pickup-store/verify', { pickupCode })
+    return runSingleFlight(`admin:pickup-store:verify:${pickupCode}`, () =>
+      request.post('/admin/pickup-store/verify', { pickupCode }),
+    )
   },
   previewPickupCode(pickupCode: string) {
     return request.get('/admin/pickup-store/preview', { params: { pickupCode } })
