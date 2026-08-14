@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { StateSafeProductionMerchantSettlementService } from './state-safe-production-merchant-settlement.service';
 
 describe('StateSafeProductionMerchantSettlementService batch locking', () => {
@@ -17,19 +16,39 @@ describe('StateSafeProductionMerchantSettlementService batch locking', () => {
       orderId: 100n,
       verificationLogId: null,
     };
+    const batch = {
+      id: 20n,
+      settlementNo: 'SETTLE-TEST',
+      merchantPromotionSourceId: 42n,
+      pickupStoreId: 9n,
+      periodStart: new Date('2026-07-01T00:00:00.000Z'),
+      periodEnd: new Date('2026-09-01T00:00:00.000Z'),
+      recordCount: 1,
+      totalSourceAmount: 10000,
+      totalCommissionAmount: 1000,
+      status: 'draft',
+      remark: null,
+    };
     const tx: any = {
       $queryRaw: jest.fn().mockResolvedValue([{ id: 1n }]),
       merchantCommissionRecord: {
         findMany: jest.fn().mockResolvedValue([record]),
       },
       merchantSettlementItem: {
-        findUnique: jest.fn().mockResolvedValue({
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({
           id: 10n,
           batchId: 20n,
           commissionRecordId: 1n,
           amount: 1000,
           status: 'included',
         }),
+      },
+      merchantSettlementBatch: {
+        create: jest.fn().mockResolvedValue(batch),
+      },
+      businessEvent: {
+        create: jest.fn().mockResolvedValue({ id: 30n }),
       },
     };
     const prisma: any = {
@@ -44,7 +63,7 @@ describe('StateSafeProductionMerchantSettlementService batch locking', () => {
         periodStart: '2026-07-01T00:00:00.000Z',
         periodEnd: '2026-09-01T00:00:00.000Z',
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toEqual(batch);
 
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(tx.merchantCommissionRecord.findMany).toHaveBeenCalledWith({
@@ -62,5 +81,13 @@ describe('StateSafeProductionMerchantSettlementService batch locking', () => {
     expect(sqlText).toContain('merchant_commission_records');
     expect(sqlText).toContain('FOR UPDATE');
     expect(sqlText).toContain('commission_amount > 0');
+    expect(tx.merchantSettlementItem.create).toHaveBeenCalledWith({
+      data: {
+        batchId: 20n,
+        commissionRecordId: 1n,
+        amount: 1000,
+        status: 'included',
+      },
+    });
   });
 });
