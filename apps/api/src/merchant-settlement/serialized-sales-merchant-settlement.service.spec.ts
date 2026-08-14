@@ -7,8 +7,24 @@ function createHarness(options?: {
   acquired?: boolean;
   existing?: { id: bigint } | null;
   sourceCode?: string | null;
+  merchantId?: bigint;
 }) {
+  const merchantId = options?.merchantId ?? 42n;
+  const tx: any = {
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    merchantCommissionRecord: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    merchantSettlementItem: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+  };
   const prisma: any = {
+    merchantPromotionSource: {
+      findFirst: jest.fn().mockResolvedValue({ id: merchantId }),
+    },
     merchantCommissionRecord: {
       findFirst: jest.fn().mockResolvedValue(options?.existing ?? null),
     },
@@ -18,6 +34,8 @@ function createHarness(options?: {
         sourceCode: options?.sourceCode === undefined ? 'MERCHANT-001' : options.sourceCode,
       }),
     },
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    $transaction: jest.fn(async (callback: any) => callback(tx)),
   };
   const redis: any = {
     setNX: jest.fn().mockResolvedValue(options?.acquired ?? true),
@@ -27,6 +45,7 @@ function createHarness(options?: {
     service: new SerializedSalesMerchantSettlementService(prisma, redis),
     prisma,
     redis,
+    tx,
   };
 }
 
@@ -35,16 +54,16 @@ describe('SerializedSalesMerchantSettlementService', () => {
     jest.restoreAllMocks();
   });
 
-  it('serializes commission creation and releases the merchant lock', async () => {
+  it('serializes commission creation by immutable merchant id and releases the lock', async () => {
     const inherited = jest
       .spyOn(ProductionMerchantSettlementService.prototype, 'generateSalesCommission')
       .mockResolvedValue(undefined);
-    const { service, redis } = createHarness();
+    const { service, redis } = createHarness({ merchantId: 42n });
 
     await service.generateSalesCommission(1n, 2n, 10000, 'merchant_referral', 'MERCHANT-001');
 
     expect(redis.setNX).toHaveBeenCalledWith(
-      expect.stringMatching(/^merchant:settlement:sales:[0-9a-f]{64}$/),
+      'merchant:settlement:sales:42',
       expect.any(String),
       120,
     );
@@ -68,20 +87,25 @@ describe('SerializedSalesMerchantSettlementService', () => {
     expect(redis.releaseLockWithLua).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the same merchant lock boundary for generation and refund reversal', async () => {
+  it('uses the same merchant-id lock boundary for generation and refund reversal', async () => {
     jest
       .spyOn(ProductionMerchantSettlementService.prototype, 'generateSalesCommission')
       .mockResolvedValue(undefined);
     const reverse = jest
       .spyOn(RefundSafeProductionMerchantSettlementService.prototype, 'reverseSalesCommissionAfterRefund')
       .mockResolvedValue({ adjusted: 1, debtCreated: 0 });
-    const { service, redis } = createHarness();
+    const { service, prisma, redis } = createHarness({ merchantId: 42n });
 
     await service.generateSalesCommission(1n, 2n, 10000, 'merchant_referral', 'MERCHANT-001');
     const generationKey = redis.setNX.mock.calls[0][0];
+
+    prisma.merchantCommissionRecord.findFirst.mockResolvedValueOnce({
+      merchantPromotionSourceId: 42n,
+    });
     await service.reverseSalesCommissionAfterRefund(1n, 7n);
     const refundKey = redis.setNX.mock.calls[1][0];
 
+    expect(generationKey).toBe('merchant:settlement:sales:42');
     expect(refundKey).toBe(generationKey);
     expect(reverse).toHaveBeenCalledWith(1n, 7n);
     expect(redis.releaseLockWithLua).toHaveBeenCalledTimes(2);
@@ -99,5 +123,37 @@ describe('SerializedSalesMerchantSettlementService', () => {
 
     expect(inherited).not.toHaveBeenCalled();
     expect(redis.releaseLockWithLua).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a commission row left pending after a crash before refund-debt consumption', async () => {
+    const { service, prisma, tx } = createHarness({ merchantId: 42n });
+    prisma.$queryRaw.mockResolvedValueOnce([{ recordId: 10n, merchantId: 42n }]);
+    tx.merchantCommissionRecord.findUnique.mockResolvedValueOnce({
+      id: 10n,
+      deletedAt: null,
+      merchantPromotionSourceId: 42n,
+      sourceType: 'sales_referral',
+      status: 'pending',
+      commissionAmount: 100,
+    });
+    tx.merchantCommissionRecord.findMany.mockResolvedValueOnce([
+      {
+        id: 20n,
+        commissionAmount: -60,
+        remark: '历史退款负债',
+      },
+    ]);
+
+    const result = await service.reconcileOutstandingSalesDebts(200);
+
+    expect(result).toEqual({ total: 1, reconciled: 1, skipped: 0, failed: 0 });
+    expect(tx.merchantCommissionRecord.update).toHaveBeenCalledWith({
+      where: { id: 20n },
+      data: expect.objectContaining({ commissionAmount: 0, status: 'settled' }),
+    });
+    expect(tx.merchantCommissionRecord.update).toHaveBeenCalledWith({
+      where: { id: 10n },
+      data: expect.objectContaining({ commissionAmount: 40 }),
+    });
   });
 });
