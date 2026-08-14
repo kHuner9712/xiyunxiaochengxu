@@ -19,6 +19,12 @@ export class AdminAdjustPointsDto {
   @Matches(POSITIVE_ID, { message: '用户ID格式无效' })
   userId!: string;
 
+  @Transform(trim)
+  @IsString()
+  @Matches(POSITIVE_ID, { message: '积分调整请求ID无效' })
+  @MaxLength(19)
+  requestId!: string;
+
   @Type(() => Number)
   @IsInt()
   @Min(0)
