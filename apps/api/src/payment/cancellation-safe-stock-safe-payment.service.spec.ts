@@ -9,6 +9,9 @@ describe('CancellationSafeStockSafePaymentService', () => {
 
   function createService(lockAcquired = true, refund?: any, terminalPayment?: any) {
     const prisma: any = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({ userId: 8n }),
+      },
       orderPayment: {
         findFirst: jest.fn().mockResolvedValue(terminalPayment ?? null),
       },
@@ -112,6 +115,45 @@ describe('CancellationSafeStockSafePaymentService', () => {
     })).rejects.toBeInstanceOf(BadRequestException);
 
     expect(baseCreateRefund).not.toHaveBeenCalled();
+  });
+
+  it('serializes refund-success core side effects per user across different orders', async () => {
+    const baseProcessRefund = jest
+      .spyOn(RecoverableProductionPaymentService.prototype, 'processWechatRefundSuccess')
+      .mockResolvedValue(undefined);
+    const { service, prisma, redis } = createService(true);
+    const refund = { id: 11n, orderId: 42n, outRefundNo: 'R42' };
+    const wechatData = { amount: { refund: 500, total: 1000 } };
+
+    await service.processWechatRefundSuccess(refund, 'WX-R42', wechatData);
+
+    expect(prisma.order.findUnique).toHaveBeenCalledWith({
+      where: { id: 42n },
+      select: { userId: true },
+    });
+    expect(redis.setNX).toHaveBeenCalledWith(
+      'user:refund-success:8',
+      expect.any(String),
+      120,
+    );
+    expect(baseProcessRefund).toHaveBeenCalledWith(refund, 'WX-R42', wechatData);
+    expect(redis.releaseLockWithLua).toHaveBeenCalled();
+  });
+
+  it('fails closed before refund-success point side effects when the user refund lock is occupied', async () => {
+    const baseProcessRefund = jest.spyOn(
+      RecoverableProductionPaymentService.prototype,
+      'processWechatRefundSuccess',
+    );
+    const { service } = createService(false);
+
+    await expect(service.processWechatRefundSuccess(
+      { id: 11n, orderId: 42n, outRefundNo: 'R42' },
+      'WX-R42',
+      { amount: { refund: 500, total: 1000 } },
+    )).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(baseProcessRefund).not.toHaveBeenCalled();
   });
 
   it('serializes group failure refund creation on the same per-order lock', async () => {
@@ -264,7 +306,7 @@ describe('CancellationSafeStockSafePaymentService', () => {
       data: expect.objectContaining({
         refundId: 'WX-R3',
         rawResponse: expect.objectContaining({ status: 'ABNORMAL' }),
-      }),
+      },
     });
     expect(processSuccess).not.toHaveBeenCalled();
     expect(result).toEqual(expect.objectContaining({
