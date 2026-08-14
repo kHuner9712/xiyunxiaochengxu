@@ -5,7 +5,7 @@
         <span>{{ isEdit ? '编辑商品' : '新增商品' }}</span>
       </template>
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="140px" style="max-width: 900px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="140px" style="max-width: 900px" :disabled="submitting">
         <el-form-item label="商品名称" prop="name">
           <el-input v-model="form.name" maxlength="100" show-word-limit />
         </el-form-item>
@@ -210,10 +210,10 @@
         <el-form-item label="服务承诺(JSON)"><el-input v-model="servicePromiseText" type="textarea" :rows="4" placeholder='例如: {"delivery":"24小时发货"}' /></el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="submitting" :disabled="pendingUploads > 0" @click="handleSubmit">
+          <el-button type="primary" :loading="submitting" :disabled="pendingUploads > 0 || submitting" @click="handleSubmit">
             {{ pendingUploads > 0 ? '文件上传中…' : '保存商品' }}
           </el-button>
-          <el-button @click="router.back()">取消</el-button>
+          <el-button :disabled="submitting" @click="router.back()">取消</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -247,6 +247,7 @@ const imageFileList = ref<any[]>([])
 const certImageFileList = ref<any[]>([])
 const currentCategoryName = ref('')
 const servicePromiseText = ref('')
+const createRequestId = ref('')
 
 const isEdit = computed(() => !!route.params.id)
 const isRegulatedType = computed(() => form.complianceType !== 'normal')
@@ -370,6 +371,17 @@ function generateSkuCode(productId?: string) {
   return `SKU-${productId || 'NEW'}-${randomPart.slice(0, 18).toUpperCase()}`
 }
 
+function createProductRequestId() {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.getRandomValues) {
+    const words = new Uint32Array(2)
+    cryptoApi.getRandomValues(words)
+    const value = (BigInt(words[0] & 0x7fffffff) << 32n) | BigInt(words[1])
+    if (value > 0n) return value.toString()
+  }
+  return (BigInt(Date.now()) * 1_000_000n + BigInt(Math.floor(Math.random() * 1_000_000))).toString()
+}
+
 function ensureSkus() {
   if (form.skuMode === 'single' && form.skus.length === 0) {
     form.skus.push({
@@ -379,6 +391,12 @@ function ensureSkus() {
       stock: form.stock,
       image: form.mainImage,
     })
+  }
+}
+
+function ensureStableSkuCodes() {
+  for (const sku of form.skus) {
+    if (!sku.skuCode) sku.skuCode = generateSkuCode(form.id)
   }
 }
 
@@ -683,6 +701,7 @@ async function handleSubmit() {
     if (!valid) return
     if (!validateSkus()) return
     if (!validateComplianceBeforeSave()) return
+    ensureStableSkuCodes()
 
     let servicePromise: any = undefined
     if (servicePromiseText.value.trim()) {
@@ -695,6 +714,7 @@ async function handleSubmit() {
     }
 
     const payload = {
+      ...(!isEdit.value ? { clientRequestId: createRequestId.value } : {}),
       name: form.name,
       categoryId: form.categoryId,
       productType: form.productType,
@@ -709,8 +729,8 @@ async function handleSubmit() {
       sortOrder: form.sortOrder,
       isRecommend: form.isRecommend,
       servicePromise,
-      skus: form.skus.map((s, _index) => ({
-        skuCode: s.skuCode || generateSkuCode(form.id),
+      skus: form.skus.map((s) => ({
+        skuCode: s.skuCode,
         specs: normalizeSpecs(s.name),
         price: priceToFen(s.price),
         originalPrice: priceToFen(s.originalPrice || s.price),
@@ -730,6 +750,7 @@ async function handleSubmit() {
       if (!form.id) return
       await productApi.update(form.id, payload)
     } else {
+      if (!createRequestId.value) throw new Error('商品创建请求标识缺失，请重新打开新增页面')
       await productApi.create(payload)
     }
 
@@ -741,6 +762,8 @@ async function handleSubmit() {
 }
 
 onMounted(async () => {
+  if (!route.params.id) createRequestId.value = createProductRequestId()
+
   const [catRes, brandRes, supplierRes] = await Promise.all([
     categoryApi.getTree(),
     brandApi.getList({ page: 1, pageSize: 100 }),

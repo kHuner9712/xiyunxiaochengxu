@@ -7,6 +7,9 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductService } from './product.service';
 
+const PRODUCT_CREATE_EVENT = 'product_create';
+const SERIALIZABLE_RETRY_LIMIT = 3;
+
 @Injectable()
 export class ProductionProductService extends ProductService {
   constructor(private readonly productionPrisma: PrismaService) {
@@ -17,80 +20,145 @@ export class ProductionProductService extends ProductService {
     const categoryId = parsePositiveBigIntId(String(dto.categoryId), '分类');
     const brandId = dto.brandId ? parsePositiveBigIntId(String(dto.brandId), '品牌') : null;
     const supplierId = dto.supplierId ? parsePositiveBigIntId(String(dto.supplierId), '供应商') : null;
+    const requestId = dto.clientRequestId?.trim() || null;
+    const fingerprint = this.createCreateRequestFingerprint(dto, categoryId, brandId, supplierId);
 
-    const productId = await this.productionPrisma.$transaction(async (tx) => {
-      await this.assertCategoryAssignable(tx, categoryId);
-      if (brandId) await this.assertBrandAssignable(tx, brandId);
-      if (supplierId) await this.assertSupplierAssignable(tx, supplierId);
+    for (let attempt = 0; attempt < SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
+      try {
+        const result = await this.productionPrisma.$transaction(
+          async (tx) => {
+            // Check the durable request fact before current category/brand/supplier state. A retry
+            // after a committed response loss must replay the original success even if catalog
+            // metadata changed afterwards.
+            if (requestId) {
+              const handled = await tx.businessEvent.findFirst({
+                where: {
+                  eventType: PRODUCT_CREATE_EVENT,
+                  bizType: 'product',
+                  bizId: requestId,
+                },
+                orderBy: { id: 'desc' },
+              });
+              if (handled) {
+                const eventPayload = this.readCreateEventPayload(handled.payload);
+                if (eventPayload.fingerprint !== fingerprint) {
+                  throw new BadRequestException('商品创建请求ID已被其他操作使用，请重新提交');
+                }
+                const replayProduct = await tx.product.findFirst({
+                  where: { id: parsePositiveBigIntId(eventPayload.productId, '商品') },
+                  select: { id: true, deletedAt: true },
+                });
+                if (!replayProduct) {
+                  throw new BadRequestException('该商品创建请求已处理，但商品记录不存在，请刷新后重试');
+                }
+                if (replayProduct.deletedAt) {
+                  throw new BadRequestException('该商品创建请求已处理，但商品已删除，请刷新商品列表');
+                }
+                return { productId: replayProduct.id, replayed: true };
+              }
+            }
 
-      const product = await tx.product.create({
-        data: {
-          name: dto.name,
-          categoryId,
-          productType: dto.productType ?? 'physical',
-          fulfillmentType: dto.fulfillmentType ?? 'delivery',
-          businessCategory: dto.businessCategory ?? 'other',
-          brandId,
-          supplierId,
-          mainImage: dto.mainImage,
-          videoUrl: dto.videoUrl,
-          images: dto.images,
-          description: dto.description,
-          attributes: dto.attributes,
-          servicePromise: dto.servicePromise,
-          recommendAgeMin: dto.recommendAgeMin,
-          recommendAgeMax: dto.recommendAgeMax,
-          isPeriodPurchase: dto.isPeriodPurchase ?? 0,
-          sortOrder: dto.sortOrder ?? 0,
-          isRecommend: dto.isRecommend ?? 0,
-          status: 3,
-          skus: {
-            create: dto.skus.map((sku) => ({
-              skuCode: sku.skuCode?.trim() || this.generateProductionCreateSkuCode(),
-              specs: sku.specs,
-              price: sku.price,
-              originalPrice: sku.originalPrice,
-              costPrice: sku.costPrice,
-              stock: sku.stock ?? 0,
-              image: sku.image,
-              weight: sku.weight,
-              barcode: sku.barcode,
-            })),
+            await this.assertCategoryAssignable(tx, categoryId);
+            if (brandId) await this.assertBrandAssignable(tx, brandId);
+            if (supplierId) await this.assertSupplierAssignable(tx, supplierId);
+
+            const product = await tx.product.create({
+              data: {
+                name: dto.name,
+                categoryId,
+                productType: dto.productType ?? 'physical',
+                fulfillmentType: dto.fulfillmentType ?? 'delivery',
+                businessCategory: dto.businessCategory ?? 'other',
+                brandId,
+                supplierId,
+                mainImage: dto.mainImage,
+                videoUrl: dto.videoUrl,
+                images: dto.images,
+                description: dto.description,
+                attributes: dto.attributes,
+                servicePromise: dto.servicePromise,
+                recommendAgeMin: dto.recommendAgeMin,
+                recommendAgeMax: dto.recommendAgeMax,
+                isPeriodPurchase: dto.isPeriodPurchase ?? 0,
+                sortOrder: dto.sortOrder ?? 0,
+                isRecommend: dto.isRecommend ?? 0,
+                status: 3,
+                skus: {
+                  create: dto.skus.map((sku) => ({
+                    skuCode: sku.skuCode?.trim() || this.generateProductionCreateSkuCode(),
+                    specs: sku.specs,
+                    price: sku.price,
+                    originalPrice: sku.originalPrice,
+                    costPrice: sku.costPrice,
+                    stock: sku.stock ?? 0,
+                    image: sku.image,
+                    weight: sku.weight,
+                    barcode: sku.barcode,
+                  })),
+                },
+              },
+              include: { skus: true },
+            });
+
+            const prices = product.skus.map((sku) => sku.price);
+            if (prices.length > 0) {
+              await tx.product.update({
+                where: { id: product.id },
+                data: {
+                  minPrice: Math.min(...prices),
+                  maxPrice: Math.max(...prices),
+                },
+              });
+            }
+
+            const initialStockLogs = product.skus
+              .filter((sku) => sku.stock > 0)
+              .map((sku) => ({
+                productId: product.id,
+                skuId: sku.id,
+                type: 2,
+                quantity: sku.stock,
+                beforeStock: 0,
+                afterStock: sku.stock,
+                reason: '商品创建初始库存',
+              }));
+            if (initialStockLogs.length > 0) {
+              await tx.productStockLog.createMany({ data: initialStockLogs });
+            }
+
+            if (requestId) {
+              // Product, SKUs, initial stock ledger and request fact commit together. A transaction
+              // retry therefore cannot leave a product without its durable idempotency marker.
+              await tx.businessEvent.create({
+                data: {
+                  eventType: PRODUCT_CREATE_EVENT,
+                  bizType: 'product',
+                  bizId: requestId,
+                  level: 'info',
+                  message: '商品创建请求已处理',
+                  payload: {
+                    productId: product.id.toString(),
+                    fingerprint,
+                  },
+                },
+              });
+            }
+
+            return { productId: product.id, replayed: false };
           },
-        },
-        include: { skus: true },
-      });
+          { isolationLevel: 'Serializable' },
+        );
 
-      const prices = product.skus.map((sku) => sku.price);
-      if (prices.length > 0) {
-        await tx.product.update({
-          where: { id: product.id },
-          data: {
-            minPrice: Math.min(...prices),
-            maxPrice: Math.max(...prices),
-          },
-        });
+        return super.findAdminById(result.productId.toString());
+      } catch (error: any) {
+        if (error?.code === 'P2034' && attempt + 1 < SERIALIZABLE_RETRY_LIMIT) {
+          continue;
+        }
+        throw error;
       }
+    }
 
-      const initialStockLogs = product.skus
-        .filter((sku) => sku.stock > 0)
-        .map((sku) => ({
-          productId: product.id,
-          skuId: sku.id,
-          type: 2,
-          quantity: sku.stock,
-          beforeStock: 0,
-          afterStock: sku.stock,
-          reason: '商品创建初始库存',
-        }));
-      if (initialStockLogs.length > 0) {
-        await tx.productStockLog.createMany({ data: initialStockLogs });
-      }
-
-      return product.id;
-    });
-
-    return super.findAdminById(productId.toString());
+    throw new Error('商品创建事务重试次数已耗尽');
   }
 
   override async update(id: string, dto: UpdateProductDto) {
@@ -301,6 +369,57 @@ export class ProductionProductService extends ProductService {
     return super.findAdminById(productId.toString());
   }
 
+  override async delete(id: string): Promise<any> {
+    const productId = parsePositiveBigIntId(id, '商品');
+    const result = await this.productionPrisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: bigint }>>`
+        SELECT id
+        FROM products
+        WHERE id = ${productId}
+        FOR UPDATE
+      `;
+      if (locked.length === 0) throw new NotFoundException('商品不存在');
+
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        include: {
+          skus: true,
+          productImages: true,
+          category: true,
+          brand: true,
+          supplier: true,
+        },
+      });
+      if (!product) throw new NotFoundException('商品不存在');
+      if (product.deletedAt) return { product, replayed: true };
+      if (product.status === 1) {
+        throw new BadRequestException('上架商品无法删除，请先下架');
+      }
+
+      const deleted = await tx.product.update({
+        where: { id: productId },
+        data: { deletedAt: new Date() },
+        include: {
+          skus: true,
+          productImages: true,
+          category: true,
+          brand: true,
+          supplier: true,
+        },
+      });
+      return { product: deleted, replayed: false };
+    });
+
+    // ProductService keeps its response serializer private; runtime access is intentional here and
+    // mirrors the existing production publish validator bridge above so delete keeps the exact
+    // established response shape while adding retry-safe locking.
+    const serializeProduct = (this as any).serializeProduct;
+    if (typeof serializeProduct !== 'function') {
+      throw new Error('ProductService serializer is unavailable');
+    }
+    return serializeProduct.call(this, result.product);
+  }
+
   private async assertCategoryAssignable(tx: Prisma.TransactionClient, categoryId: bigint) {
     const rows = await tx.$queryRaw<Array<{ id: bigint }>>`
       SELECT id
@@ -339,6 +458,75 @@ export class ProductionProductService extends ProductService {
     if (rows.length === 0) {
       throw new BadRequestException('供应商不存在或已停用，请选择合作中的供应商');
     }
+  }
+
+  private createCreateRequestFingerprint(
+    dto: CreateProductDto,
+    categoryId: bigint,
+    brandId: bigint | null,
+    supplierId: bigint | null,
+  ) {
+    const semanticPayload = {
+      name: dto.name,
+      categoryId: categoryId.toString(),
+      productType: dto.productType ?? 'physical',
+      fulfillmentType: dto.fulfillmentType ?? 'delivery',
+      businessCategory: dto.businessCategory ?? 'other',
+      brandId: brandId?.toString() ?? null,
+      supplierId: supplierId?.toString() ?? null,
+      mainImage: dto.mainImage ?? null,
+      videoUrl: dto.videoUrl ?? null,
+      images: dto.images ?? null,
+      description: dto.description ?? null,
+      attributes: dto.attributes ?? null,
+      servicePromise: dto.servicePromise ?? null,
+      recommendAgeMin: dto.recommendAgeMin ?? null,
+      recommendAgeMax: dto.recommendAgeMax ?? null,
+      isPeriodPurchase: dto.isPeriodPurchase ?? 0,
+      sortOrder: dto.sortOrder ?? 0,
+      isRecommend: dto.isRecommend ?? 0,
+      skus: dto.skus.map((sku) => ({
+        skuCode: sku.skuCode?.trim() || null,
+        specs: sku.specs ?? null,
+        price: sku.price,
+        originalPrice: sku.originalPrice ?? null,
+        costPrice: sku.costPrice ?? null,
+        stock: sku.stock ?? 0,
+        image: sku.image ?? null,
+        weight: sku.weight ?? null,
+        barcode: sku.barcode ?? null,
+      })),
+    };
+    return crypto
+      .createHash('sha256')
+      .update(this.stableStringify(semanticPayload))
+      .digest('hex');
+  }
+
+  private stableStringify(value: unknown): string {
+    if (value === undefined) return '"__undefined__"';
+    if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    }
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${this.stableStringify(record[key])}`)
+      .join(',')}}`;
+  }
+
+  private readCreateEventPayload(payload: unknown): { productId: string; fingerprint: string } {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new BadRequestException('商品创建请求记录异常，请刷新商品列表后重试');
+    }
+    const record = payload as Record<string, unknown>;
+    const productId = typeof record.productId === 'string' ? record.productId : '';
+    const fingerprint = typeof record.fingerprint === 'string' ? record.fingerprint : '';
+    if (!/^[1-9]\d*$/.test(productId) || !/^[a-f0-9]{64}$/.test(fingerprint)) {
+      throw new BadRequestException('商品创建请求记录异常，请刷新商品列表后重试');
+    }
+    return { productId, fingerprint };
   }
 
   private generateProductionCreateSkuCode() {
