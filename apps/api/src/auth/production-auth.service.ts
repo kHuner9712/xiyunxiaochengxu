@@ -139,6 +139,12 @@ export class ProductionAuthService extends AuthService {
     }
 
     const userId = user.id.toString();
+
+    // Final production providers may need to converge durable account facts before any access
+    // session is issued. Keep this hook before both Redis session state and JWT issuance so a
+    // failed convergence cannot leave a usable login behind.
+    await this.beforeIssueWeappSession(userId);
+
     const sessionRegistryKey = `wechat_session:${userId}`;
     await this.productionRedis.set(
       sessionRegistryKey,
@@ -185,6 +191,11 @@ export class ProductionAuthService extends AuthService {
     }
 
     return { token, isNewUser };
+  }
+
+  protected async beforeIssueWeappSession(_userId: string): Promise<void> {
+    // The base production service has no extra pre-session side effect. The final runtime provider
+    // overrides this hook to converge membership against the current locked member-level config.
   }
 
   private async cleanupWeappLoginKeys(sessionRegistryKey: string, accessRegistryKey: string) {

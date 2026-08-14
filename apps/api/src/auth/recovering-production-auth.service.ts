@@ -5,6 +5,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
+import { MemberService } from '../member/member.service';
 import { ProductionAuthService } from './production-auth.service';
 
 const WECHAT_ACCESS_TOKEN_CACHE_KEY = 'wechat_access_token';
@@ -19,8 +20,18 @@ export class RecoveringProductionAuthService extends ProductionAuthService {
     jwtService: JwtService,
     private readonly recoveryConfig: ConfigService,
     private readonly recoveryRedis: RedisService,
+    private readonly recoveryMemberService: MemberService,
   ) {
     super(recoveryPrisma, jwtService, recoveryConfig, recoveryRedis);
+  }
+
+  protected override async beforeIssueWeappSession(userId: string): Promise<void> {
+    // A new user may have read the previous default member level just before an admin commits a
+    // new level configuration. AtomicMemberService takes the member-level config lock before the
+    // user lock, so running this before any session/token is issued closes both orderings:
+    // - config commits first => this login observes and applies the new rules;
+    // - login converges first => the later durable config generation includes this existing user.
+    await this.recoveryMemberService.checkAndUpgradeLevel(userId);
   }
 
   override async bindPhone(

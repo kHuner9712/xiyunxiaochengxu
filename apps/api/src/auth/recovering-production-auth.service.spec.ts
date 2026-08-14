@@ -23,13 +23,17 @@ function createService() {
       WECHAT_APP_SECRET: 'wx-test-secret',
     } as Record<string, string>)[key] ?? fallback),
   };
+  const memberService: any = {
+    checkAndUpgradeLevel: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new RecoveringProductionAuthService(
     prisma,
     new JwtService({ secret: 'jwt-secret-for-access-token-32-chars' }),
     config,
     redis,
+    memberService,
   );
-  return { service, prisma, redis, store };
+  return { service, prisma, redis, store, memberService };
 }
 
 function encryptLegacyPhoneData(sessionKey: string, iv: string, payload: unknown) {
@@ -48,6 +52,14 @@ describe('RecoveringProductionAuthService', () => {
   const mockedAxios = axios as jest.Mocked<typeof axios>;
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('converges the member level through the final MemberService before session issuance', async () => {
+    const { service, memberService } = createService();
+
+    await (service as any).beforeIssueWeappSession('7');
+
+    expect(memberService.checkAndUpgradeLevel).toHaveBeenCalledWith('7');
+  });
 
   it.each([40001, 40014, 42001])('refreshes a cached access token once for WeChat token error %s', async (errcode) => {
     const { service, prisma, redis, store } = createService();

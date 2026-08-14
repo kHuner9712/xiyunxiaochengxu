@@ -8,11 +8,13 @@ import { RecoveringProductionAuthService } from './recovering-production-auth.se
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { RedisModule } from '../common/redis/redis.module';
+import { MemberModule } from '../member/member.module';
 
 @Module({
   imports: [
     PrismaModule,
     RedisModule,
+    MemberModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
