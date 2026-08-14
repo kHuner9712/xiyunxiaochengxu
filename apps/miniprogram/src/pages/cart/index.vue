@@ -24,7 +24,7 @@
       <view class="cart-summary card">
         <view>
           <text class="summary-title">购物车</text>
-          <text class="summary-subtitle">已选 {{ cartStore.checkedCount }} 件 / 共 {{ cartStore.items.length }} 件</text>
+          <text class="summary-subtitle">已选 {{ cartStore.checkedCount }} 件 / 共 {{ cartStore.totalCount }} 件</text>
         </view>
         <view class="summary-hint">
           <text class="summary-dot"></text>
@@ -233,7 +233,7 @@ defineExpose({
   padding: 0 18rpx;
   border-radius: $radius-round;
   background: $success-soft;
-  color: $success-dark;
+  color: $primary-dark;
   font-size: $font-xs;
   font-weight: 700;
 }
