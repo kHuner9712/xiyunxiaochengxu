@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
@@ -53,6 +53,15 @@ export class SnapshotTemporalRuleMerchantSettlementService extends TemporalRuleM
     snapshotTemporalRedis: RedisService,
   ) {
     super(snapshotTemporalPrisma, snapshotTemporalRedis);
+  }
+
+  override async updateRecordStatus(id: string, status: string, remark?: string) {
+    if (status === 'settled') {
+      throw new BadRequestException(
+        '分佣已结算状态只能由结算批次在确认外部付款后生成，不能手工设置',
+      );
+    }
+    return super.updateRecordStatus(id, status, remark);
   }
 
   override async generateSnapshotServiceCommissionInTransaction(
