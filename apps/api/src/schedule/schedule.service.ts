@@ -15,7 +15,7 @@ import { ProductionFlashSaleService } from '../flash-sale/production-flash-sale.
 import { GroupBuyService } from '../group-buy/group-buy.service';
 import { ProductionGroupBuyService } from '../group-buy/production-group-buy.service';
 import { MerchantSettlementService } from '../merchant-settlement/merchant-settlement.service';
-import { ProductionMerchantSettlementService } from '../merchant-settlement/production-merchant-settlement.service';
+import { SerializedSalesMerchantSettlementService } from '../merchant-settlement/serialized-sales-merchant-settlement.service';
 import { ShareService } from '../share/share.service';
 import { ProductionShareService } from '../share/production-share.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
@@ -48,7 +48,7 @@ export class ScheduleService implements OnModuleDestroy {
     @Inject(GroupBuyService)
     private readonly groupBuyService: ProductionGroupBuyService,
     @Inject(MerchantSettlementService)
-    private readonly merchantSettlementService: ProductionMerchantSettlementService,
+    private readonly merchantSettlementService: SerializedSalesMerchantSettlementService,
     @Inject(ShareService)
     private readonly shareService: ProductionShareService,
     @Inject(BenefitPackageService)
@@ -340,8 +340,11 @@ export class ScheduleService implements OnModuleDestroy {
     if (!lockValue) return;
     try {
       const result = await this.reconcileMatureSalesCommissionGaps();
-      if (result.generated > 0 || result.failed > 0) {
-        this.logger.log(`成熟订单销售分佣任务完成: ${JSON.stringify(result)}`);
+      const debt = await this.merchantSettlementService.reconcileOutstandingSalesDebts(200);
+      if (result.generated > 0 || result.failed > 0 || debt.reconciled > 0 || debt.failed > 0) {
+        this.logger.log(
+          `成熟订单销售分佣任务完成: gap=${JSON.stringify(result)}, debt=${JSON.stringify(debt)}`,
+        );
       }
     } catch (error) {
       const err = error as Error;

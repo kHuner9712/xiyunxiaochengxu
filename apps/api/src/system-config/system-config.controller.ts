@@ -2,11 +2,12 @@ import { BadRequestException, Controller, Get, Put, Body, Param } from '@nestjs/
 import { SystemConfigService } from './system-config.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
-import { IsString, IsNotEmpty, IsArray, IsIn, IsOptional, ValidateNested, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsArray, IsIn, IsOptional, ValidateNested, MaxLength, Matches } from 'class-validator';
 import { Type } from 'class-transformer';
 
 const STOREFRONT_ASSET_URL = /^(?:\/(?!\/)|https?:\/\/)/i;
 const CUSTOMER_PHONE = /^[0-9+()\-.\s]{5,40}$/;
+const CUSTOMER_PHONE_OR_EMPTY = /^(?:|[0-9+()\-.\s]{5,40})$/;
 
 class UpdateConfigDto {
   @IsString()
@@ -62,6 +63,7 @@ class CustomerServiceConfigDto {
 
   @IsString()
   @MaxLength(40)
+  @Matches(CUSTOMER_PHONE_OR_EMPTY, { message: '客服电话格式无效' })
   phone!: string;
 
   @IsString()

@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { PartialType } from '@nestjs/swagger';
 
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
@@ -8,7 +8,7 @@ export class CreateContentCategoryDto {
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
-  @MaxLength(100)
+  @MaxLength(50)
   name!: string;
 
   @IsOptional()
@@ -21,6 +21,7 @@ export class CreateContentCategoryDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(2147483647)
   sortOrder?: number;
 }
 

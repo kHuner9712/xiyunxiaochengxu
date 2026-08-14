@@ -33,10 +33,10 @@
         </el-table-column>
         <el-table-column prop="phone" label="手机号" width="130" />
         <el-table-column label="微信OpenID" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ displayWechatIdentifier(row.openidMasked, row.openid) }}</template>
+          <template #default="{ row }">{{ row.openidMasked || '-' }}</template>
         </el-table-column>
         <el-table-column label="微信UnionID" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ displayWechatIdentifier(row.unionIdMasked, row.unionId) }}</template>
+          <template #default="{ row }">{{ row.unionIdMasked || '-' }}</template>
         </el-table-column>
         <el-table-column label="会员等级" width="100">
           <template #default="{ row }">
@@ -44,9 +44,6 @@
           </template>
         </el-table-column>
         <el-table-column prop="points" label="积分" width="80" />
-        <el-table-column label="余额" width="100">
-          <template #default="{ row }">¥{{ formatPrice(row.balance) }}</template>
-        </el-table-column>
         <el-table-column label="订单数" width="80">
           <template #default="{ row }">{{ row.orderCount || 0 }}</template>
         </el-table-column>
@@ -80,7 +77,15 @@
       </div>
     </div>
 
-    <el-dialog v-model="pointsVisible" title="调整积分" width="400px" destroy-on-close>
+    <el-dialog
+      v-model="pointsVisible"
+      title="调整积分"
+      width="400px"
+      destroy-on-close
+      :close-on-click-modal="!submitting"
+      :close-on-press-escape="!submitting"
+      :show-close="!submitting"
+    >
       <el-form ref="pointsFormRef" :model="pointsForm" :rules="pointsRules" label-width="100px">
         <el-form-item label="用户">{{ pointsForm.nickname }}</el-form-item>
         <el-form-item label="当前积分">{{ pointsForm.currentPoints }}</el-form-item>
@@ -93,8 +98,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="pointsVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handlePointsSubmit">确定</el-button>
+        <el-button :disabled="submitting" @click="pointsVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handlePointsSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -127,6 +132,7 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const pointsForm = reactive({
   userId: undefined as string | undefined,
+  requestId: '',
   nickname: '',
   currentPoints: 0,
   points: 0,
@@ -142,14 +148,18 @@ function displayName(row: any) {
   return row.nickname || '微信用户'
 }
 
-function maskIdentifier(value?: string) {
-  if (!value) return ''
-  if (value.length <= 8) return `${value.slice(0, 2)}****${value.slice(-2)}`
-  return `${value.slice(0, 4)}****${value.slice(-4)}`
-}
+function createPointsRequestId() {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.getRandomValues) {
+    const words = new Uint32Array(2)
+    cryptoApi.getRandomValues(words)
+    const value = (BigInt(words[0] & 0x7fffffff) << 32n) | BigInt(words[1])
+    if (value > 0n) return value.toString()
+  }
 
-function displayWechatIdentifier(masked?: string, raw?: string) {
-  return masked || maskIdentifier(raw) || '-'
+  // Request identity is not a credential; this fallback only needs collision resistance for an
+  // administrator action when Web Crypto is unavailable. It remains inside signed BIGINT range.
+  return (BigInt(Date.now()) * 1_000_000n + BigInt(Math.floor(Math.random() * 1_000_000))).toString()
 }
 
 async function fetchList() {
@@ -187,7 +197,9 @@ function handleDetail(row: any) {
 }
 
 function handleAdjustPoints(row: any) {
+  if (submitting.value) return
   pointsForm.userId = String(row.id)
+  pointsForm.requestId = createPointsRequestId()
   pointsForm.nickname = row.nickname
   pointsForm.currentPoints = Number(row.points || 0)
   pointsForm.points = 0
@@ -196,23 +208,26 @@ function handleAdjustPoints(row: any) {
 }
 
 async function handlePointsSubmit() {
-  const valid = await pointsFormRef.value?.validate().catch(() => false)
-  if (!valid || !pointsForm.userId) return
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await pointsFormRef.value?.validate().catch(() => false)
+    if (!valid || !pointsForm.userId || !pointsForm.requestId) return
+
     await userApi.adjustPoints(
       pointsForm.userId,
       pointsForm.points,
       pointsForm.reason,
       pointsForm.currentPoints,
+      pointsForm.requestId,
     )
     ElMessage.success('调整成功')
     pointsVisible.value = false
     await fetchList()
   } catch {
-    // The first request may have committed even when its response was lost. Always refresh the
-    // authoritative balance before the administrator decides whether another adjustment is needed.
+    // A lost response can hide a committed adjustment. Keep requestId stable while this dialog
+    // remains open so an explicit retry replays the same durable backend operation rather than
+    // applying a second adjustment. Refresh the authoritative list before the next decision.
     await fetchList()
   } finally {
     submitting.value = false

@@ -130,6 +130,45 @@ describe('PointsService ownership guard', () => {
     });
   });
 
+  it('rechecks todays ledger only after the database user lock and does not award twice', async () => {
+    prisma.pointsRecord.findFirst.mockResolvedValue({ id: 88n, source: 'sign_in' });
+
+    const result = await service.signIn('100');
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.pointsRecord.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      prisma.pointsRecord.findFirst.mock.invocationCallOrder[0],
+    );
+    expect(result).toMatchObject({
+      alreadySigned: true,
+      points: 0,
+      continuous: 0,
+      consecutiveDays: 0,
+    });
+    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.pointsRecord.create).not.toHaveBeenCalled();
+    expect(redis.releaseLockWithLua).toHaveBeenCalled();
+  });
+
+  it('reads streak history through the same transaction client after locking the user', async () => {
+    prisma.pointsRecord.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 77n })
+      .mockResolvedValueOnce(null);
+    prisma.user.findFirst.mockResolvedValue({ id: 100n, availablePoints: 10, totalPoints: 20 });
+    prisma.user.update.mockResolvedValue({});
+    prisma.pointsRecord.create.mockResolvedValue({});
+
+    const result = await service.signIn('100');
+
+    expect(result).toMatchObject({ alreadySigned: false, points: 7, consecutiveDays: 2 });
+    expect(prisma.pointsRecord.findFirst).toHaveBeenCalledTimes(3);
+    expect(prisma.user.update).toHaveBeenCalledTimes(1);
+    expect(prisma.pointsRecord.create).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a concurrent duplicate sign-in before touching the database', async () => {
     redis.setNX.mockResolvedValueOnce(false);
 

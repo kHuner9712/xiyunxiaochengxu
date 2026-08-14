@@ -1,5 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
-import { AftersaleStatus } from '@prisma/client';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { AftersaleStatus, OrderStatus } from '@prisma/client';
 import { ProductionAftersaleService } from './production-aftersale.service';
 
 function paidReturnAftersale() {
@@ -22,6 +22,45 @@ function paidReturnAftersale() {
 describe('ProductionAftersaleService', () => {
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('does not create an aftersale when account cancellation wins the user-row lock race', async () => {
+    const create = jest.fn();
+    const orderUpdate = jest.fn();
+    const tx: any = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      aftersaleOrder: { create },
+      order: { update: orderUpdate },
+    };
+    const prisma: any = {
+      orderItem: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 11n,
+          orderId: 5n,
+          order: {
+            userId: 7n,
+            status: OrderStatus.completed,
+            completedAt: new Date(),
+            deliveredAt: new Date(),
+          },
+        }),
+      },
+      $transaction: jest.fn(async (callback: any) => callback(tx)),
+    };
+    const service = new ProductionAftersaleService(prisma, {} as any);
+
+    await expect(service.create('7', {
+      orderId: '5',
+      orderItemId: '11',
+      type: 1,
+      reason: '测试退款',
+      description: '测试注销竞态',
+      images: [],
+    } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(create).not.toHaveBeenCalled();
+    expect(orderUpdate).not.toHaveBeenCalled();
   });
 
   it('rejects partial-amount approval for return-and-refund aftersales', async () => {

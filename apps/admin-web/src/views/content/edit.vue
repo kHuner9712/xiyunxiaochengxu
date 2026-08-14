@@ -11,16 +11,24 @@
         </el-form-item>
 
         <el-form-item label="内容类型" prop="contentType">
-          <el-radio-group v-model="form.contentType">
+          <el-radio-group v-model="form.contentType" :disabled="uploadInProgress || submitting || cancelling">
             <el-radio value="article">文章</el-radio>
             <el-radio value="video">视频</el-radio>
           </el-radio-group>
         </el-form-item>
 
         <el-form-item label="封面图">
-          <el-upload action="" :http-request="handleUploadCover" :show-file-list="false" accept="image/*">
+          <el-upload
+            action=""
+            :http-request="handleUploadCover"
+            :show-file-list="false"
+            :disabled="uploadInProgress || submitting || cancelling"
+            accept="image/*"
+          >
             <el-image v-if="form.coverImage" :src="form.coverImage" style="width: 200px; height: 120px" fit="cover" />
-            <el-button v-else size="small">上传封面</el-button>
+            <el-button v-else size="small" :loading="isUploading('coverImage')">
+              {{ isUploading('coverImage') ? '封面上传中…' : '上传封面' }}
+            </el-button>
           </el-upload>
         </el-form-item>
 
@@ -53,7 +61,7 @@
               :http-request="handleUploadVideo"
               :show-file-list="false"
               :before-upload="validateVideoFile"
-              :disabled="videoUploading"
+              :disabled="uploadInProgress || submitting || cancelling"
               accept="video/mp4,.mp4"
             >
               <video v-if="form.videoUrl" :src="form.videoUrl" class="video-preview" controls />
@@ -62,14 +70,28 @@
               </el-button>
             </el-upload>
             <div class="video-upload-hint">仅支持 MP4，最大 50MB；上传完成后保存内容即可在小程序播放。</div>
-            <el-button v-if="form.videoUrl" type="danger" link @click="removeVideo">移除视频</el-button>
+            <el-button
+              v-if="form.videoUrl"
+              type="danger"
+              link
+              :disabled="uploadInProgress || submitting || cancelling"
+              @click="removeVideo"
+            >移除视频</el-button>
           </div>
         </el-form-item>
 
         <el-form-item v-if="form.contentType === 'video'" label="视频封面">
-          <el-upload action="" :http-request="handleUploadVideoCover" :show-file-list="false" accept="image/*">
+          <el-upload
+            action=""
+            :http-request="handleUploadVideoCover"
+            :show-file-list="false"
+            :disabled="uploadInProgress || submitting || cancelling"
+            accept="image/*"
+          >
             <el-image v-if="form.videoCover" :src="form.videoCover" style="width: 200px; height: 120px" fit="cover" />
-            <el-button v-else size="small">上传视频封面</el-button>
+            <el-button v-else size="small" :loading="isUploading('videoCover')">
+              {{ isUploading('videoCover') ? '视频封面上传中…' : '上传视频封面' }}
+            </el-button>
           </el-upload>
         </el-form-item>
 
@@ -163,8 +185,17 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
-          <el-button :disabled="submitting" @click="handleCancel">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="submitting"
+            :disabled="uploadInProgress || cancelling"
+            @click="handleSubmit"
+          >{{ uploadInProgress ? '素材上传中…' : '保存' }}</el-button>
+          <el-button
+            :loading="cancelling"
+            :disabled="submitting || uploadInProgress"
+            @click="handleCancel"
+          >取消</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -173,7 +204,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { contentApi } from '@/api/content'
 import { uploadApi } from '@/api/upload'
@@ -190,6 +221,8 @@ const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const cancelling = ref(false)
+const activeUploadField = ref<UploadField | null>(null)
 const categoriesLoading = ref(false)
 const contentCategories = ref<ContentCategoryOption[]>([])
 const videoUploading = ref(false)
@@ -201,8 +234,10 @@ const hydrating = ref(false)
 const pendingAssetIds = new Map<UploadField, string>()
 let committed = false
 let preservePendingAssetsOnUnmount = false
+let allowNavigation = false
 
 const isEdit = computed(() => !!route.params.id)
+const uploadInProgress = computed(() => activeUploadField.value !== null)
 
 const form = reactive({
   id: undefined as string | undefined,
@@ -234,6 +269,23 @@ const rules = computed<FormRules>(() => ({
     ? [{ required: true, message: '视频类型内容必须上传视频文件', trigger: 'change' }]
     : [],
 }))
+
+function isUploading(field: UploadField) {
+  return activeUploadField.value === field
+}
+
+function beginUpload(field: UploadField) {
+  if (activeUploadField.value || submitting.value || cancelling.value) {
+    ElMessage.warning('已有素材上传或保存操作进行中，请完成后再继续')
+    return false
+  }
+  activeUploadField.value = field
+  return true
+}
+
+function finishUpload(field: UploadField) {
+  if (activeUploadField.value === field) activeUploadField.value = null
+}
 
 function isPositiveBigIntId(value: unknown): boolean {
   const normalized = String(value ?? '').trim()
@@ -392,6 +444,7 @@ async function fetchDetail(id: string) {
 }
 
 async function handleUploadCover(options: any) {
+  if (!beginUpload('coverImage')) return
   try {
     const res = await uploadApi.uploadImage(options.file, 'content-cover')
     const asset = extractUploadedAsset(res)
@@ -402,10 +455,13 @@ async function handleUploadCover(options: any) {
     options.onError?.(error)
     console.error('[content-edit] cover upload failed', error)
     ElMessage.error('封面上传失败')
+  } finally {
+    finishUpload('coverImage')
   }
 }
 
 async function handleUploadVideoCover(options: any) {
+  if (!beginUpload('videoCover')) return
   try {
     const res = await uploadApi.uploadImage(options.file, 'content-video-cover')
     const asset = extractUploadedAsset(res)
@@ -416,6 +472,8 @@ async function handleUploadVideoCover(options: any) {
     options.onError?.(error)
     console.error('[content-edit] video cover upload failed', error)
     ElMessage.error('视频封面上传失败')
+  } finally {
+    finishUpload('videoCover')
   }
 }
 
@@ -452,6 +510,7 @@ function readVideoDuration(file: File): Promise<number | undefined> {
 
 async function handleUploadVideo(options: any) {
   if (!validateVideoFile(options.file)) return
+  if (!beginUpload('videoUrl')) return
   videoUploading.value = true
   videoUploadProgress.value = 0
   try {
@@ -470,10 +529,15 @@ async function handleUploadVideo(options: any) {
     ElMessage.error('视频上传失败')
   } finally {
     videoUploading.value = false
+    finishUpload('videoUrl')
   }
 }
 
 async function removeVideo() {
+  if (uploadInProgress.value || submitting.value || cancelling.value) {
+    ElMessage.warning('素材上传或保存操作进行中，请完成后再移除视频')
+    return
+  }
   const deleted = await deletePendingAsset('videoUrl', true)
   if (!deleted) {
     ElMessage.warning('视频文件清理失败，已保留当前视频，请稍后重试')
@@ -485,30 +549,36 @@ async function removeVideo() {
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
-  let relatedProductIds: string[] | null
-  try {
-    relatedProductIds = parseRelatedProductIds(form.relatedProductIdsStr)
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '关联商品ID无效')
-    return
-  }
-
-  const relatedActivityId = form.relatedActivityId.trim()
-  if (relatedActivityId && !isPositiveBigIntId(relatedActivityId)) {
-    ElMessage.error('关联活动ID必须是有效的正整数')
-    return
-  }
-  if (isEdit.value && (!form.id || !isPositiveBigIntId(form.id))) {
-    ElMessage.error('内容ID无效，请返回列表重试')
+  if (submitting.value || cancelling.value) return
+  if (uploadInProgress.value) {
+    ElMessage.warning('素材仍在上传，请等待上传完成后再保存')
     return
   }
 
   submitting.value = true
   preservePendingAssetsOnUnmount = false
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+
+    let relatedProductIds: string[] | null
+    try {
+      relatedProductIds = parseRelatedProductIds(form.relatedProductIdsStr)
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '关联商品ID无效')
+      return
+    }
+
+    const relatedActivityId = form.relatedActivityId.trim()
+    if (relatedActivityId && !isPositiveBigIntId(relatedActivityId)) {
+      ElMessage.error('关联活动ID必须是有效的正整数')
+      return
+    }
+    if (isEdit.value && (!form.id || !isPositiveBigIntId(form.id))) {
+      ElMessage.error('内容ID无效，请返回列表重试')
+      return
+    }
+
     const payload = {
       title: form.title.trim(),
       contentType: form.contentType,
@@ -535,6 +605,7 @@ async function handleSubmit() {
     }
     committed = true
     pendingAssetIds.clear()
+    allowNavigation = true
     ElMessage.success('保存成功')
     await router.push('/content/list')
   } catch (error: any) {
@@ -547,6 +618,7 @@ async function handleSubmit() {
     } else if (pendingAssetIds.size > 0) {
       preservePendingAssetsOnUnmount = true
       pendingAssetIds.clear()
+      allowNavigation = true
       ElMessage.warning('保存结果无法确认。为避免删除可能已被引用的文件，已保留上传文件，请返回列表核实')
       await router.push('/content/list')
     }
@@ -556,17 +628,37 @@ async function handleSubmit() {
 }
 
 async function handleCancel() {
-  const cleanupComplete = await cleanupPendingAssets(false)
-  if (!cleanupComplete) {
-    ElMessage.warning('部分新上传文件清理失败；将离开编辑页，并在卸载时再次尝试清理失败项')
+  if (cancelling.value || submitting.value) return
+  if (uploadInProgress.value) {
+    ElMessage.warning('素材仍在上传，请等待上传完成后再取消编辑')
+    return
   }
-  router.back()
+
+  cancelling.value = true
+  try {
+    const cleanupComplete = await cleanupPendingAssets(false)
+    if (!cleanupComplete) {
+      ElMessage.warning('部分新上传文件清理失败；将离开编辑页，并在卸载时再次尝试清理失败项')
+    }
+    allowNavigation = true
+    router.back()
+  } finally {
+    cancelling.value = false
+  }
 }
 
 watch(
   () => form.contentType,
   async (next, previous) => {
     if (hydrating.value || next === previous) return
+    if (uploadInProgress.value || submitting.value || cancelling.value) {
+      hydrating.value = true
+      form.contentType = previous
+      await nextTick()
+      hydrating.value = false
+      ElMessage.warning('素材上传或保存操作进行中，暂不能切换内容类型')
+      return
+    }
     if (next === 'article') {
       const videoDeleted = await deletePendingAsset('videoUrl', false)
       if (videoDeleted) {
@@ -605,6 +697,14 @@ onMounted(async () => {
     }
     await fetchDetail(id)
   }
+})
+
+onBeforeRouteLeave(() => {
+  if (!allowNavigation && (uploadInProgress.value || submitting.value || cancelling.value)) {
+    ElMessage.warning('素材上传或保存操作进行中，请完成后再离开页面')
+    return false
+  }
+  return true
 })
 
 onBeforeUnmount(() => {

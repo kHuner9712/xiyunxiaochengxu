@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>自提点管理</span>
-          <el-button v-permission="'pickup:store'" type="primary" @click="handleAdd">新增自提点</el-button>
+          <el-button v-permission="'pickup:store'" type="primary" :disabled="submitting" @click="handleAdd">新增自提点</el-button>
         </div>
       </template>
 
@@ -15,7 +15,7 @@
         <el-form-item label="状态">
           <el-select v-model="searchStatus" placeholder="全部" clearable @change="loadList">
             <el-option label="启用" :value="1" />
-            <el-option label="停用" :value="2" />
+            <el-option label="停用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -36,16 +36,25 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'pickup:store'" size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'pickup:store'" size="small" :disabled="isActionBusy(row) || submitting" @click="handleEdit(row)">编辑</el-button>
             <el-button
               v-permission="'pickup:store'"
               size="small"
               :type="row.status === 1 ? 'warning' : 'success'"
+              :loading="isActionBusy(row)"
+              :disabled="isActionBusy(row) || submitting"
               @click="handleToggleStatus(row)"
             >
               {{ row.status === 1 ? '停用' : '启用' }}
             </el-button>
-            <el-button v-permission="'pickup:store'" size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-permission="'pickup:store'"
+              size="small"
+              type="danger"
+              :loading="isActionBusy(row)"
+              :disabled="isActionBusy(row) || submitting"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -60,8 +69,15 @@
       />
     </el-card>
 
-    <el-dialog v-model="showDialog" :title="isEdit ? '编辑自提点' : '新增自提点'" width="600px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-dialog
+      v-model="showDialog"
+      :title="isEdit ? '编辑自提点' : '新增自提点'"
+      width="600px"
+      :close-on-click-modal="!submitting"
+      :close-on-press-escape="!submitting"
+      :show-close="!submitting"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" :disabled="submitting">
         <el-form-item label="门店名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入门店名称" />
         </el-form-item>
@@ -87,18 +103,18 @@
           <el-input v-model="form.pickupNotice" type="textarea" :rows="2" placeholder="自提注意事项" />
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="form.sortOrder" :min="0" />
+          <el-input-number v-model="form.sortOrder" :min="0" :max="2147483647" />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
             <el-radio :value="1">启用</el-radio>
-            <el-radio :value="2">停用</el-radio>
+            <el-radio :value="0">停用</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button :disabled="submitting" @click="showDialog = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -108,6 +124,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { pickupStoreApi } from '@/api/pickup-store'
+import { asArray, paginationTotal } from '@/utils/response'
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -120,6 +137,8 @@ const showDialog = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
 const formRef = ref<FormInstance>()
+const actionBusyIds = reactive(new Set<string>())
+let listLoadSeq = 0
 
 const form = reactive({
   id: undefined as string | undefined,
@@ -143,7 +162,11 @@ const rules: FormRules = {
   address: [{ required: true, message: '请输入详细地址', trigger: 'blur' }],
 }
 
+function rowKey(row: any) { return String(row?.id || '') }
+function isActionBusy(row: any) { return actionBusyIds.has(rowKey(row)) }
+
 async function loadList() {
+  const requestSeq = ++listLoadSeq
   loading.value = true
   try {
     const res = await pickupStoreApi.getList({
@@ -152,11 +175,13 @@ async function loadList() {
       keyword: searchKeyword.value || undefined,
       status: searchStatus.value,
     })
-    const data = res.data || res
-    tableData.value = data.list || []
-    total.value = data.total || 0
-  } catch {} finally {
-    loading.value = false
+    if (requestSeq !== listLoadSeq) return
+    tableData.value = asArray(res.data)
+    total.value = paginationTotal(res.data)
+  } catch (e: any) {
+    if (requestSeq === listLoadSeq) ElMessage.error(e?.message || '加载自提点列表失败')
+  } finally {
+    if (requestSeq === listLoadSeq) loading.value = false
   }
 }
 
@@ -177,6 +202,7 @@ function resetForm() {
 }
 
 function handleAdd() {
+  if (submitting.value) return
   isEdit.value = false
   resetForm()
   formRef.value?.clearValidate()
@@ -184,6 +210,7 @@ function handleAdd() {
 }
 
 function handleEdit(row: any) {
+  if (submitting.value || isActionBusy(row)) return
   isEdit.value = true
   Object.assign(form, {
     id: String(row.id),
@@ -196,7 +223,7 @@ function handleEdit(row: any) {
     businessHours: row.businessHours || '',
     pickupNotice: row.pickupNotice || '',
     sortOrder: Number(row.sortOrder || 0),
-    status: Number(row.status || 1),
+    status: Number(row.status) === 1 ? 1 : 0,
   })
   formRef.value?.clearValidate()
   showDialog.value = true
@@ -218,58 +245,63 @@ function buildPayload() {
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
-  if (isEdit.value && !form.id) {
-    ElMessage.error('自提点ID无效，请重新打开编辑窗口')
-    return
-  }
-
+  if (submitting.value) return
   submitting.value = true
   try {
-    const payload = buildPayload()
-    if (isEdit.value) {
-      await pickupStoreApi.update(form.id as string, payload)
-    } else {
-      await pickupStoreApi.create(payload)
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+    if (isEdit.value && !form.id) {
+      ElMessage.error('自提点ID无效，请重新打开编辑窗口')
+      return
     }
+
+    const payload = buildPayload()
+    if (isEdit.value) await pickupStoreApi.update(form.id as string, payload)
+    else await pickupStoreApi.create(payload)
     ElMessage.success('保存成功')
     showDialog.value = false
-    loadList()
-  } catch {} finally {
+    await loadList()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存自提点失败')
+  } finally {
     submitting.value = false
   }
 }
 
 async function handleToggleStatus(row: any) {
-  const newStatus = row.status === 1 ? 2 : 1
+  const id = String(row.id)
+  if (!id || submitting.value || actionBusyIds.has(id)) return
+  const previousStatus = Number(row.status) === 1 ? 1 : 0
+  const newStatus = previousStatus === 1 ? 0 : 1
   const action = newStatus === 1 ? '启用' : '停用'
+  actionBusyIds.add(id)
   try {
     await ElMessageBox.confirm(`确定${action}该自提点吗？`, '提示')
-  } catch {
-    return
-  }
-
-  try {
-    await pickupStoreApi.updateStatus(String(row.id), newStatus)
+    await pickupStoreApi.updateStatus(id, newStatus)
+    row.status = newStatus
     ElMessage.success(`${action}成功`)
-    loadList()
-  } catch {}
+  } catch (e: any) {
+    row.status = previousStatus
+    if (e !== 'cancel' && e !== 'close' && e?.message) ElMessage.error(e.message)
+  } finally {
+    actionBusyIds.delete(id)
+  }
 }
 
 async function handleDelete(row: any) {
+  const id = String(row.id)
+  if (!id || submitting.value || actionBusyIds.has(id)) return
+  actionBusyIds.add(id)
   try {
     await ElMessageBox.confirm('确定删除该自提点吗？删除后不可恢复。', '提示')
-  } catch {
-    return
-  }
-
-  try {
-    await pickupStoreApi.delete(String(row.id))
+    await pickupStoreApi.delete(id)
     ElMessage.success('删除成功')
-    loadList()
-  } catch {}
+    await loadList()
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close' && e?.message) ElMessage.error(e.message)
+  } finally {
+    actionBusyIds.delete(id)
+  }
 }
 
 onMounted(() => loadList())

@@ -55,12 +55,26 @@ class PrismaClientKnownRequestError extends Error {
   }
 }
 
+function sql(strings: TemplateStringsArray, ...values: unknown[]) {
+  return {
+    strings: Array.from(strings),
+    values,
+  };
+}
+
+const empty = {
+  strings: [''],
+  values: [],
+};
+
 export const Prisma = {
   DbNull: class {},
   JsonNull: class {},
   HttpError: class {},
   Decimal: class {},
   PrismaClientKnownRequestError,
+  sql,
+  empty,
 };
 
 export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];

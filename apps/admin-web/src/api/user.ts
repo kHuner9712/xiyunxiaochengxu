@@ -13,14 +13,21 @@ export const userApi = {
   adjustLevel(id: string, memberLevelId: string, reason?: string) {
     return request.put(`/admin/user/level/${encodeURIComponent(id)}`, { memberLevelId, reason })
   },
-  adjustPoints(id: string, points: number, reason: string, expectedAvailablePoints: number) {
+  adjustPoints(
+    id: string,
+    points: number,
+    reason: string,
+    expectedAvailablePoints: number,
+    requestId: string,
+  ) {
     return request.put(`/admin/user/points/${encodeURIComponent(id)}`, {
       points,
       reason,
       expectedAvailablePoints,
+      requestId,
     })
   },
-  getBabyList(params: { page: number; pageSize: number; name?: string; userId?: string }) {
+  getBabyList(params: { page: number; pageSize: number; nickname?: string; userId?: string }) {
     return request.get('/admin/baby-profile', { params })
   },
 }

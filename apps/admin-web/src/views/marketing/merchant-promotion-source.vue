@@ -26,7 +26,7 @@
           :closable="false"
           style="margin-top: 8px"
         >
-          第一版只管理商家推广来源，不做佣金、结算和复杂权限。正式路径：pages/home/index?ref=商家码 或 pages/product/detail?id=商品ID&amp;ref=商家码
+          推广码会写入订单作为历史归因身份，创建后不可修改；如需新码请新增商家推广来源。正式路径：pages/home/index?ref=商家码 或 pages/product/detail?id=商品ID&amp;ref=商家码
         </el-alert>
       </div>
 
@@ -59,6 +59,7 @@
               active-text="启用"
               inactive-text="停用"
               inline-prompt
+              :disabled="statusBusyId !== null"
               @change="handleStatusChange(row)"
             />
           </template>
@@ -68,7 +69,7 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button type="primary" link :disabled="submitting" @click="handleEdit(row)">编辑</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -94,7 +95,7 @@
           :closable="false"
           style="margin-top: 8px"
         >
-          第一版按 orders.source_code 聚合订单。表内订单金额为 SUM(pay_amount)；有效支付金额排除待付款和已取消订单，仅用于运营参考，不做佣金或结算依据。
+          按 orders.source_code 的不可变历史推广码聚合订单。表内订单金额为 SUM(pay_amount)；有效支付金额排除待付款和已取消订单，仅用于运营参考，不做佣金或结算依据。
         </el-alert>
       </div>
 
@@ -172,13 +173,21 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px" destroy-on-close>
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px" destroy-on-close :close-on-click-modal="!submitting">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px" :disabled="submitting">
         <el-form-item label="商家名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入商家名称" />
         </el-form-item>
         <el-form-item label="推广码" prop="promotionCode">
-          <el-input v-model="form.promotionCode" placeholder="例如：MOUTH001" @blur="normalizePromotionCode" />
+          <el-input
+            v-model="form.promotionCode"
+            placeholder="例如：MOUTH001"
+            :disabled="!!form.id || submitting"
+            @blur="normalizePromotionCode"
+          />
+          <div v-if="form.id" style="font-size: 12px; color: #909399; margin-top: 4px">
+            推广码是订单历史归因身份，创建后不可修改；需要新码时请新增商家推广来源。
+          </div>
         </el-form-item>
         <el-form-item label="联系人">
           <el-input v-model="form.contactName" placeholder="请输入联系人" />
@@ -200,8 +209,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -218,6 +227,7 @@ const loading = ref(false)
 const statsLoading = ref(false)
 const orderLoading = ref(false)
 const submitting = ref(false)
+const statusBusyId = ref<string | null>(null)
 const dialogVisible = ref(false)
 const orderDialogVisible = ref(false)
 const tableData = ref<any[]>([])
@@ -309,11 +319,13 @@ function resetForm() {
 }
 
 function handleAdd() {
+  if (submitting.value) return
   resetForm()
   dialogVisible.value = true
 }
 
 function handleEdit(row: any) {
+  if (submitting.value) return
   form.id = String(row.id)
   form.name = row.name || ''
   form.promotionCode = row.promotionCode || ''
@@ -326,6 +338,7 @@ function handleEdit(row: any) {
 }
 
 function normalizePromotionCode() {
+  if (form.id) return
   form.promotionCode = String(form.promotionCode || '').trim().toUpperCase()
 }
 
@@ -358,9 +371,10 @@ async function copyPromotionPath(text: string) {
 }
 
 async function handleSubmit() {
+  if (submitting.value) return
   normalizePromotionCode()
   const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!valid || submitting.value) return
 
   submitting.value = true
   try {
@@ -382,8 +396,7 @@ async function handleSubmit() {
 
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    fetchList()
-    fetchStats()
+    await Promise.all([fetchList(), fetchStats()])
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || e?.message || '保存失败')
   } finally {
@@ -394,14 +407,21 @@ async function handleSubmit() {
 async function handleStatusChange(row: any) {
   const nextStatus = row.status
   const oldStatus = nextStatus === 1 ? 0 : 1
+  if (statusBusyId.value !== null) {
+    row.status = oldStatus
+    return
+  }
 
+  statusBusyId.value = String(row.id)
   try {
     await merchantPromotionSourceApi.updateStatus(String(row.id), nextStatus)
     ElMessage.success(nextStatus === 1 ? '已启用' : '已停用')
-    fetchStats()
+    await fetchStats()
   } catch (e: any) {
     row.status = oldStatus
     ElMessage.error(e?.response?.data?.message || e?.message || '状态更新失败')
+  } finally {
+    statusBusyId.value = null
   }
 }
 

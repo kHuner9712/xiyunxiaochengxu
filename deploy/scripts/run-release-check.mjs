@@ -61,6 +61,14 @@ if (strictProductionGate && isReservedProductionApiHost(env.VITE_API_BASE_URL)) 
   process.exit(1)
 }
 
+const appIdGateArgs = ['deploy/scripts/verify-wechat-appid-consistency.mjs']
+if (strictProductionGate) appIdGateArgs.push('--require-both')
+const appIdGateStatus = run(process.execPath, appIdGateArgs)
+if (appIdGateStatus !== 0) {
+  console.error('[run-release-check] WeChat frontend/backend AppID consistency gate failed')
+  process.exit(appIdGateStatus)
+}
+
 console.log('[release-gate-boundary] API test:ci covers unit tests and mocked HTTP tests; it is not a real-database end-to-end test.')
 console.log('[release-gate-boundary] Admin browser E2E uses a built frontend and controlled mock API; production runtime, WeChat DevTools, real-device and payment acceptance remain separate evidence gates.')
 
@@ -127,4 +135,14 @@ if (isClearlyTestDatabase(env.DATABASE_URL)) {
   console.warn('[run-release-check] CI must provide a dedicated test database, migration drift check and test:integration before merge.')
 }
 
-console.log('\n[release-gate-boundary] Repository checks passed. This does not constitute production runtime or real-device acceptance.')
+if (strictProductionGate) {
+  console.log('\n━━━ Supplemental gate E: Exact-head real-device full-function acceptance ━━━')
+  const realDeviceAcceptanceStatus = run(process.execPath, ['deploy/scripts/verify-real-device-acceptance.mjs'])
+  if (realDeviceAcceptanceStatus !== 0) {
+    console.error('[run-release-check] strict production gate requires completed real-device acceptance evidence')
+    process.exit(realDeviceAcceptanceStatus)
+  }
+  console.log('\n[release-gate-boundary] Repository checks and exact-head real-device acceptance passed.')
+} else {
+  console.log('\n[release-gate-boundary] Repository checks passed. This does not constitute production runtime or real-device acceptance.')
+}

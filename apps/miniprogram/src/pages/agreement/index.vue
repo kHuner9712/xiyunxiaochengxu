@@ -36,15 +36,38 @@
       <text class="paragraph">7.2 本公司有权在提前通知的情况下修改本协议。</text>
 
       <text class="section-subtitle">八、联系方式</text>
-      <text class="paragraph">客服电话：{{ legal.contact.customerPhone }}</text>
-      <text class="paragraph">客服微信：{{ legal.contact.customerWechat }}</text>
-      <text class="paragraph">{{ legal.contact.serviceNotice }}</text>
+      <text v-if="customerPhone" class="paragraph">客服电话：{{ customerPhone }}</text>
+      <text v-if="customerService?.enabled && ['wechat', 'both'].includes(customerService.type)" class="paragraph">微信在线客服：请前往“客服与帮助”页面发起会话。</text>
+      <text v-if="customerService?.serviceTime" class="paragraph">服务时间：{{ customerService.serviceTime }}</text>
+      <text class="paragraph">订单、售后、隐私或协议相关问题均可通过“客服与帮助”联系我们。</text>
+      <view class="customer-service-link" @tap="goCustomerService">前往客服与帮助</view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { getCustomerServiceConfig, type CustomerServiceConfig } from '@/api/customer-service'
 import { LEGAL_PROFILE as legal } from '@/config/legal'
+
+const customerService = ref<CustomerServiceConfig | null>(null)
+const customerPhone = computed(() => {
+  if (!customerService.value?.enabled) return ''
+  return String(customerService.value.phone || '').trim()
+})
+
+function goCustomerService() {
+  uni.navigateTo({ url: '/pages/customer-service/index' })
+}
+
+onLoad(async () => {
+  try {
+    customerService.value = await getCustomerServiceConfig()
+  } catch (error) {
+    console.warn('[baby-mall] load customer service config on agreement page failed:', error)
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -98,4 +121,16 @@ import { LEGAL_PROFILE as legal } from '@/config/legal'
   margin-bottom: $spacing-xs;
 }
 
+.customer-service-link {
+  margin-top: $spacing-sm;
+  display: inline-flex;
+  align-items: center;
+  min-height: 64rpx;
+  padding: 0 24rpx;
+  border-radius: $radius-round;
+  background: $primary-soft;
+  color: $primary-dark;
+  font-size: $font-sm;
+  font-weight: 700;
+}
 </style>

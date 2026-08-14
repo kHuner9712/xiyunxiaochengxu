@@ -16,6 +16,7 @@ import { ShareService } from '../share/share.service';
 import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recoverable-production-payment.service';
 
 const PAYMENT_CANCEL_LOCK_TTL_SECONDS = 90;
+const REFUND_USER_LOCK_TTL_SECONDS = 120;
 
 export interface GroupBuyFailureRefundResult {
   status: string;
@@ -81,19 +82,64 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   }
 
   /**
-   * Group-expiry reconciliation and paid-order recovery run under different scheduler locks.
-   * Serialize the complete group-failure refund state machine on the same per-order lock used by
-   * payment/cancellation so two workers cannot both observe "no refund" and create separate
-   * full-refund intentions for the same order.
+   * The standard paid-refund flow validates duplicate/cumulative refund state before it writes the
+   * durable INITIATING row. Without a shared per-order claim, two concurrent requests can both pass
+   * those reads, create different out_refund_no values and independently reach WeChat. Serialize
+   * the complete refund-creation state machine on the same order lock used by payment creation and
+   * cancellation.
+   *
+   * The inherited flow persists INITIATING before the remote refund request. Once the first holder
+   * reaches WeChat, a later holder therefore observes durable in-flight refund state even if the
+   * first request times out or the process crashes after the remote call.
+   */
+  override async createRefund(params: {
+    orderId: string;
+    aftersaleId?: string;
+    refundAmount: number;
+    reason?: string;
+  }) {
+    return this.withPaymentCancelLock(params.orderId, () => super.createRefund(params));
+  }
+
+  /**
+   * Refund-success side effects read a user's current points before applying a decrement. Two
+   * successful refunds on different orders can otherwise both observe the same pre-decrement
+   * balance and drive availablePoints below zero. Serialize the inherited refund-success core by
+   * user across all orders. This is deliberately independent from the per-order payment/cancel lock.
+   *
+   * If the lock is occupied we fail closed; WeChat callback/reconciliation will retry. Deleted users
+   * are still eligible for monetary refund processing, so the lookup does not require an active user.
+   */
+  override async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {
+    const rawOrderId = refund?.orderId;
+    if (rawOrderId === undefined || rawOrderId === null) {
+      throw new BadRequestException('退款记录缺少订单ID，无法安全处理退款');
+    }
+
+    const order = await this.cancellationPrisma.order.findUnique({
+      where: { id: BigInt(rawOrderId) },
+      select: { userId: true },
+    });
+    if (!order) {
+      throw new BadRequestException('退款对应订单不存在，无法安全处理退款');
+    }
+
+    return this.withRefundUserLock(order.userId.toString(), () =>
+      super.processWechatRefundSuccess(refund, refundId, wechatData),
+    );
+  }
+
+  /**
+   * Production group-failure refund creation eventually calls `this.createRefund(...)`. The
+   * standard refund override above is therefore the single per-order lock boundary. Acquiring the
+   * same non-reentrant Redis lock here as well would self-deadlock the group-failure path. Keep this
+   * wrapper lock-free and let the durable refund-intent creation acquire the shared order lock once.
    */
   override async createGroupBuyFailureRefund(
     orderId: bigint | string,
     reason = '拼团失败自动退款',
   ): Promise<GroupBuyFailureRefundResult> {
-    const normalizedOrderId = String(orderId);
-    return this.withPaymentCancelLock(normalizedOrderId, () =>
-      super.createGroupBuyFailureRefund(orderId, reason),
-    );
+    return super.createGroupBuyFailureRefund(orderId, reason);
   }
 
   /**
@@ -264,6 +310,25 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
     );
     if (!acquired) {
       throw new BadRequestException('订单支付、取消或退款状态处理中，请稍后重试');
+    }
+
+    try {
+      return await action();
+    } finally {
+      await this.cancellationRedis.releaseLockWithLua(key, token);
+    }
+  }
+
+  private async withRefundUserLock<T>(userId: string, action: () => Promise<T>): Promise<T> {
+    const key = `user:refund-success:${userId}`;
+    const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    const acquired = await this.cancellationRedis.setNX(
+      key,
+      token,
+      REFUND_USER_LOCK_TTL_SECONDS,
+    );
+    if (!acquired) {
+      throw new BadRequestException('该用户退款状态正在处理中，请稍后重试');
     }
 
     try {

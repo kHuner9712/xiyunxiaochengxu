@@ -1,4 +1,5 @@
 import { get, post, put, del } from '@/utils/request'
+import { runPersistentIdempotentAction } from '@/utils/checkout-idempotency'
 
 export function getAddressList() {
   return get<AddressItem[]>('/weapp/address')
@@ -9,11 +10,17 @@ export function getAddressDetail(id: string) {
 }
 
 export function createAddress(data: AddressForm) {
-  return post('/weapp/address', data)
+  const payload = { ...data }
+  return runPersistentIdempotentAction(
+    'address:create',
+    payload,
+    (clientRequestId) => post('/weapp/address', { ...payload, clientRequestId }),
+  )
 }
 
 export function updateAddress(data: AddressForm & { id: string }) {
-  return put(`/weapp/address/${encodeURIComponent(data.id)}`, data)
+  const { id, ...payload } = data
+  return put(`/weapp/address/${encodeURIComponent(id)}`, payload)
 }
 
 export function deleteAddress(id: string) {

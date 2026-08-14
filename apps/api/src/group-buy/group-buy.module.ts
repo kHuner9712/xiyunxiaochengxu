@@ -4,7 +4,7 @@ import {
   WeappGroupBuyController,
 } from './group-buy.controller';
 import { GroupBuyService } from './group-buy.service';
-import { IdempotentBigintSafeProductionGroupBuyService } from './idempotent-bigint-safe-production-group-buy.service';
+import { DurableAdminIdempotentBigintSafeProductionGroupBuyService } from './durable-admin-idempotent-bigint-safe-production-group-buy.service';
 import { PublicGroupBuyViewService } from './public-group-buy-view.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
@@ -18,9 +18,10 @@ import { BenefitPackageModule } from '../benefit-package/benefit-package.module'
   ],
   controllers: [AdminGroupBuyController, WeappGroupBuyController],
   providers: [
+    DurableAdminIdempotentBigintSafeProductionGroupBuyService,
     {
       provide: GroupBuyService,
-      useClass: IdempotentBigintSafeProductionGroupBuyService,
+      useExisting: DurableAdminIdempotentBigintSafeProductionGroupBuyService,
     },
     PublicGroupBuyViewService,
   ],

@@ -172,10 +172,10 @@
         <text class="icon-text">袋</text>
         <text class="icon-label">购物车</text>
       </view>
-      <view class="add-cart-btn" :class="{ disabled: !canPurchase }" @tap="handleAddCart">
+      <view class="add-cart-btn" :class="{ disabled: !canPurchase || skuSubmitting }" @tap="handleAddCart">
         <text class="btn-text">加入购物车</text>
       </view>
-      <view class="buy-now-btn" :class="{ disabled: !canPurchase }" @tap="handleBuyNow">
+      <view class="buy-now-btn" :class="{ disabled: !canPurchase || skuSubmitting }" @tap="handleBuyNow">
         <text class="btn-text">立即购买</text>
       </view>
     </view>
@@ -198,8 +198,8 @@
           </view>
         </view>
         <SkuSelector :specs="product.specs" :skus="product.skus" @change="onSkuChange" />
-        <view class="sku-confirm-btn" @tap="confirmSku">
-          <text class="confirm-text">确定</text>
+        <view class="sku-confirm-btn" :class="{ disabled: skuSubmitting }" @tap="confirmSku">
+          <text class="confirm-text">{{ skuSubmitting ? '处理中...' : '确定' }}</text>
         </view>
       </view>
     </BottomSheet>
@@ -232,6 +232,7 @@ const selectedSkuId = ref('')
 const selectedQuantity = ref(1)
 const skuAction = ref<SkuAction>('select')
 const currentImageIndex = ref(0)
+const skuSubmitting = ref(false)
 
 const cartStore = useCartStore()
 const userStore = useUserStore()
@@ -282,6 +283,7 @@ function previewCertImage(index: number) {
 }
 
 function onSkuChange(skuId: string, quantity: number) {
+  if (skuSubmitting.value) return
   selectedSkuId.value = skuId
   selectedQuantity.value = quantity
   currentSku.value = product.value.skus.find(s => s.id === skuId) || null
@@ -292,6 +294,7 @@ function getDefaultSellableSku() {
 }
 
 function openSkuPopup(action: SkuAction) {
+  if (skuSubmitting.value) return
   if (!canPurchase.value) {
     uni.showToast({ title: product.value.status !== undefined && product.value.status !== 1 ? '商品已下架' : '库存不足', icon: 'none' })
     return
@@ -315,6 +318,7 @@ function handleBuyNow() {
 }
 
 async function confirmSku() {
+  if (skuSubmitting.value) return
   if (!selectedSkuId.value || !currentSku.value) {
     const defaultSku = getDefaultSellableSku()
     if (!defaultSku) {
@@ -327,27 +331,47 @@ async function confirmSku() {
     uni.showToast({ title: (currentSku.value?.stock ?? 0) <= 0 ? '商品暂无可售规格' : '库存不足，请重新选择', icon: 'none' })
     return
   }
-  showSkuPopup.value = false
 
   if (skuAction.value === 'select') {
+    showSkuPopup.value = false
     return
   }
 
-  if (skuAction.value === 'cart') {
-    userStore.requireLogin(async () => {
-      await cartStore.addToCart({
-        productId: product.value.id,
-        skuId: selectedSkuId.value,
-        quantity: selectedQuantity.value
-      })
+  if (!userStore.isLoggedIn) {
+    showSkuPopup.value = false
+    userStore.requireLogin(() => {})
+    return
+  }
+
+  const action = skuAction.value
+  const productId = product.value.id
+  const skuId = selectedSkuId.value
+  const quantity = selectedQuantity.value
+  showSkuPopup.value = false
+  skuSubmitting.value = true
+
+  try {
+    if (action === 'cart') {
+      await cartStore.addToCart({ productId, skuId, quantity })
       uni.showToast({ title: '已加入购物车', icon: 'success' })
-    })
-  } else {
-    userStore.requireLogin(() => {
+      return
+    }
+
+    await new Promise<void>((resolve, reject) => {
       uni.navigateTo({
-        url: `/pages/order/confirm?productId=${product.value.id}&skuId=${selectedSkuId.value}&quantity=${selectedQuantity.value}`
+        url: `/pages/order/confirm?productId=${productId}&skuId=${skuId}&quantity=${quantity}`,
+        success: () => resolve(),
+        fail: reject,
       })
     })
+  } catch (err) {
+    console.error('[baby-mall] product purchase action failed:', err)
+    uni.showToast({
+      title: action === 'cart' ? '加入购物车失败，请稍后重试' : '页面跳转失败',
+      icon: 'none',
+    })
+  } finally {
+    skuSubmitting.value = false
   }
 }
 
@@ -374,6 +398,13 @@ onLoad((options) => {
     loadProduct(id)
     loadRecommend(id)
   }
+})
+
+defineExpose({
+  skuSubmitting,
+  handleAddCart,
+  handleBuyNow,
+  confirmSku,
 })
 </script>
 
@@ -752,6 +783,7 @@ onLoad((options) => {
 
   &.disabled {
     opacity: 0.55;
+    pointer-events: none;
   }
 }
 
@@ -768,6 +800,7 @@ onLoad((options) => {
 
   &.disabled {
     opacity: 0.55;
+    pointer-events: none;
   }
 }
 
@@ -869,6 +902,11 @@ onLoad((options) => {
   padding: 24rpx 0;
   text-align: center;
   box-shadow: $shadow-coral;
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .confirm-text {

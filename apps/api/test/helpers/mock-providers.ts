@@ -1,5 +1,6 @@
 function createPrismaMock() {
   const txMock = {
+    $queryRaw: jest.fn().mockResolvedValue([]),
     adminUser: {
       findFirst: jest.fn(),
       update: jest.fn(),
@@ -9,11 +10,17 @@ function createPrismaMock() {
     },
     user: {
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     memberLevel: {
       findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    userMemberRecord: {
+      create: jest.fn(),
     },
     order: {
       findFirst: jest.fn(),
@@ -54,7 +61,6 @@ function createPrismaMock() {
   };
 
   const prismaMock = {
-    $queryRaw: jest.fn(),
     $connect: jest.fn(),
     $disconnect: jest.fn(),
     $transaction: jest.fn((callback: any) => callback(txMock)),

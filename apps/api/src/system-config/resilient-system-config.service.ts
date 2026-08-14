@@ -7,23 +7,32 @@ import { SystemConfigService } from './system-config.service';
 export class ResilientSystemConfigService extends SystemConfigService {
   constructor(
     private readonly resilientPrisma: PrismaService,
-    redisService: RedisService,
+    private readonly resilientRedis: RedisService,
   ) {
-    super(resilientPrisma, redisService);
+    super(resilientPrisma, resilientRedis);
   }
 
   override async getValue(groupName: string, configKey: string): Promise<string | null> {
+    // MySQL is the configuration ledger. Reading Redis first would allow an old cache entry to
+    // become authoritative again after a transient Redis outage during a successful DB update.
+    // Always resolve the durable row first, then repair the cache best-effort.
+    const row = await this.resilientPrisma.systemConfig.findFirst({
+      where: { groupName, configKey },
+      select: { configValue: true },
+    });
+    const value = row?.configValue ?? null;
+    const cacheKey = `config:${groupName}:${configKey}`;
     try {
-      return await super.getValue(groupName, configKey);
+      if (value === null) {
+        await this.resilientRedis.del(cacheKey);
+      } else {
+        await this.resilientRedis.set(cacheKey, value, 3600);
+      }
     } catch {
-      // Runtime business rules must remain readable from the source-of-truth database even if
-      // Redis is temporarily unavailable. Redis is a cache here, not the configuration ledger.
-      const row = await this.resilientPrisma.systemConfig.findFirst({
-        where: { groupName, configKey },
-        select: { configValue: true },
-      });
-      return row?.configValue ?? null;
+      // Redis is only an acceleration layer for system configuration. A cache outage must not
+      // replace or hide the durable database value returned to business code.
     }
+    return value;
   }
 
   override async update(
@@ -40,8 +49,8 @@ export class ResilientSystemConfigService extends SystemConfigService {
       });
       if (!row || row.configValue !== String(configValue ?? '')) throw error;
 
-      // The database commit succeeded and only a post-commit cache/runtime step failed. Reload
-      // the in-memory snapshot from the database and report the durable write truthfully.
+      // The database commit succeeded and only a post-commit cache step failed. Reload the
+      // in-memory snapshot from the database and report the durable write truthfully.
       await this.refreshRuntimeConfig();
       return row;
     }

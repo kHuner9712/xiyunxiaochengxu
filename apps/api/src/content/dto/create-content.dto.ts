@@ -29,6 +29,10 @@ function normalizeIdArray(value: unknown): unknown {
   return value.map((item) => typeof item === 'string' ? item.trim() : '__invalid_numeric_id__');
 }
 
+function trim(value: unknown): unknown {
+  return typeof value === 'string' ? value.trim() : value;
+}
+
 export class CreateContentDto {
   @IsOptional()
   @Transform(({ value }) => normalizeOptionalId(value))
@@ -123,4 +127,10 @@ export class CreateContentDto {
   @IsInt()
   @IsIn([1, 2])
   status?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => trim(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '内容创建请求ID格式不正确' })
+  clientRequestId?: string;
 }

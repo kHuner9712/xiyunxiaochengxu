@@ -32,6 +32,16 @@ const order = {
   items: [],
 } as any
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function mountList() {
   return mount(OrderListPage, {
     global: {
@@ -71,6 +81,33 @@ describe('订单列表支付处理', () => {
     expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith({
       url: '/pages/order/pay-result?orderId=order-1&payScene=list&payIntent=success',
     })
+  })
+
+  it('支付请求未完成时重复点击只创建一次支付', async () => {
+    const payment = deferred<any>()
+    vi.mocked(createPayment).mockImplementationOnce(() => payment.promise)
+    const wrapper = mountList()
+    const vm = wrapper.vm as any
+
+    const first = vm.handlePay(order)
+    const second = vm.handlePay(order)
+
+    expect(vm.isOrderActionBusy('order-1')).toBe(true)
+    expect(createPayment).toHaveBeenCalledTimes(1)
+    expect(wxPay).not.toHaveBeenCalled()
+
+    payment.resolve({
+      timeStamp: '1',
+      nonceStr: 'nonce',
+      package: 'prepay_id=1',
+      signType: 'RSA',
+      paySign: 'sign',
+    })
+    await Promise.all([first, second])
+
+    expect(createPayment).toHaveBeenCalledTimes(1)
+    expect(wxPay).toHaveBeenCalledTimes(1)
+    expect(vm.isOrderActionBusy('order-1')).toBe(false)
   })
 
   it('用户取消支付时不误跳成功结果页', async () => {

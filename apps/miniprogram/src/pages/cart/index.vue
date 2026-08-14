@@ -24,7 +24,7 @@
       <view class="cart-summary card">
         <view>
           <text class="summary-title">购物车</text>
-          <text class="summary-subtitle">已选 {{ cartStore.checkedCount }} 件 / 共 {{ cartStore.items.length }} 件</text>
+          <text class="summary-subtitle">已选 {{ cartStore.checkedCount }} 件 / 共 {{ cartStore.totalCount }} 件</text>
         </view>
         <view class="summary-hint">
           <text class="summary-dot"></text>
@@ -57,7 +57,7 @@
               <PriceDisplay :price="item.price" />
               <text class="item-price-note">单件价</text>
             </view>
-            <view class="quantity-control">
+            <view class="quantity-control" :class="{ disabled: cartActionBusy }">
               <view class="qty-btn" @tap="handleQuantity(index, -1)">-</view>
               <text class="qty-value">{{ item.quantity }}</text>
               <view class="qty-btn" @tap="handleQuantity(index, 1)">+</view>
@@ -93,8 +93,8 @@
           </view>
           <text class="total-note">优惠以确认订单为准</text>
         </view>
-        <view class="checkout-btn" :class="{ disabled: cartStore.checkedCount === 0 }" @tap="goCheckout">
-          <text class="checkout-text">去结算({{ cartStore.checkedCount }})</text>
+        <view class="checkout-btn" :class="{ disabled: cartStore.checkedCount === 0 || cartActionBusy }" @tap="goCheckout">
+          <text class="checkout-text">{{ cartActionBusy ? '购物车更新中...' : `去结算(${cartStore.checkedCount})` }}</text>
         </view>
       </view>
     </view>
@@ -102,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/stores/cart'
 import { useUserStore } from '@/stores/user'
@@ -109,6 +110,7 @@ import PriceDisplay from '@/components/PriceDisplay.vue'
 
 const cartStore = useCartStore()
 const userStore = useUserStore()
+const cartActionBusy = ref(false)
 
 function goDetail(productId: string | number) {
   uni.navigateTo({ url: `/pages/product/detail?id=${productId}` })
@@ -118,33 +120,50 @@ function goHome() {
   uni.switchTab({ url: '/pages/home/index' })
 }
 
-async function handleQuantity(index: number, delta: number) {
-  const item = cartStore.items[index]
-  const newQty = item.quantity + delta
-  if (newQty < 1) {
+function confirmRemove() {
+  return new Promise<boolean>((resolve) => {
     uni.showModal({
       title: '提示',
       content: '确定删除该商品吗？',
-      success: async (res) => {
-        if (res.confirm) {
-          try {
-            await cartStore.removeItem(item.id)
-          } catch {
-            uni.showToast({ title: '删除失败', icon: 'none' })
-          }
-        }
-      }
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
     })
-    return
-  }
+  })
+}
+
+async function handleQuantity(index: number, delta: number) {
+  if (cartActionBusy.value) return
+  const item = cartStore.items[index]
+  if (!item) return
+
+  const newQty = item.quantity + delta
   if (newQty > item.stock) {
     uni.showToast({ title: '库存不足', icon: 'none' })
     return
   }
-  await cartStore.updateQuantity(item.id, newQty)
+
+  cartActionBusy.value = true
+  try {
+    if (newQty < 1) {
+      const confirmed = await confirmRemove()
+      if (!confirmed) return
+      await cartStore.removeItem(item.id)
+      return
+    }
+
+    await cartStore.updateQuantity(item.id, newQty)
+  } catch {
+    uni.showToast({ title: newQty < 1 ? '删除失败' : '数量更新失败', icon: 'none' })
+  } finally {
+    cartActionBusy.value = false
+  }
 }
 
 function goCheckout() {
+  if (cartActionBusy.value) {
+    uni.showToast({ title: '购物车正在更新，请稍后结算', icon: 'none' })
+    return
+  }
   if (cartStore.checkedCount === 0) {
     uni.showToast({ title: '请选择商品', icon: 'none' })
     return
@@ -165,8 +184,16 @@ function goCheckout() {
 
 onShow(() => {
   if (userStore.isLoggedIn) {
-    cartStore.fetchCart()
+    void cartStore.fetchCart()
+  } else {
+    cartStore.clearCart()
   }
+})
+
+defineExpose({
+  cartActionBusy,
+  handleQuantity,
+  goCheckout,
 })
 </script>
 
@@ -503,6 +530,11 @@ onShow(() => {
   border: 1rpx solid rgba($border-color, 0.82);
   flex-shrink: 0;
   box-shadow: inset 0 0 0 1rpx rgba(255, 255, 255, 0.62);
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .qty-btn {
@@ -670,6 +702,7 @@ onShow(() => {
 
   &.disabled {
     opacity: 0.58;
+    pointer-events: none;
   }
 }
 

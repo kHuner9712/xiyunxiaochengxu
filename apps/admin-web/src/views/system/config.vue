@@ -55,7 +55,7 @@
 
         <el-form-item label="满额包邮(元)">
           <el-input-number v-model="form.freeShippingAmount" :min="0" :max="10000000" :precision="2" :step="10" />
-          <span class="hint">0 表示所有普通地区订单免基础运费；偏远地区附加规则仍按系统固定规则执行。</span>
+          <span class="hint">达到包邮门槛后所有配送地区免运费；设置为 0 表示所有配送订单免运费。</span>
         </el-form-item>
 
         <el-divider content-position="left">积分抵扣</el-divider>

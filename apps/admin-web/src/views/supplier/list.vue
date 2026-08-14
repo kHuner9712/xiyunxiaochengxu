@@ -39,7 +39,14 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'supplier:edit'" type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'supplier:delete'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-permission="'supplier:delete'"
+              type="danger"
+              link
+              :loading="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id))"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -57,36 +64,44 @@
       </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="600px"
+      destroy-on-close
+      :close-on-click-modal="!submitting"
+      :close-on-press-escape="!submitting"
+      :show-close="!submitting"
+    >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="供应商名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入供应商名称" maxlength="100" />
+          <el-input v-model="form.name" placeholder="请输入供应商名称" maxlength="100" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="联系人" prop="contactName">
-          <el-input v-model="form.contactName" placeholder="请输入联系人" maxlength="50" />
+          <el-input v-model="form.contactName" placeholder="请输入联系人" maxlength="50" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="联系电话" prop="contactPhone">
-          <el-input v-model="form.contactPhone" placeholder="请输入联系电话" maxlength="20" />
+          <el-input v-model="form.contactPhone" placeholder="请输入联系电话" maxlength="20" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="联系邮箱" prop="email">
-          <el-input v-model="form.email" placeholder="请输入联系邮箱" maxlength="100" />
+          <el-input v-model="form.email" placeholder="请输入联系邮箱" maxlength="100" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="地址">
-          <el-input v-model="form.address" placeholder="请输入地址" maxlength="300" />
+          <el-input v-model="form.address" placeholder="请输入地址" maxlength="300" :disabled="submitting" />
         </el-form-item>
         <el-form-item label="合作状态">
-          <el-radio-group v-model="form.status">
+          <el-radio-group v-model="form.status" :disabled="submitting">
             <el-radio :value="1">合作中</el-radio>
             <el-radio :value="0">已停用</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="2000" show-word-limit placeholder="请输入备注" />
+          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="2000" show-word-limit placeholder="请输入备注" :disabled="submitting" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -103,12 +118,15 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const tableData = ref<any[]>([])
 const formRef = ref<FormInstance>()
+const deleteBusyIds = reactive(new Set<string>())
+let listLoadSeq = 0
 
 const searchForm = reactive({ name: '', contactPhone: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
   id: undefined as string | undefined,
+  clientRequestId: '',
   name: '',
   contactName: '',
   contactPhone: '',
@@ -127,14 +145,29 @@ const rules: FormRules = {
 
 const dialogTitle = computed(() => (form.id ? '编辑供应商' : '新增供应商'))
 
+function createSupplierRequestId() {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.getRandomValues) {
+    const words = new Uint32Array(2)
+    cryptoApi.getRandomValues(words)
+    const value = (BigInt(words[0] & 0x7fffffff) << 32n) | BigInt(words[1])
+    if (value > 0n) return value.toString()
+  }
+  return (BigInt(Date.now()) * 1_000_000n + BigInt(Math.floor(Math.random() * 1_000_000))).toString()
+}
+
 async function fetchList() {
+  const requestSeq = ++listLoadSeq
   loading.value = true
   try {
     const res = await supplierApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
+    if (requestSeq !== listLoadSeq) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
-  } catch {} finally {
-    loading.value = false
+  } catch (e: any) {
+    if (requestSeq === listLoadSeq) ElMessage.error(e?.message || '加载供应商列表失败')
+  } finally {
+    if (requestSeq === listLoadSeq) loading.value = false
   }
 }
 
@@ -151,6 +184,7 @@ function resetSearch() {
 
 function resetForm() {
   form.id = undefined
+  form.clientRequestId = ''
   form.name = ''
   form.contactName = ''
   form.contactPhone = ''
@@ -161,12 +195,16 @@ function resetForm() {
 }
 
 function handleAdd() {
+  if (submitting.value) return
   resetForm()
+  form.clientRequestId = createSupplierRequestId()
   dialogVisible.value = true
 }
 
 function handleEdit(row: any) {
+  if (submitting.value) return
   form.id = String(row.id)
+  form.clientRequestId = ''
   form.name = row.name || ''
   form.contactName = row.contactName || ''
   form.contactPhone = row.contactPhone || ''
@@ -178,20 +216,28 @@ function handleEdit(row: any) {
 }
 
 async function handleDelete(row: any) {
+  const id = String(row.id)
+  if (deleteBusyIds.has(id)) return
+  deleteBusyIds.add(id)
   try {
     await ElMessageBox.confirm('确定删除该供应商吗？', '提示', { type: 'warning' })
-    await supplierApi.delete(String(row.id))
+    await supplierApi.delete(id)
     ElMessage.success('删除成功')
-    fetchList()
-  } catch {}
+    await fetchList()
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '删除供应商失败')
+  } finally {
+    deleteBusyIds.delete(id)
+  }
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+
     const payload = {
       name: form.name.trim(),
       contactName: form.contactName.trim(),
@@ -200,16 +246,20 @@ async function handleSubmit() {
       address: form.address.trim() || undefined,
       status: form.status,
       remark: form.remark.trim() || undefined,
+      ...(!form.id ? { clientRequestId: form.clientRequestId } : {}),
     }
     if (form.id) {
       await supplierApi.update(form.id, payload)
     } else {
+      if (!form.clientRequestId) throw new Error('供应商创建请求标识缺失，请重新打开新增窗口')
       await supplierApi.create(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    fetchList()
-  } catch {} finally {
+    await fetchList()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存供应商失败')
+  } finally {
     submitting.value = false
   }
 }

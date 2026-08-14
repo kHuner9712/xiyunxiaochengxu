@@ -5,6 +5,8 @@ import { calculateBabyMonthAge, paginate } from '@baby-mall/shared';
 import { CreateBabyProfileDto, UpdateBabyProfileDto } from './dto/create-baby-profile.dto';
 import { BabyProfileQueryDto } from './dto/baby-profile-query.dto';
 
+const BABY_CREATE_EVENT = 'baby_profile_create';
+
 @Injectable()
 export class BabyProfileService {
   private readonly logger = new Logger(BabyProfileService.name);
@@ -33,12 +35,42 @@ export class BabyProfileService {
   async create(userId: string, data: CreateBabyProfileDto) {
     const userIdValue = parsePositiveBigIntId(userId, '用户');
     const birthday = this.parseBirthday(data.birthday);
+    const requestId = data.clientRequestId?.trim() || null;
+    const requestFingerprint = this.createRequestFingerprint(data, birthday);
+    const requestBizType = `baby:${userIdValue.toString()}`;
 
-    const profile = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // All profile creates for one user already serialize on this row. Keep the idempotency lookup
+      // after the lock so two API instances cannot both decide that the same request is new.
       const userRows = await tx.$queryRaw<Array<{ id: bigint }>>`
         SELECT id FROM users WHERE id = ${userIdValue} AND deleted_at IS NULL FOR UPDATE
       `;
       if (userRows.length === 0) throw new NotFoundException('用户不存在');
+
+      if (requestId) {
+        const handled = await tx.businessEvent.findFirst({
+          where: {
+            eventType: BABY_CREATE_EVENT,
+            bizType: requestBizType,
+            bizId: requestId,
+          },
+          orderBy: { id: 'desc' },
+        });
+        if (handled) {
+          const eventPayload = this.readCreateEventPayload(handled.payload);
+          if (eventPayload.fingerprint !== requestFingerprint) {
+            throw new BadRequestException('宝宝档案创建请求ID已被其他操作使用，请重新提交');
+          }
+          const profileId = parsePositiveBigIntId(eventPayload.profileId, '宝宝档案');
+          const replayProfile = await tx.babyProfile.findFirst({
+            where: { id: profileId, userId: userIdValue, deletedAt: null },
+          });
+          if (!replayProfile) {
+            throw new BadRequestException('该宝宝档案创建请求已处理，请刷新档案列表后重新操作');
+          }
+          return { profile: replayProfile, replayed: true };
+        }
+      }
 
       const existing = await tx.babyProfile.findMany({
         where: { userId: userIdValue, deletedAt: null },
@@ -55,7 +87,7 @@ export class BabyProfileService {
       }
 
       const avatarUrl = data.avatarUrl ?? data.avatar;
-      return tx.babyProfile.create({
+      const profile = await tx.babyProfile.create({
         data: {
           userId: userIdValue,
           nickname: data.nickname?.trim() || null,
@@ -66,9 +98,31 @@ export class BabyProfileService {
           isDefault: shouldBeDefault ? 1 : 0,
         },
       });
+
+      if (requestId) {
+        // This event is the durable request fact. It is written in the same transaction as the
+        // profile, so a crash can never leave "profile committed but idempotency marker missing".
+        await tx.businessEvent.create({
+          data: {
+            eventType: BABY_CREATE_EVENT,
+            bizType: requestBizType,
+            bizId: requestId,
+            level: 'info',
+            message: '宝宝档案创建请求已处理',
+            payload: {
+              profileId: profile.id.toString(),
+              fingerprint: requestFingerprint,
+            },
+          },
+        });
+      }
+
+      return { profile, replayed: false };
     });
-    this.logger.log(`用户${userIdValue}创建宝宝档案${profile.id}`);
-    return this.serializeProfile(profile);
+    this.logger.log(
+      `用户${userIdValue}创建宝宝档案${result.profile.id}${result.replayed ? '（幂等重放）' : ''}`,
+    );
+    return this.serializeProfile(result.profile);
   }
 
   async update(userId: string, id: string, data: UpdateBabyProfileDto) {
@@ -132,11 +186,16 @@ export class BabyProfileService {
     const profileId = parsePositiveBigIntId(id, '宝宝档案');
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${userIdValue} AND deleted_at IS NULL FOR UPDATE`;
-      await tx.$queryRaw`SELECT id FROM baby_profiles WHERE id = ${profileId} AND user_id = ${userIdValue} AND deleted_at IS NULL FOR UPDATE`;
+      // Lock the owned profile even when it is already soft-deleted. This lets a retry after a lost
+      // success response replay the completed delete without reopening default-profile mutations.
+      await tx.$queryRaw`SELECT id FROM baby_profiles WHERE id = ${profileId} AND user_id = ${userIdValue} FOR UPDATE`;
       const profile = await tx.babyProfile.findFirst({
-        where: { id: profileId, userId: userIdValue, deletedAt: null },
+        where: { id: profileId, userId: userIdValue },
       });
       if (!profile) throw new NotFoundException('宝宝档案不存在');
+      if (profile.deletedAt) {
+        return { profile, replayed: true };
+      }
 
       const deleted = await tx.babyProfile.update({
         where: { id: profileId },
@@ -151,14 +210,17 @@ export class BabyProfileService {
           await tx.babyProfile.update({ where: { id: replacement.id }, data: { isDefault: 1 } });
         }
       }
-      return deleted;
+      return { profile: deleted, replayed: false };
     });
-    this.logger.log(`用户${userIdValue}删除宝宝档案${profileId}`);
-    return this.serializeProfile(result);
+    this.logger.log(
+      `用户${userIdValue}删除宝宝档案${profileId}${result.replayed ? '（幂等重放）' : ''}`,
+    );
+    return this.serializeProfile(result.profile);
   }
 
   async findAllAdmin(dto: BabyProfileQueryDto) {
     const where: any = { deletedAt: null };
+    if (dto.nickname) where.nickname = { contains: dto.nickname };
     if (dto.userId) where.userId = parsePositiveBigIntId(dto.userId, '用户');
 
     const [list, total] = await Promise.all([
@@ -193,6 +255,30 @@ export class BabyProfileService {
     if (defaults.length === 1) return;
     await tx.babyProfile.updateMany({ where: { userId, deletedAt: null }, data: { isDefault: 0 } });
     await tx.babyProfile.update({ where: { id: (defaults[0] ?? active[0]).id }, data: { isDefault: 1 } });
+  }
+
+  private createRequestFingerprint(data: CreateBabyProfileDto, birthday: Date) {
+    const avatarUrl = data.avatarUrl ?? data.avatar;
+    return JSON.stringify({
+      nickname: data.nickname?.trim() || '',
+      gender: data.gender ?? 0,
+      birthday: birthday.toISOString(),
+      avatarUrl: avatarUrl?.trim() || '',
+      isDefault: data.isDefault ?? null,
+    });
+  }
+
+  private readCreateEventPayload(payload: unknown): { profileId: string; fingerprint: string } {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new BadRequestException('宝宝档案创建请求记录异常，请刷新后重试');
+    }
+    const record = payload as Record<string, unknown>;
+    const profileId = typeof record.profileId === 'string' ? record.profileId : '';
+    const fingerprint = typeof record.fingerprint === 'string' ? record.fingerprint : '';
+    if (!profileId || !fingerprint) {
+      throw new BadRequestException('宝宝档案创建请求记录异常，请刷新后重试');
+    }
+    return { profileId, fingerprint };
   }
 
   private parseBirthday(value: string) {

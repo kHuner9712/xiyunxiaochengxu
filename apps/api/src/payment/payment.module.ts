@@ -1,9 +1,10 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PaymentController, RefundController, PaymentReconcileController, RefundReconcileController, PaymentCompensationController } from './payment.controller';
 import { PaymentService } from './payment.service';
-import { OrphanSafeMemberGrowthPaymentService } from './orphan-safe-member-growth-payment.service';
+import { ConfirmedMissingRefundRetryPaymentService } from './confirmed-missing-refund-retry-payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { HistoricalAnomalyPaymentReconcileService } from './historical-anomaly-payment-reconcile.service';
+import { PaymentReconcileExecutionService } from './payment-reconcile-execution.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
 import { ShareModule } from '../share/share.module';
@@ -18,12 +19,13 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
   providers: [
     {
       provide: PaymentService,
-      useClass: OrphanSafeMemberGrowthPaymentService,
+      useClass: ConfirmedMissingRefundRetryPaymentService,
     },
     {
       provide: PaymentReconcileService,
       useClass: HistoricalAnomalyPaymentReconcileService,
     },
+    PaymentReconcileExecutionService,
   ],
   exports: [PaymentService, PaymentReconcileService],
 })

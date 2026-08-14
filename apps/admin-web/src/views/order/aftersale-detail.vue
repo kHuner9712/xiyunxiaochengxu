@@ -109,7 +109,7 @@
               <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝原因" />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="submitting" @click="handleAudit">提交</el-button>
+              <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleAudit">提交</el-button>
             </el-form-item>
           </el-form>
         </el-card>
@@ -125,7 +125,7 @@
           <el-button
             v-permission="'order:aftersale:refund'"
             :loading="syncingRefund"
-            :disabled="!detail.latestOutRefundNo"
+            :disabled="syncingRefund || !detail.latestOutRefundNo"
             @click="handleSyncRefund"
           >
             同步微信退款状态
@@ -147,7 +147,7 @@
           <el-descriptions :column="1" border style="margin-bottom: 16px">
             <el-descriptions-item label="确认退款金额">¥{{ formatPrice(detail.refundAmount) }}</el-descriptions-item>
           </el-descriptions>
-          <el-button type="primary" :loading="submitting" @click="handleRefund">
+          <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleRefund">
             {{ isRefundRetry ? '重新发起退款' : (isZeroPayOrder ? '确认售后结算' : '确认退款') }}
           </el-button>
         </el-card>
@@ -232,6 +232,7 @@ async function fetchDetail() {
 }
 
 async function handleAudit() {
+  if (submitting.value) return
   if (auditResult.value === 'reject' && !rejectReason.value.trim()) {
     ElMessage.warning('请输入拒绝原因')
     return
@@ -262,18 +263,19 @@ async function handleAudit() {
       ? '通过并确认0元售后结算'
       : `通过并确认退款 ¥${refundAmountYuan.value.toFixed(2)}`
     : '拒绝'
-  try {
-    await ElMessageBox.confirm(`确认${actionLabel}该售后申请？`, '审核确认', {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
 
   submitting.value = true
   try {
+    try {
+      await ElMessageBox.confirm(`确认${actionLabel}该售后申请？`, '审核确认', {
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+
     if (auditResult.value === 'approve') {
       await aftersaleApi.approve(String(detail.value.id), {
         refundAmount,
@@ -297,6 +299,7 @@ async function handleAudit() {
 }
 
 async function handleSyncRefund() {
+  if (syncingRefund.value) return
   const outRefundNo = String(detail.value.latestOutRefundNo || '').trim()
   if (!outRefundNo) {
     ElMessage.warning('退款单号缺失，无法同步')
@@ -321,6 +324,7 @@ async function handleSyncRefund() {
 }
 
 async function handleRefund() {
+  if (submitting.value) return
   const refundAmount = Number(detail.value.refundAmount ?? 0)
   if (!isZeroPayOrder.value && refundAmount <= 0) {
     ElMessage.warning('退款金额未设置')
@@ -333,18 +337,19 @@ async function handleRefund() {
   const confirmation = isZeroPayOrder.value
     ? '该订单实付为0元，不会调用微信退款；系统将完成售后状态、库存、积分与权益结算。'
     : `${actionLabel} ¥${formatPrice(refundAmount)}？此操作将发起微信退款，请谨慎操作。`
-  try {
-    await ElMessageBox.confirm(confirmation, '退款确认', {
-      confirmButtonText: isRefundRetry.value ? '重新发起' : '确认',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
 
   submitting.value = true
   try {
+    try {
+      await ElMessageBox.confirm(confirmation, '退款确认', {
+        confirmButtonText: isRefundRetry.value ? '重新发起' : '确认',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+
     await aftersaleApi.refund(String(detail.value.id))
     ElMessage.success(isZeroPayOrder.value ? '0元售后结算完成' : (isRefundRetry.value ? '退款已重新发起' : '退款已发起'))
     await fetchDetail()

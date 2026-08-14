@@ -83,12 +83,15 @@ describe('production operation closure contracts', () => {
 
   it('uses the outermost hardened runtime providers rather than leaving safety wrappers unused', () => {
     const paymentModule = read('apps/api/src/payment/payment.module.ts');
+    const confirmedMissingRefundPayment = read('apps/api/src/payment/confirmed-missing-refund-retry-payment.service.ts');
     const orphanSafePayment = read('apps/api/src/payment/orphan-safe-member-growth-payment.service.ts');
     const memberGrowthPayment = read('apps/api/src/payment/member-growth-conserving-payment.service.ts');
     const promotionRecoveringPayment = read('apps/api/src/payment/promotion-recovering-durable-zero-pay-aftersale-payment.service.ts');
     const durableZeroPayPayment = read('apps/api/src/payment/durable-zero-pay-aftersale-payment.service.ts');
     const historicalReconcile = read('apps/api/src/payment/historical-anomaly-payment-reconcile.service.ts');
     const orderModule = read('apps/api/src/order/order.module.ts');
+    const pickupSafeOrder = read('apps/api/src/order/pickup-safe-order.service.ts');
+    const pickupSafePromotion = read('apps/api/src/order/pickup-safe-promotion-checkout.service.ts');
     const idempotentOrder = read('apps/api/src/order/idempotent-attribution-safe-member-benefit-order.service.ts');
     const attributionSafeOrder = read('apps/api/src/order/attribution-safe-member-benefit-order.service.ts');
     const attributionAwarePromotion = read('apps/api/src/order/attribution-aware-promotion-checkout.service.ts');
@@ -100,15 +103,22 @@ describe('production operation closure contracts', () => {
     const groupModule = read('apps/api/src/group-buy/group-buy.module.ts');
     const flashModule = read('apps/api/src/flash-sale/flash-sale.module.ts');
     const benefitModule = read('apps/api/src/benefit-package/benefit-package.module.ts');
+    const durableBenefits = read('apps/api/src/benefit-package/durable-admin-benefit-package.service.ts');
     const validitySafeBenefits = read('apps/api/src/benefit-package/validity-safe-snapshot-view-benefit-package.service.ts');
     const snapshotViewBenefits = read('apps/api/src/benefit-package/snapshot-view-benefit-package.service.ts');
     const versionedBenefits = read('apps/api/src/benefit-package/versioned-benefit-package.service.ts');
     const settlementModule = read('apps/api/src/merchant-settlement/merchant-settlement.module.ts');
+    const snapshotTemporalSettlement = read('apps/api/src/merchant-settlement/snapshot-temporal-rule-merchant-settlement.service.ts');
+    const temporalSettlement = read('apps/api/src/merchant-settlement/temporal-rule-merchant-settlement.service.ts');
+    const serializedSettlement = read('apps/api/src/merchant-settlement/serialized-sales-merchant-settlement.service.ts');
     const snapshotSettlement = read('apps/api/src/merchant-settlement/snapshot-aware-state-safe-merchant-settlement.service.ts');
     const shareModule = read('apps/api/src/share/share.module.ts');
     const atomicShare = read('apps/api/src/share/atomic-share-production.service.ts');
+    const authModule = read('apps/api/src/auth/auth.module.ts');
+    const recoveringAuth = read('apps/api/src/auth/recovering-production-auth.service.ts');
 
-    expect(paymentModule).toContain('useClass: OrphanSafeMemberGrowthPaymentService');
+    expect(paymentModule).toContain('useClass: ConfirmedMissingRefundRetryPaymentService');
+    expect(confirmedMissingRefundPayment).toContain('extends OrphanSafeMemberGrowthPaymentService');
     expect(orphanSafePayment).toContain('extends MemberGrowthConservingPaymentService');
     expect(orphanSafePayment).toContain("return { code: 'FAIL', message: '本地退款记录不存在，请重试' }");
     expect(memberGrowthPayment).toContain('extends PromotionRecoveringDurableZeroPayAftersalePaymentService');
@@ -118,7 +128,12 @@ describe('production operation closure contracts', () => {
     expect(paymentModule).toContain('HistoricalAnomalyPaymentReconcileService');
     expect(historicalReconcile).toContain('extends ProductionPaymentReconcileService');
 
-    expect(orderModule).toContain('useClass: IdempotentAttributionSafeMemberBenefitOrderService');
+    expect(authModule).toContain('useClass: RecoveringProductionAuthService');
+    expect(recoveringAuth).toContain('extends ProductionAuthService');
+
+    expect(orderModule).toContain('useClass: PickupSafeIdempotentAttributionSafeMemberBenefitOrderService');
+    expect(pickupSafeOrder).toContain('extends IdempotentAttributionSafeMemberBenefitOrderService');
+    expect(pickupSafeOrder).toContain('installPickupStoreTransactionGuard');
     expect(idempotentOrder).toContain('extends AttributionSafeMemberBenefitOrderService');
     expect(idempotentOrder).toContain('buildDeterministicOrderNo');
     expect(idempotentOrder).toContain('orderCreateIdempotency');
@@ -131,7 +146,9 @@ describe('production operation closure contracts', () => {
     expect(netRewardOrder).toContain('successfulRefundAmount');
     expect(netRewardOrder).toContain('netPayAmount');
     expect(orderModule).toContain('provide: PromotionCheckoutService');
-    expect(orderModule).toContain('useClass: AttributionAwarePromotionCheckoutService');
+    expect(orderModule).toContain('useClass: PickupSafeAttributionAwarePromotionCheckoutService');
+    expect(pickupSafePromotion).toContain('extends AttributionAwarePromotionCheckoutService');
+    expect(pickupSafePromotion).toContain('lockActivePickupStore');
     expect(attributionAwarePromotion).toContain('extends PromotionCheckoutService');
     expect(attributionAwarePromotion).toContain('resolveCreateOrderAttribution');
 
@@ -142,12 +159,20 @@ describe('production operation closure contracts', () => {
     expect(attachmentSafeAftersale).toContain('extends ProductionAftersaleService');
     expect(groupModule).toContain('ProductionGroupBuyService');
     expect(flashModule).toContain('ProductionFlashSaleService');
-    expect(benefitModule).toContain('useClass: ValiditySafeSnapshotViewBenefitPackageService');
+    expect(benefitModule).toContain('DurableAdminBenefitPackageService');
+    expect(benefitModule).toContain('useExisting: DurableAdminBenefitPackageService');
+    expect(durableBenefits).toContain('extends ValiditySafeSnapshotViewBenefitPackageService');
     expect(validitySafeBenefits).toContain('extends SnapshotViewBenefitPackageService');
     expect(validitySafeBenefits).toContain('权益尚未生效');
     expect(snapshotViewBenefits).toContain('extends VersionedBenefitPackageService');
     expect(versionedBenefits).toContain('extends ZeroPayAwareBenefitPackageService');
-    expect(settlementModule).toContain('SnapshotAwareStateSafeMerchantSettlementService');
+    expect(settlementModule).toContain('useClass: SnapshotTemporalRuleMerchantSettlementService');
+    expect(snapshotTemporalSettlement).toContain('extends TemporalRuleMerchantSettlementService');
+    expect(snapshotTemporalSettlement).toContain('benefitValueSource');
+    expect(temporalSettlement).toContain('extends SerializedSalesMerchantSettlementService');
+    expect(temporalSettlement).toContain('salesOccurredAt');
+    expect(serializedSettlement).toContain('extends SnapshotAwareStateSafeMerchantSettlementService');
+    expect(serializedSettlement).toContain('merchant:settlement:sales:');
     expect(snapshotSettlement).toContain('extends StateSafeProductionMerchantSettlementService');
     expect(shareModule).toContain('useClass: AtomicShareProductionService');
     expect(atomicShare).toContain('extends SafeShareProductionService');

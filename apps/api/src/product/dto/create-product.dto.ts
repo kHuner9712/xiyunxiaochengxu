@@ -21,6 +21,7 @@ import { Type } from 'class-transformer';
 
 type EntityId = string | number;
 const MYSQL_SIGNED_INT_MAX = 2_147_483_647;
+const PRODUCT_CREATE_REQUEST_ID = /^[1-9]\d{0,18}$/;
 
 @ValidatorConstraint({ name: 'recommendAgeRange', async: false })
 export class RecommendAgeRangeConstraint implements ValidatorConstraintInterface {
@@ -197,4 +198,12 @@ export class CreateProductDto {
   @Min(0)
   @Max(3)
   status?: number;
+
+  // Optional for rolling-upgrade compatibility with an already-cached admin build. The current
+  // admin generates one when the create page mounts and reuses it until that logical create ends.
+  @IsOptional()
+  @IsString()
+  @Matches(PRODUCT_CREATE_REQUEST_ID, { message: '商品创建请求ID无效' })
+  @MaxLength(19)
+  clientRequestId?: string;
 }

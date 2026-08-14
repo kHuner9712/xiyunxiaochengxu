@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 export interface ActivityContentItem {
   id: string
@@ -36,15 +37,23 @@ export const activityContentApi = {
     return request.get(`/admin/activity-content/detail/${encodeURIComponent(id)}`)
   },
   create(data: any) {
-    return request.post('/admin/activity-content/create', data)
+    return runSingleFlight('admin:activity-content:create', () =>
+      request.post('/admin/activity-content/create', data),
+    )
   },
   update(id: string, data: any) {
-    return request.put(`/admin/activity-content/update/${encodeURIComponent(id)}`, data)
+    return runSingleFlight(`admin:activity-content:update:${id}`, () =>
+      request.put(`/admin/activity-content/update/${encodeURIComponent(id)}`, data),
+    )
   },
   updateStatus(id: string, status: number) {
-    return request.put(`/admin/activity-content/status/${encodeURIComponent(id)}`, { status })
+    return runSingleFlight(`admin:activity-content:status:${id}`, () =>
+      request.put(`/admin/activity-content/status/${encodeURIComponent(id)}`, { status }),
+    )
   },
   delete(id: string) {
-    return request.delete(`/admin/activity-content/delete/${encodeURIComponent(id)}`)
+    return runSingleFlight(`admin:activity-content:delete:${id}`, () =>
+      request.delete(`/admin/activity-content/delete/${encodeURIComponent(id)}`),
+    )
   },
 }

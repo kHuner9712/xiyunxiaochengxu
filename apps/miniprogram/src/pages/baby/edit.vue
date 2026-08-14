@@ -33,15 +33,15 @@
       </view>
       <view class="form-item">
         <text class="form-label">头像</text>
-        <view class="avatar-upload" @tap="uploadAvatar">
+        <view class="avatar-upload" :class="{ disabled: uploading || submitting }" @tap="uploadAvatar">
           <image v-if="avatarPreview" class="avatar-preview" :src="avatarPreview" mode="aspectFill" />
-          <text v-else class="avatar-placeholder">+</text>
+          <text v-else class="avatar-placeholder">{{ uploading ? '…' : '+' }}</text>
         </view>
       </view>
     </view>
 
-    <view class="submit-btn" @tap="handleSubmit">
-      <text class="submit-text">{{ isEdit ? '保存' : '添加' }}</text>
+    <view class="submit-btn" :class="{ disabled: uploading || submitting }" @tap="handleSubmit">
+      <text class="submit-text">{{ uploading ? '头像上传中...' : (submitting ? '保存中...' : (isEdit ? '保存' : '添加')) }}</text>
     </view>
   </view>
 </template>
@@ -61,6 +61,8 @@ const form = ref<BabyForm & { id?: string }>({
 })
 
 const isEdit = ref(false)
+const uploading = ref(false)
+const submitting = ref(false)
 const avatarPreview = computed(() => form.value.avatar || form.value.avatarUrl || '')
 
 async function loadBaby(id: string) {
@@ -75,10 +77,13 @@ async function loadBaby(id: string) {
 }
 
 function onDateChange(e: any) {
+  if (submitting.value) return
   form.value.birthday = e.detail.value
 }
 
 async function uploadAvatar() {
+  if (uploading.value || submitting.value) return
+  uploading.value = true
   try {
     const results = await chooseAndUploadImage(1, 'baby-avatar')
     if (results.length) {
@@ -87,6 +92,8 @@ async function uploadAvatar() {
     }
   } catch {
     uni.showToast({ title: '图片上传失败', icon: 'none' })
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -103,7 +110,14 @@ function validate(): boolean {
 }
 
 async function handleSubmit() {
+  if (submitting.value) return
+  if (uploading.value) {
+    uni.showToast({ title: '头像仍在上传，请稍后保存', icon: 'none' })
+    return
+  }
   if (!validate()) return
+
+  submitting.value = true
   try {
     const { id, ...payload } = form.value
     const normalizedPayload: BabyForm = {
@@ -116,9 +130,11 @@ async function handleSubmit() {
       await createBaby(normalizedPayload)
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
-    setTimeout(() => uni.navigateBack(), 1500)
+    uni.navigateBack()
   } catch {
     uni.showToast({ title: '保存失败', icon: 'none' })
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -130,7 +146,9 @@ defineExpose({
   form,
   handleSubmit,
   uploadAvatar,
-  avatarPreview
+  avatarPreview,
+  uploading,
+  submitting,
 })
 </script>
 
@@ -236,6 +254,11 @@ defineExpose({
   overflow: hidden;
   border: 4rpx solid #FFFFFF;
   box-shadow: $shadow-sm;
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .avatar-preview {
@@ -254,6 +277,11 @@ defineExpose({
   padding: 24rpx 0;
   text-align: center;
   box-shadow: $shadow-coral;
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .submit-text {

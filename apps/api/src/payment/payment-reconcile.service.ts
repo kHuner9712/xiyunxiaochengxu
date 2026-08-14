@@ -12,6 +12,8 @@ const ACTIVE_REFUND_RECONCILE_STATUSES = [
   REFUND_STATUS.INITIATING,
   REFUND_STATUS.PENDING,
   REFUND_STATUS.PROCESSING,
+  REFUND_STATUS.FAILED,
+  REFUND_STATUS.RETRYING,
 ];
 
 @Injectable()
@@ -250,11 +252,15 @@ export class PaymentReconcileService {
         } else if (wechatStatus === WECHAT_REFUND_STATUS.CLOSED || wechatStatus === WECHAT_REFUND_STATUS.ABNORMAL) {
           const localStatus = wechatStatus === WECHAT_REFUND_STATUS.CLOSED ? REFUND_STATUS.CLOSED : REFUND_STATUS.ABNORMAL;
 
-          await this.prisma.$transaction(async (tx) => {
-            await tx.orderRefund.update({
-              where: { id: refund.id },
+          const claimed = await this.prisma.$transaction(async (tx) => {
+            const refundUpdate = await tx.orderRefund.updateMany({
+              where: {
+                id: refund.id,
+                status: { in: ACTIVE_REFUND_RECONCILE_STATUSES },
+              },
               data: { status: localStatus, rawResponse: wechatResult },
             });
+            if (refundUpdate.count !== 1) return false;
 
             if (refund.aftersaleId) {
               await tx.aftersaleOrder.update({
@@ -271,18 +277,37 @@ export class PaymentReconcileService {
                 },
               });
             }
+            return true;
           });
+
+          if (!claimed) {
+            skipped++;
+            this.logger.log(`退款对账放弃旧终态结果: ${refund.outRefundNo}本地状态已被并发回调/同步更新`);
+            continue;
+          }
 
           fixed++;
           this.logger.log(`退款对账同步终态: ${refund.outRefundNo} -> ${localStatus}`);
         } else if (wechatStatus === 'PROCESSING') {
-          if (refund.status === REFUND_STATUS.INITIATING) {
-            await this.prisma.orderRefund.update({
-              where: { id: refund.id },
-              data: { status: REFUND_STATUS.PENDING, refundId: wechatResult.refund_id || refund.refundId, rawResponse: wechatResult },
+          const shouldPromoteToPending = refund.status === REFUND_STATUS.INITIATING
+            || refund.status === REFUND_STATUS.FAILED
+            || refund.status === REFUND_STATUS.RETRYING;
+          if (shouldPromoteToPending) {
+            const promoted = await this.prisma.orderRefund.updateMany({
+              where: { id: refund.id, status: refund.status },
+              data: {
+                status: REFUND_STATUS.PENDING,
+                refundId: wechatResult.refund_id || refund.refundId,
+                rawResponse: wechatResult,
+              },
             });
-            fixed++;
-            this.logger.log(`退款对账修复: ${refund.outRefundNo}从 initiating 更新为 pending`);
+            if (promoted.count === 1) {
+              fixed++;
+              this.logger.log(`退款对账修复: ${refund.outRefundNo}从 ${refund.status} 更新为 pending`);
+            } else {
+              skipped++;
+              this.logger.log(`退款对账放弃过期 PROCESSING 结果: ${refund.outRefundNo}本地状态已变化`);
+            }
           } else {
             await this.rotateRefundReconcileAttempt(refund.id, wechatResult);
             skipped++;

@@ -45,6 +45,7 @@
               v-model="row.status"
               :active-value="1"
               :inactive-value="0"
+              :disabled="statusBusyIds.has(String(row.id))"
               active-text="上架"
               inactive-text="下架"
               inline-prompt
@@ -58,7 +59,13 @@
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button
+              type="danger"
+              link
+              :loading="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id))"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -183,7 +190,7 @@
         <el-button type="primary" plain @click="addItem">+ 添加权益项</el-button>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
@@ -202,6 +209,9 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const tableData = ref<any[]>([])
 const formRef = ref<FormInstance>()
+const statusBusyIds = reactive(new Set<string>())
+const deleteBusyIds = reactive(new Set<string>())
+let editLoadSeq = 0
 
 const searchForm = reactive({ keyword: '', status: undefined as number | undefined })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
@@ -304,20 +314,23 @@ function resetForm() {
 }
 
 function handleAdd() {
+  editLoadSeq += 1
   resetForm()
   dialogVisible.value = true
 }
 
 async function handleEdit(row: any) {
+  const requestSeq = ++editLoadSeq
   resetForm()
   try {
-    const res = await benefitPackageApi.getDetail(row.id)
+    const res = await benefitPackageApi.getDetail(String(row.id))
+    if (requestSeq !== editLoadSeq) return
     const d = res.data
-    form.id = d.id
+    form.id = String(d.id)
     form.name = d.name || ''
     form.subtitle = d.subtitle || ''
     form.coverImage = d.coverImage || ''
-    form.productId = d.productId ?? ''
+    form.productId = d.productId != null ? String(d.productId) : ''
     form.price = d.price
     form.validDays = d.validDays
     form.sortOrder = d.sortOrder ?? 0
@@ -327,20 +340,22 @@ async function handleEdit(row: any) {
       ? [formatDate(d.validStartAt), formatDate(d.validEndAt)]
       : []
     form.items = (asArray(d.items) as any[]).map((it) => ({
-      id: it.id,
+      id: it.id != null ? String(it.id) : undefined,
       name: it.name || '',
       itemType: it.itemType || 'service',
       quantity: it.quantity ?? 1,
       originalValue: it.originalValue,
-      merchantPromotionSourceId: it.merchantPromotionSourceId ?? '',
-      pickupStoreId: it.pickupStoreId ?? '',
+      merchantPromotionSourceId: it.merchantPromotionSourceId != null ? String(it.merchantPromotionSourceId) : '',
+      pickupStoreId: it.pickupStoreId != null ? String(it.pickupStoreId) : '',
       verifyRequired: it.verifyRequired ?? 1,
       status: it.status ?? 1,
       description: it.description || '',
     }))
     dialogVisible.value = true
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || e?.message || '获取详情失败')
+    if (requestSeq === editLoadSeq) {
+      ElMessage.error(e?.response?.data?.message || e?.message || '获取详情失败')
+    }
   }
 }
 
@@ -352,37 +367,38 @@ function removeItem(idx: number) {
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
-  const payload: any = {
-    name: form.name.trim(),
-    subtitle: form.subtitle || undefined,
-    coverImage: form.coverImage || undefined,
-    productId: form.productId || undefined,
-    price: form.price,
-    validDays: form.validDays,
-    validStartAt: form.validRange?.[0] || undefined,
-    validEndAt: form.validRange?.[1] || undefined,
-    sortOrder: form.sortOrder ?? 0,
-    status: form.status,
-    description: form.description || undefined,
-    items: form.items.map((it) => ({
-      id: it.id || undefined,
-      name: it.name.trim(),
-      itemType: it.itemType,
-      quantity: it.quantity,
-      originalValue: it.originalValue,
-      merchantPromotionSourceId: it.merchantPromotionSourceId || undefined,
-      pickupStoreId: it.pickupStoreId || undefined,
-      verifyRequired: it.verifyRequired,
-      status: it.status,
-      description: it.description || undefined,
-    })),
-  }
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+
+    const payload: any = {
+      name: form.name.trim(),
+      subtitle: form.subtitle || undefined,
+      coverImage: form.coverImage || undefined,
+      productId: form.productId || undefined,
+      price: form.price,
+      validDays: form.validDays,
+      validStartAt: form.validRange?.[0] || undefined,
+      validEndAt: form.validRange?.[1] || undefined,
+      sortOrder: form.sortOrder ?? 0,
+      status: form.status,
+      description: form.description || undefined,
+      items: form.items.map((it) => ({
+        id: it.id || undefined,
+        name: it.name.trim(),
+        itemType: it.itemType,
+        quantity: it.quantity,
+        originalValue: it.originalValue,
+        merchantPromotionSourceId: it.merchantPromotionSourceId || undefined,
+        pickupStoreId: it.pickupStoreId || undefined,
+        verifyRequired: it.verifyRequired,
+        status: it.status,
+        description: it.description || undefined,
+      })),
+    }
+
     if (form.id) {
       await benefitPackageApi.update(form.id, payload)
     } else {
@@ -390,7 +406,7 @@ async function handleSubmit() {
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    fetchList()
+    await fetchList()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || e?.message || '保存失败')
   } finally {
@@ -399,29 +415,41 @@ async function handleSubmit() {
 }
 
 async function handleStatusChange(row: any) {
-  const next = row.status
+  const id = String(row.id)
+  const next = Number(row.status)
   const old = next === 1 ? 0 : 1
+  if (statusBusyIds.has(id)) {
+    row.status = old
+    return
+  }
+  statusBusyIds.add(id)
   try {
-    await benefitPackageApi.updateStatus(row.id, next)
+    await benefitPackageApi.updateStatus(id, next)
+    row.status = next
     ElMessage.success(next === 1 ? '已上架' : '已下架')
   } catch (e: any) {
     row.status = old
     ElMessage.error(e?.response?.data?.message || e?.message || '状态更新失败')
+  } finally {
+    statusBusyIds.delete(id)
   }
 }
 
 async function handleDelete(row: any) {
+  const id = String(row.id)
+  if (deleteBusyIds.has(id)) return
+  deleteBusyIds.add(id)
   try {
     await ElMessageBox.confirm(`确认删除权益包「${row.name}」？此操作为软删除。`, '提示', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await benefitPackageApi.remove(row.id)
+    await benefitPackageApi.remove(id)
     ElMessage.success('已删除')
-    fetchList()
+    await fetchList()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || e?.message || '删除失败')
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error(e?.response?.data?.message || e?.message || '删除失败')
+    }
+  } finally {
+    deleteBusyIds.delete(id)
   }
 }
 

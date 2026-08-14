@@ -74,6 +74,9 @@
     </div>
 
     <div class="table-card">
+      <el-alert type="info" :closable="false" style="margin-bottom: 12px">
+        “已结算”只能由结算批次在确认外部付款完成后产生；本页仅允许对尚未进入批次的记录做确认或取消。
+      </el-alert>
       <el-table :data="tableData" stripe v-loading="loading">
         <el-table-column prop="id" label="ID" width="90" show-overflow-tooltip />
         <el-table-column label="来源类型" width="110">
@@ -119,11 +122,15 @@
             <el-button
               v-if="row.status === 'pending'"
               link type="primary" size="small"
+              :loading="actionBusyKey === `confirmed:${row.id}`"
+              :disabled="actionBusyKey !== null"
               @click="handleUpdateStatus(row, 'confirmed')"
             >确认</el-button>
             <el-button
               v-if="row.status === 'pending' || row.status === 'confirmed'"
               link type="warning" size="small"
+              :loading="actionBusyKey === `cancelled:${row.id}`"
+              :disabled="actionBusyKey !== null"
               @click="handleUpdateStatus(row, 'cancelled')"
             >取消</el-button>
           </template>
@@ -147,7 +154,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { merchantSettlementApi } from '@/api/merchant-settlement'
 import { formatPrice, formatDate } from '@/utils/format'
 import { asArray, paginationTotal } from '@/utils/response'
@@ -156,6 +163,7 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 const dateRange = ref<[Date, Date] | null>(null)
+const actionBusyKey = ref<string | null>(null)
 
 const stats = reactive({
   total: 0,
@@ -244,14 +252,24 @@ function resetSearch() {
   loadList()
 }
 
-async function handleUpdateStatus(row: any, status: string) {
+async function handleUpdateStatus(row: any, status: 'confirmed' | 'cancelled') {
+  if (actionBusyKey.value !== null) return
+  actionBusyKey.value = `${status}:${row.id}`
   try {
+    if (status === 'cancelled') {
+      await ElMessageBox.confirm(
+        `确认取消这笔${row.sourceType === 'sales_referral' ? '销售分佣' : '服务结算'}记录吗？`,
+        '取消分佣记录',
+        { type: 'warning', confirmButtonText: '确认取消', cancelButtonText: '返回' },
+      )
+    }
     await merchantSettlementApi.updateRecordStatus(row.id, { status })
     ElMessage.success('操作成功')
-    loadList()
-    loadStats()
+    await Promise.all([loadList(), loadStats()])
   } catch (e) {
-    // 已处理
+    // 用户取消或请求错误，均由当前操作结束后释放互斥状态
+  } finally {
+    actionBusyKey.value = null
   }
 }
 

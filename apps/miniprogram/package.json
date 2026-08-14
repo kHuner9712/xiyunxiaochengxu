@@ -6,6 +6,8 @@
     "dev:mp-weixin": "uni -p mp-weixin",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "test": "vitest run --config vitest.config.ts",
+    "test:wechat:smoke": "node scripts/run-wechat-acceptance.mjs smoke",
+    "test:wechat:full": "node scripts/run-wechat-acceptance.mjs full",
     "build:mp-weixin": "node scripts/build-miniprogram.mjs"
   },
   "dependencies": {

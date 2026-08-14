@@ -11,6 +11,10 @@ function createMockPrisma() {
       update: jest.fn(),
       updateMany: jest.fn(),
     },
+    businessEvent: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
     $queryRaw: jest.fn(),
     $transaction: jest.fn(),
   };
@@ -34,6 +38,8 @@ function babyProfile(overrides: Record<string, any> = {}) {
   };
 }
 
+const REQUEST_ID = '1760000000000-abcdefghijklmnopqrstuvwx';
+
 describe('BabyProfileService', () => {
   let service: BabyProfileService;
   let prisma: ReturnType<typeof createMockPrisma>;
@@ -43,6 +49,8 @@ describe('BabyProfileService', () => {
     prisma.$queryRaw.mockResolvedValue([{ id: 1n }]);
     prisma.babyProfile.count.mockResolvedValue(0);
     prisma.babyProfile.findMany.mockResolvedValue([]);
+    prisma.businessEvent.findFirst.mockResolvedValue(null);
+    prisma.businessEvent.create.mockResolvedValue({ id: 99n });
     service = new BabyProfileService(prisma as any);
     jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
   });
@@ -66,8 +74,72 @@ describe('BabyProfileService', () => {
         }),
       }),
     );
+    expect(prisma.businessEvent.create).not.toHaveBeenCalled();
     expect(result.avatarUrl).toBe('https://example.com/new-baby.png');
     expect(result.avatar).toBe('https://example.com/new-baby.png');
+  });
+
+  it('replays a committed create request instead of creating a duplicate after a lost response', async () => {
+    const created = babyProfile({ id: 8n, avatarUrl: 'https://example.com/retry-baby.png', isDefault: 1 });
+    let durableEvent: any = null;
+    prisma.babyProfile.create.mockResolvedValue(created);
+    prisma.businessEvent.findFirst.mockImplementation(async () => durableEvent);
+    prisma.businessEvent.create.mockImplementation(async ({ data }: any) => {
+      durableEvent = { id: 41n, ...data };
+      return durableEvent;
+    });
+
+    const request = {
+      nickname: '重试宝宝',
+      gender: 2,
+      birthday: '2025-03-02',
+      avatarUrl: 'https://example.com/retry-baby.png',
+      clientRequestId: REQUEST_ID,
+    };
+
+    const first = await service.create('1', request);
+    prisma.babyProfile.findFirst.mockResolvedValue(created);
+    const retry = await service.create('1', request);
+
+    expect(first.id).toBe('8');
+    expect(retry.id).toBe('8');
+    expect(prisma.babyProfile.create).toHaveBeenCalledTimes(1);
+    expect(prisma.businessEvent.create).toHaveBeenCalledTimes(1);
+    expect(prisma.businessEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: 'baby_profile_create',
+        bizType: 'baby:1',
+        bizId: REQUEST_ID,
+        payload: expect.objectContaining({ profileId: '8' }),
+      }),
+    });
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed when the same create request id is reused with changed profile data', async () => {
+    const created = babyProfile({ id: 9n, nickname: '第一次' });
+    let durableEvent: any = null;
+    prisma.babyProfile.create.mockResolvedValue(created);
+    prisma.businessEvent.findFirst.mockImplementation(async () => durableEvent);
+    prisma.businessEvent.create.mockImplementation(async ({ data }: any) => {
+      durableEvent = { id: 42n, ...data };
+      return durableEvent;
+    });
+
+    await service.create('1', {
+      nickname: '第一次',
+      birthday: '2025-01-01',
+      clientRequestId: REQUEST_ID,
+    });
+
+    await expect(service.create('1', {
+      nickname: '被篡改的第二次',
+      birthday: '2025-01-01',
+      clientRequestId: REQUEST_ID,
+    })).rejects.toThrow('宝宝档案创建请求ID已被其他操作使用');
+
+    expect(prisma.babyProfile.create).toHaveBeenCalledTimes(1);
+    expect(prisma.businessEvent.create).toHaveBeenCalledTimes(1);
   });
 
   it('should accept avatar alias on update and remove raw avatar before saving', async () => {
@@ -90,6 +162,36 @@ describe('BabyProfileService', () => {
     );
     expect(prisma.babyProfile.update.mock.calls[0][0].data).not.toHaveProperty('avatar');
     expect(result.avatar).toBe('https://example.com/edited-baby.png');
+  });
+
+  it('replays success for a profile already soft-deleted by the same user', async () => {
+    const deleted = babyProfile({
+      id: 7n,
+      isDefault: 0,
+      deletedAt: new Date('2026-08-14T00:00:00.000Z'),
+    });
+    prisma.babyProfile.findFirst.mockResolvedValue(deleted);
+
+    const result = await service.delete('1', '7');
+
+    expect(result.id).toBe('7');
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(prisma.babyProfile.findFirst).toHaveBeenCalledWith({
+      where: { id: 7n, userId: 1n },
+    });
+    expect(prisma.babyProfile.update).not.toHaveBeenCalled();
+    expect(prisma.babyProfile.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('delete remains scoped to the current user for unknown or foreign ids', async () => {
+    prisma.babyProfile.findFirst.mockResolvedValue(null);
+
+    await expect(service.delete('1', '7')).rejects.toThrow('宝宝档案不存在');
+
+    expect(prisma.babyProfile.findFirst).toHaveBeenCalledWith({
+      where: { id: 7n, userId: 1n },
+    });
+    expect(prisma.babyProfile.update).not.toHaveBeenCalled();
   });
 
   it('should return both avatarUrl and avatar for list items', async () => {

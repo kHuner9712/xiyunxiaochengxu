@@ -44,9 +44,6 @@ export class ProductionAuthService extends AuthService {
         `管理员修改密码后已撤销全部登录会话: adminId=${adminId}, revokedSessions=${revoked}`,
       );
     } catch (error) {
-      // The password is already changed at this point. Do not falsely report a clean security
-      // transition if session revocation could not be completed; operations must repair Redis
-      // and require a fresh login before considering the change fully closed.
       this.productionLogger.error(
         `管理员密码已修改但旧会话撤销失败: adminId=${adminId}, error=${(error as Error).message}`,
         (error as Error).stack,
@@ -118,8 +115,6 @@ export class ProductionAuthService extends AuthService {
         if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
           throw error;
         }
-        // Another concurrent first-login request created the same openid. Re-read the durable
-        // user instead of surfacing a transient 500 to the mini-program.
         user = await this.productionPrisma.user.findFirst({
           where: { openid, deletedAt: null },
         });
@@ -132,24 +127,36 @@ export class ProductionAuthService extends AuthService {
       throw new UnauthorizedException('账号已停用，请联系客服');
     }
 
-    user = await this.productionPrisma.user.update({
-      where: { id: user.id },
+    const activeClaim = await this.productionPrisma.user.updateMany({
+      where: { id: user.id, deletedAt: null, status: 1 },
       data: {
         lastLoginAt: new Date(),
         ...(unionid ? { unionId: unionid } : {}),
       },
     });
+    if (activeClaim.count !== 1) {
+      throw new UnauthorizedException('账号已停用或注销，请重新登录');
+    }
 
+    const userId = user.id.toString();
+
+    // Final production providers may need to converge durable account facts before any access
+    // session is issued. Keep this hook before both Redis session state and JWT issuance so a
+    // failed convergence cannot leave a usable login behind.
+    await this.beforeIssueWeappSession(userId);
+
+    const sessionRegistryKey = `wechat_session:${userId}`;
     await this.productionRedis.set(
-      `wechat_session:${user.id.toString()}`,
+      sessionRegistryKey,
       session_key,
       WEAPP_ACCESS_TTL_SECONDS,
     );
 
     const tokenId = crypto.randomUUID();
+    const accessRegistryKey = `weapp_access_token:${userId}:${tokenId}`;
     const token = await this.productionJwt.signAsync(
       {
-        id: user.id.toString(),
+        id: userId,
         roleType: 'user',
         type: 'user',
         tokenType: 'access',
@@ -158,11 +165,49 @@ export class ProductionAuthService extends AuthService {
       { expiresIn: '7d' },
     );
     await this.productionRedis.set(
-      `weapp_access_token:${user.id.toString()}:${tokenId}`,
+      accessRegistryKey,
       '1',
       WEAPP_ACCESS_TTL_SECONDS,
     );
 
+    let stillActive = false;
+    try {
+      stillActive = Boolean(await this.productionPrisma.user.findFirst({
+        where: { id: user.id, deletedAt: null, status: 1 },
+        select: { id: true },
+      }));
+    } catch (error) {
+      await this.cleanupWeappLoginKeys(sessionRegistryKey, accessRegistryKey);
+      this.productionLogger.error(
+        `微信登录最终账号状态确认失败: userId=${userId}, error=${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException('微信登录状态确认失败，请重新登录');
+    }
+
+    if (!stillActive) {
+      await this.cleanupWeappLoginKeys(sessionRegistryKey, accessRegistryKey);
+      throw new UnauthorizedException('账号已停用或注销，请重新登录');
+    }
+
     return { token, isNewUser };
+  }
+
+  protected async beforeIssueWeappSession(_userId: string): Promise<void> {
+    // The base production service has no extra pre-session side effect. The final runtime provider
+    // overrides this hook to converge membership against the current locked member-level config.
+  }
+
+  private async cleanupWeappLoginKeys(sessionRegistryKey: string, accessRegistryKey: string) {
+    const results = await Promise.allSettled([
+      this.productionRedis.del(sessionRegistryKey),
+      this.productionRedis.del(accessRegistryKey),
+    ]);
+    const failures = results.filter((result) => result.status === 'rejected') as PromiseRejectedResult[];
+    if (failures.length > 0) {
+      this.productionLogger.error(
+        `微信登录竞态清理 Redis 失败: sessionKey=${sessionRegistryKey}, accessKey=${accessRegistryKey}, errors=${failures.map((item) => String(item.reason)).join('; ')}`,
+      );
+    }
   }
 }

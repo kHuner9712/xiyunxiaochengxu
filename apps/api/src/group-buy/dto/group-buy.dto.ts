@@ -15,6 +15,7 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 const POSITIVE_ID_PATTERN = /^[1-9]\d*$/;
 const EXPLICIT_TIMEZONE_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/i;
 const CLIENT_REQUEST_ID_PATTERN = /^\d{13}-[a-z0-9]{16,40}$/i;
+const MYSQL_SIGNED_INT_MAX = 2147483647;
 
 function normalizeId(value: unknown): unknown {
   if (value === undefined || value === null) return value;
@@ -39,7 +40,7 @@ export class GroupBuyActivityQueryDto extends PaginationDto {
 
 // ============ 后台：活动创建/更新 ============
 export class GroupBuyActivityDto {
-  @IsString() name!: string;
+  @IsString() @MaxLength(100) name!: string;
 
   @Transform(({ value }) => normalizeId(value))
   @IsString()
@@ -53,12 +54,12 @@ export class GroupBuyActivityDto {
   @MaxLength(19, { message: 'SKU ID超出范围' })
   skuId!: string;
 
-  @Type(() => Number) @IsInt() @Min(0) groupPrice!: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) originalPrice?: number;
-  @Type(() => Number) @IsInt() @Min(2) groupSize!: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) groupExpireHours?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) stockLimit?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) limitPerUser?: number;
+  @Type(() => Number) @IsInt() @Min(0) @Max(MYSQL_SIGNED_INT_MAX) groupPrice!: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(MYSQL_SIGNED_INT_MAX) originalPrice?: number;
+  @Type(() => Number) @IsInt() @Min(2) @Max(100) groupSize!: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(168) groupExpireHours?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(MYSQL_SIGNED_INT_MAX) stockLimit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(MYSQL_SIGNED_INT_MAX) limitPerUser?: number;
 
   @IsString()
   @IsISO8601({}, { message: '开始时间必须为ISO 8601时间' })
@@ -71,9 +72,18 @@ export class GroupBuyActivityDto {
   endTime!: string;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1) status?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) sortOrder?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(MYSQL_SIGNED_INT_MAX) sortOrder?: number;
   @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() coverImage?: string;
+  @IsOptional() @IsString() @MaxLength(500) coverImage?: string;
+}
+
+export class CreateGroupBuyActivityDto extends GroupBuyActivityDto {
+  @IsOptional()
+  @Transform(({ value }) => normalizeId(value))
+  @IsString()
+  @Matches(POSITIVE_ID_PATTERN, { message: '拼团活动创建请求ID无效' })
+  @MaxLength(32, { message: '拼团活动创建请求ID过长' })
+  clientRequestId?: string;
 }
 
 // ============ 后台：活动状态 ============

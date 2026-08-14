@@ -12,11 +12,12 @@
           maxlength="8"
           size="large"
           style="max-width: 300px"
+          :disabled="verifying"
           @input="handleCodeInput"
           @keyup.enter="handlePreview"
         >
           <template #append>
-            <el-button type="primary" @click="handlePreview" :loading="previewing">查询</el-button>
+            <el-button type="primary" @click="handlePreview" :loading="previewing" :disabled="verifying">查询</el-button>
           </template>
         </el-input>
       </div>
@@ -65,11 +66,11 @@
         </div>
 
         <div class="action-section">
-          <el-button @click="resetPreview">取消</el-button>
+          <el-button :disabled="verifying" @click="resetPreview()">取消</el-button>
           <el-button
             type="success"
             :loading="verifying"
-            :disabled="preview.alreadyCompleted || preview.status !== 'pending_pickup'"
+            :disabled="preview.alreadyCompleted || preview.status !== 'pending_pickup' || previewing || verifying"
             @click="handleVerify"
           >
             {{ preview.alreadyCompleted ? '已核销' : '确认核销' }}
@@ -91,27 +92,34 @@ const previewedPickupCode = ref('')
 const previewing = ref(false)
 const verifying = ref(false)
 const preview = ref<PickupOrderPreview | null>(null)
+let previewSeq = 0
 
 function handleCodeInput(value: string) {
+  if (verifying.value) return
   const normalized = String(value || '').replace(/\D/g, '').slice(0, 8)
   pickupCode.value = normalized
   if (previewedPickupCode.value && normalized !== previewedPickupCode.value) {
     resetPreview()
   }
+  previewSeq += 1
+  if (previewing.value) previewing.value = false
 }
 
 async function handlePreview() {
+  if (previewing.value || verifying.value) return
   const code = pickupCode.value.trim()
   if (!/^\d{8}$/.test(code)) {
     ElMessage.warning('请输入8位数字自提码')
     return
   }
 
+  const requestSeq = ++previewSeq
   pickupCode.value = code
   previewing.value = true
-  resetPreview()
+  resetPreview(true)
   try {
     const res = await pickupStoreApi.previewPickupCode(code)
+    if (requestSeq !== previewSeq || pickupCode.value.trim() !== code) return
     const data = (res.data || res) as PickupOrderPreview
     if (String(data.pickupCode || '') !== code) {
       throw new Error('自提码查询结果不一致，请重新查询')
@@ -119,15 +127,16 @@ async function handlePreview() {
     preview.value = data
     previewedPickupCode.value = code
   } catch (e: any) {
+    if (requestSeq !== previewSeq) return
     const msg = e?.response?.data?.message || e?.message || '查询失败'
     ElMessage.error(msg)
   } finally {
-    previewing.value = false
+    if (requestSeq === previewSeq) previewing.value = false
   }
 }
 
 async function handleVerify() {
-  if (!preview.value) return
+  if (verifying.value || previewing.value || !preview.value) return
 
   const code = previewedPickupCode.value
   if (!code || pickupCode.value !== code || String(preview.value.pickupCode || '') !== code) {
@@ -136,22 +145,22 @@ async function handleVerify() {
     return
   }
 
-  try {
-    await ElMessageBox.confirm(
-      `确认核销订单 ${preview.value.orderNo} 吗？核销后订单将完成。`,
-      '核销确认',
-      { type: 'warning', confirmButtonText: '确认核销', cancelButtonText: '取消' },
-    )
-  } catch {
-    return
-  }
-
   verifying.value = true
   try {
+    try {
+      await ElMessageBox.confirm(
+        `确认核销订单 ${preview.value.orderNo} 吗？核销后订单将完成。`,
+        '核销确认',
+        { type: 'warning', confirmButtonText: '确认核销', cancelButtonText: '取消' },
+      )
+    } catch {
+      return
+    }
+
     await pickupStoreApi.verifyPickupCode(code)
     ElMessage.success('核销成功')
     pickupCode.value = ''
-    resetPreview()
+    resetPreview(true)
   } catch (e: any) {
     const msg = e?.response?.data?.message || e?.message || '核销失败'
     ElMessage.error(msg)
@@ -160,7 +169,8 @@ async function handleVerify() {
   }
 }
 
-function resetPreview() {
+function resetPreview(force = false) {
+  if (verifying.value && !force) return
   preview.value = null
   previewedPickupCode.value = ''
 }

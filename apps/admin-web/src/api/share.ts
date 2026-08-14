@@ -1,17 +1,24 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 export const shareApi = {
   getCampaignList(params?: any) {
     return request.get('/admin/share/campaign/list', { params })
   },
   createCampaign(data: any) {
-    return request.post('/admin/share/campaign', data)
+    return runSingleFlight('admin:share-campaign:create', () =>
+      request.post('/admin/share/campaign', data),
+    )
   },
   updateCampaign(id: string, data: any) {
-    return request.put(`/admin/share/campaign/${id}`, data)
+    return runSingleFlight(`admin:share-campaign:update:${id}`, () =>
+      request.put(`/admin/share/campaign/${encodeURIComponent(id)}`, data),
+    )
   },
   updateCampaignStatus(id: string, status: number) {
-    return request.put(`/admin/share/campaign/${id}/status`, { status })
+    return runSingleFlight(`admin:share-campaign:status:${id}`, () =>
+      request.put(`/admin/share/campaign/${encodeURIComponent(id)}/status`, { status }),
+    )
   },
   getShareRecords(params?: any) {
     return request.get('/admin/share/records', { params })

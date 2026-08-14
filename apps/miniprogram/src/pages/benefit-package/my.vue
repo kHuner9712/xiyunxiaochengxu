@@ -22,7 +22,7 @@
           <text class="meta-label">有效期：</text>
           <text class="meta-value">{{ formatDate(pkg.validFrom) }} 至 {{ pkg.validTo ? formatDate(pkg.validTo) : '长期' }}</text>
         </view>
-        <view class="pkg-action" @tap="goEntitlements(pkg.id)">查看权益项 ›</view>
+        <view class="pkg-action" @tap="goEntitlements(pkg.packageId)">查看权益项 ›</view>
       </view>
       <Loading v-if="loading" />
       <Empty v-if="!loading && packageList.length === 0" text="暂无权益卡" />

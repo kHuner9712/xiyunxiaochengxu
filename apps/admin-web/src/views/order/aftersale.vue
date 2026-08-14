@@ -77,6 +77,7 @@ const AFTERSALE_TYPE_MAP: Record<number, string> = { 1: '仅退款', 2: '退货�
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<any[]>([])
+let listRequestVersion = 0
 
 const searchForm = reactive({
   status: undefined as string | undefined,
@@ -85,15 +86,24 @@ const searchForm = reactive({
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 async function fetchList() {
+  const requestVersion = ++listRequestVersion
+  const querySnapshot = {
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    status: searchForm.status,
+  }
+
   loading.value = true
   try {
-    const res = await aftersaleApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
+    const res = await aftersaleApi.getList(querySnapshot)
+    if (requestVersion !== listRequestVersion) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
   } catch (e: any) {
+    if (requestVersion !== listRequestVersion) return
     ElMessage.error(e?.message || '获取售后列表失败')
   } finally {
-    loading.value = false
+    if (requestVersion === listRequestVersion) loading.value = false
   }
 }
 

@@ -1,0 +1,126 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { OrderStatus } from '@prisma/client';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { BusinessEventService } from '../common/business-event.service';
+import { RedisService } from '../common/redis/redis.service';
+import { BenefitPackageService } from '../benefit-package/benefit-package.service';
+import { FlashSaleService } from '../flash-sale/flash-sale.service';
+import { GroupBuyService } from '../group-buy/group-buy.service';
+import { SystemConfigService } from '../system-config/system-config.service';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
+import { ConfirmOrderDto } from './dto/confirm-order.dto';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { IdempotentAttributionSafeMemberBenefitOrderService } from './idempotent-attribution-safe-member-benefit-order.service';
+import {
+  lockActiveCheckoutUser,
+  lockActivePickupStore,
+  withLockedPickupStoreSnapshot,
+} from './pickup-order-guard';
+
+type OrderCreateContext = {
+  userId: bigint;
+  pickupStoreId?: bigint;
+};
+
+export function installPickupStoreTransactionGuard(
+  prisma: PrismaService,
+  storage: AsyncLocalStorage<OrderCreateContext>,
+): void {
+  const originalTransaction = prisma.$transaction.bind(prisma) as any;
+
+  (prisma as any).$transaction = ((input: any, ...rest: any[]) => {
+    const context = storage.getStore();
+    if (!context || typeof input !== 'function') {
+      return originalTransaction(input, ...rest);
+    }
+
+    return originalTransaction(async (tx: any) => {
+      await lockActiveCheckoutUser(tx, context.userId);
+
+      if (!context.pickupStoreId) {
+        return input(tx);
+      }
+      const store = await lockActivePickupStore(tx, context.pickupStoreId);
+      return input(withLockedPickupStoreSnapshot(tx, store));
+    }, ...rest);
+  }) as any;
+}
+
+@Injectable()
+export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
+  extends IdempotentAttributionSafeMemberBenefitOrderService {
+  private readonly pickupOrderContext = new AsyncLocalStorage<OrderCreateContext>();
+
+  constructor(
+    private readonly orderCountPrisma: PrismaService,
+    businessEventService: BusinessEventService,
+    benefitPackageService: BenefitPackageService,
+    groupBuyService: GroupBuyService,
+    flashSaleService: FlashSaleService,
+    redisService: RedisService,
+    @Optional() systemConfigService?: SystemConfigService,
+  ) {
+    super(
+      orderCountPrisma,
+      businessEventService,
+      benefitPackageService,
+      groupBuyService,
+      flashSaleService,
+      redisService,
+      systemConfigService,
+    );
+
+    const runtimePrisma = (this as any).productionPrisma as PrismaService | undefined;
+    if (!runtimePrisma || typeof runtimePrisma.$transaction !== 'function') {
+      throw new Error('OrderService checkout transaction guard is unavailable');
+    }
+    installPickupStoreTransactionGuard(runtimePrisma, this.pickupOrderContext);
+  }
+
+  override async confirm(userId: string, dto: ConfirmOrderDto) {
+    const fulfillmentType = dto.fulfillmentType || 'delivery';
+    if (fulfillmentType === 'delivery' && dto.addressId) {
+      const userIdValue = parsePositiveBigIntId(userId, '用户');
+      const addressId = parsePositiveBigIntId(dto.addressId, '收货地址');
+      const address = await this.orderCountPrisma.userAddress.findFirst({
+        where: {
+          id: addressId,
+          userId: userIdValue,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!address) {
+        throw new BadRequestException('收货地址不存在或已失效，请重新选择');
+      }
+    }
+
+    return super.confirm(userId, dto);
+  }
+
+  override async getOrderCountByUser(userId: string) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const [counts, paid] = await Promise.all([
+      super.getOrderCountByUser(userId),
+      this.orderCountPrisma.order.count({
+        where: { userId: userIdValue, status: OrderStatus.paid },
+      }),
+    ]);
+
+    return { ...counts, paid };
+  }
+
+  override async create(userId: string, dto: CreateOrderDto) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const fulfillmentType = dto.fulfillmentType || 'delivery';
+    const pickupStoreId = fulfillmentType === 'pickup'
+      ? parsePositiveBigIntId(String(dto.pickupStoreId || ''), '自提点')
+      : undefined;
+
+    return this.pickupOrderContext.run(
+      { userId: userIdValue, pickupStoreId },
+      () => super.create(userId, dto),
+    );
+  }
+}

@@ -1,168 +1,195 @@
-# 预生产部署 Runbook（禧孕优选）
+# 生产部署 Runbook（禧孕优选）
 
-当前结论：**可进入预生产部署，不可正式发布**。  
-默认约定：以下部署命令默认在仓库根目录执行（`package.json` 所在目录）。
+> 本文描述仓库当前唯一受支持的生产部署与恢复路径。**不要手工拼接 migration、Compose 启动或数据库回滚命令来替代这些入口。**
 
-上线前请同时执行：
+## 0. 当前原则
 
-1. [部署前收口清单](./DEPLOYMENT_CHECKLIST.md)
-2. `pnpm release:check:prod`（冻结前唯一推荐入口）
-3. `pnpm smoke:public`（需设置公网 URL 环境变量）
+- 正式部署只能从远端最新 `main` 执行。
+- 必须显式提供批准的完整 40 位 `EXPECTED_DEPLOY_SHA`。
+- 唯一部署入口：`deploy/scripts/deploy-production.sh`。
+- `deploy/scripts/deploy.sh` 与 `deploy/scripts/deploy-prod-check.sh` 仅为兼容入口，都会转发到同一安全部署脚本。
+- 灾难恢复必须同时恢复**同一批次的数据库和 uploads**，使用 `deploy/scripts/restore.sh`。
+- 仓库门禁通过不等于真实生产/真机验收通过。
 
-## 0. 版本要求
+## 1. 服务器要求
 
-| 工具 | 版本 |
-| --- | --- |
-| Node.js | `v24.15.0`（`package.json` 要求 `>=18.0.0`） |
-| pnpm | `11.2.2` |
-| Docker | 服务器发行版仓库或 Docker 官方稳定版 |
-| 微信开发者工具 | 上传体验版前由发布负责人记录 |
+- Linux（Ubuntu 22.04+ 或同级发行版）
+- Node.js `22.13.0`（仓库 CI / Docker 构建基线）
+- pnpm `11.2.2`
+- Docker + Docker Compose v2（`docker compose`）
+- `git`、`curl`、`gzip`、`openssl`
+- 公网开放 `80/443`
+- MySQL、Redis、API 宿主机端口仅绑定 loopback，不对公网开放
+- Redis 宿主机必须满足 `vm.overcommit_memory=1`
 
-## 1. 服务器准备
+## 2. 固定生产域名与 TLS
 
-1. 准备 Linux 服务器（推荐 Ubuntu 22.04+），开放 80/443。
-2. 安装 Docker 与 Docker Compose。
-3. 准备域名并解析：
-- `api.yunxixiaochengxu.com.cn` -> `62.234.69.19`
-- `admin.yunxixiaochengxu.com.cn` -> `62.234.69.19`
+当前 production preflight 与 Nginx 共同锁定：
 
-## 2. 环境变量填写
+- API：`api.yunxixiaochengxu.com.cn`
+- Admin：`admin.yunxixiaochengxu.com.cn`
 
-1. 复制模板：`cp .env.production.example .env.production`（仅服务器本地保留）。
-2. 按 `.env.production.example` 填写生产值，不得使用默认弱口令。
-3. 关键项必须填写：数据库、Redis、JWT、刷新令牌、微信支付、CORS、后台默认密码。
-4. 运营/资质项参考 `docs/OPERATOR_REQUIRED.md`。
-5. `deploy-prod-check.sh` 使用安全解析器读取 `.env.production`（仅识别 `KEY=VALUE`，不会执行 shell 代码）。
-6. 如值包含空格、`#`、`$`、`&` 等特殊字符，建议使用双引号包裹。
+TLS 文件必须放在：
 
-## 3. 证书放置
-
-1. 微信支付证书（仅服务器）：
-- `WECHAT_PRIVATE_KEY_PATH` 指向 `apiclient_key.pem`
-- `WECHAT_PLATFORM_CERT_PATH` 指向 `wechatpay_platform.pem`
-2. HTTPS 证书：
-- `deploy/nginx/ssl/fullchain.pem`
-- `deploy/nginx/ssl/privkey.pem`
-3. 确认证书文件具备可读权限。
-4. 推荐路径与模板保持一致：`/.env.production.example` 中的证书路径字段。
-
-## 4. Docker 启动前检查
-
-```bash
-DRY_RUN_DATABASE_URL=mysql://root:***@影子库:3306/baby_mall_dry_run \
-VITE_WX_APPID=真实AppID \
-VITE_API_BASE_URL=https://api.yunxixiaochengxu.com.cn/api \
-pnpm release:check:prod
-(cd deploy && docker compose --env-file ../.env.production config)
+```text
+deploy/nginx/ssl/api/fullchain.pem
+deploy/nginx/ssl/api/privkey.pem
+deploy/nginx/ssl/admin/fullchain.pem
+deploy/nginx/ssl/admin/privkey.pem
 ```
 
-说明：`pnpm release:check:prod` 是正式发布唯一门禁。真实 AppID、生产 API 地址、协议联系方式、密钥、证书与 `DRY_RUN_DATABASE_URL` 缺失时失败是正确阻断，不应绕过。
+部署脚本会校验证书可读、证书与私钥匹配、域名覆盖正确，且有效期至少还剩 7 天。
 
-生产小程序包只能使用：
+如需额外校验 DNS 指向当前服务器，可在部署时设置 `EXPECTED_SERVER_IP`；不要把公网 IP 写死进仓库文档或脚本。
 
-```bash
-VITE_WX_APPID=真实AppID VITE_API_BASE_URL=https://api.yunxixiaochengxu.com.cn/api pnpm build:mini:prod
-```
+## 3. `.env.production`
 
-禁止直接使用占位 `manifest.json`、空 AppID、`urlCheck=false` 或本地 API 地址上传体验版/正式版。
-
-迁移演练必须先使用可丢弃影子库：
+复制模板：
 
 ```bash
-DRY_RUN_DATABASE_URL=mysql://root:***@影子库:3306/baby_mall_dry_run pnpm prisma:migrate:dry-run
+cp .env.production.example .env.production
+chmod 600 .env.production
 ```
 
-`DRY_RUN_DATABASE_URL` 不得等于生产 `DATABASE_URL`，也不得指向生产主库。
+按模板填入真实值。重点包括：
 
-如需一键执行部署前检查与启动：
+- `DATABASE_URL` 与 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` 必须完全一致；密码含 URI 保留字符时要 percent-encode。
+- Redis 强密码。
+- `JWT_SECRET`、`REFRESH_TOKEN_SECRET`。
+- 真实微信小程序 AppID/AppSecret。
+- 微信支付商户号、API v3 Key、商户私钥、平台证书和序列号。
+- 回调 URL 必须是固定正式 API 域名的支付/退款路径。
+- `UPLOAD_PUBLIC_URL=https://api.yunxixiaochengxu.com.cn`。
+- `CORS_ORIGINS` 必须包含 `https://admin.yunxixiaochengxu.com.cn`。
+- 首次生产库需要真实 `ADMIN_DEFAULT_USERNAME/ADMIN_DEFAULT_PASSWORD`；首次登录强制改密。
+
+订单自动关闭、自动收货、售后期限、运费、包邮门槛、积分抵扣等**不通过 `.env.production` 配置**。它们的唯一运行时来源是数据库 `system_configs`，由管理后台“系统配置”维护；金额型配置以“分”持久化。
+
+## 4. 证书目录
+
+微信支付材料仅放服务器，不提交 Git：
+
+```text
+deploy/certs/apiclient_key.pem
+deploy/certs/wechatpay_platform.pem
+deploy/certs/wechatpay_platform_*.pem   # 轮换时可选
+```
+
+容器内对应路径：
+
+```text
+/app/apps/api/certs/apiclient_key.pem
+/app/apps/api/certs/wechatpay_platform.pem
+```
+
+## 5. 合并后、部署前仓库门禁
+
+在真正连接生产服务器前，至少确认目标 `main` SHA 的：
+
+- CI
+- Release Gate Check
+- API Unit Diagnostic
+- API E2E Diagnostic
+- API Open Handle Diagnostic
+- Production Container Bootstrap
+
+均成功。
+
+`Production Container Bootstrap` 会真实构建 production API 镜像，并在隔离空数据库上执行：production preflight → migrations → fresh seed → 首管理员 → Redis/MySQL health。
+
+## 6. 唯一生产部署命令
+
+确认本地仓库是干净的最新 `main`，然后执行：
 
 ```bash
-ENV_FILE=.env.production bash deploy/scripts/deploy-prod-check.sh
+EXPECTED_DEPLOY_SHA=<批准的完整40位main提交SHA> \
+ENV_FILE=.env.production \
+bash deploy/scripts/deploy-production.sh
 ```
 
-密码/密钥强度门禁（deploy-prod-check）：
-1. `DB_PASSWORD` / `REDIS_PASSWORD` / `JWT_SECRET` / `REFRESH_TOKEN_SECRET` / `ADMIN_DEFAULT_PASSWORD`
-2. 至少 16 字符
-3. 必须包含大小写字母、数字、特殊字符
-4. 默认弱值将直接失败
+该脚本会强制完成或验证：
 
-## 5. 数据库迁移
+1. Git worktree 干净、当前分支为 `main`。
+2. HEAD 等于 `EXPECTED_DEPLOY_SHA`，且等于最新 `origin/main`。
+3. `.env.production`、数据库连接、标准 80/443、固定域名/CORS/上传 origin/回调地址正确。
+4. 微信商户私钥、平台证书与序列号正确。
+5. API/Admin TLS 证书正确。
+6. 构建候选 production image。
+7. 候选镜像在改动 live DB 前通过完整 production preflight。
+8. MySQL/Redis 健康。
+9. 进入维护模式并停止公网/API writers。
+10. 备份 live 数据库。
+11. 把备份恢复到隔离 MySQL，使用候选镜像执行 migration/status/schema-drift 验证。
+12. 只有克隆验证通过后才执行 live migration。
+13. 启动候选 API并通过 health。
+14. 恢复 Nginx 公网流量。
+15. 执行完整 `smoke-runtime.sh`。
+16. 在安全阶段失败时按脚本规则自动恢复；公网已重新开放后不会盲目回滚可能包含新写入的数据库。
+
+**不要**绕过上述流程手工运行 `prisma migrate deploy` 后再直接 `docker compose up -d`。
+
+## 7. 日常完整备份
+
+数据库与本地 uploads 必须作为同一恢复单元：
 
 ```bash
-DRY_RUN_DATABASE_URL=mysql://root:***@影子库:3306/baby_mall_dry_run pnpm prisma:migrate:dry-run
-(cd deploy && docker compose --env-file ../.env.production run --rm --entrypoint sh api -lc 'cd /app/apps/api && npx prisma migrate deploy')
+ENV_FILE=.env.production bash deploy/scripts/backup.sh
 ```
 
-说明：先在可丢弃影子库完成 dry-run，再对目标库执行真实迁移。使用 `--entrypoint sh` 覆写确保迁移命令执行后容器退出，不会进入常驻服务模式。迁移幂等，重复执行不会产生冲突。
+每个批次生成：
 
-## 6. 启动服务
+```text
+db_YYYYMMDD_HHMMSS.sql.gz
+uploads_YYYYMMDD_HHMMSS.tar.gz
+checksums_YYYYMMDD_HHMMSS.sha256
+```
+
+应异地保存完整三件套，并定期做恢复演练。
+
+## 8. 灾难恢复
+
+恢复会覆盖当前生产数据库和 uploads，必须使用同一批次：
 
 ```bash
-(cd deploy && SKIP_MIGRATE=true docker compose --env-file ../.env.production up -d)
+ENV_FILE=.env.production \
+bash deploy/scripts/restore.sh db_YYYYMMDD_HHMMSS.sql.gz
 ```
 
-说明：设置 `SKIP_MIGRATE=true` 跳过 entrypoint.sh 中的自动迁移步骤，因为迁移已在第 5 步单独完成。若未单独执行迁移，可省略该变量，entrypoint.sh 会在启动时自动执行 `prisma migrate deploy`。
-
-## 7. 限流策略说明
-
-当前 API 限流（ThrottlerGuard）按单实例生效，使用进程内存储。若未来扩展为多实例部署，需将 ThrottlerGuard 的存储接入 Redis（如 @nestjs/throttler-storage-redis），使验证码、登录、refresh、小程序登录/手机号绑定等限流在多实例间共享。
-
-当前限流阈值：
-| 接口 | 限流策略 |
-|------|---------|
-| 默认 | 100次/60秒 |
-| GET /api/admin/auth/captcha | 20次/60秒 |
-| POST /api/admin/auth/login | 5次/60秒 |
-| POST /api/admin/auth/refresh | 10次/60秒 |
-| POST /api/weapp/auth/login | 10次/60秒 |
-| POST /api/weapp/auth/phone | 10次/60秒 |
-| 微信支付回调 | 跳过应用层限流（由 Nginx 层承担） |
-
-## 8. 健康检查
-
-1. API：`https://api.yunxixiaochengxu.com.cn/api/health`
-2. 后台首页：`https://admin.yunxixiaochengxu.com.cn`
-3. 上传静态资源路由：`https://api.yunxixiaochengxu.com.cn/uploads/`
-4. 容器日志：`docker compose logs -f api nginx`
-
-## 8.5 Smoke Test
+非交互执行还必须提供精确时间戳确认：
 
 ```bash
-API_BASE_URL=https://api.yunxixiaochengxu.com.cn/api ADMIN_BASE_URL=https://admin.yunxixiaochengxu.com.cn pnpm smoke:public
-pnpm smoke:all
+RESTORE_CONFIRM=YYYYMMDD_HHMMSS \
+ENV_FILE=.env.production \
+bash deploy/scripts/restore.sh db_YYYYMMDD_HHMMSS.sql.gz
 ```
 
-支付、退款、售后与自提核销必须在微信沙箱或真实预生产商户配置下单独验收，并留存回调日志与业务事件截图。
+恢复脚本会：
 
-## 9. 上传文件生产存储
+- 在停 writers 前验证 DB archive、uploads archive 与 checksum；
+- 关闭 Nginx/API；
+- 重建并恢复数据库；
+- 恢复同批次 uploads；
+- 启动 API 并通过 `/health`；
+- 临时启动 Nginx 后执行完整 runtime smoke；
+- smoke 失败会再次停止 Nginx，保持公网关闭；
+- 只有完整 smoke 成功才报告恢复完成。
 
-1. 正式商用推荐使用对象存储 + CDN 承载上传文件，本地 `uploads` 不应作为唯一长期存储。
-2. 暂未接入 OSS/COS/S3 时，必须把 `UPLOAD_DIR` 挂载到宿主机持久化卷，并纳入每日备份与恢复演练。
-3. `uploads` 目录权限建议仅 API 进程可写，Nginx 只读访问；禁止在该目录放置脚本、密钥、证书。
-4. 保持 `UPLOAD_MAX_SIZE` 与 API 上传校验一致，Nginx `client_max_body_size` 不得低于业务上限。
-5. `/uploads/` 公开访问仅适合商品图、内容图等公开资源。营业执照、食品资质等敏感资质图片如需上传，应优先走私有对象存储或后台鉴权访问；如暂时公开，运营必须知晓可被 URL 访问的风险。
-6. 对象存储接入时只在私有环境变量中配置访问密钥，不得提交任何云厂商密钥到仓库。
+## 9. 私有上传规则
 
-## 10. 错误响应与可观测性
+- 仅 `/uploads/public/...` 可静态公开。
+- `/uploads/private/...` 和兜底 `/uploads/...` 不允许直接静态访问。
+- 售后图片、营业执照、商品资质等私有文件必须通过后端鉴权接口读取。
+- 当前本地 uploads 使用 Docker 持久卷；如果未来切换对象存储，仍需保持私有/公开语义一致。
 
-1. API 继续采用 HTTP 200 + 业务 `code` 响应模式，前端按业务 `code` 判断成功、登录过期、参数错误等。
-2. 响应头与响应体会带 `requestId`，也支持客户端传入 `X-Request-Id` 或 `X-Correlation-Id`。
-3. 排查线上问题时，先用 `requestId` 关联网关日志、API 日志与 BusinessEvent。
-4. 支付、退款、库存、补偿任务异常应优先查看后台业务事件表，再查看容器日志。
+## 10. 真机/真实平台验收（部署之后单独进行）
 
-## 11. 回滚
+生产 smoke 不能替代：
 
-1. 代码回滚到上一稳定 commit/tag。
-2. 停止并重启旧版本镜像：
-```bash
-(cd deploy && docker compose down && docker compose up -d)
-```
-3. 数据库回滚前必须先备份；优先使用前向修复，谨慎执行迁移回滚。
+- 微信真实登录与手机号能力；
+- 合法 request/upload/download 域名；
+- 原生微信客服；
+- 真实微信支付与支付回调；
+- 真实退款与退款回调；
+- 登录 → 浏览 → 领券 → 普通/促销下单 → 支付 → 履约/核销 → 售后 → 退款 → 客服完整链。
 
-## 12. 常见问题
-
-1. `release:check:prod` 因 AppID 失败：未提供真实 `VITE_WX_APPID`。
-2. API 启动失败：检查 `.env.production` 是否缺必填变量或存在弱密钥。
-3. 支付回调验签失败：检查微信平台证书路径/序列号是否匹配。
-4. 退款状态异常：在后台对账中心执行退款同步并查看业务事件。
-5. 后台白屏/404：检查 `admin` 静态资源挂载与 Nginx 路由。
+只有服务器 production gate 与上述真机链均通过，才可进入正式发布判断。

@@ -12,6 +12,7 @@ const storeMock = vi.hoisted(() => ({
     memberLevelName: '普通用户',
     wxLogin: vi.fn(),
     bindPhone: vi.fn(),
+    logout: vi.fn(),
   },
 }))
 
@@ -34,6 +35,20 @@ vi.mock('@/api/order', () => ({
   normalizeOrderStatus: vi.fn((status) => status),
 }))
 
+vi.mock('@/utils/request', () => ({
+  navigateToStoredRedirect: vi.fn(),
+}))
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function mountUserPage() {
   return mount(UserPage)
 }
@@ -48,6 +63,7 @@ beforeEach(() => {
   storeMock.userStore.memberLevelName = '普通用户'
   storeMock.userStore.wxLogin.mockResolvedValue({})
   storeMock.userStore.bindPhone.mockResolvedValue({})
+  storeMock.userStore.logout.mockImplementation(() => {})
   ;(globalThis as any).uni = {
     login: vi.fn(({ success }) => success({ code: 'login-code' })),
     showToast: vi.fn(),
@@ -92,5 +108,30 @@ describe('我的页手机号绑定', () => {
       encryptedData: 'legacy-encrypted-data',
       iv: 'legacy-iv',
     })
+  })
+
+  it('首次绑定未完成时第二个授权事件不会重复绑定', async () => {
+    const pending = deferred<any>()
+    storeMock.userStore.bindPhone.mockImplementationOnce(() => pending.promise)
+    const wrapper = mountUserPage()
+    const vm = wrapper.vm as any
+    const event = {
+      detail: {
+        errMsg: 'getPhoneNumber:ok',
+        code: 'phone-code',
+      },
+    }
+
+    const first = vm.handleGetPhoneNumber(event)
+    const second = vm.handleGetPhoneNumber(event)
+
+    expect(vm.bindingPhone).toBe(true)
+    expect(storeMock.userStore.bindPhone).toHaveBeenCalledTimes(1)
+
+    pending.resolve({})
+    await Promise.all([first, second])
+
+    expect(storeMock.userStore.bindPhone).toHaveBeenCalledTimes(1)
+    expect(vm.bindingPhone).toBe(false)
   })
 })

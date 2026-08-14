@@ -82,8 +82,8 @@
 
     <view class="bottom-bar bottom-action-bar">
       <view class="cs-btn" @tap="goCustomerService">联系客服</view>
-      <view v-if="canCancelAftersale" class="cancel-btn" @tap="handleCancel">取消申请</view>
-      <view v-if="canFillReturnLogistics" class="return-logistics-btn" @tap="openReturnLogisticsForm">填写退货物流</view>
+      <view v-if="canCancelAftersale" class="cancel-btn" :class="{ disabled: actionBusy }" @tap="handleCancel">{{ actionBusy ? '处理中...' : '取消申请' }}</view>
+      <view v-if="canFillReturnLogistics" class="return-logistics-btn" :class="{ disabled: actionBusy }" @tap="openReturnLogisticsForm">填写退货物流</view>
     </view>
 
     <view v-if="showReturnLogisticsForm" class="logistics-modal-mask" @tap="closeReturnLogisticsForm">
@@ -106,8 +106,8 @@
           <textarea class="modal-textarea return-remark-input" v-model="returnLogisticsForm.remark" placeholder="选填" placeholder-class="native-textarea-placeholder" />
         </view>
         <view class="modal-actions">
-          <view class="modal-cancel-btn" @tap="closeReturnLogisticsForm">取消</view>
-          <view class="modal-submit-btn submit-logistics-btn" @tap="submitReturnLogistics">提交</view>
+          <view class="modal-cancel-btn" :class="{ disabled: actionBusy }" @tap="closeReturnLogisticsForm">取消</view>
+          <view class="modal-submit-btn submit-logistics-btn" :class="{ disabled: actionBusy }" @tap="submitReturnLogistics">{{ actionBusy ? '提交中...' : '提交' }}</view>
         </view>
       </view>
     </view>
@@ -136,6 +136,7 @@ const returnLogisticsForm = ref({
   remark: ''
 })
 const loadedAftersaleId = ref('')
+const actionBusy = ref(false)
 let skipInitialShowRefresh = true
 
 const normalizedStatus = computed(() => normalizeAftersaleStatus(detail.value.status))
@@ -212,21 +213,29 @@ function previewImage(url: string) {
   uni.previewImage({ urls: displayImages.value, current: url })
 }
 
-async function handleCancel() {
-  uni.showModal({
-    title: '提示',
-    content: '确定取消售后申请吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await cancelAftersale(detail.value.id)
-          await loadDetail(detail.value.id)
-        } catch {
-          uni.showToast({ title: '取消失败', icon: 'none' })
-        }
-      }
-    }
+function confirmModal(options: { title: string; content: string }): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.showModal({
+      ...options,
+      success: (res) => resolve(!!res.confirm),
+      fail: () => resolve(false),
+    })
   })
+}
+
+async function handleCancel() {
+  if (actionBusy.value) return
+  actionBusy.value = true
+  try {
+    const confirmed = await confirmModal({ title: '提示', content: '确定取消售后申请吗？' })
+    if (!confirmed) return
+    await cancelAftersale(detail.value.id)
+    await loadDetail(detail.value.id)
+  } catch {
+    uni.showToast({ title: '取消失败', icon: 'none' })
+  } finally {
+    actionBusy.value = false
+  }
 }
 
 function goCustomerService() {
@@ -250,6 +259,7 @@ function callReturnPhone() {
 }
 
 function openReturnLogisticsForm() {
+  if (actionBusy.value) return
   if (!detail.value.returnAddress) {
     uni.showToast({ title: '退货地址尚未补齐，请先联系客服', icon: 'none' })
     return
@@ -263,11 +273,13 @@ function openReturnLogisticsForm() {
   showReturnLogisticsForm.value = true
 }
 
-function closeReturnLogisticsForm() {
+function closeReturnLogisticsForm(force = false) {
+  if (actionBusy.value && !force) return
   showReturnLogisticsForm.value = false
 }
 
 async function submitReturnLogistics() {
+  if (actionBusy.value) return
   const payload = {
     returnLogisticsCompany: returnLogisticsForm.value.returnLogisticsCompany.trim(),
     returnLogisticsNo: returnLogisticsForm.value.returnLogisticsNo.trim(),
@@ -284,13 +296,16 @@ async function submitReturnLogistics() {
     return
   }
 
+  actionBusy.value = true
   try {
     await fillReturnLogistics(detail.value.id, payload)
     uni.showToast({ title: '提交成功', icon: 'success' })
-    closeReturnLogisticsForm()
+    closeReturnLogisticsForm(true)
     await loadDetail(detail.value.id)
   } catch {
     uni.showToast({ title: '提交失败', icon: 'none' })
+  } finally {
+    actionBusy.value = false
   }
 }
 
@@ -317,6 +332,8 @@ defineExpose({
   returnLogisticsForm,
   showReturnLogisticsForm,
   canFillReturnLogistics,
+  actionBusy,
+  handleCancel,
   submitReturnLogistics,
   openReturnLogisticsForm,
 })
@@ -578,6 +595,14 @@ defineExpose({
   background: $gradient-coral;
   font-weight: 700;
   box-shadow: $shadow-coral;
+}
+
+.cancel-btn.disabled,
+.return-logistics-btn.disabled,
+.modal-cancel-btn.disabled,
+.modal-submit-btn.disabled {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .logistics-modal-mask {

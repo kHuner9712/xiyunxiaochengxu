@@ -25,6 +25,7 @@ function fixture() {
   const redis: any = {
     get: jest.fn().mockRejectedValue(new Error('redis down')),
     set: jest.fn().mockRejectedValue(new Error('redis down')),
+    del: jest.fn().mockRejectedValue(new Error('redis down')),
   };
   return { service: new ResilientSystemConfigService(prisma, redis), prisma, redis, saved };
 }
@@ -41,6 +42,35 @@ describe('ResilientSystemConfigService', () => {
     });
 
     await expect(service.getValue('basic', 'shop_name')).resolves.toBe('禧孕优选');
+  });
+
+  it('never lets a stale recovered Redis value override the durable database value', async () => {
+    const { service, saved, redis } = fixture();
+    saved.set('basic.customer_service_phone', {
+      id: 1n,
+      groupName: 'basic',
+      configKey: 'customer_service_phone',
+      configValue: '400-800-2026',
+      valueType: 'string',
+    });
+    redis.get.mockResolvedValue('400-OLD-CACHE');
+    redis.set.mockResolvedValue(undefined);
+
+    await expect(service.getValue('basic', 'customer_service_phone')).resolves.toBe('400-800-2026');
+    expect(redis.get).not.toHaveBeenCalled();
+    expect(redis.set).toHaveBeenCalledWith(
+      'config:basic:customer_service_phone',
+      '400-800-2026',
+      3600,
+    );
+  });
+
+  it('removes a stale cache entry when the durable configuration row no longer exists', async () => {
+    const { service, redis } = fixture();
+    redis.del.mockResolvedValue(undefined);
+
+    await expect(service.getValue('basic.removed', 'missing')).resolves.toBeNull();
+    expect(redis.del).toHaveBeenCalledWith('config:basic.removed:missing');
   });
 
   it('commits batch settings and refreshes runtime rules even when cache writes fail', async () => {

@@ -26,12 +26,12 @@
       </view>
     </view>
 
-    <view class="submit-btn" @tap="handleSubmit">
-      <text class="submit-text">{{ isEdit ? '保存' : '新增' }}</text>
+    <view class="submit-btn" :class="{ disabled: submitting || deleting }" @tap="handleSubmit">
+      <text class="submit-text">{{ submitting ? '保存中...' : (isEdit ? '保存' : '新增') }}</text>
     </view>
 
-    <view v-if="isEdit" class="delete-btn" @tap="handleDelete">
-      <text class="delete-text">删除地址</text>
+    <view v-if="isEdit" class="delete-btn" :class="{ disabled: submitting || deleting }" @tap="handleDelete">
+      <text class="delete-text">{{ deleting ? '删除中...' : '删除地址' }}</text>
     </view>
   </view>
 </template>
@@ -52,6 +52,8 @@ const form = ref<AddressForm & { id?: string }>({
 })
 
 const isEdit = ref(false)
+const submitting = ref(false)
+const deleting = ref(false)
 
 const regionText = computed(() => {
   if (form.value.province) {
@@ -107,8 +109,21 @@ function validate(): boolean {
   return true
 }
 
+function confirmDelete() {
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '提示',
+      content: '确定删除该地址吗？',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
+
 async function handleSubmit() {
+  if (submitting.value || deleting.value) return
   if (!validate()) return
+  submitting.value = true
   try {
     const { id, ...payload } = form.value
     if (isEdit.value && id) {
@@ -117,33 +132,43 @@ async function handleSubmit() {
       await createAddress(payload)
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
-    setTimeout(() => uni.navigateBack(), 1500)
+    uni.navigateBack()
   } catch {
     uni.showToast({ title: '保存失败', icon: 'none' })
+  } finally {
+    submitting.value = false
   }
 }
 
 async function handleDelete() {
+  if (submitting.value || deleting.value) return
   const id = form.value.id
   if (!id) return
-  uni.showModal({
-    title: '提示',
-    content: '确定删除该地址吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await deleteAddressApi(id)
-          uni.navigateBack()
-        } catch {
-          uni.showToast({ title: '删除失败', icon: 'none' })
-        }
-      }
-    }
-  })
+
+  deleting.value = true
+  try {
+    const confirmed = await confirmDelete()
+    if (!confirmed) return
+    await deleteAddressApi(id)
+    uni.navigateBack()
+  } catch {
+    uni.showToast({ title: '删除失败', icon: 'none' })
+  } finally {
+    deleting.value = false
+  }
 }
 
 onLoad((options) => {
   if (options?.id) loadAddress(String(options.id))
+})
+
+defineExpose({
+  form,
+  isEdit,
+  submitting,
+  deleting,
+  handleSubmit,
+  handleDelete,
 })
 </script>
 
@@ -229,6 +254,12 @@ onLoad((options) => {
   padding: 24rpx 0;
   text-align: center;
   box-shadow: $shadow-coral;
+}
+
+.submit-btn.disabled,
+.delete-btn.disabled {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .submit-text {

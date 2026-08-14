@@ -62,11 +62,92 @@ export interface ActivityOrderPreview {
   maxQuantity?: number
 }
 
-export function previewActivityOrder(activityId: string, data: ActivityCheckoutInput) {
-  return post<ActivityOrderPreview>(`/weapp/activity/${encodeURIComponent(activityId)}/preview`, data)
+function buildActivityPreviewFingerprint(activityId: string, data: ActivityCheckoutInput) {
+  return JSON.stringify({
+    activityId: String(activityId),
+    activityProductId: String(data.activityProductId),
+    skuId: String(data.skuId),
+    quantity: Number(data.quantity),
+    addressId: data.addressId || '',
+    pickupStoreId: data.pickupStoreId || '',
+    fulfillmentType: data.fulfillmentType || '',
+  })
+}
+
+let activityPreviewVersion = 0
+let latestActivityPreviewRequest: {
+  version: number
+  activityId: string
+  fingerprint: string
+  promise: Promise<ActivityOrderPreview>
+} | null = null
+let latestSuccessfulActivityPreviewVersion = 0
+let latestSuccessfulActivityPreviewFingerprint = ''
+
+/**
+ * Activity checkout can start overlapping previews when quantity or fulfillment selection changes.
+ * All overlapping callers converge on the newest preview so an older response cannot restore a
+ * stale amount or stock limit after a newer user choice.
+ */
+export async function previewActivityOrder(activityId: string, data: ActivityCheckoutInput): Promise<ActivityOrderPreview> {
+  const normalizedActivityId = String(activityId)
+  const version = ++activityPreviewVersion
+  const fingerprint = buildActivityPreviewFingerprint(normalizedActivityId, data)
+  const requestPromise = post<ActivityOrderPreview>(`/weapp/activity/${encodeURIComponent(normalizedActivityId)}/preview`, data)
+  latestActivityPreviewRequest = {
+    version,
+    activityId: normalizedActivityId,
+    fingerprint,
+    promise: requestPromise,
+  }
+
+  let awaitedVersion = version
+  let awaitedActivityId = normalizedActivityId
+  let awaitedFingerprint = fingerprint
+  let awaitedPromise = requestPromise
+
+  for (;;) {
+    try {
+      const result = await awaitedPromise
+      if (awaitedVersion === activityPreviewVersion) {
+        latestSuccessfulActivityPreviewVersion = awaitedVersion
+        latestSuccessfulActivityPreviewFingerprint = awaitedFingerprint
+        return result
+      }
+    } catch (error) {
+      if (awaitedVersion === activityPreviewVersion) throw error
+    }
+
+    const latest = latestActivityPreviewRequest
+    if (!latest || latest.activityId !== awaitedActivityId) {
+      throw new Error('活动金额试算状态异常，请重试')
+    }
+    awaitedVersion = latest.version
+    awaitedActivityId = latest.activityId
+    awaitedFingerprint = latest.fingerprint
+    awaitedPromise = latest.promise
+  }
 }
 
 export async function createActivityOrder(activityId: string, data: ActivityCheckoutInput) {
+  const normalizedActivityId = String(activityId)
+  const fingerprint = buildActivityPreviewFingerprint(normalizedActivityId, data)
+  const latestPreview = latestActivityPreviewRequest
+
+  // When this activity has an active preview contract, the create request must correspond to the
+  // newest successfully settled quote. This blocks the submit-vs-quantity/address race between the
+  // final pre-preview and the write request. Direct API callers without a preview remain supported.
+  if (
+    latestPreview?.activityId === normalizedActivityId &&
+    (
+      latestPreview.fingerprint !== fingerprint ||
+      latestSuccessfulActivityPreviewVersion !== latestPreview.version ||
+      latestSuccessfulActivityPreviewFingerprint !== fingerprint
+    )
+  ) {
+    throw new Error('活动金额正在重新计算，请稍后再提交')
+  }
+
   const result = await runIdempotentCheckout<{
     orderId: string
     orderNo: string

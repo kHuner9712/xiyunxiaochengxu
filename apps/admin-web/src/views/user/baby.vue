@@ -3,7 +3,7 @@
     <div class="search-bar">
       <el-form :model="searchForm" inline>
         <el-form-item label="宝宝昵称">
-          <el-input v-model="searchForm.name" placeholder="请输入宝宝昵称" clearable />
+          <el-input v-model="searchForm.nickname" placeholder="请输入宝宝昵称" clearable />
         </el-form-item>
         <el-form-item label="用户ID">
           <el-input v-model="searchForm.userId" placeholder="请输入用户ID" clearable />
@@ -19,21 +19,23 @@
       <el-table :data="tableData" stripe v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="80" />
-        <el-table-column prop="userName" label="用户昵称" width="120" />
-        <el-table-column prop="name" label="宝宝昵称" width="120" />
+        <el-table-column label="用户昵称" width="140">
+          <template #default="{ row }">{{ row.user?.nickname || row.user?.phone || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="宝宝昵称" width="120">
+          <template #default="{ row }">{{ row.nickname || '-' }}</template>
+        </el-table-column>
         <el-table-column label="性别" width="80">
-          <template #default="{ row }">{{ row.gender === 1 ? '男' : '女' }}</template>
+          <template #default="{ row }">{{ row.gender === 1 ? '男' : row.gender === 2 ? '女' : '未知' }}</template>
         </el-table-column>
         <el-table-column label="出生日期" width="120">
           <template #default="{ row }">{{ formatDateShort(row.birthday) }}</template>
         </el-table-column>
-        <el-table-column prop="age" label="月龄" width="80" />
-        <el-table-column label="预产期" width="120">
-          <template #default="{ row }">{{ row.dueDate ? formatDateShort(row.dueDate) : '-' }}</template>
+        <el-table-column label="月龄" width="80">
+          <template #default="{ row }">{{ row.currentMonthAge ?? '-' }}</template>
         </el-table-column>
-        <el-table-column prop="remark" label="备注" show-overflow-tooltip />
         <el-table-column label="创建时间" width="180">
-          <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
+          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
         </el-table-column>
       </el-table>
 
@@ -61,7 +63,7 @@ import { asArray, paginationTotal } from '@/utils/response'
 const loading = ref(false)
 const tableData = ref<any[]>([])
 
-const searchForm = reactive({ name: '', userId: '' })
+const searchForm = reactive({ nickname: '', userId: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 async function fetchList() {
@@ -70,7 +72,7 @@ async function fetchList() {
     const res = await userApi.getBabyList({
       page: pagination.page,
       pageSize: pagination.pageSize,
-      name: searchForm.name || undefined,
+      nickname: searchForm.nickname.trim() || undefined,
       userId: searchForm.userId.trim() || undefined,
     })
     tableData.value = asArray(res.data)
@@ -86,7 +88,7 @@ function handleSearch() {
 }
 
 function resetSearch() {
-  searchForm.name = ''
+  searchForm.nickname = ''
   searchForm.userId = ''
   handleSearch()
 }

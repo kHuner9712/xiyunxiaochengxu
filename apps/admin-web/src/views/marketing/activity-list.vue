@@ -42,9 +42,9 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'marketing:activity'" type="primary" link @click="router.push(`/marketing/activity-edit/${row.id}`)">编辑</el-button>
-            <el-button v-permission="'marketing:activity'" v-if="row.status === 0 || row.status === 1" type="warning" link @click="handleEnd(row)">结束</el-button>
-            <el-button v-permission="'marketing:activity'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'marketing:activity'" type="primary" link :disabled="isActionBusy(row)" @click="router.push(`/marketing/activity-edit/${row.id}`)">编辑</el-button>
+            <el-button v-permission="'marketing:activity'" v-if="row.status === 0 || row.status === 1" type="warning" link :loading="isActionBusy(row)" :disabled="isActionBusy(row)" @click="handleEnd(row)">结束</el-button>
+            <el-button v-permission="'marketing:activity'" type="danger" link :loading="isActionBusy(row)" :disabled="isActionBusy(row)" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -78,34 +78,62 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const searchForm = reactive({ name: '', status: undefined as number | undefined })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const actionBusyIds = reactive(new Set<string>())
+let listRequestSeq = 0
+
+function activityKey(row: any) {
+  return String(row?.id || '')
+}
+
+function isActionBusy(row: any) {
+  return actionBusyIds.has(activityKey(row))
+}
 
 async function fetchList() {
+  const requestSeq = ++listRequestSeq
   loading.value = true
   try {
     const res = await activityApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
+    if (requestSeq !== listRequestSeq) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
   } catch (e: any) {
-    ElMessage.error(e?.message || '获取活动列表失败')
-  } finally { loading.value = false }
+    if (requestSeq === listRequestSeq) ElMessage.error(e?.message || '获取活动列表失败')
+  } finally {
+    if (requestSeq === listRequestSeq) loading.value = false
+  }
 }
-function handleSearch() { pagination.page = 1; fetchList() }
+function handleSearch() { pagination.page = 1; void fetchList() }
 function resetSearch() { searchForm.name = ''; searchForm.status = undefined; handleSearch() }
 async function handleEnd(row: any) {
+  const id = activityKey(row)
+  if (!id || actionBusyIds.has(id)) return
+  actionBusyIds.add(id)
   try {
     await ElMessageBox.confirm('确定结束该活动吗？结束后小程序将立即停止展示。', '提示', { type: 'warning' })
-    await activityApi.updateStatus(String(row.id), 2)
+    await activityApi.updateStatus(id, 2)
     ElMessage.success('活动已结束')
     await fetchList()
-  } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '操作失败') }
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '操作失败')
+  } finally {
+    actionBusyIds.delete(id)
+  }
 }
 async function handleDelete(row: any) {
+  const id = activityKey(row)
+  if (!id || actionBusyIds.has(id)) return
+  actionBusyIds.add(id)
   try {
     await ElMessageBox.confirm('确定删除该活动吗？', '提示', { type: 'warning' })
-    await activityApi.delete(String(row.id))
+    await activityApi.delete(id)
     ElMessage.success('删除成功')
     await fetchList()
-  } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '删除失败') }
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '删除失败')
+  } finally {
+    actionBusyIds.delete(id)
+  }
 }
-fetchList()
+void fetchList()
 </script>

@@ -72,7 +72,7 @@
     <view class="products-section card">
       <view class="card-title-row">
         <text class="card-title">商品清单</text>
-        <text class="card-subtitle">共 {{ orderItems.length }} 件</text>
+        <text class="card-subtitle">共 {{ orderItemCount }} 件</text>
       </view>
       <view v-for="item in orderItems" :key="item.skuId" class="product-item">
         <view class="product-image-wrap">
@@ -181,8 +181,8 @@
         </view>
         <text class="bottom-note">放心支付 · 自营售后</text>
       </view>
-      <view class="submit-btn" :class="{ disabled: submitting }" @tap="handleSubmit">
-        <text class="submit-text">{{ submitting ? '提交中...' : '提交订单' }}</text>
+      <view class="submit-btn" :class="{ disabled: submitting || loading }" @tap="handleSubmit">
+        <text class="submit-text">{{ loading ? '金额计算中...' : (submitting ? '提交中...' : '提交订单') }}</text>
       </view>
     </view>
 
@@ -269,6 +269,11 @@ const loading = ref(false)
 const preview = ref<OrderPreview | null>(null)
 const couponList = ref<MyCouponItem[]>([])
 const agreedToLegal = ref(false)
+
+const orderItemCount = computed(() => orderItems.value.reduce((total, item) => {
+  const quantity = Number(item.quantity)
+  return total + (Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 0)
+}, 0))
 
 const totalProductPrice = computed(() => {
   if (preview.value) return preview.value.totalAmount
@@ -489,6 +494,10 @@ function isUserCancelPayError(err: any): boolean {
 
 async function handleSubmit() {
   if (submitting.value) return
+  if (loading.value) {
+    uni.showToast({ title: '订单金额正在计算，请稍后提交', icon: 'none' })
+    return
+  }
   if (!userStore.isLoggedIn) {
     userStore.requireLogin(() => {})
     return
@@ -572,12 +581,12 @@ async function handleSubmit() {
         })
       }
     } catch (payErr: any) {
-      const payMsg = payErr?.message || '支付发起失败'
+      console.error('[baby-mall] create payment failed:', payErr)
       uni.showModal({
-        title: '提示',
-        content: payMsg.includes('暂未开通') ? payMsg : '支付功能暂未开放，请联系客服',
+        title: '支付未完成',
+        content: '订单已创建，但支付发起失败。请进入订单详情继续支付。',
         showCancel: false,
-        confirmText: '我知道了',
+        confirmText: '查看订单',
         success: () => {
           uni.redirectTo({ url: `/pages/order/detail?id=${order.orderId}` })
         }
@@ -602,6 +611,7 @@ defineExpose({
   address,
   selectedPickupStore,
   orderItems,
+  orderItemCount,
   preview,
   usePoints,
   availablePoints,

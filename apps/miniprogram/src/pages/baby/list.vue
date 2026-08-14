@@ -12,11 +12,11 @@
           <text class="baby-meta">{{ item.gender === 1 ? '男' : '女' }} · {{ formatBabyAge(item.birthday) }}</text>
         </view>
         <view class="baby-actions">
-          <view class="action-btn" @tap="editBaby(item)">
+          <view class="action-btn" :class="{ disabled: actionBusy }" @tap="editBaby(item)">
             <text class="action-text">编辑</text>
           </view>
-          <view class="action-btn delete" @tap="deleteBaby(item)">
-            <text class="action-text">删除</text>
+          <view class="action-btn delete" :class="{ disabled: actionBusy }" @tap="deleteBaby(item)">
+            <text class="action-text">{{ actionBusy ? '处理中' : '删除' }}</text>
           </view>
         </view>
       </view>
@@ -25,7 +25,7 @@
     <Empty v-if="babies.length === 0" text="暂无宝宝档案" actionText="添加宝宝" @action="addBaby" />
 
     <view class="add-btn-wrap bottom-action-bar">
-      <view class="add-btn" @tap="addBaby">
+      <view class="add-btn" :class="{ disabled: actionBusy }" @tap="addBaby">
         <text class="add-text">+ 添加宝宝</text>
       </view>
     </view>
@@ -40,6 +40,7 @@ import { formatBabyAge } from '@/utils/format'
 import Empty from '@/components/Empty.vue'
 
 const babies = ref<BabyItem[]>([])
+const actionBusy = ref(false)
 let babyVersion = 0
 
 async function loadBabies(version = babyVersion) {
@@ -59,29 +60,40 @@ function refreshBabies() {
   return loadBabies(version)
 }
 
+function confirmDelete(item: BabyItem) {
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '提示',
+      content: `确定删除${item.nickname}的档案吗？`,
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
+
 function addBaby() {
+  if (actionBusy.value) return
   uni.navigateTo({ url: '/pages/baby/edit' })
 }
 
 function editBaby(item: BabyItem) {
+  if (actionBusy.value) return
   uni.navigateTo({ url: `/pages/baby/edit?id=${item.id}` })
 }
 
 async function deleteBaby(item: BabyItem) {
-  uni.showModal({
-    title: '提示',
-    content: `确定删除${item.nickname}的档案吗？`,
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await deleteBabyApi(item.id)
-          await refreshBabies()
-        } catch {
-          uni.showToast({ title: '删除失败', icon: 'none' })
-        }
-      }
-    }
-  })
+  if (actionBusy.value) return
+  actionBusy.value = true
+  try {
+    const confirmed = await confirmDelete(item)
+    if (!confirmed) return
+    await deleteBabyApi(item.id)
+    await refreshBabies()
+  } catch {
+    uni.showToast({ title: '删除失败', icon: 'none' })
+  } finally {
+    actionBusy.value = false
+  }
 }
 
 onShow(() => {
@@ -90,8 +102,10 @@ onShow(() => {
 
 defineExpose({
   babies,
+  actionBusy,
   loadBabies,
   refreshBabies,
+  deleteBaby,
 })
 </script>
 
@@ -175,6 +189,11 @@ defineExpose({
     background: $danger-soft;
     .action-text { color: $danger-color; }
   }
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .action-text {
@@ -194,6 +213,11 @@ defineExpose({
   @include flex-center;
   text-align: center;
   box-shadow: $shadow-coral;
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .add-text {

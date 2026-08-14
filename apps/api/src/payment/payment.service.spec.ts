@@ -401,14 +401,17 @@ describe('PaymentReconcileService.reconcilePendingRefunds', () => {
     });
 
     setupTransaction(mockPrisma);
-    mockPrisma.orderRefund.update.mockResolvedValue({ status: REFUND_STATUS.CLOSED });
+    mockPrisma.orderRefund.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.aftersaleOrder.update.mockResolvedValue({});
 
     const result = await service.reconcilePendingRefunds();
 
     expect(result.fixed).toBe(1);
-    expect(mockPrisma.orderRefund.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: REFUND_STATUS.CLOSED }) }),
+    expect(mockPrisma.orderRefund.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: REFUND_RECORD.id }),
+        data: expect.objectContaining({ status: REFUND_STATUS.CLOSED }),
+      }),
     );
   });
 
@@ -419,13 +422,16 @@ describe('PaymentReconcileService.reconcilePendingRefunds', () => {
       status: 'PROCESSING', refund_id: 'wx_refund_id',
     });
 
-    mockPrisma.orderRefund.update.mockResolvedValue({ status: REFUND_STATUS.PENDING });
+    mockPrisma.orderRefund.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await service.reconcilePendingRefunds();
 
     expect(result.fixed).toBe(1);
-    expect(mockPrisma.orderRefund.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: REFUND_STATUS.PENDING }) }),
+    expect(mockPrisma.orderRefund.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: REFUND_RECORD.id, status: REFUND_STATUS.INITIATING },
+        data: expect.objectContaining({ status: REFUND_STATUS.PENDING, refundId: 'wx_refund_id' }),
+      }),
     );
   });
 

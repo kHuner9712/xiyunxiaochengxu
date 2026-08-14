@@ -18,7 +18,7 @@
           <template #header>
             <div class="card-header">
               <span>支付对账</span>
-              <el-button type="primary" :loading="paymentLoading" @click="handlePaymentReconcile">
+              <el-button type="primary" :loading="paymentLoading" :disabled="fundOperationBusy" @click="handlePaymentReconcile">
                 触发支付对账
               </el-button>
             </div>
@@ -99,7 +99,7 @@
           <template #header>
             <div class="card-header">
               <span>退款对账</span>
-              <el-button type="primary" :loading="refundLoading" @click="handleRefundReconcile">
+              <el-button type="primary" :loading="refundLoading" :disabled="fundOperationBusy" @click="handleRefundReconcile">
                 触发退款对账
               </el-button>
             </div>
@@ -130,7 +130,7 @@
           <template #header>
             <div class="card-header">
               <span>单笔退款同步</span>
-              <el-button type="primary" :loading="syncLoading" :disabled="!syncOutRefundNo" @click="handleSyncRefund">
+              <el-button type="primary" :loading="syncLoading" :disabled="!syncOutRefundNo || fundOperationBusy" @click="handleSyncRefund">
                 同步退款状态
               </el-button>
             </div>
@@ -142,6 +142,7 @@
             v-model="syncOutRefundNo"
             placeholder="请输入退款单号，如 REFUND123..."
             clearable
+            :disabled="fundOperationBusy"
             style="margin: 16px 0"
           />
           <div v-if="syncResult" class="reconcile-result">
@@ -205,7 +206,7 @@
         </el-table-column>
         <el-table-column label="操作" width="130" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" :disabled="row.status !== 'pending'" @click="openResolveDialog(row)">处理</el-button>
+            <el-button link type="primary" :disabled="row.status !== 'pending' || resolveSubmitting" @click="openResolveDialog(row)">处理</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -233,21 +234,21 @@
       <pre class="result-json">{{ payloadDialogText }}</pre>
     </el-dialog>
 
-    <el-dialog v-model="resolveDialogVisible" title="处理补偿任务" width="520px">
+    <el-dialog v-model="resolveDialogVisible" title="处理补偿任务" width="520px" :close-on-click-modal="!resolveSubmitting" :close-on-press-escape="!resolveSubmitting" :show-close="!resolveSubmitting">
       <el-form :model="resolveForm" label-width="100px">
         <el-form-item label="处理动作">
-          <el-radio-group v-model="resolveForm.status">
+          <el-radio-group v-model="resolveForm.status" :disabled="resolveSubmitting">
             <el-radio value="resolved">resolved</el-radio>
             <el-radio value="ignored">ignored</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="处理结论">
-          <el-input v-model="resolveForm.resolution" type="textarea" :rows="4" placeholder="请输入处理结论" />
+          <el-input v-model="resolveForm.resolution" type="textarea" :rows="4" :disabled="resolveSubmitting" placeholder="请输入处理结论" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="resolveDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="resolveSubmitting" @click="submitResolve">提交</el-button>
+        <el-button :disabled="resolveSubmitting" @click="resolveDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="resolveSubmitting" :disabled="resolveSubmitting" @click="submitResolve">提交</el-button>
       </template>
     </el-dialog>
   </div>
@@ -283,6 +284,7 @@ const refundLoading = ref(false)
 const syncLoading = ref(false)
 const compensationLoading = ref(false)
 const resolveSubmitting = ref(false)
+const fundOperationBusy = computed(() => paymentLoading.value || refundLoading.value || syncLoading.value)
 
 const paymentResult = ref<PaymentReconcileResult | null>(null)
 const refundResult = ref<{ total: number; fixed: number; failed: number; skipped: number } | null>(null)
@@ -321,6 +323,7 @@ const compensationPagination = reactive({
   pageSize: 10,
   total: 0,
 })
+let compensationFetchVersion = 0
 
 const payloadDialogVisible = ref(false)
 const payloadDialogText = ref('')
@@ -332,18 +335,20 @@ const resolveForm = reactive<{ status: 'resolved' | 'ignored'; resolution: strin
 })
 
 async function handlePaymentReconcile() {
-  try {
-    await ElMessageBox.confirm('即将触发支付对账，将查询微信侧状态并修复本地异常数据。请勿频繁触发，是否继续？', '确认操作', {
-      confirmButtonText: '继续',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+  if (fundOperationBusy.value) return
   paymentLoading.value = true
-  lastError.value = ''
   try {
+    try {
+      await ElMessageBox.confirm('即将触发支付对账，将查询微信侧状态并修复本地异常数据。请勿频繁触发，是否继续？', '确认操作', {
+        confirmButtonText: '继续',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+
+    lastError.value = ''
     const res = await reconcileApi.reconcilePayments()
     paymentResult.value = res.data
     await fetchCompensationTasks()
@@ -371,18 +376,20 @@ async function handlePaymentReconcile() {
 }
 
 async function handleRefundReconcile() {
-  try {
-    await ElMessageBox.confirm('即将触发退款对账，将查询微信侧状态并修复本地异常数据。请勿频繁触发，是否继续？', '确认操作', {
-      confirmButtonText: '继续',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+  if (fundOperationBusy.value) return
   refundLoading.value = true
-  lastError.value = ''
   try {
+    try {
+      await ElMessageBox.confirm('即将触发退款对账，将查询微信侧状态并修复本地异常数据。请勿频繁触发，是否继续？', '确认操作', {
+        confirmButtonText: '继续',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+
+    lastError.value = ''
     const res = await reconcileApi.reconcileRefunds()
     refundResult.value = res.data
     if (res.data.fixed > 0) {
@@ -400,23 +407,26 @@ async function handleRefundReconcile() {
 }
 
 async function handleSyncRefund() {
+  if (fundOperationBusy.value) return
   const outRefundNo = syncOutRefundNo.value.trim()
   if (!outRefundNo) {
     ElMessage.warning('请输入退款单号')
     return
   }
-  try {
-    await ElMessageBox.confirm(`即将同步退款单 ${outRefundNo} 的微信侧状态到本地，是否继续？`, '确认操作', {
-      confirmButtonText: '继续',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+
   syncLoading.value = true
-  lastError.value = ''
   try {
+    try {
+      await ElMessageBox.confirm(`即将同步退款单 ${outRefundNo} 的微信侧状态到本地，是否继续？`, '确认操作', {
+        confirmButtonText: '继续',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+
+    lastError.value = ''
     const res = await reconcileApi.syncRefund(outRefundNo)
     syncResult.value = res.data
     if (res.data.synced) {
@@ -448,6 +458,7 @@ function showPayloadDetail(row: any) {
 }
 
 function openResolveDialog(row: any) {
+  if (resolveSubmitting.value) return
   currentTask.value = row
   resolveForm.status = 'resolved'
   resolveForm.resolution = ''
@@ -455,16 +466,20 @@ function openResolveDialog(row: any) {
 }
 
 async function submitResolve() {
-  if (!currentTask.value) return
-  if (!resolveForm.resolution.trim()) {
+  if (resolveSubmitting.value || !currentTask.value) return
+  const resolution = resolveForm.resolution.trim()
+  if (!resolution) {
     ElMessage.warning('请输入处理结论')
     return
   }
+
+  const taskId = currentTask.value.id
+  const status = resolveForm.status
   resolveSubmitting.value = true
   try {
-    await reconcileApi.resolveCompensationTask(currentTask.value.id, {
-      status: resolveForm.status,
-      resolution: resolveForm.resolution.trim(),
+    await reconcileApi.resolveCompensationTask(taskId, {
+      status,
+      resolution,
     })
     ElMessage.success('补偿任务处理成功')
     resolveDialogVisible.value = false
@@ -494,23 +509,31 @@ function handleCompensationSizeChange(pageSize: number) {
 }
 
 async function fetchCompensationTasks() {
+  const requestVersion = ++compensationFetchVersion
+  const querySnapshot = {
+    page: compensationQuery.page,
+    pageSize: compensationQuery.pageSize,
+    status: compensationQuery.status || undefined,
+    orderNo: compensationQuery.orderNo.trim() || undefined,
+  }
+
   compensationLoading.value = true
   try {
-    const res = await reconcileApi.listCompensationTasks({
-      page: compensationQuery.page,
-      pageSize: compensationQuery.pageSize,
-      status: compensationQuery.status || undefined,
-      orderNo: compensationQuery.orderNo.trim() || undefined,
-    })
+    const res = await reconcileApi.listCompensationTasks(querySnapshot)
+    if (requestVersion !== compensationFetchVersion) return
+
     compensationList.value = asArray(res.data)
-    compensationPagination.page = res.data.pagination?.page || compensationQuery.page
-    compensationPagination.pageSize = res.data.pagination?.pageSize || compensationQuery.pageSize
+    compensationPagination.page = res.data.pagination?.page || querySnapshot.page
+    compensationPagination.pageSize = res.data.pagination?.pageSize || querySnapshot.pageSize
     compensationPagination.total = paginationTotal(res.data)
   } catch (error: any) {
+    if (requestVersion !== compensationFetchVersion) return
     const message = error?.response?.data?.message || error?.message || '补偿任务列表加载失败'
     ElMessage.error(message)
   } finally {
-    compensationLoading.value = false
+    if (requestVersion === compensationFetchVersion) {
+      compensationLoading.value = false
+    }
   }
 }
 

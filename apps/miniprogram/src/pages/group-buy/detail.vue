@@ -189,7 +189,7 @@ async function handleCheckoutResult(result: StartGroupBuyResult) {
   }
 
   uni.showToast({ title: result.role === 'leader' ? '开团成功，请支付' : '参团成功，请支付', icon: 'success' })
-  setTimeout(() => payOrder(result.orderId), 300)
+  await payOrder(result.orderId)
 }
 
 async function handleStart() {

@@ -56,6 +56,49 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
     );
   }
 
+  override async createRefund(params: {
+    orderId: string;
+    aftersaleId?: string;
+    refundAmount: number;
+    reason?: string;
+  }) {
+    const latestFailed = await this.recoveryPrisma.orderRefund.findFirst({
+      where: {
+        orderId: BigInt(params.orderId),
+        aftersaleId: params.aftersaleId ? BigInt(params.aftersaleId) : null,
+        status: REFUND_STATUS.FAILED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (latestFailed) {
+      const resolution = await this.resolveUncertainFailedRefund(latestFailed);
+      if (resolution.retryable) {
+        return super.createRefund(params);
+      }
+
+      if (
+        resolution.status === REFUND_STATUS.SUCCESS ||
+        resolution.status === REFUND_STATUS.PENDING
+      ) {
+        return {
+          refundId: latestFailed.id.toString(),
+          refundNo: latestFailed.refundNo,
+          outRefundNo: latestFailed.outRefundNo,
+          status: resolution.status,
+          recovered: true,
+        };
+      }
+
+      const message = resolution.status === REFUND_STATUS.ABNORMAL
+        ? '上一笔退款在微信侧处于异常状态，请先人工处理并同步退款状态，禁止重复发起'
+        : '上一笔退款的微信侧状态尚未确认，请先同步退款状态，禁止重复发起';
+      throw new BadRequestException(message);
+    }
+
+    return super.createRefund(params);
+  }
+
   override async createGroupBuyFailureRefund(
     orderId: bigint | string,
     reason = '拼团失败自动退款',
@@ -141,12 +184,6 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
     }
   }
 
-  /**
-   * Durable recovery for immediate post-payment effects. The seed query deliberately excludes
-   * OrderStatus.paid (group-buy waiting state) and aftersale so benefits are never released
-   * before group success or while a refund is being decided. A NOT EXISTS query prevents old
-   * resolved tasks from starving new orders.
-   */
   async reconcilePaidOrderSideEffects(limit = 200) {
     const candidates = await this.recoveryPrisma.$queryRaw<Array<{
       id: bigint;
@@ -227,9 +264,6 @@ export class RecoverableProductionPaymentService extends ProductionPaymentServic
             order.id.toString(),
             order.payAmount ?? 0,
           );
-          // A paid-effect task may run after a refund task. Replaying every successful refund
-          // attribution adjustment after the gross attribution keeps the final report correct
-          // regardless of scheduler ordering; every adjustment is refundId-idempotent.
           const successfulRefunds = await this.recoveryPrisma.orderRefund.findMany({
             where: { orderId: order.id, status: REFUND_STATUS.SUCCESS },
             select: { id: true },

@@ -9,6 +9,9 @@ describe('CancellationSafeStockSafePaymentService', () => {
 
   function createService(lockAcquired = true, refund?: any, terminalPayment?: any) {
     const prisma: any = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({ userId: 8n }),
+      },
       orderPayment: {
         findFirst: jest.fn().mockResolvedValue(terminalPayment ?? null),
       },
@@ -72,13 +75,19 @@ describe('CancellationSafeStockSafePaymentService', () => {
     expect(baseCreatePayment).not.toHaveBeenCalled();
   });
 
-  it('serializes group failure refund creation on the same per-order lock', async () => {
+  it('serializes standard aftersale refund creation on the shared per-order lock', async () => {
     const baseCreateRefund = jest
-      .spyOn(RecoverableProductionPaymentService.prototype, 'createGroupBuyFailureRefund')
-      .mockResolvedValue({ status: REFUND_STATUS.PENDING } as any);
+      .spyOn(StockSafeRecoverableProductionPaymentService.prototype, 'createRefund')
+      .mockResolvedValue({ refundId: '1', refundNo: 'R1', outRefundNo: 'R1' } as any);
     const { service, redis } = createService(true);
+    const params = {
+      orderId: '42',
+      aftersaleId: '9',
+      refundAmount: 500,
+      reason: '同意退款',
+    };
 
-    const result = await service.createGroupBuyFailureRefund('42', '拼团失败自动退款');
+    const result = await service.createRefund(params);
 
     expect(redis.setNX).toHaveBeenCalledWith(
       'order:payment-cancel:42',
@@ -86,23 +95,102 @@ describe('CancellationSafeStockSafePaymentService', () => {
       90,
     );
     expect(baseCreateRefund).toHaveBeenCalledTimes(1);
-    expect(baseCreateRefund).toHaveBeenCalledWith('42', '拼团失败自动退款');
+    expect(baseCreateRefund).toHaveBeenCalledWith(params);
     expect(redis.releaseLockWithLua).toHaveBeenCalled();
-    expect(result).toEqual({ status: REFUND_STATUS.PENDING });
+    expect(result).toEqual({ refundId: '1', refundNo: 'R1', outRefundNo: 'R1' });
   });
 
-  it('does not enter the group failure refund state machine when the order lock is occupied', async () => {
+  it('does not enter the standard refund state machine when the order lock is occupied', async () => {
     const baseCreateRefund = jest.spyOn(
-      RecoverableProductionPaymentService.prototype,
-      'createGroupBuyFailureRefund',
+      StockSafeRecoverableProductionPaymentService.prototype,
+      'createRefund',
     );
     const { service } = createService(false);
 
-    await expect(
-      service.createGroupBuyFailureRefund('42', '拼团失败自动退款'),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.createRefund({
+      orderId: '42',
+      aftersaleId: '9',
+      refundAmount: 500,
+      reason: '同意退款',
+    })).rejects.toBeInstanceOf(BadRequestException);
 
     expect(baseCreateRefund).not.toHaveBeenCalled();
+  });
+
+  it('serializes refund-success core side effects per user across different orders', async () => {
+    const baseProcessRefund = jest
+      .spyOn(RecoverableProductionPaymentService.prototype, 'processWechatRefundSuccess')
+      .mockResolvedValue(undefined);
+    const { service, prisma, redis } = createService(true);
+    const refund = { id: 11n, orderId: 42n, outRefundNo: 'R42' };
+    const wechatData = { amount: { refund: 500, total: 1000 } };
+
+    await service.processWechatRefundSuccess(refund, 'WX-R42', wechatData);
+
+    expect(prisma.order.findUnique).toHaveBeenCalledWith({
+      where: { id: 42n },
+      select: { userId: true },
+    });
+    expect(redis.setNX).toHaveBeenCalledWith(
+      'user:refund-success:8',
+      expect.any(String),
+      120,
+    );
+    expect(baseProcessRefund).toHaveBeenCalledWith(refund, 'WX-R42', wechatData);
+    expect(redis.releaseLockWithLua).toHaveBeenCalled();
+  });
+
+  it('fails closed before refund-success point side effects when the user refund lock is occupied', async () => {
+    const baseProcessRefund = jest.spyOn(
+      RecoverableProductionPaymentService.prototype,
+      'processWechatRefundSuccess',
+    );
+    const { service } = createService(false);
+
+    await expect(service.processWechatRefundSuccess(
+      { id: 11n, orderId: 42n, outRefundNo: 'R42' },
+      'WX-R42',
+      { amount: { refund: 500, total: 1000 } },
+    )).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(baseProcessRefund).not.toHaveBeenCalled();
+  });
+
+  it('lets group-failure refund acquire the non-reentrant order lock exactly once through createRefund', async () => {
+    const baseCreateRefund = jest
+      .spyOn(StockSafeRecoverableProductionPaymentService.prototype, 'createRefund')
+      .mockResolvedValue({ refundId: '1', refundNo: 'R1', outRefundNo: 'R1' } as any);
+    const baseGroupRefund = jest
+      .spyOn(RecoverableProductionPaymentService.prototype, 'createGroupBuyFailureRefund')
+      .mockImplementation(async function (
+        this: CancellationSafeStockSafePaymentService,
+        orderId: bigint | string,
+        reason = '拼团失败自动退款',
+      ) {
+        const result = await this.createRefund({
+          orderId: String(orderId),
+          refundAmount: 500,
+          reason,
+        });
+        return { status: REFUND_STATUS.PENDING, ...result } as any;
+      });
+    const { service, redis } = createService(true);
+    redis.setNX.mockReset().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    const result = await service.createGroupBuyFailureRefund('42', '拼团失败自动退款');
+
+    expect(baseGroupRefund).toHaveBeenCalledWith('42', '拼团失败自动退款');
+    expect(baseCreateRefund).toHaveBeenCalledTimes(1);
+    expect(redis.setNX).toHaveBeenCalledTimes(1);
+    expect(redis.setNX).toHaveBeenCalledWith(
+      'order:payment-cancel:42',
+      expect.any(String),
+      90,
+    );
+    expect(result).toEqual(expect.objectContaining({
+      status: REFUND_STATUS.PENDING,
+      refundId: '1',
+    }));
   });
 
   it('does not reopen a payment record that has already reached FAILED terminal state', async () => {
