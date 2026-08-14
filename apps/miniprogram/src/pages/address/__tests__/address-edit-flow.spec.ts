@@ -147,6 +147,42 @@ describe('收货地址编辑核心操作', () => {
     expect((globalThis as any).uni.navigateBack).toHaveBeenCalledTimes(1)
   })
 
+  it('删除确认框打开期间禁止第二次删除和保存', async () => {
+    vi.mocked(getAddressDetail).mockResolvedValue({
+      id: '9',
+      name: '原姓名',
+      phone: '13800138000',
+      province: '浙江省',
+      city: '杭州市',
+      district: '西湖区',
+      detail: '原地址',
+      isDefault: false,
+    } as any)
+    vi.mocked(deleteAddress).mockResolvedValue({} as any)
+    let modalOptions: any
+    ;(globalThis as any).uni.showModal = vi.fn((options: any) => { modalOptions = options })
+
+    const wrapper = mount(AddressEditPage)
+    lifecycle.onLoadCallbacks.at(-1)?.({ id: '9' })
+    await flushPromises()
+    fillValidForm(wrapper)
+
+    const firstDelete = (wrapper.vm as any).handleDelete()
+    const secondDelete = (wrapper.vm as any).handleDelete()
+    const saveDuringDelete = (wrapper.vm as any).handleSubmit()
+
+    expect((wrapper.vm as any).deleting).toBe(true)
+    expect((globalThis as any).uni.showModal).toHaveBeenCalledTimes(1)
+    expect(deleteAddress).not.toHaveBeenCalled()
+    expect(updateAddress).not.toHaveBeenCalled()
+
+    modalOptions.success?.({ confirm: true })
+    await Promise.all([firstDelete, secondDelete, saveDuringDelete])
+
+    expect(deleteAddress).toHaveBeenCalledTimes(1)
+    expect((wrapper.vm as any).deleting).toBe(false)
+  })
+
   it('无效手机号不会发请求，并明确提示', async () => {
     const wrapper = mount(AddressEditPage)
     lifecycle.onLoadCallbacks.at(-1)?.({})
