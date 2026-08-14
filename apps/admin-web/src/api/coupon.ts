@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 export type CouponId = string
 
@@ -39,10 +40,12 @@ export const couponApi = {
     return request.get(`/admin/coupon/${encodeURIComponent(id)}`)
   },
   create(data: CouponPayload) {
-    return request.post('/admin/coupon', data)
+    return runSingleFlight('admin:coupon:create', () => request.post('/admin/coupon', data))
   },
   update(id: CouponId, data: Partial<CouponPayload>) {
-    return request.put(`/admin/coupon/${encodeURIComponent(id)}`, data)
+    return runSingleFlight(`admin:coupon:update:${id}`, () =>
+      request.put(`/admin/coupon/${encodeURIComponent(id)}`, data),
+    )
   },
   delete(id: CouponId) {
     return request.delete(`/admin/coupon/${encodeURIComponent(id)}`)
