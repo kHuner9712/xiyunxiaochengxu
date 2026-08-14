@@ -330,6 +330,7 @@ async function fetchProducts() {
 function handleProductSelect(rows: any[]) { selectedProducts.value = rows }
 
 async function confirmProductSelect() {
+  if (loadingSelectedProducts.value) return
   loadingSelectedProducts.value = true
   try {
     const existing = new Set(form.products.map((p) => p.productId))
@@ -442,7 +443,7 @@ function validateBusinessRules() {
     }
   }
   if (form.type === '3') {
-    if (form.fullGiftRules.length === 0) throw new Error('满赠活动至少需要一条赠品规则')
+    if (form.fullGiftRules.length === 0) throw new Error('满赠活动至少需要一条满赠规则')
     for (const rule of form.fullGiftRules) {
       if (priceToFen(rule.fullAmount) <= 0) throw new Error('满赠门槛必须大于0')
       if (!skuIds.has(rule.giftSkuId)) throw new Error('满赠规则必须选择当前活动中的赠品SKU')
@@ -514,10 +515,11 @@ function buildPayload(): ActivityPayload {
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
     const payload = buildPayload()
     if (isEdit.value) await activityApi.update(activityId.value, payload)
     else await activityApi.create(payload)
