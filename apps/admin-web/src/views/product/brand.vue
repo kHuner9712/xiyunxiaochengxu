@@ -14,7 +14,7 @@
 
     <div class="table-card">
       <div style="margin-bottom: 16px">
-        <el-button v-permission="'product:brand'" type="primary" @click="handleAdd">新增品牌</el-button>
+        <el-button v-permission="'product:brand'" type="primary" :disabled="operationBusy" @click="handleAdd">新增品牌</el-button>
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading">
@@ -30,13 +30,13 @@
         <el-table-column prop="sortOrder" label="排序" width="80" />
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'product:brand'" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'product:brand'" type="primary" link :disabled="operationBusy" @click="handleEdit(row)">编辑</el-button>
             <el-button
               v-permission="'product:brand'"
               type="danger"
               link
               :loading="deleteBusyIds.has(String(row.id))"
-              :disabled="deleteBusyIds.has(String(row.id))"
+              :disabled="deleteBusyIds.has(String(row.id)) || operationBusy"
               @click="handleDelete(row)"
             >删除</el-button>
           </template>
@@ -56,13 +56,21 @@
       </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px" destroy-on-close>
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="500px"
+      destroy-on-close
+      :close-on-click-modal="!operationBusy"
+      :close-on-press-escape="!operationBusy"
+      :show-close="!operationBusy"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" :disabled="operationBusy">
         <el-form-item label="品牌名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入品牌名称" />
+          <el-input v-model="form.name" placeholder="请输入品牌名称" maxlength="50" show-word-limit />
         </el-form-item>
         <el-form-item label="品牌Logo">
-          <el-upload action="" :http-request="handleUploadLogo" :show-file-list="false" :disabled="uploading || submitting" accept="image/*">
+          <el-upload action="" :http-request="handleUploadLogo" :show-file-list="false" :disabled="operationBusy" accept="image/*">
             <el-image v-if="form.logo" :src="form.logo" style="width: 80px; height: 80px" fit="cover" />
             <el-button v-else size="small" :loading="uploading">{{ uploading ? '上传中…' : '上传Logo' }}</el-button>
           </el-upload>
@@ -75,8 +83,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button :disabled="submitting || uploading" @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" :disabled="uploading" @click="handleSubmit">
+        <el-button :disabled="operationBusy" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="operationBusy" @click="handleSubmit">
           {{ uploading ? 'Logo上传中…' : '确定' }}
         </el-button>
       </template>
@@ -85,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { brandApi } from '@/api/brand'
 import { uploadApi } from '@/api/upload'
@@ -105,6 +113,7 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const form = reactive({
   id: undefined as string | undefined,
+  clientRequestId: '',
   name: '',
   logo: '',
   sortOrder: 0,
@@ -116,6 +125,18 @@ const rules: FormRules = {
 }
 
 const dialogTitle = computed(() => (form.id ? '编辑品牌' : '新增品牌'))
+const operationBusy = computed(() => submitting.value || uploading.value)
+
+function createBrandRequestId() {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.getRandomValues) {
+    const words = new Uint32Array(2)
+    cryptoApi.getRandomValues(words)
+    const value = (BigInt(words[0] & 0x7fffffff) << 32n) | BigInt(words[1])
+    if (value > 0n) return value.toString()
+  }
+  return (BigInt(Date.now()) * 1_000_000n + BigInt(Math.floor(Math.random() * 1_000_000))).toString()
+}
 
 async function fetchList() {
   const requestSeq = ++listLoadSeq
@@ -143,7 +164,9 @@ function resetSearch() {
 }
 
 function handleAdd() {
+  if (operationBusy.value) return
   form.id = undefined
+  form.clientRequestId = createBrandRequestId()
   form.name = ''
   form.logo = ''
   form.sortOrder = 0
@@ -152,7 +175,9 @@ function handleAdd() {
 }
 
 function handleEdit(row: any) {
+  if (operationBusy.value) return
   form.id = String(row.id)
+  form.clientRequestId = ''
   form.name = row.name
   form.logo = row.logo || ''
   form.sortOrder = Number(row.sortOrder || 0)
@@ -162,7 +187,7 @@ function handleEdit(row: any) {
 
 async function handleDelete(row: any) {
   const id = String(row.id)
-  if (deleteBusyIds.has(id)) return
+  if (operationBusy.value || deleteBusyIds.has(id)) return
   deleteBusyIds.add(id)
   try {
     await ElMessageBox.confirm('确定删除该品牌吗？', '提示', { type: 'warning' })
@@ -177,7 +202,7 @@ async function handleDelete(row: any) {
 }
 
 async function handleUploadLogo(options: any) {
-  if (uploading.value || submitting.value) return
+  if (operationBusy.value) return
   uploading.value = true
   try {
     const res = await uploadApi.uploadImage(options.file, 'brand-logo')
@@ -194,11 +219,7 @@ async function handleUploadLogo(options: any) {
 }
 
 async function handleSubmit() {
-  if (submitting.value) return
-  if (uploading.value) {
-    ElMessage.warning('Logo仍在上传，请等待上传完成后再保存品牌')
-    return
-  }
+  if (operationBusy.value) return
   submitting.value = true
   try {
     const valid = await formRef.value?.validate().catch(() => false)
@@ -209,10 +230,12 @@ async function handleSubmit() {
       logo: form.logo,
       sortOrder: form.sortOrder,
       description: form.description,
+      ...(!form.id ? { clientRequestId: form.clientRequestId } : {}),
     }
     if (form.id) {
       await brandApi.update(form.id, payload)
     } else {
+      if (!form.clientRequestId) throw new Error('品牌创建请求标识缺失，请重新打开新增窗口')
       await brandApi.create(payload)
     }
     ElMessage.success('保存成功')
