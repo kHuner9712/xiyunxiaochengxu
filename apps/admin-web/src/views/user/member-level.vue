@@ -11,7 +11,7 @@
       <el-alert
         type="info"
         :closable="false"
-        title="成长值区间必须从 0 开始、连续且不重叠；最后一级必须无上限。保存后系统会按新规则重新匹配用户等级。"
+        title="成长值区间必须从 0 开始、连续且不重叠；最后一级必须无上限。保存后系统会在后台按新规则重新匹配用户等级。"
         style="margin-bottom: 16px"
       />
 
@@ -44,7 +44,15 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px" destroy-on-close>
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="620px"
+      destroy-on-close
+      :close-on-click-modal="!submitting"
+      :close-on-press-escape="!submitting"
+      :show-close="!submitting"
+    >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="150px">
         <el-form-item label="等级名称" prop="name">
           <el-input v-model="form.name" maxlength="20" />
@@ -82,8 +90,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -147,11 +155,13 @@ function resetForm() {
 }
 
 function handleAdd() {
+  if (submitting.value) return
   resetForm()
   dialogVisible.value = true
 }
 
 function handleEdit(row: any) {
+  if (submitting.value) return
   Object.assign(form, {
     id: String(row.id),
     name: row.name || '',
@@ -191,21 +201,23 @@ function buildPayload(): MemberLevelPayload {
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-  let payload: MemberLevelPayload
-  try {
-    payload = buildPayload()
-  } catch (e: any) {
-    ElMessage.warning(e?.message || '请检查等级配置')
-    return
-  }
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+
+    let payload: MemberLevelPayload
+    try {
+      payload = buildPayload()
+    } catch (e: any) {
+      ElMessage.warning(e?.message || '请检查等级配置')
+      return
+    }
+
     if (form.id) await memberApi.update(form.id, payload)
     else await memberApi.create(payload)
-    ElMessage.success('保存成功，用户等级已按新规则重新匹配')
+    ElMessage.success('保存成功，用户等级正在后台按新规则重新匹配')
     dialogVisible.value = false
     await fetchList()
   } catch (e: any) {
