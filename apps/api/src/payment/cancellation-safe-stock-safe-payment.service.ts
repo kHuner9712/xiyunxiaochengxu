@@ -81,6 +81,26 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   }
 
   /**
+   * The standard paid-refund flow validates duplicate/cumulative refund state before it writes the
+   * durable INITIATING row. Without a shared per-order claim, two concurrent requests can both pass
+   * those reads, create different out_refund_no values and independently reach WeChat. Serialize
+   * the complete refund-creation state machine on the same order lock used by payment creation,
+   * cancellation and group-failure refunds.
+   *
+   * The inherited flow persists INITIATING before the remote refund request. Once the first holder
+   * reaches WeChat, a later holder therefore observes durable in-flight refund state even if the
+   * first request times out or the process crashes after the remote call.
+   */
+  override async createRefund(params: {
+    orderId: string;
+    aftersaleId?: string;
+    refundAmount: number;
+    reason?: string;
+  }) {
+    return this.withPaymentCancelLock(params.orderId, () => super.createRefund(params));
+  }
+
+  /**
    * Group-expiry reconciliation and paid-order recovery run under different scheduler locks.
    * Serialize the complete group-failure refund state machine on the same per-order lock used by
    * payment/cancellation so two workers cannot both observe "no refund" and create separate
