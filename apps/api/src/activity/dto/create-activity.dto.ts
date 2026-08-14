@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -16,6 +17,7 @@ import {
 
 const POSITIVE_ID = /^[1-9]\d*$/;
 const EXPLICIT_TIMEZONE = /(?:Z|[+-]\d{2}:\d{2})$/i;
+const MYSQL_SIGNED_INT_MAX = 2147483647;
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 
 export class ActivityProductDto {
@@ -34,18 +36,21 @@ export class ActivityProductDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   activityPrice?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   activityStock?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MYSQL_SIGNED_INT_MAX)
   limitPerUser?: number;
 }
 
@@ -56,8 +61,6 @@ export class CreateActivityDto {
   @MaxLength(100)
   name!: string;
 
-  // Keep the existing five admin activity types, but store them as strings because Activity.type
-  // is a varchar column and the mini-program/API contract already treats it as string-capable.
   @Transform(trim)
   @IsString()
   @IsIn(['1', '2', '3', '4', '5'])
@@ -94,4 +97,10 @@ export class CreateActivityDto {
   @ValidateNested({ each: true })
   @Type(() => ActivityProductDto)
   products?: ActivityProductDto[];
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Matches(POSITIVE_ID, { message: '活动创建请求ID格式不正确' })
+  clientRequestId?: string;
 }
