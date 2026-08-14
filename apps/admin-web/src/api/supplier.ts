@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { runSingleFlight } from '@/utils/single-flight'
 
 type SupplierMutation = { id: string; [key: string]: any }
 
@@ -18,15 +19,19 @@ export const supplierApi = {
     return request.get(`/admin/supplier/detail/${encodeURIComponent(id)}`)
   },
   create(data: any) {
-    return request.post('/admin/supplier/create', data)
+    return runSingleFlight('admin:supplier:create', () => request.post('/admin/supplier/create', data))
   },
   update(idOrData: string | SupplierMutation, data?: any) {
     const id = typeof idOrData === 'string' ? idOrData : idOrData.id
     const payload = typeof idOrData === 'string' ? (data || {}) : { ...(idOrData || {}) }
     delete payload.id
-    return request.put(`/admin/supplier/update/${encodeURIComponent(id)}`, payload)
+    return runSingleFlight(`admin:supplier:update:${id}`, () =>
+      request.put(`/admin/supplier/update/${encodeURIComponent(id)}`, payload),
+    )
   },
   delete(id: string) {
-    return request.delete(`/admin/supplier/delete/${encodeURIComponent(id)}`)
+    return runSingleFlight(`admin:supplier:delete:${id}`, () =>
+      request.delete(`/admin/supplier/delete/${encodeURIComponent(id)}`),
+    )
   },
 }
