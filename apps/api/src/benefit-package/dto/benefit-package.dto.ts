@@ -21,6 +21,28 @@ const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? valu
 
 export class BenefitPackagePublicQueryDto extends PaginationDto {}
 
+export class MyBenefitPackageQueryDto extends PaginationDto {
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(30)
+  status?: string;
+}
+
+export class MyBenefitEntitlementQueryDto extends PaginationDto {
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Matches(POSITIVE_ID)
+  packageId?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(30)
+  status?: string;
+}
+
 export class BenefitPackageQueryDto extends PaginationDto {
   @IsOptional()
   @Transform(trim)
