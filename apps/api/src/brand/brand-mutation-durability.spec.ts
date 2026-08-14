@@ -24,7 +24,7 @@ function createHarness() {
     $queryRaw: jest.fn().mockResolvedValue([{ id: 10n }]),
     brand: {
       findFirst: jest.fn(async ({ where }: any) => {
-        if (where.id !== undefined) return currentBrand;
+        if (typeof where.id === 'bigint') return currentBrand;
         return null;
       }),
       create: jest.fn().mockResolvedValue(currentBrand),
@@ -96,7 +96,7 @@ describe('BrandService production mutation durability', () => {
   it('serializes rename uniqueness checks and retries a write conflict', async () => {
     const { service, prisma, tx, currentBrand } = createHarness();
     tx.brand.findFirst.mockImplementation(async ({ where }: any) => {
-      if (where.id !== undefined) return currentBrand;
+      if (typeof where.id === 'bigint') return currentBrand;
       if (where.name === '品牌B') return null;
       return null;
     });
