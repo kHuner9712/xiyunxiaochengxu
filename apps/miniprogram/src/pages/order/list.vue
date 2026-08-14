@@ -47,11 +47,26 @@
           已付款，等待拼团成团；成团后才进入发货或自提流程
         </view>
         <view class="order-actions">
-          <view v-if="order.status === 'pending_payment'" class="action-btn cancel" @tap.stop="handleCancel(order.id)">取消订单</view>
-          <view v-if="order.status === 'pending_payment'" class="action-btn primary" @tap.stop="handlePay(order)">去支付</view>
+          <view
+            v-if="order.status === 'pending_payment'"
+            class="action-btn cancel"
+            :class="{ disabled: isOrderActionBusy(order.id) }"
+            @tap.stop="handleCancel(order.id)"
+          >取消订单</view>
+          <view
+            v-if="order.status === 'pending_payment'"
+            class="action-btn primary"
+            :class="{ disabled: isOrderActionBusy(order.id) }"
+            @tap.stop="handlePay(order)"
+          >{{ isOrderActionBusy(order.id) ? '处理中...' : '去支付' }}</view>
           <view v-if="order.status === 'paid'" class="action-btn primary" @tap.stop="goGroupProgress(order)">查看拼团进度</view>
           <view v-if="order.status === 'pending_pickup'" class="action-btn primary" @tap.stop="goDetail(order.id)">查看自提码</view>
-          <view v-if="order.status === 'delivered'" class="action-btn primary" @tap.stop="handleConfirm(order.id)">确认收货</view>
+          <view
+            v-if="order.status === 'delivered'"
+            class="action-btn primary"
+            :class="{ disabled: isOrderActionBusy(order.id) }"
+            @tap.stop="handleConfirm(order.id)"
+          >{{ isOrderActionBusy(order.id) ? '处理中...' : '确认收货' }}</view>
           <view v-if="order.status === 'completed' || order.status === 'delivered'" class="action-btn" @tap.stop="handleAftersale(order)">申请售后</view>
         </view>
       </view>
@@ -91,8 +106,36 @@ const orders = ref<OrderItem[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const orderActionBusy = ref<Record<string, boolean>>({})
 let orderVersion = 0
 let loadingVersion = -1
+
+function isOrderActionBusy(id: string) {
+  return orderActionBusy.value[id] === true
+}
+
+function beginOrderAction(id: string) {
+  if (isOrderActionBusy(id)) return false
+  orderActionBusy.value = { ...orderActionBusy.value, [id]: true }
+  return true
+}
+
+function endOrderAction(id: string) {
+  if (!isOrderActionBusy(id)) return
+  const next = { ...orderActionBusy.value }
+  delete next[id]
+  orderActionBusy.value = next
+}
+
+function confirmModal(options: { title: string; content: string }) {
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      ...options,
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
 
 function resetOrders() {
   page.value = 1
@@ -190,23 +233,21 @@ function getStatusClass(status: string): string {
 }
 
 async function handleCancel(id: string) {
-  uni.showModal({
-    title: '提示',
-    content: '确定取消该订单吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await cancelOrder(id)
-          refreshOrders()
-        } catch {
-          uni.showToast({ title: '取消失败', icon: 'none' })
-        }
-      }
-    }
-  })
+  if (!beginOrderAction(id)) return
+  try {
+    const confirmed = await confirmModal({ title: '提示', content: '确定取消该订单吗？' })
+    if (!confirmed) return
+    await cancelOrder(id)
+    await refreshOrders()
+  } catch {
+    uni.showToast({ title: '取消失败', icon: 'none' })
+  } finally {
+    endOrderAction(id)
+  }
 }
 
 async function handlePay(order: OrderItem) {
+  if (!beginOrderAction(order.id)) return
   try {
     const payment = await createPayment({ orderId: order.id })
     try {
@@ -233,24 +274,23 @@ async function handlePay(order: OrderItem) {
       showCancel: false,
       confirmText: '我知道了'
     })
+  } finally {
+    endOrderAction(order.id)
   }
 }
 
 async function handleConfirm(id: string) {
-  uni.showModal({
-    title: '提示',
-    content: '确认已收到商品吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await confirmReceive(id)
-          refreshOrders()
-        } catch {
-          uni.showToast({ title: '确认失败', icon: 'none' })
-        }
-      }
-    }
-  })
+  if (!beginOrderAction(id)) return
+  try {
+    const confirmed = await confirmModal({ title: '提示', content: '确认已收到商品吗？' })
+    if (!confirmed) return
+    await confirmReceive(id)
+    await refreshOrders()
+  } catch {
+    uni.showToast({ title: '确认失败', icon: 'none' })
+  } finally {
+    endOrderAction(id)
+  }
 }
 
 onLoad((options) => {
@@ -273,6 +313,11 @@ defineExpose({
   currentTab,
   orders,
   loading,
+  orderActionBusy,
+  isOrderActionBusy,
+  handleCancel,
+  handlePay,
+  handleConfirm,
   switchTab,
   loadOrders,
   refreshOrders,
@@ -506,6 +551,11 @@ defineExpose({
 
   &.cancel {
     color: $text-hint;
+  }
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
   }
 }
 </style>
