@@ -18,6 +18,7 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 import {
   GroupBuyActivityQueryDto,
   GroupBuyActivityDto,
+  CreateGroupBuyActivityDto,
   GroupBuyActivityStatusDto,
   GroupBuyGroupQueryDto,
   GroupBuyMemberQueryDto,
@@ -44,7 +45,7 @@ export class AdminGroupBuyController {
 
   @Post('activity/create')
   @RequirePermission('marketing:activity')
-  async activityCreate(@Body() dto: GroupBuyActivityDto) {
+  async activityCreate(@Body() dto: CreateGroupBuyActivityDto) {
     return this.service.createActivity(dto);
   }
 

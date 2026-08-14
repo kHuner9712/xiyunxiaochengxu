@@ -20,7 +20,7 @@
 
     <div class="table-card">
       <div style="margin-bottom: 16px">
-        <el-button type="primary" @click="handleAdd">新增活动</el-button>
+        <el-button type="primary" :disabled="submitting" @click="handleAdd">新增活动</el-button>
         <el-alert type="info" :closable="false" style="margin-top: 8px">
           拼团活动必须绑定一个真实可售 SKU。活动库存是额外活动上限，最终成交仍同时受 SKU 实际库存约束；支付成功后计入成团人数，达到目标人数才进入履约。
         </el-alert>
@@ -57,7 +57,7 @@
               v-model="row.status"
               :active-value="1"
               :inactive-value="0"
-              :disabled="statusBusyIds.has(String(row.id))"
+              :disabled="isActivityBusy(row) || submitting"
               active-text="上架"
               inactive-text="下架"
               inline-prompt
@@ -67,13 +67,13 @@
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button link type="primary" size="small" :disabled="isActivityBusy(row) || submitting" @click="handleEdit(row)">编辑</el-button>
             <el-button
               link
               type="danger"
               size="small"
-              :loading="deleteBusyIds.has(String(row.id))"
-              :disabled="deleteBusyIds.has(String(row.id))"
+              :loading="isActivityBusy(row)"
+              :disabled="isActivityBusy(row) || submitting"
               @click="handleDelete(row)"
             >删除</el-button>
           </template>
@@ -93,10 +93,17 @@
       </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editing.id ? '编辑活动' : '新增活动'" width="780px">
-      <el-form ref="formRef" :model="editing" label-width="120px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editing.id ? '编辑活动' : '新增活动'"
+      width="780px"
+      :close-on-click-modal="!submitting"
+      :close-on-press-escape="!submitting"
+      :show-close="!submitting"
+    >
+      <el-form ref="formRef" :model="editing" label-width="120px" :disabled="submitting">
         <el-form-item label="活动名称" required>
-          <el-input v-model="editing.name" placeholder="如：3人拼团特惠" />
+          <el-input v-model="editing.name" placeholder="如：3人拼团特惠" maxlength="100" />
         </el-form-item>
         <el-form-item label="商品ID" required>
           <div class="inline-field">
@@ -125,11 +132,11 @@
           </el-select>
         </el-form-item>
         <el-form-item label="拼团价(分)" required>
-          <el-input-number v-model="editing.groupPrice" :min="0" controls-position="right" />
+          <el-input-number v-model="editing.groupPrice" :min="0" :max="2147483647" controls-position="right" />
           <span style="margin-left: 8px; color: #909399">¥{{ formatPrice(editing.groupPrice || 0) }}</span>
         </el-form-item>
         <el-form-item label="原价(分)">
-          <el-input-number v-model="editing.originalPrice" :min="0" controls-position="right" />
+          <el-input-number v-model="editing.originalPrice" :min="0" :max="2147483647" controls-position="right" />
           <span style="margin-left: 8px; color: #909399">展示用，可空</span>
         </el-form-item>
         <el-form-item label="成团人数" required>
@@ -140,11 +147,11 @@
           <span style="margin-left: 8px; color: #909399">开团后 N 小时内成团</span>
         </el-form-item>
         <el-form-item label="活动库存">
-          <el-input-number v-model="editing.stockLimit" :min="0" controls-position="right" />
+          <el-input-number v-model="editing.stockLimit" :min="0" :max="2147483647" controls-position="right" />
           <span style="margin-left: 8px; color: #909399">留空表示不限，但仍受SKU实际库存约束</span>
         </el-form-item>
         <el-form-item label="每人限购">
-          <el-input-number v-model="editing.limitPerUser" :min="0" controls-position="right" />
+          <el-input-number v-model="editing.limitPerUser" :min="0" :max="2147483647" controls-position="right" />
           <span style="margin-left: 8px; color: #909399">0 表示不限</span>
         </el-form-item>
         <el-form-item label="开始时间" required>
@@ -154,11 +161,11 @@
           <el-date-picker v-model="editing.endTime" type="datetime" placeholder="结束时间" value-format="YYYY-MM-DD HH:mm:ss" />
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="editing.sortOrder" :min="0" controls-position="right" />
+          <el-input-number v-model="editing.sortOrder" :min="0" :max="2147483647" controls-position="right" />
           <span style="margin-left: 8px; color: #909399">数字越小越靠前</span>
         </el-form-item>
         <el-form-item label="封面图">
-          <el-input v-model="editing.coverImage" placeholder="封面图 URL" />
+          <el-input v-model="editing.coverImage" placeholder="封面图 URL" maxlength="500" />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="editing.status">
@@ -172,7 +179,7 @@
       </el-form>
       <template #footer>
         <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -194,10 +201,10 @@ const tableData = ref<any[]>([])
 const availableSkus = ref<Array<{ id: string; name: string; price: number; stock: number }>>([])
 const total = ref(0)
 const dialogVisible = ref(false)
-const statusBusyIds = reactive(new Set<string>())
-const deleteBusyIds = reactive(new Set<string>())
+const actionBusyIds = reactive(new Set<string>())
 let skuLoadSeq = 0
 let editLoadSeq = 0
+let listLoadSeq = 0
 
 const searchForm = reactive({
   page: 1,
@@ -224,6 +231,9 @@ const editing = reactive<any>({
   coverImage: '',
   description: '',
 })
+
+function activityId(row: any) { return String(row?.id || '') }
+function isActivityBusy(row: any) { return actionBusyIds.has(activityId(row)) }
 
 function resetEditing() {
   skuLoadSeq += 1
@@ -306,6 +316,7 @@ function handleProductChanged() {
 }
 
 async function loadList() {
+  const requestSeq = ++listLoadSeq
   loading.value = true
   try {
     const res: any = await groupBuyApi.getActivities({
@@ -314,10 +325,11 @@ async function loadList() {
       keyword: searchForm.keyword || undefined,
       status: searchForm.status,
     })
+    if (requestSeq !== listLoadSeq) return
     tableData.value = asArray(res.data)
     total.value = paginationTotal(res.data)
   } finally {
-    loading.value = false
+    if (requestSeq === listLoadSeq) loading.value = false
   }
 }
 
@@ -334,15 +346,18 @@ function resetSearch() {
 }
 
 function handleAdd() {
+  if (submitting.value) return
   editLoadSeq += 1
   resetEditing()
   dialogVisible.value = true
 }
 
 async function handleEdit(row: any) {
+  const id = activityId(row)
+  if (!id || submitting.value || actionBusyIds.has(id)) return
   const requestSeq = ++editLoadSeq
   resetEditing()
-  const res: any = await groupBuyApi.getActivityDetail(row.id)
+  const res: any = await groupBuyApi.getActivityDetail(id)
   if (requestSeq !== editLoadSeq) return
   const d = res.data || {}
   Object.assign(editing, {
@@ -428,6 +443,10 @@ async function handleSubmit() {
       ElMessage.warning('活动结束时间必须晚于开始时间')
       return
     }
+    if (editing.status === 1 && endDate.getTime() <= Date.now()) {
+      ElMessage.warning('上架拼团活动的结束时间必须晚于当前时间')
+      return
+    }
     if (Number(editing.groupPrice) > selectedSku.price) {
       ElMessage.warning(`拼团价不能高于当前SKU售价 ¥${formatPrice(selectedSku.price)}`)
       return
@@ -460,27 +479,27 @@ async function handleSubmit() {
 }
 
 async function handleStatusChange(row: any, val: string | number | boolean) {
-  const id = String(row.id)
+  const id = activityId(row)
   const numVal = Number(val)
-  if (statusBusyIds.has(id)) {
+  if (!id || submitting.value || actionBusyIds.has(id)) {
     row.status = numVal === 1 ? 0 : 1
     return
   }
-  statusBusyIds.add(id)
+  actionBusyIds.add(id)
   try {
     await groupBuyApi.updateActivityStatus(id, numVal)
     ElMessage.success(numVal === 1 ? '已上架' : '已下架')
   } catch {
     row.status = numVal === 1 ? 0 : 1
   } finally {
-    statusBusyIds.delete(id)
+    actionBusyIds.delete(id)
   }
 }
 
 async function handleDelete(row: any) {
-  const id = String(row.id)
-  if (deleteBusyIds.has(id)) return
-  deleteBusyIds.add(id)
+  const id = activityId(row)
+  if (!id || submitting.value || actionBusyIds.has(id)) return
+  actionBusyIds.add(id)
   try {
     await ElMessageBox.confirm(`确认删除活动「${row.name}」吗？`, '提示', { type: 'warning' })
     await groupBuyApi.deleteActivity(id)
@@ -489,7 +508,7 @@ async function handleDelete(row: any) {
   } catch {
     // 取消或错误
   } finally {
-    deleteBusyIds.delete(id)
+    actionBusyIds.delete(id)
   }
 }
 
