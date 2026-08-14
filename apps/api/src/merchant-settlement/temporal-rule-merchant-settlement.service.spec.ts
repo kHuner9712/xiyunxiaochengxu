@@ -177,9 +177,30 @@ describe('TemporalRuleMerchantSettlementService', () => {
         commissionRate: 2000,
         merchantPromotionSourceId: 42n,
         pickupStoreId: 7n,
+        createdAt: expect.any(Date),
       }),
     });
+    const retiredAt = tx.merchantCommissionRule.update.mock.calls[0][0].data.deletedAt;
+    const replacementCreatedAt = tx.merchantCommissionRule.create.mock.calls[0][0].data.createdAt;
+    expect(replacementCreatedAt).toEqual(retiredAt);
     expect(result.id).toBe(2n);
+  });
+
+  it('refuses to retire a currently active rule now for a replacement that only starts in the future', async () => {
+    const { service, tx } = createHarness();
+    tx.merchantCommissionRule.findUnique.mockResolvedValue(
+      salesRule({ deletedAt: null, effectiveStartAt: null, effectiveEndAt: null, status: 1 }),
+    );
+
+    await expect(
+      service.updateRule('1', {
+        commissionRate: 2000,
+        effectiveStartAt: '2100-01-01T00:00:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.merchantCommissionRule.update).not.toHaveBeenCalled();
+    expect(tx.merchantCommissionRule.create).not.toHaveBeenCalled();
   });
 
   it('preserves omitted partial-update fields and allows explicit nullable fields to be cleared', async () => {
