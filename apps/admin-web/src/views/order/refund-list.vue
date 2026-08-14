@@ -105,6 +105,7 @@ const REFUND_STATUS_TAG_TYPE: Record<string, 'primary' | 'success' | 'warning' |
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<any[]>([])
+let listRequestVersion = 0
 
 const searchForm = reactive({
   refundNo: '',
@@ -115,17 +116,25 @@ const searchForm = reactive({
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 async function fetchList() {
+  const requestVersion = ++listRequestVersion
+  const querySnapshot: any = {
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+  }
+  if (searchForm.refundNo) querySnapshot.refundNo = searchForm.refundNo
+  if (searchForm.orderId) querySnapshot.orderId = searchForm.orderId
+  if (searchForm.status) querySnapshot.status = searchForm.status
+
   loading.value = true
   try {
-    const params: any = { page: pagination.page, pageSize: pagination.pageSize }
-    if (searchForm.refundNo) params.refundNo = searchForm.refundNo
-    if (searchForm.orderId) params.orderId = searchForm.orderId
-    if (searchForm.status) params.status = searchForm.status
-    const res = await refundApi.getList(params)
+    const res = await refundApi.getList(querySnapshot)
+    if (requestVersion !== listRequestVersion) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
-  } catch {} finally {
-    loading.value = false
+  } catch {
+    if (requestVersion !== listRequestVersion) return
+  } finally {
+    if (requestVersion === listRequestVersion) loading.value = false
   }
 }
 
