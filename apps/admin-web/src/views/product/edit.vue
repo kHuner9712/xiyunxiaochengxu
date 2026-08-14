@@ -210,7 +210,9 @@
         <el-form-item label="服务承诺(JSON)"><el-input v-model="servicePromiseText" type="textarea" :rows="4" placeholder='例如: {"delivery":"24小时发货"}' /></el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">保存商品</el-button>
+          <el-button type="primary" :loading="submitting" :disabled="pendingUploads > 0" @click="handleSubmit">
+            {{ pendingUploads > 0 ? '文件上传中…' : '保存商品' }}
+          </el-button>
           <el-button @click="router.back()">取消</el-button>
         </el-form-item>
       </el-form>
@@ -235,6 +237,7 @@ const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const pendingUploads = ref(0)
 const videoUploading = ref(false)
 const videoUploadProgress = ref(0)
 const categoryTree = ref<any[]>([])
@@ -492,6 +495,7 @@ function validateComplianceBeforeSave(): boolean {
 }
 
 async function handleUploadMainImage(options: any) {
+  pendingUploads.value += 1
   try {
     const res = await uploadApi.uploadImage(options.file, 'product-image')
     const uploadedUrl = extractUploadUrl(res)
@@ -501,10 +505,13 @@ async function handleUploadMainImage(options: any) {
   } catch (error: any) {
     options.onError?.(error)
     ElMessage.error(error?.message || '商品主图上传失败')
+  } finally {
+    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
   }
 }
 
 async function handleUploadGalleryImage(options: any) {
+  pendingUploads.value += 1
   try {
     const res = await uploadApi.uploadImage(options.file, 'product-image')
     const uploadedUrl = extractUploadUrl(res)
@@ -517,6 +524,8 @@ async function handleUploadGalleryImage(options: any) {
   } catch (error: any) {
     options.onError?.(error)
     ElMessage.error(error?.message || '商品图片上传失败')
+  } finally {
+    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
   }
 }
 
@@ -535,6 +544,7 @@ function validateVideoFile(file: File): boolean {
 
 async function handleUploadVideo(options: any) {
   if (!validateVideoFile(options.file)) return
+  pendingUploads.value += 1
   videoUploading.value = true
   videoUploadProgress.value = 0
   try {
@@ -550,6 +560,7 @@ async function handleUploadVideo(options: any) {
     ElMessage.error('视频上传失败')
   } finally {
     videoUploading.value = false
+    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
   }
 }
 
@@ -561,6 +572,7 @@ function handleRemoveImage(file: any) {
 }
 
 async function handleUploadSkuImage(options: any, row: any) {
+  pendingUploads.value += 1
   try {
     const res = await uploadApi.uploadImage(options.file, 'product-image')
     const uploadedUrl = extractUploadUrl(res)
@@ -574,10 +586,13 @@ async function handleUploadSkuImage(options: any, row: any) {
   } catch (error) {
     options.onError?.(error)
     ElMessage.error('SKU图片上传失败')
+  } finally {
+    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
   }
 }
 
 async function handleUploadCertImage(options: any) {
+  pendingUploads.value += 1
   try {
     const res = await uploadApi.uploadImage(options.file, 'cert')
     const uploadedUrl = extractUploadUrl(res)
@@ -592,6 +607,8 @@ async function handleUploadCertImage(options: any) {
   } catch (error) {
     options.onError?.(error)
     ElMessage.error('资质图片上传失败')
+  } finally {
+    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
   }
 }
 
@@ -654,18 +671,29 @@ async function fetchDetail(id: string) {
 }
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-  if (!validateSkus()) return
-  if (!validateComplianceBeforeSave()) return
-
-  let servicePromise: any = undefined
-  if (servicePromiseText.value.trim()) {
-    try { servicePromise = JSON.parse(servicePromiseText.value) } catch { ElMessage.error('服务承诺必须是合法 JSON'); return }
+  if (submitting.value) return
+  if (pendingUploads.value > 0) {
+    ElMessage.warning('文件仍在上传，请等待全部上传完成后再保存商品')
+    return
   }
 
   submitting.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
+    if (!validateSkus()) return
+    if (!validateComplianceBeforeSave()) return
+
+    let servicePromise: any = undefined
+    if (servicePromiseText.value.trim()) {
+      try {
+        servicePromise = JSON.parse(servicePromiseText.value)
+      } catch {
+        ElMessage.error('服务承诺必须是合法 JSON')
+        return
+      }
+    }
+
     const payload = {
       name: form.name,
       categoryId: form.categoryId,
