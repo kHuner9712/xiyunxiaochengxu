@@ -19,10 +19,13 @@ test('benefit package admin create keeps one durable request identity across amb
   assert.match(dto, /OmitType\(CreateBenefitPackageDto, \['clientRequestId'\] as const\)/)
 })
 
-test('benefit package update, status and delete share one browser mutation lock per package', () => {
+test('benefit package mutations reuse only the same operation and reject cross-operation promise aliasing', () => {
   const api = read('apps/admin-web/src/api/benefit-package.ts')
-  assert.match(api, /function mutationKey\(id: string\)/)
-  assert.equal((api.match(/runSingleFlight\(mutationKey\(id\)/g) || []).length, 3)
+  assert.match(api, /activePackageMutations = new Map/)
+  assert.match(api, /existing\.operation === operation/)
+  assert.match(api, /return Promise\.reject\(new Error\('该权益包正在执行其他操作，请稍后重试'\)\)/)
+  assert.match(api, /runSingleFlight\(`admin:benefit-package:\$\{operation\}:\$\{id\}`/)
+  assert.equal((api.match(/runPackageMutation\(id, '(?:update|status|delete)'/g) || []).length, 3)
 })
 
 test('runtime BenefitPackageService token resolves to the durable final provider', () => {

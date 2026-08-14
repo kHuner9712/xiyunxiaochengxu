@@ -4,6 +4,7 @@ import { runSingleFlight } from '@/utils/single-flight'
 const PENDING_BENEFIT_PACKAGE_CREATE_KEY = 'baby_mall_admin_pending_benefit_package_create_request_id'
 const POSITIVE_ID = /^[1-9]\d*$/
 let memoryPendingCreateRequestId = ''
+const activePackageMutations = new Map<string, { operation: string; promise: Promise<unknown> }>()
 
 function createBenefitPackageRequestId() {
   const cryptoApi = globalThis.crypto
@@ -53,8 +54,19 @@ function clearPendingBenefitPackageCreateRequestId(requestId: string) {
   }
 }
 
-function mutationKey(id: string) {
-  return `admin:benefit-package:mutation:${id}`
+function runPackageMutation<T>(id: string, operation: string, factory: () => Promise<T>): Promise<T> {
+  const existing = activePackageMutations.get(id)
+  if (existing) {
+    if (existing.operation === operation) return existing.promise as Promise<T>
+    return Promise.reject(new Error('该权益包正在执行其他操作，请稍后重试'))
+  }
+
+  const request = runSingleFlight(`admin:benefit-package:${operation}:${id}`, factory)
+  const tracked = request.finally(() => {
+    if (activePackageMutations.get(id)?.promise === tracked) activePackageMutations.delete(id)
+  })
+  activePackageMutations.set(id, { operation, promise: tracked })
+  return tracked
 }
 
 export const benefitPackageApi = {
@@ -90,17 +102,17 @@ export const benefitPackageApi = {
   },
   update(id: string, data: any) {
     const { clientRequestId: _ignored, ...payload } = data || {}
-    return runSingleFlight(mutationKey(id), () =>
+    return runPackageMutation(id, 'update', () =>
       request.put(`/admin/benefit-package/update/${encodeURIComponent(id)}`, payload),
     )
   },
   updateStatus(id: string, status: number) {
-    return runSingleFlight(mutationKey(id), () =>
+    return runPackageMutation(id, 'status', () =>
       request.put(`/admin/benefit-package/status/${encodeURIComponent(id)}`, { status }),
     )
   },
   remove(id: string) {
-    return runSingleFlight(mutationKey(id), () =>
+    return runPackageMutation(id, 'delete', () =>
       request.delete(`/admin/benefit-package/delete/${encodeURIComponent(id)}`),
     )
   },
