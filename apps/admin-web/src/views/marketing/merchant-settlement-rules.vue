@@ -26,9 +26,12 @@
 
     <div class="table-card">
       <div style="margin-bottom: 16px">
-        <el-button type="primary" @click="handleAdd">新增规则</el-button>
+        <el-button type="primary" :disabled="actionBusy" @click="handleAdd">新增规则</el-button>
         <el-alert type="info" :closable="false" style="margin-top: 8px">
-          销售分佣在订单支付成功后自动入账（订单 sourceType=merchant_referral）；服务结算在权益核销成功后自动入账。规则按 priority 降序匹配，多条命中取优先级最高的。
+          销售分佣在订单完成且售后申请窗口届满后生成，但按订单实际支付时间匹配当时的规则版本；服务结算按权益核销时间匹配当时版本。编辑金额、范围、优先级、生效期或启停状态会生成新版本，不会追溯改价。范围字段留空表示不限；多条命中时 priority 越大越优先。
+        </el-alert>
+        <el-alert type="warning" :closable="false" style="margin-top: 8px">
+          需要安排未来生效的新价格或新范围时，请使用“新增规则”并填写未来生效时间，不要编辑当前正在生效的规则。
         </el-alert>
       </div>
 
@@ -68,14 +71,22 @@
               active-text="启用"
               inactive-text="停用"
               inline-prompt
+              :disabled="actionBusy"
               @change="(val) => handleStatusChange(row, val)"
             />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="primary" size="small" :disabled="actionBusy" @click="handleEdit(row)">编辑</el-button>
+            <el-button
+              link
+              type="danger"
+              size="small"
+              :loading="deleteBusyId === String(row.id)"
+              :disabled="actionBusy"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -93,101 +104,109 @@
       </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editing.id ? '编辑规则' : '新增规则'" width="720px">
-      <el-form ref="formRef" :model="editing" label-width="140px">
-        <el-form-item label="规则名称" required>
-          <el-input v-model="editing.name" placeholder="如：A商家销售分佣10%" />
-        </el-form-item>
-        <el-form-item label="规则类型" required>
-          <el-radio-group v-model="editing.ruleType">
-            <el-radio value="sales_referral">销售分佣</el-radio>
-            <el-radio value="service_verification">服务结算</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="商家推广来源ID">
-          <el-input v-model="editing.merchantPromotionSourceId" placeholder="留空表示不限" />
-        </el-form-item>
-        <el-form-item label="自提门店ID">
-          <el-input v-model="editing.pickupStoreId" placeholder="留空表示不限" />
-        </el-form-item>
-        <el-form-item v-if="editing.ruleType === 'service_verification'" label="权益包ID">
-          <el-input v-model="editing.benefitPackageId" placeholder="留空表示不限" />
-        </el-form-item>
-        <el-form-item v-if="editing.ruleType === 'service_verification'" label="权益项ID">
-          <el-input v-model="editing.benefitPackageItemId" placeholder="留空表示不限" />
-        </el-form-item>
-        <el-form-item label="计算方式" required>
-          <el-radio-group v-model="editing.calculationType">
-            <el-radio value="percent">比例</el-radio>
-            <el-radio value="fixed_amount">固定金额</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="editing.calculationType === 'percent'" label="比例（%）">
-          <el-input-number
-            v-model="percentInput"
-            :min="0"
-            :max="100"
-            :precision="2"
-            :step="0.5"
-            @change="onPercentChange"
-          />
-          <span style="margin-left: 8px; color: #909399">存为 basis points（10% = 1000）</span>
-        </el-form-item>
-        <el-form-item v-if="editing.calculationType === 'fixed_amount'" label="固定金额（元）">
-          <el-input-number
-            v-model="amountInput"
-            :min="0"
-            :precision="2"
-            :step="1"
-            @change="onAmountChange"
-          />
-        </el-form-item>
-        <el-form-item label="最低分佣（元）">
-          <el-input-number
-            v-model="minInput"
-            :min="0"
-            :precision="2"
-            @change="onMinChange"
-          />
-        </el-form-item>
-        <el-form-item label="最高分佣（元）">
-          <el-input-number
-            v-model="maxInput"
-            :min="0"
-            :precision="2"
-            @change="onMaxChange"
-          />
-        </el-form-item>
-        <el-form-item label="生效开始">
-          <el-date-picker v-model="editing.effectiveStartAt" type="datetime" placeholder="留空表示不限" />
-        </el-form-item>
-        <el-form-item label="生效结束">
-          <el-date-picker v-model="editing.effectiveEndAt" type="datetime" placeholder="留空表示不限" />
-        </el-form-item>
-        <el-form-item label="优先级">
-          <el-input-number v-model="editing.priority" :min="0" :step="1" />
-          <span style="margin-left: 8px; color: #909399">数字越大越优先</span>
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-radio-group v-model="editing.status">
-            <el-radio :value="1">启用</el-radio>
-            <el-radio :value="0">停用</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="editing.remark" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editing.id ? '编辑规则' : '新增规则'"
+      width="720px"
+      :close-on-click-modal="!submitting"
+      :close-on-press-escape="!submitting"
+    >
+      <div v-loading="editLoading">
+        <el-form :model="editing" label-width="140px" :disabled="submitting || editLoading">
+          <el-form-item label="规则名称" required>
+            <el-input v-model="editing.name" placeholder="如：A商家销售分佣10%" />
+          </el-form-item>
+          <el-form-item label="规则类型" required>
+            <el-radio-group v-model="editing.ruleType">
+              <el-radio value="sales_referral">销售分佣</el-radio>
+              <el-radio value="service_verification">服务结算</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="商家推广来源ID">
+            <el-input v-model="editing.merchantPromotionSourceId" placeholder="留空表示不限" />
+          </el-form-item>
+          <el-form-item label="自提门店ID">
+            <el-input v-model="editing.pickupStoreId" placeholder="留空表示不限" />
+          </el-form-item>
+          <el-form-item v-if="editing.ruleType === 'service_verification'" label="权益包ID">
+            <el-input v-model="editing.benefitPackageId" placeholder="留空表示不限" />
+          </el-form-item>
+          <el-form-item v-if="editing.ruleType === 'service_verification'" label="权益项ID">
+            <el-input v-model="editing.benefitPackageItemId" placeholder="留空表示不限" />
+          </el-form-item>
+          <el-form-item label="计算方式" required>
+            <el-radio-group v-model="editing.calculationType">
+              <el-radio value="percent">比例</el-radio>
+              <el-radio value="fixed_amount">固定金额</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="editing.calculationType === 'percent'" label="比例（%）">
+            <el-input-number
+              v-model="percentInput"
+              :min="0"
+              :max="100"
+              :precision="2"
+              :step="0.5"
+              @change="onPercentChange"
+            />
+            <span style="margin-left: 8px; color: #909399">存为 basis points（10% = 1000）</span>
+          </el-form-item>
+          <el-form-item v-if="editing.calculationType === 'fixed_amount'" label="固定金额（元）">
+            <el-input-number
+              v-model="amountInput"
+              :min="0"
+              :precision="2"
+              :step="1"
+              @change="onAmountChange"
+            />
+          </el-form-item>
+          <el-form-item label="最低分佣（元）">
+            <el-input-number
+              v-model="minInput"
+              :min="0"
+              :precision="2"
+              @change="onMinChange"
+            />
+          </el-form-item>
+          <el-form-item label="最高分佣（元）">
+            <el-input-number
+              v-model="maxInput"
+              :min="0"
+              :precision="2"
+              @change="onMaxChange"
+            />
+          </el-form-item>
+          <el-form-item label="生效开始">
+            <el-date-picker v-model="editing.effectiveStartAt" type="datetime" placeholder="留空表示不限" />
+          </el-form-item>
+          <el-form-item label="生效结束">
+            <el-date-picker v-model="editing.effectiveEndAt" type="datetime" placeholder="留空表示不限" />
+          </el-form-item>
+          <el-form-item label="优先级">
+            <el-input-number v-model="editing.priority" :min="0" :step="1" />
+            <span style="margin-left: 8px; color: #909399">数字越大越优先</span>
+          </el-form-item>
+          <el-form-item label="状态">
+            <el-radio-group v-model="editing.status">
+              <el-radio :value="1">启用</el-radio>
+              <el-radio :value="0">停用</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="备注">
+            <el-input v-model="editing.remark" type="textarea" :rows="2" />
+          </el-form-item>
+        </el-form>
+      </div>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">保存</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting || editLoading" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { merchantSettlementApi } from '@/api/merchant-settlement'
 import { formatPrice, formatDate, formatPercent } from '@/utils/format'
@@ -197,6 +216,15 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 const dialogVisible = ref(false)
+const submitting = ref(false)
+const editLoading = ref(false)
+const statusBusyId = ref<string | null>(null)
+const deleteBusyId = ref<string | null>(null)
+let editRequestSeq = 0
+
+const actionBusy = computed(() =>
+  submitting.value || editLoading.value || statusBusyId.value !== null || deleteBusyId.value !== null,
+)
 
 const searchForm = reactive({
   page: 1,
@@ -238,10 +266,10 @@ function onAmountChange(val: number | undefined) {
   editing.commissionAmount = Math.round((val ?? 0) * 100)
 }
 function onMinChange(val: number | undefined) {
-  editing.minCommissionAmount = val ? Math.round(val * 100) : null
+  editing.minCommissionAmount = val == null ? null : Math.round(val * 100)
 }
 function onMaxChange(val: number | undefined) {
-  editing.maxCommissionAmount = val ? Math.round(val * 100) : null
+  editing.maxCommissionAmount = val == null ? null : Math.round(val * 100)
 }
 
 async function loadList() {
@@ -297,79 +325,161 @@ function resetEditing() {
 }
 
 function handleAdd() {
+  if (actionBusy.value) return
+  editRequestSeq += 1
   resetEditing()
   dialogVisible.value = true
 }
 
 async function handleEdit(row: any) {
+  if (actionBusy.value) return
+  const requestSeq = ++editRequestSeq
   resetEditing()
-  const res: any = await merchantSettlementApi.getRuleDetail(row.id)
-  const data = res.data || {}
-  Object.assign(editing, {
-    id: data.id,
-    name: data.name,
-    ruleType: data.ruleType,
-    merchantPromotionSourceId: data.merchantPromotionSourceId ?? '',
-    pickupStoreId: data.pickupStoreId ?? '',
-    benefitPackageId: data.benefitPackageId ?? '',
-    benefitPackageItemId: data.benefitPackageItemId ?? '',
-    calculationType: data.calculationType,
-    commissionRate: data.commissionRate ?? 0,
-    commissionAmount: data.commissionAmount ?? 0,
-    minCommissionAmount: data.minCommissionAmount,
-    maxCommissionAmount: data.maxCommissionAmount,
-    effectiveStartAt: data.effectiveStartAt,
-    effectiveEndAt: data.effectiveEndAt,
-    status: data.status,
-    priority: data.priority ?? 0,
-    remark: data.remark ?? '',
-  })
-  percentInput.value = (editing.commissionRate ?? 0) / 100
-  amountInput.value = (editing.commissionAmount ?? 0) / 100
-  minInput.value = editing.minCommissionAmount ? editing.minCommissionAmount / 100 : 0
-  maxInput.value = editing.maxCommissionAmount ? editing.maxCommissionAmount / 100 : 0
   dialogVisible.value = true
+  editLoading.value = true
+  try {
+    const res: any = await merchantSettlementApi.getRuleDetail(row.id)
+    if (requestSeq !== editRequestSeq) return
+    const data = res.data || {}
+    Object.assign(editing, {
+      id: data.id,
+      name: data.name,
+      ruleType: data.ruleType,
+      merchantPromotionSourceId: data.merchantPromotionSourceId ?? '',
+      pickupStoreId: data.pickupStoreId ?? '',
+      benefitPackageId: data.benefitPackageId ?? '',
+      benefitPackageItemId: data.benefitPackageItemId ?? '',
+      calculationType: data.calculationType,
+      commissionRate: data.commissionRate ?? 0,
+      commissionAmount: data.commissionAmount ?? 0,
+      minCommissionAmount: data.minCommissionAmount,
+      maxCommissionAmount: data.maxCommissionAmount,
+      effectiveStartAt: data.effectiveStartAt,
+      effectiveEndAt: data.effectiveEndAt,
+      status: data.status,
+      priority: data.priority ?? 0,
+      remark: data.remark ?? '',
+    })
+    percentInput.value = (editing.commissionRate ?? 0) / 100
+    amountInput.value = (editing.commissionAmount ?? 0) / 100
+    minInput.value = editing.minCommissionAmount == null ? 0 : editing.minCommissionAmount / 100
+    maxInput.value = editing.maxCommissionAmount == null ? 0 : editing.maxCommissionAmount / 100
+  } catch (e) {
+    if (requestSeq === editRequestSeq) dialogVisible.value = false
+  } finally {
+    if (requestSeq === editRequestSeq) editLoading.value = false
+  }
+}
+
+function buildRulePayload() {
+  return {
+    name: String(editing.name || '').trim(),
+    ruleType: editing.ruleType,
+    merchantPromotionSourceId: editing.merchantPromotionSourceId || undefined,
+    pickupStoreId: editing.pickupStoreId || undefined,
+    benefitPackageId: editing.ruleType === 'service_verification'
+      ? editing.benefitPackageId || undefined
+      : undefined,
+    benefitPackageItemId: editing.ruleType === 'service_verification'
+      ? editing.benefitPackageItemId || undefined
+      : undefined,
+    calculationType: editing.calculationType,
+    commissionRate: editing.calculationType === 'percent' ? editing.commissionRate : undefined,
+    commissionAmount: editing.calculationType === 'fixed_amount' ? editing.commissionAmount : undefined,
+    minCommissionAmount: editing.minCommissionAmount,
+    maxCommissionAmount: editing.maxCommissionAmount,
+    effectiveStartAt: editing.effectiveStartAt || undefined,
+    effectiveEndAt: editing.effectiveEndAt || undefined,
+    status: editing.status,
+    priority: editing.priority,
+    remark: String(editing.remark || '').trim() || undefined,
+  }
+}
+
+function validateRulePayload() {
+  if (!String(editing.name || '').trim()) {
+    ElMessage.warning('请填写规则名称')
+    return false
+  }
+  const start = editing.effectiveStartAt ? new Date(editing.effectiveStartAt) : null
+  const end = editing.effectiveEndAt ? new Date(editing.effectiveEndAt) : null
+  if (start && end && start >= end) {
+    ElMessage.warning('生效开始时间必须早于结束时间')
+    return false
+  }
+  if (
+    editing.minCommissionAmount != null &&
+    editing.maxCommissionAmount != null &&
+    Number(editing.minCommissionAmount) > Number(editing.maxCommissionAmount)
+  ) {
+    ElMessage.warning('最低分佣不能高于最高分佣')
+    return false
+  }
+  if (editing.id && start && start.getTime() > Date.now()) {
+    ElMessage.warning('未来生效的规则请使用“新增规则”创建，避免提前结束当前规则')
+    return false
+  }
+  return true
 }
 
 async function handleSubmit() {
-  if (!editing.name) {
-    ElMessage.warning('请填写规则名称')
-    return
-  }
+  if (submitting.value || editLoading.value) return
+  if (!validateRulePayload()) return
+
+  submitting.value = true
   try {
+    const payload = buildRulePayload()
     if (editing.id) {
-      await merchantSettlementApi.updateRule(editing.id, { ...editing })
+      await merchantSettlementApi.updateRule(editing.id, payload)
     } else {
-      await merchantSettlementApi.createRule({ ...editing })
+      await merchantSettlementApi.createRule(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    loadList()
+    await loadList()
   } catch (e) {
     // 错误已处理
+  } finally {
+    submitting.value = false
   }
 }
 
 async function handleStatusChange(row: any, val: string | number | boolean) {
   const numVal = Number(val)
+  const previousStatus = numVal === 1 ? 0 : 1
+  if (statusBusyId.value !== null || submitting.value || deleteBusyId.value !== null) {
+    row.status = previousStatus
+    return
+  }
+
+  statusBusyId.value = String(row.id)
   try {
     await merchantSettlementApi.updateRuleStatus(row.id, numVal)
     ElMessage.success(numVal === 1 ? '已启用' : '已停用')
+    await loadList()
   } catch (e) {
-    row.status = numVal === 1 ? 0 : 1
+    row.status = previousStatus
+  } finally {
+    statusBusyId.value = null
   }
 }
 
 async function handleDelete(row: any) {
+  if (deleteBusyId.value !== null || submitting.value || statusBusyId.value !== null) return
+  deleteBusyId.value = String(row.id)
   try {
-    await ElMessageBox.confirm(`确认删除规则「${row.name}」吗？`, '提示', {
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      `确认删除规则「${row.name}」吗？历史交易仍会保留并使用删除前的规则版本。`,
+      '提示',
+      { type: 'warning' },
+    )
     await merchantSettlementApi.deleteRule(row.id)
     ElMessage.success('删除成功')
-    loadList()
+    await loadList()
   } catch (e) {
     // 取消或错误
+  } finally {
+    deleteBusyId.value = null
   }
 }
 
