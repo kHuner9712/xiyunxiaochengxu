@@ -1,4 +1,5 @@
 import { get, post, put, del } from '@/utils/request'
+import { runPersistentIdempotentAction } from '@/utils/checkout-idempotency'
 
 export function getBabyList() {
   return get<BabyItem[]>('/weapp/baby-profile')
@@ -9,7 +10,12 @@ export function getBabyDetail(id: string) {
 }
 
 export function createBaby(data: BabyForm) {
-  return post('/weapp/baby-profile', normalizeBabyPayload(data))
+  const payload = normalizeBabyPayload(data)
+  return runPersistentIdempotentAction<BabyItem>(
+    'baby-profile:create',
+    payload,
+    (clientRequestId) => post<BabyItem>('/weapp/baby-profile', { ...payload, clientRequestId }),
+  )
 }
 
 export function updateBaby(data: BabyForm & { id: string }) {
