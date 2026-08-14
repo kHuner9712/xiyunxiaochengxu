@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable, Optional } from '@nestjs/common';
+import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BusinessEventService } from '../common/business-event.service';
 import { RedisService } from '../common/redis/redis.service';
@@ -51,7 +52,7 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
   private readonly pickupOrderContext = new AsyncLocalStorage<OrderCreateContext>();
 
   constructor(
-    prisma: PrismaService,
+    private readonly orderCountPrisma: PrismaService,
     businessEventService: BusinessEventService,
     benefitPackageService: BenefitPackageService,
     groupBuyService: GroupBuyService,
@@ -60,7 +61,7 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
     @Optional() systemConfigService?: SystemConfigService,
   ) {
     super(
-      prisma,
+      orderCountPrisma,
       businessEventService,
       benefitPackageService,
       groupBuyService,
@@ -74,6 +75,18 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
       throw new Error('OrderService checkout transaction guard is unavailable');
     }
     installPickupStoreTransactionGuard(runtimePrisma, this.pickupOrderContext);
+  }
+
+  override async getOrderCountByUser(userId: string) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
+    const [counts, paid] = await Promise.all([
+      super.getOrderCountByUser(userId),
+      this.orderCountPrisma.order.count({
+        where: { userId: userIdValue, status: OrderStatus.paid },
+      }),
+    ]);
+
+    return { ...counts, paid };
   }
 
   override async create(userId: string, dto: CreateOrderDto) {
