@@ -15,11 +15,14 @@ describe('promotion checkout idempotency runtime wiring', () => {
     expect(moduleSource).toContain('useClass: IdempotentProductionFlashSaleService');
   });
 
-  it('uses the idempotent bigint-safe group-buy provider in the real module', () => {
+  it('keeps the idempotent bigint-safe group-buy provider in the durable final runtime chain', () => {
     const moduleSource = read('apps/api/src/group-buy/group-buy.module.ts');
-    expect(moduleSource).toContain("import { IdempotentBigintSafeProductionGroupBuyService } from './idempotent-bigint-safe-production-group-buy.service'");
+    const providerSource = read('apps/api/src/group-buy/durable-admin-idempotent-bigint-safe-production-group-buy.service.ts');
+    expect(moduleSource).toContain("import { DurableAdminIdempotentBigintSafeProductionGroupBuyService } from './durable-admin-idempotent-bigint-safe-production-group-buy.service'");
     expect(moduleSource).toContain('provide: GroupBuyService');
-    expect(moduleSource).toContain('useClass: IdempotentBigintSafeProductionGroupBuyService');
+    expect(moduleSource).toContain('useExisting: DurableAdminIdempotentBigintSafeProductionGroupBuyService');
+    expect(providerSource).toContain("import { IdempotentBigintSafeProductionGroupBuyService } from './idempotent-bigint-safe-production-group-buy.service'");
+    expect(providerSource).toContain('extends IdempotentBigintSafeProductionGroupBuyService');
   });
 
   it('uses the idempotent activity multi-item provider in the real module', () => {

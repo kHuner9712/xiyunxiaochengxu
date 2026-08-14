@@ -48,11 +48,10 @@ export class DurableAdminIdempotentBigintSafeProductionGroupBuyService extends I
   }
 
   override async findActivities(query: GroupBuyActivityQueryDto) {
-    const normalized = { ...query };
     if (query.productId) {
-      normalized.productId = parsePositiveBigIntId(query.productId, '商品').toString();
+      query.productId = parsePositiveBigIntId(query.productId, '商品').toString();
     }
-    return super.findActivities(normalized);
+    return super.findActivities(query);
   }
 
   override async findActivityById(id: string) {
@@ -224,10 +223,9 @@ export class DurableAdminIdempotentBigintSafeProductionGroupBuyService extends I
   }
 
   override async findGroups(query: GroupBuyGroupQueryDto) {
-    const normalized = { ...query };
-    if (query.activityId) normalized.activityId = parsePositiveBigIntId(query.activityId, '活动').toString();
-    if (query.leaderUserId) normalized.leaderUserId = parsePositiveBigIntId(query.leaderUserId, '团长用户').toString();
-    return super.findGroups(normalized);
+    if (query.activityId) query.activityId = parsePositiveBigIntId(query.activityId, '活动').toString();
+    if (query.leaderUserId) query.leaderUserId = parsePositiveBigIntId(query.leaderUserId, '团长用户').toString();
+    return super.findGroups(query);
   }
 
   override async findGroupById(id: string) {
@@ -236,12 +234,11 @@ export class DurableAdminIdempotentBigintSafeProductionGroupBuyService extends I
   }
 
   override async findMembers(query: GroupBuyMemberQueryDto) {
-    const normalized = { ...query };
-    if (query.groupId) normalized.groupId = parsePositiveBigIntId(query.groupId, '团').toString();
-    if (query.activityId) normalized.activityId = parsePositiveBigIntId(query.activityId, '活动').toString();
-    if (query.userId) normalized.userId = parsePositiveBigIntId(query.userId, '用户').toString();
-    if (query.orderId) normalized.orderId = parsePositiveBigIntId(query.orderId, '订单').toString();
-    return super.findMembers(normalized);
+    if (query.groupId) query.groupId = parsePositiveBigIntId(query.groupId, '团').toString();
+    if (query.activityId) query.activityId = parsePositiveBigIntId(query.activityId, '活动').toString();
+    if (query.userId) query.userId = parsePositiveBigIntId(query.userId, '用户').toString();
+    if (query.orderId) query.orderId = parsePositiveBigIntId(query.orderId, '订单').toString();
+    return super.findMembers(query);
   }
 
   private async assertActivityDefinition(client: DbClient, input: ActivityDefinition) {
