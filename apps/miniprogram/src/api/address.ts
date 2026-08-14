@@ -13,7 +13,8 @@ export function createAddress(data: AddressForm) {
 }
 
 export function updateAddress(data: AddressForm & { id: string }) {
-  return put(`/weapp/address/${encodeURIComponent(data.id)}`, data)
+  const { id, ...payload } = data
+  return put(`/weapp/address/${encodeURIComponent(id)}`, payload)
 }
 
 export function deleteAddress(id: string) {
