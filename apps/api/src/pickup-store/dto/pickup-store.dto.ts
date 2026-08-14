@@ -13,6 +13,8 @@ import {
 } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
+const MYSQL_SIGNED_INT_MAX = 2147483647;
+const POSITIVE_ID = /^[1-9]\d*$/;
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 
 export class PickupStoreQueryDto extends PaginationDto {
@@ -32,7 +34,8 @@ export class CreatePickupStoreDto {
   @IsOptional() @Transform(trim) @IsString() @MaxLength(100) businessHours?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(500) pickupNotice?: string;
   @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1]) status?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) sortOrder?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(MYSQL_SIGNED_INT_MAX) sortOrder?: number;
+  @IsOptional() @Transform(trim) @IsString() @Matches(POSITIVE_ID, { message: '自提点创建请求ID格式不正确' }) clientRequestId?: string;
 }
 
 export class UpdatePickupStoreDto {
@@ -47,7 +50,7 @@ export class UpdatePickupStoreDto {
   @IsOptional() @Transform(trim) @IsString() @MaxLength(100) businessHours?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(500) pickupNotice?: string;
   @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1]) status?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) sortOrder?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(MYSQL_SIGNED_INT_MAX) sortOrder?: number;
 }
 
 export class PickupStoreStatusDto {
