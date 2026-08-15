@@ -175,6 +175,10 @@ export function withFreshCheckoutCouponLock(
   tx: Prisma.TransactionClient,
 ): Prisma.TransactionClient {
   const userCouponDelegate = tx.userCoupon;
+  if (!userCouponDelegate || typeof (userCouponDelegate as any).updateMany !== 'function') {
+    return tx;
+  }
+
   const userCouponProxy = new Proxy(userCouponDelegate as any, {
     get(target, property) {
       if (property === 'updateMany') {
