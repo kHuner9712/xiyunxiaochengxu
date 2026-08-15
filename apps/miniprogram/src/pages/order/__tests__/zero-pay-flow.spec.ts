@@ -241,7 +241,7 @@ describe('确认订单积分抵扣', () => {
 describe('支付结果页 0 元订单展示', () => {
   it('0 元自提订单不轮询支付状态，并展示自提码', async () => {
     orderApiMock.getOrderDetail.mockResolvedValue({
-      id: 'order-3',
+      id: '3',
       orderNo: 'XY20260531003',
       status: 'pending_pickup',
       totalAmount: 0,
@@ -262,7 +262,7 @@ describe('支付结果页 0 元订单展示', () => {
 
     const wrapper = mount(PayResultPage)
     uniAppMock.onLoadCallbacks.at(-1)?.({
-      orderId: 'order-3',
+      orderId: '3',
       payIntent: 'success',
       zeroPay: '1',
     })
