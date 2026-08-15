@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AftersaleStatus, OrderStatus } from '@prisma/client';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
@@ -18,7 +18,6 @@ const ACTIVE_AFTERSALE_STATUSES: AftersaleStatus[] = [
   AftersaleStatus.returned,
   AftersaleStatus.pending_refund,
 ];
-const ORDER_REFUND_LOCK_TTL_SECONDS = 300;
 
 @Injectable()
 export class ActiveAftersaleSafePaymentService extends ConfirmedMissingRefundRetryPaymentService {
@@ -32,7 +31,7 @@ export class ActiveAftersaleSafePaymentService extends ConfirmedMissingRefundRet
     merchantSettlementService: MerchantSettlementService,
     @Inject(GroupBuyService) groupBuyService: GroupBuyService,
     flashSaleService: FlashSaleService,
-    private readonly refundSerialRedis: RedisService,
+    redisService: RedisService,
   ) {
     super(
       activeAftersalePrisma,
@@ -44,22 +43,8 @@ export class ActiveAftersaleSafePaymentService extends ConfirmedMissingRefundRet
       merchantSettlementService,
       groupBuyService,
       flashSaleService,
-      refundSerialRedis,
+      redisService,
     );
-  }
-
-  override async createRefund(params: {
-    orderId: string;
-    aftersaleId?: string;
-    refundAmount: number;
-    reason?: string;
-  }) {
-    // PaymentService performs the aggregate refund-cap check before creating the durable
-    // INITIATING row. Without an order-scoped lock, two different aftersales can both observe the
-    // same old aggregate and each submit a WeChat refund. Keep the lock across the aggregate read,
-    // durable intent creation and remote submission so the next request necessarily observes the
-    // first refund row in the cap calculation.
-    return this.withOrderRefundLock(params.orderId, () => super.createRefund(params));
   }
 
   override async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {
@@ -79,35 +64,6 @@ export class ActiveAftersaleSafePaymentService extends ConfirmedMissingRefundRet
     const inherited = await super.reconcileRefundSuccessSideEffects(limit);
     const activeAftersaleOrders = await this.reconcileActiveAftersaleOrderStates(limit);
     return { ...inherited, activeAftersaleOrders };
-  }
-
-  private async withOrderRefundLock<T>(rawOrderId: string, action: () => Promise<T>): Promise<T> {
-    const lockKey = `payment:refund-order:${rawOrderId}`;
-    const token = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const acquired = await this.refundSerialRedis.setNX(
-      lockKey,
-      token,
-      ORDER_REFUND_LOCK_TTL_SECONDS,
-    );
-    if (!acquired) {
-      throw new BadRequestException('该订单退款正在处理中，请稍后重试');
-    }
-
-    const heartbeat = setInterval(() => {
-      void this.refundSerialRedis
-        .extendLockWithLua(lockKey, token, ORDER_REFUND_LOCK_TTL_SECONDS)
-        .catch(() => undefined);
-    }, Math.floor((ORDER_REFUND_LOCK_TTL_SECONDS * 1000) / 3));
-    heartbeat.unref?.();
-
-    try {
-      return await action();
-    } finally {
-      clearInterval(heartbeat);
-      await this.refundSerialRedis
-        .releaseLockWithLua(lockKey, token)
-        .catch(() => undefined);
-    }
   }
 
   private async reassertActiveAftersaleOrderState(rawOrderId: unknown) {
