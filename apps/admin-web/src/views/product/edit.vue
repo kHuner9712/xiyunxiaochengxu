@@ -1,11 +1,11 @@
 <template>
   <div class="page-container">
-    <el-card>
+    <el-card v-loading="editorLoading">
       <template #header>
         <span>{{ isEdit ? '编辑商品' : '新增商品' }}</span>
       </template>
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="140px" style="max-width: 900px" :disabled="submitting">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="140px" style="max-width: 900px" :disabled="submitting || invalidRoute">
         <el-form-item label="商品名称" prop="name">
           <el-input v-model="form.name" maxlength="100" show-word-limit />
         </el-form-item>
@@ -210,8 +210,8 @@
         <el-form-item label="服务承诺(JSON)"><el-input v-model="servicePromiseText" type="textarea" :rows="4" placeholder='例如: {"delivery":"24小时发货"}' /></el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="submitting" :disabled="pendingUploads > 0 || submitting" @click="handleSubmit">
-            {{ pendingUploads > 0 ? '文件上传中…' : '保存商品' }}
+          <el-button type="primary" :loading="submitting || editorLoading" :disabled="pendingUploads > 0 || submitting || editorLoading || invalidRoute" @click="handleSubmit">
+            {{ pendingUploads > 0 ? '文件上传中…' : editorLoading ? '商品数据加载中…' : '保存商品' }}
           </el-button>
           <el-button :disabled="submitting" @click="router.back()">取消</el-button>
         </el-form-item>
@@ -221,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { productApi } from '@/api/product'
@@ -233,6 +233,7 @@ import { priceToFen } from '@/utils/format'
 import { resolvePrivateFileUrl, resolvePrivateFileUrls, revokePrivateObjectUrls } from '@/utils/private-file'
 import { asArray } from '@/utils/response'
 
+const POSITIVE_ID = /^[1-9]\d*$/
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
@@ -240,6 +241,9 @@ const submitting = ref(false)
 const pendingUploads = ref(0)
 const videoUploading = ref(false)
 const videoUploadProgress = ref(0)
+const detailLoading = ref(false)
+const referenceDataLoading = ref(false)
+const referenceDataReady = ref(false)
 const categoryTree = ref<any[]>([])
 const brandList = ref<any[]>([])
 const supplierList = ref<any[]>([])
@@ -248,33 +252,17 @@ const certImageFileList = ref<any[]>([])
 const currentCategoryName = ref('')
 const servicePromiseText = ref('')
 const createRequestId = ref('')
+let detailRequestVersion = 0
+let editorGeneration = 0
 
-const isEdit = computed(() => !!route.params.id)
+const productId = computed(() => String(route.params.id || '').trim())
+const isEdit = computed(() => POSITIVE_ID.test(productId.value))
+const invalidRoute = computed(() => productId.value.length > 0 && !isEdit.value)
+const editorLoading = computed(() => detailLoading.value || referenceDataLoading.value)
 const isRegulatedType = computed(() => form.complianceType !== 'normal')
 
-const form = reactive({
-  id: undefined as string | undefined,
-  name: '',
-  categoryId: undefined as string | undefined,
-  productType: 'physical',
-  fulfillmentType: 'delivery',
-  businessCategory: 'other',
-  brandId: undefined as string | undefined,
-  supplierId: undefined as string | undefined,
-  mainImage: '',
-  videoUrl: '',
-  images: [] as string[],
-  price: 0,
-  originalPrice: 0,
-  stock: 0,
-  status: 3,
-  sortOrder: 0,
-  isRecommend: 0,
-  description: '',
-  skuMode: 'single' as 'single' | 'multi',
-  skus: [] as { id?: string; skuCode?: string; name: string; price: number; originalPrice: number; stock: number; image: string }[],
-  complianceType: 'normal' as 'normal' | 'food' | 'health' | 'infant' | 'advanced',
-  compliance: {
+function createDefaultCompliance() {
+  return {
     isRegulated: false,
     isFood: false,
     isHealthSupplement: false,
@@ -291,13 +279,67 @@ const form = reactive({
     notSuitableFor: '',
     precautions: '',
     certImages: [] as string[],
-  },
-})
+  }
+}
+
+function createDefaultForm() {
+  return {
+    id: undefined as string | undefined,
+    name: '',
+    categoryId: undefined as string | undefined,
+    productType: 'physical',
+    fulfillmentType: 'delivery',
+    businessCategory: 'other',
+    brandId: undefined as string | undefined,
+    supplierId: undefined as string | undefined,
+    mainImage: '',
+    videoUrl: '',
+    images: [] as string[],
+    price: 0,
+    originalPrice: 0,
+    stock: 0,
+    status: 3,
+    sortOrder: 0,
+    isRecommend: 0,
+    description: '',
+    skuMode: 'single' as 'single' | 'multi',
+    skus: [] as { id?: string; skuCode?: string; name: string; price: number; originalPrice: number; stock: number; image: string }[],
+    complianceType: 'normal' as 'normal' | 'food' | 'health' | 'infant' | 'advanced',
+    compliance: createDefaultCompliance(),
+  }
+}
+
+const form = reactive(createDefaultForm())
 
 const rules: FormRules = {
   name: [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
   categoryId: [{ required: true, message: '请选择分类', trigger: 'change' }],
   sortOrder: [{ required: true, message: '请输入排序', trigger: 'blur' }],
+}
+
+function currentRouteProductId() {
+  return String(route.params.id || '').trim()
+}
+
+function isCurrentEditor(generation: number, productIdValue: string) {
+  return generation === editorGeneration && currentRouteProductId() === productIdValue
+}
+
+function revokeCertPreviews() {
+  revokePrivateObjectUrls(certImageFileList.value.map((item: any) => item.url))
+}
+
+function resetRouteBoundState() {
+  revokeCertPreviews()
+  Object.assign(form, createDefaultForm())
+  imageFileList.value = []
+  certImageFileList.value = []
+  currentCategoryName.value = ''
+  servicePromiseText.value = ''
+  pendingUploads.value = 0
+  videoUploading.value = false
+  videoUploadProgress.value = 0
+  formRef.value?.clearValidate()
 }
 
 function sanitizeUrl(url: unknown): string {
@@ -363,12 +405,12 @@ function normalizeSpecs(name: string) {
   return specs
 }
 
-function generateSkuCode(productId?: string) {
+function generateSkuCode(productIdValue?: string) {
   const randomPart =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID().replace(/-/g, '')
       : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
-  return `SKU-${productId || 'NEW'}-${randomPart.slice(0, 18).toUpperCase()}`
+  return `SKU-${productIdValue || 'NEW'}-${randomPart.slice(0, 18).toUpperCase()}`
 }
 
 function createProductRequestId() {
@@ -512,26 +554,47 @@ function validateComplianceBeforeSave(): boolean {
   return true
 }
 
+function beginUploadContext() {
+  if (editorLoading.value || invalidRoute.value || submitting.value) return null
+  return { generation: editorGeneration, productIdValue: currentRouteProductId() }
+}
+
 async function handleUploadMainImage(options: any) {
+  const context = beginUploadContext()
+  if (!context) {
+    options.onError?.(new Error('商品数据加载中，请稍后重试上传'))
+    return
+  }
   pendingUploads.value += 1
   try {
     const res = await uploadApi.uploadImage(options.file, 'product-image')
+    if (!isCurrentEditor(context.generation, context.productIdValue)) return
     const uploadedUrl = extractUploadUrl(res)
     if (!uploadedUrl) throw new Error('上传成功但未返回图片地址')
     form.mainImage = uploadedUrl
     options.onSuccess?.(res)
   } catch (error: any) {
-    options.onError?.(error)
-    ElMessage.error(error?.message || '商品主图上传失败')
+    if (isCurrentEditor(context.generation, context.productIdValue)) {
+      options.onError?.(error)
+      ElMessage.error(error?.message || '商品主图上传失败')
+    }
   } finally {
-    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    if (context.generation === editorGeneration) {
+      pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    }
   }
 }
 
 async function handleUploadGalleryImage(options: any) {
+  const context = beginUploadContext()
+  if (!context) {
+    options.onError?.(new Error('商品数据加载中，请稍后重试上传'))
+    return
+  }
   pendingUploads.value += 1
   try {
     const res = await uploadApi.uploadImage(options.file, 'product-image')
+    if (!isCurrentEditor(context.generation, context.productIdValue)) return
     const uploadedUrl = extractUploadUrl(res)
     if (!uploadedUrl) throw new Error('上传成功但未返回图片地址')
     if (!form.images.includes(uploadedUrl)) {
@@ -540,10 +603,14 @@ async function handleUploadGalleryImage(options: any) {
     }
     options.onSuccess?.(res)
   } catch (error: any) {
-    options.onError?.(error)
-    ElMessage.error(error?.message || '商品图片上传失败')
+    if (isCurrentEditor(context.generation, context.productIdValue)) {
+      options.onError?.(error)
+      ElMessage.error(error?.message || '商品图片上传失败')
+    }
   } finally {
-    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    if (context.generation === editorGeneration) {
+      pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    }
   }
 }
 
@@ -562,23 +629,35 @@ function validateVideoFile(file: File): boolean {
 
 async function handleUploadVideo(options: any) {
   if (!validateVideoFile(options.file)) return
+  const context = beginUploadContext()
+  if (!context) {
+    options.onError?.(new Error('商品数据加载中，请稍后重试上传'))
+    return
+  }
   pendingUploads.value += 1
   videoUploading.value = true
   videoUploadProgress.value = 0
   try {
     const res = await uploadApi.uploadVideo(options.file, 'product-video', (percent) => {
-      videoUploadProgress.value = percent
+      if (isCurrentEditor(context.generation, context.productIdValue)) {
+        videoUploadProgress.value = percent
+      }
     })
+    if (!isCurrentEditor(context.generation, context.productIdValue)) return
     const uploadedUrl = extractUploadUrl(res)
     if (!uploadedUrl) throw new Error('上传成功但未返回视频地址')
     form.videoUrl = uploadedUrl
     options.onSuccess?.(res)
   } catch (error) {
-    options.onError?.(error)
-    ElMessage.error('视频上传失败')
+    if (isCurrentEditor(context.generation, context.productIdValue)) {
+      options.onError?.(error)
+      ElMessage.error('视频上传失败')
+    }
   } finally {
-    videoUploading.value = false
-    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    if (context.generation === editorGeneration) {
+      videoUploading.value = false
+      pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    }
   }
 }
 
@@ -590,9 +669,15 @@ function handleRemoveImage(file: any) {
 }
 
 async function handleUploadSkuImage(options: any, row: any) {
+  const context = beginUploadContext()
+  if (!context) {
+    options.onError?.(new Error('商品数据加载中，请稍后重试上传'))
+    return
+  }
   pendingUploads.value += 1
   try {
     const res = await uploadApi.uploadImage(options.file, 'product-image')
+    if (!isCurrentEditor(context.generation, context.productIdValue)) return
     const uploadedUrl = extractUploadUrl(res)
     if (!uploadedUrl) {
       ElMessage.error('上传成功但未返回图片地址')
@@ -602,31 +687,54 @@ async function handleUploadSkuImage(options: any, row: any) {
     row.image = uploadedUrl
     options.onSuccess?.(res)
   } catch (error) {
-    options.onError?.(error)
-    ElMessage.error('SKU图片上传失败')
+    if (isCurrentEditor(context.generation, context.productIdValue)) {
+      options.onError?.(error)
+      ElMessage.error('SKU图片上传失败')
+    }
   } finally {
-    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    if (context.generation === editorGeneration) {
+      pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    }
   }
 }
 
 async function handleUploadCertImage(options: any) {
+  const context = beginUploadContext()
+  if (!context) {
+    options.onError?.(new Error('商品数据加载中，请稍后重试上传'))
+    return
+  }
   pendingUploads.value += 1
+  let resolvedUrl = ''
   try {
     const res = await uploadApi.uploadImage(options.file, 'cert')
+    if (!isCurrentEditor(context.generation, context.productIdValue)) return
     const uploadedUrl = extractUploadUrl(res)
     if (!uploadedUrl) {
       ElMessage.error('上传成功但未返回资质图片地址')
       options.onError?.(new Error('上传成功但未返回资质图片地址'))
       return
     }
+    resolvedUrl = await resolvePrivateFileUrl(uploadedUrl)
+    if (!isCurrentEditor(context.generation, context.productIdValue)) {
+      revokePrivateObjectUrls(resolvedUrl ? [resolvedUrl] : [])
+      return
+    }
     form.compliance.certImages.push(uploadedUrl)
-    certImageFileList.value.push({ url: await resolvePrivateFileUrl(uploadedUrl), rawUrl: uploadedUrl })
+    certImageFileList.value.push({ url: resolvedUrl, rawUrl: uploadedUrl })
     options.onSuccess?.(res)
   } catch (error) {
-    options.onError?.(error)
-    ElMessage.error('资质图片上传失败')
+    if (resolvedUrl && !isCurrentEditor(context.generation, context.productIdValue)) {
+      revokePrivateObjectUrls([resolvedUrl])
+    }
+    if (isCurrentEditor(context.generation, context.productIdValue)) {
+      options.onError?.(error)
+      ElMessage.error('资质图片上传失败')
+    }
   } finally {
-    pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    if (context.generation === editorGeneration) {
+      pendingUploads.value = Math.max(0, pendingUploads.value - 1)
+    }
   }
 }
 
@@ -637,61 +745,104 @@ function handleRemoveCertImage(file: any) {
   if (file.url) revokePrivateObjectUrls([file.url])
 }
 
-async function fetchDetail(id: string) {
-  const res = await productApi.getDetail(id)
-  const d = res.data
-  const skus = asArray(d.skus).filter((s: any) => s.status === 1 || s.status === undefined)
-  const firstSku = skus[0]
+async function fetchDetail(productIdValue: string, generation: number) {
+  const requestVersion = ++detailRequestVersion
+  if (!POSITIVE_ID.test(productIdValue)) return
+  detailLoading.value = true
+  let resolvedCertUrls: string[] = []
+  try {
+    const res = await productApi.getDetail(productIdValue)
+    if (requestVersion !== detailRequestVersion || !isCurrentEditor(generation, productIdValue)) return
+    const d = res.data || {}
+    if (String(d.id || '') !== productIdValue) {
+      resetRouteBoundState()
+      ElMessage.error('商品详情数据与当前商品不匹配，请返回列表重新进入')
+      return
+    }
 
-  Object.assign(form, {
-    id: String(d.id),
-    name: d.name || '',
-    categoryId: d.categoryId ? String(d.categoryId) : undefined,
-    productType: d.productType || 'physical',
-    fulfillmentType: d.fulfillmentType || 'delivery',
-    businessCategory: d.businessCategory || 'other',
-    brandId: d.brandId ? String(d.brandId) : undefined,
-    supplierId: d.supplierId ? String(d.supplierId) : undefined,
-    mainImage: sanitizeUrl(d.mainImage),
-    videoUrl: sanitizeUrl(d.videoUrl),
-    images: sanitizeUrlList(d.images),
-    price: Number(((d.minPrice ?? firstSku?.price ?? 0) / 100).toFixed(2)),
-    originalPrice: Number((((firstSku?.originalPrice ?? d.minPrice ?? 0) as number) / 100).toFixed(2)),
-    stock: Number(d.stock ?? 0),
-    status: Number(d.status ?? 3),
-    sortOrder: Number(d.sortOrder ?? 0),
-    isRecommend: Number(d.isRecommend ?? 0),
-    description: d.description || '',
-    skus: skus.map((s: any) => ({
-      id: s.id ? String(s.id) : undefined,
-      skuCode: s.skuCode || undefined,
-      name: Object.values(s.specs || {}).join('/'),
-      price: Number((s.price / 100).toFixed(2)),
-      originalPrice: Number((((s.originalPrice ?? s.price) as number) / 100).toFixed(2)),
-      stock: s.stock ?? 0,
-      image: sanitizeUrl(s.image),
-    })),
-  })
+    const skus = asArray(d.skus).filter((s: any) => s.status === 1 || s.status === undefined)
+    const firstSku = skus[0]
+    const certImages = sanitizeUrlList(d.attributes?.compliance?.certImages)
+    resolvedCertUrls = await resolvePrivateFileUrls(certImages)
+    if (requestVersion !== detailRequestVersion || !isCurrentEditor(generation, productIdValue)) {
+      revokePrivateObjectUrls(resolvedCertUrls)
+      return
+    }
 
-  form.skuMode = form.skus.length > 1 ? 'multi' : 'single'
-  form.compliance = {
-    ...form.compliance,
-    ...(d.attributes?.compliance || {}),
-    certImages: sanitizeUrlList(d.attributes?.compliance?.certImages),
+    const nextCompliance = {
+      ...createDefaultCompliance(),
+      ...(d.attributes?.compliance || {}),
+      certImages,
+    }
+    revokeCertPreviews()
+    Object.assign(form, {
+      ...createDefaultForm(),
+      id: String(d.id),
+      name: d.name || '',
+      categoryId: d.categoryId ? String(d.categoryId) : undefined,
+      productType: d.productType || 'physical',
+      fulfillmentType: d.fulfillmentType || 'delivery',
+      businessCategory: d.businessCategory || 'other',
+      brandId: d.brandId ? String(d.brandId) : undefined,
+      supplierId: d.supplierId ? String(d.supplierId) : undefined,
+      mainImage: sanitizeUrl(d.mainImage),
+      videoUrl: sanitizeUrl(d.videoUrl),
+      images: sanitizeUrlList(d.images),
+      price: Number(((d.minPrice ?? firstSku?.price ?? 0) / 100).toFixed(2)),
+      originalPrice: Number((((firstSku?.originalPrice ?? d.minPrice ?? 0) as number) / 100).toFixed(2)),
+      stock: Number(d.stock ?? 0),
+      status: Number(d.status ?? 3),
+      sortOrder: Number(d.sortOrder ?? 0),
+      isRecommend: Number(d.isRecommend ?? 0),
+      description: d.description || '',
+      skus: skus.map((s: any) => ({
+        id: s.id ? String(s.id) : undefined,
+        skuCode: s.skuCode || undefined,
+        name: Object.values(s.specs || {}).join('/'),
+        price: Number((s.price / 100).toFixed(2)),
+        originalPrice: Number((((s.originalPrice ?? s.price) as number) / 100).toFixed(2)),
+        stock: s.stock ?? 0,
+        image: sanitizeUrl(s.image),
+      })),
+      compliance: nextCompliance,
+    })
+
+    form.skuMode = form.skus.length > 1 ? 'multi' : 'single'
+    applyComplianceTypeFromDetail(form.compliance)
+    servicePromiseText.value = d.servicePromise ? JSON.stringify(d.servicePromise, null, 2) : ''
+    imageFileList.value = form.images.map((url) => ({ url }))
+    certImageFileList.value = resolvedCertUrls.map((url: string, index: number) => ({ url, rawUrl: certImages[index] }))
+    resolvedCertUrls = []
+    onCategoryChange()
+  } catch (e: any) {
+    revokePrivateObjectUrls(resolvedCertUrls)
+    if (requestVersion === detailRequestVersion && isCurrentEditor(generation, productIdValue)) {
+      resetRouteBoundState()
+      ElMessage.error(e?.message || '加载商品失败')
+    }
+  } finally {
+    if (requestVersion === detailRequestVersion && isCurrentEditor(generation, productIdValue)) {
+      detailLoading.value = false
+    }
   }
-  applyComplianceTypeFromDetail(form.compliance)
-  servicePromiseText.value = d.servicePromise ? JSON.stringify(d.servicePromise, null, 2) : ''
-  imageFileList.value = form.images.map((url) => ({ url }))
-  revokePrivateObjectUrls(certImageFileList.value.map((item: any) => item.url))
-  certImageFileList.value = (await resolvePrivateFileUrls(form.compliance.certImages))
-    .map((url: string, index: number) => ({ url, rawUrl: form.compliance.certImages[index] }))
-  onCategoryChange()
 }
 
 async function handleSubmit() {
-  if (submitting.value) return
+  if (submitting.value || editorLoading.value) return
   if (pendingUploads.value > 0) {
     ElMessage.warning('文件仍在上传，请等待全部上传完成后再保存商品')
+    return
+  }
+
+  const targetProductId = currentRouteProductId()
+  const targetIsEdit = POSITIVE_ID.test(targetProductId)
+  if (targetProductId && !targetIsEdit) {
+    ElMessage.warning('商品ID无效，请返回商品列表重新进入')
+    return
+  }
+  const operationGeneration = editorGeneration
+  if (targetIsEdit && String(form.id || '') !== targetProductId) {
+    ElMessage.warning('商品数据与当前页面不匹配，请刷新后重试')
     return
   }
 
@@ -699,6 +850,14 @@ async function handleSubmit() {
   try {
     const valid = await formRef.value?.validate().catch(() => false)
     if (!valid) return
+    if (!isCurrentEditor(operationGeneration, targetProductId)) {
+      ElMessage.warning('商品已切换，已取消本次保存')
+      return
+    }
+    if (targetIsEdit && String(form.id || '') !== targetProductId) {
+      ElMessage.warning('商品数据与当前页面不匹配，请刷新后重试')
+      return
+    }
     if (!validateSkus()) return
     if (!validateComplianceBeforeSave()) return
     ensureStableSkuCodes()
@@ -714,7 +873,7 @@ async function handleSubmit() {
     }
 
     const payload = {
-      ...(!isEdit.value ? { clientRequestId: createRequestId.value } : {}),
+      ...(!targetIsEdit ? { clientRequestId: createRequestId.value } : {}),
       name: form.name,
       categoryId: form.categoryId,
       productType: form.productType,
@@ -746,37 +905,85 @@ async function handleSubmit() {
       },
     }
 
-    if (isEdit.value) {
-      if (!form.id) return
-      await productApi.update(form.id, payload)
+    if (!isCurrentEditor(operationGeneration, targetProductId)) {
+      ElMessage.warning('商品已切换，已取消本次保存')
+      return
+    }
+    if (targetIsEdit) {
+      await productApi.update(targetProductId, payload)
     } else {
       if (!createRequestId.value) throw new Error('商品创建请求标识缺失，请重新打开新增页面')
       await productApi.create(payload)
     }
 
+    if (!isCurrentEditor(operationGeneration, targetProductId)) return
     ElMessage.success('保存成功（商品状态请在列表页进行上架/下架）')
     router.push('/product/list')
+  } catch (e: any) {
+    if (isCurrentEditor(operationGeneration, targetProductId)) {
+      ElMessage.error(e?.message || '保存失败')
+    }
   } finally {
     submitting.value = false
   }
 }
 
-onMounted(async () => {
-  if (!route.params.id) createRequestId.value = createProductRequestId()
+async function loadReferenceData() {
+  if (referenceDataReady.value || referenceDataLoading.value) return
+  referenceDataLoading.value = true
+  try {
+    const [catRes, brandRes, supplierRes] = await Promise.all([
+      categoryApi.getTree(),
+      brandApi.getList({ page: 1, pageSize: 100 }),
+      supplierApi.getList({ page: 1, pageSize: 100 }),
+    ])
+    categoryTree.value = asArray(catRes.data)
+    brandList.value = asArray(brandRes.data)
+    supplierList.value = asArray(supplierRes.data)
+    referenceDataReady.value = true
 
-  const [catRes, brandRes, supplierRes] = await Promise.all([
-    categoryApi.getTree(),
-    brandApi.getList({ page: 1, pageSize: 100 }),
-    supplierApi.getList({ page: 1, pageSize: 100 }),
-  ])
-  categoryTree.value = asArray(catRes.data)
-  brandList.value = asArray(brandRes.data)
-  supplierList.value = asArray(supplierRes.data)
+    const currentProductId = currentRouteProductId()
+    const generation = editorGeneration
+    if (POSITIVE_ID.test(currentProductId)) {
+      await fetchDetail(currentProductId, generation)
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.message || '商品基础数据加载失败，请刷新后重试')
+  } finally {
+    referenceDataLoading.value = false
+  }
+}
 
-  if (route.params.id) await fetchDetail(String(route.params.id))
+watch(
+  () => currentRouteProductId(),
+  (nextProductId) => {
+    detailRequestVersion += 1
+    editorGeneration += 1
+    detailLoading.value = false
+    resetRouteBoundState()
+    if (!nextProductId) {
+      createRequestId.value = createProductRequestId()
+      return
+    }
+    createRequestId.value = ''
+    if (!POSITIVE_ID.test(nextProductId)) {
+      ElMessage.warning('商品ID无效，请返回商品列表重新进入')
+      return
+    }
+    if (referenceDataReady.value) {
+      void fetchDetail(nextProductId, editorGeneration)
+    }
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  void loadReferenceData()
 })
 
 onUnmounted(() => {
-  revokePrivateObjectUrls(certImageFileList.value.map((item: any) => item.url))
+  detailRequestVersion += 1
+  editorGeneration += 1
+  revokeCertPreviews()
 })
 </script>
