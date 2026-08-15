@@ -1,12 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { uploadImage } from '../upload'
 import {
+  AUTH_EXPIRED_EVENT,
   getApiBaseUrl,
   redirectToLoginTab,
   removeToken,
 } from '@/utils/request'
 
 vi.mock('@/utils/request', () => ({
+  AUTH_EXPIRED_EVENT: 'baby-mall:auth-expired',
   getApiBaseUrl: vi.fn(() => 'https://api.example.com/api'),
   getToken: vi.fn(() => 'token-value'),
   removeToken: vi.fn(),
@@ -20,6 +22,7 @@ beforeEach(() => {
   vi.mocked(getApiBaseUrl).mockReturnValue('https://api.example.com/api')
   ;(globalThis as any).uni = {
     showToast: vi.fn(),
+    $emit: vi.fn(),
     uploadFile: vi.fn((options) => {
       options.success({
         statusCode: 200,
@@ -67,7 +70,7 @@ describe('uploadImage', () => {
     )
   })
 
-  it('业务 401 响应会清理旧 token 并回到登录页', async () => {
+  it('业务 401 响应会清理旧 token、广播内存态失效并回到登录页', async () => {
     ;(globalThis as any).uni.uploadFile.mockImplementationOnce((options: any) => {
       options.success({
         statusCode: 200,
@@ -78,10 +81,11 @@ describe('uploadImage', () => {
     await expect(uploadImage('/tmp/refund.jpg', 'aftersale')).rejects.toThrow('登录已过期')
 
     expect(removeToken).toHaveBeenCalledTimes(1)
+    expect((globalThis as any).uni.$emit).toHaveBeenCalledWith(AUTH_EXPIRED_EVENT)
     expect(redirectToLoginTab).toHaveBeenCalledWith('登录已过期，请重新登录')
   })
 
-  it('HTTP 401 响应同样清理旧 token 并回到登录页', async () => {
+  it('HTTP 401 响应同样清理旧 token、广播内存态失效并回到登录页', async () => {
     ;(globalThis as any).uni.uploadFile.mockImplementationOnce((options: any) => {
       options.success({
         statusCode: 401,
@@ -92,6 +96,7 @@ describe('uploadImage', () => {
     await expect(uploadImage('/tmp/refund.jpg', 'aftersale')).rejects.toThrow('登录已过期')
 
     expect(removeToken).toHaveBeenCalledTimes(1)
+    expect((globalThis as any).uni.$emit).toHaveBeenCalledWith(AUTH_EXPIRED_EVENT)
     expect(redirectToLoginTab).toHaveBeenCalledWith('登录已过期，请重新登录')
   })
 
