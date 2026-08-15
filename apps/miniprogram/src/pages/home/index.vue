@@ -199,8 +199,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { onPullDownRefresh, onReachBottom, onShareAppMessage } from '@dcloudio/uni-app'
+import { ref, reactive } from 'vue'
+import { onPullDownRefresh, onReachBottom, onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import {
   getHomeData,
   getGuessProducts,
@@ -253,29 +253,66 @@ const guessProducts = ref<ProductItem[]>([])
 const guessLoading = ref(false)
 const guessPage = ref(1)
 const guessFinished = ref(false)
+let homeVersion = 0
+let guessVersion = 0
+let guessLoadingVersion = -1
 
-async function loadHomeData() {
+async function loadHomeData(version = homeVersion) {
   try {
     const data = await getHomeData()
+    if (version !== homeVersion) return
     Object.assign(homeData, data)
   } catch {
-    uni.showToast({ title: '首页加载失败', icon: 'none' })
+    if (version === homeVersion) {
+      uni.showToast({ title: '首页加载失败', icon: 'none' })
+    }
   }
 }
 
-async function loadGuessProducts() {
-  if (guessLoading.value || guessFinished.value) return
+function refreshHomeData() {
+  const version = ++homeVersion
+  return loadHomeData(version)
+}
+
+function resetGuessProducts() {
+  guessPage.value = 1
+  guessFinished.value = false
+  guessProducts.value = []
+}
+
+async function loadGuessProducts(reset = false, version = guessVersion) {
+  if (!reset && guessFinished.value && version === guessVersion) return
+  if (guessLoading.value && guessLoadingVersion === version) return
+  if (reset) resetGuessProducts()
+
+  const requestPage = guessPage.value
   guessLoading.value = true
+  guessLoadingVersion = version
   try {
-    const data = await getGuessProducts({ page: guessPage.value, pageSize: 10 })
+    const data = await getGuessProducts({ page: requestPage, pageSize: 10 })
+    if (version !== guessVersion) return
     guessProducts.value.push(...data.list)
     guessFinished.value = guessProducts.value.length >= data.total
-    guessPage.value++
+    guessPage.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '推荐加载失败', icon: 'none' })
+    if (version === guessVersion) {
+      uni.showToast({ title: '推荐加载失败', icon: 'none' })
+    }
   } finally {
-    guessLoading.value = false
+    if (version === guessVersion) {
+      guessLoading.value = false
+      guessLoadingVersion = -1
+    }
   }
+}
+
+function refreshGuessProducts() {
+  const version = ++guessVersion
+  return loadGuessProducts(true, version)
+}
+
+async function refreshHomePage() {
+  await Promise.all([refreshHomeData(), refreshGuessProducts()])
 }
 
 function recommendationSubtitle(section: RecommendationSection) {
@@ -347,20 +384,27 @@ function goActivityContentList() {
 }
 
 onPullDownRefresh(async () => {
-  guessPage.value = 1
-  guessFinished.value = false
-  guessProducts.value = []
-  await Promise.all([loadHomeData(), loadGuessProducts()])
+  await refreshHomePage()
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadGuessProducts()
+  void loadGuessProducts(false, guessVersion)
 })
 
-onMounted(() => {
-  loadHomeData()
-  loadGuessProducts()
+onShow(() => {
+  void refreshHomePage()
+})
+
+defineExpose({
+  homeData,
+  guessProducts,
+  guessLoading,
+  loadHomeData,
+  refreshHomeData,
+  loadGuessProducts,
+  refreshGuessProducts,
+  refreshHomePage,
 })
 </script>
 
