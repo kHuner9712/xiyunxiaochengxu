@@ -384,7 +384,11 @@ function openPolicy(url: string) {
 }
 
 onShow(() => {
-  loadOrderCount()
+  if (!userStore.isLoggedIn) return
+  void userStore.fetchUserInfo().catch((err) => {
+    console.warn('[baby-mall] refresh user info on profile tab failed:', err)
+  })
+  void loadOrderCount()
 })
 
 defineExpose({
