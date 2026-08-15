@@ -12,6 +12,7 @@ function read(relativePath) {
 
 const couponEdit = read('apps/admin-web/src/views/marketing/coupon-edit.vue')
 const activityEdit = read('apps/admin-web/src/views/marketing/activity-edit.vue')
+const productEdit = read('apps/admin-web/src/views/product/edit.vue')
 
 function method(source, start, end) {
   const startIndex = source.indexOf(start)
@@ -26,6 +27,9 @@ const couponSubmit = method(couponEdit, 'async function handleSubmit()', 'watch(
 const activitySelect = method(activityEdit, 'async function confirmProductSelect()', 'async function fetchDetail(')
 const activityFetch = method(activityEdit, 'async function fetchDetail(', 'function validateBusinessRules()')
 const activitySubmit = method(activityEdit, 'async function handleSubmit()', 'watch(')
+const productUploads = method(productEdit, 'function beginUploadContext()', 'function handleRemoveCertImage(')
+const productFetch = method(productEdit, 'async function fetchDetail(', 'async function handleSubmit()')
+const productSubmit = method(productEdit, 'async function handleSubmit()', 'async function loadReferenceData()')
 
 test('coupon editor ignores stale detail responses after route id changes', () => {
   assert.match(couponEdit, /let detailRequestVersion = 0/)
@@ -73,4 +77,35 @@ test('activity editor snapshots its write target before async validation', () =>
   assert.match(activitySubmit, /activityApi\.create\(payload\)/)
   assert.doesNotMatch(activitySubmit, /activityApi\.update\(activityId\.value/)
   assert.match(activityEdit, /:disabled="submitting \|\| detailLoading \|\| invalidRoute"/)
+})
+
+test('product editor drops stale detail and private certification previews after route changes', () => {
+  assert.match(productEdit, /let detailRequestVersion = 0/)
+  assert.match(productEdit, /let editorGeneration = 0/)
+  assert.match(productFetch, /const requestVersion = \+\+detailRequestVersion/)
+  assert.match(productFetch, /productApi\.getDetail\(productIdValue\)/)
+  assert.match(productFetch, /requestVersion !== detailRequestVersion \|\| !isCurrentEditor\(generation, productIdValue\)/)
+  assert.match(productFetch, /String\(d\.id \|\| ''\) !== productIdValue/)
+  assert.match(productFetch, /resolvedCertUrls = await resolvePrivateFileUrls\(certImages\)[\s\S]*!isCurrentEditor\(generation, productIdValue\)[\s\S]*revokePrivateObjectUrls\(resolvedCertUrls\)/)
+  assert.match(productEdit, /watch\([\s\S]*editorGeneration \+= 1[\s\S]*resetRouteBoundState\(\)[\s\S]*fetchDetail\(nextProductId, editorGeneration\)[\s\S]*immediate: true/)
+})
+
+test('product uploads cannot mutate another product after route changes', () => {
+  assert.match(productUploads, /return \{ generation: editorGeneration, productIdValue: currentRouteProductId\(\) \}/)
+  assert.ok((productUploads.match(/if \(!isCurrentEditor\(context\.generation, context\.productIdValue\)\) return/g) || []).length >= 5)
+  assert.match(productUploads, /uploadVideo[\s\S]*if \(isCurrentEditor\(context\.generation, context\.productIdValue\)\)[\s\S]*videoUploadProgress\.value = percent/)
+  assert.match(productUploads, /resolvedUrl = await resolvePrivateFileUrl\(uploadedUrl\)[\s\S]*!isCurrentEditor\(context\.generation, context\.productIdValue\)[\s\S]*revokePrivateObjectUrls/)
+  assert.match(productUploads, /if \(context\.generation === editorGeneration\)[\s\S]*pendingUploads\.value = Math\.max/)
+})
+
+test('product editor snapshots its write target before validation and never writes form.id directly', () => {
+  assert.match(productSubmit, /const targetProductId = currentRouteProductId\(\)/)
+  assert.match(productSubmit, /const targetIsEdit = POSITIVE_ID\.test\(targetProductId\)/)
+  assert.match(productSubmit, /const operationGeneration = editorGeneration/)
+  assert.match(productSubmit, /String\(form\.id \|\| ''\) !== targetProductId/)
+  assert.match(productSubmit, /formRef\.value\?\.validate[\s\S]*!isCurrentEditor\(operationGeneration, targetProductId\)/)
+  assert.match(productSubmit, /productApi\.update\(targetProductId, payload\)/)
+  assert.match(productSubmit, /productApi\.create\(payload\)/)
+  assert.doesNotMatch(productSubmit, /productApi\.update\(form\.id, payload\)/)
+  assert.match(productEdit, /:disabled="pendingUploads > 0 \|\| submitting \|\| editorLoading \|\| invalidRoute"/)
 })
