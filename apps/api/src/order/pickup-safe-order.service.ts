@@ -8,7 +8,7 @@ import { RedisService } from '../common/redis/redis.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
-import { SystemConfigService } from '../system-config/system-config.service';
+import { SystemConfigService } from '../system-config/system-config.module';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -16,12 +16,14 @@ import { IdempotentAttributionSafeMemberBenefitOrderService } from './idempotent
 import {
   lockActiveCheckoutUser,
   lockActivePickupStore,
+  settleExpiredPointsBeforeCheckout,
   withLockedPickupStoreSnapshot,
 } from './pickup-order-guard';
 
 type OrderCreateContext = {
   userId: bigint;
   pickupStoreId?: bigint;
+  pointsDeduct?: number;
 };
 
 /**
@@ -82,6 +84,9 @@ export function installPickupStoreTransactionGuard(
 
     return originalTransaction(async (tx: any) => {
       await lockActiveCheckoutUser(tx, context.userId);
+      if ((context.pointsDeduct ?? 0) > 0) {
+        await settleExpiredPointsBeforeCheckout(tx, context.userId);
+      }
 
       const scopedTx = context.pickupStoreId
         ? withLockedPickupStoreSnapshot(
@@ -127,9 +132,9 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
   }
 
   override async confirm(userId: string, dto: ConfirmOrderDto) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
     const fulfillmentType = dto.fulfillmentType || 'delivery';
     if (fulfillmentType === 'delivery' && dto.addressId) {
-      const userIdValue = parsePositiveBigIntId(userId, '用户');
       const addressId = parsePositiveBigIntId(dto.addressId, '收货地址');
       const address = await this.orderCountPrisma.userAddress.findFirst({
         where: {
@@ -142,6 +147,15 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
       if (!address) {
         throw new BadRequestException('收货地址不存在或已失效，请重新选择');
       }
+    }
+
+    // Keep the preview honest too. This is repeated inside create's locked transaction because a
+    // preview is never an authorization boundary and another points mutation may happen afterwards.
+    if ((dto.pointsDeduct ?? 0) > 0) {
+      await this.orderCountPrisma.$transaction(async (tx: any) => {
+        await lockActiveCheckoutUser(tx, userIdValue);
+        await settleExpiredPointsBeforeCheckout(tx, userIdValue);
+      });
     }
 
     return super.confirm(userId, dto);
@@ -167,7 +181,11 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
       : undefined;
 
     return this.pickupOrderContext.run(
-      { userId: userIdValue, pickupStoreId },
+      {
+        userId: userIdValue,
+        pickupStoreId,
+        pointsDeduct: dto.pointsDeduct,
+      },
       () => super.create(userId, dto),
     );
   }
