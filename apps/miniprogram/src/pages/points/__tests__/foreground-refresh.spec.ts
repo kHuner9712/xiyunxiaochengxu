@@ -102,6 +102,34 @@ describe('积分中心前台刷新', () => {
     expect(wrapper.find('.checkin-text').text()).toBe('已签到')
   })
 
+  it('签到成功后的新余额先返回后，签到前旧余额晚到不能覆盖新余额', async () => {
+    const staleBalance = deferred<any>()
+    vi.mocked(getPointsBalance)
+      .mockImplementationOnce(() => staleBalance.promise)
+      .mockResolvedValueOnce({ balance: 20, totalEarned: 20, totalSpent: 0 } as any)
+    vi.mocked(getCheckInStatus).mockResolvedValueOnce({ checked: false, continuous: 3, todayPoints: 0 } as any)
+
+    const wrapper = mount(PointsPage, {
+      global: { stubs: { Loading: true } },
+    })
+    uniAppMock.onShowCallbacks.at(-1)?.()
+    await Promise.resolve()
+
+    const vm = wrapper.vm as any
+    await vm.handleCheckIn()
+    await flushPromises()
+
+    expect(vm.checkInStatus.checked).toBe(true)
+    expect(vm.pointsBalance.balance).toBe(20)
+    expect(wrapper.find('.balance-value').text()).toBe('20')
+
+    staleBalance.resolve({ balance: 10, totalEarned: 10, totalSpent: 0 })
+    await flushPromises()
+
+    expect(vm.pointsBalance.balance).toBe(20)
+    expect(wrapper.find('.balance-value').text()).toBe('20')
+  })
+
   it('新的积分明细先返回后，旧分页请求晚到不能恢复旧账本', async () => {
     const first = deferred<any>()
     const second = deferred<any>()
