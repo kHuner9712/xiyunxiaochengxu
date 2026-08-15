@@ -55,12 +55,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { getCategoryTree, type CategoryItem } from '@/api/category'
 import Empty from '@/components/Empty.vue'
 
 const categories = ref<CategoryItem[]>([])
 const currentCategoryId = ref('')
+let categoryVersion = 0
 
 const currentChildren = computed(() => {
   const current = categories.value.find(c => c.id === currentCategoryId.value)
@@ -73,17 +75,21 @@ const currentCategoryName = computed(() => {
 })
 
 async function loadCategories() {
+  const version = ++categoryVersion
   try {
     const data = await getCategoryTree()
-    categories.value = Array.isArray(data) ? data : []
-    const firstWithChildren = categories.value.find(item => item.children?.length)
-    const firstCategory = firstWithChildren || categories.value[0]
-    if (firstCategory) {
-      currentCategoryId.value = firstCategory.id
-    } else {
-      currentCategoryId.value = ''
-    }
+    if (version !== categoryVersion) return
+
+    const nextCategories = Array.isArray(data) ? data : []
+    categories.value = nextCategories
+    const currentStillExists = nextCategories.some(item => item.id === currentCategoryId.value)
+    if (currentStillExists) return
+
+    const firstWithChildren = nextCategories.find(item => item.children?.length)
+    const firstCategory = firstWithChildren || nextCategories[0]
+    currentCategoryId.value = firstCategory?.id || ''
   } catch (err) {
+    if (version !== categoryVersion) return
     console.error('[baby-mall] loadCategories failed:', err)
     uni.showToast({ title: '分类加载失败', icon: 'none' })
   }
@@ -101,8 +107,14 @@ function goSearch() {
   uni.navigateTo({ url: '/pages/search/index' })
 }
 
-onMounted(() => {
-  loadCategories()
+onShow(() => {
+  void loadCategories()
+})
+
+defineExpose({
+  categories,
+  currentCategoryId,
+  loadCategories,
 })
 </script>
 
