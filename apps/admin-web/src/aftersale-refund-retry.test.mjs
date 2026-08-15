@@ -9,13 +9,14 @@ const detail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/afters
 const aftersaleList = readFileSync(resolve(root, 'apps/admin-web/src/views/order/aftersale.vue'), 'utf8')
 const refundList = readFileSync(resolve(root, 'apps/admin-web/src/views/order/refund-list.vue'), 'utf8')
 const refundDetail = readFileSync(resolve(root, 'apps/admin-web/src/views/order/refund-detail.vue'), 'utf8')
+const userDetail = readFileSync(resolve(root, 'apps/admin-web/src/views/user/detail.vue'), 'utf8')
 const refundApi = readFileSync(resolve(root, 'apps/admin-web/src/api/refund.ts'), 'utf8')
 const service = readFileSync(resolve(root, 'apps/api/src/aftersale/aftersale.service.ts'), 'utf8')
 const paymentConstants = readFileSync(resolve(root, 'apps/api/src/common/constants/payment.ts'), 'utf8')
 const refundMethod = service.slice(service.indexOf('  async refund('), service.indexOf('  private serializeAftersale('))
 const adminAuditMethod = detail.slice(detail.indexOf('async function handleAudit()'), detail.indexOf('async function handleSyncRefund()'))
 const adminSyncMethod = detail.slice(detail.indexOf('async function handleSyncRefund()'), detail.indexOf('async function handleRefund()'))
-const adminRefundMethod = detail.slice(detail.indexOf('async function handleRefund()'), detail.indexOf('onMounted(() =>'))
+const adminRefundMethod = detail.slice(detail.indexOf('async function handleRefund()'), detail.indexOf('watch('))
 
 test('refund retry, sync and manual eligibility come from backend status rules', () => {
   assert.match(detail, /detail\.value\.refundRetryable === true/)
@@ -76,7 +77,7 @@ test('admin can sync an uncertain refund before retrying', () => {
   assert.match(detail, /async function handleSyncRefund\(\)/)
   assert.match(detail, /await refundApi\.sync\(outRefundNo\)/)
   assert.match(detail, /result\.synced === false/)
-  assert.match(detail, /await fetchDetail\(\)/)
+  assert.match(detail, /await refreshDetailAfterWrite\(aftersaleId\)/)
   assert.match(detail, /请求错误由全局拦截器统一提示/)
 })
 
@@ -92,6 +93,31 @@ test('admin aftersale actions take their lock before confirmation or network wor
   assert.match(adminSyncMethod, /if \(syncingRefund\.value\) return/)
   assert.match(adminSyncMethod, /syncingRefund\.value = true[\s\S]*refundApi\.sync/)
   assert.match(adminSyncMethod, /finally \{[\s\S]*syncingRefund\.value = false/)
+})
+
+test('admin detail views ignore stale route responses and bind writes to the visible record', () => {
+  for (const source of [detail, refundDetail, userDetail]) {
+    assert.match(source, /let detailRequestVersion = 0/)
+    assert.match(source, /const requestVersion = \+\+detailRequestVersion/)
+    assert.match(source, /requestVersion !== detailRequestVersion/)
+    assert.match(source, /watch\(/)
+    assert.match(source, /immediate: true/)
+  }
+
+  assert.match(detail, /currentRouteAftersaleId\(\)/)
+  assert.match(detail, /String\(nextDetail\.id \|\| ''\) !== aftersaleId/)
+  assert.match(detail, /requestVersion !== detailRequestVersion \|\| !isCurrentRouteAftersale\(aftersaleId\)/)
+  assert.match(detail, /revokePrivateObjectUrls\(resolvedImages\)/)
+  assert.match(adminAuditMethod, /const aftersaleId = String\(detail\.value\.id \|\| ''\)[\s\S]*!isCurrentRouteAftersale\(aftersaleId\)[\s\S]*aftersaleApi\.(approve|reject)\(aftersaleId/)
+  assert.match(adminRefundMethod, /const aftersaleId = String\(detail\.value\.id \|\| ''\)[\s\S]*!isCurrentRouteAftersale\(aftersaleId\)[\s\S]*aftersaleApi\.refund\(aftersaleId\)/)
+
+  assert.match(refundDetail, /currentRouteRefundId\(\)/)
+  assert.match(refundDetail, /String\(nextDetail\.id \|\| ''\) !== refundId/)
+  assert.match(refundDetail, /currentRouteRefundId\(\) !== refundId/)
+
+  assert.match(userDetail, /currentRouteUserId\(\)/)
+  assert.match(userDetail, /String\(nextUser\.id \|\| ''\) !== userId/)
+  assert.match(userDetail, /currentRouteUserId\(\) !== userId/)
 })
 
 test('aftersale and refund lists ignore stale responses after filters or pages change', () => {
