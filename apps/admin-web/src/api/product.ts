@@ -17,9 +17,13 @@ export const productApi = {
     )
   },
   delete(id: string) {
-    return request.delete(`/admin/product/delete/${encodeURIComponent(id)}`)
+    return runSingleFlight(`admin:product:delete:${id}`, () =>
+      request.delete(`/admin/product/delete/${encodeURIComponent(id)}`),
+    )
   },
   updateStatus(id: string, status: number) {
-    return request.put(`/admin/product/status/${encodeURIComponent(id)}`, { status })
+    return runSingleFlight(`admin:product:status:${id}`, () =>
+      request.put(`/admin/product/status/${encodeURIComponent(id)}`, { status }),
+    )
   },
 }
