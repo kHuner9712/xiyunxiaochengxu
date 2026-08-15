@@ -27,7 +27,10 @@ function createService(prisma: any = {}) {
 }
 
 function createRewardTx(successfulRefundAmount: number) {
-  const userUpdate = jest.fn();
+  const earnedPoints = Math.floor(Math.max(9900 - successfulRefundAmount, 0) / 100);
+  const userUpdate = (jest.fn() as any).mockResolvedValue({
+    availablePoints: 500 + earnedPoints,
+  });
   const pointsCreate = jest.fn();
   const refundAggregate = (jest.fn() as any).mockResolvedValue({
     _sum: { refundAmount: successfulRefundAmount },
@@ -38,13 +41,7 @@ function createRewardTx(successfulRefundAmount: number) {
       findFirst: (jest.fn() as any).mockResolvedValue(null),
       create: pointsCreate,
     },
-    user: {
-      findFirst: (jest.fn() as any).mockResolvedValue({
-        id: 100n,
-        availablePoints: 500,
-      }),
-      update: userUpdate,
-    },
+    user: { update: userUpdate },
   };
   return { tx, refundAggregate, userUpdate, pointsCreate };
 }
@@ -64,7 +61,7 @@ describe('CancellationSafeProductionOrderService net-paid completion rewards', (
     });
     expect(earned).toBe(99);
     expect(pointsCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ points: 99, source: 'order_complete', sourceId: 1n }),
+      data: expect.objectContaining({ points: 99, balance: 599, source: 'order_complete', sourceId: 1n }),
     }));
   });
 
@@ -82,6 +79,7 @@ describe('CancellationSafeProductionOrderService net-paid completion rewards', (
         totalPoints: { increment: 90 },
         growthValue: { increment: 90 },
       },
+      select: { availablePoints: true },
     });
     expect(pointsCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ points: 90, balance: 590 }),
@@ -100,8 +98,8 @@ describe('CancellationSafeProductionOrderService net-paid completion rewards', (
   });
 });
 
-describe('CancellationSafeProductionOrderService cancellation points ledger', () => {
-  it('records the post-update database balance instead of a stale pre-increment snapshot', async () => {
+describe('CancellationSafeProductionOrderService cancellation ledgers', () => {
+  it('records the post-update database points balance instead of a stale pre-increment snapshot', async () => {
     const service = createService();
     const userUpdate = (jest.fn() as any).mockResolvedValue({ availablePoints: 720 });
     const pointsCreate = jest.fn();
@@ -133,6 +131,44 @@ describe('CancellationSafeProductionOrderService cancellation points ledger', ()
         source: 'order_cancel',
         sourceId: 77n,
         description: '取消订单归还积分120',
+      },
+    });
+  });
+
+  it('derives stock before/after snapshots from the serialized SKU update result', async () => {
+    const service = createService();
+    const stockLogCreate = jest.fn();
+    const skuUpdate = (jest.fn() as any).mockResolvedValue({ stock: 130 });
+    const tx = {
+      productSku: {
+        findUnique: (jest.fn() as any).mockResolvedValue({ id: 9n }),
+        update: skuUpdate,
+      },
+      productStockLog: { create: stockLogCreate },
+      $executeRaw: jest.fn(),
+    };
+
+    await (service as any).restoreSkuStockAndSalesAuthoritative(
+      tx,
+      { productId: 3n, skuId: 9n, quantity: 5 },
+      '取消订单归还库存',
+      2,
+    );
+
+    expect(skuUpdate).toHaveBeenCalledWith({
+      where: { id: 9n },
+      data: { stock: { increment: 5 } },
+      select: { stock: true },
+    });
+    expect(stockLogCreate).toHaveBeenCalledWith({
+      data: {
+        productId: 3n,
+        skuId: 9n,
+        type: 2,
+        quantity: 5,
+        beforeStock: 125,
+        afterStock: 130,
+        reason: '取消订单归还库存',
       },
     });
   });
