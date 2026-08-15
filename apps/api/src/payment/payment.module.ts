@@ -1,7 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PaymentController, RefundController, PaymentReconcileController, RefundReconcileController, PaymentCompensationController } from './payment.controller';
 import { PaymentService } from './payment.service';
-import { ConfirmedMissingRefundRetryPaymentService } from './confirmed-missing-refund-retry-payment.service';
+import { ActiveAftersaleSafePaymentService } from './active-aftersale-safe-payment.service';
 import { PaymentReconcileService } from './payment-reconcile.service';
 import { HistoricalAnomalyPaymentReconcileService } from './historical-anomaly-payment-reconcile.service';
 import { PaymentReconcileExecutionService } from './payment-reconcile-execution.service';
@@ -19,7 +19,7 @@ import { FlashSaleModule } from '../flash-sale/flash-sale.module';
   providers: [
     {
       provide: PaymentService,
-      useClass: ConfirmedMissingRefundRetryPaymentService,
+      useClass: ActiveAftersaleSafePaymentService,
     },
     {
       provide: PaymentReconcileService,
