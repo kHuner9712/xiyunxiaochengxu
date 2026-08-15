@@ -162,9 +162,11 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
    * balance and drive availablePoints below zero. Serialize the inherited refund-success core by
    * user across all orders. This is deliberately independent from the per-order payment/cancel lock.
    *
-   * Return-and-refund also snapshots SKU stock before writing the inventory ledger. Different users
-   * can refund the same SKU concurrently, so user locking alone does not serialize that snapshot.
-   * Add a SKU-scoped lock only for type=2 aftersales; ordinary refund-only requests do not need it.
+   * Any refund path that can restore inventory must also serialize the SKU snapshot used by the
+   * stock ledger. Type=2 aftersales restore one order-item SKU in the base refund transaction.
+   * Promotion failure refunds (notably failed group buys) carry no aftersaleId and restore inventory
+   * later in the production promotion hook, so lock every SKU on that order as well. SKU locks are
+   * always acquired in ascending numeric order to make multi-SKU full-order refunds deadlock-safe.
    *
    * If a lock is occupied we fail closed; WeChat callback/reconciliation will retry. Deleted users
    * are still eligible for monetary refund processing, so the lookup does not require an active user.
@@ -175,10 +177,11 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       throw new BadRequestException('退款记录缺少订单ID，无法安全处理退款');
     }
 
+    const orderId = BigInt(rawOrderId);
     const rawAftersaleId = refund?.aftersaleId;
     const [order, aftersale] = await Promise.all([
       this.cancellationPrisma.order.findUnique({
-        where: { id: BigInt(rawOrderId) },
+        where: { id: orderId },
         select: { userId: true },
       }),
       rawAftersaleId === undefined || rawAftersaleId === null
@@ -195,12 +198,21 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       throw new BadRequestException('退款对应订单不存在，无法安全处理退款');
     }
 
+    let skuIdsToLock: string[] = [];
+    if (aftersale?.type === 2 && aftersale.orderItem?.skuId) {
+      skuIdsToLock = [aftersale.orderItem.skuId.toString()];
+    } else if (rawAftersaleId === undefined || rawAftersaleId === null) {
+      const orderItems = await this.cancellationPrisma.orderItem.findMany({
+        where: { orderId },
+        select: { skuId: true },
+      });
+      skuIdsToLock = orderItems.map((item) => item.skuId.toString());
+    }
+
     const runCore = () => super.processWechatRefundSuccess(refund, refundId, wechatData);
-    return this.withRefundUserLock(order.userId.toString(), () => {
-      const skuId = aftersale?.type === 2 ? aftersale.orderItem?.skuId : null;
-      if (!skuId) return runCore();
-      return this.withRefundSkuLock(skuId.toString(), runCore);
-    });
+    return this.withRefundUserLock(order.userId.toString(), () =>
+      this.withRefundSkuLocks(skuIdsToLock, runCore),
+    );
   }
 
   /**
@@ -399,6 +411,24 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       '该商品退款库存正在处理中，请稍后重试',
       action,
     );
+  }
+
+  private async withRefundSkuLocks<T>(skuIds: string[], action: () => Promise<T>): Promise<T> {
+    const orderedSkuIds = Array.from(new Set(skuIds))
+      .sort((left, right) => {
+        const leftId = BigInt(left);
+        const rightId = BigInt(right);
+        return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
+      });
+
+    const acquire = (index: number): Promise<T> => {
+      if (index >= orderedSkuIds.length) return action();
+      return this.withRefundSkuLock(
+        orderedSkuIds[index],
+        () => acquire(index + 1),
+      );
+    };
+    return acquire(0);
   }
 
   private async withRenewingRedisLock<T>(
