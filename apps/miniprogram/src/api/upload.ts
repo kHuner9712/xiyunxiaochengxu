@@ -1,4 +1,5 @@
 import {
+  AUTH_EXPIRED_EVENT,
   getApiBaseUrl,
   getToken,
   redirectToLoginTab,
@@ -8,6 +9,16 @@ import {
 const UPLOAD_MODULE = '[baby-mall][upload]'
 const UPLOAD_PATH = '/common/file/upload'
 const AUTH_ERROR_CODES = new Set([40101, 40102, 40103])
+
+function expireUploadSession() {
+  removeToken()
+  try {
+    uni.$emit(AUTH_EXPIRED_EVENT)
+  } catch (err) {
+    console.warn(`${UPLOAD_MODULE} failed to broadcast auth expiration`, err)
+  }
+  redirectToLoginTab('登录已过期，请重新登录')
+}
 
 export function uploadImage(filePath: string, groupName?: string): Promise<{ url: string }> {
   return new Promise((resolve, reject) => {
@@ -44,8 +55,7 @@ export function uploadImage(filePath: string, groupName?: string): Promise<{ url
 
         const responseCode = typeof data?.code === 'number' ? data.code : undefined
         if (res.statusCode === 401 || (responseCode !== undefined && AUTH_ERROR_CODES.has(responseCode))) {
-          removeToken()
-          redirectToLoginTab('登录已过期，请重新登录')
+          expireUploadSession()
           reject(new Error('登录已过期，请重新登录'))
           return
         }
