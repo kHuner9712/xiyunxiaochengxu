@@ -351,7 +351,7 @@ describe('CancellationSafeStockSafePaymentService', () => {
       data: expect.objectContaining({
         refundId: 'WX-R3',
         rawResponse: expect.objectContaining({ status: 'ABNORMAL' }),
-      },
+      }),
     });
     expect(processSuccess).not.toHaveBeenCalled();
     expect(result).toEqual(expect.objectContaining({
