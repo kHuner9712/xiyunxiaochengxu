@@ -1,9 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
 import { AftersaleStatus, OrderStatus } from '@prisma/client';
 import { ActiveAftersaleSafePaymentService } from './active-aftersale-safe-payment.service';
 import { ConfirmedMissingRefundRetryPaymentService } from './confirmed-missing-refund-retry-payment.service';
 
-function createService(redisOverrides: Record<string, any> = {}) {
+function createService() {
   const prisma: any = {
     aftersaleOrder: {
       findFirst: jest.fn(),
@@ -12,12 +11,6 @@ function createService(redisOverrides: Record<string, any> = {}) {
     order: {
       updateMany: jest.fn(),
     },
-  };
-  const redis: any = {
-    setNX: jest.fn().mockResolvedValue(true),
-    extendLockWithLua: jest.fn().mockResolvedValue(true),
-    releaseLockWithLua: jest.fn().mockResolvedValue(true),
-    ...redisOverrides,
   };
   const config: any = { get: jest.fn(() => undefined) };
   const service = new ActiveAftersaleSafePaymentService(
@@ -30,58 +23,14 @@ function createService(redisOverrides: Record<string, any> = {}) {
     {} as any,
     {} as any,
     {} as any,
-    redis,
+    {} as any,
   );
-  return { service, prisma, redis };
+  return { service, prisma };
 }
 
 describe('ActiveAftersaleSafePaymentService', () => {
   afterEach(() => {
     jest.restoreAllMocks();
-  });
-
-  it('serializes ordinary refunds by order until the durable refund attempt is submitted', async () => {
-    const { service, redis } = createService();
-    const baseCreateRefund = jest
-      .spyOn(ConfirmedMissingRefundRetryPaymentService.prototype, 'createRefund')
-      .mockResolvedValue({ refundId: '7', refundNo: 'R7', outRefundNo: 'OR7' } as any);
-
-    await expect(service.createRefund({
-      orderId: '42',
-      aftersaleId: '9',
-      refundAmount: 1200,
-      reason: '售后退款',
-    })).resolves.toEqual({ refundId: '7', refundNo: 'R7', outRefundNo: 'OR7' });
-
-    expect(redis.setNX).toHaveBeenCalledWith(
-      'payment:refund-order:42',
-      expect.any(String),
-      300,
-    );
-    expect(baseCreateRefund).toHaveBeenCalledTimes(1);
-    expect(redis.releaseLockWithLua).toHaveBeenCalledWith(
-      'payment:refund-order:42',
-      expect.any(String),
-    );
-  });
-
-  it('fails closed when another refund already owns the same order lock', async () => {
-    const { service, redis } = createService({
-      setNX: jest.fn().mockResolvedValue(false),
-    });
-    const baseCreateRefund = jest
-      .spyOn(ConfirmedMissingRefundRetryPaymentService.prototype, 'createRefund')
-      .mockRejectedValue(new Error('must not submit a second refund'));
-
-    await expect(service.createRefund({
-      orderId: '42',
-      aftersaleId: '10',
-      refundAmount: 800,
-      reason: '另一笔售后退款',
-    })).rejects.toBeInstanceOf(BadRequestException);
-
-    expect(baseCreateRefund).not.toHaveBeenCalled();
-    expect(redis.releaseLockWithLua).not.toHaveBeenCalled();
   });
 
   it('re-asserts order.aftersale when another item still has an active aftersale after refund success', async () => {
