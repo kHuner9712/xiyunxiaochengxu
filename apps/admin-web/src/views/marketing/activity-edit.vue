@@ -76,7 +76,7 @@
 
         <el-form-item label="活动商品">
           <div style="width: 100%">
-            <el-button size="small" @click="selectProductVisible = true">选择商品</el-button>
+            <el-button size="small" :disabled="detailLoading || invalidRoute" @click="selectProductVisible = true">选择商品</el-button>
             <el-table :data="form.products" stripe size="small" style="margin-top: 10px; width: 100%">
               <el-table-column prop="name" label="商品名称" min-width="150" show-overflow-tooltip />
               <el-table-column label="活动 SKU" min-width="230">
@@ -144,8 +144,8 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
-          <el-button @click="router.back()">取消</el-button>
+          <el-button type="primary" :loading="submitting || detailLoading" :disabled="submitting || detailLoading || invalidRoute" @click="handleSubmit">保存</el-button>
+          <el-button :disabled="submitting" @click="router.back()">取消</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -158,15 +158,15 @@
         <el-table-column prop="stock" label="总库存" width="90" />
       </el-table>
       <template #footer>
-        <el-button @click="selectProductVisible = false">取消</el-button>
-        <el-button type="primary" :loading="loadingSelectedProducts" @click="confirmProductSelect">确定</el-button>
+        <el-button :disabled="loadingSelectedProducts" @click="selectProductVisible = false">取消</el-button>
+        <el-button type="primary" :loading="loadingSelectedProducts" :disabled="detailLoading || invalidRoute" @click="confirmProductSelect">确定</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { activityApi, type ActivityPayload } from '@/api/activity'
@@ -179,12 +179,16 @@ const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const detailLoading = ref(false)
 const selectProductVisible = ref(false)
 const loadingSelectedProducts = ref(false)
 const productList = ref<any[]>([])
 const selectedProducts = ref<any[]>([])
 const activityId = computed(() => String(route.params.id || '').trim())
 const isEdit = computed(() => POSITIVE_ID.test(activityId.value))
+const invalidRoute = computed(() => activityId.value.length > 0 && !isEdit.value)
+let detailRequestVersion = 0
+let editorGeneration = 0
 
 interface SkuOption {
   id: string
@@ -213,16 +217,20 @@ interface FullGiftRuleRow {
   giftQuantity: number
 }
 
-const form = reactive({
-  name: '',
-  type: '1' as '1' | '2' | '3' | '4' | '5',
-  dateRange: [] as string[],
-  fullReductionRules: [] as { fullAmount: number; reduceAmount: number }[],
-  fullGiftRules: [] as FullGiftRuleRow[],
-  bundlePriceYuan: 0,
-  products: [] as ActivityProductRow[],
-  description: '',
-})
+function createDefaultForm() {
+  return {
+    name: '',
+    type: '1' as '1' | '2' | '3' | '4' | '5',
+    dateRange: [] as string[],
+    fullReductionRules: [] as { fullAmount: number; reduceAmount: number }[],
+    fullGiftRules: [] as FullGiftRuleRow[],
+    bundlePriceYuan: 0,
+    products: [] as ActivityProductRow[],
+    description: '',
+  }
+}
+
+const form = reactive(createDefaultForm())
 
 const rules: FormRules = {
   name: [{ required: true, message: '请输入活动名称', trigger: 'blur' }],
@@ -239,6 +247,21 @@ const configuredSkuOptions = computed(() => form.products
       label: `${row.name} · ${sku?.label || `SKU ${row.skuId}`}`,
     }
   }))
+
+function currentRouteActivityId() {
+  return String(route.params.id || '').trim()
+}
+
+function isCurrentEditor(generation: number, activityIdValue: string) {
+  return generation === editorGeneration && currentRouteActivityId() === activityIdValue
+}
+
+function resetForm() {
+  Object.assign(form, createDefaultForm())
+  selectedProducts.value = []
+  selectProductVisible.value = false
+  formRef.value?.clearValidate()
+}
 
 function pad(value: number) { return String(value).padStart(2, '0') }
 function toLocalPicker(value: unknown) {
@@ -330,7 +353,9 @@ async function fetchProducts() {
 function handleProductSelect(rows: any[]) { selectedProducts.value = rows }
 
 async function confirmProductSelect() {
-  if (loadingSelectedProducts.value) return
+  if (loadingSelectedProducts.value || detailLoading.value || invalidRoute.value) return
+  const operationGeneration = editorGeneration
+  const targetActivityId = currentRouteActivityId()
   loadingSelectedProducts.value = true
   try {
     const existing = new Set(form.products.map((p) => p.productId))
@@ -339,6 +364,7 @@ async function confirmProductSelect() {
       const productId = String(p.id || '')
       if (!POSITIVE_ID.test(productId) || existing.has(productId)) continue
       const skuOptions = await loadSkuOptions(productId)
+      if (!isCurrentEditor(operationGeneration, targetActivityId)) return
       const sellable = skuOptions.filter((sku) => sku.status === 1 && sku.stock > 0)
       if (sellable.length === 0) {
         ElMessage.warning(`${p.name || '商品'}没有可售SKU，未加入活动`)
@@ -360,20 +386,33 @@ async function confirmProductSelect() {
       })
       existing.add(productId)
     }
+    if (!isCurrentEditor(operationGeneration, targetActivityId)) return
     selectProductVisible.value = false
     if (needsSkuChoice) ElMessage.info('部分商品有多个规格，请在活动商品表中明确选择SKU')
   } catch (e: any) {
-    ElMessage.error(e?.message || '读取商品SKU失败')
+    if (isCurrentEditor(operationGeneration, targetActivityId)) {
+      ElMessage.error(e?.message || '读取商品SKU失败')
+    }
   } finally {
-    loadingSelectedProducts.value = false
+    if (operationGeneration === editorGeneration) {
+      loadingSelectedProducts.value = false
+    }
   }
 }
 
-async function fetchDetail() {
-  if (!isEdit.value) return
+async function fetchDetail(activityIdValue: string, generation: number) {
+  const requestVersion = ++detailRequestVersion
+  if (!POSITIVE_ID.test(activityIdValue)) return
+  detailLoading.value = true
   try {
-    const res = await activityApi.getDetail(activityId.value)
+    const res = await activityApi.getDetail(activityIdValue)
+    if (requestVersion !== detailRequestVersion || !isCurrentEditor(generation, activityIdValue)) return
     const d = res.data || {}
+    if (String(d.id || '') !== activityIdValue) {
+      resetForm()
+      ElMessage.error('活动详情数据与当前活动不匹配，请返回列表重新进入')
+      return
+    }
     const type = String(d.type || '1') as '1' | '2' | '3' | '4' | '5'
     const parsedRules = d.rules && typeof d.rules === 'object' ? d.rules : {}
     const bundleQuantityBySku = new Map(
@@ -397,6 +436,7 @@ async function fetchDetail() {
         bundleQuantity: Number(bundleQuantityBySku.get(skuId) || 1),
       } as ActivityProductRow
     }))
+    if (requestVersion !== detailRequestVersion || !isCurrentEditor(generation, activityIdValue)) return
     Object.assign(form, {
       name: d.name || '',
       type,
@@ -415,7 +455,14 @@ async function fetchDetail() {
       description: d.description || '',
     })
   } catch (e: any) {
-    ElMessage.error(e?.message || '加载活动失败')
+    if (requestVersion === detailRequestVersion && isCurrentEditor(generation, activityIdValue)) {
+      resetForm()
+      ElMessage.error(e?.message || '加载活动失败')
+    }
+  } finally {
+    if (requestVersion === detailRequestVersion && isCurrentEditor(generation, activityIdValue)) {
+      detailLoading.value = false
+    }
   }
 }
 
@@ -515,26 +562,62 @@ function buildPayload(): ActivityPayload {
 }
 
 async function handleSubmit() {
-  if (submitting.value) return
+  if (submitting.value || detailLoading.value) return
+  const targetActivityId = currentRouteActivityId()
+  const targetIsEdit = POSITIVE_ID.test(targetActivityId)
+  if (targetActivityId && !targetIsEdit) {
+    ElMessage.warning('活动ID无效，请返回列表重新进入')
+    return
+  }
+  const operationGeneration = editorGeneration
+
   submitting.value = true
   try {
     const valid = await formRef.value?.validate().catch(() => false)
     if (!valid) return
+    if (!isCurrentEditor(operationGeneration, targetActivityId)) {
+      ElMessage.warning('活动已切换，已取消本次保存')
+      return
+    }
     const payload = buildPayload()
-    if (isEdit.value) await activityApi.update(activityId.value, payload)
+    if (!isCurrentEditor(operationGeneration, targetActivityId)) {
+      ElMessage.warning('活动已切换，已取消本次保存')
+      return
+    }
+    if (targetIsEdit) await activityApi.update(targetActivityId, payload)
     else await activityApi.create(payload)
+    if (!isCurrentEditor(operationGeneration, targetActivityId)) return
     ElMessage.success('保存成功')
     router.push('/marketing/activity-list')
   } catch (e: any) {
-    ElMessage.error(e?.message || '保存失败')
+    if (isCurrentEditor(operationGeneration, targetActivityId)) {
+      ElMessage.error(e?.message || '保存失败')
+    }
   } finally {
     submitting.value = false
   }
 }
 
-onMounted(async () => {
-  await fetchProducts()
-  await fetchDetail()
+watch(
+  () => currentRouteActivityId(),
+  (nextActivityId) => {
+    detailRequestVersion += 1
+    editorGeneration += 1
+    detailLoading.value = false
+    loadingSelectedProducts.value = false
+    resetForm()
+    if (!nextActivityId) return
+    if (!POSITIVE_ID.test(nextActivityId)) {
+      ElMessage.warning('活动ID无效，请返回列表重新进入')
+      return
+    }
+    void fetchDetail(nextActivityId, editorGeneration)
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  void fetchProducts()
 })
 </script>
 
