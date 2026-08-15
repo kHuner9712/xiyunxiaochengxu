@@ -187,7 +187,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { orderApi } from '@/api/order'
@@ -205,8 +205,8 @@ const remarkVisible = ref(false)
 const deliverFormRef = ref<FormInstance>()
 const verifyPickupCode = ref('')
 const adminRemarkInput = ref('')
-
 const order = ref<any>({})
+let detailRequestVersion = 0
 
 const deliverForm = reactive({
   orderId: undefined as string | undefined,
@@ -219,11 +219,59 @@ const deliverRules: FormRules = {
   logisticsNo: [{ required: true, message: '请输入物流单号', trigger: 'blur' }],
 }
 
-async function fetchDetail() {
+function currentRouteOrderId() {
+  return String(route.params.id || '').trim()
+}
+
+function isValidOrderId(orderId: string) {
+  return /^[1-9]\d*$/.test(orderId)
+}
+
+function isCurrentRouteOrder(orderId: string) {
+  return currentRouteOrderId() === orderId
+}
+
+function resetRouteBoundState() {
+  order.value = {}
+  deliverVisible.value = false
+  verifyPickupVisible.value = false
+  remarkVisible.value = false
+  deliverForm.orderId = undefined
+  deliverForm.logisticsCompany = ''
+  deliverForm.logisticsNo = ''
+  verifyPickupCode.value = ''
+  adminRemarkInput.value = ''
+}
+
+async function fetchDetail(orderId = currentRouteOrderId()) {
+  const requestVersion = ++detailRequestVersion
+  if (!isValidOrderId(orderId)) {
+    if (requestVersion === detailRequestVersion) order.value = {}
+    return
+  }
+
   try {
-    const res = await orderApi.getDetail(String(route.params.id))
-    order.value = res.data || {}
-  } catch {}
+    const res = await orderApi.getDetail(orderId)
+    if (requestVersion !== detailRequestVersion || !isCurrentRouteOrder(orderId)) return
+
+    const nextOrder = res.data || {}
+    if (String(nextOrder.id || '') !== orderId) {
+      order.value = {}
+      ElMessage.error('订单详情数据与当前订单不匹配，请刷新后重试')
+      return
+    }
+    order.value = nextOrder
+  } catch {
+    if (requestVersion === detailRequestVersion && isCurrentRouteOrder(orderId)) {
+      order.value = {}
+    }
+  }
+}
+
+async function refreshDetailAfterWrite(orderId: string) {
+  if (isCurrentRouteOrder(orderId)) {
+    await fetchDetail(orderId)
+  }
 }
 
 function formatOrderLogOperator(log: any) {
@@ -236,8 +284,8 @@ function formatOrderLogOperator(log: any) {
 function showRemarkDialog() {
   if (remarkSubmitting.value) return
   const orderId = String(order.value.id || '')
-  if (!/^\d+$/.test(orderId)) {
-    ElMessage.warning('订单ID无效，请刷新后重试')
+  if (!isValidOrderId(orderId) || !isCurrentRouteOrder(orderId)) {
+    ElMessage.warning('订单已变化，请刷新后重试')
     return
   }
 
@@ -248,8 +296,8 @@ function showRemarkDialog() {
 async function handleSaveRemark() {
   if (remarkSubmitting.value) return
   const orderId = String(order.value.id || '')
-  if (!/^\d+$/.test(orderId)) {
-    ElMessage.warning('订单ID无效，请刷新后重试')
+  if (!isValidOrderId(orderId) || !isCurrentRouteOrder(orderId)) {
+    ElMessage.warning('订单已变化，请刷新后重试')
     return
   }
 
@@ -264,7 +312,7 @@ async function handleSaveRemark() {
     await orderApi.remark(orderId, remark)
     ElMessage.success(remark ? '运营备注已保存' : '运营备注已清除')
     remarkVisible.value = false
-    await fetchDetail()
+    await refreshDetailAfterWrite(orderId)
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || e?.message || '保存运营备注失败')
   } finally {
@@ -275,8 +323,8 @@ async function handleSaveRemark() {
 function showDeliverDialog() {
   if (submitting.value) return
   const orderId = String(order.value.id || '')
-  if (!/^\d+$/.test(orderId)) {
-    ElMessage.warning('订单ID无效，请刷新后重试')
+  if (!isValidOrderId(orderId) || !isCurrentRouteOrder(orderId)) {
+    ElMessage.warning('订单已变化，请刷新后重试')
     return
   }
 
@@ -294,10 +342,15 @@ async function handleDeliver() {
     const valid = await deliverFormRef.value?.validate().catch(() => false)
     if (!valid) return
 
-    const orderId = deliverForm.orderId
+    const orderId = String(deliverForm.orderId || '')
     const logisticsCompany = deliverForm.logisticsCompany.trim()
     const logisticsNo = deliverForm.logisticsNo.trim()
-    if (!orderId || !logisticsCompany || !logisticsNo) {
+    if (!isValidOrderId(orderId) || !isCurrentRouteOrder(orderId)) {
+      deliverVisible.value = false
+      ElMessage.warning('订单已切换，请重新打开发货操作')
+      return
+    }
+    if (!logisticsCompany || !logisticsNo) {
       ElMessage.warning('请完整填写发货信息')
       return
     }
@@ -305,7 +358,7 @@ async function handleDeliver() {
     await orderApi.deliver({ orderId, logisticsCompany, logisticsNo })
     ElMessage.success('发货成功')
     deliverVisible.value = false
-    await fetchDetail()
+    await refreshDetailAfterWrite(orderId)
   } catch {} finally {
     submitting.value = false
   }
@@ -313,17 +366,27 @@ async function handleDeliver() {
 
 async function handleCancelOrder() {
   if (submitting.value) return
+  const orderId = String(order.value.id || '')
+  if (!isValidOrderId(orderId) || !isCurrentRouteOrder(orderId)) {
+    ElMessage.warning('订单已变化，请刷新后重试')
+    return
+  }
+
   submitting.value = true
   try {
     const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /\S+/, inputErrorMessage: '请输入取消原因' })
+    if (!isCurrentRouteOrder(orderId)) {
+      ElMessage.warning('订单已切换，已取消本次操作')
+      return
+    }
     const reason = String(value || '').trim()
     if (!reason) {
       ElMessage.warning('请输入取消原因')
       return
     }
-    await orderApi.cancel(String(order.value.id), reason)
+    await orderApi.cancel(orderId, reason)
     ElMessage.success('取消成功')
-    await fetchDetail()
+    await refreshDetailAfterWrite(orderId)
   } catch {
     // 用户关闭确认框或请求失败时由 finally 统一释放操作锁。
   } finally {
@@ -333,6 +396,11 @@ async function handleCancelOrder() {
 
 function showVerifyPickupDialog() {
   if (submitting.value) return
+  const orderId = String(order.value.id || '')
+  if (!isValidOrderId(orderId) || !isCurrentRouteOrder(orderId)) {
+    ElMessage.warning('订单已变化，请刷新后重试')
+    return
+  }
   if (order.value.status !== 'pending_pickup') {
     ElMessage.warning('当前订单状态不可核销')
     return
@@ -350,11 +418,17 @@ function showVerifyPickupDialog() {
 
 async function handleVerifyPickup() {
   if (submitting.value) return
+  const orderId = String(order.value.id || '')
+  if (!isValidOrderId(orderId) || !isCurrentRouteOrder(orderId)) {
+    ElMessage.warning('订单已变化，请刷新后重试')
+    return
+  }
+
   submitting.value = true
   try {
     const code = verifyPickupCode.value
     const currentCode = String(order.value.pickupCode || '').trim()
-    if (order.value.status !== 'pending_pickup' || !/^\d{8}$/.test(code) || code !== currentCode) {
+    if (!isCurrentRouteOrder(orderId) || order.value.status !== 'pending_pickup' || !/^\d{8}$/.test(code) || code !== currentCode) {
       ElMessage.warning('订单或自提码已变化，请刷新后重试')
       verifyPickupVisible.value = false
       return
@@ -364,7 +438,7 @@ async function handleVerifyPickup() {
     ElMessage.success('核销成功')
     verifyPickupVisible.value = false
     verifyPickupCode.value = ''
-    await fetchDetail()
+    await refreshDetailAfterWrite(orderId)
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '核销失败')
   } finally {
@@ -372,7 +446,17 @@ async function handleVerifyPickup() {
   }
 }
 
-onMounted(() => {
-  fetchDetail()
-})
+watch(
+  () => currentRouteOrderId(),
+  (orderId) => {
+    detailRequestVersion += 1
+    resetRouteBoundState()
+    if (!isValidOrderId(orderId)) {
+      ElMessage.warning('订单ID无效，请返回订单列表重新进入')
+      return
+    }
+    void fetchDetail(orderId)
+  },
+  { immediate: true },
+)
 </script>
