@@ -4,8 +4,8 @@ export function createPayment(data: { orderId: string }) {
   return post<PaymentResult>('/weapp/pay/create', data)
 }
 
-export function getPaymentStatus(orderId: string) {
-  return get<PaymentStatus>(`/weapp/pay/status/${orderId}`)
+export function getPaymentStatus(orderId: string, config?: { showError?: boolean }) {
+  return get<PaymentStatus>(`/weapp/pay/status/${orderId}`, undefined, config)
 }
 
 export interface PaymentResult {
