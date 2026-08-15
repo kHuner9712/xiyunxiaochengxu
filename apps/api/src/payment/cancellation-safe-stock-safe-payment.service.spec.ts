@@ -12,6 +12,9 @@ describe('CancellationSafeStockSafePaymentService', () => {
       order: {
         findUnique: jest.fn().mockResolvedValue({ userId: 8n }),
       },
+      orderItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       orderPayment: {
         findFirst: jest.fn().mockResolvedValue(terminalPayment ?? null),
       },
@@ -135,6 +138,10 @@ describe('CancellationSafeStockSafePaymentService', () => {
       where: { id: 42n },
       select: { userId: true },
     });
+    expect(prisma.orderItem.findMany).toHaveBeenCalledWith({
+      where: { orderId: 42n },
+      select: { skuId: true },
+    });
     expect(redis.setNX).toHaveBeenCalledWith(
       'user:refund-success:8',
       expect.any(String),
@@ -165,6 +172,7 @@ describe('CancellationSafeStockSafePaymentService', () => {
         orderItem: { select: { skuId: true } },
       },
     });
+    expect(prisma.orderItem.findMany).not.toHaveBeenCalled();
     expect(redis.setNX).toHaveBeenNthCalledWith(
       1,
       'user:refund-success:8',
@@ -179,6 +187,51 @@ describe('CancellationSafeStockSafePaymentService', () => {
     );
     expect(baseProcessRefund).toHaveBeenCalledWith(refund, 'WX-R43', wechatData);
     expect(redis.releaseLockWithLua).toHaveBeenCalledTimes(2);
+  });
+
+  it('locks full-order refund skus once each in numeric order', async () => {
+    const baseProcessRefund = jest
+      .spyOn(RecoverableProductionPaymentService.prototype, 'processWechatRefundSuccess')
+      .mockResolvedValue(undefined);
+    const { service, prisma, redis } = createService(true);
+    prisma.orderItem.findMany.mockResolvedValue([
+      { skuId: 99n },
+      { skuId: 7n },
+      { skuId: 42n },
+      { skuId: 99n },
+    ]);
+    const refund = { id: 13n, orderId: 42n, aftersaleId: null, outRefundNo: 'GB-R44' };
+    const wechatData = { amount: { refund: 1000, total: 1000 } };
+
+    await service.processWechatRefundSuccess(refund, 'WX-GB-R44', wechatData);
+
+    expect(redis.setNX).toHaveBeenNthCalledWith(
+      1,
+      'user:refund-success:8',
+      expect.any(String),
+      120,
+    );
+    expect(redis.setNX).toHaveBeenNthCalledWith(
+      2,
+      'sku:refund-success:7',
+      expect.any(String),
+      120,
+    );
+    expect(redis.setNX).toHaveBeenNthCalledWith(
+      3,
+      'sku:refund-success:42',
+      expect.any(String),
+      120,
+    );
+    expect(redis.setNX).toHaveBeenNthCalledWith(
+      4,
+      'sku:refund-success:99',
+      expect.any(String),
+      120,
+    );
+    expect(redis.setNX).toHaveBeenCalledTimes(4);
+    expect(redis.releaseLockWithLua).toHaveBeenCalledTimes(4);
+    expect(baseProcessRefund).toHaveBeenCalledWith(refund, 'WX-GB-R44', wechatData);
   });
 
   it('fails closed before refund-success point side effects when the user refund lock is occupied', async () => {
