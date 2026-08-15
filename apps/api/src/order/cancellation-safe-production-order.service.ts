@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
@@ -21,8 +21,8 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     private readonly cancellationPrisma: PrismaService,
     businessEventService: BusinessEventService,
     benefitPackageService: BenefitPackageService,
-    groupBuyService: GroupBuyService,
-    flashSaleService: FlashSaleService,
+    private readonly cancellationGroupBuyService: GroupBuyService,
+    private readonly cancellationFlashSaleService: FlashSaleService,
     private readonly cancellationRedis: RedisService,
     @Optional() systemConfigService?: SystemConfigService,
   ) {
@@ -30,8 +30,8 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       cancellationPrisma,
       businessEventService,
       benefitPackageService,
-      groupBuyService,
-      flashSaleService,
+      cancellationGroupBuyService,
+      cancellationFlashSaleService,
       systemConfigService,
     );
 
@@ -61,14 +61,36 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
   override async cancel(userId: string, id: string) {
     return this.withPaymentCancelLock(id, async () => {
       await this.assertManualCancelHasNoUnsafePayment(id);
-      return super.cancel(userId, id);
+      return this.cancelPendingOrder({
+        orderId: id,
+        userId: BigInt(userId),
+        reason: '用户主动取消',
+        stockReason: '取消订单归还库存',
+        operatorType: 'user',
+        operatorId: BigInt(userId),
+        action: 'cancel',
+        logContent: '用户取消订单',
+        pointsSource: 'order_cancel',
+        pointsDescription: (points) => `取消订单归还积分${points}`,
+        couponStatuses: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED],
+      });
     });
   }
 
   override async adminCancel(id: string, reason: string) {
     return this.withPaymentCancelLock(id, async () => {
       await this.assertManualCancelHasNoUnsafePayment(id);
-      return super.adminCancel(id, reason);
+      return this.cancelPendingOrder({
+        orderId: id,
+        reason: reason || '管理员取消',
+        stockReason: '管理员取消订单归还库存',
+        operatorType: 'admin',
+        action: 'cancel',
+        logContent: `管理员取消订单，原因：${reason || '无'}`,
+        pointsSource: 'admin_cancel',
+        pointsDescription: (points) => `管理员取消订单归还积分${points}`,
+        couponStatuses: [COUPON_STATUS.LOCKED],
+      });
     });
   }
 
@@ -148,29 +170,14 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
             });
           }
 
-          if (currentOrder.pointsDeducted > 0) {
-            const user = await tx.user.findUnique({
-              where: { id: currentOrder.userId },
-              select: { availablePoints: true },
-            });
-            if (user) {
-              await tx.user.update({
-                where: { id: currentOrder.userId },
-                data: { availablePoints: { increment: currentOrder.pointsDeducted } },
-              });
-              await tx.pointsRecord.create({
-                data: {
-                  userId: currentOrder.userId,
-                  type: 1,
-                  points: currentOrder.pointsDeducted,
-                  balance: user.availablePoints + currentOrder.pointsDeducted,
-                  source: 'order_auto_close',
-                  sourceId: currentOrder.id,
-                  description: `超时自动关闭归还积分${currentOrder.pointsDeducted}`,
-                },
-              });
-            }
-          }
+          await this.restoreDeductedPoints(
+            tx,
+            currentOrder.userId,
+            currentOrder.pointsDeducted,
+            'order_auto_close',
+            currentOrder.id,
+            `超时自动关闭归还积分${currentOrder.pointsDeducted}`,
+          );
 
           if (currentOrder.couponId) {
             await tx.userCoupon.updateMany({
@@ -282,6 +289,158 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     }
 
     return { completedCount };
+  }
+
+  private async cancelPendingOrder(input: {
+    orderId: string;
+    userId?: bigint;
+    reason: string;
+    stockReason: string;
+    operatorType: 'user' | 'admin';
+    operatorId?: bigint;
+    action: string;
+    logContent: string;
+    pointsSource: string;
+    pointsDescription: (points: number) => string;
+    couponStatuses: number[];
+  }) {
+    const orderId = BigInt(input.orderId);
+    const order = await this.cancellationPrisma.order.findFirst({
+      where: {
+        id: orderId,
+        ...(input.userId !== undefined ? { userId: input.userId } : {}),
+      },
+      include: { orderItems: true },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+
+    const result = await this.cancellationPrisma.$transaction(async (tx) => {
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          ...(input.userId !== undefined ? { userId: input.userId } : {}),
+          status: OrderStatus.pending_payment,
+        },
+        data: {
+          status: OrderStatus.cancelled,
+          cancelledAt: new Date(),
+          cancelReason: input.reason,
+        },
+      });
+
+      if (claimed.count === 0) {
+        const currentOrder = await tx.order.findFirst({ where: { id: orderId } });
+        if (!currentOrder) throw new NotFoundException('订单不存在');
+        if (currentOrder.status === OrderStatus.cancelled) return currentOrder;
+
+        const paidStatuses: OrderStatus[] = [
+          OrderStatus.pending_delivery,
+          OrderStatus.pending_pickup,
+          OrderStatus.delivered,
+          OrderStatus.completed,
+          OrderStatus.aftersale,
+        ];
+        if (paidStatuses.includes(currentOrder.status)) {
+          throw new BadRequestException(
+            input.operatorType === 'admin'
+              ? '订单已支付，不能取消'
+              : '订单已支付或状态已变化，不能取消',
+          );
+        }
+        throw new BadRequestException(`订单状态不允许取消: ${currentOrder.status}`);
+      }
+
+      for (const item of order.orderItems) {
+        await (this as any).restoreSkuStockAndSales(tx, item, input.stockReason, 2);
+      }
+
+      await this.restoreDeductedPoints(
+        tx,
+        order.userId,
+        order.pointsDeducted,
+        input.pointsSource,
+        order.id,
+        input.pointsDescription(order.pointsDeducted),
+      );
+
+      if (order.couponId) {
+        await tx.userCoupon.updateMany({
+          where: {
+            id: order.couponId,
+            status: { in: input.couponStatuses },
+          },
+          data: {
+            status: COUPON_STATUS.FREE,
+            usedOrderId: null,
+            ...(input.operatorType === 'user' ? { usedAt: null } : {}),
+          },
+        });
+      }
+
+      await tx.orderLog.create({
+        data: {
+          orderId,
+          operatorType: input.operatorType,
+          ...(input.operatorId !== undefined ? { operatorId: input.operatorId } : {}),
+          action: input.action,
+          content: input.logContent,
+        },
+      });
+
+      return tx.order.findFirst({ where: { id: orderId } });
+    });
+
+    try {
+      await this.cancellationGroupBuyService.handleOrderCancel(input.orderId);
+    } catch (error) {
+      this.cancellationLogger.error(
+        `拼团成员取消失败: orderId=${input.orderId}`,
+        (error as Error).message,
+      );
+    }
+
+    try {
+      await this.cancellationFlashSaleService.handleOrderCancel(input.orderId);
+    } catch (error) {
+      this.cancellationLogger.error(
+        `秒杀订单取消失败: orderId=${input.orderId}`,
+        (error as Error).message,
+      );
+    }
+
+    return (this as any).serializeOrderView(result);
+  }
+
+  private async restoreDeductedPoints(
+    tx: any,
+    userId: bigint,
+    points: number,
+    source: string,
+    sourceId: bigint,
+    description: string,
+  ) {
+    if (points <= 0) return;
+
+    // The UPDATE itself is the serialization point on the user row. Never calculate the ledger
+    // balance from a preceding snapshot: two concurrent cancellations can both read the same old
+    // balance even though their increments are serialized by InnoDB.
+    const updatedUser = await tx.user.update({
+      where: { id: userId },
+      data: { availablePoints: { increment: points } },
+      select: { availablePoints: true },
+    });
+
+    await tx.pointsRecord.create({
+      data: {
+        userId,
+        type: 1,
+        points,
+        balance: updatedUser.availablePoints,
+        source,
+        sourceId,
+        description,
+      },
+    });
   }
 
   private async assertManualCancelHasNoUnsafePayment(orderId: string) {
