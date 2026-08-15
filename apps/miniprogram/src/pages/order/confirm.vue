@@ -240,6 +240,7 @@ import { getAvailableCoupons, type MyCouponItem } from '@/api/coupon'
 import { createPayment, wxPay } from '@/api/payment'
 import { formatPrice } from '@/utils/format'
 import { useUserStore } from '@/stores/user'
+import { parseOrderConfirmItemsParam, parseSingleOrderConfirmItem } from './confirm-params'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
 interface OrderItemInput {
@@ -624,19 +625,17 @@ defineExpose({
 })
 
 onLoad(async (options) => {
-  if (options?.items) {
-    orderItems.value = JSON.parse(decodeURIComponent(options.items))
-  } else if (options?.productId) {
-    orderItems.value = [{
-      productId: options.productId,
-      skuId: options.skuId,
-      quantity: Number(options.quantity || 1),
-      productName: '',
-      productImage: '',
-      skuName: '',
-      price: 0
-    }]
+  const parsedItems = options?.items
+    ? parseOrderConfirmItemsParam(options.items)
+    : parseSingleOrderConfirmItem(options as Record<string, unknown> | undefined)
+
+  if (!parsedItems) {
+    uni.showToast({ title: '订单参数无效，请重新选择商品', icon: 'none' })
+    uni.switchTab({ url: '/pages/cart/index' })
+    return
   }
+
+  orderItems.value = parsedItems
   await loadDefaultAddress()
   if (fulfillmentType.value === 'delivery' ? !!address.value : !!selectedPickupStore.value) {
     await loadPreview()
