@@ -249,13 +249,27 @@ test('production deploy quiesces all writers before the proof backup and rolls b
   assert.match(deploy, /restore_previous_runtime\(\)/)
   assert.match(deploy, /PUBLIC_EXPOSED.*automatic database rollback is disabled/s)
   assert.match(deploy, /candidate API business route and Nginx configuration pass before public exposure/)
-  assert.match(entrypoint, /\.scheduler-paused/)
-  assert.match(entrypoint, /\$\{BUILD_SHA:-unknown\}/)
+
+  const pauseMarkerIndex = entrypoint.indexOf('> "$pause_marker"')
+  const drainInvocationIndex = entrypoint.lastIndexOf('wait_for_scheduler_drain')
+  const migrationExecIndex = entrypoint.indexOf('"$@"', drainInvocationIndex)
+  assert.ok(pauseMarkerIndex >= 0, 'standalone production migration must publish the shared scheduler pause marker')
+  assert.ok(drainInvocationIndex >= 0, 'standalone production migration must drain existing Cron writers')
+  assert.ok(migrationExecIndex >= 0, 'standalone production migration must execute only after the drain gate')
+  assert.ok(pauseMarkerIndex < drainInvocationIndex, 'global scheduler pause marker must be visible before Cron drain starts')
+  assert.ok(drainInvocationIndex < migrationExecIndex, 'live migration command must wait until existing Cron locks drain')
+  assert.match(entrypoint, /SCAN|scan/)
+  assert.match(entrypoint, /'MATCH', 'schedule:\*'/)
+  assert.match(entrypoint, /Cron 排空失败/)
+
   assert.match(redis, /key\.startsWith\('schedule:'\)/)
-  assert.match(redis, /markerBuild === currentBuild/)
+  assert.match(redis, /if \(schedulerLock && this\.isSchedulerPaused\(key\)\)/)
+  assert.match(redis, /await this\.releaseLockWithLua\(key, value\)/)
+  assert.doesNotMatch(redis, /markerBuild === currentBuild/)
+
   assert.match(smoke, /scheduler_pause_marker/)
-  assert.match(smoke, /scheduler_pause_marker.*api_build_sha/s)
-  assert.match(smoke, /rm -f.*\.scheduler-paused/)
+  assert.match(smoke, /scheduler maintenance marker is still active after deployment/)
+  assert.doesNotMatch(smoke, /rm -f.*\.scheduler-paused/)
 
   for (const source of [compose, btCompose]) {
     assert.match(source, /API_DOMAIN: \$\{API_DOMAIN:-api\.yunxixiaochengxu\.com\.cn\}/)
