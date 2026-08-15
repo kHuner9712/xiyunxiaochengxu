@@ -158,6 +158,21 @@ function mapStatusToState(status: any): PaymentState {
   return 'unknown'
 }
 
+function mapZeroPayOrderToState(detail: OrderDetail): PaymentState {
+  if (Number(detail.payAmount) !== 0) return 'unknown'
+  if (
+    detail.status === 'paid' ||
+    detail.status === 'pending_delivery' ||
+    detail.status === 'pending_pickup' ||
+    detail.status === 'delivered' ||
+    detail.status === 'completed'
+  ) {
+    return 'success'
+  }
+  if (detail.status === 'cancelled') return 'failed'
+  return 'unknown'
+}
+
 async function checkPaymentStatusOnce(generation: number) {
   try {
     const status = await getPaymentStatus(orderId.value)
@@ -179,6 +194,23 @@ async function loadOrder(generation?: number) {
   } catch (e: any) {
     if (generation !== undefined && generation !== pollGeneration) return
     uni.showToast({ title: e.message || '订单信息加载失败', icon: 'none' })
+  }
+}
+
+async function loadZeroPayOrder() {
+  const generation = ++pollGeneration
+  checking.value = true
+  try {
+    const detail = await getOrderDetail(orderId.value)
+    if (generation !== pollGeneration) return
+    orderInfo.value = detail
+    paymentState.value = mapZeroPayOrderToState(detail)
+  } catch (e: any) {
+    if (generation !== pollGeneration) return
+    paymentState.value = 'unknown'
+    uni.showToast({ title: e.message || '订单信息加载失败', icon: 'none' })
+  } finally {
+    if (generation === pollGeneration) checking.value = false
   }
 }
 
@@ -263,16 +295,23 @@ onLoad((options) => {
   if (options?.groupId) groupId.value = String(options.groupId)
   if (options?.payIntent) payIntent.value = String(options.payIntent)
   zeroPay.value = options?.zeroPay === '1'
+
+  if (!/^[1-9]\d*$/.test(orderId.value)) {
+    checking.value = false
+    paymentState.value = 'unknown'
+    uni.showToast({ title: '订单参数无效，请返回订单列表重试', icon: 'none' })
+    uni.redirectTo({ url: '/pages/order/list' })
+    return
+  }
+
   if (payIntent.value === 'cancel') {
     uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
   }
   if (zeroPay.value) {
-    paymentState.value = 'success'
-    checking.value = false
-    loadOrder()
+    void loadZeroPayOrder()
     return
   }
-  startPollingStatus()
+  void startPollingStatus()
 })
 
 onHide(() => {
@@ -280,13 +319,29 @@ onHide(() => {
 })
 
 onShow(() => {
-  if (!zeroPay.value && orderId.value && paymentState.value !== 'success' && paymentState.value !== 'failed') {
-    startPollingStatus()
+  if (zeroPay.value) {
+    if (orderId.value && paymentState.value !== 'success' && paymentState.value !== 'failed') {
+      void loadZeroPayOrder()
+    }
+    return
+  }
+  if (orderId.value && paymentState.value !== 'success' && paymentState.value !== 'failed') {
+    void startPollingStatus()
   }
 })
 
 onUnload(() => {
   stopPolling()
+})
+
+defineExpose({
+  orderInfo,
+  checking,
+  paymentState,
+  zeroPay,
+  mapZeroPayOrderToState,
+  loadZeroPayOrder,
+  startPollingStatus,
 })
 </script>
 
