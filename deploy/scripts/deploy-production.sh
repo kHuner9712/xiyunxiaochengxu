@@ -393,8 +393,8 @@ pass 'fresh production-backup clone passed migrations and schema drift verificat
 cleanup_migration_clone
 
 LIVE_DB_TOUCHED=true
-"${COMPOSE[@]}" run --rm --no-deps api npx prisma migrate deploy
-pass 'Prisma migrations completed on live database'
+"${COMPOSE[@]}" run --rm --no-deps -e MIGRATION_WRITERS_QUIESCED=true api npx prisma migrate deploy
+pass 'Prisma migrations completed on live database after verified writer quiesce'
 
 SKIP_MIGRATE=true "${COMPOSE[@]}" up -d --no-deps --force-recreate api
 CANDIDATE_REPLACED_OLD_API=true
@@ -402,16 +402,18 @@ if ! wait_healthy baby-mall-api 60; then
   docker logs --tail 250 baby-mall-api >&2 || true
   fail 'candidate API did not become healthy after deployment'
 fi
-pass 'candidate API is healthy while public Nginx remains stopped'
+pass 'candidate API is healthy with scheduler maintenance cleared while public Nginx remains stopped'
 
 API_HOST_PORT="$(read_env_value API_HOST_PORT)"
 API_HOST_PORT="${API_HOST_PORT:-3001}"
 api_health="$(curl --fail --silent --show-error "http://127.0.0.1:${API_HOST_PORT}/api/health")"
 echo "$api_health" | grep -q '"status":"ok"' || fail "candidate API direct health response is not ok: $api_health"
+echo "$api_health" | grep -Eq '"maintenance"[[:space:]]*:[[:space:]]*false' || fail "candidate API still reports migration maintenance before public exposure: $api_health"
+echo "$api_health" | grep -Eq '"scheduler"[[:space:]]*:[[:space:]]*"ok"' || fail "candidate scheduler is not ready before public exposure: $api_health"
 product_list_response="$(curl --fail --silent --show-error "http://127.0.0.1:${API_HOST_PORT}/api/weapp/product/list?page=1&pageSize=1")"
 echo "$product_list_response" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0' || fail "candidate public product list did not return code=0: $product_list_response"
 "${COMPOSE[@]}" run --rm --no-deps nginx nginx -t >/dev/null
-pass 'candidate API business route and Nginx configuration pass before public exposure'
+pass 'candidate API maintenance state, scheduler, business route and Nginx configuration pass before public exposure'
 
 "${COMPOSE[@]}" up -d --no-deps --force-recreate nginx
 PUBLIC_EXPOSED=true
