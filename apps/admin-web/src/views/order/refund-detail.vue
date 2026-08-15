@@ -89,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { refundApi } from '@/api/refund'
 import { formatPrice, formatDate } from '@/utils/format'
@@ -119,6 +119,11 @@ const REFUND_STATUS_TAG_TYPE: Record<string, 'primary' | 'success' | 'warning' |
 const router = useRouter()
 const route = useRoute()
 const detail = ref<any>({})
+let detailRequestVersion = 0
+
+function currentRouteRefundId() {
+  return String(route.params.id || '').trim()
+}
 
 function formatJson(data: any): string {
   if (!data) return '-'
@@ -129,14 +134,36 @@ function formatJson(data: any): string {
   }
 }
 
-async function fetchDetail() {
+async function fetchDetail(refundId = currentRouteRefundId()) {
+  const requestVersion = ++detailRequestVersion
+  if (!/^[1-9]\d*$/.test(refundId)) {
+    if (requestVersion === detailRequestVersion) detail.value = {}
+    return
+  }
+
   try {
-    const res = await refundApi.getDetail(route.params.id as string)
-    detail.value = res.data || {}
-  } catch {}
+    const res = await refundApi.getDetail(refundId)
+    if (requestVersion !== detailRequestVersion || currentRouteRefundId() !== refundId) return
+    const nextDetail = res.data || {}
+    if (String(nextDetail.id || '') !== refundId) {
+      detail.value = {}
+      return
+    }
+    detail.value = nextDetail
+  } catch {
+    if (requestVersion === detailRequestVersion && currentRouteRefundId() === refundId) {
+      detail.value = {}
+    }
+  }
 }
 
-onMounted(() => {
-  fetchDetail()
-})
+watch(
+  () => currentRouteRefundId(),
+  (refundId) => {
+    detailRequestVersion += 1
+    detail.value = {}
+    void fetchDetail(refundId)
+  },
+  { immediate: true },
+)
 </script>
