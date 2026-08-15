@@ -37,8 +37,8 @@ describe('确认订单入口参数', () => {
     ]))).toBeNull()
   })
 
-  it('单品直购只接受正整数商品/SKU ID 和正整数数量', () => {
-    expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '201', quantity: '3' })).toEqual({
+  it('单品直购只接受正整数商品/SKU ID 和正整数数量，并保持数组不变量', () => {
+    expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '201', quantity: '3' })).toEqual([{
       productId: '101',
       skuId: '201',
       quantity: 3,
@@ -46,7 +46,7 @@ describe('确认订单入口参数', () => {
       productImage: '',
       skuName: '',
       price: 0,
-    })
+    }])
     expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '', quantity: 1 })).toBeNull()
     expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '201', quantity: 'NaN' })).toBeNull()
   })
