@@ -355,40 +355,53 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   }
 
   private async withPaymentCancelLock<T>(orderId: string, action: () => Promise<T>): Promise<T> {
-    const key = `order:payment-cancel:${orderId}`;
-    const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
-    const acquired = await this.cancellationRedis.setNX(
-      key,
-      token,
+    return this.withRenewingRedisLock(
+      `order:payment-cancel:${orderId}`,
       PAYMENT_CANCEL_LOCK_TTL_SECONDS,
+      '订单支付、取消或退款状态处理中，请稍后重试',
+      action,
     );
-    if (!acquired) {
-      throw new BadRequestException('订单支付、取消或退款状态处理中，请稍后重试');
-    }
-
-    try {
-      return await action();
-    } finally {
-      await this.cancellationRedis.releaseLockWithLua(key, token);
-    }
   }
 
   private async withRefundUserLock<T>(userId: string, action: () => Promise<T>): Promise<T> {
-    const key = `user:refund-success:${userId}`;
-    const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
-    const acquired = await this.cancellationRedis.setNX(
-      key,
-      token,
+    return this.withRenewingRedisLock(
+      `user:refund-success:${userId}`,
       REFUND_USER_LOCK_TTL_SECONDS,
+      '该用户退款状态正在处理中，请稍后重试',
+      action,
     );
+  }
+
+  private async withRenewingRedisLock<T>(
+    key: string,
+    ttlSeconds: number,
+    busyMessage: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    const acquired = await this.cancellationRedis.setNX(key, token, ttlSeconds);
     if (!acquired) {
-      throw new BadRequestException('该用户退款状态正在处理中，请稍后重试');
+      throw new BadRequestException(busyMessage);
     }
+
+    // Remote WeChat calls and refund-success side effects can outlive a fixed Redis TTL during a
+    // network stall or database incident. Renew the exact token periodically so another worker
+    // cannot enter the same critical section merely because the original lease elapsed.
+    const heartbeat = setInterval(() => {
+      void this.cancellationRedis
+        .extendLockWithLua(key, token, ttlSeconds)
+        .catch(() => undefined);
+    }, Math.max(1000, Math.floor((ttlSeconds * 1000) / 3)));
+    heartbeat.unref?.();
 
     try {
       return await action();
     } finally {
-      await this.cancellationRedis.releaseLockWithLua(key, token);
+      clearInterval(heartbeat);
+      // The business operation has already committed or failed by this point. A transient Redis
+      // release error must not turn a successful payment/refund operation into an API failure; the
+      // tokenized lease will expire naturally if explicit release is unavailable.
+      await this.cancellationRedis.releaseLockWithLua(key, token).catch(() => undefined);
     }
   }
 }
