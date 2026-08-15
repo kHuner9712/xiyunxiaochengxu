@@ -80,11 +80,16 @@ if [ $# -gt 0 ]; then
     && [ "${2:-}" = "prisma" ] \
     && [ "${3:-}" = "migrate" ] \
     && [ "${4:-}" = "deploy" ]; then
+    if [ "${MIGRATION_WRITERS_QUIESCED:-false}" != "true" ]; then
+      echo "生产环境拒绝在线手工迁移：prisma migrate deploy 必须由已停止公开入口和 API 写入的发布流程执行；确认所有 HTTP writers 已 quiesced 后才可显式传 MIGRATION_WRITERS_QUIESCED=true" >&2
+      exit 1
+    fi
+
     pause_dir="${UPLOAD_DIR:-/app/apps/api/uploads}"
     pause_marker="$pause_dir/.scheduler-paused"
     mkdir -p "$pause_dir"
     printf '%s\n' "${BUILD_SHA:-unknown}" > "$pause_marker"
-    echo "生产迁移维护模式: 已暂停所有在线 API 构建获取新的 Cron 锁"
+    echo "生产迁移维护模式: 已确认 HTTP writers 停止，并暂停所有在线 API 构建获取新的 Cron 锁"
 
     cleanup_scheduler_pause() {
       rm -f "$pause_marker"
@@ -92,10 +97,11 @@ if [ $# -gt 0 ]; then
     }
     trap cleanup_scheduler_pause EXIT HUP INT TERM
 
-    # The shared marker stops new schedule:* locks. Wait until locks held by tasks that entered just
-    # before the marker was published have disappeared before touching the live schema. Redis is the
-    # durable cross-process observation point because every Cron job owns one of these tokenized,
-    # heartbeated locks for its full execution.
+    # MIGRATION_WRITERS_QUIESCED is an explicit operator/deployer assertion that externally visible
+    # HTTP writers have already been stopped. The shared marker additionally stops new schedule:*
+    # locks. Wait until locks held by tasks that entered just before the marker was published have
+    # disappeared before touching the live schema. Redis is the durable cross-process observation
+    # point because every Cron job owns one of these tokenized, heartbeated locks for its full run.
     wait_for_scheduler_drain
 
     "$@"
