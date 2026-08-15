@@ -22,7 +22,7 @@
           <text class="meta-label">有效期：</text>
           <text class="meta-value">{{ formatDate(pkg.validFrom) }} 至 {{ pkg.validTo ? formatDate(pkg.validTo) : '长期' }}</text>
         </view>
-        <view class="pkg-action" @tap="goEntitlements(pkg.packageId)">查看权益项 ›</view>
+        <view class="pkg-action" @tap="goEntitlements(pkg.id)">查看权益项 ›</view>
       </view>
       <Loading v-if="loading" />
       <Empty v-if="!loading && packageList.length === 0" text="暂无权益卡" />
@@ -182,8 +182,8 @@ function switchTab(v: TabValue) {
   void refreshList()
 }
 
-function goEntitlements(packageId: string) {
-  uni.navigateTo({ url: `/pages/benefit-package/entitlement?packageId=${packageId}` })
+function goEntitlements(userBenefitPackageId: string) {
+  uni.navigateTo({ url: `/pages/benefit-package/entitlement?packageId=${userBenefitPackageId}` })
 }
 
 function goEntitlementDetail(id: string) {
