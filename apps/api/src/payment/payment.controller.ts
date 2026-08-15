@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Headers, Req, Query, Logger, HttpCode, Res } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Get, Body, Param, Headers, Req, Query, Logger, HttpCode, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PaymentService } from './payment.service';
 import { PaymentReconcileExecutionService } from './payment-reconcile-execution.service';
@@ -7,6 +7,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { SkipThrottle } from '@nestjs/throttler';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import {
   IsIn,
   IsInt,
@@ -22,6 +23,19 @@ import {
 import { Type } from 'class-transformer';
 
 const POSITIVE_ID = /^[1-9]\d*$/;
+const REFUND_NO = /^REFUND\d{14}[a-f0-9]{6}$/i;
+
+function normalizePositiveId(value: string, label: string): string {
+  return parsePositiveBigIntId(value, label).toString();
+}
+
+function normalizeRefundNo(value: string): string {
+  const normalized = String(value || '').trim();
+  if (!REFUND_NO.test(normalized)) {
+    throw new BadRequestException('退款单号格式无效');
+  }
+  return normalized;
+}
 
 class CreatePaymentDto {
   @IsString()
@@ -137,7 +151,7 @@ export class PaymentController {
 
   @Get('status/:orderId')
   async queryStatus(@CurrentUser('id') userId: string, @Param('orderId') orderId: string) {
-    return this.paymentService.getPaymentStatus(orderId, userId);
+    return this.paymentService.getPaymentStatus(normalizePositiveId(orderId, '订单'), userId);
   }
 }
 
@@ -159,12 +173,12 @@ export class RefundController {
 
   @Get('detail/:id')
   async getDetail(@Param('id') id: string) {
-    return this.paymentService.getRefundDetail(id);
+    return this.paymentService.getRefundDetail(normalizePositiveId(id, '退款记录'));
   }
 
   @Post('sync/:outRefundNo')
   async syncRefund(@Param('outRefundNo') outRefundNo: string) {
-    return this.paymentService.syncRefund(outRefundNo);
+    return this.paymentService.syncRefund(normalizeRefundNo(outRefundNo));
   }
 }
 
@@ -211,6 +225,11 @@ export class PaymentCompensationController {
     @CurrentUser('id') adminId: string,
     @Body() dto: ResolveCompensationTaskDto,
   ) {
-    return this.paymentService.resolveCompensationTask(id, adminId, dto.resolution, dto.status);
+    return this.paymentService.resolveCompensationTask(
+      normalizePositiveId(id, '支付补偿任务'),
+      adminId,
+      dto.resolution,
+      dto.status,
+    );
   }
 }
