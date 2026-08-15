@@ -271,29 +271,38 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     let completedCount = 0;
     for (const order of candidates) {
       try {
-        await (this as any).completeOrderAndReward({
-          order,
-          claimWhere: {
-            id: order.id,
-            status: OrderStatus.delivered,
-            autoCompleteAt: { lte: new Date() },
-          },
-          orderUpdateData: { status: OrderStatus.completed, completedAt: new Date() },
-          operatorType: 'system',
-          action: 'auto_complete',
-          logContent: '超时未确认收货，系统自动完成',
-          completeReason: '自动完成',
-          rewardSource: 'order_auto_complete',
-          swallowClaimFailure: true,
+        const claimed = await this.cancellationPrisma.$transaction(async (tx) => {
+          const claimResult = await tx.order.updateMany({
+            where: {
+              id: order.id,
+              status: OrderStatus.delivered,
+              autoCompleteAt: { lte: new Date() },
+            },
+            data: {
+              status: OrderStatus.completed,
+              completedAt: new Date(),
+            },
+          });
+          if (claimResult.count === 0) return false;
+
+          const earnedPoints = await (this as any).rewardCompletedOrder(
+            tx,
+            order,
+            'order_auto_complete',
+          );
+          await tx.orderLog.create({
+            data: {
+              orderId: order.id,
+              operatorType: 'system',
+              action: 'auto_complete',
+              content: `超时未确认收货，系统自动完成${earnedPoints > 0 ? `，发放积分${earnedPoints}` : ''}`,
+            },
+          });
+          return true;
         });
-        completedCount += 1;
+
+        if (claimed) completedCount += 1;
       } catch (error) {
-        if (
-          error instanceof BadRequestException &&
-          error.message === '订单抢占失败'
-        ) {
-          continue;
-        }
         this.cancellationLogger.error(
           `自动完成订单失败：orderId=${order.id}, orderNo=${order.orderNo}, error=${(error as Error).message}`,
           (error as Error).stack,
