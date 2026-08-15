@@ -55,9 +55,8 @@ describe('CancellationSafeStockSafePaymentService renewing Redis locks', () => {
       }),
     );
 
-    // Allow the awaited Redis SET NX to resolve and the heartbeat to be installed.
-    await Promise.resolve();
-    await Promise.resolve();
+    // Cross one event-loop turn so the awaited Redis SET NX continuation installs the heartbeat.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(heartbeat).toBeDefined();
 
     heartbeat!();
