@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { onHide, onReachBottom, onPullDownRefresh, onShow, onUnload } from '@dcloudio/uni-app'
 import { getActivityFeed, type FeedItem } from '@/api/activity'
 import CountdownTimer from '@/components/CountdownTimer.vue'
@@ -97,35 +97,56 @@ const page = ref(1)
 const finished = ref(false)
 const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
+let feedVersion = 0
+let loadingVersion = -1
 
-async function loadFeed(reset = false) {
-  if (loading.value) return
-  if (!reset && finished.value) return
-  if (reset) {
-    page.value = 1
-    finished.value = false
-    feedList.value = []
-  }
+function resetFeed() {
+  page.value = 1
+  finished.value = false
+  feedList.value = []
+}
+
+async function loadFeed(reset = false, version = feedVersion) {
+  if (!reset && finished.value && version === feedVersion) return
+  if (loading.value && loadingVersion === version) return
+  if (reset) resetFeed()
+
+  const requestTab = currentTab.value
+  const requestPage = page.value
   loading.value = true
+  loadingVersion = version
   try {
     const data = await getActivityFeed({
-      tab: currentTab.value,
-      page: page.value,
+      tab: requestTab,
+      page: requestPage,
       pageSize: 10
     })
+    if (version !== feedVersion || requestTab !== currentTab.value) return
+
     feedList.value.push(...data.list)
     finished.value = feedList.value.length >= data.total
-    page.value++
+    page.value = requestPage + 1
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (version === feedVersion && requestTab === currentTab.value) {
+      uni.showToast({ title: '加载失败', icon: 'none' })
+    }
   } finally {
-    loading.value = false
+    if (version === feedVersion && requestTab === currentTab.value) {
+      loading.value = false
+      loadingVersion = -1
+    }
   }
 }
 
+function refreshFeed() {
+  const version = ++feedVersion
+  return loadFeed(true, version)
+}
+
 function switchTab(value: string) {
+  if (currentTab.value === value) return
   currentTab.value = value
-  loadFeed(true)
+  void refreshFeed()
 }
 
 function goDetail(item: FeedItem) {
@@ -200,21 +221,29 @@ function stopClock() {
 }
 
 onPullDownRefresh(async () => {
-  await loadFeed(true)
+  await refreshFeed()
   uni.stopPullDownRefresh()
 })
 
 onReachBottom(() => {
-  loadFeed()
+  void loadFeed(false, feedVersion)
 })
 
-onMounted(() => {
-  loadFeed()
+onShow(() => {
+  startClock()
+  void refreshFeed()
 })
-
-onShow(() => startClock())
 onHide(() => stopClock())
 onUnload(() => stopClock())
+
+defineExpose({
+  currentTab,
+  feedList,
+  loading,
+  loadFeed,
+  refreshFeed,
+  switchTab,
+})
 </script>
 
 <style lang="scss" scoped>
