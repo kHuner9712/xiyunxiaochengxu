@@ -5,6 +5,8 @@ import { useCartStore } from '../cart'
 import { logout as logoutApi } from '@/api/auth'
 import { removeToken } from '@/utils/request'
 
+let authExpiredHandler: (() => void) | null = null
+
 vi.mock('@/api/auth', () => ({
   wxLogin: vi.fn(),
   logout: vi.fn(),
@@ -13,6 +15,7 @@ vi.mock('@/api/auth', () => ({
 }))
 
 vi.mock('@/utils/request', () => ({
+  AUTH_EXPIRED_EVENT: 'baby-mall:auth-expired',
   get: vi.fn(),
   post: vi.fn(),
   put: vi.fn(),
@@ -29,6 +32,7 @@ vi.mock('@/utils/share', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  authExpiredHandler = null
   setActivePinia(createPinia())
   vi.mocked(logoutApi).mockResolvedValue(null as any)
   ;(globalThis as any).uni = {
@@ -37,6 +41,9 @@ beforeEach(() => {
     setTabBarBadge: vi.fn(),
     removeTabBarBadge: vi.fn(),
     showToast: vi.fn(),
+    $on: vi.fn((_event: string, callback: () => void) => {
+      authExpiredHandler = callback
+    }),
   }
 })
 
@@ -107,5 +114,41 @@ describe('小程序退出登录', () => {
     expect(removeToken).toHaveBeenCalledTimes(1)
     expect(cartStore.items).toEqual([])
     expect((globalThis as any).uni.reLaunch).toHaveBeenCalledWith({ url: '/pages/home/index' })
+  })
+
+  it('收到请求层 401 失效事件时同步清空内存登录态和购物车', () => {
+    const store = useUserStore()
+    const cartStore = useCartStore()
+    store.$patch({
+      token: 'expired-access-token',
+      userInfo: {
+        id: '2',
+        nickname: '过期会话用户',
+        memberLevel: 1,
+        memberLevelName: '普通会员',
+        points: 20,
+      } as any,
+    })
+    cartStore.$patch({
+      items: [{
+        id: 'stale-session-cart',
+        productId: 'product-2',
+        skuId: 'sku-2',
+        productName: '过期会话商品',
+        productImage: '',
+        skuName: '默认规格',
+        price: 2000,
+        quantity: 1,
+        stock: 10,
+        checked: true,
+      }],
+    })
+
+    expect(authExpiredHandler).toBeTypeOf('function')
+    authExpiredHandler?.()
+
+    expect(store.token).toBe('')
+    expect(store.userInfo).toBeNull()
+    expect(cartStore.items).toEqual([])
   })
 })
