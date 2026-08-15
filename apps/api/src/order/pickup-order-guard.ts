@@ -170,6 +170,8 @@ export async function settleExpiredPointsBeforeCheckout(
 /**
  * Coupon preview happens before the order transaction. Re-check expiry on the actual FREE ->
  * LOCKED write so a coupon that expires in that narrow gap cannot be committed to an order.
+ * A null UserCoupon.expireAt is the established non-expiring/historical-valid representation and
+ * must remain redeemable, matching CouponService.findUsable().
  */
 export function withFreshCheckoutCouponLock(
   tx: Prisma.TransactionClient,
@@ -188,11 +190,26 @@ export function withFreshCheckoutCouponLock(
             && args?.data?.status === COUPON_STATUS.LOCKED;
           if (!isCheckoutLock) return target.updateMany(args);
 
+          const existingAnd = args?.where?.AND;
+          const existingAndClauses = existingAnd === undefined
+            ? []
+            : Array.isArray(existingAnd)
+              ? existingAnd
+              : [existingAnd];
+
           return target.updateMany({
             ...args,
             where: {
               ...args.where,
-              expireAt: { gte: new Date() },
+              AND: [
+                ...existingAndClauses,
+                {
+                  OR: [
+                    { expireAt: null },
+                    { expireAt: { gte: new Date() } },
+                  ],
+                },
+              ],
             },
           });
         };
