@@ -206,37 +206,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
             });
           }
 
-          const flashSaleOrder = await tx.flashSaleOrder.findFirst({
-            where: {
-              orderId: currentOrder.id,
-              status: 'pending_payment',
-              deletedAt: null,
-            },
-            select: { id: true, activityId: true, quantity: true },
-          });
-          if (flashSaleOrder) {
-            const flashClaim = await tx.flashSaleOrder.updateMany({
-              where: { id: flashSaleOrder.id, status: 'pending_payment' },
-              data: { status: 'cancelled', cancelledAt: closedAt },
-            });
-            if (flashClaim.count > 0) {
-              await tx.$executeRaw`
-                UPDATE flash_sale_activities
-                SET locked_count = GREATEST(locked_count - ${flashSaleOrder.quantity}, 0),
-                    updated_at = NOW(3)
-                WHERE id = ${flashSaleOrder.activityId}
-              `;
-            }
-          }
-
-          await tx.groupBuyMember.updateMany({
-            where: {
-              orderId: currentOrder.id,
-              status: 'pending_payment',
-              deletedAt: null,
-            },
-            data: { status: 'cancelled' },
-          });
+          await this.cancelPromotionReservations(tx, currentOrder.id, closedAt);
 
           await tx.orderLog.create({
             data: {
@@ -337,6 +307,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     if (!order) throw new NotFoundException('订单不存在');
 
     const result = await this.cancellationPrisma.$transaction(async (tx) => {
+      const cancelledAt = new Date();
       const claimed = await tx.order.updateMany({
         where: {
           id: orderId,
@@ -345,7 +316,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
         },
         data: {
           status: OrderStatus.cancelled,
-          cancelledAt: new Date(),
+          cancelledAt,
           cancelReason: input.reason,
         },
       });
@@ -399,6 +370,11 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
         });
       }
 
+      // Promotion reservations are part of the same cancellation invariant. In particular,
+      // flash-sale cancellation must not commit its status before locked_count is released;
+      // otherwise a failure between those writes becomes permanently non-retryable.
+      await this.cancelPromotionReservations(tx, order.id, cancelledAt);
+
       await tx.orderLog.create({
         data: {
           orderId,
@@ -412,25 +388,41 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       return tx.order.findFirst({ where: { id: orderId } });
     });
 
-    try {
-      await this.cancellationGroupBuyService.handleOrderCancel(input.orderId);
-    } catch (error) {
-      this.cancellationLogger.error(
-        `拼团成员取消失败: orderId=${input.orderId}`,
-        (error as Error).message,
-      );
-    }
-
-    try {
-      await this.cancellationFlashSaleService.handleOrderCancel(input.orderId);
-    } catch (error) {
-      this.cancellationLogger.error(
-        `秒杀订单取消失败: orderId=${input.orderId}`,
-        (error as Error).message,
-      );
-    }
-
     return (this as any).serializeOrderView(result);
+  }
+
+  private async cancelPromotionReservations(tx: any, orderId: bigint, cancelledAt: Date) {
+    const flashSaleOrder = await tx.flashSaleOrder.findFirst({
+      where: {
+        orderId,
+        status: 'pending_payment',
+        deletedAt: null,
+      },
+      select: { id: true, activityId: true, quantity: true },
+    });
+    if (flashSaleOrder) {
+      const flashClaim = await tx.flashSaleOrder.updateMany({
+        where: { id: flashSaleOrder.id, status: 'pending_payment' },
+        data: { status: 'cancelled', cancelledAt },
+      });
+      if (flashClaim.count > 0) {
+        await tx.$executeRaw`
+          UPDATE flash_sale_activities
+          SET locked_count = GREATEST(locked_count - ${flashSaleOrder.quantity}, 0),
+              updated_at = NOW(3)
+          WHERE id = ${flashSaleOrder.activityId}
+        `;
+      }
+    }
+
+    await tx.groupBuyMember.updateMany({
+      where: {
+        orderId,
+        status: 'pending_payment',
+        deletedAt: null,
+      },
+      data: { status: 'cancelled' },
+    });
   }
 
   private async restoreDeductedPoints(
