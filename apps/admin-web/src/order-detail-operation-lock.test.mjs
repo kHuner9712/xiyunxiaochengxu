@@ -8,13 +8,17 @@ const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const source = readFileSync(resolve(root, 'apps/admin-web/src/views/order/detail.vue'), 'utf8')
 
 function method(start, end) {
-  return source.slice(source.indexOf(start), source.indexOf(end))
+  const startIndex = source.indexOf(start)
+  const endIndex = source.indexOf(end, startIndex + start.length)
+  assert.notEqual(startIndex, -1, `missing method start: ${start}`)
+  assert.notEqual(endIndex, -1, `missing method end: ${end}`)
+  return source.slice(startIndex, endIndex)
 }
 
 const remarkMethod = method('async function handleSaveRemark()', 'function showDeliverDialog()')
 const deliverMethod = method('async function handleDeliver()', 'async function handleCancelOrder()')
 const cancelMethod = method('async function handleCancelOrder()', 'function showVerifyPickupDialog()')
-const pickupMethod = method('async function handleVerifyPickup()', 'onMounted(() =>')
+const pickupMethod = method('async function handleVerifyPickup()', 'watch(')
 
 test('admin order detail locks writes before validation, prompts or network work', () => {
   assert.match(remarkMethod, /if \(remarkSubmitting\.value\) return/)
@@ -32,6 +36,19 @@ test('admin order detail locks writes before validation, prompts or network work
   assert.match(pickupMethod, /if \(submitting\.value\) return/)
   assert.match(pickupMethod, /submitting\.value = true[\s\S]*pickupStoreApi\.verifyPickupCode/)
   assert.match(pickupMethod, /finally \{[\s\S]*submitting\.value = false/)
+})
+
+test('admin order detail binds reads and writes to the current route order', () => {
+  assert.match(source, /let detailRequestVersion = 0/)
+  assert.match(source, /const requestVersion = \+\+detailRequestVersion/)
+  assert.match(source, /requestVersion !== detailRequestVersion \|\| !isCurrentRouteOrder\(orderId\)/)
+  assert.match(source, /String\(nextOrder\.id \|\| ''\) !== orderId/)
+  assert.match(source, /watch\([\s\S]*currentRouteOrderId\(\)[\s\S]*resetRouteBoundState\(\)[\s\S]*fetchDetail\(orderId\)[\s\S]*immediate: true/)
+
+  assert.match(remarkMethod, /const orderId = String\(order\.value\.id \|\| ''\)[\s\S]*isCurrentRouteOrder\(orderId\)[\s\S]*orderApi\.remark\(orderId/)
+  assert.match(deliverMethod, /const orderId = String\(deliverForm\.orderId \|\| ''\)[\s\S]*isCurrentRouteOrder\(orderId\)[\s\S]*orderApi\.deliver\(\{ orderId/)
+  assert.match(cancelMethod, /const orderId = String\(order\.value\.id \|\| ''\)[\s\S]*ElMessageBox\.prompt[\s\S]*!isCurrentRouteOrder\(orderId\)[\s\S]*orderApi\.cancel\(orderId/)
+  assert.match(pickupMethod, /const orderId = String\(order\.value\.id \|\| ''\)[\s\S]*isCurrentRouteOrder\(orderId\)[\s\S]*pickupStoreApi\.verifyPickupCode/)
 })
 
 test('admin order detail action buttons expose the same lock state', () => {
