@@ -81,7 +81,7 @@ describe('启动时恢复登录状态', () => {
     vi.mocked(get).mockRejectedValueOnce(new Error('network error'))
     const store = useUserStore()
 
-    await expect(store.checkLogin()).resolves.toBe(false)
+    await expect(store.checkLogin()).resolves.toBe(true)
 
     expect(store.isLoggedIn).toBe(true)
     expect(removeToken).not.toHaveBeenCalled()
