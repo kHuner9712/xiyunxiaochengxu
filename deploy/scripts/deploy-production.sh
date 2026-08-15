@@ -115,8 +115,14 @@ command -v docker >/dev/null 2>&1 || fail 'docker is not installed'
 command -v gzip >/dev/null 2>&1 || fail 'gzip is not installed'
 command -v openssl >/dev/null 2>&1 || fail 'openssl is not installed'
 command -v curl >/dev/null 2>&1 || fail 'curl is not installed'
+command -v flock >/dev/null 2>&1 || fail 'flock is not installed'
 docker compose version >/dev/null 2>&1 || fail 'docker compose is unavailable'
 [ -r "$ENV_FILE" ] || fail "production env file is not readable: $ENV_FILE"
+
+DEPLOY_LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/xiyunxiaochengxu-production-deploy.lock}"
+exec 9>"$DEPLOY_LOCK_FILE"
+flock -n 9 || fail "another production deployment is already running: $DEPLOY_LOCK_FILE"
+pass "production deployment lock acquired: $DEPLOY_LOCK_FILE"
 
 EXPECTED_API_DOMAIN="${API_DOMAIN:-api.yunxixiaochengxu.com.cn}"
 EXPECTED_ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.yunxixiaochengxu.com.cn}"
