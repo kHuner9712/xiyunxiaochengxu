@@ -35,7 +35,9 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       systemConfigService,
     );
 
-    const rewardCompletedOrder = (this as any).rewardCompletedOrder.bind(this);
+    // OrderService keeps this hook private, but every completion path dispatches through the
+    // instance. Replace it at the production boundary so reward amount is net of successful
+    // refunds and the ledger balance comes from the serialized user UPDATE, not a stale snapshot.
     (this as any).rewardCompletedOrder = async (
       tx: any,
       order: any,
@@ -50,11 +52,37 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       });
       const successfulRefundAmount = refundSummary?._sum?.refundAmount ?? 0;
       const netPayAmount = Math.max((order.payAmount ?? 0) - successfulRefundAmount, 0);
-      return rewardCompletedOrder(
-        tx,
-        { ...order, payAmount: netPayAmount },
-        rewardSource,
-      );
+      const earnedPoints = Math.floor(netPayAmount / 100);
+      if (earnedPoints <= 0) return 0;
+
+      const existingRecord = await tx.pointsRecord.findFirst({
+        where: { source: rewardSource, sourceId: order.id },
+      });
+      if (existingRecord) return 0;
+
+      const updatedUser = await tx.user.update({
+        where: { id: order.userId },
+        data: {
+          availablePoints: { increment: earnedPoints },
+          totalPoints: { increment: earnedPoints },
+          growthValue: { increment: earnedPoints },
+        },
+        select: { availablePoints: true },
+      });
+
+      await tx.pointsRecord.create({
+        data: {
+          userId: order.userId,
+          type: 1,
+          points: earnedPoints,
+          balance: updatedUser.availablePoints,
+          source: rewardSource,
+          sourceId: order.id,
+          description: `完成订单奖励${earnedPoints}积分`,
+        },
+      });
+
+      return earnedPoints;
     };
   }
 
@@ -147,27 +175,12 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
           if (claimed.count === 0) return false;
 
           for (const item of currentOrder.orderItems) {
-            const sku = await tx.productSku.findUnique({
-              where: { id: item.skuId },
-              select: { stock: true },
-            });
-            if (!sku) continue;
-            await tx.productSku.update({
-              where: { id: item.skuId },
-              data: { stock: { increment: item.quantity } },
-            });
-            await (this as any).safeDecrementSkuSales(tx, item.skuId, item.quantity);
-            await tx.productStockLog.create({
-              data: {
-                productId: item.productId,
-                skuId: item.skuId,
-                type: 3,
-                quantity: item.quantity,
-                beforeStock: sku.stock,
-                afterStock: sku.stock + item.quantity,
-                reason: '超时自动关闭归还库存',
-              },
-            });
+            await this.restoreSkuStockAndSalesAuthoritative(
+              tx,
+              item,
+              '超时自动关闭归还库存',
+              3,
+            );
           }
 
           await this.restoreDeductedPoints(
@@ -351,7 +364,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       }
 
       for (const item of order.orderItems) {
-        await (this as any).restoreSkuStockAndSales(tx, item, input.stockReason, 2);
+        await this.restoreSkuStockAndSalesAuthoritative(tx, item, input.stockReason, 2);
       }
 
       await this.restoreDeductedPoints(
@@ -439,6 +452,40 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
         source,
         sourceId,
         description,
+      },
+    });
+  }
+
+  private async restoreSkuStockAndSalesAuthoritative(
+    tx: any,
+    item: any,
+    reason: string,
+    type: number,
+  ) {
+    const sku = await tx.productSku.findUnique({
+      where: { id: item.skuId },
+      select: { id: true },
+    });
+    if (!sku) return;
+
+    // The increment holds the SKU row lock until commit. Derive the stock ledger snapshot from
+    // the returned post-update value so concurrent cancellations cannot log duplicate ranges.
+    const updatedSku = await tx.productSku.update({
+      where: { id: item.skuId },
+      data: { stock: { increment: item.quantity } },
+      select: { stock: true },
+    });
+    await (this as any).safeDecrementSkuSales(tx, item.skuId, item.quantity);
+
+    await tx.productStockLog.create({
+      data: {
+        productId: item.productId,
+        skuId: item.skuId,
+        type,
+        quantity: item.quantity,
+        beforeStock: updatedSku.stock - item.quantity,
+        afterStock: updatedSku.stock,
+        reason,
       },
     });
   }
