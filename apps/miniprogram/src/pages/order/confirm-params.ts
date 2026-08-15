@@ -77,14 +77,14 @@ export function parseOrderConfirmItemsParam(value: unknown): OrderConfirmParamIt
   return null
 }
 
-export function parseSingleOrderConfirmItem(options: Record<string, unknown> | undefined): OrderConfirmParamItem | null {
+export function parseSingleOrderConfirmItem(options: Record<string, unknown> | undefined): OrderConfirmParamItem[] | null {
   if (!options) return null
   const productId = normalizePositiveId(firstOptionValue(options.productId))
   const skuId = normalizePositiveId(firstOptionValue(options.skuId))
   const quantity = normalizeQuantity(firstOptionValue(options.quantity) ?? 1)
   if (!productId || !skuId || quantity === null) return null
 
-  return {
+  return [{
     productId,
     skuId,
     quantity,
@@ -92,5 +92,5 @@ export function parseSingleOrderConfirmItem(options: Record<string, unknown> | u
     productImage: '',
     skuName: '',
     price: 0,
-  }
+  }]
 }
