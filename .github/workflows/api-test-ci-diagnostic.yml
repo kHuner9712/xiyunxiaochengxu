@@ -1,0 +1,113 @@
+name: API test:ci diagnostic
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  api-test-ci-diagnostic:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: baby_mall_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+    env:
+      PRISMA_SKIP_POSTINSTALL_GENERATE: true
+      DATABASE_URL: mysql://root:root@127.0.0.1:3306/baby_mall_test
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      NODE_ENV: test
+      JWT_SECRET: ci-runtime-jwt-secret-not-for-production-2026
+      REFRESH_TOKEN_SECRET: ci-runtime-refresh-secret-not-for-production-2026
+
+    strategy:
+      matrix:
+        node-version: [22.13.0]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.2.2
+          run_install: false
+          standalone: true
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @baby-mall/shared build
+
+      - name: Prisma validate
+        run: pnpm --filter @baby-mall/api prisma:validate
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @baby-mall/api prisma:generate
+
+      - name: Apply migrations to CI MySQL
+        run: pnpm --filter @baby-mall/api prisma:migrate:deploy
+
+      - name: Verify migration-built database matches Prisma schema
+        run: pnpm --filter @baby-mall/api prisma:migrate:drift-check
+
+      - name: Audit runtime configuration contracts
+        run: pnpm audit:runtime
+
+      - name: Audit frontend-backend API contracts
+        run: pnpm audit:api-contracts
+
+      - name: Validate deployment shell scripts
+        run: bash -n deploy/scripts/deploy-production.sh deploy/scripts/deploy-prod-check.sh deploy/scripts/smoke-runtime.sh
+
+      - name: Run Admin operation contract tests
+        run: pnpm test:admin
+
+      - name: Run API tests (unit + mocked HTTP e2e)
+        id: api-tests
+        run: |
+          set +e
+          pnpm --filter @baby-mall/api test:ci > api-test-ci.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 500 api-test-ci.log >&2
+            exit "$status"
+          fi
+          cat api-test-ci.log
+
+      - name: Preserve API test:ci failure diagnostics
+        if: failure() && steps.api-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-ci-failure-log
+          path: api-test-ci.log
+          if-no-files-found: error
+          retention-days: 1
