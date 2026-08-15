@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it, jest } from '@jest/globals';
 import { REFUND_STATUS } from '../common/constants';
 import { CancellationSafeProductionOrderService } from './cancellation-safe-production-order.service';
@@ -185,37 +184,76 @@ describe('CancellationSafeProductionOrderService automatic completion observabil
     orderItems: [],
   };
 
+  it('counts and rewards only an order this worker actually claims', async () => {
+    const orderLogCreate = jest.fn();
+    const tx = {
+      order: {
+        updateMany: (jest.fn() as any).mockResolvedValue({ count: 1 }),
+      },
+      orderRefund: {
+        aggregate: (jest.fn() as any).mockResolvedValue({ _sum: { refundAmount: 0 } }),
+      },
+      pointsRecord: {
+        findFirst: (jest.fn() as any).mockResolvedValue(null),
+        create: jest.fn(),
+      },
+      user: {
+        update: (jest.fn() as any).mockResolvedValue({ availablePoints: 599 }),
+      },
+      orderLog: { create: orderLogCreate },
+    };
+    const prisma = {
+      order: {
+        findMany: (jest.fn() as any).mockResolvedValue([candidate]),
+      },
+      $transaction: (jest.fn() as any).mockImplementation(async (callback: any) => callback(tx)),
+    };
+    const service = createService(prisma);
+
+    const result = await service.autoCompleteOrders();
+
+    expect(result).toEqual({ completedCount: 1 });
+    expect(orderLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        orderId: 77n,
+        action: 'auto_complete',
+        content: expect.stringContaining('发放积分99'),
+      }),
+    });
+  });
+
   it('logs real transactional failures instead of silently swallowing them', async () => {
     const prisma = {
       order: {
         findMany: (jest.fn() as any).mockResolvedValue([candidate]),
       },
+      $transaction: (jest.fn() as any).mockRejectedValue(new Error('database write failed')),
     };
     const service = createService(prisma);
-    const complete = (jest.fn() as any).mockRejectedValue(new Error('database write failed'));
-    (service as any).completeOrderAndReward = complete;
     const logError = jest.spyOn((service as any).cancellationLogger, 'error').mockImplementation(() => undefined);
 
     const result = await service.autoCompleteOrders();
 
     expect(result).toEqual({ completedCount: 0 });
-    expect(complete).toHaveBeenCalledTimes(1);
     expect(logError).toHaveBeenCalledWith(
       expect.stringContaining('orderId=77'),
       expect.any(String),
     );
   });
 
-  it('treats a concurrent claim loss as a normal skip without false error noise', async () => {
+  it('does not count a concurrent claim loss as a completion and emits no false error', async () => {
+    const tx = {
+      order: {
+        updateMany: (jest.fn() as any).mockResolvedValue({ count: 0 }),
+      },
+    };
     const prisma = {
       order: {
         findMany: (jest.fn() as any).mockResolvedValue([candidate]),
       },
+      $transaction: (jest.fn() as any).mockImplementation(async (callback: any) => callback(tx)),
     };
     const service = createService(prisma);
-    (service as any).completeOrderAndReward = (jest.fn() as any).mockRejectedValue(
-      new BadRequestException('订单抢占失败'),
-    );
     const logError = jest.spyOn((service as any).cancellationLogger, 'error').mockImplementation(() => undefined);
 
     const result = await service.autoCompleteOrders();
