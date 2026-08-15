@@ -121,6 +121,7 @@ const pointsVisible = ref(false)
 const tableData = ref<any[]>([])
 const memberLevels = ref<any[]>([])
 const pointsFormRef = ref<FormInstance>()
+let listLoadSeq = 0
 
 const searchForm = reactive({
   nickname: '',
@@ -163,13 +164,18 @@ function createPointsRequestId() {
 }
 
 async function fetchList() {
+  const requestSeq = ++listLoadSeq
+  const params = { page: pagination.page, pageSize: pagination.pageSize, ...searchForm }
   loading.value = true
   try {
-    const res = await userApi.getList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
+    const res = await userApi.getList(params)
+    if (requestSeq !== listLoadSeq) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
-  } catch {} finally {
-    loading.value = false
+  } catch {
+    if (requestSeq !== listLoadSeq) return
+  } finally {
+    if (requestSeq === listLoadSeq) loading.value = false
   }
 }
 
@@ -182,7 +188,7 @@ async function fetchMemberLevels() {
 
 function handleSearch() {
   pagination.page = 1
-  fetchList()
+  void fetchList()
 }
 
 function resetSearch() {
@@ -235,7 +241,7 @@ async function handlePointsSubmit() {
 }
 
 onMounted(() => {
-  fetchList()
-  fetchMemberLevels()
+  void fetchList()
+  void fetchMemberLevels()
 })
 </script>
