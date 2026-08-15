@@ -63,7 +63,8 @@ export class MemberBenefitProductionOrderService extends CancellationSafeProduct
 
     // CancellationSafeProductionOrderService wraps the legacy reward method to use net paid amount
     // after any successful pre-completion refund. Replace only that private reward capability with a
-    // member-aware implementation that preserves the same net-pay invariant.
+    // member-aware implementation that preserves the same net-pay invariant and its serialized ledger
+    // semantics.
     (this as any).rewardCompletedOrder = (
       tx: any,
       order: any,
@@ -217,6 +218,19 @@ export class MemberBenefitProductionOrderService extends CancellationSafeProduct
     });
     if (existingRecord) return 0;
 
+    // Completing different orders for the same member can happen concurrently (manual receipt and
+    // scheduler completion included). Serialize the entire reward-rate/growth-level calculation on
+    // the user row so the second completion observes the first completion's growth and member level.
+    // An atomic increment alone would preserve the final totals but could still produce a stale
+    // points-rate decision, a duplicated ledger balance, and a missed level upgrade.
+    await tx.$queryRaw`
+      SELECT id
+      FROM users
+      WHERE id = ${order.userId}
+        AND deleted_at IS NULL
+      FOR UPDATE
+    `;
+
     const user = await tx.user.findFirst({
       where: { id: order.userId, deletedAt: null },
       select: {
@@ -233,20 +247,24 @@ export class MemberBenefitProductionOrderService extends CancellationSafeProduct
     const earnedGrowthValue = calculateOrderGrowthValue(netPayAmount);
     if (earnedPoints <= 0 && earnedGrowthValue <= 0) return 0;
 
-    const nextGrowthValue = user.growthValue + earnedGrowthValue;
-    await tx.user.update({
+    const updatedUser = await tx.user.update({
       where: { id: order.userId },
       data: {
         availablePoints: { increment: earnedPoints },
         totalPoints: { increment: earnedPoints },
         growthValue: { increment: earnedGrowthValue },
       },
+      select: {
+        availablePoints: true,
+        growthValue: true,
+        memberLevelId: true,
+      },
     });
     await reconcileMemberLevelForGrowth(tx, {
       userId: order.userId,
-      currentMemberLevelId: user.memberLevelId,
-      growthValue: nextGrowthValue,
-      reason: `订单${order.orderNo || order.id.toString()}完成，成长值更新为${nextGrowthValue}`,
+      currentMemberLevelId: updatedUser.memberLevelId,
+      growthValue: updatedUser.growthValue,
+      reason: `订单${order.orderNo || order.id.toString()}完成，成长值更新为${updatedUser.growthValue}`,
       levels,
     });
     if (earnedPoints > 0) {
@@ -255,7 +273,7 @@ export class MemberBenefitProductionOrderService extends CancellationSafeProduct
           userId: order.userId,
           type: 1,
           points: earnedPoints,
-          balance: user.availablePoints + earnedPoints,
+          balance: updatedUser.availablePoints,
           source: rewardSource,
           sourceId: order.id,
           description: `完成订单奖励${earnedPoints}积分`,
