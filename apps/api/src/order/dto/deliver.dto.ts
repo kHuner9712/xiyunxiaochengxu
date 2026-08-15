@@ -1,4 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, Matches, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  Matches,
+  MaxLength,
+  ArrayMinSize,
+  ArrayMaxSize,
+} from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
 // HTTP requests are still required to provide digit strings by the validators below.
@@ -7,7 +17,7 @@ type DeliveryOrderId = string | number;
 
 export class DeliverDto {
   @IsString()
-  @Matches(/^\d+$/, { message: '订单ID格式不正确' })
+  @Matches(/^[1-9]\d*$/, { message: '订单ID格式不正确' })
   orderId!: DeliveryOrderId;
 
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
@@ -28,7 +38,7 @@ export class DeliverDto {
 
 export class DeliverItemDto {
   @IsString()
-  @Matches(/^\d+$/, { message: '订单ID格式不正确' })
+  @Matches(/^[1-9]\d*$/, { message: '订单ID格式不正确' })
   orderId!: DeliveryOrderId;
 
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
@@ -46,6 +56,8 @@ export class DeliverItemDto {
 
 export class BatchDeliverDto {
   @IsArray()
+  @ArrayMinSize(1, { message: '至少选择1个订单发货' })
+  @ArrayMaxSize(50, { message: '单次批量发货最多50个订单' })
   @ValidateNested({ each: true })
   @Type(() => DeliverItemDto)
   orders!: DeliverItemDto[];
