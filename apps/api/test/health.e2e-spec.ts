@@ -124,15 +124,15 @@ describe('HealthController (e2e)', () => {
     expect(res.body.services.redis).toBe('error');
   });
 
-  it('GET /api/health stays 200 while the current build scheduler is intentionally paused for deployment', async () => {
+  it('GET /api/health returns 503 while global scheduler migration maintenance is active', async () => {
     mockPrisma.$queryRaw.mockResolvedValue([{ '1': 1 }]);
     mockRedis.ping.mockResolvedValue('PONG');
     mockRedis.isSchedulerPausedForCurrentBuild?.mockReturnValue(true);
 
     const res = await request(httpServer).get('/api/health');
 
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe('ok');
+    expect(res.status).toBe(503);
+    expect(res.body.status).toBe('degraded');
     expect(res.body.maintenance).toBe(true);
     expect(res.body.services.database).toBe('ok');
     expect(res.body.services.redis).toBe('ok');
