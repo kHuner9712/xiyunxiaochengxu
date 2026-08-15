@@ -54,11 +54,15 @@
             @tap.stop="handleCancel(order.id)"
           >取消订单</view>
           <view
-            v-if="order.status === 'pending_payment'"
+            v-if="order.status === 'pending_payment' && !isPaymentRetryBlocked(order.id)"
             class="action-btn primary"
             :class="{ disabled: isOrderActionBusy(order.id) }"
             @tap.stop="handlePay(order)"
           >{{ isOrderActionBusy(order.id) ? '处理中...' : '去支付' }}</view>
+          <text
+            v-if="order.status === 'pending_payment' && isPaymentRetryBlocked(order.id)"
+            class="payment-terminal-hint"
+          >{{ getPaymentRetryBlockMessage(order.id) }}</text>
           <view v-if="order.status === 'paid'" class="action-btn primary" @tap.stop="goGroupProgress(order)">查看拼团进度</view>
           <view v-if="order.status === 'pending_pickup'" class="action-btn primary" @tap.stop="goDetail(order.id)">查看自提码</view>
           <view
@@ -81,7 +85,7 @@
 import { ref } from 'vue'
 import { onLoad, onShow, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { getOrderList, cancelOrder, confirmReceive, normalizeOrderStatus, type OrderItem, type OrderStatus } from '@/api/order'
-import { createPayment, wxPay } from '@/api/payment'
+import { createPayment, getPaymentStatus, wxPay, type PaymentStatus } from '@/api/payment'
 import { formatOrderStatus, formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 import Loading from '@/components/Loading.vue'
@@ -107,6 +111,8 @@ const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
 const orderActionBusy = ref<Record<string, boolean>>({})
+const paymentRetryBlocked = ref<Record<string, string>>({})
+const paymentStatusRequests = new Map<string, Promise<PaymentStatus | null>>()
 let orderVersion = 0
 let loadingVersion = -1
 
@@ -125,6 +131,65 @@ function endOrderAction(id: string) {
   const next = { ...orderActionBusy.value }
   delete next[id]
   orderActionBusy.value = next
+}
+
+function isPaymentRetryBlocked(id: string) {
+  return Boolean(paymentRetryBlocked.value[id])
+}
+
+function getPaymentRetryBlockMessage(id: string) {
+  return paymentRetryBlocked.value[id] || '该微信支付已终止，请取消订单后重新下单'
+}
+
+function setPaymentRetryBlocked(id: string, message: string) {
+  paymentRetryBlocked.value = {
+    ...paymentRetryBlocked.value,
+    [id]: message || '该微信支付已终止，请取消订单后重新下单',
+  }
+}
+
+function clearPaymentRetryBlocked(id: string) {
+  if (!paymentRetryBlocked.value[id]) return
+  const next = { ...paymentRetryBlocked.value }
+  delete next[id]
+  paymentRetryBlocked.value = next
+}
+
+async function queryPaymentRetryStatus(orderId: string): Promise<PaymentStatus | null> {
+  const existing = paymentStatusRequests.get(orderId)
+  if (existing) return existing
+
+  let requestPromise!: Promise<PaymentStatus | null>
+  requestPromise = (async () => {
+    try {
+      const status = await getPaymentStatus(orderId, { showError: false })
+      if (status?.canRetryPay === false) {
+        setPaymentRetryBlocked(
+          orderId,
+          status.message
+            || (status.displayStatus === 'success'
+              ? '订单支付状态已更新，请刷新订单'
+              : status.displayStatus === 'cancelled'
+                ? '订单已取消，不能继续支付'
+                : '该微信支付已终止，请取消订单后重新下单'),
+        )
+      } else {
+        clearPaymentRetryBlocked(orderId)
+      }
+      return status
+    } catch {
+      // No payment record yet and transient status-query failures must not block a legitimate first
+      // payment. createPayment remains the authoritative write path. Keep any already-known terminal
+      // block until a successful status query proves the state changed.
+      return null
+    } finally {
+      if (paymentStatusRequests.get(orderId) === requestPromise) {
+        paymentStatusRequests.delete(orderId)
+      }
+    }
+  })()
+  paymentStatusRequests.set(orderId, requestPromise)
+  return requestPromise
 }
 
 function confirmModal(options: { title: string; content: string }) {
@@ -245,6 +310,7 @@ async function handleCancel(id: string) {
     const confirmed = await confirmModal({ title: '提示', content: '确定取消该订单吗？' })
     if (!confirmed) return
     await cancelOrder(id)
+    clearPaymentRetryBlocked(id)
     await refreshOrders()
   } catch {
     uni.showToast({ title: '取消失败', icon: 'none' })
@@ -256,6 +322,21 @@ async function handleCancel(id: string) {
 async function handlePay(order: OrderItem) {
   if (!beginOrderAction(order.id)) return
   try {
+    const status = await queryPaymentRetryStatus(order.id)
+    if (status?.canRetryPay === false || isPaymentRetryBlocked(order.id)) {
+      const message = getPaymentRetryBlockMessage(order.id)
+      if (status?.displayStatus === 'success' || status?.displayStatus === 'cancelled') {
+        await refreshOrders()
+      }
+      uni.showModal({
+        title: '当前支付不可继续',
+        content: message,
+        showCancel: false,
+        confirmText: '我知道了',
+      })
+      return
+    }
+
     const payment = await createPayment({ orderId: order.id })
     try {
       await wxPay(payment)
@@ -263,7 +344,8 @@ async function handlePay(order: OrderItem) {
     } catch (payClientErr: any) {
       const detail = String(payClientErr?.errMsg || payClientErr?.message || '')
       if (detail.toLowerCase().includes('cancel')) {
-        uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
+        uni.showToast({ title: '已取消本次支付，请以订单最新状态为准', icon: 'none' })
+        void queryPaymentRetryStatus(order.id)
         return
       }
       uni.showModal({
@@ -321,7 +403,10 @@ defineExpose({
   orders,
   loading,
   orderActionBusy,
+  paymentRetryBlocked,
   isOrderActionBusy,
+  isPaymentRetryBlocked,
+  getPaymentRetryBlockMessage,
   getOrderItemCount,
   handleCancel,
   handlePay,
@@ -565,5 +650,14 @@ defineExpose({
     opacity: 0.55;
     pointer-events: none;
   }
+}
+
+.payment-terminal-hint {
+  max-width: 320rpx;
+  align-self: center;
+  font-size: $font-xs;
+  color: $danger-color;
+  line-height: 1.4;
+  text-align: right;
 }
 </style>
