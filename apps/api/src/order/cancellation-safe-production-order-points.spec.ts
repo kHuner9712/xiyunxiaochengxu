@@ -162,7 +162,6 @@ describe('CancellationSafeProductionOrderService automatic completion observabil
 
     const result = await service.autoCompleteOrders();
 
-    expect(result).toEqual({ closedCount: 0 }).not;
     expect(result).toEqual({ completedCount: 0 });
     expect(complete).toHaveBeenCalledTimes(1);
     expect(logError).toHaveBeenCalledWith(
