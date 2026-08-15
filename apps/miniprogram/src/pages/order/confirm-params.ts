@@ -1,3 +1,5 @@
+import { CART_MAX_ITEMS, CART_MAX_QUANTITY } from '@baby-mall/shared'
+
 export interface OrderConfirmParamItem {
   productId: string
   skuId: string
@@ -19,7 +21,7 @@ function normalizePositiveId(value: unknown): string | null {
 
 function normalizeQuantity(value: unknown): number | null {
   const quantity = Number(value)
-  if (!Number.isSafeInteger(quantity) || quantity <= 0) return null
+  if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > CART_MAX_QUANTITY) return null
   return quantity
 }
 
@@ -62,7 +64,7 @@ export function parseOrderConfirmItemsParam(value: unknown): OrderConfirmParamIt
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate)
-      if (!Array.isArray(parsed) || parsed.length === 0) continue
+      if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > CART_MAX_ITEMS) continue
       const items = parsed.map(normalizeItem)
       if (items.some((item) => item === null)) continue
       const normalized = items as OrderConfirmParamItem[]
