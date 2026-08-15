@@ -74,16 +74,26 @@ const loading = ref(false)
 const signingIn = ref(false)
 const page = ref(1)
 const finished = ref(false)
+let balanceVersion = 0
 let detailVersion = 0
 let checkInVersion = 0
 let loadingVersion = -1
 
-async function loadBalance() {
+async function loadBalance(version = balanceVersion) {
   try {
-    pointsBalance.value = await getPointsBalance()
+    const data = await getPointsBalance()
+    if (version !== balanceVersion) return
+    pointsBalance.value = data
   } catch {
-    uni.showToast({ title: '积分加载失败', icon: 'none' })
+    if (version === balanceVersion) {
+      uni.showToast({ title: '积分加载失败', icon: 'none' })
+    }
   }
+}
+
+function refreshBalance() {
+  const version = ++balanceVersion
+  return loadBalance(version)
 }
 
 async function loadCheckInStatus(version = checkInVersion) {
@@ -147,7 +157,7 @@ async function loadRules() {
 async function refreshPage() {
   const statusVersion = ++checkInVersion
   await Promise.all([
-    loadBalance(),
+    refreshBalance(),
     loadCheckInStatus(statusVersion),
     refreshPointsDetail(),
     loadRules(),
@@ -157,9 +167,10 @@ async function refreshPage() {
 async function handleCheckIn() {
   if (checkInStatus.value.checked || signingIn.value) return
 
-  // Invalidate any older status read before starting the mutation. A status response that started
-  // before this physical tap must never overwrite the successful sign-in result afterwards.
+  // Invalidate reads that started before this physical tap. They represent the pre-mutation state
+  // and must never overwrite the successful sign-in result after the write commits.
   ++checkInVersion
+  ++balanceVersion
   signingIn.value = true
   try {
     const data = await checkIn()
@@ -171,11 +182,12 @@ async function handleCheckIn() {
 
     // Also invalidate a foreground refresh that may have started while the sign-in request was in flight.
     ++checkInVersion
+    ++balanceVersion
     checkInStatus.value.checked = true
     checkInStatus.value.continuous = data.continuous ?? data.consecutiveDays ?? checkInStatus.value.continuous
     checkInStatus.value.todayPoints = data.points
     uni.showToast({ title: `签到成功，+${data.points}积分`, icon: 'none' })
-    await loadBalance()
+    await refreshBalance()
     void refreshPointsDetail()
   } catch {
     uni.showToast({ title: '签到失败', icon: 'none' })
@@ -207,10 +219,13 @@ onShow(() => {
 })
 
 defineExpose({
+  pointsBalance,
   pointsDetail,
   checkInStatus,
   signingIn,
   loading,
+  loadBalance,
+  refreshBalance,
   loadPointsDetail,
   refreshPointsDetail,
   handleCheckIn,
