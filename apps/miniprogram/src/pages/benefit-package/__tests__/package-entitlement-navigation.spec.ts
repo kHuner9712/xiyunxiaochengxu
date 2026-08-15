@@ -46,7 +46,7 @@ beforeEach(() => {
 })
 
 describe('权益卡到权益项导航', () => {
-  it('使用权益包 packageId 筛选，而不是用户权益卡实例 id', async () => {
+  it('使用用户实际持有的权益卡实例 id，避免同模板多次购买串码', async () => {
     const wrapper = mount(MyBenefitPage, {
       global: { stubs: { Loading: true, Empty: true } },
     })
@@ -58,10 +58,10 @@ describe('权益卡到权益项导航', () => {
     await wrapper.find('.pkg-action').trigger('tap')
 
     expect((globalThis as any).uni.navigateTo).toHaveBeenCalledWith({
-      url: '/pages/benefit-package/entitlement?packageId=3001',
+      url: '/pages/benefit-package/entitlement?packageId=7001',
     })
     expect((globalThis as any).uni.navigateTo).not.toHaveBeenCalledWith({
-      url: '/pages/benefit-package/entitlement?packageId=7001',
+      url: '/pages/benefit-package/entitlement?packageId=3001',
     })
 
     wrapper.unmount()
