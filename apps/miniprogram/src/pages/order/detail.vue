@@ -158,11 +158,15 @@
         @tap="handleCancel"
       >取消订单</view>
       <view
-        v-if="order.status === 'pending_payment'"
+        v-if="order.status === 'pending_payment' && !paymentRetryBlocked"
         class="action-btn primary"
         :class="{ disabled: orderActionBusy }"
         @tap="handlePay"
       >{{ orderActionBusy ? '处理中...' : '去支付' }}</view>
+      <view
+        v-if="order.status === 'pending_payment' && paymentRetryBlocked"
+        class="action-hint payment-terminal-hint"
+      >{{ paymentRetryMessage || '该微信支付已终止，请取消订单后重新下单' }}</view>
       <view v-if="order.status === 'paid'" class="action-hint">已付款 · 等待拼团成团</view>
       <view v-if="order.status === 'paid' && order.groupBuyGroupId" class="action-btn primary" @tap="goGroupProgress">拼团进度</view>
       <view v-if="order.status === 'pending_pickup'" class="action-hint">到店自提 · 请出示自提码</view>
@@ -182,7 +186,7 @@
 import { ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getOrderDetail, getOrderDetailByNo, cancelOrder, confirmReceive, type OrderDetail, type OrderProductItem } from '@/api/order'
-import { createPayment, wxPay } from '@/api/payment'
+import { createPayment, getPaymentStatus, wxPay, type PaymentStatus } from '@/api/payment'
 import { formatOrderStatus, formatPrice } from '@/utils/format'
 import PriceDisplay from '@/components/PriceDisplay.vue'
 
@@ -206,11 +210,87 @@ const shouldSelectAftersale = ref(false)
 const loadedOrderId = ref('')
 const loadedOrderNo = ref('')
 const orderActionBusy = ref(false)
+const paymentRetryBlocked = ref(false)
+const paymentRetryMessage = ref('')
+let paymentStatusVersion = 0
+let paymentStatusRequest: { orderId: string; promise: Promise<PaymentStatus | null> } | null = null
 let skipInitialShowRefresh = true
+
+function clearPaymentRetryState() {
+  paymentRetryBlocked.value = false
+  paymentRetryMessage.value = ''
+}
+
+function invalidatePaymentStatusCheck() {
+  paymentStatusVersion += 1
+  paymentStatusRequest = null
+  clearPaymentRetryState()
+}
+
+function applyPaymentRetryStatus(status: PaymentStatus | null | undefined) {
+  if (order.value.status !== 'pending_payment') {
+    clearPaymentRetryState()
+    return
+  }
+  if (status?.canRetryPay === false) {
+    paymentRetryBlocked.value = true
+    paymentRetryMessage.value = status.message
+      || (status.displayStatus === 'success'
+        ? '订单支付状态已更新，请刷新订单'
+        : status.displayStatus === 'cancelled'
+          ? '订单已取消，不能继续支付'
+          : '该微信支付已终止，请取消订单后重新下单')
+    return
+  }
+  clearPaymentRetryState()
+}
+
+async function refreshPaymentRetryStatus(orderId: string): Promise<PaymentStatus | null> {
+  if (order.value.status !== 'pending_payment' || !/^[1-9]\d*$/.test(orderId)) {
+    invalidatePaymentStatusCheck()
+    return null
+  }
+
+  if (paymentStatusRequest?.orderId === orderId) {
+    return paymentStatusRequest.promise
+  }
+
+  const version = ++paymentStatusVersion
+  let requestPromise!: Promise<PaymentStatus | null>
+  requestPromise = (async () => {
+    try {
+      const status = await getPaymentStatus(orderId, { showError: false })
+      if (version === paymentStatusVersion && order.value.id === orderId) {
+        applyPaymentRetryStatus(status)
+      }
+      return status
+    } catch {
+      // A missing first payment record or a transient network error must not disable a valid first
+      // payment. createPayment remains the authoritative fallback. Preserve an already-known terminal
+      // block if a later status refresh itself cannot be completed.
+      return null
+    } finally {
+      if (paymentStatusRequest?.promise === requestPromise) {
+        paymentStatusRequest = null
+      }
+    }
+  })()
+  paymentStatusRequest = { orderId, promise: requestPromise }
+  return requestPromise
+}
+
+async function syncPaymentRetryStateForLoadedOrder() {
+  if (order.value.status === 'pending_payment') {
+    await refreshPaymentRetryStatus(order.value.id)
+  } else {
+    invalidatePaymentStatusCheck()
+  }
+}
 
 async function loadOrder(id: string) {
   try {
     order.value = await getOrderDetail(id)
+    void syncPaymentRetryStateForLoadedOrder()
     if (shouldSelectAftersale.value) guideAftersaleSelection()
   } catch {
     uni.showToast({ title: '订单加载失败', icon: 'none' })
@@ -220,6 +300,7 @@ async function loadOrder(id: string) {
 async function loadOrderByNo(orderNo: string) {
   try {
     order.value = await getOrderDetailByNo(orderNo)
+    void syncPaymentRetryStateForLoadedOrder()
     if (shouldSelectAftersale.value) guideAftersaleSelection()
   } catch {
     uni.showToast({ title: '订单加载失败', icon: 'none' })
@@ -303,13 +384,28 @@ async function handlePay() {
   if (orderActionBusy.value) return
   orderActionBusy.value = true
   try {
+    const status = await refreshPaymentRetryStatus(order.value.id)
+    if (status?.canRetryPay === false || paymentRetryBlocked.value) {
+      if (status?.displayStatus === 'success' || status?.displayStatus === 'cancelled') {
+        await loadOrder(order.value.id)
+      }
+      uni.showModal({
+        title: '当前支付不可继续',
+        content: paymentRetryMessage.value || status?.message || '支付状态已变化，请刷新订单后再操作',
+        showCancel: false,
+        confirmText: '我知道了'
+      })
+      return
+    }
+
     const payment = await createPayment({ orderId: order.value.id })
     try {
       await wxPay(payment)
       uni.redirectTo({ url: `/pages/order/pay-result?orderId=${order.value.id}&payScene=detail&payIntent=success` })
     } catch (payClientErr: any) {
       if (isUserCancelPayError(payClientErr)) {
-        uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
+        uni.showToast({ title: '已取消本次支付，请以订单详情最新状态为准', icon: 'none' })
+        void refreshPaymentRetryStatus(order.value.id)
         return
       }
       uni.showModal({
@@ -450,6 +546,9 @@ defineExpose({
   handleCancel,
   handleConfirm,
   getOrderItemCount,
+  refreshPaymentRetryStatus,
+  paymentRetryBlocked,
+  paymentRetryMessage,
   orderActionBusy,
   order,
   selectAftersaleMode
@@ -654,4 +753,5 @@ defineExpose({
   &.disabled { opacity: 0.55; pointer-events: none; }
 }
 .action-hint { font-size: $font-sm; color: $text-hint; padding: 16rpx 0; }
+.payment-terminal-hint { max-width: 360rpx; color: $danger-color; line-height: 1.4; }
 </style>
