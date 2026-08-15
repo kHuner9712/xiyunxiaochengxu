@@ -17,6 +17,7 @@ import {
   lockActiveCheckoutUser,
   lockActivePickupStore,
   settleExpiredPointsBeforeCheckout,
+  withFreshCheckoutCouponLock,
   withLockedPickupStoreSnapshot,
 } from './pickup-order-guard';
 
@@ -94,8 +95,9 @@ export function installPickupStoreTransactionGuard(
             await lockActivePickupStore(tx, context.pickupStoreId),
           )
         : tx;
+      const checkoutGuardedTx = withFreshCheckoutCouponLock(scopedTx);
 
-      return input(withDeferredWechatPaymentSeed(scopedTx));
+      return input(withDeferredWechatPaymentSeed(checkoutGuardedTx));
     }, ...rest);
   }) as any;
 }
