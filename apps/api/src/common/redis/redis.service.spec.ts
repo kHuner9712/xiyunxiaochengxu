@@ -98,7 +98,7 @@ describe('RedisService scheduler maintenance marker', () => {
   let markerPath: string;
   let previousBuildSha: string | undefined;
   let previousPauseFile: string | undefined;
-  let client: { set: jest.Mock };
+  let client: { set: jest.Mock; eval: jest.Mock };
   let service: RedisService;
 
   beforeEach(() => {
@@ -108,7 +108,10 @@ describe('RedisService scheduler maintenance marker', () => {
     previousPauseFile = process.env.SCHEDULER_PAUSE_FILE;
     process.env.BUILD_SHA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     process.env.SCHEDULER_PAUSE_FILE = markerPath;
-    client = { set: jest.fn().mockResolvedValue('OK') };
+    client = {
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn().mockResolvedValue(1),
+    };
     service = new RedisService(client as any);
   });
 
@@ -127,21 +130,47 @@ describe('RedisService scheduler maintenance marker', () => {
     expect(client.set).not.toHaveBeenCalled();
   });
 
-  it('does not block non-scheduler locks even when the candidate marker matches', async () => {
+  it('does not block non-scheduler locks even when a maintenance marker exists', async () => {
     fs.writeFileSync(markerPath, `${process.env.BUILD_SHA}\n`);
 
     await expect(service.setNX('payment:callback:123', 'lock', 60)).resolves.toBe(true);
     expect(client.set).toHaveBeenCalledWith('payment:callback:123', 'lock', 'EX', 60, 'NX');
+    expect(client.eval).not.toHaveBeenCalled();
   });
 
-  it('does not pause a previous build when the marker belongs to another candidate', async () => {
+  it('pauses an old API build when the shared marker was written by a newer migration build', async () => {
     fs.writeFileSync(markerPath, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n');
 
-    await expect(service.setNX('schedule:refund_reconcile', 'lock', 60)).resolves.toBe(true);
-    expect(client.set).toHaveBeenCalledWith('schedule:refund_reconcile', 'lock', 'EX', 60, 'NX');
+    await expect(service.setNX('schedule:refund_reconcile', 'lock', 60)).resolves.toBe(false);
+    expect(client.set).not.toHaveBeenCalled();
+    expect(service.isSchedulerPausedForCurrentBuild()).toBe(true);
   });
 
-  it('resumes schedule locks after the matching marker is removed', async () => {
+  it('releases a just-acquired schedule lock when maintenance begins during the Redis round trip', async () => {
+    client.set.mockImplementation(async () => {
+      fs.writeFileSync(markerPath, 'new-build-started-migration\n');
+      return 'OK';
+    });
+
+    await expect(service.setNX('schedule:close_timeout_orders', 'owner-token', 60)).resolves.toBe(false);
+
+    expect(client.set).toHaveBeenCalledWith(
+      'schedule:close_timeout_orders',
+      'owner-token',
+      'EX',
+      60,
+      'NX',
+    );
+    expect(client.eval).toHaveBeenCalledTimes(1);
+    const [lua, keyCount, key, token] = client.eval.mock.calls[0];
+    expect(lua).toContain('redis.call("get", KEYS[1]) == ARGV[1]');
+    expect(lua).toContain('redis.call("del", KEYS[1])');
+    expect(keyCount).toBe(1);
+    expect(key).toBe('schedule:close_timeout_orders');
+    expect(token).toBe('owner-token');
+  });
+
+  it('resumes schedule locks after the global marker is removed', async () => {
     fs.writeFileSync(markerPath, `${process.env.BUILD_SHA}\n`);
     await expect(service.setNX('schedule:close_timeout_orders', 'first', 60)).resolves.toBe(false);
 
