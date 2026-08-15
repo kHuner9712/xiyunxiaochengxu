@@ -73,11 +73,20 @@
               v-permission="'product:publish'"
               :type="row.status === 1 ? 'warning' : 'success'"
               link
+              :loading="isOperationBusy(row.id, 'status')"
+              :disabled="isAnyOperationBusy(row.id)"
               @click="handleToggleStatus(row)"
             >
               {{ row.status === 1 ? '下架' : '上架' }}
             </el-button>
-            <el-button v-permission="'product:delete'" type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-permission="'product:delete'"
+              type="danger"
+              link
+              :loading="isOperationBusy(row.id, 'delete')"
+              :disabled="isAnyOperationBusy(row.id)"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -112,6 +121,8 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const categoryTree = ref<any[]>([])
 const brandList = ref<any[]>([])
+const operationBusy = ref<Record<string, 'status' | 'delete'>>({})
+let listRequestVersion = 0
 
 const searchForm = reactive({
   keyword: '',
@@ -134,18 +145,50 @@ function normalizeCategoryIds(rows: any[]): any[] {
   }))
 }
 
+function operationKey(id: unknown) {
+  return String(id || '')
+}
+
+function isOperationBusy(id: unknown, type: 'status' | 'delete') {
+  return operationBusy.value[operationKey(id)] === type
+}
+
+function isAnyOperationBusy(id: unknown) {
+  return !!operationBusy.value[operationKey(id)]
+}
+
+function beginOperation(id: unknown, type: 'status' | 'delete') {
+  const key = operationKey(id)
+  if (!key || operationBusy.value[key]) return false
+  operationBusy.value = { ...operationBusy.value, [key]: type }
+  return true
+}
+
+function endOperation(id: unknown) {
+  const key = operationKey(id)
+  if (!operationBusy.value[key]) return
+  const next = { ...operationBusy.value }
+  delete next[key]
+  operationBusy.value = next
+}
+
 async function fetchList() {
+  const requestVersion = ++listRequestVersion
+  const params = {
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    ...searchForm,
+  }
   loading.value = true
   try {
-    const res = await productApi.getList({
-      page: pagination.page,
-      pageSize: pagination.pageSize,
-      ...searchForm,
-    })
+    const res = await productApi.getList(params)
+    if (requestVersion !== listRequestVersion) return
     tableData.value = asArray(res.data)
     pagination.total = paginationTotal(res.data)
-  } catch {} finally {
-    loading.value = false
+  } catch {
+    if (requestVersion !== listRequestVersion) return
+  } finally {
+    if (requestVersion === listRequestVersion) loading.value = false
   }
 }
 
@@ -165,7 +208,7 @@ async function fetchBrandList() {
 
 function handleSearch() {
   pagination.page = 1
-  fetchList()
+  void fetchList()
 }
 
 function resetSearch() {
@@ -198,26 +241,36 @@ function getStatusTagType(status: number) {
 }
 
 async function handleToggleStatus(row: any) {
+  const productId = String(row?.id || '')
+  if (!beginOperation(productId, 'status')) return
   const newStatus = row.status === 1 ? 0 : 1
   try {
-    await productApi.updateStatus(String(row.id), newStatus)
+    await productApi.updateStatus(productId, newStatus)
     ElMessage.success('操作成功')
-    fetchList()
-  } catch {}
+    await fetchList()
+  } catch {} finally {
+    endOperation(productId)
+  }
 }
 
 async function handleDelete(row: any) {
+  const productId = String(row?.id || '')
+  if (!beginOperation(productId, 'delete')) return
   try {
     await ElMessageBox.confirm('确定删除该商品吗？', '提示', { type: 'warning' })
-    await productApi.delete(String(row.id))
+    await productApi.delete(productId)
     ElMessage.success('删除成功')
-    fetchList()
-  } catch {}
+    await fetchList()
+  } catch {
+    // 用户关闭确认框或请求失败时统一在 finally 释放操作锁。
+  } finally {
+    endOperation(productId)
+  }
 }
 
 onMounted(() => {
-  fetchList()
-  fetchCategoryTree()
-  fetchBrandList()
+  void fetchList()
+  void fetchCategoryTree()
+  void fetchBrandList()
 })
 </script>
