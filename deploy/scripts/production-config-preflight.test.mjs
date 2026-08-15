@@ -217,6 +217,7 @@ test('production deploy quiesces all writers before the proof backup and rolls b
   const compose = readFileSync(resolve(root, 'deploy/docker-compose.yml'), 'utf8')
   const btCompose = readFileSync(resolve(root, 'deploy/docker-compose.bt.yml'), 'utf8')
 
+  const deployLockIndex = deploy.indexOf('flock -n 9')
   const buildIndex = deploy.indexOf('build --pull api')
   const maintenanceIndex = deploy.indexOf('MAINTENANCE_ACTIVE=true')
   const stopNginxIndex = deploy.indexOf('docker stop -t 10 baby-mall-nginx')
@@ -231,11 +232,15 @@ test('production deploy quiesces all writers before the proof backup and rolls b
   const publicExposeIndex = deploy.indexOf('PUBLIC_EXPOSED=true')
   const smokeIndex = deploy.indexOf('smoke-runtime.sh')
 
-  for (const [label, value] of Object.entries({ buildIndex, maintenanceIndex, stopNginxIndex, stopApiIndex, backupIndex, cloneIndex, liveTouchedIndex, liveMigrationIndex, candidateHealthIndex, candidateMaintenanceIndex, candidateSchedulerIndex, publicExposeIndex, smokeIndex })) {
+  for (const [label, value] of Object.entries({ deployLockIndex, buildIndex, maintenanceIndex, stopNginxIndex, stopApiIndex, backupIndex, cloneIndex, liveTouchedIndex, liveMigrationIndex, candidateHealthIndex, candidateMaintenanceIndex, candidateSchedulerIndex, publicExposeIndex, smokeIndex })) {
     assert.ok(value >= 0, `deployment contract missing ${label}`)
   }
 
   assert.match(deploy, /command -v curl[^\n]*fail 'curl is not installed'/)
+  assert.match(deploy, /command -v flock[^\n]*fail 'flock is not installed'/)
+  assert.match(deploy, /DEPLOY_LOCK_FILE=.*xiyunxiaochengxu-production-deploy\.lock/)
+  assert.ok(deployLockIndex < buildIndex, 'host deployment lock must be held before the candidate build begins')
+  assert.ok(deployLockIndex < maintenanceIndex, 'host deployment lock must be held before any production maintenance mutation')
   assert.ok(buildIndex < maintenanceIndex, 'candidate image must build before downtime starts')
   assert.ok(maintenanceIndex < stopNginxIndex, 'maintenance state must be armed before stopping public ingress')
   assert.ok(stopNginxIndex < stopApiIndex, 'public ingress must stop before API/background writers drain')
