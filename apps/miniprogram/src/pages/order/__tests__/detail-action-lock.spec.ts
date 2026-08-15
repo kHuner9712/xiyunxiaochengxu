@@ -16,6 +16,7 @@ const orderMock = vi.hoisted(() => ({
 
 const paymentMock = vi.hoisted(() => ({
   createPayment: vi.fn(),
+  getPaymentStatus: vi.fn(),
   wxPay: vi.fn(),
 }))
 
@@ -56,11 +57,28 @@ const pendingOrder = {
   createTime: '2026-08-14 10:00:00',
 }
 
+const terminalPaymentStatus = {
+  orderId: '101',
+  orderNo: 'O101',
+  orderStatus: 'pending_payment',
+  paymentStatus: 3,
+  paymentMethod: 'wechat',
+  amount: 1000,
+  paidAt: null,
+  transactionId: null,
+  confirming: false,
+  tradeState: 'CLOSED',
+  displayStatus: 'closed',
+  canRetryPay: false,
+  message: '微信支付已终止，请取消订单后重新下单',
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   uniAppMock.onLoadCallbacks = []
   uniAppMock.onShowCallbacks = []
   orderMock.getOrderDetail.mockResolvedValue({ ...pendingOrder })
+  paymentMock.getPaymentStatus.mockResolvedValue(undefined)
   paymentMock.wxPay.mockResolvedValue(undefined)
   ;(globalThis as any).uni = {
     showToast: vi.fn(),
@@ -86,7 +104,7 @@ describe('订单详情状态写操作锁', () => {
 
     const vm = wrapper.vm as any
     const firstPay = vm.handlePay()
-    await Promise.resolve()
+    await flushPromises()
 
     expect(vm.orderActionBusy).toBe(true)
     expect(paymentMock.createPayment).toHaveBeenCalledTimes(1)
@@ -109,6 +127,63 @@ describe('订单详情状态写操作锁', () => {
     expect((globalThis as any).uni.redirectTo).toHaveBeenCalledWith({
       url: '/pages/order/pay-result?orderId=101&payScene=detail&payIntent=success',
     })
+
+    wrapper.unmount()
+  })
+
+  it('微信支付已终止时隐藏支付入口并禁止 handlePay 绕过服务端终态', async () => {
+    paymentMock.getPaymentStatus.mockResolvedValue(terminalPaymentStatus)
+
+    const wrapper = mount(OrderDetailPage, {
+      global: { stubs: { PriceDisplay: true } },
+    })
+    uniAppMock.onLoadCallbacks.at(-1)?.({ id: '101' })
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(paymentMock.getPaymentStatus).toHaveBeenCalledWith('101', { showError: false })
+    expect(vm.paymentRetryBlocked).toBe(true)
+    expect(wrapper.find('.payment-terminal-hint').text()).toContain('取消订单后重新下单')
+    expect(wrapper.find('.action-btn.primary').exists()).toBe(false)
+
+    await vm.handlePay()
+    await flushPromises()
+
+    expect(paymentMock.createPayment).not.toHaveBeenCalled()
+    expect(paymentMock.wxPay).not.toHaveBeenCalled()
+    expect((globalThis as any).uni.showModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '当前支付不可继续',
+        content: '微信支付已终止，请取消订单后重新下单',
+        showCancel: false,
+      }),
+    )
+    expect(vm.orderActionBusy).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('支付状态预检暂时失败时不阻断首次有效支付创建', async () => {
+    paymentMock.getPaymentStatus.mockRejectedValue(new Error('支付记录不存在'))
+    paymentMock.createPayment.mockResolvedValue({
+      timeStamp: '1',
+      nonceStr: 'n',
+      package: 'prepay_id=p',
+      signType: 'RSA',
+      paySign: 's',
+    })
+
+    const wrapper = mount(OrderDetailPage, {
+      global: { stubs: { PriceDisplay: true } },
+    })
+    uniAppMock.onLoadCallbacks.at(-1)?.({ id: '101' })
+    await flushPromises()
+
+    await (wrapper.vm as any).handlePay()
+    await flushPromises()
+
+    expect(paymentMock.createPayment).toHaveBeenCalledTimes(1)
+    expect(paymentMock.wxPay).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
   })
