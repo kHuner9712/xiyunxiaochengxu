@@ -43,14 +43,18 @@
       </view>
     </view>
 
-    <view class="submit-btn" :class="{ disabled: submitting || uploading }" @tap="handleSubmit">
-      <text class="submit-text">{{ submitting ? '提交中...' : (uploading ? '图片上传中...' : '提交申请') }}</text>
+    <view
+      class="submit-btn"
+      :class="{ disabled: submitting || uploading || validatingOrder || !orderValidated }"
+      @tap="handleSubmit"
+    >
+      <text class="submit-text">{{ submitText }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { applyAftersale } from '@/api/aftersale'
 import { getOrderDetail } from '@/api/order'
@@ -66,12 +70,21 @@ const displayImageList = ref<string[]>([])
 const userStore = useUserStore()
 const uploading = ref(false)
 const submitting = ref(false)
+const validatingOrder = ref(true)
+const orderValidated = ref(false)
 
 const form = ref({
   type: 1,
   reason: '',
   description: '',
   images: [] as string[]
+})
+
+const submitText = computed(() => {
+  if (submitting.value) return '提交中...'
+  if (uploading.value) return '图片上传中...'
+  if (validatingOrder.value) return '正在校验订单...'
+  return '提交申请'
 })
 
 function onReasonChange(e: any) {
@@ -104,6 +117,14 @@ function removeImage(index: number) {
 
 async function handleSubmit() {
   if (submitting.value) return
+  if (validatingOrder.value) {
+    uni.showToast({ title: '正在校验订单，请稍后提交', icon: 'none' })
+    return
+  }
+  if (!orderValidated.value) {
+    uni.showToast({ title: '订单信息尚未通过校验，请重新进入申请页', icon: 'none' })
+    return
+  }
   if (uploading.value) {
     uni.showToast({ title: '图片仍在上传，请稍后提交', icon: 'none' })
     return
@@ -156,41 +177,51 @@ async function handleSubmit() {
 }
 
 onLoad(async (options) => {
+  orderValidated.value = false
+  validatingOrder.value = true
   if (options?.orderId) orderId.value = String(options.orderId)
   if (options?.orderItemId) orderItemId.value = String(options.orderItemId)
-  if (orderId.value) {
-    try {
-      const order = await getOrderDetail(orderId.value)
-      if (!['completed', 'delivered', 'aftersale'].includes(order.status)) {
-        uni.showModal({
-          title: '提示',
-          content: '当前订单状态不允许申请售后',
-          showCancel: false,
-          success: () => uni.navigateBack()
-        })
-        return
-      }
-      const selectedItem = order.items.find((item) => item.id === orderItemId.value)
-      if (!selectedItem) {
-        uni.showModal({
-          title: '提示',
-          content: '请选择要申请售后的商品',
-          showCancel: false,
-          success: () => uni.navigateBack()
-        })
-        return
-      }
-      if (selectedItem.canApplyAftersale === false) {
-        uni.showModal({
-          title: '提示',
-          content: selectedItem.aftersaleDisabledReason || '当前商品不允许申请售后',
-          showCancel: false,
-          success: () => uni.navigateBack()
-        })
-      }
-    } catch (error: any) {
-      uni.showToast({ title: error?.message || '订单信息获取失败', icon: 'none' })
+
+  if (!orderId.value || !orderItemId.value) {
+    validatingOrder.value = false
+    return
+  }
+
+  try {
+    const order = await getOrderDetail(orderId.value)
+    if (!['completed', 'delivered', 'aftersale'].includes(order.status)) {
+      uni.showModal({
+        title: '提示',
+        content: '当前订单状态不允许申请售后',
+        showCancel: false,
+        success: () => uni.navigateBack()
+      })
+      return
     }
+    const selectedItem = order.items.find((item) => item.id === orderItemId.value)
+    if (!selectedItem) {
+      uni.showModal({
+        title: '提示',
+        content: '请选择要申请售后的商品',
+        showCancel: false,
+        success: () => uni.navigateBack()
+      })
+      return
+    }
+    if (selectedItem.canApplyAftersale === false) {
+      uni.showModal({
+        title: '提示',
+        content: selectedItem.aftersaleDisabledReason || '当前商品不允许申请售后',
+        showCancel: false,
+        success: () => uni.navigateBack()
+      })
+      return
+    }
+    orderValidated.value = true
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '订单信息获取失败', icon: 'none' })
+  } finally {
+    validatingOrder.value = false
   }
 })
 
@@ -201,7 +232,9 @@ defineExpose({
   orderItemId,
   form,
   uploading,
-  submitting
+  submitting,
+  validatingOrder,
+  orderValidated
 })
 </script>
 
