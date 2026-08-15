@@ -57,7 +57,7 @@ beforeEach(() => {
   }
 })
 
-describe('0元订单支付结果事实源', () => {
+describe('支付结果事实源', () => {
   it('真正0元且已进入履约态时才显示成功', async () => {
     vi.mocked(getOrderDetail).mockResolvedValueOnce(order())
     const wrapper = mount(PayResultPage)
@@ -90,6 +90,44 @@ describe('0元订单支付结果事实源', () => {
     expect(vm.paymentState).toBe('unknown')
     expect(wrapper.text()).not.toContain('订单提交成功')
     expect(wrapper.text()).toContain('支付结果未知')
+
+    wrapper.unmount()
+  })
+
+  it('微信终态失败时展示服务端安全处置指引而不是通用延迟文案', async () => {
+    vi.mocked(getPaymentStatus).mockResolvedValueOnce({
+      orderId: '101',
+      orderNo: 'O101',
+      orderStatus: 'pending_payment',
+      paymentStatus: 3,
+      paymentMethod: 'wechat',
+      amount: 1990,
+      paidAt: null,
+      transactionId: null,
+      confirming: false,
+      tradeState: 'CLOSED',
+      displayStatus: 'closed',
+      canRetryPay: false,
+      message: '微信支付已终止，请取消订单后重新下单',
+    })
+    vi.mocked(getOrderDetail).mockResolvedValueOnce(order({
+      status: 'pending_payment',
+      totalAmount: 1990,
+      payAmount: 1990,
+    }))
+    const wrapper = mount(PayResultPage)
+
+    uniAppMock.onLoadCallbacks.at(-1)?.({ orderId: '101', payIntent: 'cancel' })
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(vm.paymentState).toBe('failed')
+    expect(vm.paymentMessage).toBe('微信支付已终止，请取消订单后重新下单')
+    expect(wrapper.text()).toContain('微信支付已终止，请取消订单后重新下单')
+    expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
+      title: '已取消本次支付，正在确认订单支付状态',
+      icon: 'none',
+    })
 
     wrapper.unmount()
   })
