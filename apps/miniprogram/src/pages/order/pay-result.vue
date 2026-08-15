@@ -75,6 +75,7 @@ const groupId = ref('')
 const orderInfo = ref<OrderDetail | null>(null)
 const checking = ref(true)
 const paymentState = ref<PaymentState>('confirming')
+const paymentMessage = ref('')
 const pollAttempt = ref(0)
 const maxPollCount = 6
 const pollIntervalMs = 2000
@@ -103,6 +104,9 @@ const resultText = computed(() => {
 const resultSubtext = computed(() => {
   if (paymentState.value === 'success' && orderInfo.value?.status === 'paid') {
     return '当前仅代表付款成功，尚未进入发货或自提状态'
+  }
+  if (paymentState.value === 'failed' && paymentMessage.value) {
+    return paymentMessage.value
   }
   return '订单状态可能有短暂延迟，请以订单详情为准'
 })
@@ -178,10 +182,12 @@ async function checkPaymentStatusOnce(generation: number) {
     const status = await getPaymentStatus(orderId.value)
     if (generation !== pollGeneration) return null
     paymentState.value = mapStatusToState(status)
+    paymentMessage.value = status.message || ''
     return status
   } catch {
     if (generation !== pollGeneration) return null
     paymentState.value = 'unknown'
+    paymentMessage.value = ''
     return null
   }
 }
@@ -200,6 +206,7 @@ async function loadOrder(generation?: number) {
 async function loadZeroPayOrder() {
   const generation = ++pollGeneration
   checking.value = true
+  paymentMessage.value = ''
   try {
     const detail = await getOrderDetail(orderId.value)
     if (generation !== pollGeneration) return
@@ -220,6 +227,7 @@ async function startPollingStatus() {
   const generation = ++pollGeneration
   pollingActive = true
   checking.value = true
+  paymentMessage.value = ''
   pollAttempt.value = 0
 
   try {
@@ -305,7 +313,7 @@ onLoad((options) => {
   }
 
   if (payIntent.value === 'cancel') {
-    uni.showToast({ title: '已取消支付，可稍后继续支付', icon: 'none' })
+    uni.showToast({ title: '已取消本次支付，正在确认订单支付状态', icon: 'none' })
   }
   if (zeroPay.value) {
     void loadZeroPayOrder()
@@ -338,10 +346,11 @@ defineExpose({
   orderInfo,
   checking,
   paymentState,
+  paymentMessage,
   zeroPay,
   mapZeroPayOrderToState,
-  loadZeroPayOrder,
   startPollingStatus,
+  loadZeroPayOrder,
 })
 </script>
 
