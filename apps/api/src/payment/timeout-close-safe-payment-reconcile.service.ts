@@ -76,7 +76,7 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
         }
 
         if (TERMINAL_WECHAT_PAYMENT_STATES.has(tradeState)) {
-          const safeToClose = await this.markCreatedPaymentFailed(
+          const safeToClose = await this.markTimeoutCreatedPaymentFailed(
             payment.id,
             tradeState,
             wechatResult,
@@ -126,7 +126,7 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
 
     try {
       await closeFn.call(this.timeoutClosePaymentService, order.orderNo);
-      const safeToClose = await this.markCreatedPaymentFailed(
+      const safeToClose = await this.markTimeoutCreatedPaymentFailed(
         paymentId,
         'CLOSED_BY_MERCHANT',
         initialWechatResult,
@@ -152,7 +152,7 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
           return 'fixed';
         }
         if (TERMINAL_WECHAT_PAYMENT_STATES.has(tradeState)) {
-          const safeToClose = await this.markCreatedPaymentFailed(paymentId, tradeState, refreshed);
+          const safeToClose = await this.markTimeoutCreatedPaymentFailed(paymentId, tradeState, refreshed);
           if (safeToClose) return 'closable';
         }
 
@@ -171,7 +171,7 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
     }
   }
 
-  private async markCreatedPaymentFailed(
+  private async markTimeoutCreatedPaymentFailed(
     paymentId: bigint,
     terminalState: string,
     wechatResult: any,
