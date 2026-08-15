@@ -8,7 +8,7 @@ import { RedisService } from '../common/redis/redis.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
-import { SystemConfigService } from '../system-config/system-config.module';
+import { SystemConfigService } from '../system-config/system-config.service';
 import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
