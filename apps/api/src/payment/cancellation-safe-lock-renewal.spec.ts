@@ -51,7 +51,8 @@ describe('CancellationSafeStockSafePaymentService renewing Redis locks', () => {
     );
 
     await Promise.resolve();
-    await jest.advanceTimersByTimeAsync(1000);
+    jest.advanceTimersByTime(1000);
+    await Promise.resolve();
 
     expect(redis.extendLockWithLua).toHaveBeenCalledWith(
       'order:payment-cancel:42',
