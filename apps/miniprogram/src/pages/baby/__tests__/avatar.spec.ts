@@ -98,6 +98,60 @@ describe('宝宝档案头像', () => {
     }));
   });
 
+  it('编辑详情仍在加载时禁止把编辑操作误提交为新增宝宝', async () => {
+    const pendingDetail = deferred<any>();
+    vi.mocked(getBabyDetail).mockImplementationOnce(() => pendingDetail.promise);
+    const wrapper = mount(BabyEditPage);
+    const vm = wrapper.vm as any;
+
+    await uniAppMock.onLoadCallbacks.at(-1)?.({ id: '7' });
+    expect(vm.isEdit).toBe(true);
+    expect(vm.loadingDetail).toBe(true);
+    expect(vm.detailLoaded).toBe(false);
+
+    await vm.handleSubmit();
+
+    expect(createBaby).not.toHaveBeenCalled();
+    expect(updateBaby).not.toHaveBeenCalled();
+    expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
+      title: '宝宝资料仍在加载，请稍后保存',
+      icon: 'none',
+    });
+
+    pendingDetail.resolve({
+      id: '7',
+      nickname: '小宝',
+      gender: 1,
+      birthday: '2025-01-01',
+      avatarUrl: '',
+    });
+    await flushPromises();
+    expect(vm.detailLoaded).toBe(true);
+  });
+
+  it('编辑详情加载失败后保持编辑身份且禁止退化为新增提交', async () => {
+    vi.mocked(getBabyDetail).mockRejectedValueOnce(new Error('network failed'));
+    const wrapper = mount(BabyEditPage);
+    const vm = wrapper.vm as any;
+
+    await uniAppMock.onLoadCallbacks.at(-1)?.({ id: '7' });
+    await flushPromises();
+
+    expect(vm.isEdit).toBe(true);
+    expect(vm.editTargetId).toBe('7');
+    expect(vm.detailLoaded).toBe(false);
+    expect(vm.loadingDetail).toBe(false);
+
+    await vm.handleSubmit();
+
+    expect(createBaby).not.toHaveBeenCalled();
+    expect(updateBaby).not.toHaveBeenCalled();
+    expect((globalThis as any).uni.showToast).toHaveBeenLastCalledWith({
+      title: '宝宝资料未加载成功，请返回重试',
+      icon: 'none',
+    });
+  });
+
   it('头像仍在上传时禁止保存，避免提交旧头像或空头像', async () => {
     const pendingUpload = deferred<any[]>();
     vi.mocked(chooseAndUploadImage).mockImplementationOnce(() => pendingUpload.promise as any);
