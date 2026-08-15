@@ -13,6 +13,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { paginate } from '@baby-mall/shared';
 import {
   BenefitPackagePublicQueryDto,
@@ -75,8 +76,8 @@ export class WeappBenefitPackageController {
     // reusable BenefitPackage template. Users can buy the same package more than once; filtering
     // by the template id would merge entitlements from every purchase and make both cards open the
     // same verification-code list.
-    const userBenefitPackageId = BigInt(dto.packageId);
-    const userIdValue = BigInt(userId);
+    const userBenefitPackageId = parsePositiveBigIntId(dto.packageId, '权益卡');
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
     const where = {
       userId: userIdValue,
       userBenefitPackageId,
