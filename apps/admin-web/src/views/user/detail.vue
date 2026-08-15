@@ -58,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { userApi } from '@/api/user'
 import { formatPrice, formatDate, formatDateShort, formatOrderStatus, getOrderStatusTagType } from '@/utils/format'
@@ -68,19 +68,52 @@ const route = useRoute()
 const user = ref<any>({})
 const babies = ref<any[]>([])
 const recentOrders = ref<any[]>([])
+let detailRequestVersion = 0
 
-async function fetchDetail() {
+function currentRouteUserId() {
+  return String(route.params.id || '').trim()
+}
+
+function clearDetail() {
+  user.value = {}
+  babies.value = []
+  recentOrders.value = []
+}
+
+async function fetchDetail(userId = currentRouteUserId()) {
+  const requestVersion = ++detailRequestVersion
+  if (!/^[1-9]\d*$/.test(userId)) {
+    if (requestVersion === detailRequestVersion) clearDetail()
+    return
+  }
+
   try {
-    const userId = String(route.params.id || '').trim()
-    if (!/^[1-9]\d*$/.test(userId)) return
     const res = await userApi.getDetail(userId)
-    user.value = res.data || {}
-    babies.value = res.data?.babyProfiles || res.data?.babies || []
-    recentOrders.value = res.data?.recentOrders || []
-  } catch {}
+    if (requestVersion !== detailRequestVersion || currentRouteUserId() !== userId) return
+    const nextUser = res.data || {}
+    if (String(nextUser.id || '') !== userId) {
+      clearDetail()
+      return
+    }
+    user.value = nextUser
+    babies.value = nextUser.babyProfiles || nextUser.babies || []
+    recentOrders.value = nextUser.recentOrders || []
+  } catch {
+    if (requestVersion === detailRequestVersion && currentRouteUserId() === userId) {
+      clearDetail()
+    }
+  }
 }
 
 function displayName(row: any) { return row.nickname || '微信用户' }
 
-onMounted(() => { fetchDetail() })
+watch(
+  () => currentRouteUserId(),
+  (userId) => {
+    detailRequestVersion += 1
+    clearDetail()
+    void fetchDetail(userId)
+  },
+  { immediate: true },
+)
 </script>
