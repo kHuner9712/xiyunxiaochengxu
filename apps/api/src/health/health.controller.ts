@@ -68,6 +68,13 @@ export class HealthController {
       const schedulerPaused = this.redis.isSchedulerPausedForCurrentBuild?.() ?? false;
       result.services.scheduler = schedulerPaused ? 'paused' : 'ok';
       result.maintenance = schedulerPaused;
+      if (schedulerPaused) {
+        // A shared migration marker is a global write-quiesce signal. Treat it as unhealthy so a
+        // candidate container cannot be declared ready and exposed while schema maintenance is
+        // still active or a stale marker remains after an interrupted migration.
+        result.status = 'degraded';
+        isHealthy = false;
+      }
     } catch {
       result.services.scheduler = 'error';
       result.status = 'degraded';
