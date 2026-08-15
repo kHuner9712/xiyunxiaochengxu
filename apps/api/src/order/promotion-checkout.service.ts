@@ -303,29 +303,34 @@ export class PromotionCheckoutService {
     const orderItem = order.orderItems[0];
     if (!orderItem) throw new InternalServerErrorException('促销订单项创建失败');
 
-    let paymentCreated = false;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await tx.orderPayment.create({
-          data: {
-            orderId: order.id,
-            paymentNo: generatePaymentNo(),
-            amount: payAmount,
-            paymentMethod: isZeroPay ? 'zero_pay' : 'wechat',
-            status: isZeroPay ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.CREATED,
-            ...(isZeroPay ? { paidAt: new Date() } : {}),
-          },
-        });
-        paymentCreated = true;
-        break;
-      } catch (error) {
-        if ((error as any)?.code === 'P2002') continue;
-        throw error;
-      }
-    }
-    if (!paymentCreated) throw new InternalServerErrorException('支付单号生成失败，请重试');
-
+    // A positive-amount order must not look like an initiated WeChat payment before the
+    // client actually requests payment. Cancellation/timeout safety treats an existing
+    // non-failed payment row as an in-flight remote payment, so seed a durable payment
+    // record here only for zero-pay orders. PaymentService creates the WeChat payment row
+    // atomically when the user really starts payment.
     if (isZeroPay) {
+      let paymentCreated = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          await tx.orderPayment.create({
+            data: {
+              orderId: order.id,
+              paymentNo: generatePaymentNo(),
+              amount: payAmount,
+              paymentMethod: 'zero_pay',
+              status: PAYMENT_STATUS.SUCCESS,
+              paidAt: new Date(),
+            },
+          });
+          paymentCreated = true;
+          break;
+        } catch (error) {
+          if ((error as any)?.code === 'P2002') continue;
+          throw error;
+        }
+      }
+      if (!paymentCreated) throw new InternalServerErrorException('支付单号生成失败，请重试');
+
       await tx.orderLog.create({
         data: {
           orderId: order.id,
