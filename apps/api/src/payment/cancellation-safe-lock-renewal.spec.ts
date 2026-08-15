@@ -32,13 +32,18 @@ function createService(lockAcquired = true) {
 
 describe('CancellationSafeStockSafePaymentService renewing Redis locks', () => {
   afterEach(() => {
-    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
   it('renews a long-running lease before its TTL expires', async () => {
-    jest.useFakeTimers();
     const { service, redis } = createService(true);
+    let heartbeat: (() => void) | undefined;
+    const timer = { unref: jest.fn() } as any;
+    jest.spyOn(global, 'setInterval').mockImplementation(((callback: (...args: any[]) => void) => {
+      heartbeat = () => callback();
+      return timer;
+    }) as any);
+    const clearIntervalSpy = jest.spyOn(global, 'clearInterval').mockImplementation((() => undefined) as any);
     let resolveAction!: (value: string) => void;
 
     const pending = (service as any).withRenewingRedisLock(
@@ -50,8 +55,12 @@ describe('CancellationSafeStockSafePaymentService renewing Redis locks', () => {
       }),
     );
 
+    // Allow the awaited Redis SET NX to resolve and the heartbeat to be installed.
     await Promise.resolve();
-    jest.advanceTimersByTime(1000);
+    await Promise.resolve();
+    expect(heartbeat).toBeDefined();
+
+    heartbeat!();
     await Promise.resolve();
 
     expect(redis.extendLockWithLua).toHaveBeenCalledWith(
@@ -59,9 +68,11 @@ describe('CancellationSafeStockSafePaymentService renewing Redis locks', () => {
       expect.any(String),
       3,
     );
+    expect(timer.unref).toHaveBeenCalled();
 
     resolveAction('done');
     await expect(pending).resolves.toBe('done');
+    expect(clearIntervalSpy).toHaveBeenCalledWith(timer);
     expect(redis.releaseLockWithLua).toHaveBeenCalledWith(
       'order:payment-cancel:42',
       expect.any(String),
