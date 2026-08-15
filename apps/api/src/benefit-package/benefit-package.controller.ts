@@ -9,9 +9,11 @@ import {
   Query,
 } from '@nestjs/common';
 import { BenefitPackageService } from './benefit-package.service';
+import { PrismaService } from '../common/prisma/prisma.service';
 import { Public } from '../common/decorators/public.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { paginate } from '@baby-mall/shared';
 import {
   BenefitPackagePublicQueryDto,
   MyBenefitPackageQueryDto,
@@ -28,7 +30,10 @@ import {
 
 @Controller('weapp/benefit-package')
 export class WeappBenefitPackageController {
-  constructor(private readonly service: BenefitPackageService) {}
+  constructor(
+    private readonly service: BenefitPackageService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Public()
   @Get('list')
@@ -62,7 +67,36 @@ export class WeappBenefitPackageController {
     @CurrentUser('id') userId: string,
     @Query() dto: MyBenefitEntitlementQueryDto,
   ) {
-    return this.service.findEntitlements({ ...dto, userId });
+    if (!dto.packageId) {
+      return this.service.findEntitlements({ ...dto, userId });
+    }
+
+    // In the miniprogram, packageId identifies one concrete UserBenefitPackage card, not the
+    // reusable BenefitPackage template. Users can buy the same package more than once; filtering
+    // by the template id would merge entitlements from every purchase and make both cards open the
+    // same verification-code list.
+    const userBenefitPackageId = BigInt(dto.packageId);
+    const userIdValue = BigInt(userId);
+    const where = {
+      userId: userIdValue,
+      userBenefitPackageId,
+      deletedAt: null,
+      ...(dto.status ? { status: dto.status } : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.userBenefitEntitlement.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (dto.page - 1) * dto.pageSize,
+        take: dto.pageSize,
+        select: { id: true },
+      }),
+      this.prisma.userBenefitEntitlement.count({ where }),
+    ]);
+    const list = await Promise.all(
+      rows.map((row) => this.service.findEntitlementForUser(userId, row.id.toString())),
+    );
+    return paginate(list, total, dto.page, dto.pageSize);
   }
 
   @Get('entitlement/:id')
