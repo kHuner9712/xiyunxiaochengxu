@@ -120,9 +120,9 @@
           <template #header><span>订单操作</span></template>
           <div style="display: flex; flex-direction: column; gap: 10px">
             <el-button v-permission="'order:remark'" @click="showRemarkDialog">编辑运营备注</el-button>
-            <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:deliver'" type="primary" @click="showDeliverDialog">发货</el-button>
-            <el-button v-if="order.status === 'pending_pickup'" v-permission="'pickup:verify'" type="success" @click="showVerifyPickupDialog">核销自提</el-button>
-            <el-button v-if="order.status === 'pending_payment'" v-permission="'order:cancel'" type="danger" @click="handleCancelOrder">取消订单</el-button>
+            <el-button v-if="order.status === 'pending_delivery'" v-permission="'order:deliver'" type="primary" :disabled="submitting" @click="showDeliverDialog">发货</el-button>
+            <el-button v-if="order.status === 'pending_pickup'" v-permission="'pickup:verify'" type="success" :disabled="submitting" @click="showVerifyPickupDialog">核销自提</el-button>
+            <el-button v-if="order.status === 'pending_payment'" v-permission="'order:cancel'" type="danger" :loading="submitting" :disabled="submitting" @click="handleCancelOrder">取消订单</el-button>
           </div>
         </el-card>
       </el-col>
@@ -146,8 +146,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="deliverVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleDeliver">确认发货</el-button>
+        <el-button :disabled="submitting" @click="deliverVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleDeliver">确认发货</el-button>
       </template>
     </el-dialog>
 
@@ -164,8 +164,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="verifyPickupVisible = false">取消</el-button>
-        <el-button type="success" :loading="submitting" @click="handleVerifyPickup">确认核销</el-button>
+        <el-button :disabled="submitting" @click="verifyPickupVisible = false">取消</el-button>
+        <el-button type="success" :loading="submitting" :disabled="submitting" @click="handleVerifyPickup">确认核销</el-button>
       </template>
     </el-dialog>
 
@@ -179,8 +179,8 @@
         placeholder="填写订单处理、沟通或异常情况；留空保存可清除备注"
       />
       <template #footer>
-        <el-button @click="remarkVisible = false">取消</el-button>
-        <el-button type="primary" :loading="remarkSubmitting" @click="handleSaveRemark">保存备注</el-button>
+        <el-button :disabled="remarkSubmitting" @click="remarkVisible = false">取消</el-button>
+        <el-button type="primary" :loading="remarkSubmitting" :disabled="remarkSubmitting" @click="handleSaveRemark">保存备注</el-button>
       </template>
     </el-dialog>
   </div>
@@ -234,6 +234,7 @@ function formatOrderLogOperator(log: any) {
 }
 
 function showRemarkDialog() {
+  if (remarkSubmitting.value) return
   const orderId = String(order.value.id || '')
   if (!/^\d+$/.test(orderId)) {
     ElMessage.warning('订单ID无效，请刷新后重试')
@@ -245,6 +246,7 @@ function showRemarkDialog() {
 }
 
 async function handleSaveRemark() {
+  if (remarkSubmitting.value) return
   const orderId = String(order.value.id || '')
   if (!/^\d+$/.test(orderId)) {
     ElMessage.warning('订单ID无效，请刷新后重试')
@@ -271,6 +273,7 @@ async function handleSaveRemark() {
 }
 
 function showDeliverDialog() {
+  if (submitting.value) return
   const orderId = String(order.value.id || '')
   if (!/^\d+$/.test(orderId)) {
     ElMessage.warning('订单ID无效，请刷新后重试')
@@ -285,29 +288,32 @@ function showDeliverDialog() {
 }
 
 async function handleDeliver() {
-  const valid = await deliverFormRef.value?.validate().catch(() => false)
-  if (!valid) return
-
-  const orderId = deliverForm.orderId
-  const logisticsCompany = deliverForm.logisticsCompany.trim()
-  const logisticsNo = deliverForm.logisticsNo.trim()
-  if (!orderId || !logisticsCompany || !logisticsNo) {
-    ElMessage.warning('请完整填写发货信息')
-    return
-  }
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const valid = await deliverFormRef.value?.validate().catch(() => false)
+    if (!valid) return
+
+    const orderId = deliverForm.orderId
+    const logisticsCompany = deliverForm.logisticsCompany.trim()
+    const logisticsNo = deliverForm.logisticsNo.trim()
+    if (!orderId || !logisticsCompany || !logisticsNo) {
+      ElMessage.warning('请完整填写发货信息')
+      return
+    }
+
     await orderApi.deliver({ orderId, logisticsCompany, logisticsNo })
     ElMessage.success('发货成功')
     deliverVisible.value = false
-    fetchDetail()
+    await fetchDetail()
   } catch {} finally {
     submitting.value = false
   }
 }
 
 async function handleCancelOrder() {
+  if (submitting.value) return
+  submitting.value = true
   try {
     const { value } = await ElMessageBox.prompt('请输入取消原因', '取消订单', { inputPattern: /\S+/, inputErrorMessage: '请输入取消原因' })
     const reason = String(value || '').trim()
@@ -317,11 +323,16 @@ async function handleCancelOrder() {
     }
     await orderApi.cancel(String(order.value.id), reason)
     ElMessage.success('取消成功')
-    fetchDetail()
-  } catch {}
+    await fetchDetail()
+  } catch {
+    // 用户关闭确认框或请求失败时由 finally 统一释放操作锁。
+  } finally {
+    submitting.value = false
+  }
 }
 
 function showVerifyPickupDialog() {
+  if (submitting.value) return
   if (order.value.status !== 'pending_pickup') {
     ElMessage.warning('当前订单状态不可核销')
     return
@@ -338,21 +349,22 @@ function showVerifyPickupDialog() {
 }
 
 async function handleVerifyPickup() {
-  const code = verifyPickupCode.value
-  const currentCode = String(order.value.pickupCode || '').trim()
-  if (order.value.status !== 'pending_pickup' || !/^\d{8}$/.test(code) || code !== currentCode) {
-    ElMessage.warning('订单或自提码已变化，请刷新后重试')
-    verifyPickupVisible.value = false
-    return
-  }
-
+  if (submitting.value) return
   submitting.value = true
   try {
+    const code = verifyPickupCode.value
+    const currentCode = String(order.value.pickupCode || '').trim()
+    if (order.value.status !== 'pending_pickup' || !/^\d{8}$/.test(code) || code !== currentCode) {
+      ElMessage.warning('订单或自提码已变化，请刷新后重试')
+      verifyPickupVisible.value = false
+      return
+    }
+
     await pickupStoreApi.verifyPickupCode(code)
     ElMessage.success('核销成功')
     verifyPickupVisible.value = false
     verifyPickupCode.value = ''
-    fetchDetail()
+    await fetchDetail()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '核销失败')
   } finally {
