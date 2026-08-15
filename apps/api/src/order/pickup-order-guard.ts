@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { COUPON_STATUS } from '../common/constants/payment';
 
 export type LockedPickupStore = {
   id: bigint;
@@ -164,6 +165,46 @@ export async function settleExpiredPointsBeforeCheckout(
     throw new BadRequestException('积分到期结算处理中，请稍后重试');
   }
   return { processed, deducted };
+}
+
+/**
+ * Coupon preview happens before the order transaction. Re-check expiry on the actual FREE ->
+ * LOCKED write so a coupon that expires in that narrow gap cannot be committed to an order.
+ */
+export function withFreshCheckoutCouponLock(
+  tx: Prisma.TransactionClient,
+): Prisma.TransactionClient {
+  const userCouponDelegate = tx.userCoupon;
+  const userCouponProxy = new Proxy(userCouponDelegate as any, {
+    get(target, property) {
+      if (property === 'updateMany') {
+        return async (args: any) => {
+          const isCheckoutLock =
+            args?.where?.status === COUPON_STATUS.FREE
+            && args?.data?.status === COUPON_STATUS.LOCKED;
+          if (!isCheckoutLock) return target.updateMany(args);
+
+          return target.updateMany({
+            ...args,
+            where: {
+              ...args.where,
+              expireAt: { gte: new Date() },
+            },
+          });
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  return new Proxy(tx as any, {
+    get(target, property) {
+      if (property === 'userCoupon') return userCouponProxy;
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as Prisma.TransactionClient;
 }
 
 export async function lockActivePickupStore(
