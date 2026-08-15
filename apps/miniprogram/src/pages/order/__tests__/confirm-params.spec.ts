@@ -1,3 +1,4 @@
+import { CART_MAX_ITEMS, CART_MAX_QUANTITY } from '@baby-mall/shared'
 import { describe, expect, it } from 'vitest'
 import { parseOrderConfirmItemsParam, parseSingleOrderConfirmItem } from '../confirm-params'
 
@@ -30,6 +31,32 @@ describe('确认订单入口参数', () => {
     expect(parseOrderConfirmItemsParam(JSON.stringify([{ ...validItems[0], quantity: 1.5 }]))).toBeNull()
   })
 
+  it('数量和订单项数与后端共享上限保持一致', () => {
+    expect(parseOrderConfirmItemsParam(JSON.stringify([
+      { ...validItems[0], quantity: CART_MAX_QUANTITY },
+    ]))?.[0].quantity).toBe(CART_MAX_QUANTITY)
+    expect(parseOrderConfirmItemsParam(JSON.stringify([
+      { ...validItems[0], quantity: CART_MAX_QUANTITY + 1 },
+    ]))).toBeNull()
+
+    const maxItems = Array.from({ length: CART_MAX_ITEMS }, (_, index) => ({
+      ...validItems[0],
+      productId: String(1000 + index),
+      skuId: String(2000 + index),
+      quantity: 1,
+    }))
+    expect(parseOrderConfirmItemsParam(JSON.stringify(maxItems))).toHaveLength(CART_MAX_ITEMS)
+    expect(parseOrderConfirmItemsParam(JSON.stringify([
+      ...maxItems,
+      {
+        ...validItems[0],
+        productId: '999999',
+        skuId: '999999',
+        quantity: 1,
+      },
+    ]))).toBeNull()
+  })
+
   it('拒绝重复 SKU，避免进入后端必然拒绝的订单试算/创建链', () => {
     expect(parseOrderConfirmItemsParam(JSON.stringify([
       validItems[0],
@@ -37,7 +64,7 @@ describe('确认订单入口参数', () => {
     ]))).toBeNull()
   })
 
-  it('单品直购只接受正整数商品/SKU ID 和正整数数量，并保持数组不变量', () => {
+  it('单品直购只接受后端允许范围内的正整数商品/SKU ID 和正整数数量，并保持数组不变量', () => {
     expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '201', quantity: '3' })).toEqual([{
       productId: '101',
       skuId: '201',
@@ -47,6 +74,10 @@ describe('确认订单入口参数', () => {
       skuName: '',
       price: 0,
     }])
+    expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '201', quantity: CART_MAX_QUANTITY })).toEqual([
+      expect.objectContaining({ quantity: CART_MAX_QUANTITY }),
+    ])
+    expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '201', quantity: CART_MAX_QUANTITY + 1 })).toBeNull()
     expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '', quantity: 1 })).toBeNull()
     expect(parseSingleOrderConfirmItem({ productId: '101', skuId: '201', quantity: 'NaN' })).toBeNull()
   })
