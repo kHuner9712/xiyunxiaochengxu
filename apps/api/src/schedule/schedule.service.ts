@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Cron, SchedulerRegistry } from '@nestjs/schedule';
 import { AFTERSALE_APPLY_DAYS } from '@baby-mall/shared';
-import { PAYMENT_STATUS } from '../common/constants';
+import { PAYMENT_STATUS, REFUND_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { OrderService } from '../order/order.service';
@@ -518,6 +518,20 @@ export class ScheduleService implements OnModuleDestroy {
         AND m.deleted_at IS NULL
         AND m.status = 'paid'
         AND (COALESCE(o.pay_amount, 0) = 0 OR p.status = ${PAYMENT_STATUS.SUCCESS})
+        AND NOT EXISTS (
+          SELECT 1
+          FROM order_refunds r
+          WHERE r.order_id = o.id
+            AND r.aftersale_id IS NULL
+            AND r.reason LIKE '拼团失败%'
+            AND r.status IN (
+              ${REFUND_STATUS.INITIATING},
+              ${REFUND_STATUS.PENDING},
+              ${REFUND_STATUS.PROCESSING},
+              ${REFUND_STATUS.RETRYING},
+              ${REFUND_STATUS.ABNORMAL}
+            )
+        )
       ORDER BY m.order_id ASC
       LIMIT ${limit}
     `;
