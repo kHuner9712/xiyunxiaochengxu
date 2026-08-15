@@ -18,6 +18,16 @@ vi.mock('@/api/address', () => ({
   getAddressDetail: vi.fn(),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
@@ -97,6 +107,65 @@ describe('收货地址编辑核心操作', () => {
       detail: '新地址',
     }))
     expect(createAddress).not.toHaveBeenCalled()
+  })
+
+  it('编辑详情仍在加载时禁止把编辑操作误提交为新增地址', async () => {
+    const pendingDetail = deferred<any>()
+    vi.mocked(getAddressDetail).mockImplementationOnce(() => pendingDetail.promise)
+    const wrapper = mount(AddressEditPage)
+    const vm = wrapper.vm as any
+
+    lifecycle.onLoadCallbacks.at(-1)?.({ id: '9' })
+    expect(vm.isEdit).toBe(true)
+    expect(vm.loadingDetail).toBe(true)
+    expect(vm.detailLoaded).toBe(false)
+
+    fillValidForm(wrapper)
+    await vm.handleSubmit()
+
+    expect(createAddress).not.toHaveBeenCalled()
+    expect(updateAddress).not.toHaveBeenCalled()
+    expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
+      title: '地址仍在加载，请稍后保存',
+      icon: 'none',
+    })
+
+    pendingDetail.resolve({
+      id: '9',
+      name: '原姓名',
+      phone: '13800138000',
+      province: '浙江省',
+      city: '杭州市',
+      district: '西湖区',
+      detail: '原地址',
+      isDefault: false,
+    })
+    await flushPromises()
+    expect(vm.detailLoaded).toBe(true)
+  })
+
+  it('编辑详情加载失败后保持目标地址身份且禁止退化为新增', async () => {
+    vi.mocked(getAddressDetail).mockRejectedValueOnce(new Error('network failed'))
+    const wrapper = mount(AddressEditPage)
+    const vm = wrapper.vm as any
+
+    lifecycle.onLoadCallbacks.at(-1)?.({ id: '9' })
+    await flushPromises()
+
+    expect(vm.isEdit).toBe(true)
+    expect(vm.editTargetId).toBe('9')
+    expect(vm.detailLoaded).toBe(false)
+    expect(vm.loadingDetail).toBe(false)
+
+    fillValidForm(wrapper)
+    await vm.handleSubmit()
+
+    expect(createAddress).not.toHaveBeenCalled()
+    expect(updateAddress).not.toHaveBeenCalled()
+    expect((globalThis as any).uni.showToast).toHaveBeenLastCalledWith({
+      title: '地址资料未加载成功，请返回重试',
+      icon: 'none',
+    })
   })
 
   it('保存请求进行中时快速重复提交不会产生第二次写请求', async () => {
