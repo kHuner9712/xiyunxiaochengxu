@@ -69,7 +69,7 @@
     <view class="products-section card" :class="{ 'aftersale-focus': selectAftersaleMode }">
       <view class="section-title-row">
         <text class="section-title">商品信息</text>
-        <text class="section-count">共 {{ order.items.length }} 件</text>
+        <text class="section-count">共 {{ getOrderItemCount() }} 件</text>
       </view>
       <view v-if="selectAftersaleMode" class="aftersale-select-tip">
         <text class="aftersale-select-text">请选择要申请售后的商品</text>
@@ -193,6 +193,13 @@ const order = ref<OrderDetail>({
   fulfillmentType: 'delivery',
   items: [], createTime: ''
 })
+
+function getOrderItemCount() {
+  return (order.value.items || []).reduce((total, item) => {
+    const quantity = Number(item.quantity)
+    return total + (Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 0)
+  }, 0)
+}
 
 const selectAftersaleMode = ref(false)
 const shouldSelectAftersale = ref(false)
@@ -442,6 +449,7 @@ defineExpose({
   handlePay,
   handleCancel,
   handleConfirm,
+  getOrderItemCount,
   orderActionBusy,
   order,
   selectAftersaleMode
