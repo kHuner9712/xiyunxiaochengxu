@@ -32,13 +32,37 @@ export class RedisService implements OnApplicationShutdown {
   }
 
   async setNX(key: string, value: string, ttlSeconds: number): Promise<boolean> {
-    if (this.isSchedulerPaused(key)) {
+    const schedulerLock = key.startsWith('schedule:');
+    if (schedulerLock && this.isSchedulerPaused(key)) {
       return false;
     }
+
     const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
-    return result === 'OK';
+    if (result !== 'OK') return false;
+
+    // A migration can publish the shared maintenance marker while Redis SET NX is in flight.
+    // Re-check after acquisition so an old API instance cannot enter a new Cron critical section
+    // in that narrow race. Release only the token we just acquired; if release itself is
+    // temporarily unavailable, return false anyway and let the short Redis lease expire naturally.
+    if (schedulerLock && this.isSchedulerPaused(key)) {
+      try {
+        await this.releaseLockWithLua(key, value);
+      } catch (error) {
+        this.logger.warn(
+          `调度维护模式下释放刚获取的 Cron 锁失败：key=${key}, error=${(error as Error).message}`,
+        );
+      }
+      return false;
+    }
+
+    return true;
   }
 
+  /**
+   * Compatibility probe used by health/preflight code. The pause marker is intentionally global:
+   * a migration image writes its own BUILD_SHA into a shared volume, but every currently running
+   * API build must stop starting new Cron work while that marker exists.
+   */
   isSchedulerPausedForCurrentBuild(): boolean {
     return this.isSchedulerPaused('schedule:health-check');
   }
@@ -167,25 +191,18 @@ export class RedisService implements OnApplicationShutdown {
     try {
       markerBuild = fs.readFileSync(markerPath, 'utf8').trim();
     } catch (error) {
-      this.logger.warn(`调度维护标记不可读，按暂停处理：${(error as Error).message}`);
+      this.logger.warn(`调度维护标记不可读，按全局暂停处理：${(error as Error).message}`);
       return true;
     }
 
-    const currentBuild = String(process.env.BUILD_SHA || '').trim();
-    const paused = !markerBuild
-      || markerBuild === '*'
-      || !currentBuild
-      || currentBuild === 'unknown'
-      || markerBuild === currentBuild;
-
-    if (paused && !this.schedulerPauseLogged) {
+    if (!this.schedulerPauseLogged) {
       this.schedulerPauseLogged = true;
-      this.logger.warn(`检测到当前构建的调度维护标记，Cron 任务暂停获取新锁：${markerPath}`);
-    } else if (!paused && this.schedulerPauseLogged) {
-      this.schedulerPauseLogged = false;
-      this.logger.log('调度维护标记属于其他构建，当前 Cron 正常运行');
+      const currentBuild = String(process.env.BUILD_SHA || 'unknown').trim() || 'unknown';
+      this.logger.warn(
+        `检测到全局调度维护标记，所有构建暂停获取新 Cron 锁：markerBuild=${markerBuild || 'unknown'}, currentBuild=${currentBuild}, path=${markerPath}`,
+      );
     }
-    return paused;
+    return true;
   }
 
   async onApplicationShutdown(): Promise<void> {
