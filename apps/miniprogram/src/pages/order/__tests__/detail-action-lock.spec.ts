@@ -112,4 +112,26 @@ describe('订单详情状态写操作锁', () => {
 
     wrapper.unmount()
   })
+
+  it('商品总件数按各订单项购买数量求和而不是按 SKU 行数统计', async () => {
+    orderMock.getOrderDetail.mockResolvedValueOnce({
+      ...pendingOrder,
+      items: [
+        { id: 'item-1', quantity: 3 },
+        { id: 'item-2', quantity: 2 },
+      ],
+    })
+
+    const wrapper = mount(OrderDetailPage, {
+      global: { stubs: { PriceDisplay: true } },
+    })
+    uniAppMock.onLoadCallbacks.at(-1)?.({ id: '101' })
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(vm.getOrderItemCount()).toBe(5)
+    expect(wrapper.find('.section-count').text()).toContain('共 5 件')
+
+    wrapper.unmount()
+  })
 })
