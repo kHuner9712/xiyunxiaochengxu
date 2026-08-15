@@ -100,6 +100,44 @@ describe('CancellationSafeProductionOrderService net-paid completion rewards', (
   });
 });
 
+describe('CancellationSafeProductionOrderService cancellation points ledger', () => {
+  it('records the post-update database balance instead of a stale pre-increment snapshot', async () => {
+    const service = createService();
+    const userUpdate = (jest.fn() as any).mockResolvedValue({ availablePoints: 720 });
+    const pointsCreate = jest.fn();
+    const tx = {
+      user: { update: userUpdate },
+      pointsRecord: { create: pointsCreate },
+    };
+
+    await (service as any).restoreDeductedPoints(
+      tx,
+      100n,
+      120,
+      'order_cancel',
+      77n,
+      '取消订单归还积分120',
+    );
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 100n },
+      data: { availablePoints: { increment: 120 } },
+      select: { availablePoints: true },
+    });
+    expect(pointsCreate).toHaveBeenCalledWith({
+      data: {
+        userId: 100n,
+        type: 1,
+        points: 120,
+        balance: 720,
+        source: 'order_cancel',
+        sourceId: 77n,
+        description: '取消订单归还积分120',
+      },
+    });
+  });
+});
+
 describe('CancellationSafeProductionOrderService automatic completion observability', () => {
   const candidate = {
     id: 77n,
@@ -124,6 +162,7 @@ describe('CancellationSafeProductionOrderService automatic completion observabil
 
     const result = await service.autoCompleteOrders();
 
+    expect(result).toEqual({ closedCount: 0 }).not;
     expect(result).toEqual({ completedCount: 0 });
     expect(complete).toHaveBeenCalledTimes(1);
     expect(logError).toHaveBeenCalledWith(
