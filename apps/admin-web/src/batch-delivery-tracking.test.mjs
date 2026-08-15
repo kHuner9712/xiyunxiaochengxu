@@ -23,6 +23,25 @@ test('batch delivery requires a tracking number for every selected order', () =>
   )
 })
 
+test('delivery inputs match the backend VARCHAR(50) contract', () => {
+  assert.match(delivery, /v-model="deliverForm\.logisticsNo"[^>]*maxlength="50"/)
+  assert.match(delivery, /v-model="row\.logisticsNo"[\s\S]*?maxlength="50"/)
+  assert.doesNotMatch(delivery, /maxlength="80"/)
+})
+
+test('delivery list uses latest-request-wins and submit locks start at function entry', () => {
+  assert.match(delivery, /let listRequestVersion = 0/)
+  assert.match(delivery, /const requestVersion = \+\+listRequestVersion/)
+  assert.match(delivery, /if \(requestVersion !== listRequestVersion\) return/)
+  assert.match(delivery, /if \(requestVersion === listRequestVersion\) loading\.value = false/)
+  assert.match(delivery, /async function handleSubmitDeliver\(\) \{\s*if \(submitting\.value\) return\s*submitting\.value = true/)
+  assert.match(delivery, /function handleDeliver\(row: any\) \{\s*if \(submitting\.value\) return/)
+  assert.match(delivery, /function handleBatchDeliver\(\) \{\s*if \(submitting\.value \|\| !selectedOrders\.value\.length\) return/)
+  assert.match(delivery, /:disabled="!selectedOrders\.length \|\| submitting"/)
+  assert.match(delivery, /:close-on-click-modal="!submitting"/)
+  assert.match(delivery, /await fetchList\(\)/)
+})
+
 test('delivery list uses serialized receiver fields and actual purchased units', () => {
   assert.match(delivery, /\{\{ getDeliveryItemQuantity\(row\.orderItems\) \}\}/)
   assert.match(delivery, /function getDeliveryItemQuantity\(orderItems: unknown\)/)
