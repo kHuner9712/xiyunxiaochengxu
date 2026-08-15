@@ -12,7 +12,7 @@ const TERMINAL_WECHAT_PAYMENT_STATES = new Set(['CLOSED', 'REVOKED', 'PAYERROR']
 @Injectable()
 export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends HistoricalAnomalyPaymentReconcileService {
   private readonly timeoutCloseLogger = new Logger(TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService.name);
-  private readonly closeDelayMs = 5 * 60 * 1000;
+  private readonly timeoutCloseDelayMs = 5 * 60 * 1000;
 
   constructor(
     private readonly timeoutClosePrisma: PrismaService,
@@ -84,7 +84,7 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
           if (safeToClose) {
             closable += 1;
           } else {
-            await this.delayAutoClose(order.id, `local_payment_state_changed_after_${tradeState}`);
+            await this.delayTimeoutAutoClose(order.id, `local_payment_state_changed_after_${tradeState}`);
             delayed += 1;
           }
           continue;
@@ -101,11 +101,11 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
           continue;
         }
 
-        await this.delayAutoClose(order.id, `trade_state=${tradeState || 'unknown'}`);
+        await this.delayTimeoutAutoClose(order.id, `trade_state=${tradeState || 'unknown'}`);
         delayed += 1;
       } catch (error) {
         failed += 1;
-        await this.delayAutoClose(order.id, `query_error=${(error as Error).message}`);
+        await this.delayTimeoutAutoClose(order.id, `query_error=${(error as Error).message}`);
         delayed += 1;
       }
     }
@@ -120,7 +120,7 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
   ): Promise<'fixed' | 'closable' | 'pending' | 'failed'> {
     const closeFn = (this.timeoutClosePaymentService as any).closeWechatOrderForCancellation;
     if (typeof closeFn !== 'function') {
-      await this.delayAutoClose(order.id, 'wechat_close_capability_unavailable');
+      await this.delayTimeoutAutoClose(order.id, 'wechat_close_capability_unavailable');
       return 'failed';
     }
 
@@ -133,7 +133,7 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
       );
       if (safeToClose) return 'closable';
 
-      await this.delayAutoClose(order.id, 'local_payment_state_changed_after_wechat_close');
+      await this.delayTimeoutAutoClose(order.id, 'local_payment_state_changed_after_wechat_close');
       return 'pending';
     } catch (closeError) {
       // WeChat may reject close because payment won the race. Re-query before deciding anything
@@ -156,13 +156,13 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
           if (safeToClose) return 'closable';
         }
 
-        await this.delayAutoClose(
+        await this.delayTimeoutAutoClose(
           order.id,
           `wechat_close_failed_then_${tradeState || 'unknown'}:${(closeError as Error).message}`,
         );
         return 'failed';
       } catch (queryError) {
-        await this.delayAutoClose(
+        await this.delayTimeoutAutoClose(
           order.id,
           `wechat_close_and_requery_failed:${(closeError as Error).message};${(queryError as Error).message}`,
         );
@@ -197,8 +197,8 @@ export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends Hi
     return current?.status === PAYMENT_STATUS.FAILED;
   }
 
-  private async delayAutoClose(orderId: bigint, reason: string) {
-    const nextCloseAt = new Date(Date.now() + this.closeDelayMs);
+  private async delayTimeoutAutoClose(orderId: bigint, reason: string) {
+    const nextCloseAt = new Date(Date.now() + this.timeoutCloseDelayMs);
     await this.timeoutClosePrisma.order.updateMany({
       where: { id: orderId, status: OrderStatus.pending_payment },
       data: { autoCloseAt: nextCloseAt },
