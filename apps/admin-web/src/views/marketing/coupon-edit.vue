@@ -101,8 +101,8 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
-          <el-button @click="router.back()">取消</el-button>
+          <el-button type="primary" :loading="submitting || detailLoading" :disabled="submitting || detailLoading || invalidRoute" @click="handleSubmit">保存</el-button>
+          <el-button :disabled="submitting" @click="router.back()">取消</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { couponApi, type CouponPayload, type CouponRecord } from '@/api/coupon'
@@ -120,29 +120,36 @@ const route = useRoute()
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const detailLoading = ref(false)
 const receivedCount = ref(0)
+let detailRequestVersion = 0
 
 const couponId = computed(() => String(route.params.id || '').trim())
 const isEdit = computed(() => POSITIVE_ID.test(couponId.value))
+const invalidRoute = computed(() => couponId.value.length > 0 && !isEdit.value)
 const issuedLocked = computed(() => isEdit.value && receivedCount.value > 0)
 
-const form = reactive({
-  name: '',
-  type: 1 as 1 | 2 | 3,
-  amountYuan: 10,
-  discount: 9,
-  minAmountYuan: 0,
-  discountLimitYuan: 0,
-  totalCount: 100,
-  perLimit: 1,
-  dateRange: [] as string[],
-  validDays: 0,
-  applicableType: 0 as 0 | 1 | 2,
-  applicableIdsText: '',
-  description: '',
-  isNewUser: false,
-  status: 1 as 0 | 1,
-})
+function createDefaultForm() {
+  return {
+    name: '',
+    type: 1 as 1 | 2 | 3,
+    amountYuan: 10,
+    discount: 9,
+    minAmountYuan: 0,
+    discountLimitYuan: 0,
+    totalCount: 100,
+    perLimit: 1,
+    dateRange: [] as string[],
+    validDays: 0,
+    applicableType: 0 as 0 | 1 | 2,
+    applicableIdsText: '',
+    description: '',
+    isNewUser: false,
+    status: 1 as 0 | 1,
+  }
+}
+
+const form = reactive(createDefaultForm())
 
 const rules: FormRules = {
   name: [{ required: true, message: '请输入优惠券名称', trigger: 'blur' }],
@@ -150,6 +157,20 @@ const rules: FormRules = {
   totalCount: [{ required: true, message: '请输入发行量', trigger: 'blur' }],
   perLimit: [{ required: true, message: '请输入每人限领数量', trigger: 'blur' }],
   dateRange: [{ required: true, message: '请选择有效期', trigger: 'change' }],
+}
+
+function currentRouteCouponId() {
+  return String(route.params.id || '').trim()
+}
+
+function isCurrentRouteCoupon(couponIdValue: string) {
+  return currentRouteCouponId() === couponIdValue
+}
+
+function resetForm() {
+  Object.assign(form, createDefaultForm())
+  receivedCount.value = 0
+  formRef.value?.clearValidate()
 }
 
 function pad(value: number) {
@@ -188,33 +209,52 @@ function onTypeChange() {
   if (form.type === 3) form.minAmountYuan = 0
 }
 
-async function fetchDetail() {
-  if (!isEdit.value) return
+function applyDetail(d: CouponRecord) {
+  receivedCount.value = Number(d.receivedCount || 0)
+  form.name = d.name || ''
+  form.type = ([1, 2, 3].includes(Number(d.type)) ? Number(d.type) : 1) as 1 | 2 | 3
+  if (form.type === 2) {
+    form.discount = Number(d.value || 0) / 10
+    form.amountYuan = 0
+  } else {
+    form.amountYuan = Number(d.value || 0) / 100
+  }
+  form.minAmountYuan = Number(d.minAmount || 0) / 100
+  form.discountLimitYuan = Number(d.discountLimit || 0) / 100
+  form.totalCount = Number(d.totalCount || 0)
+  form.perLimit = Number(d.perLimit || 1)
+  form.dateRange = [toLocalPicker(d.startTime), toLocalPicker(d.endTime)]
+  form.validDays = Number(d.validDays || 0)
+  form.applicableType = ([0, 1, 2].includes(Number(d.applicableType)) ? Number(d.applicableType) : 0) as 0 | 1 | 2
+  form.applicableIdsText = Array.isArray(d.applicableIds) ? d.applicableIds.join(',') : ''
+  form.description = d.description || ''
+  form.isNewUser = d.isNewUser === 1
+  form.status = d.status === 0 ? 0 : 1
+}
+
+async function fetchDetail(couponIdValue: string) {
+  const requestVersion = ++detailRequestVersion
+  if (!POSITIVE_ID.test(couponIdValue)) return
+  detailLoading.value = true
   try {
-    const res = await couponApi.getDetail(couponId.value)
+    const res = await couponApi.getDetail(couponIdValue)
+    if (requestVersion !== detailRequestVersion || !isCurrentRouteCoupon(couponIdValue)) return
     const d = res.data as CouponRecord
-    receivedCount.value = Number(d.receivedCount || 0)
-    form.name = d.name || ''
-    form.type = ([1, 2, 3].includes(Number(d.type)) ? Number(d.type) : 1) as 1 | 2 | 3
-    if (form.type === 2) {
-      form.discount = Number(d.value || 0) / 10
-      form.amountYuan = 0
-    } else {
-      form.amountYuan = Number(d.value || 0) / 100
+    if (String(d?.id || '') !== couponIdValue) {
+      resetForm()
+      ElMessage.error('优惠券详情数据与当前优惠券不匹配，请返回列表重新进入')
+      return
     }
-    form.minAmountYuan = Number(d.minAmount || 0) / 100
-    form.discountLimitYuan = Number(d.discountLimit || 0) / 100
-    form.totalCount = Number(d.totalCount || 0)
-    form.perLimit = Number(d.perLimit || 1)
-    form.dateRange = [toLocalPicker(d.startTime), toLocalPicker(d.endTime)]
-    form.validDays = Number(d.validDays || 0)
-    form.applicableType = ([0, 1, 2].includes(Number(d.applicableType)) ? Number(d.applicableType) : 0) as 0 | 1 | 2
-    form.applicableIdsText = Array.isArray(d.applicableIds) ? d.applicableIds.join(',') : ''
-    form.description = d.description || ''
-    form.isNewUser = d.isNewUser === 1
-    form.status = d.status === 0 ? 0 : 1
+    applyDetail(d)
   } catch (e: any) {
-    ElMessage.error(e?.message || '加载优惠券失败')
+    if (requestVersion === detailRequestVersion && isCurrentRouteCoupon(couponIdValue)) {
+      resetForm()
+      ElMessage.error(e?.message || '加载优惠券失败')
+    }
+  } finally {
+    if (requestVersion === detailRequestVersion && isCurrentRouteCoupon(couponIdValue)) {
+      detailLoading.value = false
+    }
   }
 }
 
@@ -253,11 +293,22 @@ function buildPayload(): CouponPayload {
 }
 
 async function handleSubmit() {
-  if (submitting.value) return
+  if (submitting.value || detailLoading.value) return
+  const targetCouponId = currentRouteCouponId()
+  const targetIsEdit = POSITIVE_ID.test(targetCouponId)
+  if (targetCouponId && !targetIsEdit) {
+    ElMessage.warning('优惠券ID无效，请返回列表重新进入')
+    return
+  }
+
   submitting.value = true
   try {
     const valid = await formRef.value?.validate().catch(() => false)
     if (!valid) return
+    if (!isCurrentRouteCoupon(targetCouponId)) {
+      ElMessage.warning('优惠券已切换，已取消本次保存')
+      return
+    }
 
     let data: CouponPayload
     try {
@@ -267,21 +318,42 @@ async function handleSubmit() {
       return
     }
 
-    if (isEdit.value) {
-      await couponApi.update(couponId.value, data)
+    if (!isCurrentRouteCoupon(targetCouponId)) {
+      ElMessage.warning('优惠券已切换，已取消本次保存')
+      return
+    }
+    if (targetIsEdit) {
+      await couponApi.update(targetCouponId, data)
     } else {
       await couponApi.create(data)
     }
+    if (!isCurrentRouteCoupon(targetCouponId)) return
     ElMessage.success('保存成功')
     router.push('/marketing/coupon-list')
   } catch (e: any) {
-    ElMessage.error(e?.message || '保存失败')
+    if (isCurrentRouteCoupon(targetCouponId)) {
+      ElMessage.error(e?.message || '保存失败')
+    }
   } finally {
     submitting.value = false
   }
 }
 
-onMounted(fetchDetail)
+watch(
+  () => currentRouteCouponId(),
+  (nextCouponId) => {
+    detailRequestVersion += 1
+    detailLoading.value = false
+    resetForm()
+    if (!nextCouponId) return
+    if (!POSITIVE_ID.test(nextCouponId)) {
+      ElMessage.warning('优惠券ID无效，请返回列表重新进入')
+      return
+    }
+    void fetchDetail(nextCouponId)
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
