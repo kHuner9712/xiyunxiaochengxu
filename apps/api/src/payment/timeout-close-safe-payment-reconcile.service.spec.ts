@@ -1,8 +1,8 @@
 import { OrderStatus } from '@prisma/client';
 import { PAYMENT_STATUS } from '../common/constants';
-import { TimeoutCloseSafePaymentReconcileService } from './timeout-close-safe-payment-reconcile.service';
+import { TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService } from './timeout-close-safe-payment-reconcile.service';
 
-describe('TimeoutCloseSafePaymentReconcileService', () => {
+describe('TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService', () => {
   function createService() {
     const prisma: any = {
       order: {
@@ -26,7 +26,7 @@ describe('TimeoutCloseSafePaymentReconcileService', () => {
       emitError: jest.fn(),
       emitCritical: jest.fn(),
     };
-    const service = new TimeoutCloseSafePaymentReconcileService(
+    const service = new TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService(
       prisma,
       paymentService,
       businessEvent,
