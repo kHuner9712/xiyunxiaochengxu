@@ -157,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { aftersaleApi } from '@/api/aftersale'
@@ -185,6 +185,7 @@ const returnReceiverName = ref('')
 const returnReceiverPhone = ref('')
 const returnAddress = ref('')
 const displayImages = ref<string[]>([])
+let detailRequestVersion = 0
 
 const orderItems = computed(() => (detail.value.orderItem ? [detail.value.orderItem] : []))
 const isZeroPayOrder = computed(() => Number(detail.value.order?.payAmount ?? 0) === 0)
@@ -205,6 +206,30 @@ const canRefund = computed(() => {
   )
 })
 
+function currentRouteAftersaleId() {
+  return String(route.params.id || '').trim()
+}
+
+function isValidAftersaleId(aftersaleId: string) {
+  return /^[1-9]\d*$/.test(aftersaleId)
+}
+
+function isCurrentRouteAftersale(aftersaleId: string) {
+  return currentRouteAftersaleId() === aftersaleId
+}
+
+function clearRouteBoundState() {
+  revokePrivateObjectUrls(displayImages.value)
+  displayImages.value = []
+  detail.value = {}
+  auditResult.value = 'approve'
+  rejectReason.value = ''
+  refundAmountYuan.value = 0
+  returnReceiverName.value = ''
+  returnReceiverPhone.value = ''
+  returnAddress.value = ''
+}
+
 function formatSkuSpecs(specs: unknown) {
   if (!specs) return '-'
   if (typeof specs === 'string') return specs
@@ -213,53 +238,97 @@ function formatSkuSpecs(specs: unknown) {
   return String(specs)
 }
 
-async function fetchDetail() {
+async function fetchDetail(aftersaleId = currentRouteAftersaleId()) {
+  const requestVersion = ++detailRequestVersion
+  if (!isValidAftersaleId(aftersaleId)) {
+    if (requestVersion === detailRequestVersion) clearRouteBoundState()
+    return
+  }
+
+  let resolvedImages: string[] = []
   try {
+    const res = await aftersaleApi.getDetail(aftersaleId)
+    if (requestVersion !== detailRequestVersion || !isCurrentRouteAftersale(aftersaleId)) return
+
+    const nextDetail = res.data || {}
+    if (String(nextDetail.id || '') !== aftersaleId) {
+      clearRouteBoundState()
+      ElMessage.error('售后详情数据与当前售后单不匹配，请刷新后重试')
+      return
+    }
+
+    resolvedImages = await resolvePrivateFileUrls(asArray(nextDetail.images))
+    if (requestVersion !== detailRequestVersion || !isCurrentRouteAftersale(aftersaleId)) {
+      revokePrivateObjectUrls(resolvedImages)
+      return
+    }
+
     revokePrivateObjectUrls(displayImages.value)
-    displayImages.value = []
-    const res = await aftersaleApi.getDetail(String(route.params.id))
-    detail.value = res.data || {}
-    const orderIsZeroPay = Number(detail.value.order?.payAmount ?? 0) === 0
-    const defaultRefundAmount = detail.value.refundAmount ?? (orderIsZeroPay ? 0 : (detail.value.orderItem?.subtotal || 0))
+    displayImages.value = resolvedImages
+    detail.value = nextDetail
+    const orderIsZeroPay = Number(nextDetail.order?.payAmount ?? 0) === 0
+    const defaultRefundAmount = nextDetail.refundAmount ?? (orderIsZeroPay ? 0 : (nextDetail.orderItem?.subtotal || 0))
     refundAmountYuan.value = Number(defaultRefundAmount || 0) / 100
-    returnReceiverName.value = String(detail.value.returnReceiverName || '')
-    returnReceiverPhone.value = String(detail.value.returnReceiverPhone || '')
-    returnAddress.value = String(detail.value.returnAddress || '')
-    displayImages.value = await resolvePrivateFileUrls(asArray(detail.value.images))
+    returnReceiverName.value = String(nextDetail.returnReceiverName || '')
+    returnReceiverPhone.value = String(nextDetail.returnReceiverPhone || '')
+    returnAddress.value = String(nextDetail.returnAddress || '')
   } catch (e: any) {
-    ElMessage.error(e?.message || '获取售后详情失败')
+    revokePrivateObjectUrls(resolvedImages)
+    if (requestVersion === detailRequestVersion && isCurrentRouteAftersale(aftersaleId)) {
+      clearRouteBoundState()
+      ElMessage.error(e?.message || '获取售后详情失败')
+    }
+  }
+}
+
+async function refreshDetailAfterWrite(aftersaleId: string) {
+  if (isCurrentRouteAftersale(aftersaleId)) {
+    await fetchDetail(aftersaleId)
   }
 }
 
 async function handleAudit() {
   if (submitting.value) return
-  if (auditResult.value === 'reject' && !rejectReason.value.trim()) {
-    ElMessage.warning('请输入拒绝原因')
+  const aftersaleId = String(detail.value.id || '')
+  if (!isValidAftersaleId(aftersaleId) || !isCurrentRouteAftersale(aftersaleId)) {
+    ElMessage.warning('售后单已变化，请刷新后重试')
     return
   }
 
-  const refundAmount = isZeroPayOrder.value ? 0 : priceToFen(refundAmountYuan.value)
-  if (auditResult.value === 'approve' && !isZeroPayOrder.value && refundAmount <= 0) {
+  const auditDecision = auditResult.value
+  const isZeroPay = isZeroPayOrder.value
+  const aftersaleType = Number(detail.value.type)
+  const rejectReasonValue = rejectReason.value.trim()
+  const refundAmount = isZeroPay ? 0 : priceToFen(refundAmountYuan.value)
+  const receiverName = returnReceiverName.value.trim()
+  const receiverPhone = returnReceiverPhone.value.trim()
+  const receiverAddress = returnAddress.value.trim()
+
+  if (auditDecision === 'reject' && !rejectReasonValue) {
+    ElMessage.warning('请输入拒绝原因')
+    return
+  }
+  if (auditDecision === 'approve' && !isZeroPay && refundAmount <= 0) {
     ElMessage.warning('请输入正确的退款金额')
     return
   }
-  if (auditResult.value === 'approve' && detail.value.type === 2) {
-    if (!returnReceiverName.value.trim()) {
+  if (auditDecision === 'approve' && aftersaleType === 2) {
+    if (!receiverName) {
       ElMessage.warning('请输入退货收件人')
       return
     }
-    if (!returnReceiverPhone.value.trim()) {
+    if (!receiverPhone) {
       ElMessage.warning('请输入退货联系电话')
       return
     }
-    if (!returnAddress.value.trim()) {
+    if (!receiverAddress) {
       ElMessage.warning('请输入退货地址')
       return
     }
   }
 
-  const actionLabel = auditResult.value === 'approve'
-    ? isZeroPayOrder.value
+  const actionLabel = auditDecision === 'approve'
+    ? isZeroPay
       ? '通过并确认0元售后结算'
       : `通过并确认退款 ¥${refundAmountYuan.value.toFixed(2)}`
     : '拒绝'
@@ -276,21 +345,26 @@ async function handleAudit() {
       return
     }
 
-    if (auditResult.value === 'approve') {
-      await aftersaleApi.approve(String(detail.value.id), {
+    if (!isCurrentRouteAftersale(aftersaleId) || String(detail.value.id || '') !== aftersaleId) {
+      ElMessage.warning('售后单已切换，已取消本次操作')
+      return
+    }
+
+    if (auditDecision === 'approve') {
+      await aftersaleApi.approve(aftersaleId, {
         refundAmount,
-        ...(detail.value.type === 2 ? {
-          returnReceiverName: returnReceiverName.value.trim(),
-          returnReceiverPhone: returnReceiverPhone.value.trim(),
-          returnAddress: returnAddress.value.trim(),
+        ...(aftersaleType === 2 ? {
+          returnReceiverName: receiverName,
+          returnReceiverPhone: receiverPhone,
+          returnAddress: receiverAddress,
         } : {}),
       })
       ElMessage.success('审核通过')
     } else {
-      await aftersaleApi.reject(String(detail.value.id), rejectReason.value.trim())
+      await aftersaleApi.reject(aftersaleId, rejectReasonValue)
       ElMessage.success('已拒绝')
     }
-    await fetchDetail()
+    await refreshDetailAfterWrite(aftersaleId)
   } catch (e: any) {
     ElMessage.error(e?.message || '审核操作失败')
   } finally {
@@ -300,7 +374,12 @@ async function handleAudit() {
 
 async function handleSyncRefund() {
   if (syncingRefund.value) return
+  const aftersaleId = String(detail.value.id || '')
   const outRefundNo = String(detail.value.latestOutRefundNo || '').trim()
+  if (!isValidAftersaleId(aftersaleId) || !isCurrentRouteAftersale(aftersaleId)) {
+    ElMessage.warning('售后单已变化，请刷新后重试')
+    return
+  }
   if (!outRefundNo) {
     ElMessage.warning('退款单号缺失，无法同步')
     return
@@ -315,7 +394,7 @@ async function handleSyncRefund() {
     } else {
       ElMessage.success(result.message || '退款状态已同步')
     }
-    await fetchDetail()
+    await refreshDetailAfterWrite(aftersaleId)
   } catch {
     // 请求错误由全局拦截器统一提示。
   } finally {
@@ -325,16 +404,24 @@ async function handleSyncRefund() {
 
 async function handleRefund() {
   if (submitting.value) return
+  const aftersaleId = String(detail.value.id || '')
+  if (!isValidAftersaleId(aftersaleId) || !isCurrentRouteAftersale(aftersaleId)) {
+    ElMessage.warning('售后单已变化，请刷新后重试')
+    return
+  }
+
   const refundAmount = Number(detail.value.refundAmount ?? 0)
-  if (!isZeroPayOrder.value && refundAmount <= 0) {
+  const isZeroPay = isZeroPayOrder.value
+  const refundRetry = isRefundRetry.value
+  if (!isZeroPay && refundAmount <= 0) {
     ElMessage.warning('退款金额未设置')
     return
   }
 
-  const actionLabel = isZeroPayOrder.value
+  const actionLabel = isZeroPay
     ? '确认完成0元售后结算'
-    : (isRefundRetry.value ? '重新发起退款' : '确认退款')
-  const confirmation = isZeroPayOrder.value
+    : (refundRetry ? '重新发起退款' : '确认退款')
+  const confirmation = isZeroPay
     ? '该订单实付为0元，不会调用微信退款；系统将完成售后状态、库存、积分与权益结算。'
     : `${actionLabel} ¥${formatPrice(refundAmount)}？此操作将发起微信退款，请谨慎操作。`
 
@@ -342,7 +429,7 @@ async function handleRefund() {
   try {
     try {
       await ElMessageBox.confirm(confirmation, '退款确认', {
-        confirmButtonText: isRefundRetry.value ? '重新发起' : '确认',
+        confirmButtonText: refundRetry ? '重新发起' : '确认',
         cancelButtonText: '取消',
         type: 'warning',
       })
@@ -350,9 +437,14 @@ async function handleRefund() {
       return
     }
 
-    await aftersaleApi.refund(String(detail.value.id))
-    ElMessage.success(isZeroPayOrder.value ? '0元售后结算完成' : (isRefundRetry.value ? '退款已重新发起' : '退款已发起'))
-    await fetchDetail()
+    if (!isCurrentRouteAftersale(aftersaleId) || String(detail.value.id || '') !== aftersaleId) {
+      ElMessage.warning('售后单已切换，已取消本次操作')
+      return
+    }
+
+    await aftersaleApi.refund(aftersaleId)
+    ElMessage.success(isZeroPay ? '0元售后结算完成' : (refundRetry ? '退款已重新发起' : '退款已发起'))
+    await refreshDetailAfterWrite(aftersaleId)
   } catch (e: any) {
     ElMessage.error(e?.message || '退款失败')
   } finally {
@@ -360,11 +452,23 @@ async function handleRefund() {
   }
 }
 
-onMounted(() => {
-  fetchDetail()
-})
+watch(
+  () => currentRouteAftersaleId(),
+  (aftersaleId) => {
+    detailRequestVersion += 1
+    clearRouteBoundState()
+    if (!isValidAftersaleId(aftersaleId)) {
+      ElMessage.warning('售后单ID无效，请返回售后列表重新进入')
+      return
+    }
+    void fetchDetail(aftersaleId)
+  },
+  { immediate: true },
+)
 
 onUnmounted(() => {
+  detailRequestVersion += 1
   revokePrivateObjectUrls(displayImages.value)
+  displayImages.value = []
 })
 </script>
