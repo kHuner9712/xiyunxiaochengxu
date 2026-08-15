@@ -10,8 +10,8 @@ const TIMEOUT_CLOSE_CONFIRM_BATCH_SIZE = 20;
 const TERMINAL_WECHAT_PAYMENT_STATES = new Set(['CLOSED', 'REVOKED', 'PAYERROR']);
 
 @Injectable()
-export class TimeoutCloseSafePaymentReconcileService extends HistoricalAnomalyPaymentReconcileService {
-  private readonly timeoutCloseLogger = new Logger(TimeoutCloseSafePaymentReconcileService.name);
+export class TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService extends HistoricalAnomalyPaymentReconcileService {
+  private readonly timeoutCloseLogger = new Logger(TimeoutCloseSafeHistoricalAnomalyPaymentReconcileService.name);
   private readonly closeDelayMs = 5 * 60 * 1000;
 
   constructor(
