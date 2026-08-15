@@ -7,6 +7,7 @@ import { BenefitPackageService } from '../benefit-package/benefit-package.servic
 import { BusinessEventService } from '../common/business-event.service';
 import { PAYMENT_STATUS, REFUND_STATUS, WECHAT_REFUND_STATUS } from '../common/constants';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { parsePositiveBigIntId } from '../common/utils/bigint-id';
 import { RedisService } from '../common/redis/redis.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
 import { GroupBuyService } from '../group-buy/group-buy.service';
@@ -17,6 +18,7 @@ import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recov
 
 const PAYMENT_CANCEL_LOCK_TTL_SECONDS = 90;
 const REFUND_USER_LOCK_TTL_SECONDS = 120;
+const TERMINAL_WECHAT_PAYMENT_STATES = new Set(['CLOSED', 'REVOKED', 'PAYERROR']);
 
 export interface GroupBuyFailureRefundResult {
   status: string;
@@ -61,6 +63,58 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
     } catch {
       this.cancellationPrivateKey = null;
     }
+  }
+
+  override async getPaymentStatus(orderId: string, userId: string) {
+    const orderIdValue = parsePositiveBigIntId(orderId, '订单');
+    return this.withPaymentCancelLock(orderId, async () => {
+      const result = await super.getPaymentStatus(orderId, userId);
+      const tradeState = result.tradeState;
+      if (!tradeState || !TERMINAL_WECHAT_PAYMENT_STATES.has(tradeState)) {
+        return result;
+      }
+
+      const terminalResult = {
+        ...result,
+        paymentStatus: PAYMENT_STATUS.FAILED,
+        confirming: false,
+        displayStatus: tradeState === 'CLOSED' ? 'closed' as const : 'failed' as const,
+        canRetryPay: false,
+        message: '微信支付已终止，请取消订单后重新下单',
+      };
+
+      const claimed = await this.cancellationPrisma.orderPayment.updateMany({
+        where: {
+          orderId: orderIdValue,
+          status: PAYMENT_STATUS.CREATED,
+        },
+        data: { status: PAYMENT_STATUS.FAILED },
+      });
+      if (claimed.count === 1) {
+        return terminalResult;
+      }
+
+      // A payment-success callback can race the authoritative status query. Never overwrite or
+      // report that success as FAILED merely because the terminal-state compare-and-set lost.
+      const currentPayment = await this.cancellationPrisma.orderPayment.findFirst({
+        where: { orderId: orderIdValue },
+        orderBy: { createdAt: 'desc' },
+        select: { status: true },
+      });
+      if (currentPayment?.status === PAYMENT_STATUS.SUCCESS) {
+        return super.getPaymentStatus(orderId, userId);
+      }
+      if (currentPayment?.status === PAYMENT_STATUS.FAILED) {
+        return terminalResult;
+      }
+
+      return {
+        ...result,
+        confirming: true,
+        canRetryPay: false,
+        message: '支付状态正在收敛，请刷新后重试',
+      };
+    });
   }
 
   override async createPayment(orderId: string, userId: string) {
