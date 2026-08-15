@@ -1,7 +1,7 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import OrderListPage from '../list.vue'
-import { createPayment, wxPay } from '@/api/payment'
+import { createPayment, getPaymentStatus, wxPay } from '@/api/payment'
 
 vi.mock('@dcloudio/uni-app', () => ({
   onLoad: vi.fn(),
@@ -19,6 +19,7 @@ vi.mock('@/api/order', () => ({
 
 vi.mock('@/api/payment', () => ({
   createPayment: vi.fn(),
+  getPaymentStatus: vi.fn(),
   wxPay: vi.fn(),
 }))
 
@@ -30,6 +31,22 @@ const order = {
   payAmount: 1000,
   createTime: '2026-06-06 12:00:00',
   items: [],
+} as any
+
+const terminalPaymentStatus = {
+  orderId: 'order-1',
+  orderNo: 'XY20260606001',
+  orderStatus: 'pending_payment',
+  paymentStatus: 3,
+  paymentMethod: 'wechat',
+  amount: 1000,
+  paidAt: null,
+  transactionId: null,
+  confirming: false,
+  tradeState: 'CLOSED',
+  displayStatus: 'closed',
+  canRetryPay: false,
+  message: '微信支付已终止，请取消订单后重新下单',
 } as any
 
 function deferred<T>() {
@@ -56,6 +73,7 @@ function mountList() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(getPaymentStatus).mockRejectedValue(new Error('支付记录不存在'))
   vi.mocked(createPayment).mockResolvedValue({
     timeStamp: '1',
     nonceStr: 'nonce',
@@ -91,6 +109,7 @@ describe('订单列表支付处理', () => {
 
     const first = vm.handlePay(order)
     const second = vm.handlePay(order)
+    await flushPromises()
 
     expect(vm.isOrderActionBusy('order-1')).toBe(true)
     expect(createPayment).toHaveBeenCalledTimes(1)
@@ -110,7 +129,28 @@ describe('订单列表支付处理', () => {
     expect(vm.isOrderActionBusy('order-1')).toBe(false)
   })
 
-  it('用户取消支付时不误跳成功结果页', async () => {
+  it('微信支付已终止时从列表阻断再次创建支付并记住终态', async () => {
+    vi.mocked(getPaymentStatus).mockResolvedValue(terminalPaymentStatus)
+    const wrapper = mountList()
+    const vm = wrapper.vm as any
+
+    await vm.handlePay(order)
+
+    expect(getPaymentStatus).toHaveBeenCalledWith('order-1', { showError: false })
+    expect(createPayment).not.toHaveBeenCalled()
+    expect(wxPay).not.toHaveBeenCalled()
+    expect(vm.isPaymentRetryBlocked('order-1')).toBe(true)
+    expect(vm.getPaymentRetryBlockMessage('order-1')).toContain('取消订单后重新下单')
+    expect((globalThis as any).uni.showModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '当前支付不可继续',
+        content: '微信支付已终止，请取消订单后重新下单',
+        showCancel: false,
+      }),
+    )
+  })
+
+  it('用户取消支付时不误跳成功结果页且不再承诺一定可重试', async () => {
     vi.mocked(wxPay).mockRejectedValueOnce({ errMsg: 'requestPayment:fail cancel' })
     const wrapper = mountList()
 
@@ -118,7 +158,7 @@ describe('订单列表支付处理', () => {
 
     expect((globalThis as any).uni.navigateTo).not.toHaveBeenCalled()
     expect((globalThis as any).uni.showToast).toHaveBeenCalledWith({
-      title: '已取消支付，可稍后继续支付',
+      title: '已取消本次支付，请以订单最新状态为准',
       icon: 'none',
     })
   })
