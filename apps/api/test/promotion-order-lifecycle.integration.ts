@@ -149,7 +149,11 @@ async function main() {
     assert.equal(flashOrder.orderItems[0]?.activityDiscount, 95000);
     assert.equal(flashOrder.orderItems[0]?.activityType, 'flash_sale');
     assert.equal(flashOrder.orderItems[0]?.activityId, flashActivity.id);
-    assert.equal(flashOrder.payment?.amount, 5000, '秒杀支付单金额必须同步');
+    assert.equal(
+      flashOrder.payment,
+      null,
+      '正金额秒杀订单创建时不得提前持久化微信 CREATED 支付单',
+    );
 
     const flashLink = await prisma.flashSaleOrder.findUniqueOrThrow({
       where: { orderId: flashOrder.id },
@@ -207,7 +211,11 @@ async function main() {
     assert.equal(groupOrder.orderItems[0]?.activityDiscount, 96000);
     assert.equal(groupOrder.orderItems[0]?.activityType, 'group_buy');
     assert.equal(groupOrder.orderItems[0]?.activityId, groupActivity.id);
-    assert.equal(groupOrder.payment?.amount, 4000, '拼团支付单金额必须同步');
+    assert.equal(
+      groupOrder.payment,
+      null,
+      '正金额拼团订单创建时不得提前持久化微信 CREATED 支付单',
+    );
 
     const groupMember = await prisma.groupBuyMember.findUniqueOrThrow({
       where: { orderId: groupOrder.id },
