@@ -37,6 +37,14 @@ describe('ProductionFlashSaleService public detail', () => {
     await expect(service.weappFindActivityById('9007199254740993')).rejects.toThrow('秒杀活动不存在或已下架');
   });
 
+  it.each(['abc', '0', '-1', '9223372036854775808'])(
+    '秒杀公开详情拒绝非法 ID %s，而不是让 BigInt 转换异常逃逸为 500',
+    async (id) => {
+      const service = createService(1);
+      await expect(service.weappFindActivityById(id)).rejects.toThrow(/活动ID(无效|超出范围)/);
+    },
+  );
+
   it('我的秒杀仅返回页面所需字段，不暴露用户和订单项内部 ID', async () => {
     const now = new Date();
     const prisma = {
