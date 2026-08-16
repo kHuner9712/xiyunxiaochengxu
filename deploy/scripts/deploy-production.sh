@@ -237,8 +237,16 @@ fi
 
 "${COMPOSE[@]}" build --pull api
 pass "API and admin image built with BUILD_SHA=$BUILD_SHA"
-API_IMAGE_ID="$("${COMPOSE[@]}" images -q api | head -n 1)"
-[ -n "$API_IMAGE_ID" ] || fail 'cannot resolve newly built API image for migration clone verification'
+API_IMAGE_REF="$("${COMPOSE[@]}" config --images api | head -n 1)"
+[ -n "$API_IMAGE_REF" ] || fail 'cannot resolve newly built API image reference for migration clone verification'
+API_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$API_IMAGE_REF" 2>/dev/null || true)"
+[ -n "$API_IMAGE_ID" ] || fail "cannot resolve newly built API image ID from $API_IMAGE_REF"
+CANDIDATE_BUILD_SHA="$(docker run --rm --entrypoint sh "$API_IMAGE_ID" -c 'printf "%s" "${BUILD_SHA:-}"')"
+[ "$CANDIDATE_BUILD_SHA" = "$BUILD_SHA" ] || fail "candidate image build SHA mismatch before maintenance: expected=$BUILD_SHA actual=${CANDIDATE_BUILD_SHA:-empty}"
+HOST_MIGRATION_COUNT="$(find "$ROOT_DIR/apps/api/prisma/migrations" -type f -name migration.sql | wc -l | tr -d '[:space:]')"
+IMAGE_MIGRATION_COUNT="$(docker run --rm --entrypoint sh "$API_IMAGE_ID" -c 'find prisma/migrations -type f -name migration.sql | wc -l' | tr -d '[:space:]')"
+[ "$IMAGE_MIGRATION_COUNT" = "$HOST_MIGRATION_COUNT" ] || fail "candidate image migration count mismatch before maintenance: host=$HOST_MIGRATION_COUNT image=$IMAGE_MIGRATION_COUNT imageRef=$API_IMAGE_REF"
+pass "newly built candidate image identity and migration payload verified before maintenance ($API_IMAGE_ID, migrations=$IMAGE_MIGRATION_COUNT)"
 "${COMPOSE[@]}" run --rm --no-deps api true
 pass 'candidate image passed full production config/payment preflight before maintenance'
 
