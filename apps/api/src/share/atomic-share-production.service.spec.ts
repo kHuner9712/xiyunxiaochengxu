@@ -38,7 +38,6 @@ describe('AtomicShareProductionService direct invite attribution', () => {
         status: 1,
         startTime: { lte: expect.any(Date) },
         endTime: { gte: expect.any(Date) },
-        deletedAt: null,
       },
       orderBy: [{ startTime: 'desc' }, { id: 'desc' }],
       select: { id: true },
