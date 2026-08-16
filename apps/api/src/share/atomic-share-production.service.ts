@@ -42,7 +42,6 @@ export class AtomicShareProductionService extends SafeShareProductionService {
           status: 1,
           startTime: { lte: now },
           endTime: { gte: now },
-          deletedAt: null,
         },
         orderBy: [{ startTime: 'desc' }, { id: 'desc' }],
         select: { id: true },
