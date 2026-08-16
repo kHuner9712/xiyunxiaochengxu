@@ -35,7 +35,8 @@ export class WeappActivityController {
   @Get(':id')
   async findById(@Param('id') id: string) {
     const service = this.activityService as CheckoutReadyProductionActivityService;
-    return service.findPublishedById(id);
+    const activity = await service.findPublishedById(id);
+    return { ...activity, now: new Date().toISOString() };
   }
 
   @Public()
