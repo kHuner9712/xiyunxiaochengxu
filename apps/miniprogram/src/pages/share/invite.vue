@@ -2,7 +2,7 @@
   <view class="invite-page page-shell">
     <view class="header-section">
       <text class="header-title">邀请好友 有礼相送</text>
-      <text class="header-desc">分享给好友，好友首单支付后你将获得奖励</text>
+      <text class="header-desc">活动期间分享给好友，好友首单完成后按活动规则发放奖励</text>
     </view>
 
     <view class="stats-section card">
@@ -113,7 +113,7 @@ function sourceTypeText(source: string): string {
 }
 
 function rewardStatusText(status: string): string {
-  if (status === 'pending') return '待领取'
+  if (status === 'pending') return '待发放'
   if (status === 'issued') return '已发放'
   if (status === 'claimed') return '已领取'
   if (status === 'cancelled') return '已取消'
@@ -130,6 +130,10 @@ onShareAppMessage(() => ({
 }))
 
 onShow(() => {
+  if (!userStore.isLoggedIn) {
+    userStore.requireLogin(() => {})
+    return
+  }
   void Promise.all([loadStats(), loadRewards()])
 })
 </script>
