@@ -13,7 +13,11 @@ vi.mock('@dcloudio/uni-app', () => ({
 }))
 
 vi.mock('@/stores/user', () => ({
-  useUserStore: () => ({ userInfo: { id: '100' } }),
+  useUserStore: () => ({
+    userInfo: { id: '100' },
+    isLoggedIn: true,
+    requireLogin: vi.fn(),
+  }),
 }))
 
 vi.mock('@/api/share', () => ({
