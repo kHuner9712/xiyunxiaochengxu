@@ -68,4 +68,21 @@ describe('IdSafeDurableAdminBenefitPackageService', () => {
       packageItemId: '789',
     }));
   });
+
+  it.each(['abc', '0', '-1', '9223372036854775808'])(
+    '后台核销日志拒绝非法核销员 ID %s，而不是让筛选查询抛 500',
+    async (id) => {
+      const parent = jest
+        .spyOn(DurableAdminBenefitPackageService.prototype, 'findVerificationLogs')
+        .mockResolvedValue({ list: [], total: 0 } as any);
+      const service = createService();
+
+      await expect(service.findVerificationLogs({
+        page: 1,
+        pageSize: 20,
+        verifierId: id,
+      })).rejects.toThrow(/核销员ID(无效|超出范围)/);
+      expect(parent).not.toHaveBeenCalled();
+    },
+  );
 });
