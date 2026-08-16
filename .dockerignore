@@ -39,6 +39,7 @@ apps/api/certs
 
 # Database/export artifacts
 *.sql
+!apps/api/prisma/migrations/**/migration.sql
 *.sql.gz
 *.dump
 *.bak
