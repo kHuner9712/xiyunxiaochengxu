@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-API_URL="${API_URL:-https://api.yunxixiaochengxu.com.cn/api/health}"
+API_BASE_URL="${API_BASE_URL:-https://api.yunxixiaochengxu.com.cn/api}"
+API_URL="${API_URL:-${API_BASE_URL}/health}"
 ADMIN_URL="${ADMIN_URL:-https://admin.yunxixiaochengxu.com.cn/}"
 API_HOST="${API_HOST:-api.yunxixiaochengxu.com.cn}"
 ADMIN_HOST="${ADMIN_HOST:-admin.yunxixiaochengxu.com.cn}"
@@ -47,6 +48,46 @@ if unhealthy:
 
 print(f"[smoke] API 正常，依赖状态: {services}")
 PY
+
+check_business_api() {
+  local label="$1"
+  local path="$2"
+  local output="$TMP_DIR/business-${label}.json"
+  local url="${API_BASE_URL}${path}"
+
+  echo "[smoke] 检查业务 API ${label}: ${url}"
+  curl "${curl_common[@]}" -H 'Accept: application/json' "$url" > "$output"
+  python3 - "$output" "$label" <<'PY'
+import json
+import sys
+
+path, label = sys.argv[1], sys.argv[2]
+with open(path, encoding='utf-8') as file:
+    payload = json.load(file)
+
+if not isinstance(payload, dict):
+    raise SystemExit(f"{label}: response is not a JSON object: {type(payload).__name__}")
+if payload.get('code') != 0:
+    raise SystemExit(f"{label}: business code is not 0: {payload!r}")
+if 'data' not in payload:
+    raise SystemExit(f"{label}: response is missing data: {payload!r}")
+if not payload.get('requestId'):
+    raise SystemExit(f"{label}: response is missing requestId: {payload!r}")
+
+print(f"[smoke] {label} 正常")
+PY
+}
+
+# These are real public mini-program read paths, not synthetic health endpoints. They exercise
+# routing, auth-public metadata, Prisma connectivity/migrations, response serialization and the
+# production database schema while remaining safe and side-effect free.
+check_business_api "home" "/weapp/home/data"
+check_business_api "category" "/weapp/category/tree"
+check_business_api "product-list" "/weapp/product/list?page=1&pageSize=1"
+check_business_api "activity-feed" "/weapp/activity/feed?tab=recommend&page=1&pageSize=1"
+check_business_api "flash-sale-list" "/weapp/flash-sale/list?page=1&pageSize=1"
+check_business_api "group-buy-list" "/weapp/group-buy/list?page=1&pageSize=1"
+check_business_api "benefit-package-list" "/weapp/benefit-package/list?page=1&pageSize=1"
 
 echo "[smoke] 检查管理后台: $ADMIN_URL"
 curl "${curl_common[@]}" --output /dev/null "$ADMIN_URL"
