@@ -19,6 +19,7 @@ export interface GroupBuyActivity {
   sortOrder: number
   description?: string
   coverImage?: string
+  now?: string
 }
 
 export interface PublicGroupBuyMember {
