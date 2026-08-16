@@ -58,4 +58,17 @@ export class IdSafeDurableAdminBenefitPackageService extends DurableAdminBenefit
         : {}),
     });
   }
+
+  override async findVerificationLogs(
+    query: Parameters<DurableAdminBenefitPackageService['findVerificationLogs']>[0],
+  ) {
+    return super.findVerificationLogs({
+      ...query,
+      ...(query.userId ? { userId: parsePositiveBigIntId(query.userId, '用户').toString() } : {}),
+      ...(query.packageId ? { packageId: parsePositiveBigIntId(query.packageId, '权益包').toString() } : {}),
+      ...(query.verifierId
+        ? { verifierId: parsePositiveBigIntId(query.verifierId, '核销员').toString() }
+        : {}),
+    });
+  }
 }
