@@ -187,6 +187,7 @@ export interface ActivityDetail {
   activityProducts?: ActivityProduct[]
   productList?: ActivityProduct[]
   goodsList?: ActivityProduct[]
+  now?: string
 }
 
 export interface FeedItem {
