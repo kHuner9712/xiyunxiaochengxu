@@ -41,6 +41,7 @@ export class ProductionFlashSaleService extends TransactionalFlashSaleService {
   }
 
   override async weappFindActivityById(id: string) {
+    parsePositiveBigIntId(id, '活动');
     const activity = await super.weappFindActivityById(id);
     if (activity.status !== 1) {
       throw new NotFoundException('秒杀活动不存在或已下架');
