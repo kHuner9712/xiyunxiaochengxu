@@ -32,6 +32,7 @@
 import { ref } from 'vue'
 import { onHide, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import { flashSaleApi, type FlashSaleActivity } from '@/api/flash-sale'
+import { resolveServerClockOffset, serverNowFromOffset } from '@/utils/server-clock'
 import Loading from '@/components/Loading.vue'
 import Empty from '@/components/Empty.vue'
 
@@ -39,17 +40,20 @@ const activityList = ref<FlashSaleActivity[]>([])
 const loading = ref(false)
 const page = ref(1)
 const finished = ref(false)
+const serverClockOffsetMs = ref(0)
 const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 let listVersion = 0
 let loadingVersion = -1
 
+function updateClock() {
+  nowMs.value = serverNowFromOffset(serverClockOffsetMs.value)
+}
+
 function startClock() {
   stopClock()
-  nowMs.value = Date.now()
-  clockTimer = setInterval(() => {
-    nowMs.value = Date.now()
-  }, 1000)
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
 }
 
 function stopClock() {
@@ -112,6 +116,11 @@ async function loadList(version = listVersion) {
     const data = await flashSaleApi.getList({ page: requestPage, pageSize: 20 })
     if (version !== listVersion) return
 
+    const serverNow = data.list.find((item) => item.now)?.now
+    if (serverNow) {
+      serverClockOffsetMs.value = resolveServerClockOffset(serverNow)
+      updateClock()
+    }
     activityList.value.push(...data.list)
     finished.value = activityList.value.length >= data.total
     page.value = requestPage + 1
