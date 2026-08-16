@@ -24,6 +24,39 @@ export class AtomicShareProductionService extends SafeShareProductionService {
     super(atomicSharePrisma, redisService, pointsService, couponService, systemConfigService);
   }
 
+  override async bindInvite(
+    userId: string,
+    data: { inviter?: string; shareRecordId?: string; campaignId?: string },
+  ) {
+    // The invite page and poster links historically carried only `inviter`. Without an explicit
+    // share record/campaign that created a valid invite relation whose sourceCampaignId was null,
+    // so the advertised first-paid reward could never be issued. Preserve exact attribution when
+    // a caller supplies a share record/campaign; otherwise attach the deterministic current
+    // invite-new-user campaign. If several overlap, the most recently-started campaign wins.
+    let normalizedData = data;
+    if (data.inviter && !data.shareRecordId && !data.campaignId) {
+      const now = new Date();
+      const activeInviteCampaign = await this.atomicSharePrisma.shareCampaign.findFirst({
+        where: {
+          type: 'invite_new_user',
+          status: 1,
+          startTime: { lte: now },
+          endTime: { gte: now },
+          deletedAt: null,
+        },
+        orderBy: [{ startTime: 'desc' }, { id: 'desc' }],
+        select: { id: true },
+      });
+      if (activeInviteCampaign) {
+        normalizedData = {
+          ...data,
+          campaignId: activeInviteCampaign.id.toString(),
+        };
+      }
+    }
+    return super.bindInvite(userId, normalizedData);
+  }
+
   override async recordShare(
     userId: string,
     data: {
