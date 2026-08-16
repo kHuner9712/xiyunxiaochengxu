@@ -17,7 +17,7 @@
       </view>
       <text class="activity-name">{{ activity.name }}</text>
       <view class="activity-meta">
-        <CountdownTimer :endTime="normalizedEndTime" label="距结束" />
+        <CountdownTimer :endTime="normalizedEndTime" :clockOffsetMs="serverClockOffsetMs" label="距结束" />
       </view>
       <text v-if="activity.description" class="activity-desc">{{ activity.description }}</text>
     </view>
@@ -95,6 +95,7 @@ import { computed, ref } from 'vue'
 import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from '@dcloudio/uni-app'
 import { getActivityDetail, type ActivityDetail, type ActivityProduct } from '@/api/activity'
 import { normalizeTimeToTimestamp, type CompatibleTime } from '@/utils/time'
+import { resolveServerClockOffset, serverNowFromOffset } from '@/utils/server-clock'
 import { formatPrice } from '@/utils/format'
 import CountdownTimer from '@/components/CountdownTimer.vue'
 
@@ -110,6 +111,7 @@ const activity = ref<ActivityDetail>({
   rules: null,
   products: [],
 })
+const serverClockOffsetMs = ref(0)
 const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
@@ -214,12 +216,14 @@ function isGiftSku(skuId?: string | null) {
   return giftSkuIds.value.has(String(skuId || ''))
 }
 
+function updateClock() {
+  nowMs.value = serverNowFromOffset(serverClockOffsetMs.value)
+}
+
 function startClock() {
-  nowMs.value = Date.now()
+  updateClock()
   if (clockTimer) return
-  clockTimer = setInterval(() => {
-    nowMs.value = Date.now()
-  }, 1000)
+  clockTimer = setInterval(updateClock, 1000)
 }
 
 function stopClock() {
@@ -230,7 +234,10 @@ function stopClock() {
 
 async function loadActivity(id: string) {
   try {
-    activity.value = await getActivityDetail(id)
+    const data = await getActivityDetail(id)
+    serverClockOffsetMs.value = resolveServerClockOffset(data.now)
+    updateClock()
+    activity.value = data
   } catch (error: any) {
     uni.showToast({ title: error?.message || '活动加载失败', icon: 'none' })
   }
@@ -285,7 +292,7 @@ onLoad((options) => {
     uni.showToast({ title: '活动参数无效', icon: 'none' })
     return
   }
-  loadActivity(id)
+  void loadActivity(id)
 })
 
 onShow(() => startClock())
