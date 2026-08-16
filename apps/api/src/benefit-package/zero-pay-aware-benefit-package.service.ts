@@ -8,6 +8,7 @@ import { SnapshotGuardedProductionBenefitPackageService } from './snapshot-guard
 interface ZeroPayAwareBenefitPackageServiceContract {
   findAll(...args: any[]): Promise<any>;
   findById(...args: any[]): Promise<any>;
+  findDetailForWeapp(...args: any[]): Promise<any>;
   findByProductId(...args: any[]): Promise<any>;
   create(...args: any[]): Promise<any>;
   update(...args: any[]): Promise<any>;
