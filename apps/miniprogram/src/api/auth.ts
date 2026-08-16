@@ -1,4 +1,4 @@
-import { del, post, put } from '@/utils/request'
+import { del, post, put, removeToken } from '@/utils/request'
 
 export function wxLogin(data: { code: string }) {
   return post<{ token: string; isNewUser: boolean }>('/weapp/auth/login', data)
@@ -16,6 +16,11 @@ export function updateProfile(data: { nickname?: string; avatar?: string; avatar
   return put('/weapp/user/profile', data)
 }
 
-export function cancelAccount() {
-  return del<{ cancelled: boolean; cancelledAt: string }>('/weapp/user/account')
+export async function cancelAccount() {
+  const result = await del<{ cancelled: boolean; cancelledAt: string }>('/weapp/user/account')
+  // A successful cancellation has already revoked all server sessions. Remove the persisted token
+  // immediately so a subsequent local-state cleanup cannot accidentally issue an authenticated
+  // request with a tombstoned account.
+  removeToken()
+  return result
 }
