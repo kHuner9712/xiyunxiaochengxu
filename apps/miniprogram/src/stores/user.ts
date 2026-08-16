@@ -137,9 +137,9 @@ export const useUserStore = defineStore('user', () => {
     const { revokeServer = true } = options
     // request() snapshots the Authorization header synchronously when logoutApi() is invoked, so
     // normal logout can revoke the server token while the UI clears immediately. Account
-    // cancellation already revokes every session transactionally, so callers may skip the redundant
-    // request to avoid a 401 redirect racing with the post-cancellation home navigation.
-    if (revokeServer && token.value) {
+    // cancellation removes the persisted token after the server has revoked every session, so
+    // checking getToken() here avoids a redundant request with a tombstoned account.
+    if (revokeServer && token.value && getToken()) {
       void logoutApi().catch((err) => {
         console.warn('[baby-mall] server session revoke failed during logout:', err)
       })
