@@ -28,9 +28,9 @@ test('benefit package mutations reuse only the same operation and reject cross-o
   assert.equal((api.match(/runPackageMutation\(id, '(?:update|status|delete)'/g) || []).length, 3)
 })
 
-test('runtime BenefitPackageService token resolves to the durable final provider', () => {
+test('runtime BenefitPackageService token resolves to the id-safe durable final provider', () => {
   const moduleSource = read('apps/api/src/benefit-package/benefit-package.module.ts')
-  assert.match(moduleSource, /DurableAdminBenefitPackageService/)
-  assert.match(moduleSource, /provide: BenefitPackageService,[\s\S]*useExisting: DurableAdminBenefitPackageService/)
+  assert.match(moduleSource, /IdSafeDurableAdminBenefitPackageService/)
+  assert.match(moduleSource, /provide: BenefitPackageService,[\s\S]*useExisting: IdSafeDurableAdminBenefitPackageService/)
   assert.doesNotMatch(moduleSource, /useClass: ValiditySafeSnapshotViewBenefitPackageService/)
 })
