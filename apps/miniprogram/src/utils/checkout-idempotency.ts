@@ -94,4 +94,22 @@ export async function runIdempotentCheckout<T>(
   return result
 }
 
+/** Remove only our pending write identities. This is used after permanent account cancellation so
+ * another account on the same device can never reuse a request identity created by the deleted
+ * account. Ordinary network retries continue to keep these identities until success or TTL expiry.
+ */
+export function clearPersistentIdempotencyState() {
+  try {
+    const info = uni.getStorageInfoSync()
+    const keys = Array.isArray(info?.keys) ? info.keys : []
+    for (const key of keys) {
+      if (String(key).startsWith(STORAGE_PREFIX)) {
+        uni.removeStorageSync(String(key))
+      }
+    }
+  } catch (err) {
+    console.warn('[baby-mall] failed to clear pending checkout identities after account cancellation:', err)
+  }
+}
+
 export const runPersistentIdempotentAction = runIdempotentCheckout
