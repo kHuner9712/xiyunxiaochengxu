@@ -2,14 +2,15 @@
   <view class="baby-edit-page page-shell">
     <view class="intro-card card">
       <text class="intro-title">{{ isEdit ? '编辑宝宝档案' : '添加宝宝档案' }}</text>
-      <text class="intro-desc">用于更准确的月龄推荐，信息仅在小程序服务内使用。</text>
+      <text class="intro-desc">{{ loadingDetail ? '正在加载宝宝资料...' : '用于更准确的月龄推荐，信息仅在小程序服务内使用。' }}</text>
     </view>
-    <view class="form-section card">
+    <view class="form-section card" :class="{ disabled: formLocked }">
       <view class="form-item">
         <text class="form-label">昵称</text>
         <input
           class="form-input"
           v-model="form.nickname"
+          :disabled="formLocked"
           placeholder="请输入宝宝昵称"
           placeholder-class="native-input-placeholder"
         />
@@ -17,31 +18,31 @@
       <view class="form-item">
         <text class="form-label">性别</text>
         <view class="gender-select">
-          <view class="gender-option" :class="{ active: form.gender === 1 }" @tap="form.gender = 1">
+          <view class="gender-option" :class="{ active: form.gender === 1 }" @tap="setGender(1)">
             <text class="gender-text">男</text>
           </view>
-          <view class="gender-option" :class="{ active: form.gender === 2 }" @tap="form.gender = 2">
+          <view class="gender-option" :class="{ active: form.gender === 2 }" @tap="setGender(2)">
             <text class="gender-text">女</text>
           </view>
         </view>
       </view>
       <view class="form-item">
         <text class="form-label">生日</text>
-        <picker mode="date" :value="form.birthday" @change="onDateChange">
+        <picker mode="date" :disabled="formLocked" :value="form.birthday" @change="onDateChange">
           <text class="form-value" :class="{ placeholder: !form.birthday }">{{ form.birthday || '请选择生日' }}</text>
         </picker>
       </view>
       <view class="form-item">
         <text class="form-label">头像</text>
-        <view class="avatar-upload" :class="{ disabled: uploading || submitting }" @tap="uploadAvatar">
+        <view class="avatar-upload" :class="{ disabled: uploading || formLocked }" @tap="uploadAvatar">
           <image v-if="avatarPreview" class="avatar-preview" :src="avatarPreview" mode="aspectFill" />
           <text v-else class="avatar-placeholder">{{ uploading ? '…' : '+' }}</text>
         </view>
       </view>
     </view>
 
-    <view class="submit-btn" :class="{ disabled: uploading || submitting }" @tap="handleSubmit">
-      <text class="submit-text">{{ uploading ? '头像上传中...' : (submitting ? '保存中...' : (isEdit ? '保存' : '添加')) }}</text>
+    <view class="submit-btn" :class="{ disabled: uploading || submitting || formLocked }" @tap="handleSubmit">
+      <text class="submit-text">{{ loadingDetail ? '资料加载中...' : (uploading ? '头像上传中...' : (submitting ? '保存中...' : (isEdit ? '保存' : '添加'))) }}</text>
     </view>
   </view>
 </template>
@@ -61,28 +62,54 @@ const form = ref<BabyForm & { id?: string }>({
 })
 
 const isEdit = ref(false)
+const editTargetId = ref('')
+const loadingDetail = ref(false)
+const detailLoaded = ref(true)
 const uploading = ref(false)
 const submitting = ref(false)
 const avatarPreview = computed(() => form.value.avatar || form.value.avatarUrl || '')
+const formLocked = computed(() =>
+  loadingDetail.value || submitting.value || (isEdit.value && !detailLoaded.value)
+)
 
 async function loadBaby(id: string) {
+  // Lock the page into edit mode before the network request starts. Otherwise a slow detail
+  // request leaves the page temporarily behaving like "create", and a fast user tap can create a
+  // duplicate baby instead of updating the requested one.
+  isEdit.value = true
+  editTargetId.value = id
+  detailLoaded.value = false
+  loadingDetail.value = true
   try {
     const data = await getBabyDetail(id)
+    // This page currently has a single onLoad identity, but retain the target check so a stale
+    // response can never bind a different record if route reuse is introduced later.
+    if (editTargetId.value !== id) return
     const avatar = data.avatar || data.avatarUrl || ''
     form.value = { ...data, id: String(data.id), avatar, avatarUrl: avatar }
-    isEdit.value = true
+    detailLoaded.value = true
   } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (editTargetId.value === id) {
+      detailLoaded.value = false
+      uni.showToast({ title: '宝宝资料加载失败，请返回重试', icon: 'none' })
+    }
+  } finally {
+    if (editTargetId.value === id) loadingDetail.value = false
   }
 }
 
+function setGender(gender: 1 | 2) {
+  if (formLocked.value) return
+  form.value.gender = gender
+}
+
 function onDateChange(e: any) {
-  if (submitting.value) return
+  if (formLocked.value) return
   form.value.birthday = e.detail.value
 }
 
 async function uploadAvatar() {
-  if (uploading.value || submitting.value) return
+  if (uploading.value || formLocked.value) return
   uploading.value = true
   try {
     const results = await chooseAndUploadImage(1, 'baby-avatar')
@@ -111,6 +138,14 @@ function validate(): boolean {
 
 async function handleSubmit() {
   if (submitting.value) return
+  if (loadingDetail.value) {
+    uni.showToast({ title: '宝宝资料仍在加载，请稍后保存', icon: 'none' })
+    return
+  }
+  if (isEdit.value && (!detailLoaded.value || !form.value.id || form.value.id !== editTargetId.value)) {
+    uni.showToast({ title: '宝宝资料未加载成功，请返回重试', icon: 'none' })
+    return
+  }
   if (uploading.value) {
     uni.showToast({ title: '头像仍在上传，请稍后保存', icon: 'none' })
     return
@@ -139,11 +174,22 @@ async function handleSubmit() {
 }
 
 onLoad((options) => {
-  if (options?.id) loadBaby(String(options.id))
+  if (options?.id) {
+    const id = String(options.id)
+    isEdit.value = true
+    editTargetId.value = id
+    detailLoaded.value = false
+    void loadBaby(id)
+  }
 })
 
 defineExpose({
   form,
+  isEdit,
+  editTargetId,
+  loadingDetail,
+  detailLoaded,
+  formLocked,
   handleSubmit,
   uploadAvatar,
   avatarPreview,
@@ -181,6 +227,11 @@ defineExpose({
 .form-section {
   margin-bottom: $spacing-lg;
   border-radius: $radius-xxl;
+
+  &.disabled {
+    opacity: 0.65;
+    pointer-events: none;
+  }
 }
 
 .form-item {

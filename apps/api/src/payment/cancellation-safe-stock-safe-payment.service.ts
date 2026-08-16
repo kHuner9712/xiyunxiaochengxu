@@ -18,6 +18,7 @@ import { StockSafeRecoverableProductionPaymentService } from './stock-safe-recov
 
 const PAYMENT_CANCEL_LOCK_TTL_SECONDS = 90;
 const REFUND_USER_LOCK_TTL_SECONDS = 120;
+const REFUND_SKU_LOCK_TTL_SECONDS = 120;
 const TERMINAL_WECHAT_PAYMENT_STATES = new Set(['CLOSED', 'REVOKED', 'PAYERROR']);
 
 export interface GroupBuyFailureRefundResult {
@@ -161,7 +162,13 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
    * balance and drive availablePoints below zero. Serialize the inherited refund-success core by
    * user across all orders. This is deliberately independent from the per-order payment/cancel lock.
    *
-   * If the lock is occupied we fail closed; WeChat callback/reconciliation will retry. Deleted users
+   * Any refund path that can restore inventory must also serialize the SKU snapshot used by the
+   * stock ledger. Type=2 aftersales restore one order-item SKU in the base refund transaction.
+   * Promotion failure refunds (notably failed group buys) carry no aftersaleId and restore inventory
+   * later in the production promotion hook, so lock every SKU on that order as well. SKU locks are
+   * always acquired in ascending numeric order to make multi-SKU full-order refunds deadlock-safe.
+   *
+   * If a lock is occupied we fail closed; WeChat callback/reconciliation will retry. Deleted users
    * are still eligible for monetary refund processing, so the lookup does not require an active user.
    */
   override async processWechatRefundSuccess(refund: any, refundId: string, wechatData: any) {
@@ -170,16 +177,41 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
       throw new BadRequestException('退款记录缺少订单ID，无法安全处理退款');
     }
 
-    const order = await this.cancellationPrisma.order.findUnique({
-      where: { id: BigInt(rawOrderId) },
-      select: { userId: true },
-    });
+    const orderId = BigInt(rawOrderId);
+    const rawAftersaleId = refund?.aftersaleId;
+    const [order, aftersale] = await Promise.all([
+      this.cancellationPrisma.order.findUnique({
+        where: { id: orderId },
+        select: { userId: true },
+      }),
+      rawAftersaleId === undefined || rawAftersaleId === null
+        ? Promise.resolve(null)
+        : this.cancellationPrisma.aftersaleOrder.findUnique({
+            where: { id: BigInt(rawAftersaleId) },
+            select: {
+              type: true,
+              orderItem: { select: { skuId: true } },
+            },
+          }),
+    ]);
     if (!order) {
       throw new BadRequestException('退款对应订单不存在，无法安全处理退款');
     }
 
+    let skuIdsToLock: string[] = [];
+    if (aftersale?.type === 2 && aftersale.orderItem?.skuId) {
+      skuIdsToLock = [aftersale.orderItem.skuId.toString()];
+    } else if (rawAftersaleId === undefined || rawAftersaleId === null) {
+      const orderItems = await this.cancellationPrisma.orderItem.findMany({
+        where: { orderId },
+        select: { skuId: true },
+      });
+      skuIdsToLock = orderItems.map((item) => item.skuId.toString());
+    }
+
+    const runCore = () => super.processWechatRefundSuccess(refund, refundId, wechatData);
     return this.withRefundUserLock(order.userId.toString(), () =>
-      super.processWechatRefundSuccess(refund, refundId, wechatData),
+      this.withRefundSkuLocks(skuIdsToLock, runCore),
     );
   }
 
@@ -355,40 +387,80 @@ export class CancellationSafeStockSafePaymentService extends StockSafeRecoverabl
   }
 
   private async withPaymentCancelLock<T>(orderId: string, action: () => Promise<T>): Promise<T> {
-    const key = `order:payment-cancel:${orderId}`;
-    const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
-    const acquired = await this.cancellationRedis.setNX(
-      key,
-      token,
+    return this.withRenewingRedisLock(
+      `order:payment-cancel:${orderId}`,
       PAYMENT_CANCEL_LOCK_TTL_SECONDS,
+      '订单支付、取消或退款状态处理中，请稍后重试',
+      action,
     );
-    if (!acquired) {
-      throw new BadRequestException('订单支付、取消或退款状态处理中，请稍后重试');
-    }
-
-    try {
-      return await action();
-    } finally {
-      await this.cancellationRedis.releaseLockWithLua(key, token);
-    }
   }
 
   private async withRefundUserLock<T>(userId: string, action: () => Promise<T>): Promise<T> {
-    const key = `user:refund-success:${userId}`;
-    const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
-    const acquired = await this.cancellationRedis.setNX(
-      key,
-      token,
+    return this.withRenewingRedisLock(
+      `user:refund-success:${userId}`,
       REFUND_USER_LOCK_TTL_SECONDS,
+      '该用户退款状态正在处理中，请稍后重试',
+      action,
     );
+  }
+
+  private async withRefundSkuLock<T>(skuId: string, action: () => Promise<T>): Promise<T> {
+    return this.withRenewingRedisLock(
+      `sku:refund-success:${skuId}`,
+      REFUND_SKU_LOCK_TTL_SECONDS,
+      '该商品退款库存正在处理中，请稍后重试',
+      action,
+    );
+  }
+
+  private async withRefundSkuLocks<T>(skuIds: string[], action: () => Promise<T>): Promise<T> {
+    const orderedSkuIds = Array.from(new Set(skuIds))
+      .sort((left, right) => {
+        const leftId = BigInt(left);
+        const rightId = BigInt(right);
+        return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
+      });
+
+    const acquire = (index: number): Promise<T> => {
+      if (index >= orderedSkuIds.length) return action();
+      return this.withRefundSkuLock(
+        orderedSkuIds[index],
+        () => acquire(index + 1),
+      );
+    };
+    return acquire(0);
+  }
+
+  private async withRenewingRedisLock<T>(
+    key: string,
+    ttlSeconds: number,
+    busyMessage: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    const acquired = await this.cancellationRedis.setNX(key, token, ttlSeconds);
     if (!acquired) {
-      throw new BadRequestException('该用户退款状态正在处理中，请稍后重试');
+      throw new BadRequestException(busyMessage);
     }
+
+    // Remote WeChat calls and refund-success side effects can outlive a fixed Redis TTL during a
+    // network stall or database incident. Renew the exact token periodically so another worker
+    // cannot enter the same critical section merely because the original lease elapsed.
+    const heartbeat = setInterval(() => {
+      void this.cancellationRedis
+        .extendLockWithLua(key, token, ttlSeconds)
+        .catch(() => undefined);
+    }, Math.max(1000, Math.floor((ttlSeconds * 1000) / 3)));
+    heartbeat.unref?.();
 
     try {
       return await action();
     } finally {
-      await this.cancellationRedis.releaseLockWithLua(key, token);
+      clearInterval(heartbeat);
+      // The business operation has already committed or failed by this point. A transient Redis
+      // release error must not turn a successful payment/refund operation into an API failure; the
+      // tokenized lease will expire naturally if explicit release is unavailable.
+      await this.cancellationRedis.releaseLockWithLua(key, token).catch(() => undefined);
     }
   }
 }

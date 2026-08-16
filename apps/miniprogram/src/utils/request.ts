@@ -36,6 +36,7 @@ function normalizeApiBaseUrl(raw: string): string {
 const BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || '')
 const TOKEN_KEY = 'baby_mall_token'
 export const REDIRECT_AFTER_LOGIN_KEY = 'baby_mall_redirect_after_login'
+export const AUTH_EXPIRED_EVENT = 'baby-mall:auth-expired'
 const USER_TAB_URL = '/pages/user/index'
 const TAB_BAR_ROUTES = new Set([
   'pages/home/index',
@@ -67,6 +68,14 @@ export function setToken(token: string) {
 
 export function removeToken() {
   uni.removeStorageSync(TOKEN_KEY)
+}
+
+function notifyAuthExpired() {
+  try {
+    uni.$emit(AUTH_EXPIRED_EVENT)
+  } catch (err) {
+    console.warn('[baby-mall] failed to broadcast auth expiration:', err)
+  }
 }
 
 function getCurrentPageUrl() {
@@ -211,6 +220,7 @@ export function request<T = any>(config: RequestConfig): Promise<T> {
 
         if (statusCode === 401 || (responseCode !== undefined && AUTH_ERROR_CODES.has(responseCode))) {
           removeToken()
+          notifyAuthExpired()
           redirectToLoginTab('登录已过期，请重新登录')
           reject(new Error('登录已过期，请重新登录'))
           return

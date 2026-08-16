@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { get, getToken, setToken, removeToken, redirectToLoginTab } from '@/utils/request'
+import { AUTH_EXPIRED_EVENT, get, getToken, setToken, removeToken, redirectToLoginTab } from '@/utils/request'
 import { wxLogin as wxLoginApi, logout as logoutApi, bindPhone as bindPhoneApi, updateProfile as updateProfileApi } from '@/api/auth'
 import { handleShareBindOnLogin } from '@/utils/share'
 import { useCartStore } from './cart'
@@ -34,18 +34,35 @@ export const useUserStore = defineStore('user', () => {
   const memberLevelName = computed(() => userInfo.value?.memberLevelName || '普通用户')
   const points = computed(() => userInfo.value?.points || 0)
 
+  function clearLocalSession() {
+    token.value = ''
+    userInfo.value = null
+    useCartStore().clearCart()
+  }
+
+  // request.ts owns transport-level 401 detection. Keep Pinia state synchronized with
+  // persisted token removal so pages cannot remain in a stale "logged in" UI after expiry.
+  const uniEventBus = uni as typeof uni & { $on?: (event: string, callback: () => void) => void }
+  if (typeof uniEventBus.$on === 'function') {
+    uniEventBus.$on(AUTH_EXPIRED_EVENT, clearLocalSession)
+  }
+
   async function checkLogin() {
     const savedToken = getToken()
-    if (!savedToken) return false
+    if (!savedToken) {
+      clearLocalSession()
+      return false
+    }
 
     token.value = savedToken
     try {
       await fetchUserInfo()
       return true
     } catch (err) {
-      // 401 会由请求层清除持久化 token；临时网络错误则保留登录态，避免误登出。
+      // 401 会由请求层同时清除持久化 token 与内存态。临时网络错误则保留登录态，
+      // checkLogin 的返回值必须与 isLoggedIn 保持一致，避免弱网时调用方误判为游客。
       console.warn('[baby-mall] restore login session failed:', err)
-      return false
+      return !!getToken()
     }
   }
 
@@ -57,9 +74,7 @@ export const useUserStore = defineStore('user', () => {
     } catch (err) {
       console.error('[baby-mall] fetchUserInfo failed after auth:', err)
       if (!getToken()) {
-        token.value = ''
-        userInfo.value = null
-        useCartStore().clearCart()
+        clearLocalSession()
       }
       throw err
     }
@@ -127,9 +142,7 @@ export const useUserStore = defineStore('user', () => {
         console.warn('[baby-mall] server session revoke failed during logout:', err)
       })
     }
-    useCartStore().clearCart()
-    token.value = ''
-    userInfo.value = null
+    clearLocalSession()
     removeToken()
     uni.reLaunch({ url: '/pages/home/index' })
   }

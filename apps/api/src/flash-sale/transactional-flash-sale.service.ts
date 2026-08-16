@@ -283,33 +283,54 @@ export class TransactionalFlashSaleService extends FlashSaleService {
   }
 
   override async releaseExpiredLocks() {
-    const expired = await this.transactionalPrisma.flashSaleOrder.findMany({
-      where: {
-        status: 'pending_payment',
-        lockExpireAt: { lte: new Date() },
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        orderId: true,
-        activityId: true,
-        quantity: true,
-      },
-      take: 200,
-    });
+    type RecoveryCandidate = {
+      id: bigint;
+      orderId: bigint;
+      activityId: bigint;
+      quantity: number;
+      orderStatus: OrderStatus | null;
+    };
+
+    // Recover already-terminal business facts first, even before the original payment lock expires.
+    // Only a still-pending ordinary order needs to wait for lock_expire_at. This prevents a large
+    // block of uncertain payments from monopolizing the 200-row batch and starving paid/cancelled
+    // flash-sale rows whose inventory state can be settled immediately.
+    const candidates = await this.transactionalPrisma.$queryRaw<RecoveryCandidate[]>`
+      SELECT
+        fso.id AS id,
+        fso.order_id AS orderId,
+        fso.activity_id AS activityId,
+        fso.quantity AS quantity,
+        o.status AS orderStatus
+      FROM flash_sale_orders fso
+      LEFT JOIN orders o ON o.id = fso.order_id
+      WHERE fso.status = 'pending_payment'
+        AND fso.deleted_at IS NULL
+        AND (
+          o.id IS NULL
+          OR o.status <> ${OrderStatus.pending_payment}
+          OR fso.lock_expire_at <= NOW(3)
+        )
+      ORDER BY
+        CASE
+          WHEN o.id IS NULL THEN 0
+          WHEN o.status <> ${OrderStatus.pending_payment} THEN 0
+          ELSE 1
+        END ASC,
+        fso.lock_expire_at ASC,
+        fso.id ASC
+      LIMIT 200
+    `;
 
     let released = 0;
     let deferred = 0;
     let settled = 0;
     let failed = 0;
 
-    for (const fsOrder of expired) {
+    for (const fsOrder of candidates) {
       try {
-        const order = await this.transactionalPrisma.order.findUnique({
-          where: { id: fsOrder.orderId },
-          select: { status: true },
-        });
-        if (!order) {
+        const orderStatus = fsOrder.orderStatus;
+        if (!orderStatus) {
           failed += 1;
           this.transactionalLogger.error(
             `秒杀库存锁对应订单不存在: flashSaleOrder=${fsOrder.id}`,
@@ -317,12 +338,12 @@ export class TransactionalFlashSaleService extends FlashSaleService {
           continue;
         }
 
-        if (order.status === OrderStatus.pending_payment) {
+        if (orderStatus === OrderStatus.pending_payment) {
           deferred += 1;
           continue;
         }
 
-        if (order.status === OrderStatus.cancelled) {
+        if (orderStatus === OrderStatus.cancelled) {
           await this.transactionalPrisma.$transaction(async (tx) => {
             const claim = await tx.flashSaleOrder.updateMany({
               where: { id: fsOrder.id, status: 'pending_payment' },
@@ -348,7 +369,7 @@ export class TransactionalFlashSaleService extends FlashSaleService {
           OrderStatus.completed,
           OrderStatus.aftersale,
         ];
-        if (paidStatuses.includes(order.status)) {
+        if (paidStatuses.includes(orderStatus)) {
           await this.handlePaymentSuccess(fsOrder.orderId);
           settled += 1;
           continue;
@@ -358,14 +379,14 @@ export class TransactionalFlashSaleService extends FlashSaleService {
       } catch (error) {
         failed += 1;
         this.transactionalLogger.error(
-          `秒杀过期库存锁处理失败: flashSaleOrder=${fsOrder.id}, error=${(error as Error).message}`,
+          `秒杀库存锁恢复处理失败: flashSaleOrder=${fsOrder.id}, error=${(error as Error).message}`,
         );
       }
     }
 
     if (released || deferred || settled || failed) {
       this.transactionalLogger.log(
-        `秒杀过期库存锁处理: released=${released}, deferred=${deferred}, settled=${settled}, failed=${failed}`,
+        `秒杀库存锁恢复处理: released=${released}, deferred=${deferred}, settled=${settled}, failed=${failed}`,
       );
     }
     return { released, deferred, settled, failed };

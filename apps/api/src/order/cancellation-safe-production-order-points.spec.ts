@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it, jest } from '@jest/globals';
 import { REFUND_STATUS } from '../common/constants';
 import { CancellationSafeProductionOrderService } from './cancellation-safe-production-order.service';
@@ -27,7 +26,10 @@ function createService(prisma: any = {}) {
 }
 
 function createRewardTx(successfulRefundAmount: number) {
-  const userUpdate = jest.fn();
+  const earnedPoints = Math.floor(Math.max(9900 - successfulRefundAmount, 0) / 100);
+  const userUpdate = (jest.fn() as any).mockResolvedValue({
+    availablePoints: 500 + earnedPoints,
+  });
   const pointsCreate = jest.fn();
   const refundAggregate = (jest.fn() as any).mockResolvedValue({
     _sum: { refundAmount: successfulRefundAmount },
@@ -38,13 +40,7 @@ function createRewardTx(successfulRefundAmount: number) {
       findFirst: (jest.fn() as any).mockResolvedValue(null),
       create: pointsCreate,
     },
-    user: {
-      findFirst: (jest.fn() as any).mockResolvedValue({
-        id: 100n,
-        availablePoints: 500,
-      }),
-      update: userUpdate,
-    },
+    user: { update: userUpdate },
   };
   return { tx, refundAggregate, userUpdate, pointsCreate };
 }
@@ -64,7 +60,7 @@ describe('CancellationSafeProductionOrderService net-paid completion rewards', (
     });
     expect(earned).toBe(99);
     expect(pointsCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ points: 99, source: 'order_complete', sourceId: 1n }),
+      data: expect.objectContaining({ points: 99, balance: 599, source: 'order_complete', sourceId: 1n }),
     }));
   });
 
@@ -82,6 +78,7 @@ describe('CancellationSafeProductionOrderService net-paid completion rewards', (
         totalPoints: { increment: 90 },
         growthValue: { increment: 90 },
       },
+      select: { availablePoints: true },
     });
     expect(pointsCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ points: 90, balance: 590 }),
@@ -100,6 +97,82 @@ describe('CancellationSafeProductionOrderService net-paid completion rewards', (
   });
 });
 
+describe('CancellationSafeProductionOrderService cancellation ledgers', () => {
+  it('records the post-update database points balance instead of a stale pre-increment snapshot', async () => {
+    const service = createService();
+    const userUpdate = (jest.fn() as any).mockResolvedValue({ availablePoints: 720 });
+    const pointsCreate = jest.fn();
+    const tx = {
+      user: { update: userUpdate },
+      pointsRecord: { create: pointsCreate },
+    };
+
+    await (service as any).restoreDeductedPoints(
+      tx,
+      100n,
+      120,
+      'order_cancel',
+      77n,
+      '取消订单归还积分120',
+    );
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 100n },
+      data: { availablePoints: { increment: 120 } },
+      select: { availablePoints: true },
+    });
+    expect(pointsCreate).toHaveBeenCalledWith({
+      data: {
+        userId: 100n,
+        type: 1,
+        points: 120,
+        balance: 720,
+        source: 'order_cancel',
+        sourceId: 77n,
+        description: '取消订单归还积分120',
+      },
+    });
+  });
+
+  it('derives stock before/after snapshots from the serialized SKU update result', async () => {
+    const service = createService();
+    const stockLogCreate = jest.fn();
+    const skuUpdate = (jest.fn() as any).mockResolvedValue({ stock: 130 });
+    const tx = {
+      productSku: {
+        findUnique: (jest.fn() as any).mockResolvedValue({ id: 9n }),
+        update: skuUpdate,
+      },
+      productStockLog: { create: stockLogCreate },
+      $executeRaw: jest.fn(),
+    };
+
+    await (service as any).restoreSkuStockAndSalesAuthoritative(
+      tx,
+      { productId: 3n, skuId: 9n, quantity: 5 },
+      '取消订单归还库存',
+      2,
+    );
+
+    expect(skuUpdate).toHaveBeenCalledWith({
+      where: { id: 9n },
+      data: { stock: { increment: 5 } },
+      select: { stock: true },
+    });
+    expect(stockLogCreate).toHaveBeenCalledWith({
+      data: {
+        productId: 3n,
+        skuId: 9n,
+        type: 2,
+        quantity: 5,
+        beforeStock: 125,
+        afterStock: 130,
+        reason: '取消订单归还库存',
+      },
+    });
+  });
+});
+
 describe('CancellationSafeProductionOrderService automatic completion observability', () => {
   const candidate = {
     id: 77n,
@@ -111,37 +184,76 @@ describe('CancellationSafeProductionOrderService automatic completion observabil
     orderItems: [],
   };
 
+  it('counts and rewards only an order this worker actually claims', async () => {
+    const orderLogCreate = jest.fn();
+    const tx = {
+      order: {
+        updateMany: (jest.fn() as any).mockResolvedValue({ count: 1 }),
+      },
+      orderRefund: {
+        aggregate: (jest.fn() as any).mockResolvedValue({ _sum: { refundAmount: 0 } }),
+      },
+      pointsRecord: {
+        findFirst: (jest.fn() as any).mockResolvedValue(null),
+        create: jest.fn(),
+      },
+      user: {
+        update: (jest.fn() as any).mockResolvedValue({ availablePoints: 599 }),
+      },
+      orderLog: { create: orderLogCreate },
+    };
+    const prisma = {
+      order: {
+        findMany: (jest.fn() as any).mockResolvedValue([candidate]),
+      },
+      $transaction: (jest.fn() as any).mockImplementation(async (callback: any) => callback(tx)),
+    };
+    const service = createService(prisma);
+
+    const result = await service.autoCompleteOrders();
+
+    expect(result).toEqual({ completedCount: 1 });
+    expect(orderLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        orderId: 77n,
+        action: 'auto_complete',
+        content: expect.stringContaining('发放积分99'),
+      }),
+    });
+  });
+
   it('logs real transactional failures instead of silently swallowing them', async () => {
     const prisma = {
       order: {
         findMany: (jest.fn() as any).mockResolvedValue([candidate]),
       },
+      $transaction: (jest.fn() as any).mockRejectedValue(new Error('database write failed')),
     };
     const service = createService(prisma);
-    const complete = (jest.fn() as any).mockRejectedValue(new Error('database write failed'));
-    (service as any).completeOrderAndReward = complete;
     const logError = jest.spyOn((service as any).cancellationLogger, 'error').mockImplementation(() => undefined);
 
     const result = await service.autoCompleteOrders();
 
     expect(result).toEqual({ completedCount: 0 });
-    expect(complete).toHaveBeenCalledTimes(1);
     expect(logError).toHaveBeenCalledWith(
       expect.stringContaining('orderId=77'),
       expect.any(String),
     );
   });
 
-  it('treats a concurrent claim loss as a normal skip without false error noise', async () => {
+  it('does not count a concurrent claim loss as a completion and emits no false error', async () => {
+    const tx = {
+      order: {
+        updateMany: (jest.fn() as any).mockResolvedValue({ count: 0 }),
+      },
+    };
     const prisma = {
       order: {
         findMany: (jest.fn() as any).mockResolvedValue([candidate]),
       },
+      $transaction: (jest.fn() as any).mockImplementation(async (callback: any) => callback(tx)),
     };
     const service = createService(prisma);
-    (service as any).completeOrderAndReward = (jest.fn() as any).mockRejectedValue(
-      new BadRequestException('订单抢占失败'),
-    );
     const logError = jest.spyOn((service as any).cancellationLogger, 'error').mockImplementation(() => undefined);
 
     const result = await service.autoCompleteOrders();

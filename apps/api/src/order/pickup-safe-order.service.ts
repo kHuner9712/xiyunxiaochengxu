@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BusinessEventService } from '../common/business-event.service';
+import { PAYMENT_STATUS } from '../common/constants/payment';
 import { RedisService } from '../common/redis/redis.service';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
 import { FlashSaleService } from '../flash-sale/flash-sale.service';
@@ -15,13 +16,60 @@ import { IdempotentAttributionSafeMemberBenefitOrderService } from './idempotent
 import {
   lockActiveCheckoutUser,
   lockActivePickupStore,
+  settleExpiredPointsBeforeCheckout,
+  withFreshCheckoutCouponLock,
   withLockedPickupStoreSnapshot,
 } from './pickup-order-guard';
 
 type OrderCreateContext = {
   userId: bigint;
   pickupStoreId?: bigint;
+  pointsDeduct?: number;
 };
+
+/**
+ * Legacy OrderService seeds a CREATED WeChat payment row inside the order-create transaction.
+ * That row is indistinguishable from a payment that the user actually started, while the
+ * cancellation safety layer intentionally blocks any non-failed payment record. Production
+ * checkout therefore defers the positive-amount WeChat record until PaymentService is called.
+ *
+ * Keep zero-pay and any future non-WeChat payment writes untouched. PaymentService already owns
+ * the unique orderId race and creates/reuses the durable WeChat payment record atomically when
+ * payment is genuinely initiated.
+ */
+export function withDeferredWechatPaymentSeed(tx: any): any {
+  const orderPayment = tx?.orderPayment;
+  if (!orderPayment || typeof orderPayment.create !== 'function') return tx;
+
+  const originalCreate = orderPayment.create.bind(orderPayment);
+  const guardedOrderPayment = new Proxy(orderPayment, {
+    get(target, property, receiver) {
+      if (property !== 'create') return Reflect.get(target, property, receiver);
+      return async (args: any) => {
+        const data = args?.data;
+        const isPrematureWechatSeed =
+          data?.paymentMethod === 'wechat'
+          && data?.status === PAYMENT_STATUS.CREATED
+          && Number(data?.amount) > 0;
+
+        if (isPrematureWechatSeed) {
+          // OrderService ignores the create result and only needs the write to complete. Returning
+          // the would-be data keeps the legacy control flow intact without persisting a false
+          // "payment initiated" fact.
+          return { ...data };
+        }
+        return originalCreate(args);
+      };
+    },
+  });
+
+  return new Proxy(tx, {
+    get(target, property, receiver) {
+      if (property === 'orderPayment') return guardedOrderPayment;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+}
 
 export function installPickupStoreTransactionGuard(
   prisma: PrismaService,
@@ -37,12 +85,19 @@ export function installPickupStoreTransactionGuard(
 
     return originalTransaction(async (tx: any) => {
       await lockActiveCheckoutUser(tx, context.userId);
-
-      if (!context.pickupStoreId) {
-        return input(tx);
+      if ((context.pointsDeduct ?? 0) > 0) {
+        await settleExpiredPointsBeforeCheckout(tx, context.userId);
       }
-      const store = await lockActivePickupStore(tx, context.pickupStoreId);
-      return input(withLockedPickupStoreSnapshot(tx, store));
+
+      const scopedTx = context.pickupStoreId
+        ? withLockedPickupStoreSnapshot(
+            tx,
+            await lockActivePickupStore(tx, context.pickupStoreId),
+          )
+        : tx;
+      const checkoutGuardedTx = withFreshCheckoutCouponLock(scopedTx);
+
+      return input(withDeferredWechatPaymentSeed(checkoutGuardedTx));
     }, ...rest);
   }) as any;
 }
@@ -79,9 +134,9 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
   }
 
   override async confirm(userId: string, dto: ConfirmOrderDto) {
+    const userIdValue = parsePositiveBigIntId(userId, '用户');
     const fulfillmentType = dto.fulfillmentType || 'delivery';
     if (fulfillmentType === 'delivery' && dto.addressId) {
-      const userIdValue = parsePositiveBigIntId(userId, '用户');
       const addressId = parsePositiveBigIntId(dto.addressId, '收货地址');
       const address = await this.orderCountPrisma.userAddress.findFirst({
         where: {
@@ -94,6 +149,15 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
       if (!address) {
         throw new BadRequestException('收货地址不存在或已失效，请重新选择');
       }
+    }
+
+    // Keep the preview honest too. This is repeated inside create's locked transaction because a
+    // preview is never an authorization boundary and another points mutation may happen afterwards.
+    if ((dto.pointsDeduct ?? 0) > 0) {
+      await this.orderCountPrisma.$transaction(async (tx: any) => {
+        await lockActiveCheckoutUser(tx, userIdValue);
+        await settleExpiredPointsBeforeCheckout(tx, userIdValue);
+      });
     }
 
     return super.confirm(userId, dto);
@@ -119,7 +183,11 @@ export class PickupSafeIdempotentAttributionSafeMemberBenefitOrderService
       : undefined;
 
     return this.pickupOrderContext.run(
-      { userId: userIdValue, pickupStoreId },
+      {
+        userId: userIdValue,
+        pickupStoreId,
+        pointsDeduct: dto.pointsDeduct,
+      },
       () => super.create(userId, dto),
     );
   }

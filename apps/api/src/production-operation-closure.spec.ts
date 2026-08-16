@@ -83,6 +83,7 @@ describe('production operation closure contracts', () => {
 
   it('uses the outermost hardened runtime providers rather than leaving safety wrappers unused', () => {
     const paymentModule = read('apps/api/src/payment/payment.module.ts');
+    const activeAftersaleSafePayment = read('apps/api/src/payment/active-aftersale-safe-payment.service.ts');
     const confirmedMissingRefundPayment = read('apps/api/src/payment/confirmed-missing-refund-retry-payment.service.ts');
     const orphanSafePayment = read('apps/api/src/payment/orphan-safe-member-growth-payment.service.ts');
     const memberGrowthPayment = read('apps/api/src/payment/member-growth-conserving-payment.service.ts');
@@ -98,6 +99,7 @@ describe('production operation closure contracts', () => {
     const memberBenefitOrder = read('apps/api/src/order/member-benefit-production-order.service.ts');
     const netRewardOrder = read('apps/api/src/order/cancellation-safe-production-order.service.ts');
     const aftersaleModule = read('apps/api/src/aftersale/aftersale.module.ts');
+    const transitionSafeAftersale = read('apps/api/src/aftersale/transition-safe-return-destination-aftersale.service.ts');
     const returnDestinationAftersale = read('apps/api/src/aftersale/return-destination-view-aftersale.service.ts');
     const attachmentSafeAftersale = read('apps/api/src/aftersale/attachment-safe-production-aftersale.service.ts');
     const groupModule = read('apps/api/src/group-buy/group-buy.module.ts');
@@ -117,7 +119,10 @@ describe('production operation closure contracts', () => {
     const authModule = read('apps/api/src/auth/auth.module.ts');
     const recoveringAuth = read('apps/api/src/auth/recovering-production-auth.service.ts');
 
-    expect(paymentModule).toContain('useClass: ConfirmedMissingRefundRetryPaymentService');
+    expect(paymentModule).toContain('useClass: ActiveAftersaleSafePaymentService');
+    expect(activeAftersaleSafePayment).toContain('extends ConfirmedMissingRefundRetryPaymentService');
+    expect(activeAftersaleSafePayment).toContain('override async processWechatRefundSuccess');
+    expect(activeAftersaleSafePayment).toContain('reconcileActiveAftersaleOrderStates');
     expect(confirmedMissingRefundPayment).toContain('extends OrphanSafeMemberGrowthPaymentService');
     expect(orphanSafePayment).toContain('extends MemberGrowthConservingPaymentService');
     expect(orphanSafePayment).toContain("return { code: 'FAIL', message: '本地退款记录不存在，请重试' }");
@@ -152,8 +157,13 @@ describe('production operation closure contracts', () => {
     expect(attributionAwarePromotion).toContain('extends PromotionCheckoutService');
     expect(attributionAwarePromotion).toContain('resolveCreateOrderAttribution');
 
-    expect(aftersaleModule).toContain('useClass: ReturnDestinationViewAftersaleService');
+    expect(aftersaleModule).toContain('useClass: TransitionSafeReturnDestinationAftersaleService');
     expect(aftersaleModule).toContain('AftersaleReviewService');
+    expect(transitionSafeAftersale).toContain('extends ReturnDestinationViewAftersaleService');
+    expect(transitionSafeAftersale).toContain('override async cancel');
+    expect(transitionSafeAftersale).toContain('override async reject');
+    expect(transitionSafeAftersale).toContain('override async fillReturnLogistics');
+    expect(transitionSafeAftersale).toContain('status: AftersaleStatus.pending_review');
     expect(returnDestinationAftersale).toContain('extends AttachmentSafeProductionAftersaleService');
     expect(returnDestinationAftersale).toContain('override async fillReturnLogistics');
     expect(attachmentSafeAftersale).toContain('extends ProductionAftersaleService');

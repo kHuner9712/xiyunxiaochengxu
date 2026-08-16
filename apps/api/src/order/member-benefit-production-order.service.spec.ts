@@ -135,12 +135,21 @@ describe('MemberBenefitProductionOrderService', () => {
     });
   });
 
-  it('完成订单按当前会员1.5倍发积分，但成长值仍按基础实付值升级', async () => {
+  it('完成订单在用户行锁内按当前会员倍率发积分，并用UPDATE后的权威余额和成长值升级', async () => {
     const { service } = createService();
-    const userUpdate = jest.fn(async () => ({}));
+    const lockUser = jest.fn(async () => [{ id: 7n }]);
+    const userUpdate = jest
+      .fn()
+      .mockResolvedValueOnce({
+        availablePoints: 35,
+        growthValue: 105,
+        memberLevelId: 1n,
+      })
+      .mockResolvedValueOnce({ memberLevelId: 2n });
     const memberRecordCreate = jest.fn(async () => ({}));
     const pointsCreate = jest.fn(async () => ({}));
     const tx: any = {
+      $queryRaw: lockUser,
       orderRefund: { aggregate: jest.fn(async () => ({ _sum: { refundAmount: 0 } })) },
       pointsRecord: {
         findFirst: jest.fn(async () => null),
@@ -166,15 +175,21 @@ describe('MemberBenefitProductionOrderService', () => {
     }, 'order_complete');
 
     expect(earned).toBe(15);
-    expect(userUpdate).toHaveBeenCalledWith({
+    expect(lockUser).toHaveBeenCalledTimes(1);
+    expect(userUpdate).toHaveBeenNthCalledWith(1, {
       where: { id: 7n },
       data: {
         availablePoints: { increment: 15 },
         totalPoints: { increment: 15 },
         growthValue: { increment: 10 },
       },
+      select: {
+        availablePoints: true,
+        growthValue: true,
+        memberLevelId: true,
+      },
     });
-    expect(userUpdate).toHaveBeenCalledWith({
+    expect(userUpdate).toHaveBeenNthCalledWith(2, {
       where: { id: 7n },
       data: { memberLevelId: 2n },
     });
@@ -183,6 +198,53 @@ describe('MemberBenefitProductionOrderService', () => {
     });
     expect(pointsCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({ points: 15, balance: 35, source: 'order_complete', sourceId: 88n }),
+    });
+  });
+
+  it('并发完成后的等级计算必须使用原子更新返回的成长值，而不是事务前快照', async () => {
+    const { service } = createService();
+    const userUpdate = jest
+      .fn()
+      .mockResolvedValueOnce({
+        availablePoints: 215,
+        growthValue: 205,
+        memberLevelId: 1n,
+      })
+      .mockResolvedValueOnce({ memberLevelId: 2n });
+    const memberRecordCreate = jest.fn(async () => ({}));
+    const tx: any = {
+      $queryRaw: jest.fn(async () => [{ id: 7n }]),
+      orderRefund: { aggregate: jest.fn(async () => ({ _sum: { refundAmount: 0 } })) },
+      pointsRecord: {
+        findFirst: jest.fn(async () => null),
+        create: jest.fn(async () => ({})),
+      },
+      user: {
+        // This snapshot is intentionally stale relative to the atomic UPDATE return to model another
+        // completion that committed immediately before this reward calculation acquired the row.
+        findFirst: jest.fn(async () => ({
+          availablePoints: 20,
+          growthValue: 95,
+          memberLevelId: 1n,
+        })),
+        update: userUpdate,
+      },
+      memberLevel: { findMany: jest.fn(async () => memberLevels()) },
+      userMemberRecord: { create: memberRecordCreate },
+    };
+
+    await (service as any).rewardCompletedOrder(tx, {
+      id: 89n,
+      orderNo: 'XY-MEMBER-2',
+      userId: 7n,
+      payAmount: 1000,
+    }, 'order_complete');
+
+    expect(memberRecordCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 7n, oldLevelId: 1n, newLevelId: 2n }),
+    });
+    expect(tx.pointsRecord.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ balance: 215 }),
     });
   });
 });

@@ -217,10 +217,7 @@ served_hash="$(curl --fail --silent --show-error \
 pass "API and admin static volume match image build $served_hash"
 
 scheduler_pause_marker="$(docker exec baby-mall-api sh -c 'marker="${UPLOAD_DIR:-/app/apps/api/uploads}/.scheduler-paused"; if [ -f "$marker" ]; then cat "$marker"; fi' 2>/dev/null | tr -d '\r\n' || true)"
-if [ -n "$scheduler_pause_marker" ]; then
-  [ "$scheduler_pause_marker" = "$api_build_sha" ] || fail "scheduler pause marker belongs to a different build: marker=$scheduler_pause_marker api=$api_build_sha"
-  docker exec baby-mall-api sh -c 'rm -f "${UPLOAD_DIR:-/app/apps/api/uploads}/.scheduler-paused"'
-  pass 'deployment scheduler pause marker matched the candidate build and was cleared after full smoke success'
-fi
+[ -z "$scheduler_pause_marker" ] || fail "scheduler maintenance marker is still active after deployment: marker=${scheduler_pause_marker}; migration owner must clear it before runtime smoke can pass"
+pass 'no scheduler maintenance marker remains after migration and candidate startup'
 
 printf 'RUNTIME SMOKE PASS (%d checks)\n' "$PASS_COUNT"

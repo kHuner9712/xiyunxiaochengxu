@@ -48,11 +48,13 @@ beforeEach(() => {
 })
 
 describe('售后申请手机号门槛', () => {
-  it('未绑定手机号申请售后时被拦截', async () => {
+  it('订单已校验但未绑定手机号时仍被手机号门槛拦截', async () => {
     const wrapper = mount(AftersaleApplyPage)
     ;(wrapper.vm as any).orderId = 'order-1'
     ;(wrapper.vm as any).orderItemId = 'item-1'
     ;(wrapper.vm as any).form.reason = '质量问题'
+    ;(wrapper.vm as any).validatingOrder = false
+    ;(wrapper.vm as any).orderValidated = true
 
     await (wrapper.vm as any).handleSubmit()
 

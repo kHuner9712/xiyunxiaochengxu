@@ -1,4 +1,5 @@
 import { describe, expect, it, jest } from '@jest/globals';
+import { REFUND_STATUS } from '../common/constants';
 
 jest.mock('@nestjs/schedule', () => ({
   Cron: () => () => {},
@@ -101,6 +102,20 @@ describe('ScheduleService group-buy refund backlog priority', () => {
     expect(paymentService.createGroupBuyFailureRefund).not.toHaveBeenCalledWith(
       '901',
       '拼团失败自动退款',
+    );
+
+    const [queryStrings, ...queryValues] = prismaService.$queryRaw.mock.calls[0];
+    const queryText = Array.from(queryStrings as readonly string[]).join(' ');
+    expect(queryText).toContain('NOT EXISTS');
+    expect(queryText).toContain('FROM order_refunds r');
+    expect(queryValues).toEqual(
+      expect.arrayContaining([
+        REFUND_STATUS.INITIATING,
+        REFUND_STATUS.PENDING,
+        REFUND_STATUS.PROCESSING,
+        REFUND_STATUS.RETRYING,
+        REFUND_STATUS.ABNORMAL,
+      ]),
     );
   });
 });

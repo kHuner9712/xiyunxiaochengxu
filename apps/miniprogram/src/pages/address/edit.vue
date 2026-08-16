@@ -1,15 +1,15 @@
 <template>
   <view class="address-edit-page page-shell">
-    <view class="form-section card">
+    <view class="form-section card" :class="{ disabled: formLocked }">
       <view class="form-item">
         <text class="form-label">收货人</text>
-        <input class="form-input" v-model="form.name" placeholder="请输入收货人姓名" placeholder-class="native-input-placeholder" />
+        <input class="form-input" v-model="form.name" :disabled="formLocked" placeholder="请输入收货人姓名" placeholder-class="native-input-placeholder" />
       </view>
       <view class="form-item">
         <text class="form-label">手机号</text>
-        <input class="form-input" v-model="form.phone" placeholder="请输入手机号" placeholder-class="native-input-placeholder" type="number" maxlength="11" />
+        <input class="form-input" v-model="form.phone" :disabled="formLocked" placeholder="请输入手机号" placeholder-class="native-input-placeholder" type="number" maxlength="11" />
       </view>
-      <picker mode="region" @change="onRegionChange" :value="regionValue">
+      <picker mode="region" :disabled="formLocked" @change="onRegionChange" :value="regionValue">
         <view class="form-item">
           <text class="form-label">所在地区</text>
           <text class="form-value" :class="{ placeholder: !regionText }">{{ regionText || '请选择省/市/区' }}</text>
@@ -18,19 +18,19 @@
       </picker>
       <view class="form-item">
         <text class="form-label">详细地址</text>
-        <textarea class="form-textarea" v-model="form.detail" placeholder="请输入详细地址" placeholder-class="native-textarea-placeholder" />
+        <textarea class="form-textarea" v-model="form.detail" :disabled="formLocked" placeholder="请输入详细地址" placeholder-class="native-textarea-placeholder" />
       </view>
       <view class="form-item switch-item">
         <text class="form-label">设为默认地址</text>
-        <switch :checked="form.isDefault" @change="onDefaultChange" color="#F27678" />
+        <switch :checked="form.isDefault" :disabled="formLocked" @change="onDefaultChange" color="#F27678" />
       </view>
     </view>
 
-    <view class="submit-btn" :class="{ disabled: submitting || deleting }" @tap="handleSubmit">
-      <text class="submit-text">{{ submitting ? '保存中...' : (isEdit ? '保存' : '新增') }}</text>
+    <view class="submit-btn" :class="{ disabled: submitting || deleting || formLocked }" @tap="handleSubmit">
+      <text class="submit-text">{{ loadingDetail ? '地址加载中...' : (submitting ? '保存中...' : (isEdit ? '保存' : '新增')) }}</text>
     </view>
 
-    <view v-if="isEdit" class="delete-btn" :class="{ disabled: submitting || deleting }" @tap="handleDelete">
+    <view v-if="isEdit" class="delete-btn" :class="{ disabled: submitting || deleting || formLocked }" @tap="handleDelete">
       <text class="delete-text">{{ deleting ? '删除中...' : '删除地址' }}</text>
     </view>
   </view>
@@ -52,8 +52,14 @@ const form = ref<AddressForm & { id?: string }>({
 })
 
 const isEdit = ref(false)
+const editTargetId = ref('')
+const loadingDetail = ref(false)
+const detailLoaded = ref(true)
 const submitting = ref(false)
 const deleting = ref(false)
+const formLocked = computed(() =>
+  loadingDetail.value || submitting.value || deleting.value || (isEdit.value && !detailLoaded.value)
+)
 
 const regionText = computed(() => {
   if (form.value.province) {
@@ -65,6 +71,7 @@ const regionText = computed(() => {
 const regionValue = ref<string[]>([])
 
 function onRegionChange(e: any) {
+  if (formLocked.value) return
   const { value } = e.detail
   regionValue.value = value
   form.value.province = value[0]
@@ -73,19 +80,33 @@ function onRegionChange(e: any) {
 }
 
 function onDefaultChange(e: any) {
+  if (formLocked.value) return
   form.value.isDefault = !!e.detail.value
 }
 
 async function loadAddress(id: string) {
+  // Route identity is authoritative immediately. Do not leave an edit route temporarily behaving
+  // like a create form while the detail request is in flight; on a slow network that can create a
+  // duplicate address instead of updating the requested record.
+  isEdit.value = true
+  editTargetId.value = id
+  detailLoaded.value = false
+  loadingDetail.value = true
   try {
     const data = await getAddressDetail(id)
+    if (editTargetId.value !== id) return
     form.value = { ...data, id: String(data.id) }
     if (data.province) {
       regionValue.value = [data.province, data.city || '', data.district || '']
     }
-    isEdit.value = true
+    detailLoaded.value = true
   } catch {
-    uni.showToast({ title: '地址加载失败', icon: 'none' })
+    if (editTargetId.value === id) {
+      detailLoaded.value = false
+      uni.showToast({ title: '地址加载失败，请返回重试', icon: 'none' })
+    }
+  } finally {
+    if (editTargetId.value === id) loadingDetail.value = false
   }
 }
 
@@ -122,6 +143,14 @@ function confirmDelete() {
 
 async function handleSubmit() {
   if (submitting.value || deleting.value) return
+  if (loadingDetail.value) {
+    uni.showToast({ title: '地址仍在加载，请稍后保存', icon: 'none' })
+    return
+  }
+  if (isEdit.value && (!detailLoaded.value || !form.value.id || form.value.id !== editTargetId.value)) {
+    uni.showToast({ title: '地址资料未加载成功，请返回重试', icon: 'none' })
+    return
+  }
   if (!validate()) return
   submitting.value = true
   try {
@@ -142,8 +171,12 @@ async function handleSubmit() {
 
 async function handleDelete() {
   if (submitting.value || deleting.value) return
+  if (loadingDetail.value || (isEdit.value && !detailLoaded.value)) {
+    uni.showToast({ title: '地址资料未加载成功，请返回重试', icon: 'none' })
+    return
+  }
   const id = form.value.id
-  if (!id) return
+  if (!id || id !== editTargetId.value) return
 
   deleting.value = true
   try {
@@ -159,12 +192,22 @@ async function handleDelete() {
 }
 
 onLoad((options) => {
-  if (options?.id) loadAddress(String(options.id))
+  if (options?.id) {
+    const id = String(options.id)
+    isEdit.value = true
+    editTargetId.value = id
+    detailLoaded.value = false
+    void loadAddress(id)
+  }
 })
 
 defineExpose({
   form,
   isEdit,
+  editTargetId,
+  loadingDetail,
+  detailLoaded,
+  formLocked,
   submitting,
   deleting,
   handleSubmit,
@@ -182,6 +225,11 @@ defineExpose({
   margin-bottom: $spacing-lg;
   background: rgba(255, 255, 255, 0.9);
   border-radius: $radius-xxl;
+
+  &.disabled {
+    opacity: 0.65;
+    pointer-events: none;
+  }
 }
 
 .form-item {

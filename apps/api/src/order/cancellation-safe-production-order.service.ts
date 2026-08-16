@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { BenefitPackageService } from '../benefit-package/benefit-package.service';
@@ -21,8 +21,8 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     private readonly cancellationPrisma: PrismaService,
     businessEventService: BusinessEventService,
     benefitPackageService: BenefitPackageService,
-    groupBuyService: GroupBuyService,
-    flashSaleService: FlashSaleService,
+    private readonly cancellationGroupBuyService: GroupBuyService,
+    private readonly cancellationFlashSaleService: FlashSaleService,
     private readonly cancellationRedis: RedisService,
     @Optional() systemConfigService?: SystemConfigService,
   ) {
@@ -30,12 +30,14 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       cancellationPrisma,
       businessEventService,
       benefitPackageService,
-      groupBuyService,
-      flashSaleService,
+      cancellationGroupBuyService,
+      cancellationFlashSaleService,
       systemConfigService,
     );
 
-    const rewardCompletedOrder = (this as any).rewardCompletedOrder.bind(this);
+    // OrderService keeps this hook private, but every completion path dispatches through the
+    // instance. Replace it at the production boundary so reward amount is net of successful
+    // refunds and the ledger balance comes from the serialized user UPDATE, not a stale snapshot.
     (this as any).rewardCompletedOrder = async (
       tx: any,
       order: any,
@@ -50,25 +52,73 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
       });
       const successfulRefundAmount = refundSummary?._sum?.refundAmount ?? 0;
       const netPayAmount = Math.max((order.payAmount ?? 0) - successfulRefundAmount, 0);
-      return rewardCompletedOrder(
-        tx,
-        { ...order, payAmount: netPayAmount },
-        rewardSource,
-      );
+      const earnedPoints = Math.floor(netPayAmount / 100);
+      if (earnedPoints <= 0) return 0;
+
+      const existingRecord = await tx.pointsRecord.findFirst({
+        where: { source: rewardSource, sourceId: order.id },
+      });
+      if (existingRecord) return 0;
+
+      const updatedUser = await tx.user.update({
+        where: { id: order.userId },
+        data: {
+          availablePoints: { increment: earnedPoints },
+          totalPoints: { increment: earnedPoints },
+          growthValue: { increment: earnedPoints },
+        },
+        select: { availablePoints: true },
+      });
+
+      await tx.pointsRecord.create({
+        data: {
+          userId: order.userId,
+          type: 1,
+          points: earnedPoints,
+          balance: updatedUser.availablePoints,
+          source: rewardSource,
+          sourceId: order.id,
+          description: `完成订单奖励${earnedPoints}积分`,
+        },
+      });
+
+      return earnedPoints;
     };
   }
 
   override async cancel(userId: string, id: string) {
     return this.withPaymentCancelLock(id, async () => {
       await this.assertManualCancelHasNoUnsafePayment(id);
-      return super.cancel(userId, id);
+      return this.cancelPendingOrder({
+        orderId: id,
+        userId: BigInt(userId),
+        reason: '用户主动取消',
+        stockReason: '取消订单归还库存',
+        operatorType: 'user',
+        operatorId: BigInt(userId),
+        action: 'cancel',
+        logContent: '用户取消订单',
+        pointsSource: 'order_cancel',
+        pointsDescription: (points) => `取消订单归还积分${points}`,
+        couponStatuses: [COUPON_STATUS.LOCKED, COUPON_STATUS.USED],
+      });
     });
   }
 
   override async adminCancel(id: string, reason: string) {
     return this.withPaymentCancelLock(id, async () => {
       await this.assertManualCancelHasNoUnsafePayment(id);
-      return super.adminCancel(id, reason);
+      return this.cancelPendingOrder({
+        orderId: id,
+        reason: reason || '管理员取消',
+        stockReason: '管理员取消订单归还库存',
+        operatorType: 'admin',
+        action: 'cancel',
+        logContent: `管理员取消订单，原因：${reason || '无'}`,
+        pointsSource: 'admin_cancel',
+        pointsDescription: (points) => `管理员取消订单归还积分${points}`,
+        couponStatuses: [COUPON_STATUS.LOCKED],
+      });
     });
   }
 
@@ -125,52 +175,22 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
           if (claimed.count === 0) return false;
 
           for (const item of currentOrder.orderItems) {
-            const sku = await tx.productSku.findUnique({
-              where: { id: item.skuId },
-              select: { stock: true },
-            });
-            if (!sku) continue;
-            await tx.productSku.update({
-              where: { id: item.skuId },
-              data: { stock: { increment: item.quantity } },
-            });
-            await (this as any).safeDecrementSkuSales(tx, item.skuId, item.quantity);
-            await tx.productStockLog.create({
-              data: {
-                productId: item.productId,
-                skuId: item.skuId,
-                type: 3,
-                quantity: item.quantity,
-                beforeStock: sku.stock,
-                afterStock: sku.stock + item.quantity,
-                reason: '超时自动关闭归还库存',
-              },
-            });
+            await this.restoreSkuStockAndSalesAuthoritative(
+              tx,
+              item,
+              '超时自动关闭归还库存',
+              3,
+            );
           }
 
-          if (currentOrder.pointsDeducted > 0) {
-            const user = await tx.user.findUnique({
-              where: { id: currentOrder.userId },
-              select: { availablePoints: true },
-            });
-            if (user) {
-              await tx.user.update({
-                where: { id: currentOrder.userId },
-                data: { availablePoints: { increment: currentOrder.pointsDeducted } },
-              });
-              await tx.pointsRecord.create({
-                data: {
-                  userId: currentOrder.userId,
-                  type: 1,
-                  points: currentOrder.pointsDeducted,
-                  balance: user.availablePoints + currentOrder.pointsDeducted,
-                  source: 'order_auto_close',
-                  sourceId: currentOrder.id,
-                  description: `超时自动关闭归还积分${currentOrder.pointsDeducted}`,
-                },
-              });
-            }
-          }
+          await this.restoreDeductedPoints(
+            tx,
+            currentOrder.userId,
+            currentOrder.pointsDeducted,
+            'order_auto_close',
+            currentOrder.id,
+            `超时自动关闭归还积分${currentOrder.pointsDeducted}`,
+          );
 
           if (currentOrder.couponId) {
             await tx.userCoupon.updateMany({
@@ -186,37 +206,7 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
             });
           }
 
-          const flashSaleOrder = await tx.flashSaleOrder.findFirst({
-            where: {
-              orderId: currentOrder.id,
-              status: 'pending_payment',
-              deletedAt: null,
-            },
-            select: { id: true, activityId: true, quantity: true },
-          });
-          if (flashSaleOrder) {
-            const flashClaim = await tx.flashSaleOrder.updateMany({
-              where: { id: flashSaleOrder.id, status: 'pending_payment' },
-              data: { status: 'cancelled', cancelledAt: closedAt },
-            });
-            if (flashClaim.count > 0) {
-              await tx.$executeRaw`
-                UPDATE flash_sale_activities
-                SET locked_count = GREATEST(locked_count - ${flashSaleOrder.quantity}, 0),
-                    updated_at = NOW(3)
-                WHERE id = ${flashSaleOrder.activityId}
-              `;
-            }
-          }
-
-          await tx.groupBuyMember.updateMany({
-            where: {
-              orderId: currentOrder.id,
-              status: 'pending_payment',
-              deletedAt: null,
-            },
-            data: { status: 'cancelled' },
-          });
+          await this.cancelPromotionReservations(tx, currentOrder.id, closedAt);
 
           await tx.orderLog.create({
             data: {
@@ -251,29 +241,38 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     let completedCount = 0;
     for (const order of candidates) {
       try {
-        await (this as any).completeOrderAndReward({
-          order,
-          claimWhere: {
-            id: order.id,
-            status: OrderStatus.delivered,
-            autoCompleteAt: { lte: new Date() },
-          },
-          orderUpdateData: { status: OrderStatus.completed, completedAt: new Date() },
-          operatorType: 'system',
-          action: 'auto_complete',
-          logContent: '超时未确认收货，系统自动完成',
-          completeReason: '自动完成',
-          rewardSource: 'order_auto_complete',
-          swallowClaimFailure: true,
+        const claimed = await this.cancellationPrisma.$transaction(async (tx) => {
+          const claimResult = await tx.order.updateMany({
+            where: {
+              id: order.id,
+              status: OrderStatus.delivered,
+              autoCompleteAt: { lte: new Date() },
+            },
+            data: {
+              status: OrderStatus.completed,
+              completedAt: new Date(),
+            },
+          });
+          if (claimResult.count === 0) return false;
+
+          const earnedPoints = await (this as any).rewardCompletedOrder(
+            tx,
+            order,
+            'order_auto_complete',
+          );
+          await tx.orderLog.create({
+            data: {
+              orderId: order.id,
+              operatorType: 'system',
+              action: 'auto_complete',
+              content: `超时未确认收货，系统自动完成${earnedPoints > 0 ? `，发放积分${earnedPoints}` : ''}`,
+            },
+          });
+          return true;
         });
-        completedCount += 1;
+
+        if (claimed) completedCount += 1;
       } catch (error) {
-        if (
-          error instanceof BadRequestException &&
-          error.message === '订单抢占失败'
-        ) {
-          continue;
-        }
         this.cancellationLogger.error(
           `自动完成订单失败：orderId=${order.id}, orderNo=${order.orderNo}, error=${(error as Error).message}`,
           (error as Error).stack,
@@ -282,6 +281,214 @@ export class CancellationSafeProductionOrderService extends ProductionOrderServi
     }
 
     return { completedCount };
+  }
+
+  private async cancelPendingOrder(input: {
+    orderId: string;
+    userId?: bigint;
+    reason: string;
+    stockReason: string;
+    operatorType: 'user' | 'admin';
+    operatorId?: bigint;
+    action: string;
+    logContent: string;
+    pointsSource: string;
+    pointsDescription: (points: number) => string;
+    couponStatuses: number[];
+  }) {
+    const orderId = BigInt(input.orderId);
+    const order = await this.cancellationPrisma.order.findFirst({
+      where: {
+        id: orderId,
+        ...(input.userId !== undefined ? { userId: input.userId } : {}),
+      },
+      include: { orderItems: true },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+
+    const result = await this.cancellationPrisma.$transaction(async (tx) => {
+      const cancelledAt = new Date();
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          ...(input.userId !== undefined ? { userId: input.userId } : {}),
+          status: OrderStatus.pending_payment,
+        },
+        data: {
+          status: OrderStatus.cancelled,
+          cancelledAt,
+          cancelReason: input.reason,
+        },
+      });
+
+      if (claimed.count === 0) {
+        const currentOrder = await tx.order.findFirst({ where: { id: orderId } });
+        if (!currentOrder) throw new NotFoundException('订单不存在');
+        if (currentOrder.status === OrderStatus.cancelled) return currentOrder;
+
+        const paidStatuses: OrderStatus[] = [
+          OrderStatus.pending_delivery,
+          OrderStatus.pending_pickup,
+          OrderStatus.delivered,
+          OrderStatus.completed,
+          OrderStatus.aftersale,
+        ];
+        if (paidStatuses.includes(currentOrder.status)) {
+          throw new BadRequestException(
+            input.operatorType === 'admin'
+              ? '订单已支付，不能取消'
+              : '订单已支付或状态已变化，不能取消',
+          );
+        }
+        throw new BadRequestException(`订单状态不允许取消: ${currentOrder.status}`);
+      }
+
+      for (const item of order.orderItems) {
+        await this.restoreSkuStockAndSalesAuthoritative(tx, item, input.stockReason, 2);
+      }
+
+      await this.restoreDeductedPoints(
+        tx,
+        order.userId,
+        order.pointsDeducted,
+        input.pointsSource,
+        order.id,
+        input.pointsDescription(order.pointsDeducted),
+      );
+
+      if (order.couponId) {
+        await tx.userCoupon.updateMany({
+          where: {
+            id: order.couponId,
+            status: { in: input.couponStatuses },
+          },
+          data: {
+            status: COUPON_STATUS.FREE,
+            usedOrderId: null,
+            ...(input.operatorType === 'user' ? { usedAt: null } : {}),
+          },
+        });
+      }
+
+      // Promotion reservations are part of the same cancellation invariant. In particular,
+      // flash-sale cancellation must not commit its status before locked_count is released;
+      // otherwise a failure between those writes becomes permanently non-retryable.
+      await this.cancelPromotionReservations(tx, order.id, cancelledAt);
+
+      await tx.orderLog.create({
+        data: {
+          orderId,
+          operatorType: input.operatorType,
+          ...(input.operatorId !== undefined ? { operatorId: input.operatorId } : {}),
+          action: input.action,
+          content: input.logContent,
+        },
+      });
+
+      return tx.order.findFirst({ where: { id: orderId } });
+    });
+
+    return (this as any).serializeOrderView(result);
+  }
+
+  private async cancelPromotionReservations(tx: any, orderId: bigint, cancelledAt: Date) {
+    const flashSaleOrder = await tx.flashSaleOrder.findFirst({
+      where: {
+        orderId,
+        status: 'pending_payment',
+        deletedAt: null,
+      },
+      select: { id: true, activityId: true, quantity: true },
+    });
+    if (flashSaleOrder) {
+      const flashClaim = await tx.flashSaleOrder.updateMany({
+        where: { id: flashSaleOrder.id, status: 'pending_payment' },
+        data: { status: 'cancelled', cancelledAt },
+      });
+      if (flashClaim.count > 0) {
+        await tx.$executeRaw`
+          UPDATE flash_sale_activities
+          SET locked_count = GREATEST(locked_count - ${flashSaleOrder.quantity}, 0),
+              updated_at = NOW(3)
+          WHERE id = ${flashSaleOrder.activityId}
+        `;
+      }
+    }
+
+    await tx.groupBuyMember.updateMany({
+      where: {
+        orderId,
+        status: 'pending_payment',
+        deletedAt: null,
+      },
+      data: { status: 'cancelled' },
+    });
+  }
+
+  private async restoreDeductedPoints(
+    tx: any,
+    userId: bigint,
+    points: number,
+    source: string,
+    sourceId: bigint,
+    description: string,
+  ) {
+    if (points <= 0) return;
+
+    // The UPDATE itself is the serialization point on the user row. Never calculate the ledger
+    // balance from a preceding snapshot: two concurrent cancellations can both read the same old
+    // balance even though their increments are serialized by InnoDB.
+    const updatedUser = await tx.user.update({
+      where: { id: userId },
+      data: { availablePoints: { increment: points } },
+      select: { availablePoints: true },
+    });
+
+    await tx.pointsRecord.create({
+      data: {
+        userId,
+        type: 1,
+        points,
+        balance: updatedUser.availablePoints,
+        source,
+        sourceId,
+        description,
+      },
+    });
+  }
+
+  private async restoreSkuStockAndSalesAuthoritative(
+    tx: any,
+    item: any,
+    reason: string,
+    type: number,
+  ) {
+    const sku = await tx.productSku.findUnique({
+      where: { id: item.skuId },
+      select: { id: true },
+    });
+    if (!sku) return;
+
+    // The increment holds the SKU row lock until commit. Derive the stock ledger snapshot from
+    // the returned post-update value so concurrent cancellations cannot log duplicate ranges.
+    const updatedSku = await tx.productSku.update({
+      where: { id: item.skuId },
+      data: { stock: { increment: item.quantity } },
+      select: { stock: true },
+    });
+    await (this as any).safeDecrementSkuSales(tx, item.skuId, item.quantity);
+
+    await tx.productStockLog.create({
+      data: {
+        productId: item.productId,
+        skuId: item.skuId,
+        type,
+        quantity: item.quantity,
+        beforeStock: updatedSku.stock - item.quantity,
+        afterStock: updatedSku.stock,
+        reason,
+      },
+    });
   }
 
   private async assertManualCancelHasNoUnsafePayment(orderId: string) {
