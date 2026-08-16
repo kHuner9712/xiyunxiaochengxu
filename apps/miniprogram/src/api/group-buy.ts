@@ -45,6 +45,7 @@ export interface GroupBuyGroup {
   successAt?: string
   failedAt?: string
   createdAt: string
+  now?: string
   members?: PublicGroupBuyMember[]
   leader?: { nickname: string; avatarUrl?: string } | null
   activity?: { id: string; name: string; coverImage?: string; groupPrice: number; groupSize: number } | null
