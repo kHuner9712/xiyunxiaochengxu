@@ -1,4 +1,6 @@
-import { del, post, put, removeToken } from '@/utils/request'
+import { del, post, put, removeToken, REDIRECT_AFTER_LOGIN_KEY } from '@/utils/request'
+import { clearShareAttributionState } from '@/utils/share'
+import { clearPersistentIdempotencyState } from '@/utils/checkout-idempotency'
 
 export function wxLogin(data: { code: string }) {
   return post<{ token: string; isNewUser: boolean }>('/weapp/auth/login', data)
@@ -18,9 +20,12 @@ export function updateProfile(data: { nickname?: string; avatar?: string; avatar
 
 export async function cancelAccount() {
   const result = await del<{ cancelled: boolean; cancelledAt: string }>('/weapp/user/account')
-  // A successful cancellation has already revoked all server sessions. Remove the persisted token
-  // immediately so a subsequent local-state cleanup cannot accidentally issue an authenticated
-  // request with a tombstoned account.
+  // The server has atomically revoked every session and anonymized the account at this point.
+  // Clear all account-bound device context before a later account can inherit attribution or a
+  // pending write identity created by the deleted account.
   removeToken()
+  uni.removeStorageSync(REDIRECT_AFTER_LOGIN_KEY)
+  clearShareAttributionState()
+  clearPersistentIdempotencyState()
   return result
 }
