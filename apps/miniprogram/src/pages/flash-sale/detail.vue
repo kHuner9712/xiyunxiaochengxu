@@ -67,21 +67,26 @@ import { useUserStore } from '@/stores/user'
 import { getPromotionSourceForOrder } from '@/utils/share'
 import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
 import { createPayment, wxPay } from '@/api/payment'
+import { resolveServerClockOffset, serverNowFromOffset } from '@/utils/server-clock'
 import Loading from '@/components/Loading.vue'
 
+const POSITIVE_ID = /^[1-9]\d*$/
 const userStore = useUserStore()
 const activity = ref<FlashSaleActivity | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
+const serverClockOffsetMs = ref(0)
 const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
+function updateClock() {
+  nowMs.value = serverNowFromOffset(serverClockOffsetMs.value)
+}
+
 function startClock() {
   stopClock()
-  nowMs.value = Date.now()
-  clockTimer = setInterval(() => {
-    nowMs.value = Date.now()
-  }, 1000)
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
 }
 
 function stopClock() {
@@ -145,6 +150,8 @@ async function loadDetail(id: string) {
   loading.value = true
   try {
     const data = await flashSaleApi.getDetail(id)
+    serverClockOffsetMs.value = resolveServerClockOffset(data.now)
+    updateClock()
     activity.value = data
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
@@ -228,9 +235,13 @@ async function payOrder(orderId: string) {
 }
 
 onLoad((options) => {
-  if (options?.id) {
-    loadDetail(String(options.id))
+  const id = String(options?.id || '').trim()
+  if (!POSITIVE_ID.test(id)) {
+    uni.showToast({ title: '秒杀活动参数无效', icon: 'none' })
+    uni.redirectTo({ url: '/pages/flash-sale/list' })
+    return
   }
+  void loadDetail(id)
 })
 onShow(() => startClock())
 onHide(() => stopClock())

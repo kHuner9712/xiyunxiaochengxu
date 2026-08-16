@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useUserStore } from '../user'
 import { useCartStore } from '../cart'
 import { logout as logoutApi } from '@/api/auth'
-import { removeToken } from '@/utils/request'
+import { getToken, removeToken } from '@/utils/request'
 
 let authExpiredHandler: (() => void) | null = null
 
@@ -34,6 +34,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   authExpiredHandler = null
   setActivePinia(createPinia())
+  vi.mocked(getToken).mockReturnValue('')
   vi.mocked(logoutApi).mockResolvedValue(null as any)
   ;(globalThis as any).uni = {
     reLaunch: vi.fn(),
@@ -48,7 +49,8 @@ beforeEach(() => {
 })
 
 describe('小程序退出登录', () => {
-  it('先发服务端撤销请求，再立即清除本地会话、购物车并返回首页', () => {
+  it('正常登录态先发服务端撤销请求，再立即清除本地会话、购物车并返回首页', () => {
+    vi.mocked(getToken).mockReturnValue('live-access-token')
     const store = useUserStore()
     const cartStore = useCartStore()
     store.$patch({
@@ -90,7 +92,7 @@ describe('小程序退出登录', () => {
     expect((globalThis as any).uni.reLaunch).toHaveBeenCalledWith({ url: '/pages/home/index' })
   })
 
-  it('本地已无 token 时不发送无意义的 logout 请求，但仍清空本地购物车', () => {
+  it('持久化 token 已移除时不发送无意义的 logout 请求，但仍清空本地购物车', () => {
     const store = useUserStore()
     const cartStore = useCartStore()
     cartStore.$patch({
@@ -112,6 +114,30 @@ describe('小程序退出登录', () => {
 
     expect(logoutApi).not.toHaveBeenCalled()
     expect(removeToken).toHaveBeenCalledTimes(1)
+    expect(cartStore.items).toEqual([])
+    expect((globalThis as any).uni.reLaunch).toHaveBeenCalledWith({ url: '/pages/home/index' })
+  })
+
+  it('账号注销成功后即使内存 token 尚未清理，也不再用已撤销 token 请求服务端 logout', () => {
+    vi.mocked(getToken).mockReturnValue('')
+    const store = useUserStore()
+    const cartStore = useCartStore()
+    store.$patch({
+      token: 'revoked-by-account-cancellation',
+      userInfo: {
+        id: '3',
+        nickname: '待清理用户',
+        memberLevel: 1,
+        memberLevelName: '普通会员',
+        points: 0,
+      } as any,
+    })
+
+    store.logout()
+
+    expect(logoutApi).not.toHaveBeenCalled()
+    expect(store.token).toBe('')
+    expect(store.userInfo).toBeNull()
     expect(cartStore.items).toEqual([])
     expect((globalThis as any).uni.reLaunch).toHaveBeenCalledWith({ url: '/pages/home/index' })
   })

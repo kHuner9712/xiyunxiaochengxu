@@ -27,14 +27,17 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { normalizeTimeToTimestamp, type CompatibleTime } from '@/utils/time'
+import { serverNowFromOffset } from '@/utils/server-clock'
 
 const props = withDefaults(defineProps<{
   endTime: CompatibleTime
   label?: string
   showLabel?: boolean
+  clockOffsetMs?: number
 }>(), {
   label: '距结束',
-  showLabel: true
+  showLabel: true,
+  clockOffsetMs: 0,
 })
 
 const days = ref(0)
@@ -57,7 +60,7 @@ function stopTimer() {
 }
 
 function update() {
-  const now = Date.now()
+  const now = serverNowFromOffset(props.clockOffsetMs)
   const endTimestamp = normalizeTimeToTimestamp(props.endTime)
   const diff = endTimestamp - now
   if (!Number.isFinite(endTimestamp) || diff <= 0) {
@@ -88,7 +91,7 @@ onMounted(() => {
   startTimer()
 })
 
-watch(() => props.endTime, () => {
+watch([() => props.endTime, () => props.clockOffsetMs], () => {
   startTimer()
 })
 

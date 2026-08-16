@@ -42,7 +42,7 @@ function createService() {
     {} as any,
     {} as any,
   );
-  return { service, groupA, groupB };
+  return { service, prisma, groupA, groupB };
 }
 
 describe('BigintSafeProductionGroupBuyService', () => {
@@ -126,4 +126,25 @@ describe('BigintSafeProductionGroupBuyService', () => {
       await expect(service.weappFindGroupById(id)).rejects.toThrow(/团ID(无效|超出范围)/);
     },
   );
+
+  it.each(['abc', '0', '-1', '9223372036854775808'])(
+    '拼团活动详情拒绝非法 ID %s，而不是让 BigInt 转换异常逃逸为 500',
+    async (id) => {
+      const { service, prisma } = createService();
+      await expect(service.weappFindActivityById(id)).rejects.toThrow(/活动ID(无效|超出范围)/);
+      expect(prisma.groupBuyActivity.findFirst).not.toHaveBeenCalled();
+    },
+  );
+
+  it('拼团活动详情携带服务器时间供小程序校准活动状态', async () => {
+    const { service } = createService();
+    const before = Date.now();
+    const result: any = await service.weappFindActivityById('8000000000000001');
+    const after = Date.now();
+    const serverNow = new Date(result.now).getTime();
+
+    expect(Number.isFinite(serverNow)).toBe(true);
+    expect(serverNow).toBeGreaterThanOrEqual(before);
+    expect(serverNow).toBeLessThanOrEqual(after);
+  });
 });

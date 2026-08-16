@@ -155,11 +155,30 @@ export const useCartStore = defineStore('cart', () => {
 
   async function removeSelected() {
     const selectedIds = checkedItems.value.map(item => item.id)
-    await Promise.all(selectedIds.map(id => del(`/weapp/cart/delete/${encodeURIComponent(id)}`)))
-    const selectedSet = new Set(selectedIds)
-    items.value = items.value.filter(item => !selectedSet.has(item.id))
-    updateTabBadge()
+    if (selectedIds.length === 0) return
+
+    // Selection is intentionally local-only in the miniprogram, so the backend's
+    // /remove-selected endpoint cannot safely represent what the user currently sees selected.
+    // Settle every per-row delete instead of Promise.all short-circuiting on the first failure:
+    // some requests may already have committed, and the UI must converge to that durable state.
+    const results = await Promise.allSettled(
+      selectedIds.map(id => del(`/weapp/cart/delete/${encodeURIComponent(id)}`)),
+    )
+    const succeededIds = selectedIds.filter((_, index) => results[index].status === 'fulfilled')
+    if (succeededIds.length > 0) {
+      const succeededSet = new Set(succeededIds)
+      items.value = items.value.filter(item => !succeededSet.has(item.id))
+      updateTabBadge()
+    }
+
+    // Always reconcile with the server after a partial batch. Individual cart deletion is
+    // idempotent server-side, so a response-loss retry cannot corrupt the cart.
     await fetchCart()
+
+    const failed = results.find((result) => result.status === 'rejected') as PromiseRejectedResult | undefined
+    if (failed) {
+      throw failed.reason instanceof Error ? failed.reason : new Error('部分商品删除失败，请重试')
+    }
   }
 
   function toggleCheck(index: number) {

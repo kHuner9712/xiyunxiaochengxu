@@ -19,6 +19,7 @@ export interface PromotionSourcePayload {
 }
 
 const PROMOTION_SOURCE_STORAGE_KEY = 'xy_promotion_source'
+const PENDING_INVITE_STORAGE_KEY = 'pending_invite'
 const SHARE_VISIT_DEDUPE_WINDOW_MS = 2000
 
 function normalizeString(value: any): string | undefined {
@@ -109,25 +110,25 @@ export function handleShareVisit(params: ShareParams) {
 
 export async function handleShareBindOnLogin() {
   if (isBindingInvite) return false
-  const pending = uni.getStorageSync('pending_invite')
+  const pending = uni.getStorageSync(PENDING_INVITE_STORAGE_KEY)
   if (!pending) return false
   let data: ShareParams
   try {
     data = JSON.parse(pending)
   } catch {
-    uni.removeStorageSync('pending_invite')
+    uni.removeStorageSync(PENDING_INVITE_STORAGE_KEY)
     return false
   }
 
   try {
     isBindingInvite = true
     await bindInvite(toShareApiParams(data))
-    uni.removeStorageSync('pending_invite')
+    uni.removeStorageSync(PENDING_INVITE_STORAGE_KEY)
     return true
   } catch (err: any) {
     const msg = String(err?.message || err?.errMsg || '').toLowerCase()
     if (msg.includes('already_invited') || msg.includes('已绑定') || msg.includes('不能邀请自己')) {
-      uni.removeStorageSync('pending_invite')
+      uni.removeStorageSync(PENDING_INVITE_STORAGE_KEY)
     }
     return false
   } finally {
@@ -137,7 +138,7 @@ export async function handleShareBindOnLogin() {
 
 export function savePendingInvite(params: ShareParams) {
   if (params.inviter || params.shareRecordId || params.campaignId) {
-    uni.setStorageSync('pending_invite', JSON.stringify(params))
+    uni.setStorageSync(PENDING_INVITE_STORAGE_KEY, JSON.stringify(params))
   }
   savePromotionSource(params)
 }
@@ -178,4 +179,17 @@ export function getPromotionSourceForOrder(): PromotionSourcePayload {
     uni.removeStorageSync(PROMOTION_SOURCE_STORAGE_KEY)
     return {}
   }
+}
+
+/**
+ * Permanent account cancellation must not leak referral attribution into a later account that is
+ * created on the same device. Reset both durable storage and the in-memory visit/bind state only
+ * after the server has confirmed cancellation.
+ */
+export function clearShareAttributionState() {
+  uni.removeStorageSync(PENDING_INVITE_STORAGE_KEY)
+  uni.removeStorageSync(PROMOTION_SOURCE_STORAGE_KEY)
+  isBindingInvite = false
+  lastVisitKey = ''
+  lastVisitAt = 0
 }

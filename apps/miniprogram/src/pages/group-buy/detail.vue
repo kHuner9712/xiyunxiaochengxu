@@ -62,21 +62,26 @@ import { groupBuyApi, type GroupBuyActivity, type GroupBuyGroup, type StartGroup
 import { useUserStore } from '@/stores/user'
 import { resolvePromotionFulfillment } from '@/utils/promotion-fulfillment'
 import { createPayment, wxPay } from '@/api/payment'
+import { resolveServerClockOffset, serverNowFromOffset } from '@/utils/server-clock'
 
+const POSITIVE_ID = /^[1-9]\d*$/
 const userStore = useUserStore()
 const activity = ref<GroupBuyActivity | null>(null)
 const availableGroups = ref<GroupBuyGroup[]>([])
 const submitting = ref(false)
 const lastGroupId = ref('')
+const serverClockOffsetMs = ref(0)
 const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
+function updateClock() {
+  nowMs.value = serverNowFromOffset(serverClockOffsetMs.value)
+}
+
 function startClock() {
   stopClock()
-  nowMs.value = Date.now()
-  clockTimer = setInterval(() => {
-    nowMs.value = Date.now()
-  }, 1000)
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
 }
 
 function stopClock() {
@@ -130,6 +135,8 @@ function remainTime(timeStr: string): string {
 async function loadDetail(id: string) {
   try {
     const data = await groupBuyApi.getDetail(id)
+    serverClockOffsetMs.value = resolveServerClockOffset(data.now)
+    updateClock()
     activity.value = data
     await loadAvailableGroups(id)
   } catch {
@@ -248,9 +255,13 @@ async function handleJoin(groupId: string) {
 }
 
 onLoad((options) => {
-  if (options?.id) {
-    loadDetail(String(options.id))
+  const id = String(options?.id || '').trim()
+  if (!POSITIVE_ID.test(id)) {
+    uni.showToast({ title: '拼团活动参数无效', icon: 'none' })
+    uni.redirectTo({ url: '/pages/group-buy/list' })
+    return
   }
+  void loadDetail(id)
 })
 onShow(() => startClock())
 onHide(() => stopClock())

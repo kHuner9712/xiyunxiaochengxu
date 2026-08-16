@@ -46,6 +46,7 @@ export class PublicGroupBuyViewService {
       successAt: group.successAt,
       failedAt: group.failedAt,
       createdAt: group.createdAt,
+      now: new Date().toISOString(),
       activity: group.activity
         ? {
             id: group.activity.id.toString(),

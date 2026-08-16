@@ -4,7 +4,7 @@
       <button
         class="avatar-picker"
         open-type="chooseAvatar"
-        :disabled="submitting"
+        :disabled="submitting || cancellingAccount"
         @chooseavatar="handleChooseAvatar"
       >
         <image class="user-avatar" :src="avatarPreview" mode="aspectFill" />
@@ -24,7 +24,7 @@
           placeholder="请输入昵称"
           placeholder-class="native-input-placeholder"
           maxlength="20"
-          :disabled="submitting"
+          :disabled="submitting || cancellingAccount"
           @input="markDirty"
         />
       </view>
@@ -39,7 +39,7 @@
       </view>
     </view>
 
-    <button class="save-btn" :disabled="submitting" :loading="submitting" @tap="handleSubmit">
+    <button class="save-btn" :disabled="submitting || cancellingAccount" :loading="submitting" @tap="handleSubmit">
       {{ submitting ? '保存中...' : '保存资料' }}
     </button>
 
@@ -53,6 +53,21 @@
         <text class="menu-arrow">›</text>
       </view>
     </view>
+
+    <view class="account-section card">
+      <view class="account-copy">
+        <text class="account-title">账号管理</text>
+        <text class="account-desc">注销前会检查未完成订单、售后与退款。注销成功后，个人资料、地址、宝宝档案和购物车等账号信息将清除，且无法恢复。</text>
+      </view>
+      <button
+        class="cancel-account-btn"
+        :disabled="submitting || cancellingAccount"
+        :loading="cancellingAccount"
+        @tap="handleCancelAccount"
+      >
+        {{ cancellingAccount ? '注销处理中...' : '注销账号' }}
+      </button>
+    </view>
   </view>
 </template>
 
@@ -60,11 +75,13 @@
 import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
+import { cancelAccount } from '@/api/auth'
 import { uploadImage } from '@/api/upload'
 import { formatPhone } from '@/utils/format'
 
 const userStore = useUserStore()
 const submitting = ref(false)
+const cancellingAccount = ref(false)
 const selectedAvatarPath = ref('')
 const dirty = ref(false)
 const form = reactive({
@@ -82,7 +99,7 @@ function syncForm() {
 }
 
 function markDirty() {
-  if (!submitting.value) dirty.value = true
+  if (!submitting.value && !cancellingAccount.value) dirty.value = true
 }
 
 onShow(async () => {
@@ -94,14 +111,14 @@ onShow(async () => {
     console.error('[baby-mall] profile fetchUserInfo failed:', err)
   } finally {
     // A slow foreground refresh must not erase edits made while it was in flight.
-    if (!wasDirty && !dirty.value && !submitting.value) {
+    if (!wasDirty && !dirty.value && !submitting.value && !cancellingAccount.value) {
       syncForm()
     }
   }
 })
 
 function handleChooseAvatar(e: any) {
-  if (submitting.value) return
+  if (submitting.value || cancellingAccount.value) return
   const avatarUrl = e?.detail?.avatarUrl
   if (!avatarUrl) {
     uni.showToast({ title: '未获取到头像', icon: 'none' })
@@ -113,7 +130,7 @@ function handleChooseAvatar(e: any) {
 }
 
 async function handleSubmit() {
-  if (submitting.value) return
+  if (submitting.value || cancellingAccount.value) return
 
   const nickname = form.nickname.trim()
   if (!nickname) {
@@ -151,6 +168,58 @@ async function handleSubmit() {
   }
 }
 
+function confirmModal(options: UniApp.ShowModalOptions): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.showModal({
+      ...options,
+      success: (res) => resolve(!!res.confirm),
+      fail: () => resolve(false),
+    })
+  })
+}
+
+async function handleCancelAccount() {
+  if (submitting.value || cancellingAccount.value) return
+
+  const firstConfirmed = await confirmModal({
+    title: '注销账号',
+    content: '账号注销不可恢复。系统会先检查未完成订单、售后和退款；如仍有待处理业务，本次注销会被拒绝。是否继续？',
+    confirmText: '继续注销',
+    confirmColor: '#D14343',
+    cancelText: '取消',
+  })
+  if (!firstConfirmed) return
+
+  const finalConfirmed = await confirmModal({
+    title: '再次确认',
+    content: '注销成功后，个人资料、收货地址、宝宝档案、购物车等账号信息将被清除。确认永久注销当前账号？',
+    confirmText: '确认注销',
+    confirmColor: '#D14343',
+    cancelText: '返回',
+  })
+  if (!finalConfirmed) return
+
+  cancellingAccount.value = true
+  try {
+    await cancelAccount()
+    uni.showToast({ title: '账号已注销', icon: 'success' })
+    // logout() clears token, in-memory user state and cart before returning to the public home page.
+    // The redundant server-side logout request is best-effort and safely ignored because account
+    // cancellation has already revoked all sessions transactionally on the backend.
+    userStore.logout()
+  } catch (err: any) {
+    console.error('[baby-mall] cancel account failed:', err)
+    uni.showModal({
+      title: '暂时无法注销',
+      content: err?.message || '账号注销失败，请稍后重试',
+      showCancel: false,
+      confirmText: '我知道了',
+    })
+  } finally {
+    cancellingAccount.value = false
+  }
+}
+
 function goMember() {
   uni.navigateTo({ url: '/pages/member/index' })
 }
@@ -167,14 +236,17 @@ defineExpose({
   form,
   dirty,
   submitting,
+  cancellingAccount,
   handleChooseAvatar,
   handleSubmit,
+  handleCancelAccount,
 })
 </script>
 
 <style lang="scss" scoped>
 .profile-page {
   min-height: 100vh;
+  padding-bottom: $spacing-lg;
 }
 
 .profile-header {
@@ -226,7 +298,8 @@ defineExpose({
 }
 
 .form-section,
-.menu-section {
+.menu-section,
+.account-section {
   margin: $spacing-sm $spacing-md;
   background: rgba(255, 255, 255, 0.9);
 }
@@ -309,6 +382,50 @@ defineExpose({
 
   &[disabled] {
     opacity: 0.72;
+  }
+}
+
+.account-section {
+  margin-top: $spacing-lg;
+}
+
+.account-copy {
+  padding-bottom: $spacing-md;
+}
+
+.account-title {
+  display: block;
+  font-size: $font-md;
+  font-weight: 800;
+  color: $text-color;
+}
+
+.account-desc {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-xs;
+  line-height: 1.6;
+  color: $text-hint;
+}
+
+.cancel-account-btn {
+  width: 100%;
+  min-height: 76rpx;
+  margin: 0;
+  border-radius: $radius-round;
+  border: 1rpx solid rgba(209, 67, 67, 0.45);
+  background: rgba(209, 67, 67, 0.06);
+  color: #D14343;
+  font-size: $font-sm;
+  font-weight: 700;
+  line-height: 76rpx;
+
+  &::after {
+    border: none;
+  }
+
+  &[disabled] {
+    opacity: 0.55;
   }
 }
 </style>

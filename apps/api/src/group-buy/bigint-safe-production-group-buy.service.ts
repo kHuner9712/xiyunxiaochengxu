@@ -19,11 +19,12 @@ export class BigintSafeProductionGroupBuyService extends ProductionGroupBuyServi
   }
 
   override async weappFindActivityById(id: string) {
+    parsePositiveBigIntId(id, '活动');
     const activity = await super.weappFindActivityById(id);
     if (activity.status !== 1) {
       throw new NotFoundException('拼团活动不存在或已下架');
     }
-    return activity;
+    return { ...activity, now: new Date().toISOString() };
   }
 
   override async weappFindGroupById(id: string) {
