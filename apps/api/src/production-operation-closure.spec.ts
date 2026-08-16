@@ -169,8 +169,8 @@ describe('production operation closure contracts', () => {
     expect(attachmentSafeAftersale).toContain('extends ProductionAftersaleService');
     expect(groupModule).toContain('ProductionGroupBuyService');
     expect(flashModule).toContain('ProductionFlashSaleService');
-    expect(benefitModule).toContain('DurableAdminBenefitPackageService');
-    expect(benefitModule).toContain('useExisting: DurableAdminBenefitPackageService');
+    expect(benefitModule).toContain('IdSafeDurableAdminBenefitPackageService');
+    expect(benefitModule).toContain('useExisting: IdSafeDurableAdminBenefitPackageService');
     expect(durableBenefits).toContain('extends ValiditySafeSnapshotViewBenefitPackageService');
     expect(validitySafeBenefits).toContain('extends SnapshotViewBenefitPackageService');
     expect(validitySafeBenefits).toContain('权益尚未生效');
